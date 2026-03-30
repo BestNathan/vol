@@ -1,0 +1,23 @@
+# Build output
+/target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# State files (runtime data)
+~/.deribit-vol-monitor/
+
+# Logs
+*.log
+logs/
+
+# Worktrees
+.worktrees/

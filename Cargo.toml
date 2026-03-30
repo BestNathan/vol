@@ -1,0 +1,65 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/vol-core",
+    "crates/vol-eventbus",
+    "crates/vol-config",
+    "crates/vol-datasource",
+    "crates/vol-deribit",
+    "crates/vol-feishu",
+    "crates/vol-alert",
+    "crates/vol-notification",
+    "crates/vol-monitor",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Deribit Vol Monitor"]
+license = "MIT"
+
+[workspace.dependencies]
+# Async
+tokio = { version = "1.35", features = ["full"] }
+tokio-util = "0.7"
+async-trait = "0.1"
+
+# WebSocket
+tokio-tungstenite = { version = "0.21", features = ["rustls-tls-webpki-roots"] }
+
+# HTTP
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Crypto (for Feishu HMAC)
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+
+# Data structures
+indexmap = "2.1"
+
+# Internal crates
+vol-core = { path = "crates/vol-core" }
+vol-eventbus = { path = "crates/vol-eventbus" }
+vol-config = { path = "crates/vol-config" }
+vol-datasource = { path = "crates/vol-datasource" }
+vol-deribit = { path = "crates/vol-deribit" }
+vol-feishu = { path = "crates/vol-feishu" }
+vol-alert = { path = "crates/vol-alert" }
+vol-notification = { path = "crates/vol-notification" }

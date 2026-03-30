@@ -1,0 +1,20 @@
+[package]
+name = "vol-deribit"
+version.workspace = true
+edition.workspace = true
+description = "Deribit-specific data structures and message types for volatility monitoring"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+tokio-rustls = { version = "0.25", features = ["ring"] }
+rustls = "0.22"
+webpki-roots = "0.26"
+futures-util = "0.3"
+tracing = { workspace = true }
+reqwest = { workspace = true }
+thiserror = { workspace = true }
+vol-core = { workspace = true }

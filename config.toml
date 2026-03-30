@@ -1,0 +1,62 @@
+# config.toml for vol-monitor
+
+[data_sources]
+enabled = ["deribit"]
+
+[data_sources.deribit]
+ws_url = "wss://www.deribit.com/ws/api/v2"
+symbols = ["BTC", "ETH"]
+poll_interval_secs = 60
+
+[tenors]
+short_max_dte = 7
+medium_min_dte = 20
+medium_max_dte = 40
+long_min_dte = 80
+
+[alerts]
+enabled = ["absolute_iv", "rate_change", "term_structure", "skew"]
+cooldown_secs = 300
+
+# BTC IV thresholds - typically lower than ETH
+[alerts.absolute_iv.symbols.btc]
+short_threshold = 0.55
+medium_threshold = 0.53
+long_threshold = 0.51
+short_atm_threshold = 0.05    # ±5% for short-term
+medium_atm_threshold = 0.10   # ±10% for medium-term
+long_atm_threshold = 0.15     # ±15% for long-term
+
+# ETH IV thresholds - typically higher than BTC, wider ATM ranges
+[alerts.absolute_iv.symbols.eth]
+short_threshold = 0.75
+medium_threshold = 0.73
+long_threshold = 0.71
+short_atm_threshold = 0.08    # ±8% for short-term
+medium_atm_threshold = 0.12   # ±12% for medium-term
+long_atm_threshold = 0.18     # ±18% for long-term
+
+[alerts.rate_of_change]
+window_1h_threshold = 0.05
+window_4h_threshold = 0.10
+window_24h_threshold = 0.20
+
+[alerts.term_structure]
+short_long_spread_threshold = 0.15
+
+[alerts.skew]
+threshold = 0.10
+
+[notifications]
+enabled = ["stdout"]
+
+# Feishu (Lark) notification using OAuth 2.0 app access token
+# Get app_id and app_secret from https://open.feishu.cn/app
+[notifications.feishu]
+app_id = "cli_a936b13197385bde"
+app_secret = "JnWnFrrOvzHi4deDmFY9kd1NMGbiWuNz"
+receive_id = "oc_c29208d94757e2aefd97bfa5f57e0b26"
+message_template = "🚨 {tenor} {alert_type}: {symbol} IV={value}"
+
+[state]
+path = "~/.deribit-vol-monitor/state.json"

@@ -1,0 +1,24 @@
+[package]
+name = "vol-monitor"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "vol-monitor"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+
+vol-core = { workspace = true }
+vol-eventbus = { workspace = true }
+vol-config = { workspace = true }
+vol-datasource = { workspace = true }
+vol-alert = { workspace = true }
+vol-notification = { workspace = true }

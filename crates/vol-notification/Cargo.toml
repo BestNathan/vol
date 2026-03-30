@@ -1,0 +1,14 @@
+[package]
+name = "vol-notification"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+vol-core = { workspace = true }
+vol-config = { workspace = true }
+vol-feishu = { workspace = true }

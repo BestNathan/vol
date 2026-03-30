@@ -1,0 +1,9 @@
+[package]
+name = "vol-eventbus"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+vol-core = { workspace = true }
+tracing = { workspace = true }
