@@ -58,7 +58,23 @@
       "Bash(git add:*)",
       "Bash(git commit -m \"docs: add multi-channel dispatch and index price state management design:*)",
       "Bash(git worktree:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(cargo clean:*)",
+      "Bash(1 -- --test-threads=1)",
+      "Bash(rustc --crate-type lib crates/vol-deribit/src/message.rs --edition 2021)",
+      "Bash(nm target/debug/deps/vol_deribit-*)",
+      "Bash(objdump -t target/debug/deps/vol_deribit-*)",
+      "Bash(cargo rustc:*)",
+      "Bash(ls:*)",
+      "Bash(echo \"CARGO_TARGET_DIR=$CARGO_TARGET_DIR\")",
+      "Bash(echo \"PWD=$PWD\")",
+      "Bash(cargo install:*)",
+      "Bash(cargo locate-project:*)",
+      "Bash(git reset:*)",
+      "Bash(git:*)",
+      "Bash(timeout 20 HTTPS_PROXY=http://192.168.2.98:8890 ./target/release/vol-monitor)",
+      "Bash(HTTPS_PROXY=http://192.168.2.98:8890 timeout 20 ./target/release/vol-monitor)",
+      "Bash(RUST_LOG=info HTTPS_PROXY=http://192.168.2.98:8890 timeout 25 ./target/release/vol-monitor)"
     ]
   }
 }

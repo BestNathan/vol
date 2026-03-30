@@ -84,8 +84,8 @@ impl DataSource for DeribitDataSource {
         }
 
         let index_state = self.index_price_state.clone();
-        let _client_clone = self.client.clone();
-        let _tx_clone = tx.clone();
+        let client_clone = self.client.clone();
+        let tx_clone = tx.clone();
 
         // Spawn single data merger task that handles all channels
         tokio::spawn(async move {
@@ -95,7 +95,7 @@ impl DataSource for DeribitDataSource {
 
             for channel in &all_channels {
                 info!("Subscribing to channel: {}", channel.channel_name());
-                match _client_clone.subscribe(channel.clone()).await {
+                match client_clone.subscribe(channel.clone()).await {
                     Ok(rx) => {
                         info!("Successfully subscribed to channel");
                         match channel {
@@ -159,7 +159,7 @@ impl DataSource for DeribitDataSource {
                                 let index_price = index_state.get(&index_key).await;
 
                                 if let Some(vol_data) = option.to_volatility_data_with_index(index_price) {
-                                    let _ = _tx_clone.send(vol_data).await;
+                                    let _ = tx_clone.send(vol_data).await;
                                 }
                             }
                         }
