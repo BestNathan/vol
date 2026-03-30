@@ -5,6 +5,55 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::{OptionMarkPrice, PriceIndex, DeribitTicker, Trade};
+
+/// Channel type enum - type-safe channel binding at compile time
+#[derive(Debug, Clone)]
+pub enum ChannelType {
+    /// Options mark price with IV (markprice.options.<INDEX>)
+    MarkpriceOptions(String),
+    /// Index price (deribit_price_index.<INDEX>)
+    PriceIndex(String),
+    /// Ticker data (ticker.<BASE>)
+    Ticker(String),
+    /// Trade executions (trades.<INSTRUMENT>)
+    Trade(String),
+}
+
+impl ChannelType {
+    /// Get the channel name string for subscription
+    pub fn channel_name(&self) -> String {
+        match self {
+            ChannelType::MarkpriceOptions(idx) => crate::subscription::markprice_options(idx),
+            ChannelType::PriceIndex(idx) => crate::subscription::deribit_price_index(idx),
+            ChannelType::Ticker(base) => crate::subscription::ticker_base(base),
+            ChannelType::Trade(instrument) => crate::subscription::trades(instrument),
+        }
+    }
+}
+
+/// Unified channel data enum
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ChannelData {
+    OptionMarkPrice(Vec<OptionMarkPrice>),
+    PriceIndex(PriceIndex),
+    Ticker(DeribitTicker),
+    Trade(Trade),
+}
+
+impl ChannelData {
+    /// Get channel name for logging
+    pub fn channel_name(&self) -> &'static str {
+        match self {
+            ChannelData::OptionMarkPrice(_) => "markprice.options",
+            ChannelData::PriceIndex(_) => "deribit_price_index",
+            ChannelData::Ticker(_) => "ticker",
+            ChannelData::Trade(_) => "trades",
+        }
+    }
+}
+
 /// JSON-RPC request structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcRequest<T = Value> {
@@ -188,7 +237,7 @@ mod tests {
             }
         }"#;
 
-        let notification: SubscriptionNotification<crate::market_data::OptionMarkPrice> =
+        let notification: SubscriptionNotification<OptionMarkPrice> =
             serde_json::from_str(json).unwrap();
 
         assert_eq!(notification.method, "subscription");

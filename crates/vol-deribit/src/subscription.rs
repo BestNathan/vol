@@ -95,6 +95,12 @@ pub fn book_depth(instrument: &str, depth: u8) -> String {
     format!("book.{}.{}", instrument, depth)
 }
 
+/// Build deribit price index channel
+/// e.g., "deribit_price_index.btc_usd"
+pub fn deribit_price_index(index: &str) -> String {
+    format!("deribit_price_index.{}", index)
+}
+
 /// Build trades channel
 /// e.g., "trades.BTC-PERPETUAL"
 pub fn trades(instrument: &str) -> String {
@@ -156,6 +162,12 @@ pub mod presets {
         channels.extend(perpetual_tickers(bases));
         channels
     }
+
+    /// Subscribe to deribit price index for BTC and ETH
+    /// Returns: ["deribit_price_index.btc_usd", "deribit_price_index.eth_usd"]
+    pub fn price_indices(bases: Vec<&str>) -> Vec<String> {
+        bases.iter().map(|&b| deribit_price_index(&format!("{}_usd", b.to_lowercase()))).collect()
+    }
 }
 
 #[cfg(test)]
@@ -178,5 +190,19 @@ mod tests {
         assert_eq!(mp.len(), 2);
         assert!(mp.contains(&"markprice.options.btc_usd".to_string()));
         assert!(mp.contains(&"markprice.options.eth_usd".to_string()));
+    }
+
+    #[test]
+    fn test_deribit_price_index_builder() {
+        assert_eq!(deribit_price_index("btc_usd"), "deribit_price_index.btc_usd");
+        assert_eq!(deribit_price_index("eth_usd"), "deribit_price_index.eth_usd");
+    }
+
+    #[test]
+    fn test_price_indices_preset() {
+        let indices = presets::price_indices(vec!["BTC", "ETH"]);
+        assert_eq!(indices.len(), 2);
+        assert!(indices.contains(&"deribit_price_index.btc_usd".to_string()));
+        assert!(indices.contains(&"deribit_price_index.eth_usd".to_string()));
     }
 }

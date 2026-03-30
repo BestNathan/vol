@@ -6,6 +6,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use futures_util::{StreamExt, SinkExt};
+use serde::Deserialize;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tracing::{info, warn, error};
@@ -17,7 +18,7 @@ use tokio_rustls::TlsConnector;
 use rustls::{RootCertStore, ClientConfig, pki_types::ServerName};
 use webpki_roots::TLS_SERVER_ROOTS;
 
-use crate::{ChannelType, ChannelData, OptionMarkPrice, PriceIndex, DeribitTicker, Trade, SubscriptionNotification};
+use crate::{ChannelType, ChannelData, OptionMarkPrice, PriceIndex, DeribitTicker, Trade, SubscriptionNotification, SubscriptionParams};
 use vol_core::VolatilityData;
 
 /// Deribit WebSocket client state
@@ -273,6 +274,7 @@ impl DeribitClient {
     }
 
     /// Parse incoming WebSocket message into VolatilityData
+    #[allow(deprecated)]
     pub fn parse_message(text: &str) -> Option<Vec<VolatilityData>> {
         let notification: SubscriptionNotification<OptionMarkPrice> =
             serde_json::from_str(text).ok()?;
@@ -397,8 +399,23 @@ impl DeribitClient {
                 Some(ChannelData::OptionMarkPrice(notification.params.data))
             }
             ChannelType::PriceIndex(_) => {
-                let notification: SubscriptionNotification<PriceIndex> = serde_json::from_str(text).ok()?;
-                Some(ChannelData::PriceIndex(notification.params.data.into_iter().next()?))
+                // deribit_price_index channels send a single object, not an array
+                // Parse with custom single-item notification structure
+                #[derive(Deserialize)]
+                struct SinglePriceIndexNotification {
+                    jsonrpc: String,
+                    method: String,
+                    params: SinglePriceIndexParams,
+                }
+
+                #[derive(Deserialize)]
+                struct SinglePriceIndexParams {
+                    channel: String,
+                    data: PriceIndex,
+                }
+
+                let notification: SinglePriceIndexNotification = serde_json::from_str(text).ok()?;
+                Some(ChannelData::PriceIndex(notification.params.data))
             }
             ChannelType::Ticker(_) => {
                 let notification: SubscriptionNotification<DeribitTicker> = serde_json::from_str(text).ok()?;

@@ -102,13 +102,19 @@ pub struct OptionMarkPrice {
 }
 
 impl OptionMarkPrice {
-    /// Convert to vol-core VolatilityData
-    pub fn to_volatility_data(&self) -> Option<vol_core::VolatilityData> {
+    /// Convert to VolatilityData with externally provided index price
+    pub fn to_volatility_data_with_index(
+        &self,
+        index_price: Option<f64>,
+    ) -> Option<vol_core::VolatilityData> {
         let iv = self.iv?;
 
         // Parse instrument name: "BTC-29MAR24-70000-C"
         let (underlying, _year, month, day, strike, option_type) =
             crate::instrument::parse_instrument_name(&self.instrument_name)?;
+
+        // Use provided index price, fallback to strike if not available
+        let index_price = index_price.unwrap_or(strike);
 
         // Calculate DTE from expiry
         let expiry_str = format!("{:02}{}{:02}", day,
@@ -121,17 +127,6 @@ impl OptionMarkPrice {
             _year % 100
         );
         let dte = crate::instrument::calculate_dte(&expiry_str)?;
-
-        // Use index_price if available, otherwise use a default based on underlying
-        // Deribit's markprice.options channel may not include index_price
-        let index_price = self.index_price.unwrap_or_else(|| {
-            // Default approximate prices (will be refined when ticker data arrives)
-            match underlying.to_lowercase().as_str() {
-                "btc" => 100000.0,  // Default BTC price
-                "eth" => 5000.0,    // Default ETH price
-                _ => strike,         // Fallback to strike (ATM)
-            }
-        });
 
         let mut extra = std::collections::HashMap::new();
         extra.insert("underlying".to_string(), serde_json::json!(underlying));
@@ -154,6 +149,12 @@ impl OptionMarkPrice {
             extra,
         })
     }
+
+    /// Convert to VolatilityData (deprecated - use with_index version)
+    #[deprecated(note = "Use to_volatility_data_with_index instead")]
+    pub fn to_volatility_data(&self) -> Option<vol_core::VolatilityData> {
+        self.to_volatility_data_with_index(None)
+    }
 }
 
 /// Mark price update for index/perpetual
@@ -164,6 +165,19 @@ pub struct IndexMarkPrice {
     /// Index name (e.g., "btc_usd")
     pub index: String,
     /// Mark price
+    pub price: f64,
+    /// Timestamp (milliseconds since Unix epoch)
+    pub timestamp: u64,
+}
+
+/// Deribit Price Index data
+///
+/// Received from `deribit_price_index.<INDEX>` channels
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PriceIndex {
+    /// Index name (e.g., "btc_usd")
+    pub index_name: String,
+    /// Current index price
     pub price: f64,
     /// Timestamp (milliseconds since Unix epoch)
     pub timestamp: u64,
@@ -295,5 +309,43 @@ impl DeribitTicker {
             delta: None,
             extra,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_volatility_data_with_index() {
+        let option = OptionMarkPrice {
+            instrument_name: "BTC-29MAR24-70000-C".to_string(),
+            mark_price: 2000.0,
+            iv: Some(0.80),
+            timestamp: 1234567890,
+            index_price: None,
+        };
+
+        let result = option.to_volatility_data_with_index(Some(70000.0));
+        assert!(result.is_some());
+        let vol_data = result.unwrap();
+        assert_eq!(vol_data.index_price, 70000.0);
+    }
+
+    #[test]
+    fn test_to_volatility_data_with_index_fallback() {
+        let option = OptionMarkPrice {
+            instrument_name: "BTC-29MAR24-70000-C".to_string(),
+            mark_price: 2000.0,
+            iv: Some(0.80),
+            timestamp: 1234567890,
+            index_price: None,
+        };
+
+        // Without index price, should fall back to strike
+        let result = option.to_volatility_data_with_index(None);
+        assert!(result.is_some());
+        let vol_data = result.unwrap();
+        assert_eq!(vol_data.index_price, 70000.0); // strike price
     }
 }
