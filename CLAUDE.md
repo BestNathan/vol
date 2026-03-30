@@ -137,6 +137,28 @@ Set `HTTPS_PROXY` environment variable for HTTP proxy tunneling:
 HTTPS_PROXY=http://192.168.2.98:8890 ./target/release/vol-monitor
 ```
 
+## Deribit API Documentation
+
+Local copy of Deribit API documentation is available at `docs/deribit/`:
+
+```
+docs/deribit/
+├── api-reference/      # API 方法参考文档
+├── articles/           # 指南和最佳实践
+├── fix-api/           # FIX API 文档
+├── specifications/     # OpenAPI/AsyncAPI 规范
+├── subscriptions/      # WebSocket 订阅频道
+├── index.md           # 文档首页
+└── llms.txt          # 文档索引
+```
+
+**常用文档路径：**
+- 市场数据：`docs/deribit/api-reference/market-data/`
+- 交易操作：`docs/deribit/api-reference/trading/`
+- WebSocket 订阅：`docs/deribit/subscriptions/`
+- 快速入门：`docs/deribit/articles/deribit-quickstart.md`
+- 错误处理：`docs/deribit/articles/errors.md`
+
 ## Common Modifications
 
 ### Adding a new alert type
