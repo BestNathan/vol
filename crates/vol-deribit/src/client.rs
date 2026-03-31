@@ -323,6 +323,108 @@ impl DeribitClient {
         Ok(rx)
     }
 
+    /// Start the WebSocket connection and reader loop
+    async fn start_connection(&self) {
+        let ws_url = self.ws_url.clone();
+        let proxy_url = self.proxy_url.clone();
+        let manager = self.subscription_manager.clone();
+        let channels = self.subscribed_channels.lock().await.clone();
+        let state = self.state.clone();
+
+        tokio::spawn(async move {
+            let mut retry_delay = Duration::from_secs(1);
+            const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
+
+            loop {
+                info!("Connecting to Deribit WebSocket: {}", ws_url);
+                if let Some(proxy) = &proxy_url {
+                    info!("Using proxy: {}", proxy);
+                }
+
+                let connect_result = if let Some(proxy) = &proxy_url {
+                    Self::connect_via_proxy(&ws_url, proxy).await
+                } else {
+                    connect_async(&ws_url).await.map(|(ws, _)| ws).ok()
+                };
+
+                match connect_result {
+                    Some(ws_stream) => {
+                        info!("Connected to Deribit");
+
+                        let (mut write, mut read) = ws_stream.split();
+
+                        // Subscribe to ALL channels at once
+                        let channel_names: Vec<String> = channels.iter()
+                            .map(|c| c.channel_name())
+                            .collect();
+
+                        let subscribe_msg = serde_json::json!({
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "public/subscribe",
+                            "params": {
+                                "channels": channel_names.iter().map(|s| s.as_str()).collect::<Vec<&str>>()
+                            }
+                        });
+
+                        if let Err(e) = write.send(Message::Text(subscribe_msg.to_string())).await {
+                            error!("Failed to send subscription: {}", e);
+                            continue;
+                        }
+
+                        info!("Subscribed to channels: {:?}", channel_names);
+
+                        // Update state
+                        {
+                            let mut s = state.lock().await;
+                            s.connected = true;
+                            s.subscriptions = channel_names.clone();
+                        }
+
+                        // Read and dispatch
+                        while let Some(msg_result) = read.next().await {
+                            match msg_result {
+                                Ok(Message::Text(text)) => {
+                                    if let Some((channel_type, data)) = Self::parse_and_route(&text) {
+                                        manager.dispatch(&channel_type, data).await;
+                                    }
+                                }
+                                Ok(Message::Ping(data)) => {
+                                    if let Err(e) = write.send(Message::Pong(data)).await {
+                                        warn!("Failed to send pong: {}", e);
+                                    }
+                                }
+                                Ok(Message::Close(frame)) => {
+                                    warn!("WebSocket closed: {:?}", frame);
+                                    break;
+                                }
+                                Ok(_) => {}
+                                Err(e) => {
+                                    error!("WebSocket error: {}", e);
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Connection lost - reset state
+                        {
+                            let mut s = state.lock().await;
+                            s.connected = false;
+                            s.subscriptions = Vec::new();
+                        }
+                    }
+                    None => {
+                        error!("Failed to connect to Deribit");
+                    }
+                }
+
+                // Wait before reconnecting (exponential backoff)
+                tokio::time::sleep(retry_delay).await;
+                retry_delay = (retry_delay * 2).min(MAX_RETRY_DELAY);
+        }
+        });
+    }
+
     /// Parse channel message based on channel type
     fn parse_channel_message(text: &str, channel_type: &ChannelType) -> Option<ChannelData> {
         match channel_type {
