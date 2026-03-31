@@ -2,7 +2,7 @@
 //!
 //! Reference: https://open.feishu.cn/document/server-docs/api-call-guide/calling-process/get-access-token
 
-use vol_core::{NotificationHandler, Alert, Result, VolError, Tenor};
+use vol_core::{NotificationHandler, Alert, Result, VolError, Tenor, OptionType};
 use vol_feishu::FeishuClient;
 use vol_config::FeishuConfig;
 use tracing::{info, warn};
@@ -61,9 +61,15 @@ impl FeishuNotification {
             Tenor::Long => "长期",
         };
 
-        let option_type_cn = match alert.message.contains("C") {
-            true => "Call",
-            false => "Put",
+        let option_type_cn = match alert.option_type {
+            OptionType::Call => "Call",
+            OptionType::Put => "Put",
+        };
+
+        let moneyness_str = if alert.moneyness > 0.0 {
+            format!("ITM +{:.1}%", alert.moneyness * 100.0)
+        } else {
+            format!("OTM {:.1}%", alert.moneyness * 100.0)
         };
 
         serde_json::to_string(&serde_json::json!({
@@ -83,11 +89,15 @@ impl FeishuNotification {
                     "text": {
                         "tag": "lark_md",
                         "content": format!(
-                            "**合约**: {}\n**类型**: {} | **方向**: {}\n**IV**: {:.1}%",
+                            "**合约**: {}\n**期限**: {} | **类型**: {}\n**IV**: {:.1}%\n**指数价格**: {:.2} USD\n**DTE**: {} 天\n**合约价格**: {:.2} USD\n**实虚值**: {}",
                             alert.symbol,
                             tenor_cn,
                             option_type_cn,
-                            alert.iv * 100.0
+                            alert.iv * 100.0,
+                            alert.index_price,
+                            alert.dte,
+                            alert.mark_price,
+                            moneyness_str
                         )
                     }
                 },
