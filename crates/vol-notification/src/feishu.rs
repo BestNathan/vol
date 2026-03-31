@@ -54,6 +54,18 @@ impl FeishuNotification {
             vol_core::AlertType::RateChange { .. } => "📈 IV 快速变化告警",
             vol_core::AlertType::TermStructure { .. } => "📊 期限结构异常告警",
             vol_core::AlertType::Skew { .. } => "⚖️ Skew 偏离告警",
+            vol_core::AlertType::PortfolioMargin { .. } => "💰 保证金告警",
+            vol_core::AlertType::PortfolioBalance { .. } => "💵 余额告警",
+            vol_core::AlertType::PortfolioDelta { .. } => "📉 Delta 告警",
+            vol_core::AlertType::PortfolioPnL { .. } => "📊 P&L 告警",
+            vol_core::AlertType::PortfolioGreek { greek, .. } => {
+                match greek.as_str() {
+                    "gamma" => "🔧 Gamma 告警",
+                    "theta" => "⏰ Theta 告警",
+                    "vega" => "📊 Vega 告警",
+                    _ => "📈 Greek 告警",
+                }
+            }
         };
 
         let tenor_cn = match alert.tenor {

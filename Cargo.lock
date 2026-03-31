@@ -1409,12 +1409,14 @@ name = "vol-notification"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "vol-config",
  "vol-core",
+ "vol-deribit",
  "vol-feishu",
 ]
 
