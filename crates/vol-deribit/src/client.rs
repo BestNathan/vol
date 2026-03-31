@@ -554,7 +554,6 @@ impl DeribitClient {
     /// the notification type, which is more efficient than trying
     /// each type sequentially.
     fn parse_and_route(text: &str) -> Option<(ChannelType, ChannelData)> {
-<<<<<<< Updated upstream
         let notification = serde_json::from_str::<DeribitNotification>(text).ok()?;
 
         match notification {
@@ -563,15 +562,6 @@ impl DeribitClient {
                     return None;
                 }
                 let index = n
-=======
-        // Try parsing as OptionMarkPrice notification (array)
-        if let Ok(notification) =
-            serde_json::from_str::<SubscriptionNotification<Vec<OptionMarkPrice>>>(text)
-        {
-            if notification.method == "subscription" {
-                // Extract index from channel name: "markprice.options.btc_usd" -> "btc_usd"
-                let index = notification
->>>>>>> Stashed changes
                     .params
                     .channel
                     .strip_prefix("markprice.options.")?
@@ -581,21 +571,11 @@ impl DeribitClient {
                     ChannelData::OptionMarkPrice(n.params.data),
                 ))
             }
-<<<<<<< Updated upstream
             DeribitNotification::PriceIndex(n) => {
                 if n.method != "subscription" {
                     return None;
                 }
                 let index = n
-=======
-        }
-
-        // Try parsing as PriceIndex notification (single object)
-        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<PriceIndex>>(text)
-        {
-            if notification.method == "subscription" {
-                let index = notification
->>>>>>> Stashed changes
                     .params
                     .channel
                     .strip_prefix("deribit_price_index.")?
@@ -605,29 +585,17 @@ impl DeribitClient {
                     ChannelData::PriceIndex(n.params.data),
                 ))
             }
-<<<<<<< Updated upstream
             DeribitNotification::Ticker(n) => {
                 if n.method != "subscription" {
                     return None;
                 }
                 let base = n
-=======
-        }
-
-        // Try parsing as Ticker notification (array)
-        if let Ok(notification) =
-            serde_json::from_str::<SubscriptionNotification<Vec<DeribitTicker>>>(text)
-        {
-            if notification.method == "subscription" {
-                let base = notification
->>>>>>> Stashed changes
                     .params
                     .channel
                     .strip_prefix("ticker.")?
                     .split('.')
                     .next()?
                     .to_string();
-<<<<<<< Updated upstream
                 let ticker = n.params.data.into_iter().next()?;
                 Some((ChannelType::Ticker(base), ChannelData::Ticker(ticker)))
             }
@@ -638,24 +606,6 @@ impl DeribitClient {
                 let instrument = n.params.channel.strip_prefix("trades.")?.to_string();
                 let trade = n.params.data.into_iter().next()?;
                 Some((ChannelType::Trade(instrument), ChannelData::Trade(trade)))
-=======
-                let ticker = notification.params.data.into_iter().next()?;
-                return Some((ChannelType::Ticker(base), ChannelData::Ticker(ticker)));
-            }
-        }
-
-        // Try parsing as Trade notification (array)
-        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<Vec<Trade>>>(text)
-        {
-            if notification.method == "subscription" {
-                let instrument = notification
-                    .params
-                    .channel
-                    .strip_prefix("trades.")?
-                    .to_string();
-                let trade = notification.params.data.into_iter().next()?;
-                return Some((ChannelType::Trade(instrument), ChannelData::Trade(trade)));
->>>>>>> Stashed changes
             }
         }
     }
