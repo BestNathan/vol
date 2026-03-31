@@ -26,12 +26,15 @@ impl NotificationHandler for StdoutNotification {
 
     async fn send(&self, alert: &Alert) -> Result<()> {
         let message = format!(
-            "[ALERT] {} | {} | {} | IV: {:.1}% | {}",
+            "[ALERT] {} | {} | {} | IV: {:.1}% | 指数：{:.2} | DTE: {}天 | {} | 价格：{:.2}",
             alert.tenor,
             alert.alert_type,
             alert.symbol,
             alert.iv * 100.0,
-            alert.message
+            alert.index_price,
+            alert.dte,
+            alert.option_type,
+            alert.mark_price,
         );
         info!("{}", message);
         println!("{}", message);
