@@ -148,7 +148,7 @@ impl OptionMarkPrice {
 
         let mut extra = std::collections::HashMap::new();
         extra.insert("underlying".to_string(), serde_json::json!(underlying));
-        extra.insert("mark_price".to_string(), serde_json::json!(self.mark_price));
+        extra.insert("mark_price_coin".to_string(), serde_json::json!(self.mark_price));
         extra.insert(
             "index_price_used".to_string(),
             serde_json::json!(index_price),

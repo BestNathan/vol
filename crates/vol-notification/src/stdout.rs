@@ -25,8 +25,9 @@ impl NotificationHandler for StdoutNotification {
     }
 
     async fn send(&self, alert: &Alert) -> Result<()> {
+        let underlying = alert.symbol.split('-').next().unwrap_or("BTC").to_uppercase();
         let message = format!(
-            "[ALERT] {} | {} | {} | IV: {:.1}% | 指数：{:.2} | DTE: {}天 | {} | 价格：{:.2}",
+            "[ALERT] {} | {} | {} | IV: {:.1}% | 指数：{:.2} | DTE: {}天 | {} | 价格：{:.4} {} ({:.2} USD)",
             alert.tenor,
             alert.alert_type,
             alert.symbol,
@@ -34,7 +35,9 @@ impl NotificationHandler for StdoutNotification {
             alert.index_price,
             alert.dte,
             alert.option_type,
-            alert.mark_price,
+            alert.mark_price_coin,
+            underlying,
+            alert.mark_price_usd(),
         );
         info!("{}", message);
         println!("{}", message);

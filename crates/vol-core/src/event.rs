@@ -57,11 +57,16 @@ pub struct Alert {
     /// Moneyness ratio (spot / strike)
     pub moneyness: f64,
 
-    /// Option mark price
-    pub mark_price: f64,
+    /// Option mark price in coin units (e.g., 0.05 BTC or 0.5 ETH)
+    pub mark_price_coin: f64,
 }
 
 impl Alert {
+    /// Get option mark price in USD
+    pub fn mark_price_usd(&self) -> f64 {
+        self.mark_price_coin * self.index_price
+    }
+
     pub fn new(
         alert_type: AlertType,
         tenor: Tenor,
@@ -74,7 +79,7 @@ impl Alert {
         dte: u32,
         option_type: OptionType,
         moneyness: f64,
-        mark_price: f64,
+        mark_price_coin: f64,
     ) -> Self {
         Self {
             alert_type,
@@ -88,7 +93,7 @@ impl Alert {
             dte,
             option_type,
             moneyness,
-            mark_price,
+            mark_price_coin,
         }
     }
 }

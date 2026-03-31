@@ -450,7 +450,7 @@ impl DeribitClient {
                     Some(ws_stream) => {
                         info!("Connected to Deribit");
 
-                        let (mut write, mut read) = ws_stream.split();
+                        let (write, mut read) = ws_stream.split();
 
                         // Wrap writer in Arc for sharing
                         let write_arc = Arc::new(Mutex::new(write));

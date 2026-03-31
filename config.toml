@@ -56,7 +56,7 @@ enabled = ["stdout"]
 app_id = "cli_a936b13197385bde"
 app_secret = "JnWnFrrOvzHi4deDmFY9kd1NMGbiWuNz"
 receive_id = "oc_c29208d94757e2aefd97bfa5f57e0b26"
-message_template = "🚨 {tenor} {alert_type}: {symbol} | IV={value:.1}% | 指数={index_price} | DTE={dte}天 | {option_type} | 价格={mark_price}"
+message_template = "🚨 {tenor} {alert_type}: {symbol} | IV={value:.1}% | 指数={index_price} | DTE={dte}天 | {option_type} | 价格={mark_price_coin} ({mark_price_usd} USD)"
 
 [state]
 path = "~/.deribit-vol-monitor/state.json"

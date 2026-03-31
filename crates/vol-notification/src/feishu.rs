@@ -42,7 +42,8 @@ impl FeishuNotification {
                 if alert.moneyness > 0.0 { "ITM +" } else { "OTM " },
                 alert.moneyness.abs() * 100.0
             ))
-            .replace("{mark_price}", &format!("{:.2}", alert.mark_price))
+            .replace("{mark_price_coin}", &format!("{:.4}", alert.mark_price_coin))
+            .replace("{mark_price_usd}", &format!("{:.2}", alert.mark_price_usd()))
             .replace("{strike}", &alert.message)
     }
 
@@ -89,14 +90,16 @@ impl FeishuNotification {
                     "text": {
                         "tag": "lark_md",
                         "content": format!(
-                            "**合约**: {}\n**期限**: {} | **类型**: {}\n**IV**: {:.1}%\n**指数价格**: {:.2} USD\n**DTE**: {} 天\n**合约价格**: {:.2} USD\n**实虚值**: {}",
+                            "**合约**: {}\n**期限**: {} | **类型**: {}\n**IV**: {:.1}%\n**指数价格**: {:.2} USD\n**DTE**: {} 天\n**合约价格**: {:.4} {} ({:.2} USD)\n**实虚值**: {}",
                             alert.symbol,
                             tenor_cn,
                             option_type_cn,
                             alert.iv * 100.0,
                             alert.index_price,
                             alert.dte,
-                            alert.mark_price,
+                            alert.mark_price_coin,
+                            alert.symbol.split('-').next().unwrap_or("BTC").to_uppercase(),
+                            alert.mark_price_usd(),
                             moneyness_str
                         )
                     }
@@ -156,7 +159,7 @@ impl NotificationHandler for FeishuNotification {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_core::{AlertType, OptionType};
+    use vol_core::{AlertType, OptionType, Tenor};
 
     #[test]
     fn test_format_message_all_fields() {
@@ -165,7 +168,7 @@ mod tests {
             app_id: Some("test_app_id".to_string()),
             app_secret: Some("test_app_secret".to_string()),
             receive_id: Some("test_receive_id".to_string()),
-            message_template: "{tenor} {alert_type} {symbol} IV={value} Index={index_price} DTE={dte} Type={option_type} Moneyness={moneyness} Price={mark_price}".to_string(),
+            message_template: "{tenor} {alert_type} {symbol} IV={value} Index={index_price} DTE={dte} Type={option_type} Moneyness={moneyness} CoinPrice={mark_price_coin} UsdPrice={mark_price_usd}".to_string(),
         };
 
         let handler = FeishuNotification::new(config);
@@ -183,24 +186,20 @@ mod tests {
             dte: 28,
             option_type: OptionType::Call,
             moneyness: 0.02,
-            mark_price: 1250.75,
+            mark_price_coin: 0.0183,
         };
 
-        // Use reflection or access the field directly for testing
-        // Since format_message is private, we test via send() or make it pub(crate)
-        // For unit test, we can access via a helper or test the output indirectly
-
-        // Test the template replacement by calling format_message indirectly
-        // We'll make format_message public for testing or test the actual output
+        // Test the template replacement by calling format_message
         let formatted = handler.format_message(&alert);
 
-        // Verify all 5 new fields are replaced correctly
+        // Verify all new fields are replaced correctly
         assert!(formatted.contains("85.0%"), "IV value should be formatted as percentage");
         assert!(formatted.contains("68500.50"), "index_price should be formatted with 2 decimals");
         assert!(formatted.contains("28"), "dte should be present");
         assert!(formatted.contains("C"), "option_type should be present");
         assert!(formatted.contains("ITM +2.0%"), "moneyness should be formatted as ITM/OTM with percentage");
-        assert!(formatted.contains("1250.75"), "mark_price should be formatted with 2 decimals");
+        assert!(formatted.contains("0.0183"), "mark_price_coin should be present");
+        assert!(formatted.contains("1253.56"), "mark_price_usd should be calculated (0.0183 * 68500.50)");
 
         // Verify original fields are also replaced
         assert!(formatted.contains("short"), "tenor should be present");

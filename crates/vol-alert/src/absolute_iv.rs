@@ -61,7 +61,7 @@ impl AlertHandler for AbsoluteIvHandler {
         // IV threshold check
         if data.iv >= iv_threshold {
             let moneyness = data.moneyness();
-            let mark_price = data.extra.get("mark_price")
+            let mark_price = data.extra.get("mark_price_coin")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0);
             Some(Alert::new(
@@ -237,6 +237,6 @@ mod tests {
         assert_eq!(alert.dte, 5);
         assert_eq!(alert.option_type, vol_core::OptionType::Call);
         assert!(alert.moneyness > 0.0); // Call with index_price > strike has positive moneyness
-        assert_eq!(alert.mark_price, 0.0); // mark_price defaults to 0.0 when not in extra
+        assert_eq!(alert.mark_price_coin, 0.0); // mark_price defaults to 0.0 when not in extra
     }
 }
