@@ -153,7 +153,10 @@ pub mod presets {
     /// Subscribe to perpetual tickers for BTC and ETH
     /// Returns: ["ticker.BTC.perpetual", "ticker.ETH.perpetual"]
     pub fn perpetual_tickers(bases: Vec<&str>) -> Vec<String> {
-        bases.iter().map(|&b| ticker_kind(b, kind::PERPETUAL)).collect()
+        bases
+            .iter()
+            .map(|&b| ticker_kind(b, kind::PERPETUAL))
+            .collect()
     }
 
     /// Subscribe to both options mark prices and perpetual tickers
@@ -166,7 +169,10 @@ pub mod presets {
     /// Subscribe to deribit price index for BTC and ETH
     /// Returns: ["deribit_price_index.btc_usd", "deribit_price_index.eth_usd"]
     pub fn price_indices(bases: Vec<&str>) -> Vec<String> {
-        bases.iter().map(|&b| deribit_price_index(&format!("{}_usd", b.to_lowercase()))).collect()
+        bases
+            .iter()
+            .map(|&b| deribit_price_index(&format!("{}_usd", b.to_lowercase())))
+            .collect()
     }
 }
 
@@ -194,8 +200,14 @@ mod tests {
 
     #[test]
     fn test_deribit_price_index_builder() {
-        assert_eq!(deribit_price_index("btc_usd"), "deribit_price_index.btc_usd");
-        assert_eq!(deribit_price_index("eth_usd"), "deribit_price_index.eth_usd");
+        assert_eq!(
+            deribit_price_index("btc_usd"),
+            "deribit_price_index.btc_usd"
+        );
+        assert_eq!(
+            deribit_price_index("eth_usd"),
+            "deribit_price_index.eth_usd"
+        );
     }
 
     #[test]
