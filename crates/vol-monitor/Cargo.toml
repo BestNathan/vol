@@ -22,3 +22,4 @@ vol-config = { workspace = true }
 vol-datasource = { workspace = true }
 vol-alert = { workspace = true }
 vol-notification = { workspace = true }
+vol-deribit = { workspace = true }

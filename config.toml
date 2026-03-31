@@ -8,6 +8,15 @@ ws_url = "wss://www.deribit.com/ws/api/v2"
 symbols = ["BTC", "ETH"]
 poll_interval_secs = 60
 
+# Deribit authentication (optional, for private channels like portfolio)
+# Credentials can also be set via environment variables:
+# - DERIBIT_CLIENT_ID
+# - DERIBIT_CLIENT_SECRET
+# Environment variables take precedence over config file values
+[data_sources.deribit.auth]
+client_id = "your-client-id"
+client_secret = "your-client-secret"
+
 [tenors]
 short_max_dte = 7
 medium_min_dte = 20
@@ -46,6 +55,37 @@ short_long_spread_threshold = 0.15
 
 [alerts.skew]
 threshold = 0.10
+
+# Portfolio monitoring metrics
+# See alerts.metrics for configuration
+
+[[alerts.metrics]]
+type = "margin_ratio"
+enabled = true
+min_threshold = 1.2
+
+[[alerts.metrics]]
+type = "free_balance"
+enabled = true
+min_threshold = 10000.0
+
+[[alerts.metrics]]
+type = "delta_exposure"
+enabled = false
+min_threshold = -0.3
+max_threshold = 0.3
+
+[[alerts.metrics]]
+type = "session_pnl"
+enabled = true
+max_threshold = -5000.0
+
+[[alerts.metrics]]
+type = "total_greeks"
+enabled = false
+gamma_threshold = 0.05
+vega_threshold = 100.0
+theta_threshold = -50.0
 
 [notifications]
 enabled = ["stdout"]

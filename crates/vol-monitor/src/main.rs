@@ -6,12 +6,15 @@ mod registry;
 use anyhow::Result;
 use tracing::{info, warn, error};
 use tracing_subscriber::{self, EnvFilter};
+use tokio::sync::mpsc;
+use std::sync::Arc;
 
-use vol_core::{DataSource, AlertHandler, NotificationHandler, VolatilityData};
+use vol_core::{DataSource, AlertHandler, NotificationHandler, VolatilityData, Alert};
 use vol_config::Config;
 use vol_datasource::DeribitDataSource;
-use vol_alert::{AlertManager, AbsoluteIvHandler, RateChangeHandler, TermStructureHandler, SkewHandler};
+use vol_alert::{AlertManager, AbsoluteIvHandler, RateChangeHandler, TermStructureHandler, SkewHandler, PortfolioAlertHandler, PortfolioSnapshot};
 use vol_notification::{StdoutNotification, FeishuNotification};
+use vol_deribit::{DeribitClient, ChannelType, ChannelData};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -55,12 +58,103 @@ async fn main() -> Result<()> {
         deribit = deribit.with_proxy(proxy.clone());
     }
 
+    // Create client with auth if configured (for portfolio subscription)
+    let portfolio_client = DeribitClient::new(&deribit_config.ws_url);
+
+    // Add auth if configured
+    let auth_configured = if let Some(auth) = &deribit_config.auth {
+        if let (Some(_client_id), Some(_client_secret)) = (auth.client_id(), auth.client_secret()) {
+            info!("OAuth authentication configured for portfolio monitoring");
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    // Clone auth config for portfolio task
+    let auth_for_task = deribit_config.auth.clone();
+    // Clone for portfolio task
+    let portfolio_client_for_task = portfolio_client.clone();
+
     deribit.connect().await?;
     info!("Connecting to Deribit WebSocket: {}", deribit_config.ws_url);
 
     // Subscribe to data stream
     let mut data_rx = deribit.subscribe(deribit_config.symbols.clone())?;
     info!("Subscribed to ticker data for symbols: {:?}", deribit_config.symbols);
+
+    // Create alert notification channel for unified alert processing
+    let (alert_tx, mut alert_rx) = mpsc::channel::<Alert>(100);
+
+    // Set up portfolio monitoring if auth is configured
+    let portfolio_alert_handler = Arc::new(PortfolioAlertHandler::new(
+        config.alerts.metrics.clone(),
+        config.alerts.cooldown_secs,
+    ));
+
+    // Clone required items for portfolio task
+    let portfolio_symbols = deribit_config.symbols.clone();
+    let portfolio_handler_clone = portfolio_alert_handler.clone();
+    let alert_tx_portfolio = alert_tx.clone();
+
+    // Spawn portfolio monitoring task
+    tokio::spawn(async move {
+        let mut portfolio_client = portfolio_client_for_task;
+
+        // Apply auth if configured
+        if let Some(auth) = &auth_for_task {
+            if let (Some(client_id), Some(client_secret)) = (auth.client_id(), auth.client_secret()) {
+                portfolio_client = portfolio_client.with_auth(&client_id, &client_secret);
+            }
+        }
+
+        // Subscribe to portfolio channel for each symbol
+        for symbol in &portfolio_symbols {
+            let channel = ChannelType::UserPortfolio(symbol.clone());
+            info!("Subscribing to portfolio channel: {}", channel.channel_name());
+
+            match portfolio_client.subscribe(channel).await {
+                Ok(mut rx) => {
+                    info!("Successfully subscribed to portfolio.{}", symbol);
+
+                    // Process portfolio updates
+                    while let Some(data) = rx.recv().await {
+                        if let ChannelData::Portfolio(portfolio) = data {
+                            // Create snapshot for alert evaluation
+                            let snapshot = PortfolioSnapshot {
+                                currency: portfolio.currency.clone(),
+                                timestamp: 0, // PortfolioData doesn't have timestamp field
+                                margin_ratio: portfolio.margin_ratio(),
+                                free_balance: portfolio.free_balance(),
+                                delta_exposure: portfolio.delta_exposure(),
+                                session_pnl: portfolio.session_upl + portfolio.session_rpl,
+                                options_gamma: portfolio.options_gamma,
+                                options_vega: portfolio.options_vega,
+                                options_theta: portfolio.options_theta,
+                            };
+
+                            // Evaluate alerts
+                            let alerts = portfolio_handler_clone.evaluate(&snapshot).await;
+
+                            // Send alerts to notification pipeline
+                            for alert in alerts {
+                                let _ = alert_tx_portfolio.send(alert).await;
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to subscribe to portfolio.{}: {}", symbol, e);
+                }
+            }
+        }
+
+        info!("Portfolio monitoring task ended");
+    });
+
+    info!("Portfolio monitoring initialized (auth configured: {})", auth_configured);
 
     // Initialize alert handlers
     let abs_iv_config = config.alerts.absolute_iv.clone();
@@ -115,6 +209,29 @@ async fn main() -> Result<()> {
 
                 // Run alert evaluation
                 evaluate_and_notify(&vol_data, &absolute_iv, &rate_change, &term_structure, &skew, &stdout, feishu.as_ref(), &alert_manager).await;
+            }
+
+            // Handle alerts from portfolio monitoring
+            Some(alert) = alert_rx.recv() => {
+                // Check cooldown
+                if !alert_manager.can_send(&alert) {
+                    warn!("Portfolio alert suppressed (cooldown)");
+                    continue;
+                }
+
+                // Send to stdout
+                if let Err(e) = stdout.send(&alert).await {
+                    error!("Failed to send stdout notification: {}", e);
+                }
+
+                // Send to Feishu if configured
+                if let Some(feishu_handler) = &feishu {
+                    if let Err(e) = feishu_handler.send(&alert).await {
+                        error!("Failed to send Feishu notification: {}", e);
+                    } else {
+                        info!("Feishu notification sent for portfolio alert");
+                    }
+                }
             }
 
             // Handle shutdown signal
