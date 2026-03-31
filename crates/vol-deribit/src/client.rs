@@ -656,4 +656,188 @@ mod tests {
         assert!(matches!(&subscribed[1], ChannelType::PriceIndex(idx) if idx == "eth_usd"));
         assert!(matches!(&subscribed[2], ChannelType::MarkpriceOptions(idx) if idx == "btc_usd"));
     }
+
+    #[test]
+    fn test_parse_and_route_markprice() {
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "method": "subscription",
+            "params": {
+                "channel": "markprice.options.btc_usd",
+                "data": [
+                    {
+                        "instrument_name": "BTC-29MAR24-70000-C",
+                        "mark_price": 1250.50,
+                        "iv": 0.72,
+                        "timestamp": 1743456789000,
+                        "price": 95000.00
+                    }
+                ]
+            }
+        }"#;
+
+        let result = DeribitClient::parse_and_route(json).unwrap();
+        let (channel_type, channel_data) = result;
+
+        // Verify channel type
+        assert!(matches!(&channel_type, ChannelType::MarkpriceOptions(idx) if idx == "btc_usd"));
+
+        // Verify channel data
+        assert!(matches!(channel_data, ChannelData::OptionMarkPrice(_)));
+        if let ChannelData::OptionMarkPrice(data) = channel_data {
+            assert_eq!(data.len(), 1);
+            assert_eq!(data[0].instrument_name, "BTC-29MAR24-70000-C");
+            assert!((data[0].mark_price - 1250.50).abs() < f64::EPSILON);
+            assert!(data[0].iv.unwrap() - 0.72 < f64::EPSILON);
+        }
+    }
+
+    #[test]
+    fn test_parse_and_route_price_index() {
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "method": "subscription",
+            "params": {
+                "channel": "deribit_price_index.btc_usd",
+                "data": {
+                    "index_name": "btc_usd",
+                    "price": 95123.45,
+                    "timestamp": 1743456789000
+                }
+            }
+        }"#;
+
+        let result = DeribitClient::parse_and_route(json).unwrap();
+        let (channel_type, channel_data) = result;
+
+        // Verify channel type
+        assert!(matches!(&channel_type, ChannelType::PriceIndex(idx) if idx == "btc_usd"));
+
+        // Verify channel data
+        assert!(matches!(channel_data, ChannelData::PriceIndex(_)));
+        if let ChannelData::PriceIndex(data) = channel_data {
+            assert_eq!(data.index_name, "btc_usd");
+            assert!((data.price - 95123.45).abs() < f64::EPSILON);
+            assert_eq!(data.timestamp, 1743456789000);
+        }
+    }
+
+    #[test]
+    fn test_parse_and_route_ticker() {
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "method": "subscription",
+            "params": {
+                "channel": "ticker.BTC",
+                "data": [
+                    {
+                        "instrument_name": "BTC-PERPETUAL",
+                        "last": 95100.00,
+                        "mark": 95123.45,
+                        "index_price": 95123.45,
+                        "mark_iv": 0.65,
+                        "timestamp": 1743456789000,
+                        "best_bid_price": 95099.00,
+                        "best_ask_price": 95101.00,
+                        "best_bid_amount": 15000,
+                        "best_ask_amount": 12000,
+                        "state": "open",
+                        "volume": 1234567.89
+                    }
+                ]
+            }
+        }"#;
+
+        let result = DeribitClient::parse_and_route(json).unwrap();
+        let (channel_type, channel_data) = result;
+
+        // Verify channel type
+        assert!(matches!(&channel_type, ChannelType::Ticker(base) if base == "BTC"));
+
+        // Verify channel data
+        assert!(matches!(channel_data, ChannelData::Ticker(_)));
+        if let ChannelData::Ticker(data) = channel_data {
+            assert_eq!(data.instrument_name, "BTC-PERPETUAL");
+            assert!(data.last.unwrap() - 95100.00 < f64::EPSILON);
+            assert!(data.mark_iv.unwrap() - 0.65 < f64::EPSILON);
+        }
+    }
+
+    #[test]
+    fn test_parse_and_route_trade() {
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "method": "subscription",
+            "params": {
+                "channel": "trades.BTC-PERPETUAL",
+                "data": [
+                    {
+                        "trade_id": "12345678",
+                        "instrument_name": "BTC-PERPETUAL",
+                        "price": 95050.00,
+                        "amount": 1500,
+                        "timestamp": 1743456789000,
+                        "direction": "buy",
+                        "liquidation": false,
+                        "block_trade": false
+                    }
+                ]
+            }
+        }"#;
+
+        let result = DeribitClient::parse_and_route(json).unwrap();
+        let (channel_type, channel_data) = result;
+
+        // Verify channel type
+        assert!(
+            matches!(&channel_type, ChannelType::Trade(instrument) if instrument == "BTC-PERPETUAL")
+        );
+
+        // Verify channel data
+        assert!(matches!(channel_data, ChannelData::Trade(_)));
+        if let ChannelData::Trade(data) = channel_data {
+            assert_eq!(data.trade_id, "12345678");
+            assert_eq!(data.instrument_name, "BTC-PERPETUAL");
+            assert!((data.price - 95050.00).abs() < f64::EPSILON);
+            assert_eq!(data.amount, 1500.0);
+            assert_eq!(data.direction, "buy");
+        }
+    }
+
+    #[test]
+    fn test_parse_and_route_wrong_method() {
+        // Test with a non-subscription method (e.g., a response or error)
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {"status": "ok"},
+            "usIn": 1743456789000,
+            "usOut": 1743456789001,
+            "usDiff": 1,
+            "testnet": false
+        }"#;
+
+        // Should return None for non-subscription messages
+        let result = DeribitClient::parse_and_route(json);
+        assert!(
+            result.is_none(),
+            "Should return None for non-subscription method"
+        );
+
+        // Also test with subscription method but invalid channel prefix
+        let json_invalid_channel = r#"{
+            "jsonrpc": "2.0",
+            "method": "subscription",
+            "params": {
+                "channel": "unknown.channel.test",
+                "data": []
+            }
+        }"#;
+
+        let result = DeribitClient::parse_and_route(json_invalid_channel);
+        assert!(
+            result.is_none(),
+            "Should return None for unknown channel prefix"
+        );
+    }
 }
