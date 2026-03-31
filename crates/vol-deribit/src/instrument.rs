@@ -135,7 +135,11 @@ fn parse_expiry(expiry: &str) -> Option<(u32, u32, u32)> {
 
     let year_str = &expiry[month_start + month_end..];
     let year_short: u32 = year_str.parse().ok()?;
-    let year = if year_short < 50 { 2000 + year_short } else { 1900 + year_short };
+    let year = if year_short < 50 {
+        2000 + year_short
+    } else {
+        1900 + year_short
+    };
 
     Some((day, month, year))
 }

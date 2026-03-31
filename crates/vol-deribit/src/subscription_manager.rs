@@ -1,10 +1,10 @@
 //! Subscription manager for multi-channel dispatch over single WebSocket connection.
 
+use crate::{ChannelData, ChannelType};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
-use crate::{ChannelType, ChannelData};
 
 /// Thread-safe subscription registry
 pub struct SubscriptionManager {
@@ -80,10 +80,10 @@ mod tests {
 
         manager.dispatch(&channel_type, test_data.clone()).await;
 
-        let received = tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            rx.recv()
-        ).await.expect("timeout").expect("channel closed");
+        let received = tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv())
+            .await
+            .expect("timeout")
+            .expect("channel closed");
 
         assert_eq!(received.channel_name(), "deribit_price_index");
     }

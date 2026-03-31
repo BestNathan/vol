@@ -35,16 +35,16 @@
 //! | `book.<INSTRUMENT>` | Order book updates |
 //! | `trades.<INSTRUMENT>` | Trade executions |
 
+pub mod client;
 pub mod instrument;
 pub mod market_data;
 pub mod message;
 pub mod subscription;
 pub mod subscription_manager;
-pub mod client;
 
 // Re-export commonly used types
+pub use client::{ClientState, DeribitClient};
 pub use instrument::*;
 pub use market_data::*;
 pub use message::*;
 pub use subscription::*;
-pub use client::{DeribitClient, ClientState};

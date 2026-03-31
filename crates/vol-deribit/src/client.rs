@@ -3,23 +3,21 @@
 //! Provides low-level WebSocket connection, subscription management,
 //! and message parsing for Deribit API v2.
 
+use futures_util::{SinkExt, StreamExt};
+use rustls::{pki_types::ServerName, ClientConfig, RootCertStore};
 use std::sync::Arc;
 use std::time::Duration;
-use futures_util::{StreamExt, SinkExt};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
-use tracing::{info, warn, error, debug};
-use tokio_tungstenite::{
-    connect_async,
-    tungstenite::Message,
-    WebSocketStream,
-};
 use tokio_rustls::TlsConnector;
-use rustls::{RootCertStore, ClientConfig, pki_types::ServerName};
+use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
+use tracing::{debug, error, info, warn};
 use webpki_roots::TLS_SERVER_ROOTS;
 
-use crate::{ChannelType, ChannelData, OptionMarkPrice, PriceIndex, DeribitTicker, Trade, SubscriptionNotification};
 use crate::subscription_manager::SubscriptionManager;
+use crate::{
+    ChannelData, ChannelType, DeribitNotification, OptionMarkPrice, SubscriptionNotification,
+};
 use vol_core::VolatilityData;
 
 /// Type alias for WebSocket write half
@@ -31,7 +29,7 @@ type WsSplitSink = futures_util::stream::SplitSink<WsWriter, Message>;
 pub struct ClientState {
     pub connected: bool,
     pub subscriptions: Vec<String>,
-    connection_started: bool,  // Track if connection task has been started
+    connection_started: bool, // Track if connection task has been started
 }
 
 impl Default for ClientState {
@@ -87,11 +85,7 @@ impl DeribitClient {
 
     /// Run the WebSocket reader loop and stream parsed messages
     #[deprecated(note = "Use subscribe(ChannelType) instead")]
-    pub async fn run(
-        &self,
-        channels: Vec<String>,
-        tx: mpsc::Sender<VolatilityData>,
-    ) {
+    pub async fn run(&self, channels: Vec<String>, tx: mpsc::Sender<VolatilityData>) {
         let mut retry_delay = Duration::from_secs(1);
         const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
 
@@ -189,9 +183,13 @@ impl DeribitClient {
     async fn connect_via_proxy(
         ws_url: &str,
         proxy_url: &str,
-    ) -> Option<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>> {
+    ) -> Option<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+    > {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
         use tokio::net::TcpStream;
-        use tokio::io::{AsyncWriteExt, AsyncBufReadExt, BufReader};
         use tokio_tungstenite::{client_async, MaybeTlsStream};
 
         let ws_url_owned = ws_url.to_string();
@@ -206,7 +204,9 @@ impl DeribitClient {
         let proxy_port: u16 = proxy_parts[1].parse().ok()?;
 
         // Parse WebSocket host for CONNECT request
-        let ws_host = ws_url.trim_start_matches("wss://").trim_start_matches("ws://");
+        let ws_host = ws_url
+            .trim_start_matches("wss://")
+            .trim_start_matches("ws://");
         let ws_host_parts: Vec<&str> = ws_host.split('/').collect();
         let target_host = format!("{}:443", ws_host_parts[0]);
 
@@ -218,7 +218,10 @@ impl DeribitClient {
             "CONNECT {} HTTP/1.1\r\nHost: {}\r\nProxy-Connection: Keep-Alive\r\n\r\n",
             target_host, target_host
         );
-        proxy_stream.write_all(connect_request.as_bytes()).await.ok()?;
+        proxy_stream
+            .write_all(connect_request.as_bytes())
+            .await
+            .ok()?;
 
         // Read response
         let mut reader = BufReader::new(proxy_stream);
@@ -253,9 +256,7 @@ impl DeribitClient {
 
         // Extract domain for TLS (without port)
         let domain = target_host.split(':').next().unwrap();
-        let server_name = ServerName::try_from(domain)
-            .ok()?
-            .to_owned();
+        let server_name = ServerName::try_from(domain).ok()?.to_owned();
         let tls_connector = Arc::new(config);
 
         // Perform TLS handshake
@@ -402,7 +403,10 @@ impl DeribitClient {
                 }
             }
         } else {
-            debug!("WebSocket not connected, subscription queued: {:?}", channels);
+            debug!(
+                "WebSocket not connected, subscription queued: {:?}",
+                channels
+            );
         }
     }
 
@@ -453,10 +457,8 @@ impl DeribitClient {
 
                         // Get the FULL list of channels at connect time
                         let channel_types = channels.lock().await.clone();
-                        let channel_names: Vec<String> = channel_types
-                            .iter()
-                            .map(|c| c.channel_name())
-                            .collect();
+                        let channel_names: Vec<String> =
+                            channel_types.iter().map(|c| c.channel_name()).collect();
 
                         // Send initial subscription using the wrapped writer
                         {
@@ -470,7 +472,9 @@ impl DeribitClient {
                                 }
                             });
 
-                            if let Err(e) = writer.send(Message::Text(subscribe_msg.to_string())).await {
+                            if let Err(e) =
+                                writer.send(Message::Text(subscribe_msg.to_string())).await
+                            {
                                 error!("Failed to send subscription: {}", e);
                                 continue;
                             }
@@ -495,7 +499,8 @@ impl DeribitClient {
                         while let Some(msg_result) = read.next().await {
                             match msg_result {
                                 Ok(Message::Text(text)) => {
-                                    if let Some((channel_type, data)) = Self::parse_and_route(&text) {
+                                    if let Some((channel_type, data)) = Self::parse_and_route(&text)
+                                    {
                                         manager.dispatch(&channel_type, data).await;
                                     }
                                 }
@@ -539,70 +544,70 @@ impl DeribitClient {
                 // Wait before reconnecting (exponential backoff)
                 tokio::time::sleep(retry_delay).await;
                 retry_delay = (retry_delay * 2).min(MAX_RETRY_DELAY);
-        }
+            }
         });
     }
 
-    /// Parse message and extract channel type and data
+    /// Parse message and extract channel type and data.
+    ///
+    /// Uses a single JSON parse with an untagged enum to discriminate
+    /// the notification type, which is more efficient than trying
+    /// each type sequentially.
     fn parse_and_route(text: &str) -> Option<(ChannelType, ChannelData)> {
-        // Try parsing as OptionMarkPrice notification (array)
-        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<Vec<OptionMarkPrice>>>(text) {
-            if notification.method == "subscription" {
-                // Extract index from channel name: "markprice.options.btc_usd" -> "btc_usd"
-                let index = notification.params.channel
+        let notification = serde_json::from_str::<DeribitNotification>(text).ok()?;
+
+        match notification {
+            DeribitNotification::Markprice(n) => {
+                if n.method != "subscription" {
+                    return None;
+                }
+                let index = n
+                    .params
+                    .channel
                     .strip_prefix("markprice.options.")?
                     .to_string();
-                return Some((
+                Some((
                     ChannelType::MarkpriceOptions(index),
-                    ChannelData::OptionMarkPrice(notification.params.data),
-                ));
+                    ChannelData::OptionMarkPrice(n.params.data),
+                ))
             }
-        }
-
-        // Try parsing as PriceIndex notification (single object)
-        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<PriceIndex>>(text) {
-            if notification.method == "subscription" {
-                let index = notification.params.channel
+            DeribitNotification::PriceIndex(n) => {
+                if n.method != "subscription" {
+                    return None;
+                }
+                let index = n
+                    .params
+                    .channel
                     .strip_prefix("deribit_price_index.")?
                     .to_string();
-                return Some((
+                Some((
                     ChannelType::PriceIndex(index),
-                    ChannelData::PriceIndex(notification.params.data),
-                ));
+                    ChannelData::PriceIndex(n.params.data),
+                ))
             }
-        }
-
-        // Try parsing as Ticker notification (array)
-        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<Vec<DeribitTicker>>>(text) {
-            if notification.method == "subscription" {
-                let base = notification.params.channel
+            DeribitNotification::Ticker(n) => {
+                if n.method != "subscription" {
+                    return None;
+                }
+                let base = n
+                    .params
+                    .channel
                     .strip_prefix("ticker.")?
                     .split('.')
                     .next()?
                     .to_string();
-                let ticker = notification.params.data.into_iter().next()?;
-                return Some((
-                    ChannelType::Ticker(base),
-                    ChannelData::Ticker(ticker),
-                ));
+                let ticker = n.params.data.into_iter().next()?;
+                Some((ChannelType::Ticker(base), ChannelData::Ticker(ticker)))
+            }
+            DeribitNotification::Trade(n) => {
+                if n.method != "subscription" {
+                    return None;
+                }
+                let instrument = n.params.channel.strip_prefix("trades.")?.to_string();
+                let trade = n.params.data.into_iter().next()?;
+                Some((ChannelType::Trade(instrument), ChannelData::Trade(trade)))
             }
         }
-
-        // Try parsing as Trade notification (array)
-        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<Vec<Trade>>>(text) {
-            if notification.method == "subscription" {
-                let instrument = notification.params.channel
-                    .strip_prefix("trades.")?
-                    .to_string();
-                let trade = notification.params.data.into_iter().next()?;
-                return Some((
-                    ChannelType::Trade(instrument),
-                    ChannelData::Trade(trade),
-                ));
-            }
-        }
-
-        None
     }
 }
 
@@ -629,9 +634,15 @@ mod tests {
         let client = DeribitClient::new("wss://www.deribit.com/ws/api/v2");
 
         // Subscribe to multiple channels
-        let _rx1 = client.subscribe(ChannelType::PriceIndex("btc_usd".to_string())).await;
-        let _rx2 = client.subscribe(ChannelType::PriceIndex("eth_usd".to_string())).await;
-        let _rx3 = client.subscribe(ChannelType::MarkpriceOptions("btc_usd".to_string())).await;
+        let _rx1 = client
+            .subscribe(ChannelType::PriceIndex("btc_usd".to_string()))
+            .await;
+        let _rx2 = client
+            .subscribe(ChannelType::PriceIndex("eth_usd".to_string()))
+            .await;
+        let _rx3 = client
+            .subscribe(ChannelType::MarkpriceOptions("btc_usd".to_string()))
+            .await;
 
         // Give connection time to start
         tokio::time::sleep(Duration::from_millis(100)).await;

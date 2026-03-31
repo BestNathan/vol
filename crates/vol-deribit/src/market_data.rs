@@ -124,11 +124,22 @@ impl OptionMarkPrice {
         let index_price = index_price?;
 
         // Calculate DTE from expiry
-        let expiry_str = format!("{:02}{}{:02}", day,
+        let expiry_str = format!(
+            "{:02}{}{:02}",
+            day,
             match month {
-                1 => "JAN", 2 => "FEB", 3 => "MAR", 4 => "APR",
-                5 => "MAY", 6 => "JUN", 7 => "JUL", 8 => "AUG",
-                9 => "SEP", 10 => "OCT", 11 => "NOV", 12 => "DEC",
+                1 => "JAN",
+                2 => "FEB",
+                3 => "MAR",
+                4 => "APR",
+                5 => "MAY",
+                6 => "JUN",
+                7 => "JUL",
+                8 => "AUG",
+                9 => "SEP",
+                10 => "OCT",
+                11 => "NOV",
+                12 => "DEC",
                 _ => return None,
             },
             _year % 100
@@ -138,7 +149,10 @@ impl OptionMarkPrice {
         let mut extra = std::collections::HashMap::new();
         extra.insert("underlying".to_string(), serde_json::json!(underlying));
         extra.insert("mark_price".to_string(), serde_json::json!(self.mark_price));
-        extra.insert("index_price_used".to_string(), serde_json::json!(index_price));
+        extra.insert(
+            "index_price_used".to_string(),
+            serde_json::json!(index_price),
+        );
         extra.insert("strike_price".to_string(), serde_json::json!(strike));
 
         Some(vol_core::VolatilityData {
@@ -281,17 +295,26 @@ impl DeribitTicker {
             crate::instrument::parse_instrument_name(&self.instrument_name)?;
 
         // Calculate DTE
-        let dte = crate::instrument::calculate_dte(
-            &format!("{:02}{}{:02}", day,
-                match month {
-                    1 => "JAN", 2 => "FEB", 3 => "MAR", 4 => "APR",
-                    5 => "MAY", 6 => "JUN", 7 => "JUL", 8 => "AUG",
-                    9 => "SEP", 10 => "OCT", 11 => "NOV", 12 => "DEC",
-                    _ => return None,
-                },
-                year % 100
-            )
-        )?;
+        let dte = crate::instrument::calculate_dte(&format!(
+            "{:02}{}{:02}",
+            day,
+            match month {
+                1 => "JAN",
+                2 => "FEB",
+                3 => "MAR",
+                4 => "APR",
+                5 => "MAY",
+                6 => "JUN",
+                7 => "JUL",
+                8 => "AUG",
+                9 => "SEP",
+                10 => "OCT",
+                11 => "NOV",
+                12 => "DEC",
+                _ => return None,
+            },
+            year % 100
+        ))?;
 
         let mut extra = std::collections::HashMap::new();
         extra.insert("underlying".to_string(), serde_json::json!(underlying));
@@ -352,6 +375,9 @@ mod tests {
 
         // Without index price, should return None (no fallback to strike)
         let result = option.to_volatility_data_with_index(None);
-        assert!(result.is_none(), "Should return None when index_price is not provided");
+        assert!(
+            result.is_none(),
+            "Should return None when index_price is not provided"
+        );
     }
 }
