@@ -486,69 +486,6 @@ impl DeribitClient {
 
         None
     }
-
-    /// Parse message and extract channel type and data
-    #[allow(dead_code)]
-    fn parse_and_route(text: &str) -> Option<(ChannelType, ChannelData)> {
-        // Try parsing as OptionMarkPrice notification (array)
-        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<Vec<OptionMarkPrice>>>(text) {
-            if notification.method == "subscription" {
-                // Extract index from channel name: "markprice.options.btc_usd" -> "btc_usd"
-                let index = notification.params.channel
-                    .strip_prefix("markprice.options.")?
-                    .to_string();
-                return Some((
-                    ChannelType::MarkpriceOptions(index),
-                    ChannelData::OptionMarkPrice(notification.params.data),
-                ));
-            }
-        }
-
-        // Try parsing as PriceIndex notification (single object)
-        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<PriceIndex>>(text) {
-            if notification.method == "subscription" {
-                let index = notification.params.channel
-                    .strip_prefix("deribit_price_index.")?
-                    .to_string();
-                return Some((
-                    ChannelType::PriceIndex(index),
-                    ChannelData::PriceIndex(notification.params.data),
-                ));
-            }
-        }
-
-        // Try parsing as Ticker notification (array)
-        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<Vec<DeribitTicker>>>(text) {
-            if notification.method == "subscription" {
-                let base = notification.params.channel
-                    .strip_prefix("ticker.")?
-                    .split('.')
-                    .next()?
-                    .to_string();
-                let ticker = notification.params.data.into_iter().next()?;
-                return Some((
-                    ChannelType::Ticker(base),
-                    ChannelData::Ticker(ticker),
-                ));
-            }
-        }
-
-        // Try parsing as Trade notification (array)
-        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<Vec<Trade>>>(text) {
-            if notification.method == "subscription" {
-                let instrument = notification.params.channel
-                    .strip_prefix("trades.")?
-                    .to_string();
-                let trade = notification.params.data.into_iter().next()?;
-                return Some((
-                    ChannelType::Trade(instrument),
-                    ChannelData::Trade(trade),
-                ));
-            }
-        }
-
-        None
-    }
 }
 
 impl Clone for DeribitClient {
