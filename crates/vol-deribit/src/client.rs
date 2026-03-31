@@ -18,6 +18,7 @@ use rustls::{RootCertStore, ClientConfig, pki_types::ServerName};
 use webpki_roots::TLS_SERVER_ROOTS;
 
 use crate::{ChannelType, ChannelData, OptionMarkPrice, PriceIndex, DeribitTicker, Trade, SubscriptionNotification};
+use crate::subscription_manager::SubscriptionManager;
 use vol_core::VolatilityData;
 
 /// Deribit WebSocket client state
@@ -41,6 +42,8 @@ pub struct DeribitClient {
     ws_url: String,
     state: Arc<Mutex<ClientState>>,
     proxy_url: Option<String>,
+    subscription_manager: Arc<SubscriptionManager>,
+    subscribed_channels: Arc<Mutex<Vec<ChannelType>>>,
 }
 
 impl DeribitClient {
@@ -50,6 +53,8 @@ impl DeribitClient {
             ws_url: ws_url.into(),
             state: Arc::new(Mutex::new(ClientState::default())),
             proxy_url: None,
+            subscription_manager: Arc::new(SubscriptionManager::new()),
+            subscribed_channels: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -419,6 +424,8 @@ impl Clone for DeribitClient {
             ws_url: self.ws_url.clone(),
             state: self.state.clone(),
             proxy_url: self.proxy_url.clone(),
+            subscription_manager: self.subscription_manager.clone(),
+            subscribed_channels: self.subscribed_channels.clone(),
         }
     }
 }
