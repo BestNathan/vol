@@ -222,6 +222,7 @@ fn create_default_config() -> Config {
                 ws_url: "wss://www.deribit.com/ws/api/v2".to_string(),
                 symbols: vec!["BTC".to_string(), "ETH".to_string()],
                 poll_interval_secs: 60,
+                auth: None,
             }),
         },
         tenors: TenorConfig {
@@ -245,6 +246,7 @@ fn create_default_config() -> Config {
             skew: SkewConfig {
                 threshold: 0.10,
             },
+            metrics: vec![],
         },
         notifications: NotificationsConfig {
             enabled: vec!["stdout".to_string()],
