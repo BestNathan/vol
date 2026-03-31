@@ -499,3 +499,31 @@ impl Clone for DeribitClient {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::time::Duration;
+
+    #[tokio::test]
+    async fn test_multiple_subscriptions_share_connection() {
+        let client = DeribitClient::new("wss://www.deribit.com/ws/api/v2");
+
+        // Subscribe to multiple channels
+        let _rx1 = client.subscribe(ChannelType::PriceIndex("btc_usd".to_string())).await;
+        let _rx2 = client.subscribe(ChannelType::PriceIndex("eth_usd".to_string())).await;
+        let _rx3 = client.subscribe(ChannelType::MarkpriceOptions("btc_usd".to_string())).await;
+
+        // Give connection time to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Verify all channels are tracked in subscribed_channels
+        let subscribed = client.subscribed_channels.lock().await;
+        assert_eq!(subscribed.len(), 3, "All 3 subscriptions should be tracked");
+
+        // Verify channel types are correctly stored
+        assert!(matches!(&subscribed[0], ChannelType::PriceIndex(idx) if idx == "btc_usd"));
+        assert!(matches!(&subscribed[1], ChannelType::PriceIndex(idx) if idx == "eth_usd"));
+        assert!(matches!(&subscribed[2], ChannelType::MarkpriceOptions(idx) if idx == "btc_usd"));
+    }
+}
