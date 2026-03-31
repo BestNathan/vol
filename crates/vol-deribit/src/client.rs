@@ -302,17 +302,34 @@ impl DeribitClient {
         &self,
         channel: ChannelType,
     ) -> Result<mpsc::Receiver<ChannelData>, vol_core::VolError> {
-        let (tx, rx) = mpsc::channel(1024);
+        // Register subscriber and get receiver
+        let rx = self.subscription_manager.register(channel.clone()).await;
 
-        // Get channel name string for subscription
-        let channel_name = channel.channel_name();
+        // Check if we need to start/restart the connection
+        let needs_reconnect = {
+            let mut channels = self.subscribed_channels.lock().await;
+            let is_new = !channels.contains(&channel);
+            if is_new {
+                channels.push(channel);
+            }
+            is_new
+        };
 
-        // Store channel type for runtime dispatch
-        let channel_type = channel.clone();
+        // Start connection if this is a new channel
+        if needs_reconnect {
+            self.start_connection().await;
+        }
 
-        // Spawn WebSocket message processing loop
+        Ok(rx)
+    }
+
+    /// Start the WebSocket connection and reader loop
+    async fn start_connection(&self) {
         let ws_url = self.ws_url.clone();
         let proxy_url = self.proxy_url.clone();
+        let manager = self.subscription_manager.clone();
+        let channels = self.subscribed_channels.lock().await.clone();
+        let state = self.state.clone();
 
         tokio::spawn(async move {
             let mut retry_delay = Duration::from_secs(1);
@@ -336,13 +353,17 @@ impl DeribitClient {
 
                         let (mut write, mut read) = ws_stream.split();
 
-                        // Send subscription message
+                        // Subscribe to ALL channels at once
+                        let channel_names: Vec<String> = channels.iter()
+                            .map(|c| c.channel_name())
+                            .collect();
+
                         let subscribe_msg = serde_json::json!({
                             "jsonrpc": "2.0",
                             "id": 1,
                             "method": "public/subscribe",
                             "params": {
-                                "channels": [&channel_name]
+                                "channels": channel_names.iter().map(|s| s.as_str()).collect::<Vec<&str>>()
                             }
                         });
 
@@ -351,17 +372,21 @@ impl DeribitClient {
                             continue;
                         }
 
-                        info!("Subscribed to channel: {}", channel_name);
+                        info!("Subscribed to channels: {:?}", channel_names);
 
-                        // Read messages
+                        // Update state
+                        {
+                            let mut s = state.lock().await;
+                            s.connected = true;
+                            s.subscriptions = channel_names.clone();
+                        }
+
+                        // Read and dispatch
                         while let Some(msg_result) = read.next().await {
                             match msg_result {
                                 Ok(Message::Text(text)) => {
-                                    if let Some(data) = Self::parse_channel_message(&text, &channel_type) {
-                                        if let Err(e) = tx.send(data).await {
-                                            warn!("Failed to send channel data: {}", e);
-                                            break;
-                                        }
+                                    if let Some((channel_type, data)) = Self::parse_and_route(&text) {
+                                        manager.dispatch(&channel_type, data).await;
                                     }
                                 }
                                 Ok(Message::Ping(data)) => {
@@ -380,6 +405,13 @@ impl DeribitClient {
                                 }
                             }
                         }
+
+                        // Connection lost - reset state
+                        {
+                            let mut s = state.lock().await;
+                            s.connected = false;
+                            s.subscriptions = Vec::new();
+                        }
                     }
                     None => {
                         error!("Failed to connect to Deribit");
@@ -389,32 +421,70 @@ impl DeribitClient {
                 // Wait before reconnecting (exponential backoff)
                 tokio::time::sleep(retry_delay).await;
                 retry_delay = (retry_delay * 2).min(MAX_RETRY_DELAY);
-            }
+        }
         });
-
-        Ok(rx)
     }
 
-    /// Parse channel message based on channel type
-    fn parse_channel_message(text: &str, channel_type: &ChannelType) -> Option<ChannelData> {
-        match channel_type {
-            ChannelType::MarkpriceOptions(_) => {
-                let notification: SubscriptionNotification<Vec<OptionMarkPrice>> = serde_json::from_str(text).ok()?;
-                Some(ChannelData::OptionMarkPrice(notification.params.data))
-            }
-            ChannelType::PriceIndex(_) => {
-                let notification: SubscriptionNotification<PriceIndex> = serde_json::from_str(text).ok()?;
-                Some(ChannelData::PriceIndex(notification.params.data))
-            }
-            ChannelType::Ticker(_) => {
-                let notification: SubscriptionNotification<Vec<DeribitTicker>> = serde_json::from_str(text).ok()?;
-                Some(ChannelData::Ticker(notification.params.data.into_iter().next()?))
-            }
-            ChannelType::Trade(_) => {
-                let notification: SubscriptionNotification<Vec<Trade>> = serde_json::from_str(text).ok()?;
-                Some(ChannelData::Trade(notification.params.data.into_iter().next()?))
+    /// Parse message and extract channel type and data
+    fn parse_and_route(text: &str) -> Option<(ChannelType, ChannelData)> {
+        // Try parsing as OptionMarkPrice notification (array)
+        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<Vec<OptionMarkPrice>>>(text) {
+            if notification.method == "subscription" {
+                // Extract index from channel name: "markprice.options.btc_usd" -> "btc_usd"
+                let index = notification.params.channel
+                    .strip_prefix("markprice.options.")?
+                    .to_string();
+                return Some((
+                    ChannelType::MarkpriceOptions(index),
+                    ChannelData::OptionMarkPrice(notification.params.data),
+                ));
             }
         }
+
+        // Try parsing as PriceIndex notification (single object)
+        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<PriceIndex>>(text) {
+            if notification.method == "subscription" {
+                let index = notification.params.channel
+                    .strip_prefix("deribit_price_index.")?
+                    .to_string();
+                return Some((
+                    ChannelType::PriceIndex(index),
+                    ChannelData::PriceIndex(notification.params.data),
+                ));
+            }
+        }
+
+        // Try parsing as Ticker notification (array)
+        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<Vec<DeribitTicker>>>(text) {
+            if notification.method == "subscription" {
+                let base = notification.params.channel
+                    .strip_prefix("ticker.")?
+                    .split('.')
+                    .next()?
+                    .to_string();
+                let ticker = notification.params.data.into_iter().next()?;
+                return Some((
+                    ChannelType::Ticker(base),
+                    ChannelData::Ticker(ticker),
+                ));
+            }
+        }
+
+        // Try parsing as Trade notification (array)
+        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<Vec<Trade>>>(text) {
+            if notification.method == "subscription" {
+                let instrument = notification.params.channel
+                    .strip_prefix("trades.")?
+                    .to_string();
+                let trade = notification.params.data.into_iter().next()?;
+                return Some((
+                    ChannelType::Trade(instrument),
+                    ChannelData::Trade(trade),
+                ));
+            }
+        }
+
+        None
     }
 
     /// Parse message and extract channel type and data
@@ -490,5 +560,33 @@ impl Clone for DeribitClient {
             subscription_manager: self.subscription_manager.clone(),
             subscribed_channels: self.subscribed_channels.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::time::Duration;
+
+    #[tokio::test]
+    async fn test_multiple_subscriptions_share_connection() {
+        let client = DeribitClient::new("wss://www.deribit.com/ws/api/v2");
+
+        // Subscribe to multiple channels
+        let _rx1 = client.subscribe(ChannelType::PriceIndex("btc_usd".to_string())).await;
+        let _rx2 = client.subscribe(ChannelType::PriceIndex("eth_usd".to_string())).await;
+        let _rx3 = client.subscribe(ChannelType::MarkpriceOptions("btc_usd".to_string())).await;
+
+        // Give connection time to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Verify all channels are tracked in subscribed_channels
+        let subscribed = client.subscribed_channels.lock().await;
+        assert_eq!(subscribed.len(), 3, "All 3 subscriptions should be tracked");
+
+        // Verify channel types are correctly stored
+        assert!(matches!(&subscribed[0], ChannelType::PriceIndex(idx) if idx == "btc_usd"));
+        assert!(matches!(&subscribed[1], ChannelType::PriceIndex(idx) if idx == "eth_usd"));
+        assert!(matches!(&subscribed[2], ChannelType::MarkpriceOptions(idx) if idx == "btc_usd"));
     }
 }

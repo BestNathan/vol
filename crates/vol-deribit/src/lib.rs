@@ -41,6 +41,7 @@ pub mod message;
 pub mod subscription;
 pub mod subscription_manager;
 pub mod client;
+pub mod subscription_manager;
 
 // Re-export commonly used types
 pub use instrument::*;

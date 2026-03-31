@@ -8,7 +8,7 @@ use serde_json::Value;
 use crate::{OptionMarkPrice, PriceIndex, DeribitTicker, Trade};
 
 /// Channel type enum - type-safe channel binding at compile time
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum ChannelType {
     /// Options mark price with IV (markprice.options.<INDEX>)
     MarkpriceOptions(String),
