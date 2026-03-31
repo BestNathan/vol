@@ -8,6 +8,22 @@ pub enum AlertType {
     RateChange { window_hours: u32, change_pct: f64 },
     TermStructure { spread_pct: f64 },
     Skew { skew_pct: f64 },
+
+    /// Portfolio margin ratio alert
+    #[serde(rename = "portfolio_margin")]
+    PortfolioMargin { current: f64, threshold: f64 },
+    /// Portfolio free balance alert
+    #[serde(rename = "portfolio_balance")]
+    PortfolioBalance { current: f64, threshold: f64 },
+    /// Portfolio delta exposure alert
+    #[serde(rename = "portfolio_delta")]
+    PortfolioDelta { current: f64 },
+    /// Portfolio PnL alert
+    #[serde(rename = "portfolio_pnl")]
+    PortfolioPnL { current: f64, threshold: f64 },
+    /// Portfolio Greeks alert
+    #[serde(rename = "portfolio_greek")]
+    PortfolioGreek { greek: String, current: f64, threshold: f64 },
 }
 
 impl std::fmt::Display for AlertType {
@@ -17,6 +33,11 @@ impl std::fmt::Display for AlertType {
             AlertType::RateChange { .. } => write!(f, "rate_change"),
             AlertType::TermStructure { .. } => write!(f, "term_structure"),
             AlertType::Skew { .. } => write!(f, "skew"),
+            AlertType::PortfolioMargin { .. } => write!(f, "portfolio_margin"),
+            AlertType::PortfolioBalance { .. } => write!(f, "portfolio_balance"),
+            AlertType::PortfolioDelta { .. } => write!(f, "portfolio_delta"),
+            AlertType::PortfolioPnL { .. } => write!(f, "portfolio_pnl"),
+            AlertType::PortfolioGreek { .. } => write!(f, "portfolio_greek"),
         }
     }
 }
