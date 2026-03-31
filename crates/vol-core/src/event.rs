@@ -1,4 +1,4 @@
-use crate::models::Tenor;
+use crate::models::{OptionType, Tenor};
 use serde::{Deserialize, Serialize};
 
 /// Alert types supported by the system
@@ -44,6 +44,21 @@ pub struct Alert {
 
     /// Data source name
     pub source: String,
+
+    /// Current index price of the underlying asset
+    pub index_price: f64,
+
+    /// Days to expiration
+    pub dte: u32,
+
+    /// Option type (call/put)
+    pub option_type: OptionType,
+
+    /// Moneyness ratio (spot / strike)
+    pub moneyness: f64,
+
+    /// Option mark price
+    pub mark_price: f64,
 }
 
 impl Alert {
@@ -55,6 +70,11 @@ impl Alert {
         message: String,
         timestamp: u64,
         source: String,
+        index_price: f64,
+        dte: u32,
+        option_type: OptionType,
+        moneyness: f64,
+        mark_price: f64,
     ) -> Self {
         Self {
             alert_type,
@@ -64,6 +84,11 @@ impl Alert {
             message,
             timestamp,
             source,
+            index_price,
+            dte,
+            option_type,
+            moneyness,
+            mark_price,
         }
     }
 }
