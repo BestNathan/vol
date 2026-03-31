@@ -126,7 +126,7 @@ pub struct FeishuConfig {
 }
 
 fn default_message_template() -> String {
-    "🚨 {tenor} {alert_type}: {value}".to_string()
+    "🚨 {tenor} {alert_type}: {symbol} | IV={value:.1}% | 指数={index_price} | DTE={dte}天 | {option_type} | 价格={mark_price}".to_string()
 }
 
 /// State persistence configuration
