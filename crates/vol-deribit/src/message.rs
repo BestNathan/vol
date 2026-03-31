@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{OptionMarkPrice, PriceIndex, DeribitTicker, Trade};
+use crate::{DeribitTicker, OptionMarkPrice, PriceIndex, Trade};
 
 /// Channel type enum - type-safe channel binding at compile time
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -133,14 +133,15 @@ pub struct SubscriptionParams<T = Value> {
 /// Untagged enum for Deribit WebSocket notifications.
 ///
 /// Serde tries variants in order, using fail-fast deserialization.
-/// This is more efficient than manually trying each type sequentially.
+/// Order matters: more specific types (with required fields) come first.
+/// Trade comes before Ticker because DeribitTicker has all optional fields.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum DeribitNotification {
     Markprice(SubscriptionNotification<Vec<OptionMarkPrice>>),
     PriceIndex(SubscriptionNotification<PriceIndex>),
-    Ticker(SubscriptionNotification<Vec<DeribitTicker>>),
     Trade(SubscriptionNotification<Vec<Trade>>),
+    Ticker(SubscriptionNotification<Vec<DeribitTicker>>),
 }
 
 /// Subscription request to public channels
@@ -256,5 +257,154 @@ mod tests {
         assert_eq!(notification.method, "subscription");
         assert_eq!(notification.params.channel, "markprice.options.btc_usd");
         assert_eq!(notification.params.data.len(), 1);
+    }
+
+    #[test]
+    fn test_markprice_notification() {
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "method": "subscription",
+            "params": {
+                "channel": "markprice.options.btc_usd",
+                "data": [
+                    {
+                        "instrument_name": "BTC-29MAR24-70000-C",
+                        "mark_price": 1250.50,
+                        "iv": 0.72,
+                        "timestamp": 1743456789000,
+                        "price": 95000.00
+                    },
+                    {
+                        "instrument_name": "BTC-29MAR24-70000-P",
+                        "mark_price": 890.25,
+                        "iv": 0.68,
+                        "timestamp": 1743456789000,
+                        "price": 95000.00
+                    }
+                ]
+            }
+        }"#;
+
+        let notification: DeribitNotification = serde_json::from_str(json).unwrap();
+
+        match notification {
+            DeribitNotification::Markprice(n) => {
+                assert_eq!(n.params.channel, "markprice.options.btc_usd");
+                assert_eq!(n.params.data.len(), 2);
+                assert_eq!(n.params.data[0].instrument_name, "BTC-29MAR24-70000-C");
+                assert!((n.params.data[0].mark_price - 1250.50).abs() < f64::EPSILON);
+                assert!(n.params.data[0].iv.unwrap() - 0.72 < f64::EPSILON);
+            }
+            _ => panic!("Expected Markprice variant"),
+        }
+    }
+
+    #[test]
+    fn test_price_index_notification() {
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "method": "subscription",
+            "params": {
+                "channel": "deribit_price_index.btc_usd",
+                "data": {
+                    "index_name": "btc_usd",
+                    "price": 95123.45,
+                    "timestamp": 1743456789000
+                }
+            }
+        }"#;
+
+        let notification: DeribitNotification = serde_json::from_str(json).unwrap();
+
+        match notification {
+            DeribitNotification::PriceIndex(n) => {
+                assert_eq!(n.params.channel, "deribit_price_index.btc_usd");
+                assert_eq!(n.params.data.index_name, "btc_usd");
+                assert!((n.params.data.price - 95123.45).abs() < f64::EPSILON);
+                assert_eq!(n.params.data.timestamp, 1743456789000);
+            }
+            _ => panic!("Expected PriceIndex variant"),
+        }
+    }
+
+    #[test]
+    fn test_ticker_notification() {
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "method": "subscription",
+            "params": {
+                "channel": "ticker.BTC",
+                "data": [
+                    {
+                        "instrument_name": "BTC-PERPETUAL",
+                        "last": 95100.00,
+                        "mark": 95123.45,
+                        "index_price": 95123.45,
+                        "iv": 0.65,
+                        "timestamp": 1743456789000,
+                        "best_bid_price": 95099.00,
+                        "best_ask_price": 95101.00,
+                        "best_bid_amount": 15000,
+                        "best_ask_amount": 12000,
+                        "state": "open",
+                        "volume": 1234567.89
+                    }
+                ]
+            }
+        }"#;
+
+        let notification: DeribitNotification = serde_json::from_str(json).unwrap();
+
+        match notification {
+            DeribitNotification::Ticker(n) => {
+                assert_eq!(n.params.channel, "ticker.BTC");
+                assert_eq!(n.params.data.len(), 1);
+                assert_eq!(n.params.data[0].instrument_name, "BTC-PERPETUAL");
+                assert!(n.params.data[0].last.unwrap() - 95100.00 < f64::EPSILON);
+                assert!(n.params.data[0].mark_iv.unwrap() - 0.65 < f64::EPSILON);
+            }
+            _ => panic!("Expected Ticker variant"),
+        }
+    }
+
+    #[test]
+    fn test_trade_notification() {
+        // Deribit trade data has specific fields that distinguish it from ticker data
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "method": "subscription",
+            "params": {
+                "channel": "trades.BTC-PERPETUAL",
+                "data": [
+                    {
+                        "trade_id": "12345678",
+                        "instrument_name": "BTC-PERPETUAL",
+                        "price": 95050.00,
+                        "amount": 1500,
+                        "timestamp": 1743456789000,
+                        "direction": "buy",
+                        "liquidation": false,
+                        "block_trade": false,
+                        "tick_direction": 0,
+                        "buyer_is_maker": false
+                    }
+                ]
+            }
+        }"#;
+
+        let notification: DeribitNotification = serde_json::from_str(json).unwrap();
+
+        match notification {
+            DeribitNotification::Trade(n) => {
+                assert_eq!(n.params.channel, "trades.BTC-PERPETUAL");
+                assert_eq!(n.params.data.len(), 1);
+                assert_eq!(n.params.data[0].trade_id, "12345678");
+                assert_eq!(n.params.data[0].instrument_name, "BTC-PERPETUAL");
+                assert!((n.params.data[0].price - 95050.00).abs() < f64::EPSILON);
+                assert_eq!(n.params.data[0].amount, 1500.0);
+                assert_eq!(n.params.data[0].direction, "buy");
+            }
+            _ => panic!("Expected Trade variant"),
+        }
     }
 }
