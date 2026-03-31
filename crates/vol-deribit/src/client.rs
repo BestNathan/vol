@@ -428,40 +428,6 @@ impl DeribitClient {
         }
     }
 
-    /// Get OAuth access token via HTTP POST
-    async fn get_access_token(&self) -> Result<String, vol_core::VolError> {
-        let client_id = self.client_id.as_ref()
-            .ok_or_else(|| vol_core::VolError::Auth("client_id not configured".into()))?;
-        let client_secret = self.client_secret.as_ref()
-            .ok_or_else(|| vol_core::VolError::Auth("client_secret not configured".into()))?;
-
-        let client = reqwest::Client::new();
-        let response = client
-            .post("https://www.deribit.com/api/v2/public/auth")
-            .json(&serde_json::json!({
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "public/auth",
-                "params": {
-                    "grant_type": "client_credentials",
-                    "client_id": client_id,
-                    "client_secret": client_secret
-                }
-            }))
-            .send()
-            .await
-            .map_err(|e| vol_core::VolError::Auth(format!("Token request failed: {}", e)))?;
-
-        let result: serde_json::Value = response.json().await
-            .map_err(|e| vol_core::VolError::Auth(format!("Token parse failed: {}", e)))?;
-
-        result.get("result")
-            .and_then(|r| r.get("access_token"))
-            .and_then(|t| t.as_str())
-            .map(|s| s.to_string())
-            .ok_or_else(|| vol_core::VolError::Auth("No access token in response".into()))
-    }
-
     /// Get OAuth access token via HTTP POST (static helper for use in spawned tasks)
     async fn get_access_token_inner(client_id: &str, client_secret: &str) -> Result<String, vol_core::VolError> {
         let client = reqwest::Client::new();
