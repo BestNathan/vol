@@ -20,6 +20,9 @@ pub enum VolError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Authentication error: {0}")]
+    Auth(String),
 }
 
 pub type Result<T> = std::result::Result<T, VolError>;

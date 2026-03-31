@@ -52,6 +52,10 @@ pub struct DeribitClient {
     /// Shared write sender for dynamic subscription updates
     /// Outer Arc<Mutex<>> allows cloning the client, inner Option<Arc<Mutex<>>> allows sharing the writer
     ws_sender: Arc<Mutex<Option<Arc<Mutex<WsSplitSink>>>>>,
+    /// OAuth client ID
+    client_id: Option<String>,
+    /// OAuth client secret
+    client_secret: Option<String>,
 }
 
 impl DeribitClient {
@@ -64,6 +68,8 @@ impl DeribitClient {
             subscription_manager: Arc::new(SubscriptionManager::new()),
             subscribed_channels: Arc::new(Mutex::new(Vec::new())),
             ws_sender: Arc::new(Mutex::new(None)),
+            client_id: None,
+            client_secret: None,
         }
     }
 
@@ -71,6 +77,18 @@ impl DeribitClient {
     pub fn with_proxy(mut self, proxy_url: impl Into<String>) -> Self {
         self.proxy_url = Some(proxy_url.into());
         self
+    }
+
+    /// Configure OAuth authentication
+    pub fn with_auth(mut self, client_id: impl Into<String>, client_secret: impl Into<String>) -> Self {
+        self.client_id = Some(client_id.into());
+        self.client_secret = Some(client_secret.into());
+        self
+    }
+
+    /// Check if authentication is configured
+    pub fn has_auth(&self) -> bool {
+        self.client_id.is_some() && self.client_secret.is_some()
     }
 
     /// Get connection state
@@ -410,6 +428,69 @@ impl DeribitClient {
         }
     }
 
+    /// Get OAuth access token via HTTP POST
+    async fn get_access_token(&self) -> Result<String, vol_core::VolError> {
+        let client_id = self.client_id.as_ref()
+            .ok_or_else(|| vol_core::VolError::Auth("client_id not configured".into()))?;
+        let client_secret = self.client_secret.as_ref()
+            .ok_or_else(|| vol_core::VolError::Auth("client_secret not configured".into()))?;
+
+        let client = reqwest::Client::new();
+        let response = client
+            .post("https://www.deribit.com/api/v2/public/auth")
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "public/auth",
+                "params": {
+                    "grant_type": "client_credentials",
+                    "client_id": client_id,
+                    "client_secret": client_secret
+                }
+            }))
+            .send()
+            .await
+            .map_err(|e| vol_core::VolError::Auth(format!("Token request failed: {}", e)))?;
+
+        let result: serde_json::Value = response.json().await
+            .map_err(|e| vol_core::VolError::Auth(format!("Token parse failed: {}", e)))?;
+
+        result.get("result")
+            .and_then(|r| r.get("access_token"))
+            .and_then(|t| t.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| vol_core::VolError::Auth("No access token in response".into()))
+    }
+
+    /// Get OAuth access token via HTTP POST (static helper for use in spawned tasks)
+    async fn get_access_token_inner(client_id: &str, client_secret: &str) -> Result<String, vol_core::VolError> {
+        let client = reqwest::Client::new();
+        let response = client
+            .post("https://www.deribit.com/api/v2/public/auth")
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "public/auth",
+                "params": {
+                    "grant_type": "client_credentials",
+                    "client_id": client_id,
+                    "client_secret": client_secret
+                }
+            }))
+            .send()
+            .await
+            .map_err(|e| vol_core::VolError::Auth(format!("Token request failed: {}", e)))?;
+
+        let result: serde_json::Value = response.json().await
+            .map_err(|e| vol_core::VolError::Auth(format!("Token parse failed: {}", e)))?;
+
+        result.get("result")
+            .and_then(|r| r.get("access_token"))
+            .and_then(|t| t.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| vol_core::VolError::Auth("No access token in response".into()))
+    }
+
     /// Start the WebSocket connection and reader loop
     ///
     /// Connection is decoupled from subscription management:
@@ -429,6 +510,8 @@ impl DeribitClient {
         let channels = self.subscribed_channels.clone();
         let state = self.state.clone();
         let ws_sender = self.ws_sender.clone();
+        let client_id = self.client_id.clone();
+        let client_secret = self.client_secret.clone();
 
         tokio::spawn(async move {
             let mut retry_delay = Duration::from_secs(1);
@@ -460,9 +543,56 @@ impl DeribitClient {
                         let channel_names: Vec<String> =
                             channel_types.iter().map(|c| c.channel_name()).collect();
 
+                        // Authenticate if credentials are present
+                        let access_token = if let (Some(cid), Some(csecret)) = (&client_id, &client_secret) {
+                            match Self::get_access_token_inner(cid, csecret).await {
+                                Ok(token) => {
+                                    info!("OAuth authentication successful");
+                                    Some(token)
+                                }
+                                Err(e) => {
+                                    error!("OAuth authentication failed: {}", e);
+                                    None
+                                }
+                            }
+                        } else {
+                            None
+                        };
+
                         // Send initial subscription using the wrapped writer
                         {
                             let mut writer = write_arc.lock().await;
+
+                            // If we have auth, send auth message first
+                            if let Some(token) = &access_token {
+                                let auth_msg = serde_json::json!({
+                                    "jsonrpc": "2.0",
+                                    "id": 2,
+                                    "method": "private/auth",
+                                    "params": {
+                                        "access_token": token
+                                    }
+                                });
+
+                                if let Err(e) = writer.send(Message::Text(auth_msg.to_string())).await {
+                                    error!("Failed to send auth message: {}", e);
+                                }
+
+                                // Wait for auth response
+                                if let Some(Ok(msg)) = read.next().await {
+                                    if let Message::Text(text) = msg {
+                                        if let Ok(resp) = serde_json::from_str::<serde_json::Value>(&text) {
+                                            if let Some(error) = resp.get("error") {
+                                                error!("Auth failed: {}", error);
+                                            } else {
+                                                info!("private/auth succeeded");
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Then send subscription
                             let subscribe_msg = serde_json::json!({
                                 "jsonrpc": "2.0",
                                 "id": 1,
@@ -634,6 +764,8 @@ impl Clone for DeribitClient {
             subscription_manager: self.subscription_manager.clone(),
             subscribed_channels: self.subscribed_channels.clone(),
             ws_sender: self.ws_sender.clone(),
+            client_id: self.client_id.clone(),
+            client_secret: self.client_secret.clone(),
         }
     }
 }
