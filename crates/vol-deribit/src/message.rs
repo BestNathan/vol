@@ -130,6 +130,19 @@ pub struct SubscriptionParams<T = Value> {
     pub data: T,
 }
 
+/// Untagged enum for Deribit WebSocket notifications.
+///
+/// Serde tries variants in order, using fail-fast deserialization.
+/// This is more efficient than manually trying each type sequentially.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum DeribitNotification {
+    Markprice(SubscriptionNotification<Vec<OptionMarkPrice>>),
+    PriceIndex(SubscriptionNotification<PriceIndex>),
+    Ticker(SubscriptionNotification<Vec<DeribitTicker>>),
+    Trade(SubscriptionNotification<Vec<Trade>>),
+}
+
 /// Subscription request to public channels
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublicSubscribeParams {
