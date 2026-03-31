@@ -105,6 +105,10 @@ impl DataSource for DeribitDataSource {
                                 // Not used in current implementation but handled for completeness
                                 warn!("Unexpected channel type: {:?}", channel);
                             }
+                            ChannelType::UserPortfolio(_) => {
+                                // Private channel for portfolio updates - requires authentication
+                                warn!("UserPortfolio channel requires OAuth authentication");
+                            }
                         }
                     }
                     Err(e) => {
