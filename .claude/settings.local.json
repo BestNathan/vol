@@ -130,7 +130,14 @@
       "Bash(timeout 30 bash -c 'RUST_LOG=info,target:index_price_missing=warn,target:data_send_failed=error,target:volatility_data_conversion_failed=error HTTPS_PROXY=http://192.168.2.98:8890 ./target/release/vol-monitor 2>&1')",
       "Bash(timeout 15 bash -c 'RUST_LOG=vol_deribit=debug HTTPS_PROXY=http://192.168.2.98:8890 ./target/release/vol-monitor 2>&1')",
       "Bash(timeout 20 bash -c 'RUST_LOG=volatility_data_conversion_failed=debug HTTPS_PROXY=http://192.168.2.98:8890 ./target/release/vol-monitor 2>&1')",
-      "Bash(HTTPS_PROXY=http://192.168.2.98:8890 timeout 15 ./target/release/vol-monitor)"
+      "Bash(HTTPS_PROXY=http://192.168.2.98:8890 timeout 15 ./target/release/vol-monitor)",
+      "Bash(jq -r \".[] | select\\(.message.role == \"\"assistant\"\"\\) | .message.content[]? | select\\(.type == \"\"tool_use\"\"\\)? | .input? | .file_path // empty\")",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(timeout 10 RUST_LOG=info ./target/release/vol-monitor)",
+      "Bash(timeout 10 bash -c 'RUST_LOG=info ./target/release/vol-monitor')",
+      "Bash(timeout 15 bash -c 'RUST_LOG=info ./target/release/vol-monitor')",
+      "Bash(RUST_LOG=vol_deribit=debug timeout 25 ./target/release/vol-monitor)"
     ]
   }
 }
