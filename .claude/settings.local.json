@@ -113,7 +113,8 @@
       "Bash(HTTPS_PROXY=http://192.168.2.98:8890 curl -s https://docs.deribit.com/llms.txt)",
       "Bash(HTTPS_PROXY=http://192.168.2.98:8890 curl -s https://docs.deribit.com/llms.txt -o /root/nq-deribit/docs/deribit/llms.txt)",
       "Bash(RUST_LOG=info HTTPS_PROXY=http://192.168.2.98:8890 timeout 15 ./target/release/vol-monitor)",
-      "Bash(RUST_LOG=info HTTPS_PROXY=http://192.168.2.98:8890 timeout 300 ./target/release/vol-monitor 2>&1)"
+      "Bash(RUST_LOG=info HTTPS_PROXY=http://192.168.2.98:8890 timeout 300 ./target/release/vol-monitor 2>&1)",
+      "Bash(HTTPS_PROXY=http://192.168.2.98:8890 timeout 70 ./target/release/vol-monitor)"
     ]
   }
 }

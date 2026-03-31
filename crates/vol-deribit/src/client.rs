@@ -26,6 +26,7 @@ use vol_core::VolatilityData;
 pub struct ClientState {
     pub connected: bool,
     pub subscriptions: Vec<String>,
+    connection_started: bool,  // Track if connection task has been started
 }
 
 impl Default for ClientState {
@@ -33,6 +34,7 @@ impl Default for ClientState {
         Self {
             connected: false,
             subscriptions: Vec::new(),
+            connection_started: false,
         }
     }
 }
@@ -305,18 +307,20 @@ impl DeribitClient {
         // Register subscriber and get receiver
         let rx = self.subscription_manager.register(channel.clone()).await;
 
-        // Check if we need to start/restart the connection
-        let needs_reconnect = {
+        // Check if we need to start the connection
+        let should_start = {
+            let mut state = self.state.lock().await;
             let mut channels = self.subscribed_channels.lock().await;
             let is_new = !channels.contains(&channel);
             if is_new {
                 channels.push(channel);
             }
-            is_new
+            // Only start if this is a new channel AND we haven't started a connection yet
+            is_new && !state.connection_started
         };
 
-        // Start connection if this is a new channel
-        if needs_reconnect {
+        // Start connection if needed
+        if should_start {
             self.start_connection().await;
         }
 
@@ -325,6 +329,12 @@ impl DeribitClient {
 
     /// Start the WebSocket connection and reader loop
     async fn start_connection(&self) {
+        // Mark connection as started before spawning
+        {
+            let mut state = self.state.lock().await;
+            state.connection_started = true;
+        }
+
         let ws_url = self.ws_url.clone();
         let proxy_url = self.proxy_url.clone();
         let manager = self.subscription_manager.clone();
@@ -410,6 +420,7 @@ impl DeribitClient {
                         {
                             let mut s = state.lock().await;
                             s.connected = false;
+                            s.connection_started = false;  // Allow reconnect on next subscribe()
                             s.subscriptions = Vec::new();
                         }
                     }
