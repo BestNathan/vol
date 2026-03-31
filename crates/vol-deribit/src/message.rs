@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{OptionMarkPrice, PriceIndex, DeribitTicker, Trade};
+use crate::{DeribitTicker, OptionMarkPrice, PriceIndex, Trade};
 
 /// Channel type enum - type-safe channel binding at compile time
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
