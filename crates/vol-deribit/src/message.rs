@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{DeribitTicker, OptionMarkPrice, PriceIndex, Trade};
+use crate::{DeribitTicker, OptionMarkPrice, PortfolioData, PriceIndex, Trade};
 
 /// Channel type enum - type-safe channel binding at compile time
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -18,6 +18,8 @@ pub enum ChannelType {
     Ticker(String),
     /// Trade executions (trades.<INSTRUMENT>)
     Trade(String),
+    /// Portfolio data (user.portfolio.<CURRENCY>)
+    UserPortfolio(String),
 }
 
 impl ChannelType {
@@ -28,6 +30,9 @@ impl ChannelType {
             ChannelType::PriceIndex(idx) => crate::subscription::deribit_price_index(idx),
             ChannelType::Ticker(base) => crate::subscription::ticker_base(base),
             ChannelType::Trade(instrument) => crate::subscription::trades(instrument),
+            ChannelType::UserPortfolio(currency) => {
+                format!("user.portfolio.{}", currency)
+            }
         }
     }
 }
@@ -40,6 +45,7 @@ pub enum ChannelData {
     PriceIndex(PriceIndex),
     Ticker(DeribitTicker),
     Trade(Trade),
+    Portfolio(PortfolioData),
 }
 
 impl ChannelData {
@@ -50,6 +56,7 @@ impl ChannelData {
             ChannelData::PriceIndex(_) => "deribit_price_index",
             ChannelData::Ticker(_) => "ticker",
             ChannelData::Trade(_) => "trades",
+            ChannelData::Portfolio(_) => "user.portfolio",
         }
     }
 }
@@ -142,6 +149,7 @@ pub enum DeribitNotification {
     PriceIndex(SubscriptionNotification<PriceIndex>),
     Trade(SubscriptionNotification<Vec<Trade>>),
     Ticker(SubscriptionNotification<Vec<DeribitTicker>>),
+    Portfolio(SubscriptionNotification<PortfolioData>),
 }
 
 /// Subscription request to public channels
@@ -405,6 +413,53 @@ mod tests {
                 assert_eq!(n.params.data[0].direction, "buy");
             }
             _ => panic!("Expected Trade variant"),
+        }
+    }
+
+    #[test]
+    fn test_portfolio_notification() {
+        // Test portfolio notification parsing - requires Portfolio variant
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "method": "subscription",
+            "params": {
+                "channel": "user.portfolio.BTC",
+                "data": {
+                    "currency": "BTC",
+                    "equity": 1.5,
+                    "balance": 1.2,
+                    "available_funds": 0.8,
+                    "margin_balance": 1.3,
+                    "initial_margin": 0.5,
+                    "maintenance_margin": 0.25,
+                    "session_upl": 0.01,
+                    "session_rpl": 0.005,
+                    "total_pl": 0.15,
+                    "delta_total": 0.25,
+                    "options_delta": 0.2,
+                    "options_gamma": 0.05,
+                    "options_theta": -0.01,
+                    "options_vega": 0.1,
+                    "options_value": 0.8,
+                    "options_pl": 0.08,
+                    "futures_pl": 0.02,
+                    "portfolio_margining_enabled": true,
+                    "margin_model": "portfolio"
+                }
+            }
+        }"#;
+
+        let notification: DeribitNotification = serde_json::from_str(json).unwrap();
+
+        match notification {
+            DeribitNotification::Portfolio(n) => {
+                assert_eq!(n.params.channel, "user.portfolio.BTC");
+                assert_eq!(n.params.data.currency, "BTC");
+                assert!((n.params.data.equity - 1.5).abs() < f64::EPSILON);
+                assert!((n.params.data.available_funds - 0.8).abs() < f64::EPSILON);
+                assert!((n.params.data.delta_total - 0.25).abs() < f64::EPSILON);
+            }
+            _ => panic!("Expected Portfolio variant"),
         }
     }
 }

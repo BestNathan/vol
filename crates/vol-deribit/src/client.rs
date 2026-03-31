@@ -607,6 +607,20 @@ impl DeribitClient {
                 let trade = n.params.data.into_iter().next()?;
                 Some((ChannelType::Trade(instrument), ChannelData::Trade(trade)))
             }
+            DeribitNotification::Portfolio(n) => {
+                if n.method != "subscription" {
+                    return None;
+                }
+                let currency = n
+                    .params
+                    .channel
+                    .strip_prefix("user.portfolio.")?
+                    .to_string();
+                Some((
+                    ChannelType::UserPortfolio(currency),
+                    ChannelData::Portfolio(n.params.data),
+                ))
+            }
         }
     }
 }
