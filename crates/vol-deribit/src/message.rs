@@ -126,8 +126,8 @@ pub struct SubscriptionNotification<T = Value> {
 pub struct SubscriptionParams<T = Value> {
     /// Channel name (e.g., "ticker.BTC", "markprice.options.btc_usd")
     pub channel: String,
-    /// Array of data items
-    pub data: Vec<T>,
+    /// Data payload - use Vec<T> for array responses, T for single object
+    pub data: T,
 }
 
 /// Subscription request to public channels
@@ -237,7 +237,7 @@ mod tests {
             }
         }"#;
 
-        let notification: SubscriptionNotification<OptionMarkPrice> =
+        let notification: SubscriptionNotification<Vec<OptionMarkPrice>> =
             serde_json::from_str(json).unwrap();
 
         assert_eq!(notification.method, "subscription");
