@@ -8,10 +8,11 @@ use std::time::Duration;
 use futures_util::{StreamExt, SinkExt};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
-use tracing::{info, warn, error};
+use tracing::{info, warn, error, debug};
 use tokio_tungstenite::{
     connect_async,
     tungstenite::Message,
+    WebSocketStream,
 };
 use tokio_rustls::TlsConnector;
 use rustls::{RootCertStore, ClientConfig, pki_types::ServerName};
@@ -20,6 +21,10 @@ use webpki_roots::TLS_SERVER_ROOTS;
 use crate::{ChannelType, ChannelData, OptionMarkPrice, PriceIndex, DeribitTicker, Trade, SubscriptionNotification};
 use crate::subscription_manager::SubscriptionManager;
 use vol_core::VolatilityData;
+
+/// Type alias for WebSocket write half
+type WsWriter = WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+type WsSplitSink = futures_util::stream::SplitSink<WsWriter, Message>;
 
 /// Deribit WebSocket client state
 #[derive(Debug, Clone)]
@@ -46,6 +51,9 @@ pub struct DeribitClient {
     proxy_url: Option<String>,
     subscription_manager: Arc<SubscriptionManager>,
     subscribed_channels: Arc<Mutex<Vec<ChannelType>>>,
+    /// Shared write sender for dynamic subscription updates
+    /// Outer Arc<Mutex<>> allows cloning the client, inner Option<Arc<Mutex<>>> allows sharing the writer
+    ws_sender: Arc<Mutex<Option<Arc<Mutex<WsSplitSink>>>>>,
 }
 
 impl DeribitClient {
@@ -57,6 +65,7 @@ impl DeribitClient {
             proxy_url: None,
             subscription_manager: Arc::new(SubscriptionManager::new()),
             subscribed_channels: Arc::new(Mutex::new(Vec::new())),
+            ws_sender: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -300,6 +309,15 @@ impl DeribitClient {
     }
 
     /// Subscribe to a channel and return data stream
+    ///
+    /// This method:
+    /// 1. Registers the channel with the subscription manager
+    /// 2. Adds the channel to subscribed_channels list
+    /// 3. Starts connection if not already running
+    /// 4. Sends a full resubscription to the server with ALL channels
+    ///
+    /// Subscription is decoupled from connection - each call sends
+    /// a complete subscription list to ensure all channels are active.
     pub async fn subscribe(
         &self,
         channel: ChannelType,
@@ -307,27 +325,93 @@ impl DeribitClient {
         // Register subscriber and get receiver
         let rx = self.subscription_manager.register(channel.clone()).await;
 
-        // Check if we need to start the connection
-        let should_start = {
-            let mut state = self.state.lock().await;
+        // Add to subscribed_channels if new
+        let is_new = {
             let mut channels = self.subscribed_channels.lock().await;
             let is_new = !channels.contains(&channel);
             if is_new {
-                channels.push(channel);
+                channels.push(channel.clone());
             }
-            // Only start if this is a new channel AND we haven't started a connection yet
+            is_new
+        };
+
+        // Start connection if not already running
+        let should_start = {
+            let state = self.state.lock().await;
             is_new && !state.connection_started
         };
 
-        // Start connection if needed
         if should_start {
             self.start_connection().await;
         }
 
+        // Send full subscription to server with all current channels
+        // This will be queued if not connected, or sent immediately if already connected
+        self.send_full_subscription().await;
+
         Ok(rx)
     }
 
+    /// Send subscription message to server with all current channels
+    async fn send_full_subscription(&self) {
+        // Get all channels to subscribe to
+        let channels: Vec<String> = {
+            let channel_types = self.subscribed_channels.lock().await.clone();
+            channel_types.iter().map(|c| c.channel_name()).collect()
+        };
+
+        // Get current subscriptions to check if we need to resubscribe
+        let current_subs = {
+            let state = self.state.lock().await;
+            state.subscriptions.clone()
+        };
+
+        // Check if subscription already matches
+        let current_set: std::collections::HashSet<_> = current_subs.iter().collect();
+        let new_set: std::collections::HashSet<_> = channels.iter().collect();
+
+        if current_set == new_set && !channels.is_empty() {
+            debug!("Subscription unchanged, skipping: {:?}", channels);
+            return;
+        }
+
+        // Get the WebSocket sender
+        let sender_outer = self.ws_sender.lock().await;
+        if let Some(write_arc) = sender_outer.as_ref() {
+            let subscribe_msg = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "public/subscribe",
+                "params": {
+                    "channels": channels.iter().map(|s| s.as_str()).collect::<Vec<&str>>()
+                }
+            });
+
+            let mut writer = write_arc.lock().await;
+            match writer.send(Message::Text(subscribe_msg.to_string())).await {
+                Ok(_) => {
+                    info!("Sent subscription for channels: {:?}", channels);
+                    // Update state after successful send
+                    {
+                        let mut state = self.state.lock().await;
+                        state.subscriptions = channels.clone();
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to send subscription: {}", e);
+                }
+            }
+        } else {
+            debug!("WebSocket not connected, subscription queued: {:?}", channels);
+        }
+    }
+
     /// Start the WebSocket connection and reader loop
+    ///
+    /// Connection is decoupled from subscription management:
+    /// - This method only manages the WebSocket lifecycle
+    /// - Subscriptions are sent after each connect using the full channel list
+    /// - subscribe() can be called at any time to add channels
     async fn start_connection(&self) {
         // Mark connection as started before spawning
         {
@@ -338,8 +422,9 @@ impl DeribitClient {
         let ws_url = self.ws_url.clone();
         let proxy_url = self.proxy_url.clone();
         let manager = self.subscription_manager.clone();
-        let channels = self.subscribed_channels.lock().await.clone();
+        let channels = self.subscribed_channels.clone();
         let state = self.state.clone();
+        let ws_sender = self.ws_sender.clone();
 
         tokio::spawn(async move {
             let mut retry_delay = Duration::from_secs(1);
@@ -363,23 +448,32 @@ impl DeribitClient {
 
                         let (mut write, mut read) = ws_stream.split();
 
-                        // Subscribe to ALL channels at once
-                        let channel_names: Vec<String> = channels.iter()
+                        // Wrap writer in Arc for sharing
+                        let write_arc = Arc::new(Mutex::new(write));
+
+                        // Get the FULL list of channels at connect time
+                        let channel_types = channels.lock().await.clone();
+                        let channel_names: Vec<String> = channel_types
+                            .iter()
                             .map(|c| c.channel_name())
                             .collect();
 
-                        let subscribe_msg = serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "id": 1,
-                            "method": "public/subscribe",
-                            "params": {
-                                "channels": channel_names.iter().map(|s| s.as_str()).collect::<Vec<&str>>()
-                            }
-                        });
+                        // Send initial subscription using the wrapped writer
+                        {
+                            let mut writer = write_arc.lock().await;
+                            let subscribe_msg = serde_json::json!({
+                                "jsonrpc": "2.0",
+                                "id": 1,
+                                "method": "public/subscribe",
+                                "params": {
+                                    "channels": channel_names.iter().map(|s| s.as_str()).collect::<Vec<&str>>()
+                                }
+                            });
 
-                        if let Err(e) = write.send(Message::Text(subscribe_msg.to_string())).await {
-                            error!("Failed to send subscription: {}", e);
-                            continue;
+                            if let Err(e) = writer.send(Message::Text(subscribe_msg.to_string())).await {
+                                error!("Failed to send subscription: {}", e);
+                                continue;
+                            }
                         }
 
                         info!("Subscribed to channels: {:?}", channel_names);
@@ -391,6 +485,12 @@ impl DeribitClient {
                             s.subscriptions = channel_names.clone();
                         }
 
+                        // Store the Arc<Mutex<write>> for dynamic subscriptions
+                        {
+                            let mut sender_guard = ws_sender.lock().await;
+                            *sender_guard = Some(write_arc.clone());
+                        }
+
                         // Read and dispatch
                         while let Some(msg_result) = read.next().await {
                             match msg_result {
@@ -400,7 +500,8 @@ impl DeribitClient {
                                     }
                                 }
                                 Ok(Message::Ping(data)) => {
-                                    if let Err(e) = write.send(Message::Pong(data)).await {
+                                    let mut writer = write_arc.lock().await;
+                                    if let Err(e) = writer.send(Message::Pong(data)).await {
                                         warn!("Failed to send pong: {}", e);
                                     }
                                 }
@@ -420,8 +521,14 @@ impl DeribitClient {
                         {
                             let mut s = state.lock().await;
                             s.connected = false;
-                            s.connection_started = false;  // Allow reconnect on next subscribe()
+                            s.connection_started = false;
                             s.subscriptions = Vec::new();
+                        }
+
+                        // Clear sender
+                        {
+                            let mut sender_guard = ws_sender.lock().await;
+                            *sender_guard = None;
                         }
                     }
                     None => {
@@ -507,6 +614,7 @@ impl Clone for DeribitClient {
             proxy_url: self.proxy_url.clone(),
             subscription_manager: self.subscription_manager.clone(),
             subscribed_channels: self.subscribed_channels.clone(),
+            ws_sender: self.ws_sender.clone(),
         }
     }
 }

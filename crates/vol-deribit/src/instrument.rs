@@ -116,17 +116,24 @@ pub fn parse_instrument_name(name: &str) -> Option<(String, u32, u32, u32, f64, 
     Some((underlying, year, month, day, strike, option_type))
 }
 
-/// Parse Deribit expiry format (e.g., "29MAR24") into components
+/// Parse Deribit expiry format (e.g., "29MAR24" or "1APR26") into components
+/// Supports both 2-digit day (29MAR24) and 1-digit day (1APR26) formats
 fn parse_expiry(expiry: &str) -> Option<(u32, u32, u32)> {
     if expiry.len() < 5 {
         return None;
     }
 
-    let day: u32 = expiry[0..2].parse().ok()?;
-    let month_str = &expiry[2..5];
-    let year_str = &expiry[5..];
+    // Find where the month starts (first letter)
+    let day_end = expiry.find(|c: char| c.is_ascii_alphabetic())?;
+    let day: u32 = expiry[0..day_end].parse().ok()?;
 
+    // Find where the year starts (first digit after month)
+    let month_start = day_end;
+    let month_end = expiry[month_start..].find(|c: char| c.is_ascii_digit())?;
+    let month_str = &expiry[month_start..month_start + month_end];
     let month = month_from_str(month_str)?;
+
+    let year_str = &expiry[month_start + month_end..];
     let year_short: u32 = year_str.parse().ok()?;
     let year = if year_short < 50 { 2000 + year_short } else { 1900 + year_short };
 

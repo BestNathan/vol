@@ -154,12 +154,57 @@ impl DataSource for DeribitDataSource {
                     Some(data) = merged_options_rx.recv() => {
                         if let ChannelData::OptionMarkPrice(options_list) = data {
                             for option in options_list {
-                                let underlying = option.instrument_name.split('-').next().unwrap_or("BTC");
+                                // Parse underlying from instrument name - no fallback
+                                let underlying = match option.instrument_name.split('-').next() {
+                                    Some(u) => u,
+                                    None => {
+                                        error!(
+                                            target: "volatility_data_conversion_failed",
+                                            instrument = %option.instrument_name,
+                                            "Failed to parse underlying from instrument name"
+                                        );
+                                        continue;
+                                    }
+                                };
+
                                 let index_key = format!("{}_usd", underlying.to_lowercase());
                                 let index_price = index_state.get(&index_key).await;
 
-                                if let Some(vol_data) = option.to_volatility_data_with_index(index_price) {
-                                    let _ = tx_clone.send(vol_data).await;
+                                // Log warning if index price missing - critical for accurate moneyness
+                                if index_price.is_none() {
+                                    warn!(
+                                        target: "index_price_missing",
+                                        instrument = %option.instrument_name,
+                                        index_key = %index_key,
+                                        "Index price not available, skipping option"
+                                    );
+                                    continue;
+                                }
+
+                                // Try to convert and log specific failure reason
+                                match option.to_volatility_data_with_index(index_price) {
+                                    Some(vol_data) => {
+                                        if let Err(e) = tx_clone.send(vol_data).await {
+                                            error!(
+                                                target: "data_send_failed",
+                                                instrument = %option.instrument_name,
+                                                error = %e,
+                                                "Failed to send volatility data"
+                                            );
+                                        }
+                                    }
+                                    None => {
+                                        // This should not happen if index_price is Some
+                                        // Log as error for alerting - indicates data quality issue
+                                        error!(
+                                            target: "volatility_data_conversion_failed",
+                                            instrument = %option.instrument_name,
+                                            mark_price = %option.mark_price,
+                                            iv = ?option.iv,
+                                            index_price = ?index_price,
+                                            "VolatilityData conversion failed - check instrument format or IV data"
+                                        );
+                                    }
                                 }
                             }
                         }

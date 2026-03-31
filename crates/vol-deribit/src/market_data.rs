@@ -96,13 +96,19 @@ pub struct OptionMarkPrice {
     pub iv: Option<f64>,
     /// Timestamp (milliseconds since Unix epoch)
     pub timestamp: u64,
-    /// Index price (included in markprice.options channel)
-    #[serde(default)]
+    /// Index price - MAY be included in markprice.options channel
+    /// If not present, must subscribe to deribit_price_index separately
+    #[serde(default, rename = "price")]
     pub index_price: Option<f64>,
 }
 
 impl OptionMarkPrice {
     /// Convert to VolatilityData with externally provided index price
+    ///
+    /// Returns None if:
+    /// - IV is missing
+    /// - Instrument name cannot be parsed
+    /// - Index price is not provided (required for accurate moneyness calculation)
     pub fn to_volatility_data_with_index(
         &self,
         index_price: Option<f64>,
@@ -113,8 +119,9 @@ impl OptionMarkPrice {
         let (underlying, _year, month, day, strike, option_type) =
             crate::instrument::parse_instrument_name(&self.instrument_name)?;
 
-        // Use provided index price, fallback to strike if not available
-        let index_price = index_price.unwrap_or(strike);
+        // Index price is REQUIRED - no fallback to strike
+        // Fallback would cause incorrect moneyness/ITM calculations
+        let index_price = index_price?;
 
         // Calculate DTE from expiry
         let expiry_str = format!("{:02}{}{:02}", day,
@@ -131,7 +138,8 @@ impl OptionMarkPrice {
         let mut extra = std::collections::HashMap::new();
         extra.insert("underlying".to_string(), serde_json::json!(underlying));
         extra.insert("mark_price".to_string(), serde_json::json!(self.mark_price));
-        extra.insert("index_price".to_string(), serde_json::json!(index_price));
+        extra.insert("index_price_used".to_string(), serde_json::json!(index_price));
+        extra.insert("strike_price".to_string(), serde_json::json!(strike));
 
         Some(vol_core::VolatilityData {
             symbol: self.instrument_name.clone(),
@@ -333,7 +341,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_volatility_data_with_index_fallback() {
+    fn test_to_volatility_data_without_index_returns_none() {
         let option = OptionMarkPrice {
             instrument_name: "BTC-29MAR24-70000-C".to_string(),
             mark_price: 2000.0,
@@ -342,10 +350,8 @@ mod tests {
             index_price: None,
         };
 
-        // Without index price, should fall back to strike
+        // Without index price, should return None (no fallback to strike)
         let result = option.to_volatility_data_with_index(None);
-        assert!(result.is_some());
-        let vol_data = result.unwrap();
-        assert_eq!(vol_data.index_price, 70000.0); // strike price
+        assert!(result.is_none(), "Should return None when index_price is not provided");
     }
 }
