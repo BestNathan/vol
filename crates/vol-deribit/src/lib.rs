@@ -39,6 +39,7 @@ pub mod instrument;
 pub mod market_data;
 pub mod message;
 pub mod subscription;
+pub mod subscription_manager;
 pub mod client;
 
 // Re-export commonly used types

@@ -18,6 +18,7 @@ use rustls::{RootCertStore, ClientConfig, pki_types::ServerName};
 use webpki_roots::TLS_SERVER_ROOTS;
 
 use crate::{ChannelType, ChannelData, OptionMarkPrice, PriceIndex, DeribitTicker, Trade, SubscriptionNotification};
+use crate::subscription_manager::SubscriptionManager;
 use vol_core::VolatilityData;
 
 /// Deribit WebSocket client state
@@ -41,6 +42,8 @@ pub struct DeribitClient {
     ws_url: String,
     state: Arc<Mutex<ClientState>>,
     proxy_url: Option<String>,
+    subscription_manager: Arc<SubscriptionManager>,
+    subscribed_channels: Arc<Mutex<Vec<ChannelType>>>,
 }
 
 impl DeribitClient {
@@ -50,6 +53,8 @@ impl DeribitClient {
             ws_url: ws_url.into(),
             state: Arc::new(Mutex::new(ClientState::default())),
             proxy_url: None,
+            subscription_manager: Arc::new(SubscriptionManager::new()),
+            subscribed_channels: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -411,6 +416,69 @@ impl DeribitClient {
             }
         }
     }
+
+    /// Parse message and extract channel type and data
+    #[allow(dead_code)]
+    fn parse_and_route(text: &str) -> Option<(ChannelType, ChannelData)> {
+        // Try parsing as OptionMarkPrice notification (array)
+        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<Vec<OptionMarkPrice>>>(text) {
+            if notification.method == "subscription" {
+                // Extract index from channel name: "markprice.options.btc_usd" -> "btc_usd"
+                let index = notification.params.channel
+                    .strip_prefix("markprice.options.")?
+                    .to_string();
+                return Some((
+                    ChannelType::MarkpriceOptions(index),
+                    ChannelData::OptionMarkPrice(notification.params.data),
+                ));
+            }
+        }
+
+        // Try parsing as PriceIndex notification (single object)
+        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<PriceIndex>>(text) {
+            if notification.method == "subscription" {
+                let index = notification.params.channel
+                    .strip_prefix("deribit_price_index.")?
+                    .to_string();
+                return Some((
+                    ChannelType::PriceIndex(index),
+                    ChannelData::PriceIndex(notification.params.data),
+                ));
+            }
+        }
+
+        // Try parsing as Ticker notification (array)
+        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<Vec<DeribitTicker>>>(text) {
+            if notification.method == "subscription" {
+                let base = notification.params.channel
+                    .strip_prefix("ticker.")?
+                    .split('.')
+                    .next()?
+                    .to_string();
+                let ticker = notification.params.data.into_iter().next()?;
+                return Some((
+                    ChannelType::Ticker(base),
+                    ChannelData::Ticker(ticker),
+                ));
+            }
+        }
+
+        // Try parsing as Trade notification (array)
+        if let Ok(notification) = serde_json::from_str::<SubscriptionNotification<Vec<Trade>>>(text) {
+            if notification.method == "subscription" {
+                let instrument = notification.params.channel
+                    .strip_prefix("trades.")?
+                    .to_string();
+                let trade = notification.params.data.into_iter().next()?;
+                return Some((
+                    ChannelType::Trade(instrument),
+                    ChannelData::Trade(trade),
+                ));
+            }
+        }
+
+        None
+    }
 }
 
 impl Clone for DeribitClient {
@@ -419,6 +487,8 @@ impl Clone for DeribitClient {
             ws_url: self.ws_url.clone(),
             state: self.state.clone(),
             proxy_url: self.proxy_url.clone(),
+            subscription_manager: self.subscription_manager.clone(),
+            subscribed_channels: self.subscribed_channels.clone(),
         }
     }
 }
