@@ -61,6 +61,9 @@ impl AlertHandler for AbsoluteIvHandler {
         // IV threshold check
         if data.iv >= iv_threshold {
             let moneyness = data.moneyness();
+            let mark_price = data.extra.get("mark_price")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
             Some(Alert::new(
                 AlertType::AbsoluteIv { threshold: iv_threshold },
                 tenor,
@@ -73,6 +76,11 @@ impl AlertHandler for AbsoluteIvHandler {
                 ),
                 data.timestamp,
                 data.source.clone(),
+                data.index_price,
+                data.dte,
+                data.option_type,
+                moneyness,
+                mark_price,
             ))
         } else {
             None
@@ -191,5 +199,44 @@ mod tests {
         // Should return None for missing symbol config
         let alert = handler.evaluate(&sol_data);
         assert!(alert.is_none());
+    }
+
+    #[test]
+    fn test_alert_has_new_fields() {
+        let mut symbols = HashMap::new();
+        symbols.insert("btc".to_string(), SymbolIvConfig {
+            short_threshold: 0.80,
+            medium_threshold: 0.70,
+            long_threshold: 0.60,
+            short_atm_threshold: 0.05,
+            medium_atm_threshold: 0.10,
+            long_atm_threshold: 0.15,
+        });
+
+        let handler = AbsoluteIvHandler::new(AbsoluteIvConfig { symbols });
+
+        let btc_data = VolatilityData {
+            symbol: "BTC-6JAN25-95000-C".to_string(),
+            dte: 5,
+            iv: 0.85,
+            timestamp: 1234567890,
+            source: "deribit".to_string(),
+            strike: 95000.0,
+            option_type: vol_core::OptionType::Call,
+            index_price: 96000.0, // Slightly ITM for non-zero moneyness
+            delta: None,
+            extra: std::collections::HashMap::new(),
+        };
+
+        let alert = handler.evaluate(&btc_data);
+        assert!(alert.is_some());
+
+        let alert = alert.unwrap();
+        // Verify all 5 new fields are populated
+        assert_eq!(alert.index_price, 96000.0);
+        assert_eq!(alert.dte, 5);
+        assert_eq!(alert.option_type, vol_core::OptionType::Call);
+        assert!(alert.moneyness > 0.0); // Call with index_price > strike has positive moneyness
+        assert_eq!(alert.mark_price, 0.0); // mark_price defaults to 0.0 when not in extra
     }
 }
