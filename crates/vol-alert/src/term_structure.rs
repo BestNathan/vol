@@ -31,6 +31,10 @@ impl AlertHandler for TermStructureHandler {
 
         // Placeholder: just return None for now since term structure
         // requires multi-instrument comparison that needs more state
+        //
+        // NOTE: When this handler is implemented, it will need to populate
+        // the new Alert fields (tenor, alert_type, symbol, value) to support
+        // the enriched notification template system.
         None
     }
 

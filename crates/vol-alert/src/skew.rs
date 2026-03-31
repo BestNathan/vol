@@ -27,6 +27,10 @@ impl AlertHandler for SkewHandler {
         // put/call IV pairs and calculate the spread
 
         // For now, placeholder implementation
+        //
+        // NOTE: When this handler is implemented, it will need to populate
+        // the new Alert fields (tenor, alert_type, symbol, value) to support
+        // the enriched notification template system.
         None
     }
 
