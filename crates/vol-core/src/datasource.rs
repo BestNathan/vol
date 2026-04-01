@@ -1,7 +1,7 @@
 use crate::error::Result;
-use crate::models::VolatilityData;
-use tokio::sync::mpsc::Receiver;
+use crate::event::MonitoringEvent;
 use async_trait::async_trait;
+use tokio::sync::mpsc;
 
 /// Health status for a data source
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11,25 +11,54 @@ pub enum HealthStatus {
     Unhealthy,
 }
 
-/// DataSource trait - abstracts where volatility data comes from.
+/// DataSource trait - produces monitoring events.
 ///
-/// All data source plugins (Deribit, Binance, CSV, etc.) must implement this trait.
-/// The trait is designed to be:
-/// - Source-agnostic: No knowledge of specific API details
-/// - Uniform: All sources emit the same VolatilityData struct
-/// - Testable: Can be mocked for unit tests
+/// All datasource plugins (Deribit, Binance, CSV, etc.) must implement this trait.
 #[async_trait]
 pub trait DataSource: Send + Sync {
-    /// Returns the name of this data source (e.g., "deribit", "binance", "csv")
+    /// Datasource name for logging
     fn name(&self) -> &str;
 
-    /// Connect to the data source. Should be called before subscribe().
+    /// Connect to the data source.
     async fn connect(&mut self) -> Result<()>;
 
-    /// Subscribe to volatility data for the given symbols.
-    /// Returns a receiver that will stream VolatilityData events.
-    fn subscribe(&self, symbols: Vec<String>) -> Result<Receiver<VolatilityData>>;
+    /// Run the datasource, sending events to the provided channel.
+    /// Returns when the connection is closed or an error occurs.
+    async fn run(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()>;
 
-    /// Check the health status of this data source
+    /// Health check
     async fn health_check(&self) -> HealthStatus;
+
+    /// Clone as trait object (for spawning in tokio tasks)
+    fn clone_box(&self) -> Box<dyn DataSource>;
+}
+
+// Implement for Box<dyn DataSource>
+#[async_trait]
+impl DataSource for Box<dyn DataSource> {
+    fn name(&self) -> &str {
+        (**self).name()
+    }
+
+    async fn connect(&mut self) -> Result<()> {
+        (**self).connect().await
+    }
+
+    async fn run(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()> {
+        (**self).run(tx).await
+    }
+
+    async fn health_check(&self) -> HealthStatus {
+        (**self).health_check().await
+    }
+
+    fn clone_box(&self) -> Box<dyn DataSource> {
+        (**self).clone_box()
+    }
+}
+
+impl Clone for Box<dyn DataSource> {
+    fn clone(&self) -> Self {
+        self.clone_box()
+    }
 }

@@ -1,40 +1,40 @@
 //! Plugin registry for managing handlers.
 
-use vol_core::{AlertHandler, NotificationHandler};
+use vol_core::{RuleProcessor, NotificationChannel};
 
-/// Registry for alert handlers
+/// Registry for rule processors
 #[allow(dead_code)]
-pub struct AlertRegistry {
-    handlers: Vec<Box<dyn AlertHandler>>,
+pub struct RuleRegistry {
+    rules: Vec<Box<dyn RuleProcessor>>,
 }
 
 #[allow(dead_code)]
-impl AlertRegistry {
+impl RuleRegistry {
     pub fn new() -> Self {
         Self {
-            handlers: Vec::new(),
+            rules: Vec::new(),
         }
     }
 
-    pub fn register(&mut self, handler: Box<dyn AlertHandler>) {
-        self.handlers.push(handler);
+    pub fn register(&mut self, rule: Box<dyn RuleProcessor>) {
+        self.rules.push(rule);
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Box<dyn AlertHandler>> {
-        self.handlers.iter()
+    pub fn iter(&self) -> impl Iterator<Item = &Box<dyn RuleProcessor>> {
+        self.rules.iter()
     }
 }
 
-impl Default for AlertRegistry {
+impl Default for RuleRegistry {
     fn default() -> Self {
         Self::new()
     }
 }
 
-/// Registry for notification handlers
+/// Registry for notification channels
 #[allow(dead_code)]
 pub struct NotificationRegistry {
-    handlers: Vec<Box<dyn NotificationHandler>>,
+    handlers: Vec<Box<dyn NotificationChannel>>,
 }
 
 #[allow(dead_code)]
@@ -45,11 +45,11 @@ impl NotificationRegistry {
         }
     }
 
-    pub fn register(&mut self, handler: Box<dyn NotificationHandler>) {
+    pub fn register(&mut self, handler: Box<dyn NotificationChannel>) {
         self.handlers.push(handler);
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Box<dyn NotificationHandler>> {
+    pub fn iter(&self) -> impl Iterator<Item = &Box<dyn NotificationChannel>> {
         self.handlers.iter()
     }
 }

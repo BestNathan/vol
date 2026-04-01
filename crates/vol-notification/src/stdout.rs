@@ -1,9 +1,10 @@
 //! Stdout notification handler for testing.
 
-use vol_core::{NotificationHandler, Alert, Result};
+use vol_core::{NotificationChannel, Alert, Result};
 use tracing::info;
 
 /// Stdout notification handler - prints alerts to console
+#[derive(Clone)]
 pub struct StdoutNotification;
 
 impl StdoutNotification {
@@ -19,7 +20,7 @@ impl Default for StdoutNotification {
 }
 
 #[async_trait::async_trait]
-impl NotificationHandler for StdoutNotification {
+impl NotificationChannel for StdoutNotification {
     fn name(&self) -> &str {
         "stdout"
     }
@@ -42,5 +43,9 @@ impl NotificationHandler for StdoutNotification {
         info!("{}", message);
         println!("{}", message);
         Ok(())
+    }
+
+    fn clone_box(&self) -> Box<dyn NotificationChannel> {
+        Box::new(self.clone())
     }
 }

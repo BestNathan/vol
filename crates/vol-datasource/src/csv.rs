@@ -2,9 +2,10 @@
 
 use std::path::Path;
 use tokio::sync::mpsc;
-use vol_core::{DataSource, HealthStatus, VolatilityData, VolError, Result};
+use vol_core::{DataSource, HealthStatus, VolatilityData, VolError, Result, MonitoringEvent};
 
 /// CSV file data source - reads volatility data from a CSV file
+#[derive(Clone)]
 pub struct CsvDataSource {
     file_path: String,
 }
@@ -31,16 +32,11 @@ impl DataSource for CsvDataSource {
         Ok(())
     }
 
-    fn subscribe(&self, _symbols: Vec<String>) -> Result<mpsc::Receiver<VolatilityData>> {
-        let (tx, rx) = mpsc::channel(1024);
-
-        tokio::spawn(async move {
-            // TODO: Read CSV file and stream data
-            // For now, just close the channel
-            drop(tx);
-        });
-
-        Ok(rx)
+    async fn run(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()> {
+        // TODO: Read CSV file and stream data
+        // For now, just close the channel
+        drop(tx);
+        Ok(())
     }
 
     async fn health_check(&self) -> HealthStatus {
@@ -49,5 +45,9 @@ impl DataSource for CsvDataSource {
         } else {
             HealthStatus::Unhealthy
         }
+    }
+
+    fn clone_box(&self) -> Box<dyn DataSource> {
+        Box::new(self.clone())
     }
 }

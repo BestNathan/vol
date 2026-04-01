@@ -1365,6 +1365,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "vol-engine"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "vol-core",
+]
+
+[[package]]
 name = "vol-eventbus"
 version = "0.1.0"
 dependencies = [
@@ -1396,11 +1408,10 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
- "vol-alert",
  "vol-config",
  "vol-core",
  "vol-datasource",
- "vol-eventbus",
+ "vol-engine",
  "vol-notification",
 ]
 

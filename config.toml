@@ -14,8 +14,8 @@ poll_interval_secs = 60
 # - DERIBIT_CLIENT_SECRET
 # Environment variables take precedence over config file values
 [data_sources.deribit.auth]
-client_id = "your-client-id"
-client_secret = "your-client-secret"
+client_id = "nhXng7Bj"
+client_secret = "OxCGY10HlzgKfRoXPBRQqg5IBQcZguGPhE1tewP5U3Y"
 
 [tenors]
 short_max_dte = 7
@@ -88,7 +88,7 @@ vega_threshold = 100.0
 theta_threshold = -50.0
 
 [notifications]
-enabled = ["stdout"]
+enabled = ["stdout", "feishu"]
 
 # Feishu (Lark) notification using OAuth 2.0 app access token
 # Get app_id and app_secret from https://open.feishu.cn/app

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{info, error, warn};
-use vol_core::{DataSource, HealthStatus, Result, VolatilityData};
+use vol_core::{DataSource, HealthStatus, Result, VolatilityData, MonitoringEvent};
 use vol_deribit::{ChannelType, ChannelData, DeribitClient};
 
 /// Index price state - thread-safe shared state
@@ -35,19 +35,22 @@ impl IndexPriceState {
 }
 
 /// Deribit WebSocket data source
+#[derive(Clone)]
 pub struct DeribitDataSource {
     client: DeribitClient,
     index_price_state: IndexPriceState,
-    _symbols: Vec<String>,
+    symbols: Vec<String>,
+    poll_interval_secs: u64,
 }
 
 impl DeribitDataSource {
-    pub fn new(ws_url: String, symbols: Vec<String>, _poll_interval_secs: u64) -> Self {
+    pub fn new(ws_url: String, symbols: Vec<String>, poll_interval_secs: u64) -> Self {
         let client = DeribitClient::new(ws_url);
         Self {
             client,
             index_price_state: IndexPriceState::new(),
-            _symbols: symbols,
+            symbols,
+            poll_interval_secs,
         }
     }
 
@@ -56,39 +59,24 @@ impl DeribitDataSource {
         self
     }
 
-}
-
-#[async_trait::async_trait]
-impl DataSource for DeribitDataSource {
-    fn name(&self) -> &str {
-        "deribit"
-    }
-
-    async fn connect(&mut self) -> Result<()> {
-        info!("Initializing Deribit data source");
-        Ok(())
-    }
-
-    fn subscribe(&self, symbols: Vec<String>) -> Result<mpsc::Receiver<VolatilityData>> {
-        let (tx, rx) = mpsc::channel(1024);
+    /// Run the datasource, sending events to the provided channel
+    pub async fn run_internal(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()> {
+        let (internal_tx, mut internal_rx) = mpsc::channel::<VolatilityData>(1024);
 
         // Build list of all channels to subscribe to
         let mut all_channels = Vec::new();
-        let mut index_symbols = Vec::new();
 
-        for symbol in &symbols {
+        for symbol in &self.symbols {
             let index = format!("{}_usd", symbol.to_lowercase());
             all_channels.push(ChannelType::MarkpriceOptions(index.clone()));
             all_channels.push(ChannelType::PriceIndex(index.clone()));
-            index_symbols.push(index);
         }
 
         let index_state = self.index_price_state.clone();
         let client_clone = self.client.clone();
-        let tx_clone = tx.clone();
 
-        // Spawn single data merger task that handles all channels
-        tokio::spawn(async move {
+        // Spawn internal data merger task
+        let data_task = tokio::spawn(async move {
             // Subscribe to all channels and collect receivers
             let mut option_rxs: Vec<mpsc::Receiver<ChannelData>> = Vec::new();
             let mut index_rxs: Vec<mpsc::Receiver<ChannelData>> = Vec::new();
@@ -102,11 +90,9 @@ impl DataSource for DeribitDataSource {
                             ChannelType::MarkpriceOptions(_) => option_rxs.push(rx),
                             ChannelType::PriceIndex(_) => index_rxs.push(rx),
                             ChannelType::Ticker(_) | ChannelType::Trade(_) => {
-                                // Not used in current implementation but handled for completeness
                                 warn!("Unexpected channel type: {:?}", channel);
                             }
                             ChannelType::UserPortfolio(_) => {
-                                // Private channel for portfolio updates - requires authentication
                                 warn!("UserPortfolio channel requires OAuth authentication");
                             }
                         }
@@ -146,7 +132,6 @@ impl DataSource for DeribitDataSource {
             // Now use tokio::select! to merge the two streams
             loop {
                 tokio::select! {
-                    // Handle index price updates
                     Some(data) = merged_index_rx.recv() => {
                         if let ChannelData::PriceIndex(price_data) = data {
                             index_state.update(&price_data.index_name, price_data.price).await;
@@ -154,16 +139,13 @@ impl DataSource for DeribitDataSource {
                         }
                     }
 
-                    // Handle options mark prices
                     Some(data) = merged_options_rx.recv() => {
                         if let ChannelData::OptionMarkPrice(options_list) = data {
                             for option in options_list {
-                                // Parse underlying from instrument name - no fallback
                                 let underlying = match option.instrument_name.split('-').next() {
                                     Some(u) => u,
                                     None => {
                                         error!(
-                                            target: "volatility_data_conversion_failed",
                                             instrument = %option.instrument_name,
                                             "Failed to parse underlying from instrument name"
                                         );
@@ -174,10 +156,8 @@ impl DataSource for DeribitDataSource {
                                 let index_key = format!("{}_usd", underlying.to_lowercase());
                                 let index_price = index_state.get(&index_key).await;
 
-                                // Log warning if index price missing - critical for accurate moneyness
                                 if index_price.is_none() {
                                     warn!(
-                                        target: "index_price_missing",
                                         instrument = %option.instrument_name,
                                         index_key = %index_key,
                                         "Index price not available, skipping option"
@@ -185,28 +165,12 @@ impl DataSource for DeribitDataSource {
                                     continue;
                                 }
 
-                                // Try to convert and log specific failure reason
-                                match option.to_volatility_data_with_index(index_price) {
-                                    Some(vol_data) => {
-                                        if let Err(e) = tx_clone.send(vol_data).await {
-                                            error!(
-                                                target: "data_send_failed",
-                                                instrument = %option.instrument_name,
-                                                error = %e,
-                                                "Failed to send volatility data"
-                                            );
-                                        }
-                                    }
-                                    None => {
-                                        // This should not happen if index_price is Some
-                                        // Log as error for alerting - indicates data quality issue
+                                if let Some(vol_data) = option.to_volatility_data_with_index(index_price) {
+                                    if let Err(e) = internal_tx.send(vol_data).await {
                                         error!(
-                                            target: "volatility_data_conversion_failed",
                                             instrument = %option.instrument_name,
-                                            mark_price = %option.mark_price,
-                                            iv = ?option.iv,
-                                            index_price = ?index_price,
-                                            "VolatilityData conversion failed - check instrument format or IV data"
+                                            error = %e,
+                                            "Failed to send volatility data"
                                         );
                                     }
                                 }
@@ -222,7 +186,35 @@ impl DataSource for DeribitDataSource {
             }
         });
 
-        Ok(rx)
+        // Forward VolatilityData events as MonitoringEvent::Volatility
+        while let Some(vol_data) = internal_rx.recv().await {
+            let event = MonitoringEvent::Volatility(vol_data);
+            if let Err(e) = tx.send(event).await {
+                error!("Failed to send event: {}", e);
+                break;
+            }
+        }
+
+        // Cancel the data task if we exit the loop
+        data_task.abort();
+
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl DataSource for DeribitDataSource {
+    fn name(&self) -> &str {
+        "deribit"
+    }
+
+    async fn connect(&mut self) -> Result<()> {
+        info!("Initializing Deribit data source");
+        Ok(())
+    }
+
+    async fn run(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()> {
+        self.run_internal(tx).await
     }
 
     async fn health_check(&self) -> HealthStatus {
@@ -231,5 +223,9 @@ impl DataSource for DeribitDataSource {
         } else {
             HealthStatus::Unhealthy
         }
+    }
+
+    fn clone_box(&self) -> Box<dyn DataSource> {
+        Box::new(self.clone())
     }
 }

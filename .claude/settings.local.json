@@ -137,7 +137,12 @@
       "Bash(timeout 10 RUST_LOG=info ./target/release/vol-monitor)",
       "Bash(timeout 10 bash -c 'RUST_LOG=info ./target/release/vol-monitor')",
       "Bash(timeout 15 bash -c 'RUST_LOG=info ./target/release/vol-monitor')",
-      "Bash(RUST_LOG=vol_deribit=debug timeout 25 ./target/release/vol-monitor)"
+      "Bash(RUST_LOG=vol_deribit=debug timeout 25 ./target/release/vol-monitor)",
+      "Bash(tee /tmp/vol-monitor.log)",
+      "Bash(/tmp/test_feishu.py:*)",
+      "Bash(__NEW_LINE_83fe5c112d1cd82e__ python3:*)",
+      "Bash(pip install:*)",
+      "Bash(__NEW_LINE_eba615f68be49788__ python3:*)"
     ]
   }
 }

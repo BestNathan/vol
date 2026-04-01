@@ -10,6 +10,7 @@ members = [
     "crates/vol-alert",
     "crates/vol-notification",
     "crates/vol-monitor",
+    "crates/vol-engine",
 ]
 
 [workspace.package]
@@ -63,3 +64,4 @@ vol-deribit = { path = "crates/vol-deribit" }
 vol-feishu = { path = "crates/vol-feishu" }
 vol-alert = { path = "crates/vol-alert" }
 vol-notification = { path = "crates/vol-notification" }
+vol-engine = { path = "crates/vol-engine" }

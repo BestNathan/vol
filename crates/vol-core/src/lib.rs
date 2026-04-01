@@ -2,12 +2,13 @@
 //!
 //! This crate defines the abstraction layer - all plugins implement traits from this crate.
 
-mod datasource;
-mod alert;
-mod notification;
-mod models;
-mod event;
-mod error;
+pub mod datasource;
+pub mod alert;
+pub mod notification;
+pub mod models;
+pub mod event;
+pub mod error;
+pub mod rule;
 
 pub use datasource::*;
 pub use alert::*;
@@ -15,3 +16,4 @@ pub use notification::*;
 pub use models::*;
 pub use event::*;
 pub use error::*;
+pub use rule::*;

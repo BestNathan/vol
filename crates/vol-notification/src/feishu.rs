@@ -2,12 +2,13 @@
 //!
 //! Reference: https://open.feishu.cn/document/server-docs/api-call-guide/calling-process/get-access-token
 
-use vol_core::{NotificationHandler, Alert, Result, VolError, Tenor, OptionType};
+use vol_core::{NotificationChannel, Alert, Result, VolError, Tenor, OptionType};
 use vol_feishu::FeishuClient;
 use vol_config::FeishuConfig;
 use tracing::{info, warn};
 
 /// Feishu/Lark notification handler
+#[derive(Clone)]
 pub struct FeishuNotification {
     client: FeishuClient,
     receive_id: String,
@@ -134,7 +135,7 @@ impl FeishuNotification {
 }
 
 #[async_trait::async_trait]
-impl NotificationHandler for FeishuNotification {
+impl NotificationChannel for FeishuNotification {
     fn name(&self) -> &str {
         "feishu"
     }
@@ -165,6 +166,10 @@ impl NotificationHandler for FeishuNotification {
                 "Feishu notification failed".to_string()
             )),
         }
+    }
+
+    fn clone_box(&self) -> Box<dyn NotificationChannel> {
+        Box::new(self.clone())
     }
 }
 
