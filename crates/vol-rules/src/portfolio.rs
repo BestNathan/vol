@@ -1,6 +1,6 @@
 //! Portfolio rule with configurable metrics.
 
-use vol_core::{Alert, Tenor, OptionType, AlertType, RuleProcessor, MonitoringEvent, EventType, RuleAction, Result};
+use vol_core::{Alert, Tenor, OptionType, AlertType, RuleProcessor, MonitoringEvent, EventType, RuleAction, Result, PortfolioMetricType};
 use vol_config::metrics::MetricConfig;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -293,7 +293,13 @@ impl RuleProcessor for PortfolioRule {
     }
 
     fn interests(&self) -> Vec<EventType> {
-        vec![EventType::Portfolio]
+        vec![
+            EventType::Portfolio(PortfolioMetricType::MarginRatio),
+            EventType::Portfolio(PortfolioMetricType::FreeBalance),
+            EventType::Portfolio(PortfolioMetricType::DeltaExposure),
+            EventType::Portfolio(PortfolioMetricType::SessionPnL),
+            EventType::Portfolio(PortfolioMetricType::Greeks),
+        ]
     }
 
     fn evaluate(&self, _event: &MonitoringEvent) -> Option<Alert> {

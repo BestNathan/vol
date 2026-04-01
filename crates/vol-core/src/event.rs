@@ -2,12 +2,31 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use crate::models::VolatilityData;
 
+/// Market data event types
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum MarketDataType {
+    Ticker,
+    MarkPrice,
+    Trade,
+    OrderBook,
+}
+
+/// Portfolio metric event types
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum PortfolioMetricType {
+    MarginRatio,
+    FreeBalance,
+    DeltaExposure,
+    SessionPnL,
+    Greeks,
+}
+
 /// Event type identifier for rule filtering
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum EventType {
+    MarketData(MarketDataType),
+    Portfolio(PortfolioMetricType),
     Volatility,
-    Portfolio,
-    Market,
     Custom(String),
 }
 
@@ -64,8 +83,8 @@ impl MonitoringEvent {
     pub fn event_type(&self) -> EventType {
         match self {
             Self::Volatility(_) => EventType::Volatility,
-            Self::Portfolio(_) => EventType::Portfolio,
-            Self::Market(_) => EventType::Market,
+            Self::Portfolio(_) => EventType::Portfolio(PortfolioMetricType::Greeks),
+            Self::Market(_) => EventType::MarketData(MarketDataType::Ticker),
             Self::Custom { kind, .. } => EventType::Custom(kind.clone()),
         }
     }
