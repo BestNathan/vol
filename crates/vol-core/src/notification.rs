@@ -2,11 +2,11 @@ use crate::event::Alert;
 use crate::error::Result;
 use async_trait::async_trait;
 
-/// NotificationChannel trait - delivers alerts to users.
+/// NotificationHandler trait - delivers alerts to users.
 ///
 /// All notification plugins (feishu, stdout, slack, etc.) must implement this trait.
 #[async_trait]
-pub trait NotificationChannel: Send + Sync {
+pub trait NotificationHandler: Send + Sync {
     /// Returns the name of this notification handler (e.g., "feishu", "stdout")
     fn name(&self) -> &str;
 
@@ -19,11 +19,11 @@ pub trait NotificationChannel: Send + Sync {
     }
 
     /// Clone as trait object
-    fn clone_box(&self) -> Box<dyn NotificationChannel>;
+    fn clone_box(&self) -> Box<dyn NotificationHandler>;
 }
 
 #[async_trait]
-impl NotificationChannel for Box<dyn NotificationChannel> {
+impl NotificationHandler for Box<dyn NotificationHandler> {
     fn name(&self) -> &str {
         (**self).name()
     }
@@ -36,12 +36,12 @@ impl NotificationChannel for Box<dyn NotificationChannel> {
         (**self).is_enabled()
     }
 
-    fn clone_box(&self) -> Box<dyn NotificationChannel> {
+    fn clone_box(&self) -> Box<dyn NotificationHandler> {
         (**self).clone_box()
     }
 }
 
-impl Clone for Box<dyn NotificationChannel> {
+impl Clone for Box<dyn NotificationHandler> {
     fn clone(&self) -> Self {
         self.clone_box()
     }
