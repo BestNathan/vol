@@ -66,11 +66,11 @@ symbol = "BTC"
 short_threshold = 0.55
 medium_threshold = 0.53
 long_threshold = 0.51
-short_atm_threshold = 0.10   # Short-term: ATM ±10%
-medium_atm_threshold = 0.08  # Medium-term: ATM ±8%
-long_atm_threshold = 0.05    # Long-term: ATM ±5%
+short_atm_threshold = 0.05
+medium_atm_threshold = 0.08
+long_atm_threshold = 0.10
 # Per-DTE ATM thresholds (overrides tenor-based for specific DTE values)
-dte_atm_thresholds = { "1" = 0.01, "2" = 0.02, "3" = 0.03, "4" = 0.04, "5" = 0.05, "6" = 0.05, "7" = 0.05 }
+dte_atm_thresholds = { "1" = 0.02, "2" = 0.03, "3" = 0.04 }
 enabled = true
 notifications = ["feishu-alerts", "stdout"]
 
@@ -81,11 +81,11 @@ symbol = "ETH"
 short_threshold = 0.75
 medium_threshold = 0.73
 long_threshold = 0.71
-short_atm_threshold = 0.10   # Short-term: ATM ±10%
-medium_atm_threshold = 0.08  # Medium-term: ATM ±8%
-long_atm_threshold = 0.05    # Long-term: ATM ±5%
+short_atm_threshold = 0.07
+medium_atm_threshold = 0.10
+long_atm_threshold = 0.12
 # Per-DTE ATM thresholds (overrides tenor-based for specific DTE values)
-dte_atm_thresholds = { "1" = 0.01, "2" = 0.02, "3" = 0.03, "4" = 0.04, "5" = 0.05, "6" = 0.05, "7" = 0.05 }
+dte_atm_thresholds = { "1" = 0.03, "2" = 0.04, "3" = 0.05 }
 enabled = true
 notifications = ["feishu-alerts", "stdout"]
 
