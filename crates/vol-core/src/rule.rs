@@ -20,16 +20,21 @@ pub enum RuleAction {
 /// All rule implementations (IV threshold, portfolio margin, etc.) must implement this trait.
 #[async_trait]
 pub trait RuleProcessor: Send + Sync {
-    /// Rule name for logging and identification
-    fn name(&self) -> &str;
+    /// Rule ID for configuration reference
+    fn id(&self) -> &str;
+
+    /// Rule type for configuration parsing
+    fn rule_type(&self) -> &str;
 
     /// Declare which event types this rule is interested in.
     /// Rules only receive events matching their interests.
     fn interests(&self) -> Vec<EventType>;
 
-    /// Evaluate an event and optionally return an alert.
-    /// This is called synchronously - keep it fast!
-    fn evaluate(&self, event: &MonitoringEvent) -> Option<Alert>;
+    /// Evaluate an event and return alerts (can produce multiple).
+    async fn evaluate(&self, event: &MonitoringEvent) -> Vec<Alert>;
+
+    /// Get configured notification channel IDs
+    fn notification_ids(&self) -> Vec<String>;
 
     /// Optional callback after an alert is sent.
     /// Can be used for cooldown logic, state updates, etc.
@@ -44,16 +49,24 @@ pub trait RuleProcessor: Send + Sync {
 // Implement RuleProcessor for Box<dyn RuleProcessor>
 #[async_trait]
 impl RuleProcessor for Box<dyn RuleProcessor> {
-    fn name(&self) -> &str {
-        (**self).name()
+    fn id(&self) -> &str {
+        (**self).id()
+    }
+
+    fn rule_type(&self) -> &str {
+        (**self).rule_type()
     }
 
     fn interests(&self) -> Vec<EventType> {
         (**self).interests()
     }
 
-    fn evaluate(&self, event: &MonitoringEvent) -> Option<Alert> {
-        (**self).evaluate(event)
+    async fn evaluate(&self, event: &MonitoringEvent) -> Vec<Alert> {
+        (**self).evaluate(event).await
+    }
+
+    fn notification_ids(&self) -> Vec<String> {
+        (**self).notification_ids()
     }
 
     async fn on_alert(&self, alert: &Alert) -> Result<RuleAction> {
