@@ -1,0 +1,17 @@
+[package]
+name = "vol-rules"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+
+vol-core = { workspace = true }
+vol-config = { workspace = true }
