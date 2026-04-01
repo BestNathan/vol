@@ -23,6 +23,27 @@ pub struct FeishuNotificationConfig {
     pub message_template: String,
 }
 
+/// Feishu config for backwards compatibility with vol-notification
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct FeishuConfig {
+    /// App ID for OAuth 2.0 authentication
+    #[serde(default)]
+    pub app_id: Option<String>,
+    /// App Secret for OAuth 2.0 authentication
+    #[serde(default)]
+    pub app_secret: Option<String>,
+    /// Receive ID (chat_id or user_id)
+    #[serde(default)]
+    pub receive_id: Option<String>,
+    /// Message template for text notifications
+    #[serde(default = "default_message_template")]
+    pub message_template: String,
+}
+
+fn default_message_template() -> String {
+    "🚨 {tenor} {alert_type}: {symbol} | IV={value:.1}% | 指数={index_price} | DTE={dte}天 | {option_type} | 价格={mark_price_coin} ({mark_price_usd} USD)".to_string()
+}
+
 /// Notification configuration enum
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]

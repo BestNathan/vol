@@ -13,69 +13,65 @@ pub use metrics::*;
 pub use notification::*;
 pub use rule::*;
 
-/// Engine configuration - layered arrays for extensibility
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct EngineConfig {
+// Re-export legacy types for backwards compatibility
+pub use datasource::{DeribitConfig, DeribitAuthConfig};
+
+/// Engine configuration
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct EngineConfigFile {
+    #[serde(default)]
+    pub hot_reload: bool,
+    #[serde(default = "default_30")]
+    pub hot_reload_interval_secs: u64,
+    #[serde(default = "default_1000")]
+    pub channel_buffer_size: usize,
+    #[serde(default = "default_300")]
+    pub alert_cooldown_secs: u64,
+}
+
+fn default_30() -> u64 { 30 }
+fn default_1000() -> usize { 1000 }
+fn default_300() -> u64 { 300 }
+
+/// Main configuration structure - new format with layered arrays
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Config {
+    #[serde(default)]
+    pub engine: EngineConfigFile,
+    pub tenors: TenorConfig,
     #[serde(default)]
     pub datasources: Vec<DataSourceConfig>,
     #[serde(default)]
-    pub rules: Vec<RuleConfig>,
-    #[serde(default)]
     pub notifications: Vec<NotificationConfig>,
+    #[serde(default)]
+    pub rules: Vec<RuleConfig>,
+    /// Legacy format support - for backwards compatibility
+    #[serde(default)]
+    pub data_sources: Option<LegacyDataSourcesConfig>,
+    #[serde(default)]
+    pub alerts: Option<LegacyAlertsConfig>,
+    #[serde(default)]
+    pub state: Option<StateConfig>,
 }
 
-/// Main configuration structure
+/// Legacy data sources configuration (for backwards compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Config {
-    pub data_sources: DataSourcesConfig,
-    pub tenors: TenorConfig,
-    pub alerts: AlertsConfig,
-    pub notifications: NotificationsConfig,
-    pub state: StateConfig,
-}
-
-/// Data sources configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DataSourcesConfig {
+pub struct LegacyDataSourcesConfig {
     pub enabled: Vec<String>,
     pub deribit: Option<DeribitConfig>,
 }
 
-/// Deribit-specific configuration
+/// Legacy alerts configuration (for backwards compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeribitConfig {
-    pub ws_url: String,
-    pub symbols: Vec<String>,
-    pub poll_interval_secs: u64,
+pub struct LegacyAlertsConfig {
+    pub enabled: Vec<String>,
+    pub cooldown_secs: u64,
+    pub absolute_iv: AbsoluteIvConfig,
+    pub rate_of_change: RateOfChangeConfig,
+    pub term_structure: TermStructureConfig,
+    pub skew: SkewConfig,
     #[serde(default)]
-    pub auth: Option<DeribitAuthConfig>,
-}
-
-/// Deribit OAuth authentication configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeribitAuthConfig {
-    /// OAuth client ID - env var DERIBIT_CLIENT_ID takes precedence
-    #[serde(default)]
-    pub client_id: Option<String>,
-    /// OAuth client secret - env var DERIBIT_CLIENT_SECRET takes precedence
-    #[serde(default)]
-    pub client_secret: Option<String>,
-}
-
-impl DeribitAuthConfig {
-    /// Get client_id with env var override
-    pub fn client_id(&self) -> Option<String> {
-        std::env::var("DERIBIT_CLIENT_ID")
-            .ok()
-            .or_else(|| self.client_id.clone())
-    }
-
-    /// Get client_secret with env var override
-    pub fn client_secret(&self) -> Option<String> {
-        std::env::var("DERIBIT_CLIENT_SECRET")
-            .ok()
-            .or_else(|| self.client_secret.clone())
-    }
+    pub metrics: Vec<MetricConfig>,
 }
 
 /// Tenor configuration - DTE boundaries
@@ -100,30 +96,7 @@ impl TenorConfig {
     }
 }
 
-/// Alerts configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AlertsConfig {
-    pub enabled: Vec<String>,
-    pub cooldown_secs: u64,
-    pub absolute_iv: AbsoluteIvConfig,
-    pub rate_of_change: RateOfChangeConfig,
-    pub term_structure: TermStructureConfig,
-    pub skew: SkewConfig,
-    #[serde(default)]
-    pub metrics: Vec<MetricConfig>,
-}
-
-/// Per-symbol IV and ATM threshold configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SymbolIvConfig {
-    pub short_threshold: f64,
-    pub medium_threshold: f64,
-    pub long_threshold: f64,
-    pub short_atm_threshold: f64,
-    pub medium_atm_threshold: f64,
-    pub long_atm_threshold: f64,
-}
-
+/// Absolute IV threshold configuration (legacy format)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AbsoluteIvConfig {
     /// Per-symbol configuration keyed by lowercase symbol name (e.g., "btc", "eth")
@@ -135,6 +108,17 @@ impl AbsoluteIvConfig {
     pub fn get_symbol_config(&self, symbol: &str) -> Option<&SymbolIvConfig> {
         self.symbols.get(&symbol.to_lowercase())
     }
+}
+
+/// Per-symbol IV and ATM threshold configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SymbolIvConfig {
+    pub short_threshold: f64,
+    pub medium_threshold: f64,
+    pub long_threshold: f64,
+    pub short_atm_threshold: f64,
+    pub medium_atm_threshold: f64,
+    pub long_atm_threshold: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -152,33 +136,6 @@ pub struct TermStructureConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkewConfig {
     pub threshold: f64,
-}
-
-/// Notifications configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NotificationsConfig {
-    pub enabled: Vec<String>,
-    pub feishu: Option<FeishuConfig>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FeishuConfig {
-    /// App ID for OAuth 2.0 authentication
-    #[serde(default)]
-    pub app_id: Option<String>,
-    /// App Secret for OAuth 2.0 authentication
-    #[serde(default)]
-    pub app_secret: Option<String>,
-    /// Receive ID (chat_id or user_id)
-    #[serde(default)]
-    pub receive_id: Option<String>,
-    /// Message template for text notifications
-    #[serde(default = "default_message_template")]
-    pub message_template: String,
-}
-
-fn default_message_template() -> String {
-    "🚨 {tenor} {alert_type}: {symbol} | IV={value:.1}% | 指数={index_price} | DTE={dte}天 | {option_type} | 价格={mark_price_coin} ({mark_price_usd} USD)".to_string()
 }
 
 /// State persistence configuration

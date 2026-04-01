@@ -4,18 +4,20 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use vol_core::{RuleProcessor, MonitoringEvent, Alert, AlertType, EventType, RuleAction, Result, VolatilityData};
-use vol_config::RateOfChangeConfig;
+use vol_config::RateChangeRuleConfig;
 
 /// Rate of change rule for IV changes over time
 pub struct RateChangeRule {
-    config: RateOfChangeConfig,
+    config: RateChangeRuleConfig,
+    id: String,
     // Rolling buffers per symbol: stores (timestamp, iv) pairs
     buffers: Arc<Mutex<std::collections::HashMap<String, VecDeque<(u64, f64)>>>>,
 }
 
 impl RateChangeRule {
-    pub fn new(config: RateOfChangeConfig) -> Self {
+    pub fn new(config: RateChangeRuleConfig) -> Self {
         Self {
+            id: config.id.clone(),
             config,
             buffers: Arc::new(Mutex::new(std::collections::HashMap::new())),
         }
@@ -44,7 +46,8 @@ impl RateChangeRule {
         Some((latest - oldest) / oldest)
     }
 
-    async fn evaluate_volatility_async(&self, data: &VolatilityData) -> Option<Alert> {
+    async fn evaluate_volatility_async(&self, data: &VolatilityData) -> Vec<Alert> {
+        let mut alerts = Vec::new();
         let mut buffers = self.buffers.lock().await;
         let buffer = buffers.entry(data.symbol.clone()).or_insert_with(VecDeque::new);
 
@@ -59,7 +62,7 @@ impl RateChangeRule {
         // Check 1h rate of change
         if let Some(change) = self.calculate_rate_change(buffer, 3_600_000) {
             if change.abs() >= self.config.window_1h_threshold {
-                return Some(Alert::new(
+                alerts.push(Alert::new(
                     AlertType::RateChange { window_hours: 1, change_pct: change },
                     data.tenor(),
                     data.symbol.clone(),
@@ -83,7 +86,7 @@ impl RateChangeRule {
         // Check 4h rate of change
         if let Some(change) = self.calculate_rate_change(buffer, 14_400_000) {
             if change.abs() >= self.config.window_4h_threshold {
-                return Some(Alert::new(
+                alerts.push(Alert::new(
                     AlertType::RateChange { window_hours: 4, change_pct: change },
                     data.tenor(),
                     data.symbol.clone(),
@@ -107,7 +110,7 @@ impl RateChangeRule {
         // Check 24h rate of change
         if let Some(change) = self.calculate_rate_change(buffer, 86_400_000) {
             if change.abs() >= self.config.window_24h_threshold {
-                return Some(Alert::new(
+                alerts.push(Alert::new(
                     AlertType::RateChange { window_hours: 24, change_pct: change },
                     data.tenor(),
                     data.symbol.clone(),
@@ -128,13 +131,14 @@ impl RateChangeRule {
             }
         }
 
-        None
+        alerts
     }
 }
 
 impl Clone for RateChangeRule {
     fn clone(&self) -> Self {
         Self {
+            id: self.id.clone(),
             config: self.config.clone(),
             buffers: Arc::new(Mutex::new(self.buffers.try_lock().map(|b| b.clone()).unwrap_or_default())),
         }
@@ -143,24 +147,27 @@ impl Clone for RateChangeRule {
 
 #[async_trait::async_trait]
 impl RuleProcessor for RateChangeRule {
-    fn name(&self) -> &str {
-        "rate_change"
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn rule_type(&self) -> &str {
+        "rate-change"
     }
 
     fn interests(&self) -> Vec<EventType> {
         vec![EventType::Volatility]
     }
 
-    fn evaluate(&self, event: &MonitoringEvent) -> Option<Alert> {
-        // Note: This is a simplified synchronous evaluation
-        // For full rate change tracking, use evaluate_async instead
+    async fn evaluate(&self, event: &MonitoringEvent) -> Vec<Alert> {
         let MonitoringEvent::Volatility(vol_data) = event else {
-            return None;
+            return vec![];
         };
-        // For synchronous evaluation, we just return None
-        // The async version should be called from async context
-        let _ = vol_data;
-        None
+        self.evaluate_volatility_async(vol_data).await
+    }
+
+    fn notification_ids(&self) -> Vec<String> {
+        self.config.notifications.clone()
     }
 
     async fn on_alert(&self, _alert: &Alert) -> Result<RuleAction> {

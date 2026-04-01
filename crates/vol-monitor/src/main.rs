@@ -7,11 +7,12 @@ use anyhow::Result;
 use tracing::{info, warn};
 use tracing_subscriber::{self, EnvFilter};
 
-use vol_config::Config;
+use vol_config::{Config, DataSourceConfig, NotificationConfig, RuleConfig};
 use vol_engine::{MonitoringEngineBuilder, EngineConfig};
 use vol_datasource::DeribitDataSource;
 use vol_notification::{StdoutNotification, FeishuNotification};
-use vol_rules::{AbsoluteIvRule, RateChangeRule, TermStructureRule, SkewRule, PortfolioRule};
+use vol_rules::{AbsoluteIvRule, RateChangeRule, TermStructureRule, SkewRule};
+use vol_config::{TermStructureConfig, SkewConfig};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -21,53 +22,126 @@ async fn main() -> Result<()> {
         .init();
 
     info!("===========================================");
-    info!("  Deribit Volatility Monitor v0.2.0");
+    info!("  Deribit Volatility Monitor v0.3.0");
     info!("===========================================");
 
     // Load configuration
     let config = Config::load("config.toml").unwrap_or_else(|e| {
         warn!("Failed to load config.toml: {}", e);
+        warn!("Using default configuration");
         create_default_config()
     });
 
-    // Create datasource
-    let deribit_config = config.data_sources.deribit.as_ref().expect("Deribit config required");
-    let mut deribit_ds = DeribitDataSource::new(
-        deribit_config.ws_url.clone(),
-        deribit_config.symbols.clone(),
-        deribit_config.poll_interval_secs,
-    );
-
-    // Use proxy if configured
-    if let Ok(proxy) = std::env::var("HTTPS_PROXY").or_else(|_| std::env::var("HTTP_PROXY")) {
-        info!("Using proxy: {}", proxy);
-        deribit_ds = deribit_ds.with_proxy(proxy);
-    }
-
-    // Create rules
-    let abs_iv = AbsoluteIvRule::new(config.alerts.absolute_iv.clone());
-    let rate_change = RateChangeRule::new(config.alerts.rate_of_change.clone());
-    let term_structure = TermStructureRule::new(config.alerts.term_structure.clone());
-    let skew = SkewRule::new(config.alerts.skew.clone());
-    let portfolio = PortfolioRule::new(config.alerts.metrics.clone(), config.alerts.cooldown_secs);
-
-    // Create notifications
-    let stdout = StdoutNotification::new();
-    let feishu = config.notifications.feishu.clone().map(FeishuNotification::new);
+    // Create engine config
+    let engine_config = EngineConfig::default();
 
     // Build engine
     let mut builder = MonitoringEngineBuilder::new()
-        .with_config(EngineConfig::default())
-        .with_datasource(Box::new(deribit_ds))
-        .with_rule(Box::new(abs_iv))
-        .with_rule(Box::new(rate_change))
-        .with_rule(Box::new(term_structure))
-        .with_rule(Box::new(skew))
-        .with_rule(Box::new(portfolio))
-        .with_notification(Box::new(stdout));
+        .with_config(engine_config);
 
-    if let Some(feishu_notif) = feishu {
-        builder = builder.with_notification(Box::new(feishu_notif));
+    // Add datasources
+    for ds_config in &config.datasources {
+        match ds_config {
+            DataSourceConfig::WebSocket(ws_config) => {
+                if !ws_config.enabled {
+                    continue;
+                }
+                if ws_config.provider != "deribit" {
+                    warn!("Unsupported provider: {}", ws_config.provider);
+                    continue;
+                }
+
+                let symbols = vec!["BTC".to_string(), "ETH".to_string()];
+                let mut ds = DeribitDataSource::new(
+                    ws_config.ws_url.clone(),
+                    symbols,
+                    ws_config.poll_interval_secs,
+                    ws_config.id.clone(),
+                );
+
+                // Use proxy if configured
+                if let Ok(proxy) = std::env::var("HTTPS_PROXY").or_else(|_| std::env::var("HTTP_PROXY")) {
+                    info!("Using proxy: {}", proxy);
+                    ds = ds.with_proxy(proxy);
+                }
+
+                builder = builder.with_datasource(Box::new(ds));
+                info!("Added datasource: {}", ws_config.id);
+            }
+            DataSourceConfig::HttpPoll(_) => {
+                warn!("HttpPoll datasource not yet implemented");
+            }
+        }
+    }
+
+    // Add notifications
+    for notif_config in &config.notifications {
+        match notif_config {
+            NotificationConfig::Stdout(stdout_cfg) => {
+                if !stdout_cfg.enabled {
+                    continue;
+                }
+                let stdout = StdoutNotification::new();
+                builder = builder.with_notification(Box::new(stdout));
+                info!("Added notification: {}", stdout_cfg.id);
+            }
+            NotificationConfig::Feishu(feishu_cfg) => {
+                if !feishu_cfg.enabled {
+                    continue;
+                }
+                let feishu_config = vol_config::FeishuConfig {
+                    app_id: Some(feishu_cfg.app_id.clone()),
+                    app_secret: Some(feishu_cfg.app_secret.clone()),
+                    receive_id: Some(feishu_cfg.receive_id.clone()),
+                    message_template: feishu_cfg.message_template.clone(),
+                };
+                let feishu = FeishuNotification::new(feishu_config);
+                builder = builder.with_notification(Box::new(feishu));
+                info!("Added notification: {}", feishu_cfg.id);
+            }
+        }
+    }
+
+    // Add rules
+    for rule_config in &config.rules {
+        if !rule_config.enabled() {
+            continue;
+        }
+
+        match rule_config {
+            RuleConfig::AbsoluteIv(abs_cfg) => {
+                let rule = AbsoluteIvRule::new(abs_cfg.clone());
+                builder = builder.with_rule(Box::new(rule));
+                info!("Added rule: {} (type: absolute-iv, symbol: {})", abs_cfg.id, abs_cfg.symbol);
+            }
+            RuleConfig::RateChange(rate_cfg) => {
+                let rule = RateChangeRule::new(rate_cfg.clone());
+                builder = builder.with_rule(Box::new(rule));
+                info!("Added rule: {} (type: rate-change, symbol: {})", rate_cfg.id, rate_cfg.symbol);
+            }
+            RuleConfig::TermStructure(term_cfg) => {
+                let config = TermStructureConfig {
+                    short_long_spread_threshold: term_cfg.short_long_spread_threshold,
+                };
+                let rule = TermStructureRule::new(config, term_cfg.id.clone());
+                builder = builder.with_rule(Box::new(rule));
+                info!("Added rule: {} (type: term-structure)", term_cfg.id);
+            }
+            RuleConfig::Skew(skew_cfg) => {
+                let config = SkewConfig {
+                    threshold: skew_cfg.threshold,
+                };
+                let rule = SkewRule::new(config, skew_cfg.id.clone());
+                builder = builder.with_rule(Box::new(rule));
+                info!("Added rule: {} (type: skew)", skew_cfg.id);
+            }
+            RuleConfig::Portfolio(_) => {
+                warn!("Portfolio rule not yet implemented in new format");
+            }
+            RuleConfig::MarginRatio(_) => {
+                warn!("MarginRatio rule not yet implemented");
+            }
+        }
     }
 
     let engine = builder.build();
@@ -76,16 +150,10 @@ async fn main() -> Result<()> {
     info!("  Monitoring started");
     info!("===========================================");
     info!("");
-    info!("Alert thresholds (BTC):");
-    info!("  Absolute IV:  short>={:.0}%, medium>={:.0}%, long>={:.0}%",
-          config.alerts.absolute_iv.get_symbol_config("btc").map(|c| c.short_threshold * 100.0).unwrap_or(0.0),
-          config.alerts.absolute_iv.get_symbol_config("btc").map(|c| c.medium_threshold * 100.0).unwrap_or(0.0),
-          config.alerts.absolute_iv.get_symbol_config("btc").map(|c| c.long_threshold * 100.0).unwrap_or(0.0));
-    info!("Alert thresholds (ETH):");
-    info!("  Absolute IV:  short>={:.0}%, medium>={:.0}%, long>={:.0}%",
-          config.alerts.absolute_iv.get_symbol_config("eth").map(|c| c.short_threshold * 100.0).unwrap_or(0.0),
-          config.alerts.absolute_iv.get_symbol_config("eth").map(|c| c.medium_threshold * 100.0).unwrap_or(0.0),
-          config.alerts.absolute_iv.get_symbol_config("eth").map(|c| c.long_threshold * 100.0).unwrap_or(0.0));
+    info!("Configuration loaded:");
+    info!("  Datasources: {}", config.datasources.len());
+    info!("  Notifications: {}", config.notifications.len());
+    info!("  Rules: {}", config.rules.iter().filter(|r| r.enabled()).count());
     info!("");
 
     // Run engine (runs until shutdown)
@@ -96,70 +164,24 @@ async fn main() -> Result<()> {
 }
 
 fn create_default_config() -> Config {
-    use vol_config::*;
-    use std::collections::HashMap;
-
-    let mut symbols = HashMap::new();
-
-    // BTC config - BTC typically has lower IV than ETH
-    symbols.insert("btc".to_string(), SymbolIvConfig {
-        short_threshold: 0.80,
-        medium_threshold: 0.70,
-        long_threshold: 0.60,
-        short_atm_threshold: 0.05,
-        medium_atm_threshold: 0.10,
-        long_atm_threshold: 0.15,
-    });
-
-    // ETH config - ETH typically has higher IV, allow wider ATM ranges
-    symbols.insert("eth".to_string(), SymbolIvConfig {
-        short_threshold: 0.90,
-        medium_threshold: 0.80,
-        long_threshold: 0.70,
-        short_atm_threshold: 0.08,
-        medium_atm_threshold: 0.12,
-        long_atm_threshold: 0.18,
-    });
-
     Config {
-        data_sources: DataSourcesConfig {
-            enabled: vec!["deribit".to_string()],
-            deribit: Some(DeribitConfig {
-                ws_url: "wss://www.deribit.com/ws/api/v2".to_string(),
-                symbols: vec!["BTC".to_string(), "ETH".to_string()],
-                poll_interval_secs: 60,
-                auth: None,
-            }),
+        engine: vol_config::EngineConfigFile {
+            hot_reload: false,
+            hot_reload_interval_secs: 30,
+            channel_buffer_size: 1000,
+            alert_cooldown_secs: 300,
         },
-        tenors: TenorConfig {
+        tenors: vol_config::TenorConfig {
             short_max_dte: 7,
             medium_min_dte: 20,
             medium_max_dte: 40,
             long_min_dte: 80,
         },
-        alerts: AlertsConfig {
-            enabled: vec!["absolute_iv".to_string(), "rate_change".to_string()],
-            cooldown_secs: 300,
-            absolute_iv: AbsoluteIvConfig { symbols },
-            rate_of_change: RateOfChangeConfig {
-                window_1h_threshold: 0.05,
-                window_4h_threshold: 0.10,
-                window_24h_threshold: 0.20,
-            },
-            term_structure: TermStructureConfig {
-                short_long_spread_threshold: 0.15,
-            },
-            skew: SkewConfig {
-                threshold: 0.10,
-            },
-            metrics: vec![],
-        },
-        notifications: NotificationsConfig {
-            enabled: vec!["stdout".to_string()],
-            feishu: None,
-        },
-        state: StateConfig {
-            path: "~/.deribit-vol-monitor/state.json".to_string(),
-        },
+        datasources: vec![],
+        notifications: vec![],
+        rules: vec![],
+        data_sources: None,
+        alerts: None,
+        state: None,
     }
 }

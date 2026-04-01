@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{info, error, warn};
-use vol_core::{DataSource, HealthStatus, Result, VolatilityData, MonitoringEvent};
+use vol_core::{DataSource, HealthStatus, Result, VolatilityData, MonitoringEvent, EventType};
 use vol_deribit::{ChannelType, ChannelData, DeribitClient};
 
 /// Index price state - thread-safe shared state
@@ -41,16 +41,18 @@ pub struct DeribitDataSource {
     index_price_state: IndexPriceState,
     symbols: Vec<String>,
     poll_interval_secs: u64,
+    id: String,
 }
 
 impl DeribitDataSource {
-    pub fn new(ws_url: String, symbols: Vec<String>, poll_interval_secs: u64) -> Self {
+    pub fn new(ws_url: String, symbols: Vec<String>, poll_interval_secs: u64, id: String) -> Self {
         let client = DeribitClient::new(ws_url);
         Self {
             client,
             index_price_state: IndexPriceState::new(),
             symbols,
             poll_interval_secs,
+            id,
         }
     }
 
@@ -204,6 +206,14 @@ impl DeribitDataSource {
 
 #[async_trait::async_trait]
 impl DataSource for DeribitDataSource {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn event_type(&self) -> EventType {
+        EventType::Volatility
+    }
+
     fn name(&self) -> &str {
         "deribit"
     }

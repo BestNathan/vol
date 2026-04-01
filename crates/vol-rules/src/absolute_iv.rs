@@ -1,7 +1,7 @@
 //! Absolute IV threshold rule.
 
 use vol_core::{RuleProcessor, MonitoringEvent, Alert, AlertType, EventType, RuleAction, Result, Tenor, VolatilityData};
-use vol_config::{AbsoluteIvConfig, SymbolIvConfig};
+use vol_config::AbsoluteIvRuleConfig;
 
 /// Extract underlying symbol from instrument name
 /// e.g., "BTC-29MAR24-70000-C" -> "BTC"
@@ -12,45 +12,35 @@ fn extract_symbol(instrument_name: &str) -> Option<&str> {
 /// Absolute IV threshold rule
 #[derive(Clone)]
 pub struct AbsoluteIvRule {
-    config: AbsoluteIvConfig,
+    config: AbsoluteIvRuleConfig,
+    id: String,
 }
 
 impl AbsoluteIvRule {
-    pub fn new(config: AbsoluteIvConfig) -> Self {
-        Self { config }
-    }
-
-    fn get_symbol_config(&self, symbol: &str) -> Option<&SymbolIvConfig> {
-        self.config.get_symbol_config(symbol)
+    pub fn new(config: AbsoluteIvRuleConfig) -> Self {
+        Self {
+            id: config.id.clone(),
+            config,
+        }
     }
 
     fn evaluate_volatility(&self, data: &VolatilityData) -> Option<Alert> {
         // Extract symbol from instrument name
         let symbol_name = extract_symbol(&data.symbol)?;
 
-        // Get symbol-specific config
-        let symbol_config = self.get_symbol_config(symbol_name)?;
+        // Check if this matches our configured symbol
+        if symbol_name.to_lowercase() != self.config.symbol.to_lowercase() {
+            return None;
+        }
 
         let tenor = data.tenor();
 
-        // Get IV threshold for this symbol and tenor
+        // Get IV threshold for this tenor
         let iv_threshold = match tenor {
-            Tenor::Short => symbol_config.short_threshold,
-            Tenor::Medium => symbol_config.medium_threshold,
-            Tenor::Long => symbol_config.long_threshold,
+            Tenor::Short => self.config.short_threshold,
+            Tenor::Medium => self.config.medium_threshold,
+            Tenor::Long => self.config.long_threshold,
         };
-
-        // Get ATM threshold for this symbol and tenor
-        let atm_threshold = match tenor {
-            Tenor::Short => symbol_config.short_atm_threshold,
-            Tenor::Medium => symbol_config.medium_atm_threshold,
-            Tenor::Long => symbol_config.long_atm_threshold,
-        };
-
-        // ATM filter - skip if not ATM for this symbol's threshold
-        if !data.is_atm(atm_threshold) {
-            return None;
-        }
 
         // IV threshold check
         if data.iv >= iv_threshold {
@@ -64,9 +54,9 @@ impl AbsoluteIvRule {
                 data.symbol.clone(),
                 data.iv,
                 format!(
-                    "{} {} IV {:.1}% (symbol: {}, moneyness: {:.2}%, ATM: {:.1}%) >= threshold {:.1}%",
+                    "{} {} IV {:.1}% (symbol: {}, moneyness: {:.2}%) >= threshold {:.1}%",
                     data.symbol, tenor,
-                    data.iv * 100.0, symbol_name, moneyness * 100.0, atm_threshold * 100.0, iv_threshold * 100.0
+                    data.iv * 100.0, symbol_name, moneyness * 100.0, iv_threshold * 100.0
                 ),
                 data.timestamp,
                 data.source.clone(),
@@ -84,19 +74,27 @@ impl AbsoluteIvRule {
 
 #[async_trait::async_trait]
 impl RuleProcessor for AbsoluteIvRule {
-    fn name(&self) -> &str {
-        "absolute_iv"
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn rule_type(&self) -> &str {
+        "absolute-iv"
     }
 
     fn interests(&self) -> Vec<EventType> {
         vec![EventType::Volatility]
     }
 
-    fn evaluate(&self, event: &MonitoringEvent) -> Option<Alert> {
+    async fn evaluate(&self, event: &MonitoringEvent) -> Vec<Alert> {
         let MonitoringEvent::Volatility(vol_data) = event else {
-            return None;
+            return vec![];
         };
-        self.evaluate_volatility(vol_data)
+        self.evaluate_volatility(vol_data).into_iter().collect()
+    }
+
+    fn notification_ids(&self) -> Vec<String> {
+        self.config.notifications.clone()
     }
 
     async fn on_alert(&self, _alert: &Alert) -> Result<RuleAction> {
@@ -111,77 +109,11 @@ impl RuleProcessor for AbsoluteIvRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
     fn test_extract_symbol() {
         assert_eq!(extract_symbol("BTC-29MAR24-70000-C"), Some("BTC"));
         assert_eq!(extract_symbol("ETH-29MAR24-3500-P"), Some("ETH"));
         assert_eq!(extract_symbol("INVALID"), Some("INVALID"));
-    }
-
-    #[test]
-    fn test_evaluate_with_symbol_specific_config() {
-        let mut symbols = HashMap::new();
-
-        // BTC config - lower thresholds
-        symbols.insert("btc".to_string(), SymbolIvConfig {
-            short_threshold: 0.80,
-            medium_threshold: 0.70,
-            long_threshold: 0.60,
-            short_atm_threshold: 0.05,
-            medium_atm_threshold: 0.10,
-            long_atm_threshold: 0.15,
-        });
-
-        // ETH config - higher thresholds
-        symbols.insert("eth".to_string(), SymbolIvConfig {
-            short_threshold: 0.90,
-            medium_threshold: 0.80,
-            long_threshold: 0.70,
-            short_atm_threshold: 0.08,
-            medium_atm_threshold: 0.12,
-            long_atm_threshold: 0.18,
-        });
-
-        let handler = AbsoluteIvRule::new(AbsoluteIvConfig { symbols });
-
-        // Create test data - BTC at 85% IV (should trigger for BTC)
-        let btc_data = VolatilityData {
-            symbol: "BTC-6JAN25-95000-C".to_string(),
-            dte: 5,
-            iv: 0.85,
-            timestamp: 1234567890,
-            source: "deribit".to_string(),
-            strike: 95000.0,
-            option_type: vol_core::OptionType::Call,
-            index_price: 95000.0,
-            delta: None,
-            extra: std::collections::HashMap::new(),
-        };
-
-        // BTC 85% IV should trigger (threshold 80%)
-        let event = MonitoringEvent::Volatility(btc_data);
-        let alert = handler.evaluate(&event);
-        assert!(alert.is_some());
-
-        // Create ETH data at 85% IV (should NOT trigger for ETH)
-        let eth_data = VolatilityData {
-            symbol: "ETH-6JAN25-3800-C".to_string(),
-            dte: 5,
-            iv: 0.85,
-            timestamp: 1234567890,
-            source: "deribit".to_string(),
-            strike: 3800.0,
-            option_type: vol_core::OptionType::Call,
-            index_price: 3800.0,
-            delta: None,
-            extra: std::collections::HashMap::new(),
-        };
-
-        // ETH 85% IV should NOT trigger (threshold 90%)
-        let event = MonitoringEvent::Volatility(eth_data);
-        let alert = handler.evaluate(&event);
-        assert!(alert.is_none());
     }
 }

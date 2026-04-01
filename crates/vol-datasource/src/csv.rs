@@ -2,22 +2,31 @@
 
 use std::path::Path;
 use tokio::sync::mpsc;
-use vol_core::{DataSource, HealthStatus, VolatilityData, VolError, Result, MonitoringEvent};
+use vol_core::{DataSource, HealthStatus, VolError, Result, MonitoringEvent, EventType};
 
 /// CSV file data source - reads volatility data from a CSV file
 #[derive(Clone)]
 pub struct CsvDataSource {
     file_path: String,
+    id: String,
 }
 
 impl CsvDataSource {
-    pub fn new(file_path: String) -> Self {
-        Self { file_path }
+    pub fn new(file_path: String, id: String) -> Self {
+        Self { file_path, id }
     }
 }
 
 #[async_trait::async_trait]
 impl DataSource for CsvDataSource {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn event_type(&self) -> EventType {
+        EventType::Volatility
+    }
+
     fn name(&self) -> &str {
         "csv"
     }

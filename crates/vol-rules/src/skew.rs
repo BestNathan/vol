@@ -8,17 +8,25 @@ use vol_config::SkewConfig;
 pub struct SkewRule {
     #[allow(dead_code)]
     config: SkewConfig,
+    id: String,
 }
 
 impl SkewRule {
-    pub fn new(config: SkewConfig) -> Self {
-        Self { config }
+    pub fn new(config: SkewConfig, id: String) -> Self {
+        Self {
+            config,
+            id,
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl RuleProcessor for SkewRule {
-    fn name(&self) -> &str {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn rule_type(&self) -> &str {
         "skew"
     }
 
@@ -26,17 +34,14 @@ impl RuleProcessor for SkewRule {
         vec![EventType::Volatility]
     }
 
-    fn evaluate(&self, _event: &MonitoringEvent) -> Option<Alert> {
+    async fn evaluate(&self, _event: &MonitoringEvent) -> Vec<Alert> {
         // Skew alerts require comparing put vs call IV at similar strikes
-        // This is a simplified implementation - real version would track
-        // put/call IV pairs and calculate the spread
+        // Placeholder implementation
+        vec![]
+    }
 
-        // For now, placeholder implementation
-        //
-        // NOTE: When this rule is fully implemented, it will need to populate
-        // the new Alert fields (tenor, alert_type, symbol, value) to support
-        // the enriched notification template system.
-        None
+    fn notification_ids(&self) -> Vec<String> {
+        vec![]
     }
 
     async fn on_alert(&self, _alert: &Alert) -> Result<RuleAction> {

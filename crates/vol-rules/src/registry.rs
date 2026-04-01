@@ -21,7 +21,7 @@ impl RuleRegistry {
     /// Register a rule
     pub async fn register(&self, rule: Box<dyn RuleProcessor>) {
         let mut rules = self.rules.write().await;
-        rules.insert(rule.name().to_string(), rule);
+        rules.insert(rule.id().to_string(), rule);
     }
 
     /// Unregister a rule by name
@@ -47,9 +47,8 @@ impl RuleRegistry {
         let mut alerts = Vec::new();
         for rule in rules.values() {
             if rule.interests().contains(&event_type) {
-                if let Some(alert) = rule.evaluate(event) {
-                    alerts.push(alert);
-                }
+                let rule_alerts = rule.evaluate(event).await;
+                alerts.extend(rule_alerts);
             }
         }
         alerts

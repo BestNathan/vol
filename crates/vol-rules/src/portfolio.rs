@@ -24,13 +24,17 @@ pub struct PortfolioRule {
     metrics: Arc<RwLock<Vec<MetricConfig>>>,
     cooldown_secs: u64,
     last_alert: Arc<RwLock<std::collections::HashMap<String, u64>>>,
+    id: String,
+    notifications: Vec<String>,
 }
 
 impl PortfolioRule {
-    pub fn new(metrics: Vec<MetricConfig>, cooldown_secs: u64) -> Self {
+    pub fn new(metrics: Vec<MetricConfig>, cooldown_secs: u64, id: String, notifications: Vec<String>) -> Self {
         Self {
             metrics: Arc::new(RwLock::new(metrics)),
             cooldown_secs,
+            id,
+            notifications,
             last_alert: Arc::new(RwLock::new(std::collections::HashMap::new())),
         }
     }
@@ -281,6 +285,8 @@ impl Clone for PortfolioRule {
         Self {
             metrics: self.metrics.clone(),
             cooldown_secs: self.cooldown_secs,
+            id: self.id.clone(),
+            notifications: self.notifications.clone(),
             last_alert: self.last_alert.clone(),
         }
     }
@@ -288,7 +294,11 @@ impl Clone for PortfolioRule {
 
 #[async_trait::async_trait]
 impl RuleProcessor for PortfolioRule {
-    fn name(&self) -> &str {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn rule_type(&self) -> &str {
         "portfolio"
     }
 
@@ -302,11 +312,19 @@ impl RuleProcessor for PortfolioRule {
         ]
     }
 
-    fn evaluate(&self, _event: &MonitoringEvent) -> Option<Alert> {
-        // Portfolio rule evaluates multiple alerts at once via evaluate() method
-        // This is called synchronously, so we just return None here
-        // The async evaluate() method should be used instead
-        None
+    async fn evaluate(&self, event: &MonitoringEvent) -> Vec<Alert> {
+        // Portfolio rule evaluates portfolio events
+        let MonitoringEvent::Portfolio(snapshot) = event else {
+            return vec![];
+        };
+        // Need to convert PortfolioSnapshot to our internal type
+        // For now, return empty - this rule needs proper event type
+        let _ = snapshot;
+        vec![]
+    }
+
+    fn notification_ids(&self) -> Vec<String> {
+        self.notifications.clone()
     }
 
     async fn on_alert(&self, _alert: &Alert) -> Result<RuleAction> {
