@@ -43,12 +43,15 @@ impl AbsoluteIvRule {
             Tenor::Long => self.config.long_threshold,
         };
 
-        // Get ATM threshold for this tenor
-        let atm_threshold = match tenor {
-            Tenor::Short => self.config.short_atm_threshold,
-            Tenor::Medium => self.config.medium_atm_threshold,
-            Tenor::Long => self.config.long_atm_threshold,
-        };
+        // Get ATM threshold: per-DTE config takes precedence, fallback to tenor-based
+        let dte_key = data.dte.to_string();
+        let atm_threshold = self.config.dte_atm_thresholds.get(&dte_key)
+            .copied()
+            .unwrap_or_else(|| match tenor {
+                Tenor::Short => self.config.short_atm_threshold,
+                Tenor::Medium => self.config.medium_atm_threshold,
+                Tenor::Long => self.config.long_atm_threshold,
+            });
 
         // ATM filter - skip if not within ATM moneyness threshold for this tenor
         let moneyness = data.moneyness();

@@ -22,13 +22,18 @@ pub struct AbsoluteIvRuleConfig {
     pub medium_atm_threshold: f64,
     #[serde(default = "default_long_atm")]
     pub long_atm_threshold: f64,
+    /// Per-DTE ATM moneyness thresholds - overrides tenor-based thresholds for specific DTE values
+    /// Key is DTE in days as string (TOML limitation), value is the ATM threshold
+    /// e.g., {"1": 0.01, "2": 0.02, "3": 0.03}
+    #[serde(default)]
+    pub dte_atm_thresholds: std::collections::HashMap<String, f64>,
     #[serde(default)]
     pub notifications: Vec<String>,
 }
 
 fn default_short_atm() -> f64 { 0.10 }   // 10% for short-term options
-fn default_medium_atm() -> f64 { 0.15 }  // 15% for medium-term options
-fn default_long_atm() -> f64 { 0.20 }    // 20% for long-term options
+fn default_medium_atm() -> f64 { 0.08 }  // 8% for medium-term options
+fn default_long_atm() -> f64 { 0.05 }    // 5% for long-term options
 
 /// Rate of change rule configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
