@@ -42,21 +42,16 @@ async fn main() -> Result<()> {
     // Add datasources
     for ds_config in &config.datasources {
         match ds_config {
-            DataSourceConfig::WebSocket(ws_config) => {
-                if !ws_config.enabled {
-                    continue;
-                }
-                if ws_config.provider != "deribit" {
-                    warn!("Unsupported provider: {}", ws_config.provider);
+            DataSourceConfig::Deribit(deribit_cfg) => {
+                if !deribit_cfg.enabled {
                     continue;
                 }
 
-                let symbols = vec!["BTC".to_string(), "ETH".to_string()];
                 let mut ds = DeribitDataSource::new(
-                    ws_config.ws_url.clone(),
-                    symbols,
-                    ws_config.poll_interval_secs,
-                    ws_config.id.clone(),
+                    deribit_cfg.ws_url.clone(),
+                    deribit_cfg.symbols.clone(),
+                    deribit_cfg.poll_interval_secs,
+                    deribit_cfg.id.clone(),
                 );
 
                 // Use proxy if configured
@@ -66,10 +61,13 @@ async fn main() -> Result<()> {
                 }
 
                 builder = builder.with_datasource(Box::new(ds));
-                info!("Added datasource: {}", ws_config.id);
+                info!("Added datasource: {} (provider: deribit)", deribit_cfg.id);
             }
-            DataSourceConfig::HttpPoll(_) => {
-                warn!("HttpPoll datasource not yet implemented");
+            DataSourceConfig::Binance(_) => {
+                warn!("Binance datasource not yet implemented");
+            }
+            DataSourceConfig::Internal(_) => {
+                warn!("Internal datasource not yet implemented");
             }
         }
     }

@@ -14,7 +14,7 @@ pub use notification::*;
 pub use rule::*;
 
 // Re-export legacy types for backwards compatibility
-pub use datasource::{DeribitConfig, DeribitAuthConfig};
+pub use datasource::{DeribitDataSourceConfig as DeribitConfig, DeribitAuthConfig};
 
 /// Engine configuration
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]

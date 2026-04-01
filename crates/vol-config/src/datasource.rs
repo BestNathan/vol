@@ -1,50 +1,40 @@
 //! Data source configuration types.
+//!
+//! Configuration is organized by provider type (Deribit, Binance, etc.)
+//! rather than transport mechanism (WebSocket vs HTTP).
 
 use serde::{Deserialize, Serialize};
 
-/// Deribit-specific configuration (legacy format)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeribitConfig {
-    pub ws_url: String,
-    pub symbols: Vec<String>,
-    pub poll_interval_secs: u64,
-    #[serde(default)]
-    pub auth: Option<DeribitAuthConfig>,
-}
-
-/// Deribit authentication configuration (legacy format)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Deribit authentication configuration
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DeribitAuthConfig {
-    /// OAuth client ID - env var DERIBIT_CLIENT_ID takes precedence
     #[serde(default)]
     pub client_id: Option<String>,
-    /// OAuth client secret - env var DERIBIT_CLIENT_SECRET takes precedence
     #[serde(default)]
     pub client_secret: Option<String>,
 }
 
-/// WebSocket data source configuration
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct WebSocketDataSourceConfig {
+/// Deribit data source configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeribitDataSourceConfig {
     pub id: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
-    pub provider: String,
     pub ws_url: String,
-    pub channels: Vec<String>,
-    #[serde(default)]
-    pub auth: Option<DeribitAuthConfig>,
+    #[serde(default = "default_symbols")]
+    pub symbols: Vec<String>,
     #[serde(default = "default_60")]
     pub poll_interval_secs: u64,
+    #[serde(default)]
+    pub auth: Option<DeribitAuthConfig>,
 }
 
-/// HTTP polling data source configuration
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct HttpPollDataSourceConfig {
+/// Internal/portfolio data source configuration (HTTP polling)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InternalDataSourceConfig {
     pub id: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
-    pub provider: String,
     pub url: String,
     #[serde(default = "default_30")]
     pub poll_interval_secs: u64,
@@ -52,30 +42,62 @@ pub struct HttpPollDataSourceConfig {
     pub headers: std::collections::HashMap<String, String>,
 }
 
-/// Data source configuration enum
+/// Binance data source configuration (for future expansion)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BinanceDataSourceConfig {
+    pub id: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub api_url: String,
+    #[serde(default = "default_symbols")]
+    pub symbols: Vec<String>,
+    #[serde(default = "default_60")]
+    pub poll_interval_secs: u64,
+    #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub api_secret: Option<String>,
+}
+
+/// Data source configuration enum - organized by provider
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
+#[serde(tag = "provider", rename_all = "lowercase")]
 pub enum DataSourceConfig {
-    WebSocket(WebSocketDataSourceConfig),
-    HttpPoll(HttpPollDataSourceConfig),
+    Deribit(DeribitDataSourceConfig),
+    Binance(BinanceDataSourceConfig),
+    Internal(InternalDataSourceConfig),
 }
 
 impl DataSourceConfig {
     pub fn id(&self) -> &str {
         match self {
-            DataSourceConfig::WebSocket(c) => &c.id,
-            DataSourceConfig::HttpPoll(c) => &c.id,
+            DataSourceConfig::Deribit(c) => &c.id,
+            DataSourceConfig::Binance(c) => &c.id,
+            DataSourceConfig::Internal(c) => &c.id,
         }
     }
 
     pub fn enabled(&self) -> bool {
         match self {
-            DataSourceConfig::WebSocket(c) => c.enabled,
-            DataSourceConfig::HttpPoll(c) => c.enabled,
+            DataSourceConfig::Deribit(c) => c.enabled,
+            DataSourceConfig::Binance(c) => c.enabled,
+            DataSourceConfig::Internal(c) => c.enabled,
         }
     }
 }
 
-fn default_true() -> bool { true }
-fn default_60() -> u64 { 60 }
-fn default_30() -> u64 { 30 }
+fn default_true() -> bool {
+    true
+}
+
+fn default_60() -> u64 {
+    60
+}
+
+fn default_30() -> u64 {
+    30
+}
+
+fn default_symbols() -> Vec<String> {
+    vec!["BTC".to_string(), "ETH".to_string()]
+}

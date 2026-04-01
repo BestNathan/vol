@@ -1,4 +1,4 @@
-# config.toml for vol-monitor - New format with layered arrays
+# config.toml for vol-monitor - Provider-based datasource configuration
 
 [engine]
 hot_reload = true
@@ -12,13 +12,12 @@ medium_min_dte = 20
 medium_max_dte = 40
 long_min_dte = 80
 
-# Data sources - array format
+# Data sources - organized by provider
 [[datasources]]
 id = "deribit-markets"
-type = "web-socket"
 provider = "deribit"
 ws_url = "wss://www.deribit.com/ws/api/v2"
-channels = ["markprice.btc", "markprice.eth"]
+symbols = ["BTC", "ETH"]
 poll_interval_secs = 60
 enabled = true
 
@@ -26,7 +25,26 @@ enabled = true
 client_id = "nhXng7Bj"
 client_secret = "OxCGY10HlzgKfRoXPBRQqg5IBQcZguGPhE1tewP5U3Y"
 
-# Notifications - array format
+# Example: Internal portfolio data source (HTTP polling)
+# [[datasources]]
+# id = "internal-portfolio"
+# provider = "internal"
+# url = "https://internal-api/portfolio"
+# poll_interval_secs = 30
+# enabled = false
+
+# Example: Binance data source
+# [[datasources]]
+# id = "binance-options"
+# provider = "binance"
+# api_url = "https://options.binance.com"
+# symbols = ["BTC", "ETH"]
+# poll_interval_secs = 60
+# enabled = false
+# api_key = "your-api-key"
+# api_secret = "your-api-secret"
+
+# Notifications
 [[notifications]]
 id = "feishu-alerts"
 type = "feishu"
@@ -40,7 +58,7 @@ id = "stdout"
 type = "stdout"
 enabled = true
 
-# Rules - array format
+# Rules
 [[rules]]
 id = "absolute-iv-btc"
 type = "absolute-iv"
@@ -95,3 +113,11 @@ symbol = "BTC"
 threshold = 0.10
 enabled = false
 notifications = ["stdout"]
+
+[[rules]]
+id = "portfolio-margin"
+type = "margin-ratio"
+datasources = ["internal-portfolio"]
+min_threshold = 1.2
+enabled = false
+notifications = ["feishu-alerts"]
