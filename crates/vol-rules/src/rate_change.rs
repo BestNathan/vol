@@ -59,75 +59,81 @@ impl RateChangeRule {
             buffer.pop_front();
         }
 
-        // Check 1h rate of change
-        if let Some(change) = self.calculate_rate_change(buffer, 3_600_000) {
-            if change.abs() >= self.config.window_1h_threshold {
-                alerts.push(Alert::new(
-                    AlertType::RateChange { window_hours: 1, change_pct: change },
-                    data.tenor(),
-                    data.symbol.clone(),
-                    data.iv,
-                    format!(
-                        "{} {} IV changed {:.1}% in 1h (threshold: {:.1}%)",
-                        data.symbol, data.tenor(),
-                        change * 100.0, self.config.window_1h_threshold * 100.0
-                    ),
-                    data.timestamp,
-                    data.source.clone(),
-                    data.index_price,
-                    data.dte,
-                    data.option_type,
-                    data.moneyness(),
-                    data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                ));
+        // Check 1h rate of change - skip if in gap region (no tenor classification)
+        if let Some(tenor) = data.tenor() {
+            if let Some(change) = self.calculate_rate_change(buffer, 3_600_000) {
+                if change.abs() >= self.config.window_1h_threshold {
+                    alerts.push(Alert::new(
+                        AlertType::RateChange { window_hours: 1, change_pct: change },
+                        tenor,
+                        data.symbol.clone(),
+                        data.iv,
+                        format!(
+                            "{} {} IV changed {:.1}% in 1h (threshold: {:.1}%)",
+                            data.symbol, tenor,
+                            change * 100.0, self.config.window_1h_threshold * 100.0
+                        ),
+                        data.timestamp,
+                        data.source.clone(),
+                        data.index_price,
+                        data.dte,
+                        data.option_type,
+                        data.moneyness(),
+                        data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    ));
+                }
             }
         }
 
-        // Check 4h rate of change
-        if let Some(change) = self.calculate_rate_change(buffer, 14_400_000) {
-            if change.abs() >= self.config.window_4h_threshold {
-                alerts.push(Alert::new(
-                    AlertType::RateChange { window_hours: 4, change_pct: change },
-                    data.tenor(),
-                    data.symbol.clone(),
-                    data.iv,
-                    format!(
-                        "{} {} IV changed {:.1}% in 4h (threshold: {:.1}%)",
-                        data.symbol, data.tenor(),
-                        change * 100.0, self.config.window_4h_threshold * 100.0
-                    ),
-                    data.timestamp,
-                    data.source.clone(),
-                    data.index_price,
-                    data.dte,
-                    data.option_type,
-                    data.moneyness(),
-                    data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                ));
+        // Check 4h rate of change - skip if in gap region (no tenor classification)
+        if let Some(tenor) = data.tenor() {
+            if let Some(change) = self.calculate_rate_change(buffer, 14_400_000) {
+                if change.abs() >= self.config.window_4h_threshold {
+                    alerts.push(Alert::new(
+                        AlertType::RateChange { window_hours: 4, change_pct: change },
+                        tenor,
+                        data.symbol.clone(),
+                        data.iv,
+                        format!(
+                            "{} {} IV changed {:.1}% in 4h (threshold: {:.1}%)",
+                            data.symbol, tenor,
+                            change * 100.0, self.config.window_4h_threshold * 100.0
+                        ),
+                        data.timestamp,
+                        data.source.clone(),
+                        data.index_price,
+                        data.dte,
+                        data.option_type,
+                        data.moneyness(),
+                        data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    ));
+                }
             }
         }
 
-        // Check 24h rate of change
-        if let Some(change) = self.calculate_rate_change(buffer, 86_400_000) {
-            if change.abs() >= self.config.window_24h_threshold {
-                alerts.push(Alert::new(
-                    AlertType::RateChange { window_hours: 24, change_pct: change },
-                    data.tenor(),
-                    data.symbol.clone(),
-                    data.iv,
-                    format!(
-                        "{} {} IV changed {:.1}% in 24h (threshold: {:.1}%)",
-                        data.symbol, data.tenor(),
-                        change * 100.0, self.config.window_24h_threshold * 100.0
-                    ),
-                    data.timestamp,
-                    data.source.clone(),
-                    data.index_price,
-                    data.dte,
-                    data.option_type,
-                    data.moneyness(),
-                    data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                ));
+        // Check 24h rate of change - skip if in gap region (no tenor classification)
+        if let Some(tenor) = data.tenor() {
+            if let Some(change) = self.calculate_rate_change(buffer, 86_400_000) {
+                if change.abs() >= self.config.window_24h_threshold {
+                    alerts.push(Alert::new(
+                        AlertType::RateChange { window_hours: 24, change_pct: change },
+                        tenor,
+                        data.symbol.clone(),
+                        data.iv,
+                        format!(
+                            "{} {} IV changed {:.1}% in 24h (threshold: {:.1}%)",
+                            data.symbol, tenor,
+                            change * 100.0, self.config.window_24h_threshold * 100.0
+                        ),
+                        data.timestamp,
+                        data.source.clone(),
+                        data.index_price,
+                        data.dte,
+                        data.option_type,
+                        data.moneyness(),
+                        data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    ));
+                }
             }
         }
 

@@ -62,17 +62,20 @@ impl AlertHandler for RateChangeHandler {
             buffer.pop_front();
         }
 
+        // Get tenor - skip if in gap region (no tenor classification)
+        let tenor = data.tenor()?;
+
         // Check 1h rate of change
         if let Some(change) = self.calculate_rate_change(buffer, 3_600_000) {
             if change.abs() >= self.config.window_1h_threshold {
                 return Some(Alert::new(
                     AlertType::RateChange { window_hours: 1, change_pct: change },
-                    data.tenor(),
+                    tenor,
                     data.symbol.clone(),
                     data.iv,
                     format!(
                         "{} {} IV changed {:.1}% in 1h (threshold: {:.1}%)",
-                        data.symbol, data.tenor(),
+                        data.symbol, tenor,
                         change * 100.0, self.config.window_1h_threshold * 100.0
                     ),
                     data.timestamp,
@@ -91,12 +94,12 @@ impl AlertHandler for RateChangeHandler {
             if change.abs() >= self.config.window_4h_threshold {
                 return Some(Alert::new(
                     AlertType::RateChange { window_hours: 4, change_pct: change },
-                    data.tenor(),
+                    tenor,
                     data.symbol.clone(),
                     data.iv,
                     format!(
                         "{} {} IV changed {:.1}% in 4h (threshold: {:.1}%)",
-                        data.symbol, data.tenor(),
+                        data.symbol, tenor,
                         change * 100.0, self.config.window_4h_threshold * 100.0
                     ),
                     data.timestamp,
@@ -115,12 +118,12 @@ impl AlertHandler for RateChangeHandler {
             if change.abs() >= self.config.window_24h_threshold {
                 return Some(Alert::new(
                     AlertType::RateChange { window_hours: 24, change_pct: change },
-                    data.tenor(),
+                    tenor,
                     data.symbol.clone(),
                     data.iv,
                     format!(
                         "{} {} IV changed {:.1}% in 24h (threshold: {:.1}%)",
-                        data.symbol, data.tenor(),
+                        data.symbol, tenor,
                         change * 100.0, self.config.window_24h_threshold * 100.0
                     ),
                     data.timestamp,

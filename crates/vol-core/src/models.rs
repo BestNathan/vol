@@ -72,8 +72,9 @@ pub struct VolatilityData {
 }
 
 impl VolatilityData {
-    /// Classify the tenor based on DTE
-    pub fn tenor(&self) -> Tenor {
+    /// Classify the tenor based on DTE.
+    /// Returns None for gap regions (8-20 days, 40-79 days) where no tenor-based alerts apply.
+    pub fn tenor(&self) -> Option<Tenor> {
         classify_tenor(self.dte)
     }
 
@@ -110,17 +111,25 @@ impl VolatilityData {
     }
 }
 
-/// Classify DTE into tenor buckets based on user-specified rules:
-/// - Short: DTE <= 7
+/// Tenor classification based on DTE (days to expiry).
+///
+/// Business rule classifications - gaps between ranges are intentional.
+/// Options in gap regions don't trigger tenor-based alerts.
+///
+/// Default ranges:
+/// - Short:  DTE <= 7
 /// - Medium: 20 < DTE < 40
-/// - Long: DTE > 80
-pub fn classify_tenor(dte: u32) -> Tenor {
+/// - Long:   DTE >= 80
+pub fn classify_tenor(dte: u32) -> Option<Tenor> {
     if dte <= 7 {
-        Tenor::Short
+        Some(Tenor::Short)
     } else if dte > 20 && dte < 40 {
-        Tenor::Medium
+        Some(Tenor::Medium)
+    } else if dte >= 80 {
+        Some(Tenor::Long)
     } else {
-        // DTE > 80 or outside medium range
-        Tenor::Long
+        // Gap regions: 8-20 days or 40-79 days
+        // These don't trigger tenor-based alerts
+        None
     }
 }

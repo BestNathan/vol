@@ -33,7 +33,8 @@ impl AbsoluteIvRule {
             return None;
         }
 
-        let tenor = data.tenor();
+        // Get tenor classification - skip if in gap region
+        let tenor = data.tenor()?;
 
         // Get IV threshold for this tenor
         let iv_threshold = match tenor {
