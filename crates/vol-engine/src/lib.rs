@@ -24,7 +24,9 @@
 mod engine;
 mod builder;
 mod config;
+mod registry;
 
 pub use engine::MonitoringEngine;
 pub use builder::MonitoringEngineBuilder;
 pub use config::EngineConfig;
+pub use registry::RuleRegistry;

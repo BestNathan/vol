@@ -33,7 +33,7 @@ impl MonitoringEngine {
 
     /// Register a rule processor
     pub fn add_rule(&mut self, rule: Box<dyn RuleProcessor>) {
-        info!("Registered rule: {} (interests: {:?})", rule.name(), rule.interests());
+        info!("Registered rule: {} (interests: {:?})", rule.id(), rule.interests());
         self.rules.push(rule);
     }
 
@@ -128,14 +128,15 @@ impl MonitoringEngine {
                 let tx = alert_tx.clone();
                 let rule_clone = rule.clone_box_rule();
                 tokio::spawn(async move {
-                    info!("Starting rule: {}", rule_clone.name());
+                    info!("Starting rule: {}", rule_clone.id());
                     while let Ok(event) = rx.recv().await {
                         // Fast path: skip events we're not interested in
                         if !interests.contains(&event.event_type()) {
                             continue;
                         }
 
-                        if let Some(alert) = rule_clone.evaluate(&event) {
+                        let alerts = rule_clone.evaluate(&event).await;
+                        for alert in alerts {
                             if let Err(e) = tx.send(alert).await {
                                 error!("Failed to send alert: {}", e);
                                 break;
