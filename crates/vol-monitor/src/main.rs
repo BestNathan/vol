@@ -11,6 +11,7 @@ use vol_config::Config;
 use vol_engine::{MonitoringEngineBuilder, EngineConfig};
 use vol_datasource::DeribitDataSource;
 use vol_notification::{StdoutNotification, FeishuNotification};
+use vol_rules::{AbsoluteIvRule, RateChangeRule, TermStructureRule, SkewRule, PortfolioRule};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -43,15 +44,26 @@ async fn main() -> Result<()> {
         deribit_ds = deribit_ds.with_proxy(proxy);
     }
 
+    // Create rules
+    let abs_iv = AbsoluteIvRule::new(config.alerts.absolute_iv.clone());
+    let rate_change = RateChangeRule::new(config.alerts.rate_of_change.clone());
+    let term_structure = TermStructureRule::new(config.alerts.term_structure.clone());
+    let skew = SkewRule::new(config.alerts.skew.clone());
+    let portfolio = PortfolioRule::new(config.alerts.metrics.clone(), config.alerts.cooldown_secs);
+
     // Create notifications
     let stdout = StdoutNotification::new();
     let feishu = config.notifications.feishu.clone().map(FeishuNotification::new);
 
     // Build engine
-    // Note: Rules will be added in a future task when vol-rules is migrated
     let mut builder = MonitoringEngineBuilder::new()
         .with_config(EngineConfig::default())
         .with_datasource(Box::new(deribit_ds))
+        .with_rule(Box::new(abs_iv))
+        .with_rule(Box::new(rate_change))
+        .with_rule(Box::new(term_structure))
+        .with_rule(Box::new(skew))
+        .with_rule(Box::new(portfolio))
         .with_notification(Box::new(stdout));
 
     if let Some(feishu_notif) = feishu {
@@ -63,6 +75,18 @@ async fn main() -> Result<()> {
     info!("===========================================");
     info!("  Monitoring started");
     info!("===========================================");
+    info!("");
+    info!("Alert thresholds (BTC):");
+    info!("  Absolute IV:  short>={:.0}%, medium>={:.0}%, long>={:.0}%",
+          config.alerts.absolute_iv.get_symbol_config("btc").map(|c| c.short_threshold * 100.0).unwrap_or(0.0),
+          config.alerts.absolute_iv.get_symbol_config("btc").map(|c| c.medium_threshold * 100.0).unwrap_or(0.0),
+          config.alerts.absolute_iv.get_symbol_config("btc").map(|c| c.long_threshold * 100.0).unwrap_or(0.0));
+    info!("Alert thresholds (ETH):");
+    info!("  Absolute IV:  short>={:.0}%, medium>={:.0}%, long>={:.0}%",
+          config.alerts.absolute_iv.get_symbol_config("eth").map(|c| c.short_threshold * 100.0).unwrap_or(0.0),
+          config.alerts.absolute_iv.get_symbol_config("eth").map(|c| c.medium_threshold * 100.0).unwrap_or(0.0),
+          config.alerts.absolute_iv.get_symbol_config("eth").map(|c| c.long_threshold * 100.0).unwrap_or(0.0));
+    info!("");
 
     // Run engine (runs until shutdown)
     // TODO: Handle shutdown signal and save state

@@ -1413,6 +1413,7 @@ dependencies = [
  "vol-datasource",
  "vol-engine",
  "vol-notification",
+ "vol-rules",
 ]
 
 [[package]]
