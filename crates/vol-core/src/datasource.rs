@@ -16,6 +16,12 @@ pub enum HealthStatus {
 /// All datasource plugins (Deribit, Binance, CSV, etc.) must implement this trait.
 #[async_trait]
 pub trait DataSource: Send + Sync {
+    /// Unique datasource ID for configuration reference
+    fn id(&self) -> &str;
+
+    /// Event type this datasource produces
+    fn event_type(&self) -> crate::event::EventType;
+
     /// Datasource name for logging
     fn name(&self) -> &str;
 
@@ -36,6 +42,14 @@ pub trait DataSource: Send + Sync {
 // Implement for Box<dyn DataSource>
 #[async_trait]
 impl DataSource for Box<dyn DataSource> {
+    fn id(&self) -> &str {
+        (**self).id()
+    }
+
+    fn event_type(&self) -> crate::event::EventType {
+        (**self).event_type()
+    }
+
     fn name(&self) -> &str {
         (**self).name()
     }
