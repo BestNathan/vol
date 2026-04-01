@@ -3,8 +3,26 @@
 use serde::{Deserialize, Serialize};
 use vol_core::Tenor;
 
+pub mod datasource;
 pub mod metrics;
+pub mod notification;
+pub mod rule;
+
+pub use datasource::*;
 pub use metrics::*;
+pub use notification::*;
+pub use rule::*;
+
+/// Engine configuration - layered arrays for extensibility
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct EngineConfig {
+    #[serde(default)]
+    pub datasources: Vec<DataSourceConfig>,
+    #[serde(default)]
+    pub rules: Vec<RuleConfig>,
+    #[serde(default)]
+    pub notifications: Vec<NotificationConfig>,
+}
 
 /// Main configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
