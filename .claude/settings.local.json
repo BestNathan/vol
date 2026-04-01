@@ -149,7 +149,11 @@
       "Bash(lark-cli --help)",
       "Bash(lark-cli api:*)",
       "Bash(lark-cli docs:*)",
-      "Bash(lark-cli auth:*)"
+      "Bash(lark-cli auth:*)",
+      "Bash(lark-cli wiki:*)",
+      "Bash(lark-cli schema:*)",
+      "Bash(lark-cli)",
+      "Bash(HTTPS_PROXY=http://192.168.2.98:8890 timeout 60 ./target/release/vol-monitor)"
     ]
   }
 }

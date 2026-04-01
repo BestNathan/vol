@@ -1,14 +1,14 @@
 //! Chain builder for MonitoringEngine.
 
 use crate::{MonitoringEngine, EngineConfig};
-use vol_core::{DataSource, RuleProcessor, NotificationChannel};
+use vol_core::{DataSource, RuleProcessor, NotificationHandler};
 
 /// Builder for constructing MonitoringEngine with fluent API
 pub struct MonitoringEngineBuilder {
     config: EngineConfig,
     datasources: Vec<Box<dyn DataSource>>,
     rules: Vec<Box<dyn RuleProcessor>>,
-    notifications: Vec<Box<dyn NotificationChannel>>,
+    notifications: Vec<Box<dyn NotificationHandler>>,
 }
 
 impl MonitoringEngineBuilder {
@@ -40,8 +40,8 @@ impl MonitoringEngineBuilder {
         self
     }
 
-    /// Add a notification channel
-    pub fn with_notification(mut self, notif: Box<dyn NotificationChannel>) -> Self {
+    /// Add a notification handler
+    pub fn with_notification(mut self, notif: Box<dyn NotificationHandler>) -> Self {
         self.notifications.push(notif);
         self
     }

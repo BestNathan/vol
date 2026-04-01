@@ -2,7 +2,7 @@
 //!
 //! Reference: https://open.feishu.cn/document/server-docs/api-call-guide/calling-process/get-access-token
 
-use vol_core::{NotificationChannel, Alert, Result, VolError, Tenor, OptionType};
+use vol_core::{NotificationHandler, Alert, Result, VolError, Tenor, OptionType};
 use vol_feishu::FeishuClient;
 use vol_config::FeishuConfig;
 use tracing::{info, warn};
@@ -135,7 +135,7 @@ impl FeishuNotification {
 }
 
 #[async_trait::async_trait]
-impl NotificationChannel for FeishuNotification {
+impl NotificationHandler for FeishuNotification {
     fn name(&self) -> &str {
         "feishu"
     }
@@ -168,7 +168,7 @@ impl NotificationChannel for FeishuNotification {
         }
     }
 
-    fn clone_box(&self) -> Box<dyn NotificationChannel> {
+    fn clone_box(&self) -> Box<dyn NotificationHandler> {
         Box::new(self.clone())
     }
 }

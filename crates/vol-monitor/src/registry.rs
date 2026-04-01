@@ -1,6 +1,6 @@
 //! Plugin registry for managing handlers.
 
-use vol_core::{RuleProcessor, NotificationChannel};
+use vol_core::{RuleProcessor, NotificationHandler};
 
 /// Registry for rule processors
 #[allow(dead_code)]
@@ -31,10 +31,10 @@ impl Default for RuleRegistry {
     }
 }
 
-/// Registry for notification channels
+/// Registry for notification handlers
 #[allow(dead_code)]
 pub struct NotificationRegistry {
-    handlers: Vec<Box<dyn NotificationChannel>>,
+    handlers: Vec<Box<dyn NotificationHandler>>,
 }
 
 #[allow(dead_code)]
@@ -45,11 +45,11 @@ impl NotificationRegistry {
         }
     }
 
-    pub fn register(&mut self, handler: Box<dyn NotificationChannel>) {
+    pub fn register(&mut self, handler: Box<dyn NotificationHandler>) {
         self.handlers.push(handler);
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Box<dyn NotificationChannel>> {
+    pub fn iter(&self) -> impl Iterator<Item = &Box<dyn NotificationHandler>> {
         self.handlers.iter()
     }
 }

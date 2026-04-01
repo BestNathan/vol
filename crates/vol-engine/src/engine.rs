@@ -1,6 +1,6 @@
 //! Core monitoring engine - orchestrates datasources, rules, and notifications.
 
-use vol_core::{DataSource, RuleProcessor, NotificationChannel, MonitoringEvent, Alert, error::Result};
+use vol_core::{DataSource, RuleProcessor, NotificationHandler, MonitoringEvent, Alert, error::Result};
 use tokio::sync::{mpsc, broadcast};
 use tokio::task::JoinHandle;
 use tracing::{info, error, warn};
@@ -10,7 +10,7 @@ use crate::config::EngineConfig;
 pub struct MonitoringEngine {
     datasources: Vec<Box<dyn DataSource>>,
     rules: Vec<Box<dyn RuleProcessor>>,
-    notifications: Vec<Box<dyn NotificationChannel>>,
+    notifications: Vec<Box<dyn NotificationHandler>>,
     config: EngineConfig,
 }
 
@@ -37,8 +37,8 @@ impl MonitoringEngine {
         self.rules.push(rule);
     }
 
-    /// Register a notification channel
-    pub fn add_notification(&mut self, notif: Box<dyn NotificationChannel>) {
+    /// Register a notification handler
+    pub fn add_notification(&mut self, notif: Box<dyn NotificationHandler>) {
         info!("Registered notification: {}", notif.name());
         self.notifications.push(notif);
     }
@@ -154,7 +154,7 @@ impl MonitoringEngine {
     ) -> Vec<JoinHandle<Result<()>>> {
         // For notifications, we use a fan-out pattern where each notification channel
         // runs in the same task to avoid needing mpsc resubscribe
-        let notifications: Vec<Box<dyn NotificationChannel>> = self.notifications
+        let notifications: Vec<Box<dyn NotificationHandler>> = self.notifications
             .iter()
             .filter(|n| n.is_enabled())
             .map(|n| n.clone_box())
