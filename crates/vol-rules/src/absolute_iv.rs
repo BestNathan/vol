@@ -43,9 +43,16 @@ impl AbsoluteIvRule {
             Tenor::Long => self.config.long_threshold,
         };
 
-        // ATM filter - skip if not within ATM moneyness threshold
+        // Get ATM threshold for this tenor
+        let atm_threshold = match tenor {
+            Tenor::Short => self.config.short_atm_threshold,
+            Tenor::Medium => self.config.medium_atm_threshold,
+            Tenor::Long => self.config.long_atm_threshold,
+        };
+
+        // ATM filter - skip if not within ATM moneyness threshold for this tenor
         let moneyness = data.moneyness();
-        if moneyness.abs() > self.config.atm_threshold {
+        if moneyness.abs() > atm_threshold {
             return None;
         }
 

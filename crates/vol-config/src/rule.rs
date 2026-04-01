@@ -14,15 +14,21 @@ pub struct AbsoluteIvRuleConfig {
     pub short_threshold: f64,
     pub medium_threshold: f64,
     pub long_threshold: f64,
-    /// ATM moneyness threshold - only alert on options within this moneyness range
+    /// ATM moneyness threshold per tenor - only alert on options within this moneyness range
     /// e.g., 0.10 means |moneyness| <= 10% (within 10% of index price)
-    #[serde(default = "default_atm_threshold")]
-    pub atm_threshold: f64,
+    #[serde(default = "default_short_atm")]
+    pub short_atm_threshold: f64,
+    #[serde(default = "default_medium_atm")]
+    pub medium_atm_threshold: f64,
+    #[serde(default = "default_long_atm")]
+    pub long_atm_threshold: f64,
     #[serde(default)]
     pub notifications: Vec<String>,
 }
 
-fn default_atm_threshold() -> f64 { 1.0 } // Default: no ATM filter (100% = allow all)
+fn default_short_atm() -> f64 { 0.10 }   // 10% for short-term options
+fn default_medium_atm() -> f64 { 0.15 }  // 15% for medium-term options
+fn default_long_atm() -> f64 { 0.20 }    // 20% for long-term options
 
 /// Rate of change rule configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
