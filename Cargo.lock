@@ -1412,6 +1412,7 @@ dependencies = [
  "vol-core",
  "vol-datasource",
  "vol-engine",
+ "vol-feishu",
  "vol-notification",
  "vol-rules",
 ]

@@ -14,6 +14,9 @@ use tracing::info;
 pub const FEISHU_BASE_URL: &str = "https://open.feishu.cn";
 pub const FEISHU_TOKEN_PATH: &str = "/open-apis/auth/v3/app_access_token/internal";
 pub const FEISHU_MESSAGE_PATH: &str = "/open-apis/im/v1/messages";
+pub const FEISHU_DRIVE_FOLDER_PATH: &str = "/open-apis/drive/v1/folders";
+pub const FEISHU_DRIVE_UPLOAD_PATH: &str = "/open-apis/drive/v1/medias/upload";
+pub const FEISHU_DOCS_CREATE_PATH: &str = "/open-apis/drive/v2/files";
 
 /// App Access Token response
 /// Feishu API returns flat structure: {code, msg, app_access_token, expire, tenant_access_token}
@@ -221,6 +224,166 @@ impl FeishuClient {
         card_content: &str,
     ) -> Result<SendMessageResponse, FeishuError> {
         self.send_message(receive_id, "interactive", card_content).await
+    }
+
+    /// Create a folder in Feishu Drive
+    pub async fn create_folder(&self, folder_name: &str, parent_folder_id: Option<&str>) -> Result<String, FeishuError> {
+        let url = format!("{}{}", self.base_url, FEISHU_DRIVE_FOLDER_PATH);
+        let token = self.get_access_token().await?;
+
+        let mut body = serde_json::json!({
+            "folder_type": "normal",
+            "name": folder_name,
+        });
+
+        if let Some(parent_id) = parent_folder_id {
+            body["parent_folder_id"] = serde_json::json!(parent_id);
+        }
+
+        let response = self.client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| FeishuError::Network(format!("Failed to create folder: {}", e)))?;
+
+        let result: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| FeishuError::Parse(format!("Failed to parse folder response: {}", e)))?;
+
+        let code = result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
+        if code != 0 {
+            return Err(FeishuError::Api(format!("Create folder failed: {}", result)));
+        }
+
+        result["data"]["folder_token"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| FeishuError::Parse("folder_token not found".to_string()))
+    }
+
+    /// Search for a folder by name
+    pub async fn search_folder(&self, folder_name: &str) -> Result<Option<String>, FeishuError> {
+        let url = format!("{}{}/search", self.base_url, FEISHU_DRIVE_FOLDER_PATH);
+        let token = self.get_access_token().await?;
+
+        let response = self.client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .query(&[("folder_name", folder_name)])
+            .send()
+            .await
+            .map_err(|e| FeishuError::Network(format!("Failed to search folder: {}", e)))?;
+
+        let result: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| FeishuError::Parse(format!("Failed to parse search response: {}", e)))?;
+
+        let code = result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
+        if code != 0 {
+            return Err(FeishuError::Api(format!("Search folder failed: {}", result)));
+        }
+
+        if let Some(items) = result.get("data").and_then(|d| d.as_array()) {
+            for item in items {
+                if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
+                    if name == folder_name {
+                        if let Some(token) = item.get("folder_token").and_then(|v| v.as_str()) {
+                            return Ok(Some(token.to_string()));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Get or create folder - returns folder token
+    pub async fn get_or_create_folder(&self, folder_name: &str) -> Result<String, FeishuError> {
+        // First try to find existing folder
+        if let Some(token) = self.search_folder(folder_name).await? {
+            info!("Found existing folder: {} -> {}", folder_name, token);
+            return Ok(token);
+        }
+
+        // Create new folder
+        let token = self.create_folder(folder_name, None).await?;
+        info!("Created new folder: {} -> {}", folder_name, token);
+        Ok(token)
+    }
+
+    /// Upload a markdown document to Feishu Drive
+    pub async fn upload_markdown_doc(
+        &self,
+        title: &str,
+        content: &str,
+        folder_token: &str,
+    ) -> Result<String, FeishuError> {
+        let url = format!("{}{}", self.base_url, FEISHU_DOCS_CREATE_PATH);
+        let token = self.get_access_token().await?;
+
+        // Create cloud doc with markdown content
+        let body = serde_json::json!({
+            "folder_token": folder_token,
+            "title": title,
+            "doc_type": 1, // 1 = doc
+        });
+
+        let response = self.client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| FeishuError::Network(format!("Failed to create doc: {}", e)))?;
+
+        let result: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| FeishuError::Parse(format!("Failed to parse doc create response: {}", e)))?;
+
+        let code = result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
+        if code != 0 {
+            return Err(FeishuError::Api(format!("Create doc failed: {}", result)));
+        }
+
+        let doc_token = result["data"]["file_token"]
+            .as_str()
+            .ok_or_else(|| FeishuError::Parse("file_token not found".to_string()))?
+            .to_string();
+
+        // Upload content using block API
+        let content_url = format!("{}/open-apis/docx/v1/documents/{}/blocks", self.base_url, doc_token);
+
+        let content_body = serde_json::json!({
+            "parent_block_id": doc_token,
+            "block_type": 1, // Text block
+            "text_block": {
+                "elements": [{
+                    "text_run": {
+                        "content": content,
+                        "text_element_style": {}
+                    }
+                }]
+            }
+        });
+
+        let _ = self.client
+            .post(&content_url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json")
+            .json(&content_body)
+            .send()
+            .await;
+
+        info!("Created document: {} -> {}", title, doc_token);
+        Ok(doc_token)
     }
 }
 

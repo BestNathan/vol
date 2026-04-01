@@ -142,7 +142,14 @@
       "Bash(/tmp/test_feishu.py:*)",
       "Bash(__NEW_LINE_83fe5c112d1cd82e__ python3:*)",
       "Bash(pip install:*)",
-      "Bash(__NEW_LINE_eba615f68be49788__ python3:*)"
+      "Bash(__NEW_LINE_eba615f68be49788__ python3:*)",
+      "Bash(HTTPS_PROXY=http://192.168.2.98:8890 ./target/release/upload-doc 2>&1)",
+      "Bash(lark-cli config:*)",
+      "Bash(lark-cli drive:*)",
+      "Bash(lark-cli --help)",
+      "Bash(lark-cli api:*)",
+      "Bash(lark-cli docs:*)",
+      "Bash(lark-cli auth:*)"
     ]
   }
 }

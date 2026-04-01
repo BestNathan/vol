@@ -7,6 +7,10 @@ edition.workspace = true
 name = "vol-monitor"
 path = "src/main.rs"
 
+[[bin]]
+name = "upload-doc"
+path = "src/bin/upload-doc.rs"
+
 [dependencies]
 tokio = { workspace = true }
 serde = { workspace = true }
@@ -22,3 +26,4 @@ vol-datasource = { workspace = true }
 vol-notification = { workspace = true }
 vol-engine = { workspace = true }
 vol-rules = { workspace = true }
+vol-feishu = { workspace = true }
