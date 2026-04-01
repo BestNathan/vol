@@ -43,9 +43,14 @@ impl AbsoluteIvRule {
             Tenor::Long => self.config.long_threshold,
         };
 
+        // ATM filter - skip if not within ATM moneyness threshold
+        let moneyness = data.moneyness();
+        if moneyness.abs() > self.config.atm_threshold {
+            return None;
+        }
+
         // IV threshold check
         if data.iv >= iv_threshold {
-            let moneyness = data.moneyness();
             let mark_price = data.extra.get("mark_price_coin")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0);

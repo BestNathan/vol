@@ -14,9 +14,15 @@ pub struct AbsoluteIvRuleConfig {
     pub short_threshold: f64,
     pub medium_threshold: f64,
     pub long_threshold: f64,
+    /// ATM moneyness threshold - only alert on options within this moneyness range
+    /// e.g., 0.10 means |moneyness| <= 10% (within 10% of index price)
+    #[serde(default = "default_atm_threshold")]
+    pub atm_threshold: f64,
     #[serde(default)]
     pub notifications: Vec<String>,
 }
+
+fn default_atm_threshold() -> f64 { 1.0 } // Default: no ATM filter (100% = allow all)
 
 /// Rate of change rule configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]

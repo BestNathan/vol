@@ -66,6 +66,7 @@ symbol = "BTC"
 short_threshold = 0.55
 medium_threshold = 0.53
 long_threshold = 0.51
+atm_threshold = 0.15  # Only alert on options within 15% of index price (ATM ±15%)
 enabled = true
 notifications = ["feishu-alerts", "stdout"]
 
@@ -76,6 +77,7 @@ symbol = "ETH"
 short_threshold = 0.75
 medium_threshold = 0.73
 long_threshold = 0.71
+atm_threshold = 0.15  # Only alert on options within 15% of index price (ATM ±15%)
 enabled = true
 notifications = ["feishu-alerts", "stdout"]
 
