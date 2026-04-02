@@ -23,7 +23,7 @@ spec:
       restartPolicy: Always
       containers:
       - name: vol-monitor
-        image: your-dockerhub-username/vol-monitor:latest
+        image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:latest
         imagePullPolicy: Always
         args:
           - "--config"

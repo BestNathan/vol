@@ -4,8 +4,8 @@
 set -e
 
 # Configuration - UPDATE THESE VALUES
-DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-your-dockerhub-username}"
-IMAGE_NAME="${DOCKERHUB_USERNAME}/vol-monitor"
+DOCKER_REGISTRY="${DOCKER_REGISTRY:-crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com}"
+IMAGE_NAME="${DOCKER_REGISTRY}/n_common/vol-monitor"
 VERSION="${1:-latest}"
 K8S_DIR="$(dirname "$0")"
 
