@@ -6,7 +6,6 @@ members = [
     "crates/vol-config",
     "crates/vol-datasource",
     "crates/vol-deribit",
-    "crates/vol-feishu",
     "crates/vol-alert",
     "crates/vol-notification",
     "crates/vol-monitor",
@@ -48,6 +47,9 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# Feishu/Lark SDK
+openlark = { version = "0.15.0-rc.2", default-features = false, features = ["auth", "communication"] }
+
 # Crypto (for Feishu HMAC)
 hmac = "0.12"
 sha2 = "0.10"
@@ -62,7 +64,6 @@ vol-eventbus = { path = "crates/vol-eventbus" }
 vol-config = { path = "crates/vol-config" }
 vol-datasource = { path = "crates/vol-datasource" }
 vol-deribit = { path = "crates/vol-deribit" }
-vol-feishu = { path = "crates/vol-feishu" }
 vol-alert = { path = "crates/vol-alert" }
 vol-notification = { path = "crates/vol-notification" }
 vol-engine = { path = "crates/vol-engine" }

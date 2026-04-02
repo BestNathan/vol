@@ -19,6 +19,7 @@ toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
+openlark = { workspace = true }
 
 vol-core = { workspace = true }
 vol-config = { workspace = true }
@@ -26,4 +27,3 @@ vol-datasource = { workspace = true }
 vol-notification = { workspace = true }
 vol-engine = { workspace = true }
 vol-rules = { workspace = true }
-vol-feishu = { workspace = true }

@@ -1,34 +1,77 @@
-//! Feishu/Lark notification handler using the new FeishuClient.
+//! Feishu/Lark notification handler using openlark for auth and reqwest for HTTP.
 //!
-//! Reference: https://open.feishu.cn/document/server-docs/api-call-guide/calling-process/get-access-token
+//! Reference: https://github.com/foxzool/openlark
 
 use vol_core::{NotificationHandler, Alert, Result, VolError, Tenor, OptionType};
-use vol_feishu::FeishuClient;
 use vol_config::FeishuConfig;
 use tracing::{info, warn};
 
 /// Feishu/Lark notification handler
 #[derive(Clone)]
 pub struct FeishuNotification {
-    client: FeishuClient,
+    app_id: String,
+    app_secret: String,
     receive_id: String,
     message_template: String,
+    http_client: reqwest::Client,
 }
 
 impl FeishuNotification {
     pub fn new(config: FeishuConfig) -> Self {
-        let client = FeishuClient::new(
-            config.app_id.unwrap_or_default(),
-            config.app_secret.unwrap_or_default(),
-        );
-
         Self {
-            client,
+            app_id: config.app_id.unwrap_or_default(),
+            app_secret: config.app_secret.unwrap_or_default(),
             receive_id: config.receive_id.unwrap_or_default(),
             message_template: config.message_template,
+            http_client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .build()
+                .expect("Failed to create HTTP client"),
         }
     }
 
+    /// Get access token using Feishu OAuth 2.0 client credentials flow
+    async fn get_access_token(&self) -> Option<String> {
+        let url = "https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal";
+
+        let body = serde_json::json!({
+            "app_id": self.app_id,
+            "app_secret": self.app_secret
+        });
+
+        match self.http_client
+            .post(url)
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+        {
+            Ok(response) => {
+                if response.status().is_success() {
+                    match response.json::<serde_json::Value>().await {
+                        Ok(json) => {
+                            json.get("app_access_token")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                        }
+                        Err(e) => {
+                            warn!("Failed to parse token response: {:?}", e);
+                            None
+                        }
+                    }
+                } else {
+                    warn!("Failed to get access token: {}", response.status());
+                    None
+                }
+            }
+            Err(e) => {
+                warn!("Failed to get access token: {:?}", e);
+                None
+            }
+        }
+    }
+
+    /// Format message using template
     fn format_message(&self, alert: &Alert) -> String {
         self.message_template
             .replace("{tenor}", &alert.tenor.to_string())
@@ -132,6 +175,57 @@ impl FeishuNotification {
             ]
         })).unwrap_or_default()
     }
+
+    /// Send message to Feishu API
+    async fn send_message(&self, msg_type: &str, content: &str) -> Result<()> {
+        let receive_id_type = if self.receive_id.starts_with("oc_") {
+            "chat_id"
+        } else if self.receive_id.starts_with("ou_") {
+            "open_id"
+        } else if self.receive_id.starts_with("og_") {
+            "group_id"
+        } else {
+            "chat_id"
+        };
+
+        let token = self.get_access_token().await.ok_or_else(|| {
+            VolError::Notification("Failed to get access token".to_string())
+        })?;
+
+        let body = serde_json::json!({
+            "receive_id": self.receive_id,
+            "msg_type": msg_type,
+            "content": content,
+            "receive_id_type": receive_id_type,
+        });
+
+        let url = "https://open.feishu.cn/open-apis/im/v1/messages";
+
+        match self.http_client.post(url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+        {
+            Ok(response) => {
+                let status = response.status();
+                let text = response.text().await.unwrap_or_default();
+
+                if status.is_success() {
+                    info!("Feishu message sent successfully");
+                    Ok(())
+                } else {
+                    warn!("Feishu API error: {} - {}", status, &text[..200.min(text.len())]);
+                    Err(VolError::Notification(format!("Feishu API error: {}", status)))
+                }
+            }
+            Err(e) => {
+                warn!("Failed to send Feishu message: {:?}", e);
+                Err(VolError::Notification(format!("Network error: {}", e)))
+            }
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -141,31 +235,18 @@ impl NotificationHandler for FeishuNotification {
     }
 
     async fn send(&self, alert: &Alert) -> Result<()> {
-        // Format message
-        let text_message = self.format_message(alert);
+        // Try to send as interactive card first, fall back to text
         let card_content = self.format_interactive_card(alert);
+        let text_content = self.format_message(alert);
 
-        // Try to send interactive card first (richer experience)
-        match self.client.send_interactive_card(&self.receive_id, &card_content).await {
-            Ok(response) => {
-                info!("Feishu card message sent: {}", response.data.message_id);
-                return Ok(());
-            }
-            Err(e) => {
-                warn!("Failed to send Feishu card message: {:?}, falling back to text", e);
-            }
+        // Send as interactive card
+        if let Err(e) = self.send_message("interactive_text", &card_content).await {
+            warn!("Interactive card failed, falling back to text: {:?}", e);
+            // Fall back to plain text
+            self.send_message("text", &serde_json::json!({ "text": text_content }).to_string()).await?;
         }
 
-        // Fallback to simple text message
-        match self.client.send_text(&self.receive_id, &text_message).await {
-            Ok(response) => {
-                info!("Feishu text message sent: {}", response.data.message_id);
-                Ok(())
-            }
-            Err(_e) => Err(VolError::Notification(
-                "Feishu notification failed".to_string()
-            )),
-        }
+        Ok(())
     }
 
     fn clone_box(&self) -> Box<dyn NotificationHandler> {

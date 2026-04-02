@@ -10,7 +10,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 chrono = "0.4"
+reqwest = { workspace = true }
+openlark = { workspace = true }
 vol-core = { workspace = true }
 vol-config = { workspace = true }
-vol-feishu = { workspace = true }
 vol-deribit = { workspace = true }
