@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vol-monitor-config
+  namespace: deribit
+  labels:
+    app: vol-monitor
+data:
+  config.toml: |
+    # config.toml for vol-monitor - Provider-based datasource configuration
+
+    [engine]
+    hot_reload = true
+    hot_reload_interval_secs = 30
+    channel_buffer_size = 1000
+    alert_cooldown_secs = 300
+
+    [tenors]
+    short_max_dte = 7
+    medium_min_dte = 20
+    medium_max_dte = 40
+    long_min_dte = 80
+
+    # Data sources - organized by provider
+    [[datasources]]
+    id = "deribit-markets"
+    provider = "deribit"
+    ws_url = "wss://www.deribit.com/ws/api/v2"
+    symbols = ["BTC", "ETH"]
+    poll_interval_secs = 60
+    enabled = true
+
+    [datasources.auth]
+    client_id = "nhXng7Bj"
+    client_secret = "OxCGY10HlzgKfRoXPBRQqg5IBQcZguGPhE1tewP5U3Y"
+
+    # Example: Internal portfolio data source (HTTP polling)
+    # [[datasources]]
+    # id = "internal-portfolio"
+    # provider = "internal"
+    # url = "https://internal-api/portfolio"
+    # poll_interval_secs = 30
+    # enabled = false
+
+    # Example: Binance data source
+    # [[datasources]]
+    # id = "binance-options"
+    # provider = "binance"
+    # api_url = "https://options.binance.com"
+    # symbols = ["BTC", "ETH"]
+    # poll_interval_secs = 60
+    # enabled = false
+    # api_key = "your-api-key"
+    # api_secret = "your-api-secret"
+
+    # Notifications
+    [[notifications]]
+    id = "feishu-alerts"
+    type = "feishu"
+    app_id = "cli_a936b13197385bde"
+    app_secret = "JnWnFrrOvzHi4deDmFY9kd1NMGbiWuNz"
+    receive_id = "oc_c29208d94757e2aefd97bfa5f57e0b26"
+    enabled = true
+
+    [[notifications]]
+    id = "stdout"
+    type = "stdout"
+    enabled = true
+
+    # Rules
+    [[rules]]
+    id = "absolute-iv-btc"
+    type = "absolute-iv"
+    symbol = "BTC"
+    short_threshold = 0.55
+    medium_threshold = 0.53
+    long_threshold = 0.51
+    short_atm_threshold = 0.05
+    medium_atm_threshold = 0.08
+    long_atm_threshold = 0.10
+    # Per-DTE ATM thresholds (overrides tenor-based for specific DTE values)
+    dte_atm_thresholds = { "1" = 0.02, "2" = 0.03, "3" = 0.04 }
+    enabled = true
+    notifications = ["feishu-alerts", "stdout"]
+
+    [[rules]]
+    id = "absolute-iv-eth"
+    type = "absolute-iv"
+    symbol = "ETH"
+    short_threshold = 0.75
+    medium_threshold = 0.73
+    long_threshold = 0.71
+    short_atm_threshold = 0.07
+    medium_atm_threshold = 0.10
+    long_atm_threshold = 0.12
+    # Per-DTE ATM thresholds (overrides tenor-based for specific DTE values)
+    dte_atm_thresholds = { "1" = 0.03, "2" = 0.04, "3" = 0.05 }
+    enabled = true
+    notifications = ["feishu-alerts", "stdout"]
+
+    [[rules]]
+    id = "rate-change-btc"
+    type = "rate-change"
+    symbol = "BTC"
+    window_1h_threshold = 0.05
+    window_4h_threshold = 0.10
+    window_24h_threshold = 0.20
+    enabled = true
+    notifications = ["feishu-alerts", "stdout"]
+
+    [[rules]]
+    id = "rate-change-eth"
+    type = "rate-change"
+    symbol = "ETH"
+    window_1h_threshold = 0.05
+    window_4h_threshold = 0.10
+    window_24h_threshold = 0.20
+    enabled = true
+    notifications = ["feishu-alerts", "stdout"]
+
+    [[rules]]
+    id = "term-structure"
+    type = "term-structure"
+    short_long_spread_threshold = 0.15
+    enabled = false
+    notifications = ["stdout"]
+
+    [[rules]]
+    id = "skew"
+    type = "skew"
+    symbol = "BTC"
+    threshold = 0.10
+    enabled = false
+    notifications = ["stdout"]
+
+    [[rules]]
+    id = "portfolio-margin"
+    type = "margin-ratio"
+    datasources = ["internal-portfolio"]
+    min_threshold = 1.2
+    enabled = false
+    notifications = ["feishu-alerts"]
