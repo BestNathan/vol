@@ -1,0 +1,34 @@
+# Build artifacts
+target/
+**/target/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Docs
+docs/
+*.md
+!README.md
+
+# Kubernetes configs
+k8s/
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Scripts
+*.sh
+
+# Misc
+**/tests/
+**/benches/

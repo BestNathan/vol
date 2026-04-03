@@ -3,7 +3,7 @@
 
 set -e
 
-# Configuration - UPDATE THESE VALUES
+# Configuration - Aliyun Container Registry (ACR)
 DOCKER_REGISTRY="${DOCKER_REGISTRY:-crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com}"
 IMAGE_NAME="${DOCKER_REGISTRY}/n_common/vol-monitor"
 VERSION="${1:-latest}"
@@ -12,12 +12,20 @@ K8S_DIR="$(dirname "$0")"
 echo "============================================"
 echo "  vol-monitor Kubernetes Deploy"
 echo "============================================"
+echo "Registry: $DOCKER_REGISTRY"
 echo "Image: $IMAGE_NAME:$VERSION"
 echo "Version: $VERSION"
 echo ""
 
+# Step 0: Login to ACR
+echo "[0/6] Logging in to ACR..."
+if ! docker info 2>&1 | grep -q "$DOCKER_REGISTRY"; then
+    echo "Logging in to $DOCKER_REGISTRY..."
+    docker login "$DOCKER_REGISTRY" -u "308719298@qq.com" -p "zhangdage2011"
+fi
+
 # Step 1: Build Docker image
-echo "[1/5] Building Docker image..."
+echo "[1/6] Building Docker image..."
 docker build -t "$IMAGE_NAME:$VERSION" -f Dockerfile .
 
 # Tag as latest if not already
@@ -25,8 +33,8 @@ if [ "$VERSION" != "latest" ]; then
     docker tag "$IMAGE_NAME:$VERSION" "$IMAGE_NAME:latest"
 fi
 
-# Step 2: Push to Docker Hub
-echo "[2/5] Pushing to Docker Hub..."
+# Step 2: Push to ACR
+echo "[2/6] Pushing to ACR..."
 docker push "$IMAGE_NAME:$VERSION"
 if [ "$VERSION" != "latest" ]; then
     docker push "$IMAGE_NAME:latest"
