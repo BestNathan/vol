@@ -21,13 +21,15 @@ spec:
         app: vol-monitor
     spec:
       restartPolicy: Always
+      # nodeSelector removed - multi-arch image supports both amd64 and arm64
       containers:
       - name: vol-monitor
         image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:latest
         imagePullPolicy: Always
+        workingDir: /etc/vol-monitor
         args:
           - "--config"
-          - "/etc/vol-monitor/config.toml"
+          - "config.toml"
         volumeMounts:
         - name: config
           mountPath: /etc/vol-monitor
@@ -35,6 +37,8 @@ spec:
         env:
         - name: RUST_LOG
           value: "info"
+        - name: HTTPS_PROXY
+          value: "http://192.168.2.98:8890"
       volumes:
       - name: config
         configMap:
@@ -42,3 +46,4 @@ spec:
           items:
           - key: config.toml
             path: config.toml
+          defaultMode: 0644

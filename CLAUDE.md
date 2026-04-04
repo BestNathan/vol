@@ -21,6 +21,188 @@ RUST_LOG=info HTTPS_PROXY=http://<proxy>:<port> ./target/release/vol-monitor
 cargo test --workspace
 ```
 
+## Docker Build
+
+### Prerequisites
+
+**Cargo Registry Mirror (required for reliable builds in China):**
+
+The project uses rsproxy.cn mirror for crates.io. Ensure `.cargo/config.toml` exists:
+
+```toml
+[source.crates-io]
+replace-with = 'rsproxy-sparse'
+[source.rsproxy]
+registry = "https://rsproxy.cn/crates.io-index"
+[source.rsproxy-sparse]
+registry = "sparse+https://rsproxy.cn/index/"
+[registries.rsproxy]
+index = "https://rsproxy.cn/crates.io-index"
+[net]
+git-fetch-with-cli = true
+```
+
+### Dockerfile (Multi-stage Build)
+
+```dockerfile
+# Stage 1: Build
+FROM rust:latest AS builder
+
+WORKDIR /app
+
+# Copy cargo config for registry mirror
+COPY .cargo ./.cargo
+
+# Copy dependency definitions first for better caching
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ ./crates/
+
+# Build release binary
+RUN cargo build --release -vv
+
+# Stage 2: Runtime
+FROM debian:bookworm-slim
+
+# Install CA certificates using Aliyun mirror
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Copy the binary from builder
+COPY --from=builder /app/target/release/vol-monitor /usr/local/bin/vol-monitor
+
+WORKDIR /app
+
+# Run the binary
+ENTRYPOINT ["/usr/local/bin/vol-monitor"]
+```
+
+**Key points:**
+- `.cargo/config.toml` must be copied into the image for rsproxy mirror to work
+- Using sparse registry protocol for faster dependency resolution
+- Aliyun mirror for apt packages (`deb.debian.org` → `mirrors.aliyun.com`)
+- Multi-stage build keeps final image ~95MB
+
+### Build and Deploy to K8s
+
+```bash
+# Build image (single architecture - current platform)
+docker build -t crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:latest .
+
+# Push to ACR
+docker push crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:latest
+
+# Deploy to k8s
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/deployment.yaml
+```
+
+Or use the one-click deploy script:
+```bash
+./k8s/deploy.sh latest
+```
+
+### Multi-Architecture Builds
+
+The project supports building multi-architecture images for `linux/amd64` and `linux/arm64`.
+
+**Setup (one-time):**
+
+```bash
+# Create multi-arch builder (requires Docker buildx)
+docker buildx create --use --name multiarch --driver docker-container
+docker buildx inspect multiarch --bootstrap
+```
+
+**Build multi-arch image:**
+
+```bash
+# Build and push to ACR
+docker buildx build --platform linux/amd64,linux/arm64 \
+    --push -t crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:latest .
+```
+
+**Verify multi-arch image:**
+
+```bash
+docker buildx imagetools inspect crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:latest
+# Output should show:
+#   Manifests:
+#     ...  # linux/amd64
+#     ...  # linux/arm64
+```
+
+**Notes:**
+- First build may take 5-10 minutes due to QEMU emulation for arm64
+- `--push` is required (multi-arch images cannot be loaded locally)
+- The resulting image is a manifest list containing both architectures
+- Kubernetes will automatically pull the correct architecture for each node
+- After multi-arch setup, `./k8s/deploy.sh` uses buildx automatically
+
+## Kubernetes Deployment
+
+### Cluster Architecture
+
+- **Nodes**: 3-node cluster (k8s-master, k8s-worker1/amd64, rock-5b-plus/arm64)
+- **Ingress**: Higress
+- **Registry**: Aliyun Container Registry (ACR) private
+
+### Deployment Configuration
+
+| Resource | Name | Namespace |
+|----------|------|-----------|
+| Namespace | `deribit` | - |
+| Deployment | `vol-monitor` | `deribit` |
+| ConfigMap | `vol-monitor-config` | `deribit` |
+
+### Pod Spec Highlights
+
+```yaml
+spec:
+  nodeSelector:
+    kubernetes.io/arch: amd64  # Required: image is amd64 only
+  containers:
+  - name: vol-monitor
+    image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:latest
+    workingDir: /etc/vol-monitor  # Config mounted here
+    args:
+      - "--config"
+      - "config.toml"
+    env:
+    - name: RUST_LOG
+      value: "info"
+    - name: HTTPS_PROXY
+      value: "http://192.168.2.98:8890"  # Required for Deribit API access
+    volumeMounts:
+    - name: config
+      mountPath: /etc/vol-monitor
+      readOnly: true
+  volumes:
+  - name: config
+    configMap:
+      name: vol-monitor-config
+```
+
+### Management Commands
+
+```bash
+# View logs
+kubectl -n deribit logs -f deployment/vol-monitor
+
+# View status
+kubectl -n deribit get pods -l app=vol-monitor
+
+# Restart deployment
+kubectl -n deribit rollout restart deployment/vol-monitor
+
+# Rollback
+kubectl -n deribit rollout undo deployment/vol-monitor
+
+# Update ConfigMap
+kubectl -n deribit delete configmap vol-monitor-config
+kubectl -n deribit create configmap vol-monitor-config --from-file=config.toml=/root/nq-deribit/config.toml
+```
+
 ## Architecture Overview
 
 ### Workspace Structure

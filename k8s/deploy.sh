@@ -24,20 +24,25 @@ if ! docker info 2>&1 | grep -q "$DOCKER_REGISTRY"; then
     docker login "$DOCKER_REGISTRY" -u "308719298@qq.com" -p "zhangdage2011"
 fi
 
-# Step 1: Build Docker image
-echo "[1/6] Building Docker image..."
-docker build -t "$IMAGE_NAME:$VERSION" -f Dockerfile .
-
-# Tag as latest if not already
-if [ "$VERSION" != "latest" ]; then
-    docker tag "$IMAGE_NAME:$VERSION" "$IMAGE_NAME:latest"
+# Step 1: Setup multi-arch builder
+echo "[1/6] Setting up multi-arch builder..."
+if ! docker buildx ls | grep -q "multiarch"; then
+    echo "Creating multi-arch builder..."
+    docker buildx create --use --name multiarch --driver docker-container
+    docker buildx inspect multiarch --bootstrap
 fi
+docker buildx use multiarch
 
-# Step 2: Push to ACR
-echo "[2/6] Pushing to ACR..."
-docker push "$IMAGE_NAME:$VERSION"
+# Step 2: Build and push multi-arch image
+echo "[2/6] Building multi-arch Docker image (linux/amd64, linux/arm64)..."
+echo "      This may take 5-10 minutes due to QEMU emulation..."
+docker buildx build --platform linux/amd64,linux/arm64 \
+    --push -t "$IMAGE_NAME:$VERSION" -f Dockerfile .
+
+# Tag as latest if not already (manifest list)
 if [ "$VERSION" != "latest" ]; then
-    docker push "$IMAGE_NAME:latest"
+    docker buildx build --platform linux/amd64,linux/arm64 \
+        --push -t "$IMAGE_NAME:latest" -f Dockerfile . --cache-from "$IMAGE_NAME:$VERSION"
 fi
 
 # Step 3: Update Deployment image tag
