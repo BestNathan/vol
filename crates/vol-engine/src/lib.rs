@@ -9,17 +9,7 @@
 //! DataSource → Event Channel → Rules → Alert Channel → Notifications
 //! ```
 //!
-//! ## Example
-//!
-//! ```rust
-//! let engine = MonitoringEngineBuilder::new()
-//!     .with_datasource(Box::new(DeribitDataSource::new(config)))
-//!     .with_rule(Box::new(IvThresholdRule::new(thresholds)))
-//!     .with_notification(Box::new(FeishuNotification::new(feishu_config)))
-//!     .build();
-//!
-//! engine.run().await?;
-//! ```
+//! See `MonitoringEngineBuilder` for construction.
 
 mod engine;
 mod builder;
