@@ -17,6 +17,7 @@ short_max_dte = 7
 medium_min_dte = 20
 medium_max_dte = 40
 long_min_dte = 80
+long_max_dte = 200
 
 # Data sources - organized by provider
 [[datasources]]
@@ -31,13 +32,13 @@ enabled = true
 client_id = "nhXng7Bj"
 client_secret = "OxCGY10HlzgKfRoXPBRQqg5IBQcZguGPhE1tewP5U3Y"
 
-# Example: Internal portfolio data source (HTTP polling)
-# [[datasources]]
-# id = "internal-portfolio"
-# provider = "internal"
-# url = "https://internal-api/portfolio"
-# poll_interval_secs = 30
-# enabled = false
+# Portfolio data source - monitors account positions and Greeks
+[[datasources]]
+id = "portfolio"
+provider = "deribit-portfolio"
+poll_interval_secs = 30
+currencies = ["BTC", "ETH"]
+enabled = true
 
 # Example: Binance data source
 # [[datasources]]
@@ -137,3 +138,16 @@ datasources = ["internal-portfolio"]
 min_threshold = 1.2
 enabled = false
 notifications = ["feishu-alerts"]
+
+# Portfolio monitoring rules
+[[rules]]
+id = "portfolio-greeks"
+type = "portfolio"
+enabled = true
+metrics = [
+    { type = "delta_exposure", enabled = true, min_threshold = -100.0, max_threshold = 100.0 },
+    { type = "total_greeks", enabled = true, gamma_threshold = 50.0, vega_threshold = 200.0, theta_threshold = 100.0 },
+    { type = "free_balance", enabled = true, min_threshold = 0.5 },
+    { type = "margin_ratio", enabled = true, min_threshold = 1.25 },
+]
+notifications = ["feishu-alerts", "stdout"]
