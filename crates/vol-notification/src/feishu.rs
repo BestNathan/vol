@@ -83,40 +83,59 @@ impl FeishuNotification {
 
     /// Format alert as an interactive card (rich message)
     fn format_interactive_card(&self, alert: &Alert) -> String {
-        let title = match &alert.alert_type {
-            vol_core::AlertType::AbsoluteIv { .. } => "🚨 IV 阈值告警",
-            vol_core::AlertType::RateChange { .. } => "📈 IV 快速变化告警",
-            vol_core::AlertType::TermStructure { .. } => "📊 期限结构异常告警",
-            vol_core::AlertType::Skew { .. } => "⚖️ Skew 偏离告警",
-            vol_core::AlertType::PortfolioMargin { .. } => "💰 保证金告警",
-            vol_core::AlertType::PortfolioBalance { .. } => "💵 余额告警",
-            vol_core::AlertType::PortfolioDelta { .. } => "📉 Delta 告警",
-            vol_core::AlertType::PortfolioPnL { .. } => "📊 P&L 告警",
-            vol_core::AlertType::PortfolioGreek { greek, .. } => {
-                match greek.as_str() {
-                    "gamma" => "🔧 Gamma 告警",
-                    "theta" => "⏰ Theta 告警",
-                    "vega" => "📊 Vega 告警",
-                    _ => "📈 Greek 告警",
-                }
+        let (title, content) = match &alert.alert_type {
+            vol_core::AlertType::AbsoluteIv { .. } => ("🚨 IV 阈值告警", format!(
+                "**合约**: {}\n**期限**: {}\n**类型**: {}\n**IV**: {:.1}%\n**指数价格**: {:.2} USD\n**DTE**: {} 天\n**合约价格**: {:.4} {} ({:.2} USD)\n**实虚值**: {}",
+                alert.symbol, self.tenor_cn(alert.tenor), self.option_type_cn(alert.option_type),
+                alert.iv * 100.0, alert.index_price, alert.dte,
+                alert.mark_price_coin, alert.symbol.split('-').next().unwrap_or("BTC").to_uppercase(),
+                alert.mark_price_usd(), self.moneyness_str(alert.moneyness)
+            )),
+            vol_core::AlertType::RateChange { .. } => ("📈 IV 快速变化告警", format!(
+                "**合约**: {}\n**期限**: {}\n**类型**: {}\n**IV**: {:.1}%\n**指数价格**: {:.2} USD\n**DTE**: {} 天\n**合约价格**: {:.4} {} ({:.2} USD)\n**实虚值**: {}",
+                alert.symbol, self.tenor_cn(alert.tenor), self.option_type_cn(alert.option_type),
+                alert.iv * 100.0, alert.index_price, alert.dte,
+                alert.mark_price_coin, alert.symbol.split('-').next().unwrap_or("BTC").to_uppercase(),
+                alert.mark_price_usd(), self.moneyness_str(alert.moneyness)
+            )),
+            vol_core::AlertType::TermStructure { .. } => ("📊 期限结构异常告警", format!(
+                "**策略**: {}\n**期限**: {}\n**类型**: {}\n**IV Spread**: {:.1}%\n**指数价格**: {:.2} USD",
+                alert.symbol, self.tenor_cn(alert.tenor), self.option_type_cn(alert.option_type),
+                alert.iv * 100.0, alert.index_price
+            )),
+            vol_core::AlertType::Skew { .. } => ("⚖️ Skew 偏离告警", format!(
+                "**标的**: {}\n**期限**: {}\n**Skew**: {:.1}%\n**指数价格**: {:.2} USD",
+                alert.symbol, self.tenor_cn(alert.tenor), alert.iv * 100.0, alert.index_price
+            )),
+            vol_core::AlertType::PortfolioMargin { current, threshold } => ("💰 保证金比率告警", format!(
+                "**账户**: PORTFOLIO_{}\n**保证金比率**: {:.2}\n**阈值**: {:.2}\n**可用资金**: {:.4}\n**初始保证金**: {:.4}\n**维持保证金**: {:.4}",
+                alert.symbol.replace("PORTFOLIO_", ""), current, threshold,
+                alert.mark_price_coin, alert.index_price, alert.moneyness
+            )),
+            vol_core::AlertType::PortfolioBalance { current, threshold } => ("💵 余额告警", format!(
+                "**账户**: PORTFOLIO_{}\n**可用余额**: {:.4}\n**阈值**: {:.4}\n**总权益**: {:.4}",
+                alert.symbol.replace("PORTFOLIO_", ""), current, threshold, alert.index_price
+            )),
+            vol_core::AlertType::PortfolioDelta { current } => ("📉 Delta 敞口告警", format!(
+                "**账户**: PORTFOLIO_{}\n**总 Delta**: {:.2}\n**指数价格**: {:.2} USD",
+                alert.symbol.replace("PORTFOLIO_", ""), current, alert.index_price
+            )),
+            vol_core::AlertType::PortfolioPnL { current, threshold } => ("📊 P&L 告警", format!(
+                "**账户**: PORTFOLIO_{}\n**Session PnL**: {:.4}\n**阈值**: {:.4}",
+                alert.symbol.replace("PORTFOLIO_", ""), current, threshold
+            )),
+            vol_core::AlertType::PortfolioGreek { greek, current, threshold } => {
+                let greek_name = match greek.as_str() {
+                    "gamma" => "Gamma",
+                    "theta" => "Theta",
+                    "vega" => "Vega",
+                    _ => "Greek",
+                };
+                ("📈 Greek 告警", format!(
+                    "**账户**: PORTFOLIO_{}\n**{}**: {:.6}\n**阈值**: {:.6}",
+                    alert.symbol.replace("PORTFOLIO_", ""), greek_name, current, threshold
+                ))
             }
-        };
-
-        let tenor_cn = match alert.tenor {
-            Tenor::Short => "短期",
-            Tenor::Medium => "中期",
-            Tenor::Long => "长期",
-        };
-
-        let option_type_cn = match alert.option_type {
-            OptionType::Call => "Call",
-            OptionType::Put => "Put",
-        };
-
-        let moneyness_str = if alert.moneyness > 0.0 {
-            format!("ITM +{:.1}%", alert.moneyness * 100.0)
-        } else {
-            format!("OTM {:.1}%", alert.moneyness * 100.0)
         };
 
         serde_json::to_string(&json!({
@@ -135,19 +154,7 @@ impl FeishuNotification {
                     "tag": "div",
                     "text": {
                         "tag": "lark_md",
-                        "content": format!(
-                            "**合约**: {}\n**期限**: {} | **类型**: {}\n**IV**: {:.1}%\n**指数价格**: {:.2} USD\n**DTE**: {} 天\n**合约价格**: {:.4} {} ({:.2} USD)\n**实虚值**: {}",
-                            alert.symbol,
-                            tenor_cn,
-                            option_type_cn,
-                            alert.iv * 100.0,
-                            alert.index_price,
-                            alert.dte,
-                            alert.mark_price_coin,
-                            alert.symbol.split('-').next().unwrap_or("BTC").to_uppercase(),
-                            alert.mark_price_usd(),
-                            moneyness_str
-                        )
+                        "content": content
                     }
                 },
                 {
@@ -164,6 +171,32 @@ impl FeishuNotification {
                 }
             ]
         })).unwrap_or_default()
+    }
+
+    /// Helper function for tenor Chinese name
+    fn tenor_cn(&self, tenor: Tenor) -> &'static str {
+        match tenor {
+            Tenor::Short => "短期",
+            Tenor::Medium => "中期",
+            Tenor::Long => "长期",
+        }
+    }
+
+    /// Helper function for option type Chinese name
+    fn option_type_cn(&self, option_type: OptionType) -> &'static str {
+        match option_type {
+            OptionType::Call => "Call",
+            OptionType::Put => "Put",
+        }
+    }
+
+    /// Helper function for moneyness string
+    fn moneyness_str(&self, moneyness: f64) -> String {
+        if moneyness > 0.0 {
+            format!("ITM +{:.1}%", moneyness * 100.0)
+        } else {
+            format!("OTM {:.1}%", moneyness * 100.0)
+        }
     }
 
     /// Send message to Feishu API using openlark SDK
