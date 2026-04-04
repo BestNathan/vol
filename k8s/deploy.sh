@@ -24,12 +24,10 @@ if ! docker info 2>&1 | grep -q "$DOCKER_REGISTRY"; then
     docker login "$DOCKER_REGISTRY" -u "308719298@qq.com" -p "zhangdage2011"
 fi
 
-# Step 1: Pull base images from local registry
-echo "[1/7] Pulling base images from local registry..."
-docker pull 192.168.2.106:5000/library/rust:latest || true
-docker pull 192.168.2.106:5000/library/debian:bookworm-slim || true
-docker tag 192.168.2.106:5000/library/rust:latest rust:latest 2>/dev/null || true
-docker tag 192.168.2.106:5000/library/debian:bookworm-slim debian:bookworm-slim 2>/dev/null || true
+# Step 1: Pull base images (Docker will use configured registry mirrors)
+echo "[1/7] Pulling base images..."
+docker pull rust:latest || true
+docker pull debian:bookworm-slim || true
 
 # Step 2: Enable QEMU for arm64 build
 echo "[2/7] Setting up QEMU for arm64 build..."
