@@ -93,9 +93,15 @@ async fn main() -> Result<()> {
                     receive_id: Some(feishu_cfg.receive_id.clone()),
                     message_template: feishu_cfg.message_template.clone(),
                 };
-                let feishu = FeishuNotification::new(feishu_config);
-                builder = builder.with_notification(Box::new(feishu));
-                info!("Added notification: {}", feishu_cfg.id);
+                match FeishuNotification::new(feishu_config) {
+                    Ok(feishu) => {
+                        builder = builder.with_notification(Box::new(feishu));
+                        info!("Added notification: {}", feishu_cfg.id);
+                    }
+                    Err(e) => {
+                        warn!("Failed to initialize Feishu notification: {:?}", e);
+                    }
+                }
             }
         }
     }

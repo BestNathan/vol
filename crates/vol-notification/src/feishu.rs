@@ -1,74 +1,64 @@
-//! Feishu/Lark notification handler using openlark for auth and reqwest for HTTP.
+//! Feishu/Lark notification handler using openlark SDK.
 //!
 //! Reference: https://github.com/foxzool/openlark
 
 use vol_core::{NotificationHandler, Alert, Result, VolError, Tenor, OptionType};
 use vol_config::FeishuConfig;
+use open_lark::Client;
+use open_lark::communication::im::im::v1::message::create::{CreateMessageRequest, CreateMessageBody};
+use open_lark::communication::im::im::v1::message::models::ReceiveIdType;
+use serde_json::json;
 use tracing::{info, warn};
 
 /// Feishu/Lark notification handler
 #[derive(Clone)]
 pub struct FeishuNotification {
-    app_id: String,
-    app_secret: String,
+    client: Client,
     receive_id: String,
+    receive_id_type: ReceiveIdType,
     message_template: String,
-    http_client: reqwest::Client,
 }
 
 impl FeishuNotification {
-    pub fn new(config: FeishuConfig) -> Self {
-        Self {
-            app_id: config.app_id.unwrap_or_default(),
-            app_secret: config.app_secret.unwrap_or_default(),
-            receive_id: config.receive_id.unwrap_or_default(),
+    pub fn new(config: FeishuConfig) -> Result<Self> {
+        let app_id = config.app_id.ok_or_else(|| {
+            VolError::Notification("Feishu app_id is required".to_string())
+        })?;
+
+        let app_secret = config.app_secret.ok_or_else(|| {
+            VolError::Notification("Feishu app_secret is required".to_string())
+        })?;
+
+        let receive_id = config.receive_id.ok_or_else(|| {
+            VolError::Notification("Feishu receive_id is required".to_string())
+        })?;
+
+        // Determine receive_id_type based on prefix
+        // oc_ -> chat_id, ou_ -> open_id, og_ -> chat_id (group chat)
+        let receive_id_type = if receive_id.starts_with("oc_") {
+            ReceiveIdType::ChatId
+        } else if receive_id.starts_with("ou_") {
+            ReceiveIdType::OpenId
+        } else if receive_id.starts_with("og_") {
+            ReceiveIdType::ChatId
+        } else {
+            // Default to chat_id for backwards compatibility
+            ReceiveIdType::ChatId
+        };
+
+        // Create openlark client with app credentials
+        let client = Client::builder()
+            .app_id(&app_id)
+            .app_secret(&app_secret)
+            .build()
+            .map_err(|e| VolError::Notification(format!("Failed to create openlark client: {}", e)))?;
+
+        Ok(Self {
+            client,
+            receive_id,
+            receive_id_type,
             message_template: config.message_template,
-            http_client: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(10))
-                .build()
-                .expect("Failed to create HTTP client"),
-        }
-    }
-
-    /// Get access token using Feishu OAuth 2.0 client credentials flow
-    async fn get_access_token(&self) -> Option<String> {
-        let url = "https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal";
-
-        let body = serde_json::json!({
-            "app_id": self.app_id,
-            "app_secret": self.app_secret
-        });
-
-        match self.http_client
-            .post(url)
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-        {
-            Ok(response) => {
-                if response.status().is_success() {
-                    match response.json::<serde_json::Value>().await {
-                        Ok(json) => {
-                            json.get("app_access_token")
-                                .and_then(|v| v.as_str())
-                                .map(|s| s.to_string())
-                        }
-                        Err(e) => {
-                            warn!("Failed to parse token response: {:?}", e);
-                            None
-                        }
-                    }
-                } else {
-                    warn!("Failed to get access token: {}", response.status());
-                    None
-                }
-            }
-            Err(e) => {
-                warn!("Failed to get access token: {:?}", e);
-                None
-            }
-        }
+        })
     }
 
     /// Format message using template
@@ -129,7 +119,7 @@ impl FeishuNotification {
             format!("OTM {:.1}%", alert.moneyness * 100.0)
         };
 
-        serde_json::to_string(&serde_json::json!({
+        serde_json::to_string(&json!({
             "config": {
                 "wide_screen_mode": true
             },
@@ -176,53 +166,48 @@ impl FeishuNotification {
         })).unwrap_or_default()
     }
 
-    /// Send message to Feishu API
+    /// Send message to Feishu API using openlark SDK
     async fn send_message(&self, msg_type: &str, content: &str) -> Result<()> {
-        let receive_id_type = if self.receive_id.starts_with("oc_") {
-            "chat_id"
-        } else if self.receive_id.starts_with("ou_") {
-            "open_id"
-        } else if self.receive_id.starts_with("og_") {
-            "group_id"
-        } else {
-            "chat_id"
+        // Build the message request body
+        let body = CreateMessageBody {
+            receive_id: self.receive_id.clone(),
+            msg_type: msg_type.to_string(),
+            content: content.to_string(),
+            uuid: None,
         };
 
-        let token = self.get_access_token().await.ok_or_else(|| {
-            VolError::Notification("Failed to get access token".to_string())
-        })?;
+        // Create the request with the appropriate receive_id_type
+        let request = CreateMessageRequest::new(self.client.core_config().clone())
+            .receive_id_type(self.receive_id_type);
 
-        let body = serde_json::json!({
-            "receive_id": self.receive_id,
-            "msg_type": msg_type,
-            "content": content,
-            "receive_id_type": receive_id_type,
-        });
+        // Send the message
+        let result: open_lark::SDKResult<serde_json::Value> = request.execute(body).await;
 
-        let url = "https://open.feishu.cn/open-apis/im/v1/messages";
-
-        match self.http_client.post(url)
-            .header("Authorization", format!("Bearer {}", token))
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-        {
+        match result {
             Ok(response) => {
-                let status = response.status();
-                let text = response.text().await.unwrap_or_default();
+                // Check if the response contains a message_id (success indicator)
+                let response: &serde_json::Value = &response;
+                if let Some(data) = response.get("data") {
+                    if let Some(message_id) = data.get("message_id").and_then(|v: &serde_json::Value| v.as_str()) {
+                        info!("Feishu message sent successfully: {}", message_id);
+                        return Ok(());
+                    }
+                }
 
-                if status.is_success() {
+                // Fallback: check code field
+                let code = response.get("code").and_then(|v: &serde_json::Value| v.as_i64()).unwrap_or(-1);
+                if code == 0 {
                     info!("Feishu message sent successfully");
                     Ok(())
                 } else {
-                    warn!("Feishu API error: {} - {}", status, &text[..200.min(text.len())]);
-                    Err(VolError::Notification(format!("Feishu API error: {}", status)))
+                    let msg = response.get("msg").and_then(|v: &serde_json::Value| v.as_str()).unwrap_or("Unknown error");
+                    warn!("Feishu API error: code={}, msg={}", code, msg);
+                    Err(VolError::Notification(format!("Feishu API error: {} - {}", code, msg)))
                 }
             }
             Err(e) => {
                 warn!("Failed to send Feishu message: {:?}", e);
-                Err(VolError::Notification(format!("Network error: {}", e)))
+                Err(VolError::Notification(format!("Failed to send message: {}", e)))
             }
         }
     }
@@ -243,7 +228,7 @@ impl NotificationHandler for FeishuNotification {
         if let Err(e) = self.send_message("interactive_text", &card_content).await {
             warn!("Interactive card failed, falling back to text: {:?}", e);
             // Fall back to plain text
-            self.send_message("text", &serde_json::json!({ "text": text_content }).to_string()).await?;
+            self.send_message("text", &json!({ "text": text_content }).to_string()).await?;
         }
 
         Ok(())
@@ -269,7 +254,7 @@ mod tests {
             message_template: "{tenor} {alert_type} {symbol} IV={value} Index={index_price} DTE={dte} Type={option_type} Moneyness={moneyness} CoinPrice={mark_price_coin} UsdPrice={mark_price_usd}".to_string(),
         };
 
-        let handler = FeishuNotification::new(config);
+        let handler = FeishuNotification::new(config).unwrap();
 
         // Create a test alert with all fields populated
         let alert = Alert {
@@ -303,5 +288,28 @@ mod tests {
         assert!(formatted.contains("short"), "tenor should be present");
         assert!(formatted.contains("absolute_iv"), "alert_type should be present");
         assert!(formatted.contains("BTC-29MAR24-70000-C"), "symbol should be present");
+    }
+
+    #[test]
+    fn test_receive_id_type_mapping() {
+        // Test oc_ prefix -> ChatId
+        let config_oc = FeishuConfig {
+            app_id: Some("test".to_string()),
+            app_secret: Some("test".to_string()),
+            receive_id: Some("oc_c29208d94757e2aefd97bfa5f57e0b26".to_string()),
+            message_template: "test".to_string(),
+        };
+        let handler_oc = FeishuNotification::new(config_oc).unwrap();
+        assert!(matches!(handler_oc.receive_id_type, ReceiveIdType::ChatId));
+
+        // Test ou_ prefix -> OpenId
+        let config_ou = FeishuConfig {
+            app_id: Some("test".to_string()),
+            app_secret: Some("test".to_string()),
+            receive_id: Some("ou_xxxxxxxxxxxx".to_string()),
+            message_template: "test".to_string(),
+        };
+        let handler_ou = FeishuNotification::new(config_ou).unwrap();
+        assert!(matches!(handler_ou.receive_id_type, ReceiveIdType::OpenId));
     }
 }
