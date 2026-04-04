@@ -4,7 +4,7 @@ use vol_core::{DataSource, RuleProcessor, NotificationHandler, MonitoringEvent, 
 use vol_alert::AlertManager;
 use tokio::sync::{mpsc, broadcast};
 use tokio::task::JoinHandle;
-use tracing::{info, error, warn};
+use tracing::{info, error, warn, debug};
 use std::sync::Arc;
 use crate::config::EngineConfig;
 
@@ -65,6 +65,8 @@ impl MonitoringEngine {
         let rule_handles = self.spawn_rules(event_tx, alert_tx.clone());
 
         // Create AlertManager with config
+        // AlertManager is created here in run() because it needs to be moved into
+        // spawn_notifications, which takes ownership to transfer to the spawned task
         let alert_manager = AlertManager::new(self.config.config_file.clone());
 
         // Spawn notifications - single consumer for alerts
@@ -178,7 +180,7 @@ impl MonitoringEngine {
             while let Some(alert) = alert_rx.recv().await {
                 // Check cooldown before sending
                 if !alert_manager.can_send(&alert) {
-                    tracing::debug!("Alert in cooldown, skipping: {}:{}:{}",
+                    debug!("Alert in cooldown, skipping: {}:{}:{}",
                         alert.alert_type, alert.tenor, alert.symbol);
                     continue;
                 }
