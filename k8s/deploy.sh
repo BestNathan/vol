@@ -18,46 +18,68 @@ echo "Version: $VERSION"
 echo ""
 
 # Step 0: Login to ACR
-echo "[0/6] Logging in to ACR..."
+echo "[0/7] Logging in to ACR..."
 if ! docker info 2>&1 | grep -q "$DOCKER_REGISTRY"; then
     echo "Logging in to $DOCKER_REGISTRY..."
     docker login "$DOCKER_REGISTRY" -u "308719298@qq.com" -p "zhangdage2011"
 fi
 
-# Step 1: Setup multi-arch builder
-echo "[1/6] Setting up multi-arch builder..."
-if ! docker buildx ls | grep -q "multiarch"; then
-    echo "Creating multi-arch builder..."
-    docker buildx create --use --name multiarch --driver docker-container
-    docker buildx inspect multiarch --bootstrap
-fi
-docker buildx use multiarch
+# Step 1: Pull base images from local registry
+echo "[1/7] Pulling base images from local registry..."
+docker pull 192.168.2.106:5000/library/rust:latest || true
+docker pull 192.168.2.106:5000/library/debian:bookworm-slim || true
+docker tag 192.168.2.106:5000/library/rust:latest rust:latest 2>/dev/null || true
+docker tag 192.168.2.106:5000/library/debian:bookworm-slim debian:bookworm-slim 2>/dev/null || true
 
-# Step 2: Build and push multi-arch image
-echo "[2/6] Building multi-arch Docker image (linux/amd64, linux/arm64)..."
-echo "      This may take 5-10 minutes due to QEMU emulation..."
-docker buildx build --platform linux/amd64,linux/arm64 \
-    --push -t "$IMAGE_NAME:$VERSION" -f Dockerfile .
+# Step 2: Enable QEMU for arm64 build
+echo "[2/7] Setting up QEMU for arm64 build..."
+docker run --rm --privileged multiarch/qemu-user-static --reset -p yes >/dev/null 2>&1 || true
 
-# Tag as latest if not already (manifest list)
+# Step 3: Build and push amd64 image
+echo "[3/7] Building amd64 image..."
+docker build --platform linux/amd64 -t "$IMAGE_NAME:amd64" -f Dockerfile .
+echo "Pushing amd64 image..."
+docker push "$IMAGE_NAME:amd64"
+
+# Step 4: Build and push arm64 image (using QEMU)
+echo "[4/7] Building arm64 image (this may take 10-15 minutes)..."
+docker build --platform linux/arm64 -t "$IMAGE_NAME:arm64" -f Dockerfile .
+echo "Pushing arm64 image..."
+docker push "$IMAGE_NAME:arm64"
+
+# Step 5: Create and push manifest list
+echo "[5/7] Creating manifest list..."
+docker manifest create "$IMAGE_NAME:$VERSION" \
+    "$IMAGE_NAME:amd64" \
+    "$IMAGE_NAME:arm64"
+docker manifest annotate "$IMAGE_NAME:$VERSION" "$IMAGE_NAME:amd64" --arch amd64 --os linux
+docker manifest annotate "$IMAGE_NAME:$VERSION" "$IMAGE_NAME:arm64" --arch arm64 --os linux
+echo "Pushing manifest list..."
+docker manifest push "$IMAGE_NAME:$VERSION"
+
+# Tag as latest if not already
 if [ "$VERSION" != "latest" ]; then
-    docker buildx build --platform linux/amd64,linux/arm64 \
-        --push -t "$IMAGE_NAME:latest" -f Dockerfile . --cache-from "$IMAGE_NAME:$VERSION"
+    docker manifest create "$IMAGE_NAME:latest" \
+        "$IMAGE_NAME:amd64" \
+        "$IMAGE_NAME:arm64"
+    docker manifest annotate "$IMAGE_NAME:latest" "$IMAGE_NAME:amd64" --arch amd64 --os linux
+    docker manifest annotate "$IMAGE_NAME:latest" "$IMAGE_NAME:arm64" --arch arm64 --os linux
+    docker manifest push "$IMAGE_NAME:latest"
 fi
 
-# Step 3: Update Deployment image tag
-echo "[3/5] Updating Deployment image tag..."
+# Step 6: Update Deployment image tag
+echo "[6/7] Updating Deployment image tag..."
 sed -i.bak "s|image: .*/vol-monitor:.*|image: $IMAGE_NAME:$VERSION|" "$K8S_DIR/deployment.yaml"
 rm -f "$K8S_DIR/deployment.yaml.bak"
 
-# Step 4: Apply Kubernetes manifests
-echo "[4/5] Applying Kubernetes manifests..."
+# Step 7: Apply Kubernetes manifests
+echo "[7/7] Applying Kubernetes manifests..."
 kubectl apply -f "$K8S_DIR/namespace.yaml"
 kubectl apply -f "$K8S_DIR/configmap.yaml"
 kubectl apply -f "$K8S_DIR/deployment.yaml"
 
-# Step 5: Wait for deployment
-echo "[5/5] Waiting for deployment to complete..."
+# Wait for deployment
+echo "Waiting for deployment to complete..."
 kubectl -n deribit rollout status deployment/vol-monitor --timeout=300s
 
 echo ""
