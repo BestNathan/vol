@@ -243,8 +243,8 @@ impl NotificationHandler for FeishuNotification {
         let card_content = self.format_interactive_card(alert);
         let text_content = self.format_message(alert);
 
-        // Send as interactive card
-        if let Err(e) = self.send_message("interactive_text", &card_content).await {
+        // Send as interactive card (msg_type must be "interactive" per Feishu API docs)
+        if let Err(e) = self.send_message("interactive", &card_content).await {
             warn!("Interactive card failed, falling back to text: {:?}", e);
             // Fall back to plain text
             self.send_message("text", &json!({ "text": text_content }).to_string()).await?;
