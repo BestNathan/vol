@@ -62,6 +62,9 @@ impl PortfolioDataSource {
             theta_total += pos.theta;
         }
 
+        info!("Fetched portfolio {}: equity={:.4}, balance={:.4}, delta={:.2}, vega={:.2}",
+              currency, summary.equity, summary.balance, delta_total, vega_total);
+
         Ok(PortfolioSnapshot {
             currency: summary.currency,
             timestamp: std::time::SystemTime::now()
