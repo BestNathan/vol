@@ -1,9 +1,11 @@
 //! Core monitoring engine - orchestrates datasources, rules, and notifications.
 
 use vol_core::{DataSource, RuleProcessor, NotificationHandler, MonitoringEvent, Alert, error::Result};
+use vol_alert::AlertManager;
 use tokio::sync::{mpsc, broadcast};
 use tokio::task::JoinHandle;
 use tracing::{info, error, warn};
+use std::sync::Arc;
 use crate::config::EngineConfig;
 
 /// Monitoring engine - the main event loop coordinator
@@ -62,8 +64,11 @@ impl MonitoringEngine {
         // Spawn rules - each rule gets its own broadcast subscription
         let rule_handles = self.spawn_rules(event_tx, alert_tx.clone());
 
+        // Create AlertManager with config
+        let alert_manager = AlertManager::new(self.config.config_file.clone());
+
         // Spawn notifications - single consumer for alerts
-        let notif_handles = self.spawn_notifications(alert_rx);
+        let notif_handles = self.spawn_notifications(alert_rx, alert_manager);
 
         // Collect all handles
         let all_handles = ds_handles.into_iter()
@@ -152,6 +157,7 @@ impl MonitoringEngine {
     fn spawn_notifications(
         &self,
         mut alert_rx: mpsc::Receiver<Alert>,
+        alert_manager: AlertManager,
     ) -> Vec<JoinHandle<Result<()>>> {
         // For notifications, we use a fan-out pattern where each notification channel
         // runs in the same task to avoid needing mpsc resubscribe
@@ -166,9 +172,16 @@ impl MonitoringEngine {
         }
 
         let num_notifications = notifications.len();
+        let alert_manager = Arc::new(alert_manager);
         vec![tokio::spawn(async move {
             info!("Starting {} notification channels", num_notifications);
             while let Some(alert) = alert_rx.recv().await {
+                // Check cooldown before sending
+                if !alert_manager.can_send(&alert) {
+                    tracing::debug!("Alert in cooldown, skipping: {}:{}:{}",
+                        alert.alert_type, alert.tenor, alert.symbol);
+                    continue;
+                }
                 for notif in &notifications {
                     if let Err(e) = notif.send(&alert).await {
                         error!("Notification {} failed: {}", notif.name(), e);

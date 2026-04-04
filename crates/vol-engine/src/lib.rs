@@ -30,3 +30,4 @@ pub use engine::MonitoringEngine;
 pub use builder::MonitoringEngineBuilder;
 pub use config::EngineConfig;
 pub use registry::RuleRegistry;
+pub use vol_alert::AlertManager;
