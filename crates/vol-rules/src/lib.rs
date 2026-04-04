@@ -20,6 +20,7 @@ pub use absolute_iv::AbsoluteIvRule;
 pub use rate_change::RateChangeRule;
 pub use term_structure::TermStructureRule;
 pub use skew::SkewRule;
-pub use portfolio::{PortfolioRule, PortfolioSnapshot};
+pub use portfolio::PortfolioRule;
 pub use manager::AlertManager;
 pub use registry::RuleRegistry;
+pub use vol_core::PortfolioSnapshot;

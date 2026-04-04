@@ -1,23 +1,9 @@
 //! Portfolio rule with configurable metrics.
 
-use vol_core::{Alert, Tenor, OptionType, AlertType, RuleProcessor, MonitoringEvent, EventType, RuleAction, Result, PortfolioMetricType};
+use vol_core::{Alert, Tenor, OptionType, AlertType, RuleProcessor, MonitoringEvent, EventType, RuleAction, Result, PortfolioMetricType, PortfolioSnapshot};
 use vol_config::metrics::MetricConfig;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-
-/// Portfolio data snapshot for alert evaluation
-#[derive(Debug, Clone)]
-pub struct PortfolioSnapshot {
-    pub currency: String,
-    pub timestamp: u64,
-    pub margin_ratio: Option<f64>,
-    pub free_balance: f64,
-    pub delta_exposure: f64,
-    pub session_pnl: f64,
-    pub options_gamma: f64,
-    pub options_vega: f64,
-    pub options_theta: f64,
-}
 
 /// Portfolio rule with configurable metrics
 pub struct PortfolioRule {
@@ -80,7 +66,8 @@ impl PortfolioRule {
 
             match metric {
                 MetricConfig::MarginRatio(cfg) => {
-                    if let Some(ratio) = snapshot.margin_ratio {
+                    if snapshot.initial_margin > 0.0 {
+                        let ratio = snapshot.margin_balance / snapshot.initial_margin;
                         if let Some(min) = cfg.min_threshold {
                             if ratio < min {
                                 let key = format!("margin_ratio_{}", snapshot.currency);
@@ -100,7 +87,7 @@ impl PortfolioRule {
                                         dte: 0,
                                         option_type: OptionType::Call,
                                         moneyness: 0.0,
-                                        mark_price_coin: snapshot.free_balance,
+                                        mark_price_coin: snapshot.available_funds,
                                     });
                                     self.record_alert(key).await;
                                 }
@@ -110,25 +97,25 @@ impl PortfolioRule {
                 }
                 MetricConfig::FreeBalance(cfg) => {
                     if let Some(min) = cfg.min_threshold {
-                        if snapshot.free_balance < min {
+                        if snapshot.available_funds < min {
                             let key = format!("free_balance_{}", snapshot.currency);
                             if !self.in_cooldown(&key).await {
                                 alerts.push(Alert {
                                     alert_type: AlertType::PortfolioBalance {
-                                        current: snapshot.free_balance,
+                                        current: snapshot.available_funds,
                                         threshold: min
                                     },
                                     tenor: Tenor::Medium,
                                     symbol: format!("PORTFOLIO_{}", snapshot.currency),
                                     iv: 0.0,
-                                    message: format!("Free balance {:.2} below threshold {:.2}", snapshot.free_balance, min),
+                                    message: format!("Free balance {:.2} below threshold {:.2}", snapshot.available_funds, min),
                                     timestamp: snapshot.timestamp,
                                     source: "deribit".to_string(),
                                     index_price: 0.0,
                                     dte: 0,
                                     option_type: OptionType::Call,
                                     moneyness: 0.0,
-                                    mark_price_coin: snapshot.free_balance,
+                                    mark_price_coin: snapshot.available_funds,
                                 });
                                 self.record_alert(key).await;
                             }
@@ -136,7 +123,7 @@ impl PortfolioRule {
                     }
                 }
                 MetricConfig::DeltaExposure(cfg) => {
-                    let delta = snapshot.delta_exposure;
+                    let delta = snapshot.delta_total;
                     let triggered = cfg.min_threshold.map(|min| delta < min).unwrap_or(false)
                         || cfg.max_threshold.map(|max| delta > max).unwrap_or(false);
 
