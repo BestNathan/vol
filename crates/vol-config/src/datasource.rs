@@ -75,6 +75,18 @@ pub struct BinanceDataSourceConfig {
     pub api_secret: Option<String>,
 }
 
+/// Portfolio data source configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortfolioDataSourceConfig {
+    pub id: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_60")]
+    pub poll_interval_secs: u64,
+    #[serde(default = "default_currencies")]
+    pub currencies: Vec<String>,
+}
+
 /// Data source configuration enum - organized by provider
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "provider", rename_all = "lowercase")]
@@ -82,6 +94,8 @@ pub enum DataSourceConfig {
     Deribit(DeribitDataSourceConfig),
     Binance(BinanceDataSourceConfig),
     Internal(InternalDataSourceConfig),
+    #[serde(rename = "deribit-portfolio")]
+    Portfolio(PortfolioDataSourceConfig),
 }
 
 impl DataSourceConfig {
@@ -90,6 +104,7 @@ impl DataSourceConfig {
             DataSourceConfig::Deribit(c) => &c.id,
             DataSourceConfig::Binance(c) => &c.id,
             DataSourceConfig::Internal(c) => &c.id,
+            DataSourceConfig::Portfolio(c) => &c.id,
         }
     }
 
@@ -98,6 +113,7 @@ impl DataSourceConfig {
             DataSourceConfig::Deribit(c) => c.enabled,
             DataSourceConfig::Binance(c) => c.enabled,
             DataSourceConfig::Internal(c) => c.enabled,
+            DataSourceConfig::Portfolio(c) => c.enabled,
         }
     }
 }
@@ -115,5 +131,9 @@ fn default_30() -> u64 {
 }
 
 fn default_symbols() -> Vec<String> {
+    vec!["BTC".to_string(), "ETH".to_string()]
+}
+
+fn default_currencies() -> Vec<String> {
     vec!["BTC".to_string(), "ETH".to_string()]
 }
