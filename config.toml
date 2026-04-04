@@ -4,7 +4,13 @@
 hot_reload = true
 hot_reload_interval_secs = 30
 channel_buffer_size = 1000
-alert_cooldown_secs = 300
+alert_cooldown_secs = 300  # Global fallback
+
+# Tenor-specific cooldowns (override global)
+[engine.tenor_cooldowns]
+short_secs = 600    # 10 minutes - short tenor alerts
+medium_secs = 3600  # 1 hour - medium tenor alerts
+long_secs = 14400   # 4 hours - long tenor alerts
 
 [tenors]
 short_max_dte = 7
