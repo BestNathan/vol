@@ -9,11 +9,13 @@ pub struct Position {
     pub size: f64,
     pub average_price: f64,
     pub mark_price: f64,
+    #[serde(default, alias = "floating_profit_loss")]
     pub unrealized_pnl: f64,
     pub delta: f64,
     pub gamma: f64,
     pub vega: f64,
     pub theta: f64,
+    #[serde(default)]
     pub underlying: String,
 }
 

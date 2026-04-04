@@ -517,14 +517,14 @@ impl DeribitClient {
         Ok(positions)
     }
 
-    /// Get portfolio/account summary via REST API
-    pub async fn get_portfolio(&self, currency: &str) -> Result<PortfolioSummary, vol_core::VolError> {
+    /// Get account summary via REST API (get_account_summary)
+    pub async fn get_account_summary(&self, currency: &str) -> Result<PortfolioSummary, vol_core::VolError> {
         let mut params = serde_json::Map::new();
         params.insert("currency".to_string(), serde_json::Value::String(currency.to_string()));
 
-        let response = self.request("private/get_portfolio", Some(params)).await?;
+        let response = self.request("private/get_account_summary", Some(params)).await?;
         let summary: PortfolioSummary = serde_json::from_value(response)
-            .map_err(|e| vol_core::VolError::Parse(format!("Portfolio parse failed: {}", e)))?;
+            .map_err(|e| vol_core::VolError::Parse(format!("AccountSummary parse failed: {}", e)))?;
         Ok(summary)
     }
 

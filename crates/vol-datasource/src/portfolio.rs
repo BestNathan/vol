@@ -43,8 +43,8 @@ impl PortfolioDataSource {
 
     /// Fetch portfolio snapshot for a currency
     async fn fetch_snapshot(&self, currency: &str) -> Result<PortfolioSnapshot> {
-        // Get portfolio summary from REST API
-        let summary = self.client.get_portfolio(currency).await?;
+        // Get account summary from REST API
+        let summary = self.client.get_account_summary(currency).await?;
 
         // Get positions from REST API
         let positions = self.client.get_positions(Some(currency)).await?;
