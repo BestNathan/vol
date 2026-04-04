@@ -16,6 +16,17 @@ pub use rule::*;
 // Re-export legacy types for backwards compatibility
 pub use datasource::{DeribitDataSourceConfig as DeribitConfig, DeribitAuthConfig};
 
+/// Tenor-specific cooldown configuration
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct TenorCooldownsConfig {
+    #[serde(default)]
+    pub short_secs: Option<u64>,
+    #[serde(default)]
+    pub medium_secs: Option<u64>,
+    #[serde(default)]
+    pub long_secs: Option<u64>,
+}
+
 /// Engine configuration
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct EngineConfigFile {
@@ -27,11 +38,34 @@ pub struct EngineConfigFile {
     pub channel_buffer_size: usize,
     #[serde(default = "default_300")]
     pub alert_cooldown_secs: u64,
+    #[serde(default)]
+    pub tenor_cooldowns: TenorCooldownsConfig,
 }
 
 fn default_30() -> u64 { 30 }
 fn default_1000() -> usize { 1000 }
 fn default_300() -> u64 { 300 }
+
+impl EngineConfigFile {
+    /// Get cooldown period for a specific tenor.
+    /// Returns tenor-specific value if configured, otherwise falls back to global alert_cooldown_secs.
+    pub fn get_cooldown_for_tenor(&self, tenor: Tenor) -> u64 {
+        match tenor {
+            Tenor::Short => self
+                .tenor_cooldowns
+                .short_secs
+                .unwrap_or(self.alert_cooldown_secs),
+            Tenor::Medium => self
+                .tenor_cooldowns
+                .medium_secs
+                .unwrap_or(self.alert_cooldown_secs),
+            Tenor::Long => self
+                .tenor_cooldowns
+                .long_secs
+                .unwrap_or(self.alert_cooldown_secs),
+        }
+    }
+}
 
 /// Main configuration structure - new format with layered arrays
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -367,5 +401,52 @@ mod tests {
         assert_eq!(config.metrics[0].name(), "free_balance");
         assert_eq!(config.metrics[1].name(), "margin_ratio");
         assert_eq!(config.metrics[2].name(), "total_greeks");
+    }
+
+    #[test]
+    fn test_get_cooldown_for_tenor_uses_specific_value() {
+        let config = EngineConfigFile {
+            alert_cooldown_secs: 300,
+            tenor_cooldowns: TenorCooldownsConfig {
+                short_secs: Some(600),
+                medium_secs: Some(3600),
+                long_secs: Some(14400),
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(config.get_cooldown_for_tenor(Tenor::Short), 600);
+        assert_eq!(config.get_cooldown_for_tenor(Tenor::Medium), 3600);
+        assert_eq!(config.get_cooldown_for_tenor(Tenor::Long), 14400);
+    }
+
+    #[test]
+    fn test_get_cooldown_for_tenor_fallback_to_global() {
+        let config = EngineConfigFile {
+            alert_cooldown_secs: 300,
+            tenor_cooldowns: TenorCooldownsConfig {
+                short_secs: Some(600),
+                medium_secs: None,
+                long_secs: None,
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(config.get_cooldown_for_tenor(Tenor::Short), 600);
+        assert_eq!(config.get_cooldown_for_tenor(Tenor::Medium), 300);
+        assert_eq!(config.get_cooldown_for_tenor(Tenor::Long), 300);
+    }
+
+    #[test]
+    fn test_get_cooldown_for_tenor_all_default() {
+        let config = EngineConfigFile {
+            alert_cooldown_secs: 300,
+            tenor_cooldowns: TenorCooldownsConfig::default(),
+            ..Default::default()
+        };
+
+        assert_eq!(config.get_cooldown_for_tenor(Tenor::Short), 300);
+        assert_eq!(config.get_cooldown_for_tenor(Tenor::Medium), 300);
+        assert_eq!(config.get_cooldown_for_tenor(Tenor::Long), 300);
     }
 }

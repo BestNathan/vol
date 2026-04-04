@@ -14,6 +14,22 @@ pub struct DeribitAuthConfig {
     pub client_secret: Option<String>,
 }
 
+impl DeribitAuthConfig {
+    /// Get client ID, checking environment variables first.
+    pub fn client_id(&self) -> Option<String> {
+        std::env::var("DERIBIT_CLIENT_ID")
+            .ok()
+            .or_else(|| self.client_id.clone())
+    }
+
+    /// Get client secret, checking environment variables first.
+    pub fn client_secret(&self) -> Option<String> {
+        std::env::var("DERIBIT_CLIENT_SECRET")
+            .ok()
+            .or_else(|| self.client_secret.clone())
+    }
+}
+
 /// Deribit data source configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeribitDataSourceConfig {
