@@ -16,3 +16,17 @@ pub struct Position {
     pub theta: f64,
     pub underlying: String,
 }
+
+/// Portfolio/account summary from private/get_portfolio REST API
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortfolioSummary {
+    pub currency: String,
+    pub equity: f64,
+    pub balance: f64,
+    pub available_funds: f64,
+    pub margin_balance: f64,
+    pub initial_margin: f64,
+    pub maintenance_margin: f64,
+    pub session_upl: f64,
+    pub session_rpl: f64,
+}

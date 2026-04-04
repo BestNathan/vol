@@ -49,6 +49,6 @@ pub use client::{ClientState, DeribitClient};
 pub use instrument::*;
 pub use market_data::*;
 pub use message::*;
-pub use positions::Position;
+pub use positions::{Position, PortfolioSummary};
 pub use portfolio::PortfolioData;
 pub use subscription::*;

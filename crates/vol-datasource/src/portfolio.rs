@@ -43,6 +43,9 @@ impl PortfolioDataSource {
 
     /// Fetch portfolio snapshot for a currency
     async fn fetch_snapshot(&self, currency: &str) -> Result<PortfolioSnapshot> {
+        // Get portfolio summary from REST API
+        let summary = self.client.get_portfolio(currency).await?;
+
         // Get positions from REST API
         let positions = self.client.get_positions(Some(currency)).await?;
 
@@ -60,18 +63,18 @@ impl PortfolioDataSource {
         }
 
         Ok(PortfolioSnapshot {
-            currency: currency.to_string(),
+            currency: summary.currency,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as u64,
-            equity: 0.0,
-            balance: 0.0,
-            available_funds: 0.0,
-            margin_balance: 0.0,
-            initial_margin: 0.0,
-            maintenance_margin: 0.0,
-            session_pnl: 0.0,
+            equity: summary.equity,
+            balance: summary.balance,
+            available_funds: summary.available_funds,
+            margin_balance: summary.margin_balance,
+            initial_margin: summary.initial_margin,
+            maintenance_margin: summary.maintenance_margin,
+            session_pnl: summary.session_upl + summary.session_rpl,
             delta_total,
             options_delta: delta_total,
             options_gamma: gamma_total,
@@ -96,37 +99,66 @@ impl DataSource for PortfolioDataSource {
     }
 
     async fn connect(&mut self) -> Result<()> {
-        info!("PortfolioDataSource connected (no WebSocket subscription needed)");
+        // Verify client has authentication configured
+        if !self.client.has_auth() {
+            return Err(vol_core::VolError::Connection(
+                "PortfolioDataSource requires authenticated client".to_string()
+            ));
+        }
+        info!("PortfolioDataSource connected and authenticated");
         Ok(())
     }
 
     async fn run(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()> {
         info!("Starting portfolio data source with {} currencies", self.currencies.len());
 
-        let mut ticker = tokio::time::interval(tokio::time::Duration::from_secs(self.poll_interval_secs));
+        let base_interval = self.poll_interval_secs;
+        let mut error_count = 0;
+        let mut current_interval = base_interval;
 
         loop {
-            ticker.tick().await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(current_interval)).await;
 
+            let mut success = true;
             for currency in &self.currencies {
                 match self.fetch_snapshot(currency).await {
                     Ok(snapshot) => {
                         let event = MonitoringEvent::Portfolio(snapshot);
                         if let Err(e) = tx.send(event).await {
                             error!("Failed to send portfolio event: {}", e);
+                            success = false;
                             break;
                         }
                     }
                     Err(e) => {
                         warn!("Failed to fetch portfolio for {}: {}", currency, e);
+                        success = false;
                     }
                 }
+            }
+
+            // Adjust interval based on success/failure
+            if success {
+                error_count = 0;
+                current_interval = base_interval;
+            } else {
+                error_count += 1;
+                // Exponential backoff: double interval, max 5x base
+                current_interval = std::cmp::min(base_interval * 2_u64.pow(error_count), base_interval * 5);
             }
         }
     }
 
     async fn health_check(&self) -> HealthStatus {
-        HealthStatus::Healthy
+        // Try to fetch positions for first currency
+        if let Some(currency) = self.currencies.first() {
+            match self.client.get_positions(Some(currency)).await {
+                Ok(_) => HealthStatus::Healthy,
+                Err(_) => HealthStatus::Unhealthy,
+            }
+        } else {
+            HealthStatus::Degraded
+        }
     }
 
     fn clone_box(&self) -> Box<dyn DataSource> {
