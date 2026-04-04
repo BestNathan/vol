@@ -304,10 +304,7 @@ impl RuleProcessor for PortfolioRule {
         let MonitoringEvent::Portfolio(snapshot) = event else {
             return vec![];
         };
-        // Need to convert PortfolioSnapshot to our internal type
-        // For now, return empty - this rule needs proper event type
-        let _ = snapshot;
-        vec![]
+        self.evaluate(snapshot).await
     }
 
     fn notification_ids(&self) -> Vec<String> {
