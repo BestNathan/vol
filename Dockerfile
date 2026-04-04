@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:latest AS builder
+FROM docker.1panel.live/library/rust:latest AS builder
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY .cargo ./.cargo
 RUN cargo build --release -vv
 
 # Stage 2: Runtime
-FROM debian:bookworm-slim
+FROM docker.1panel.live/library/debian:bookworm-slim
 
 # Install CA certificates for HTTPS using Aliyun mirror
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
