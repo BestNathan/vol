@@ -20,6 +20,7 @@ data:
     medium_min_dte = 20
     medium_max_dte = 40
     long_min_dte = 80
+    long_max_dte = 200
 
     # Data sources - organized by provider
     [[datasources]]

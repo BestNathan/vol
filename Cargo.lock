@@ -2410,6 +2410,8 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "vol-alert",
+ "vol-config",
  "vol-core",
 ]
 
@@ -2438,6 +2440,7 @@ dependencies = [
  "vol-config",
  "vol-core",
  "vol-datasource",
+ "vol-deribit",
  "vol-engine",
  "vol-notification",
  "vol-rules",

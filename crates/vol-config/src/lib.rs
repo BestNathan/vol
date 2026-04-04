@@ -115,6 +115,7 @@ pub struct TenorConfig {
     pub medium_min_dte: u32,
     pub medium_max_dte: u32,
     pub long_min_dte: u32,
+    pub long_max_dte: u32,
 }
 
 impl TenorConfig {
@@ -129,7 +130,8 @@ impl TenorConfig {
     /// - Gap:    8-19 days (no alerts)
     /// - Medium: 20-40 days (medium-term options)
     /// - Gap:    41-79 days (no alerts)
-    /// - Long:   80+ days (long-term/LEAPS options)
+    /// - Long:   80-200 days (long-term/LEAPS options)
+    /// - Gap:    201+ days (no alerts - too far out)
     pub fn classify(&self, dte: u32) -> Option<Tenor> {
         if dte <= self.short_max_dte {
             // Short: DTE <= short_max_dte (e.g., 0-7 days)
@@ -137,8 +139,8 @@ impl TenorConfig {
         } else if dte >= self.medium_min_dte && dte <= self.medium_max_dte {
             // Medium: medium_min_dte <= DTE <= medium_max_dte (e.g., 20-40 days)
             Some(Tenor::Medium)
-        } else if dte >= self.long_min_dte {
-            // Long: DTE >= long_min_dte (e.g., 80+ days)
+        } else if dte >= self.long_min_dte && dte <= self.long_max_dte {
+            // Long: long_min_dte <= DTE <= long_max_dte (e.g., 80-200 days)
             Some(Tenor::Long)
         } else {
             // Gap region - no tenor classification (no alerts for this DTE)

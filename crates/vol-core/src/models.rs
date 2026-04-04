@@ -21,7 +21,7 @@ impl std::fmt::Display for OptionType {
 pub enum Tenor {
     Short,  // DTE <= 7
     Medium, // 20 < DTE < 40
-    Long,   // DTE > 80
+    Long,   // 80 <= DTE <= 200
 }
 
 impl std::fmt::Display for Tenor {
@@ -119,16 +119,16 @@ impl VolatilityData {
 /// Default ranges:
 /// - Short:  DTE <= 7
 /// - Medium: 20 < DTE < 40
-/// - Long:   DTE >= 80
+/// - Long:   80 <= DTE <= 200
 pub fn classify_tenor(dte: u32) -> Option<Tenor> {
     if dte <= 7 {
         Some(Tenor::Short)
     } else if dte > 20 && dte < 40 {
         Some(Tenor::Medium)
-    } else if dte >= 80 {
+    } else if dte >= 80 && dte <= 200 {
         Some(Tenor::Long)
     } else {
-        // Gap regions: 8-20 days or 40-79 days
+        // Gap regions: 8-20 days, 40-79 days, 201+ days
         // These don't trigger tenor-based alerts
         None
     }
