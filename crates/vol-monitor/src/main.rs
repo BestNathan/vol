@@ -33,7 +33,12 @@ async fn main() -> Result<()> {
     });
 
     // Create engine config
-    let engine_config = EngineConfig::default();
+    let engine_config = EngineConfig {
+        event_buffer_size: config.engine.channel_buffer_size,
+        alert_buffer_size: 100,
+        enable_backpressure: true,
+        config_file: config.engine.clone(),
+    };
 
     // Build engine
     let mut builder = MonitoringEngineBuilder::new()
@@ -174,6 +179,11 @@ fn create_default_config() -> Config {
             hot_reload_interval_secs: 30,
             channel_buffer_size: 1000,
             alert_cooldown_secs: 300,
+            tenor_cooldowns: vol_config::TenorCooldownsConfig {
+                short_secs: Some(600),    // 10 minutes
+                medium_secs: Some(3600),  // 1 hour
+                long_secs: Some(14400),   // 4 hours
+            },
         },
         tenors: vol_config::TenorConfig {
             short_max_dte: 7,
