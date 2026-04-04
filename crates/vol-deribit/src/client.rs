@@ -14,6 +14,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
 use tracing::{debug, error, info, warn};
 use webpki_roots::TLS_SERVER_ROOTS;
 
+use crate::positions::Position;
 use crate::subscription_manager::SubscriptionManager;
 use crate::{
     ChannelData, ChannelType, DeribitNotification, OptionMarkPrice, SubscriptionNotification,
@@ -455,6 +456,65 @@ impl DeribitClient {
             .and_then(|t| t.as_str())
             .map(|s| s.to_string())
             .ok_or_else(|| vol_core::VolError::Auth("No access token in response".into()))
+    }
+
+    /// Get OAuth access token (public method for use in REST API calls)
+    pub async fn get_access_token(&self) -> Result<String, vol_core::VolError> {
+        let client_id = self.client_id.as_ref()
+            .ok_or_else(|| vol_core::VolError::Auth("No client_id configured".into()))?;
+        let client_secret = self.client_secret.as_ref()
+            .ok_or_else(|| vol_core::VolError::Auth("No client_secret configured".into()))?;
+        Self::get_access_token_inner(client_id, client_secret).await
+    }
+
+    /// Make a REST API request to Deribit
+    async fn request(&self, method: &str, params: Option<serde_json::Map<String, serde_json::Value>>) -> Result<serde_json::Value, vol_core::VolError> {
+        // Get access token
+        let access_token = self.get_access_token().await?;
+
+        let client = reqwest::Client::new();
+        let mut payload = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": method,
+        });
+
+        if let Some(p) = params {
+            payload["params"] = serde_json::Value::Object(p);
+        }
+
+        let response = client
+            .post("https://www.deribit.com/api/v2/")
+            .header("Authorization", format!("Bearer {}", access_token))
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| vol_core::VolError::Connection(format!("REST request failed: {}", e)))?;
+
+        let result: serde_json::Value = response.json().await
+            .map_err(|e| vol_core::VolError::Parse(format!("REST response parse failed: {}", e)))?;
+
+        // Check for error response
+        if let Some(error) = result.get("error") {
+            return Err(vol_core::VolError::Internal(format!("Deribit API error: {}", error)));
+        }
+
+        result.get("result")
+            .cloned()
+            .ok_or_else(|| vol_core::VolError::Parse("No result in response".into()))
+    }
+
+    /// Get account positions via REST API
+    pub async fn get_positions(&self, currency: Option<&str>) -> Result<Vec<Position>, vol_core::VolError> {
+        let mut params = serde_json::Map::new();
+        if let Some(curr) = currency {
+            params.insert("currency".to_string(), serde_json::Value::String(curr.to_string()));
+        }
+
+        let response = self.request("private/get_positions", Some(params)).await?;
+        let positions: Vec<Position> = serde_json::from_value(response)
+            .map_err(|e| vol_core::VolError::Parse(format!("Position parse failed: {}", e)))?;
+        Ok(positions)
     }
 
     /// Start the WebSocket connection and reader loop
