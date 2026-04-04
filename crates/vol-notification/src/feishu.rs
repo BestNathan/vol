@@ -180,27 +180,46 @@ impl FeishuNotification {
         let request = CreateMessageRequest::new(self.client.core_config().clone())
             .receive_id_type(self.receive_id_type);
 
+        // Log request details for debugging
+        info!("Sending Feishu message: receive_id={}, receive_id_type={:?}, msg_type={}",
+              self.receive_id, self.receive_id_type, msg_type);
+
         // Send the message
         let result: open_lark::SDKResult<serde_json::Value> = request.execute(body).await;
 
         match result {
             Ok(response) => {
+                info!("Feishu API raw response: {:?}", response);
                 // Check if the response contains a message_id (success indicator)
+                // openlark SDK returns Feishu API response with fields at root level:
+                // {"body": {...}, "message_id": "...", "chat_id": "...", ...}
                 let response: &serde_json::Value = &response;
+
+                // Try to find message_id at root level (openlark SDK format)
+                let message_id = response
+                    .get("message_id")
+                    .and_then(|v| v.as_str());
+
+                if let Some(message_id) = message_id {
+                    info!("Feishu message sent successfully: {}", message_id);
+                    return Ok(());
+                }
+
+                // Legacy format check (Feishu API v2 with data wrapper)
                 if let Some(data) = response.get("data") {
-                    if let Some(message_id) = data.get("message_id").and_then(|v: &serde_json::Value| v.as_str()) {
+                    if let Some(message_id) = data.get("message_id").and_then(|v| v.as_str()) {
                         info!("Feishu message sent successfully: {}", message_id);
                         return Ok(());
                     }
                 }
 
-                // Fallback: check code field
-                let code = response.get("code").and_then(|v: &serde_json::Value| v.as_i64()).unwrap_or(-1);
+                // Fallback: check code field (older API format)
+                let code = response.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
                 if code == 0 {
                     info!("Feishu message sent successfully");
                     Ok(())
                 } else {
-                    let msg = response.get("msg").and_then(|v: &serde_json::Value| v.as_str()).unwrap_or("Unknown error");
+                    let msg = response.get("msg").and_then(|v| v.as_str()).unwrap_or("Unknown error");
                     warn!("Feishu API error: code={}, msg={}", code, msg);
                     Err(VolError::Notification(format!("Feishu API error: {} - {}", code, msg)))
                 }
