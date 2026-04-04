@@ -9,10 +9,11 @@ use tracing_subscriber::{self, EnvFilter};
 
 use vol_config::{Config, DataSourceConfig, NotificationConfig, RuleConfig};
 use vol_engine::{MonitoringEngineBuilder, EngineConfig};
-use vol_datasource::DeribitDataSource;
+use vol_datasource::{DeribitDataSource, PortfolioDataSource};
 use vol_notification::{StdoutNotification, FeishuNotification};
-use vol_rules::{AbsoluteIvRule, RateChangeRule, TermStructureRule, SkewRule};
+use vol_rules::{AbsoluteIvRule, RateChangeRule, TermStructureRule, SkewRule, PortfolioRule};
 use vol_config::{TermStructureConfig, SkewConfig};
+use vol_deribit::DeribitClient;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -73,6 +74,39 @@ async fn main() -> Result<()> {
             }
             DataSourceConfig::Internal(_) => {
                 warn!("Internal datasource not yet implemented");
+            }
+            DataSourceConfig::Portfolio(portfolio_cfg) => {
+                if !portfolio_cfg.enabled {
+                    continue;
+                }
+
+                // Find Deribit datasource config for auth credentials
+                let deribit_auth = config.datasources.iter()
+                    .find_map(|ds| {
+                        if let DataSourceConfig::Deribit(d) = ds {
+                            d.auth.clone()
+                        } else {
+                            None
+                        }
+                    });
+
+                // Create DeribitClient with auth
+                let mut client = DeribitClient::new("wss://www.deribit.com/ws/api/v2");
+                if let Some(auth) = deribit_auth {
+                    if let (Some(client_id), Some(client_secret)) = (auth.client_id(), auth.client_secret()) {
+                        client = client.with_auth(client_id, client_secret);
+                    }
+                }
+
+                let ds = PortfolioDataSource::new(
+                    portfolio_cfg.id.clone(),
+                    client,
+                    portfolio_cfg.poll_interval_secs,
+                    portfolio_cfg.currencies.clone(),
+                );
+
+                builder = builder.with_datasource(Box::new(ds));
+                info!("Added portfolio datasource: {}", portfolio_cfg.id);
             }
         }
     }
@@ -144,8 +178,22 @@ async fn main() -> Result<()> {
                 builder = builder.with_rule(Box::new(rule));
                 info!("Added rule: {} (type: skew)", skew_cfg.id);
             }
-            RuleConfig::Portfolio(_) => {
-                warn!("Portfolio rule not yet implemented in new format");
+            RuleConfig::Portfolio(portfolio_cfg) => {
+                if !portfolio_cfg.enabled {
+                    continue;
+                }
+
+                let rule = PortfolioRule::new(
+                    portfolio_cfg.metrics.clone(),
+                    config.engine.alert_cooldown_secs,
+                    portfolio_cfg.id.clone(),
+                    portfolio_cfg.notifications.clone(),
+                );
+
+                builder = builder.with_rule(Box::new(rule));
+                info!("Added portfolio rule: {} (metrics: {})",
+                    portfolio_cfg.id,
+                    portfolio_cfg.metrics.iter().filter(|m| m.enabled()).count());
             }
             RuleConfig::MarginRatio(_) => {
                 warn!("MarginRatio rule not yet implemented");
@@ -190,6 +238,7 @@ fn create_default_config() -> Config {
             medium_min_dte: 20,
             medium_max_dte: 40,
             long_min_dte: 80,
+            long_max_dte: 200,
         },
         datasources: vec![],
         notifications: vec![],
