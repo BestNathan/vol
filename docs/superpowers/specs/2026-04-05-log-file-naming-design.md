@@ -60,3 +60,18 @@ Note: `tracing-appender` 0.2+ supports `builder()` API with `filename_prefix` an
 1. Run application and verify log file naming
 2. Verify daily rotation creates correctly named files
 3. Verify error log file uses same naming pattern
+
+## Implementation Notes
+
+- Used `RollingFileAppender::builder()` API available in tracing-appender 0.2
+- `filename_prefix` accepts the service name (e.g., `vol-monitor`)
+- `filename_suffix` accepts the extension (e.g., `log` or `error.log`)
+- Date format is `YYYY-MM-DD` inserted between prefix and suffix
+- Separator character is `.` (dot), not `-` (hyphen) - this is tracing-appender's convention
+- Final format: `{prefix}.{date}.{suffix}`
+
+## Verified Result
+
+Log files now follow the pattern:
+- Regular: `vol-monitor.2026-04-05.log`
+- Error: `vol-monitor.2026-04-05.error.log`
