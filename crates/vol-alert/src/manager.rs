@@ -72,6 +72,7 @@ mod tests {
             OptionType::Call,
             0.1,
             0.02,
+            String::new(), // trace_id for testing
         )
     }
 

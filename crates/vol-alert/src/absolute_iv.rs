@@ -77,6 +77,7 @@ impl AlertHandler for AbsoluteIvHandler {
                 data.option_type,
                 moneyness,
                 mark_price,
+                String::new(), // trace_id - set by engine layer
             ))
         } else {
             None

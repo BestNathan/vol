@@ -80,6 +80,7 @@ impl RateChangeRule {
                         data.option_type,
                         data.moneyness(),
                         data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                        String::new(), // trace_id - set by engine layer
                     ));
                 }
             }
@@ -106,6 +107,7 @@ impl RateChangeRule {
                         data.option_type,
                         data.moneyness(),
                         data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                        String::new(), // trace_id - set by engine layer
                     ));
                 }
             }
@@ -132,6 +134,7 @@ impl RateChangeRule {
                         data.option_type,
                         data.moneyness(),
                         data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                        String::new(), // trace_id - set by engine layer
                     ));
                 }
             }

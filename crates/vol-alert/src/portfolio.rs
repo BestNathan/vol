@@ -97,6 +97,7 @@ impl PortfolioAlertHandler {
                                         option_type: OptionType::Call,
                                         moneyness: 0.0,
                                         mark_price_coin: snapshot.free_balance,
+                                        trace_id: String::new(),
                                     });
                                     self.record_alert(key).await;
                                 }
@@ -125,6 +126,7 @@ impl PortfolioAlertHandler {
                                     option_type: OptionType::Call,
                                     moneyness: 0.0,
                                     mark_price_coin: snapshot.free_balance,
+                                    trace_id: String::new(),
                                 });
                                 self.record_alert(key).await;
                             }
@@ -154,6 +156,7 @@ impl PortfolioAlertHandler {
                                 option_type: OptionType::Call,
                                 moneyness: 0.0,
                                 mark_price_coin: 0.0,
+                                trace_id: String::new(),
                             });
                             self.record_alert(key).await;
                         }
@@ -180,6 +183,7 @@ impl PortfolioAlertHandler {
                                     option_type: OptionType::Call,
                                     moneyness: 0.0,
                                     mark_price_coin: 0.0,
+                                    trace_id: String::new(),
                                 });
                                 self.record_alert(key).await;
                             }
@@ -209,6 +213,7 @@ impl PortfolioAlertHandler {
                                     option_type: OptionType::Call,
                                     moneyness: 0.0,
                                     mark_price_coin: 0.0,
+                                    trace_id: String::new(),
                                 });
                                 self.record_alert(key).await;
                             }
@@ -236,6 +241,7 @@ impl PortfolioAlertHandler {
                                     option_type: OptionType::Call,
                                     moneyness: 0.0,
                                     mark_price_coin: 0.0,
+                                    trace_id: String::new(),
                                 });
                                 self.record_alert(key).await;
                             }
@@ -263,6 +269,7 @@ impl PortfolioAlertHandler {
                                     option_type: OptionType::Call,
                                     moneyness: 0.0,
                                     mark_price_coin: 0.0,
+                                    trace_id: String::new(),
                                 });
                                 self.record_alert(key).await;
                             }
