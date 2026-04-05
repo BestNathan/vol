@@ -58,7 +58,6 @@ impl NotificationHandler for StdoutNotification {
             alert.mark_price_usd(),
         );
         info!("{}", message);
-        println!("{}", message);
         Ok(())
     }
 

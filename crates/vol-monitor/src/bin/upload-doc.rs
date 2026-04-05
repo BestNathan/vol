@@ -37,22 +37,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Document saved locally to: {}", doc_path);
 
     // Upload to Feishu
-    println!("\n===========================================");
-    println!("Uploading to Feishu Cloud Docs...");
-    println!("===========================================\n");
+    info!("\n===========================================");
+    info!("Uploading to Feishu Cloud Docs...");
+    info!("===========================================\n");
 
     match upload_to_feishu(&doc_content).await {
         Ok((file_token, url)) => {
-            println!("\n✅ Upload successful!");
-            println!("File token: {}", file_token);
-            println!("URL: {}", url);
+            info!("\n✅ Upload successful!");
+            info!("File token: {}", file_token);
+            info!("URL: {}", url);
             Ok(())
         }
         Err(e) => {
             error!("Upload failed: {}", e);
-            println!("\n❌ Upload failed: {}", e);
-            println!("\nDocument saved locally: {}", doc_path);
-            println!("Please upload manually to Feishu Drive.");
+            info!("\n❌ Upload failed: {}", e);
+            info!("\nDocument saved locally: {}", doc_path);
+            info!("Please upload manually to Feishu Drive.");
             Err(e.into())
         }
     }

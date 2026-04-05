@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
 
     // Initialize tracing and logging
     if let Err(e) = tracing_setup::init(&config.tracing) {
-        eprintln!("Failed to initialize tracing: {}", e);
+        tracing::error!("Failed to initialize tracing: {}", e);
     }
 
     info!("===========================================");
