@@ -1,27 +1,13 @@
 //! Portfolio data source - Deribit WebSocket + REST polling.
 
 use async_trait::async_trait;
-use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::mpsc;
 use tracing::{info, warn, error, info_span};
 use vol_config::{DeribitClientConfig, PortfolioConfig};
 use vol_core::{DataSource, MonitoringEvent, PortfolioSnapshot, Result, HealthStatus, EventType};
 use vol_deribit::DeribitClient;
-use vol_tracing::record_tags;
+use vol_tracing::{new_trace_id, Instrument};
 
-/// Global counter for generating unique trace IDs
-static TRACE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-/// Generate a unique trace ID based on timestamp and counter
-fn generate_trace_id() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_micros() as u64;
-    let counter = TRACE_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-    (timestamp << 16) ^ counter
-}
 
 pub struct PortfolioDataSource {
     id: String,
@@ -143,18 +129,21 @@ impl DataSource for PortfolioDataSource {
                 match self.fetch_snapshot(currency).await {
                     Ok(snapshot) => {
                         // Create tracing span with business context
-                        let trace_id = generate_trace_id();
+                        let trace_id = new_trace_id();
                         let span = info_span!(
-                            "datasource_poll",
+                            "portfolio_snapshot",
+                            source = "deribit_portfolio",
                             trace_id = %trace_id,
-                            source = "deribit-portfolio"
+                            currency = %snapshot.currency,
+                            equity = %snapshot.equity,
+                            delta_total = %snapshot.delta_total,
+                            options_vega = %snapshot.options_vega,
+                            balance = %snapshot.balance,
+                            margin_balance = %snapshot.margin_balance
                         );
-                        record_tags!(span, snapshot, currency, equity, delta_total, options_vega, balance, margin_balance);
 
-                        // Enter span while sending the event
-                        let _guard = span.enter();
                         let event = MonitoringEvent::Portfolio(snapshot);
-                        if let Err(e) = tx.send(event).await {
+                        if let Err(e) = tx.send(event).instrument(span).await {
                             error!("Failed to send portfolio event: {}", e);
                             success = false;
                             break;
