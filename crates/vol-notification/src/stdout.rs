@@ -1,9 +1,8 @@
 //! Stdout notification handler for testing.
 
 use vol_core::{NotificationHandler, Alert, Result};
+use vol_tracing::current_trace_id;
 use tracing::{info, info_span};
-use tracing_opentelemetry::OpenTelemetrySpanExt;
-use opentelemetry::trace::TraceContextExt;
 
 /// Stdout notification handler - prints alerts to console
 #[derive(Clone)]
@@ -45,12 +44,7 @@ impl NotificationHandler for StdoutNotification {
 
         let _guard = span.enter();
 
-        // Extract current trace_id for logging
-        let trace_id = tracing::Span::current()
-            .context()
-            .span()
-            .span_context()
-            .trace_id();
+        let trace_id = current_trace_id();
 
         tracing::info!(
             trace_id = %trace_id,
