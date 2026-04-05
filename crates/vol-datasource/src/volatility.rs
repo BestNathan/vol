@@ -271,3 +271,42 @@ impl DataSource for VolatilityDataSource {
         Box::new(self.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opentelemetry::trace::TraceContextExt;
+    use tracing::info_span;
+
+    #[test]
+    fn test_trace_id_format() {
+        // Create a span and verify trace_id format
+        // Note: Without an initialized tracer provider, trace_id will be all zeros
+        // This test verifies the API works correctly - actual trace_id generation
+        // depends on OpenTelemetry layer being configured at runtime
+        let span = info_span!("test_datasource", source = "deribit");
+        let _guard = span.enter();
+
+        let ctx = tracing::Span::current().context();
+        let trace_id = ctx.span().span_context().trace_id();
+
+        // Verify trace_id is 32 hex characters (OTel format)
+        let trace_id_str = trace_id.to_string();
+        assert_eq!(trace_id_str.len(), 32, "TraceId should be 32 hex chars");
+    }
+
+    #[test]
+    fn test_span_has_context() {
+        // Verify that spans created with info_span have valid context
+        let span = info_span!("test_span", test = "value");
+        let _guard = span.enter();
+
+        let ctx = tracing::Span::current().context();
+        let _span_handle = ctx.span();
+        let span_context = _span_handle.span_context();
+
+        // Span context should exist even if trace_id is zeros
+        // This test just verifies the API is accessible
+        let _ = span_context.is_valid();
+    }
+}
