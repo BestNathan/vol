@@ -22,6 +22,7 @@ long_max_dte = 200
 # Client configuration - global, by type
 [clients.deribit]
 ws_url = "wss://www.deribit.com/ws/api/v2"
+[clients.deribit.auth]
 client_id = "nhXng7Bj"
 client_secret = "OxCGY10HlzgKfRoXPBRQqg5IBQcZguGPhE1tewP5U3Y"
 
@@ -143,7 +144,7 @@ notifications = ["feishu-alerts", "stdout"]
 [tracing]
 # Logging configuration
 [tracing.logging]
-log_dir = "logs"
+log_dir = "/tmp/logs"
 log_prefix = "vol-monitor"
 retention_days = 7
 json_format = true
@@ -154,7 +155,7 @@ error_file = true
 # OpenTelemetry/Jaeger configuration
 [tracing.opentelemetry]
 enabled = true
-endpoint = "http://jaeger-collector.observability:14250"
+endpoint = "http://jaeger-collector.observability.svc.cluster.local:4317"
 service_name = "vol-monitor"
 service_namespace = "deribit"
 deployment_environment = "production"

@@ -1,6 +1,8 @@
 use tracing::Span;
+use std::clone::Clone;
 
 /// Wrapper for sending events across channel boundaries with span context.
+#[derive(Clone)]
 pub struct WithSpan<T> {
     value: T,
     parent_span: Option<Span>,

@@ -42,7 +42,7 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(&config.logging.console_level));
 
-    // 1. Console layer (compact, colored)
+    // 1. Console layer (compact, colored) - writes to stdout
     let console_layer = fmt::layer()
         .with_target(true)
         .with_thread_ids(false)
@@ -50,7 +50,7 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
         .with_file(true)
         .with_line_number(true)
         .with_ansi(true)
-        .with_span_events(FmtSpan::NEW);
+        .with_writer(std::io::stdout);
 
     // 2. File layer (JSON, rolling)
     let file_appender = create_file_appender(&config.logging);
@@ -92,7 +92,7 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
 
         let tracer_provider = trace::TracerProvider::builder()
             .with_config(trace::Config::default()
-                .with_sampler(Sampler::TraceIdRatioBased(sample_rate))
+                .with_sampler(Sampler::AlwaysOn)
                 .with_resource(resource)
             )
             .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
