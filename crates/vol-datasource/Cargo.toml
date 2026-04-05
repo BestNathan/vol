@@ -20,3 +20,4 @@ vol-deribit = { workspace = true }
 vol-config = { workspace = true }
 vol-tracing = { path = "../vol-tracing" }
 opentelemetry = { workspace = true }
+tracing-opentelemetry = { workspace = true }

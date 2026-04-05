@@ -2729,6 +2729,7 @@ dependencies = [
  "tokio-rustls 0.25.0",
  "tokio-tungstenite",
  "tracing",
+ "tracing-opentelemetry",
  "vol-config",
  "vol-core",
  "vol-deribit",
