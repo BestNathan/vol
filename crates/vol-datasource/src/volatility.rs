@@ -9,7 +9,7 @@ use tracing::{info, error, warn, info_span};
 use vol_config::DeribitClientConfig;
 use vol_core::{DataSource, HealthStatus, Result, VolatilityData, MonitoringEvent, EventType};
 use vol_deribit::{ChannelType, ChannelData, DeribitClient};
-use vol_tracing::{WithSpan, new_trace_id, Instrument};
+use vol_tracing::{TracedEvent, new_trace_id, Instrument};
 
 /// Index price state - thread-safe shared state
 #[derive(Debug, Clone, Default)]
@@ -73,7 +73,7 @@ impl VolatilityDataSource {
 
     /// Run the datasource, sending events to the provided channel
     pub async fn run_internal(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()> {
-        let (internal_tx, mut internal_rx) = mpsc::channel::<WithSpan<VolatilityData>>(1024);
+        let (internal_tx, mut internal_rx) = mpsc::channel::<TracedEvent<VolatilityData>>(1024);
 
         // Build list of all channels to subscribe to
         let mut all_channels = Vec::new();
@@ -190,7 +190,7 @@ impl VolatilityDataSource {
                                         option_type = %vol_data.option_type,
                                     );
 
-                                    let traced_event = WithSpan::new(vol_data, span.clone());
+                                    let traced_event = TracedEvent::new(vol_data, span.clone(), trace_id.clone());
                                     if let Err(e) = internal_tx.send(traced_event).instrument(span).await {
                                         error!(
                                             instrument = %option.instrument_name,
@@ -213,8 +213,6 @@ impl VolatilityDataSource {
 
         // Forward VolatilityData events as MonitoringEvent::Volatility
         while let Some(traced_vol_data) = internal_rx.recv().await {
-            // Extract span metadata (trace_id, etc.) before consuming the span
-            // The span context will be preserved in the same async task context
             let event = traced_vol_data.into_value();
             let monitoring_event = MonitoringEvent::Volatility(event);
             if let Err(e) = tx.send(monitoring_event).await {

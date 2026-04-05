@@ -99,6 +99,11 @@ impl<T> TracedEvent<T> {
         &self.value
     }
 
+    /// Get a reference to the parent span.
+    pub fn parent_span(&self) -> Option<&Span> {
+        self.parent_span.as_ref()
+    }
+
     /// Unwrap and return the value, consuming the wrapper.
     pub fn into_value(self) -> T {
         self.value
