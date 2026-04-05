@@ -230,7 +230,10 @@ impl MonitoringEngine {
             info!("Starting {} notification channels", num_notifications);
             while let Some(traced_alert) = alert_rx.recv().await {
                 // Extract alert, span, and trace_id from the wrapper
-                let (alert, _span, trace_id) = traced_alert.split();
+                let (mut alert, _span, trace_id) = traced_alert.split();
+
+                // Set trace_id on alert for notification layer to use
+                alert.trace_id = trace_id.clone();
 
                 // Create notification span with the same trace_id
                 let notif_span = info_span!(

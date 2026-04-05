@@ -1,7 +1,6 @@
 //! Stdout notification handler for testing.
 
 use vol_core::{NotificationHandler, Alert, Result};
-use vol_tracing::new_trace_id;
 use tracing::{info, info_span};
 
 /// Stdout notification handler - prints alerts to console
@@ -27,8 +26,8 @@ impl NotificationHandler for StdoutNotification {
     }
 
     async fn send(&self, alert: &Alert) -> Result<()> {
-        // Generate trace_id at entry
-        let trace_id = new_trace_id();
+        // Use trace_id from alert (set by engine layer)
+        let trace_id = &alert.trace_id;
 
         // Create span for notification with business attributes
         let span = info_span!(

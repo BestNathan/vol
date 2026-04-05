@@ -275,7 +275,8 @@ impl NotificationHandler for FeishuNotification {
     }
 
     async fn send(&self, alert: &Alert) -> Result<()> {
-        let trace_id = vol_tracing::new_trace_id();
+        // Extract trace_id from alert (inherited from datasource)
+        let trace_id = &alert.trace_id;
         let span = info_span!(
             "notification_send",
             channel = "feishu",

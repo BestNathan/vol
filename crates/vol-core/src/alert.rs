@@ -80,6 +80,9 @@ pub struct Alert {
 
     /// Option mark price in coin units (e.g., 0.05 BTC or 0.5 ETH)
     pub mark_price_coin: f64,
+
+    /// Trace ID for distributed tracing across the pipeline
+    pub trace_id: String,
 }
 
 impl Alert {
@@ -116,6 +119,7 @@ impl Alert {
         option_type: OptionType,
         moneyness: f64,
         mark_price_coin: f64,
+        trace_id: String,
     ) -> Self {
         Self {
             alert_type,
@@ -130,6 +134,7 @@ impl Alert {
             option_type,
             moneyness,
             mark_price_coin,
+            trace_id,
         }
     }
 }
