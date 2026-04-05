@@ -138,3 +138,31 @@ metrics = [
     { type = "margin_ratio", enabled = true, min_threshold = 1.25 },
 ]
 notifications = ["feishu-alerts", "stdout"]
+
+# Tracing configuration
+[tracing]
+# Logging configuration
+[tracing.logging]
+log_dir = "logs"
+log_prefix = "vol-monitor"
+retention_days = 7
+json_format = true
+console_level = "info"
+file_level = "debug"
+error_file = true
+
+# OpenTelemetry/Jaeger configuration
+[tracing.opentelemetry]
+enabled = true
+endpoint = "http://localhost:4317"
+service_name = "vol-monitor"
+service_namespace = "deribit"
+deployment_environment = "production"
+sample_rate = 1.0
+
+# Batch export configuration
+[tracing.opentelemetry.batch]
+max_queue_size = 2048
+max_batch_size = 512
+scheduled_delay_millis = 5000
+max_export_timeout_millis = 30000
