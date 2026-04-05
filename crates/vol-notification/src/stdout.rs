@@ -2,6 +2,8 @@
 
 use vol_core::{NotificationHandler, Alert, Result};
 use tracing::{info, info_span};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+use opentelemetry::trace::TraceContextExt;
 
 /// Stdout notification handler - prints alerts to console
 #[derive(Clone)]
@@ -42,6 +44,18 @@ impl NotificationHandler for StdoutNotification {
         span.record("alert.option_type", &alert.option_type.to_string());
 
         let _guard = span.enter();
+
+        // Extract current trace_id for logging
+        let trace_id = tracing::Span::current()
+            .context()
+            .span()
+            .span_context()
+            .trace_id();
+
+        tracing::info!(
+            trace_id = %trace_id,
+            "notification sent to stdout"
+        );
 
         let underlying = alert.symbol.split('-').next().unwrap_or("BTC").to_uppercase();
         let message = format!(
