@@ -154,7 +154,7 @@ error_file = true
 # OpenTelemetry/Jaeger configuration
 [tracing.opentelemetry]
 enabled = true
-endpoint = "http://localhost:4317"
+endpoint = "http://jaeger-collector.observability:14250"
 service_name = "vol-monitor"
 service_namespace = "deribit"
 deployment_environment = "production"

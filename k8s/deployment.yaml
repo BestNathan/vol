@@ -38,7 +38,7 @@ spec:
         env:
         # Tracing
         - name: OTEL_ENDPOINT
-          value: "http://jaeger-collector.observability:4317"
+          value: "http://jaeger-collector.observability:14250"
         # Logging
         - name: RUST_LOG
           value: "info"
