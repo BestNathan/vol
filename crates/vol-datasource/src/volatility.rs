@@ -9,9 +9,7 @@ use tracing::{info, error, warn, info_span};
 use vol_config::DeribitClientConfig;
 use vol_core::{DataSource, HealthStatus, Result, VolatilityData, MonitoringEvent, EventType};
 use vol_deribit::{ChannelType, ChannelData, DeribitClient};
-use vol_tracing::{WithSpan, record_tags};
-use opentelemetry::trace::TraceContextExt;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
+use vol_tracing::{WithSpan, new_trace_id, Instrument};
 
 /// Index price state - thread-safe shared state
 #[derive(Debug, Clone, Default)]
@@ -180,24 +178,20 @@ impl VolatilityDataSource {
                                 }
 
                                 if let Some(vol_data) = option.to_volatility_data_with_index(index_price) {
-                                    // Create tracing span and extract OTel TraceId
-                                    let span = info_span!("datasource_receive", source = "deribit");
+                                    let trace_id = new_trace_id();
+                                    let span = info_span!(
+                                        "datasource_receive",
+                                        source = "deribit",
+                                        trace_id = %trace_id,
+                                        iv = %vol_data.iv,
+                                        symbol = %vol_data.symbol,
+                                        dte = vol_data.dte,
+                                        index_price = %vol_data.index_price,
+                                        option_type = %vol_data.option_type,
+                                    );
 
-                                    // Extract trace_id from span context while span is current
-                                    let trace_id_hex = {
-                                        let _guard = span.enter();
-                                        let ctx = tracing::Span::current().context();
-                                        let trace_id = ctx.span().span_context().trace_id();
-                                        format!("tr_{}", trace_id.to_string())
-                                    };
-
-                                    span.record("trace_id", &trace_id_hex);
-                                    record_tags!(span, vol_data, iv, symbol, dte);
-                                    span.record("index_price", &vol_data.index_price);
-                                    span.record("option_type", &vol_data.option_type.to_string());
-
-                                    let traced_event = WithSpan::new(vol_data, span);
-                                    if let Err(e) = internal_tx.send(traced_event).await {
+                                    let traced_event = WithSpan::new(vol_data, span.clone());
+                                    if let Err(e) = internal_tx.send(traced_event).instrument(span).await {
                                         error!(
                                             instrument = %option.instrument_name,
                                             error = %e,
