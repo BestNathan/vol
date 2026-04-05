@@ -36,8 +36,13 @@ spec:
           mountPath: /etc/vol-monitor
           readOnly: true
         env:
+        # Tracing
+        - name: OTEL_ENDPOINT
+          value: "http://jaeger-collector.observability:4317"
+        # Logging
         - name: RUST_LOG
           value: "info"
+        # Network
         - name: HTTPS_PROXY
           value: "http://192.168.2.98:8890"
       volumes:
