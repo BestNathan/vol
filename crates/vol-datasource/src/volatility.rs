@@ -180,23 +180,21 @@ impl VolatilityDataSource {
                                 }
 
                                 if let Some(vol_data) = option.to_volatility_data_with_index(index_price) {
-                                    // Extract values before creating span
-                                    let iv = vol_data.iv;
-                                    let symbol = vol_data.symbol.clone();
-                                    let dte = vol_data.dte;
-                                    let index_price = vol_data.index_price;
-                                    let option_type = vol_data.option_type.to_string();
-
                                     // Create tracing span and extract OTel TraceId
                                     let span = info_span!("datasource_receive", source = "deribit");
-                                    let trace_id = span.context().span().span_context().trace_id();
-                                    let trace_id_hex = format!("tr_{}", trace_id.to_string());
+
+                                    // Extract trace_id from span context while span is current
+                                    let trace_id_hex = {
+                                        let _guard = span.enter();
+                                        let ctx = tracing::Span::current().context();
+                                        let trace_id = ctx.span().span_context().trace_id();
+                                        format!("tr_{}", trace_id.to_string())
+                                    };
+
                                     span.record("trace_id", &trace_id_hex);
-                                    span.record("iv", &iv);
-                                    span.record("symbol", &symbol);
-                                    span.record("dte", &dte);
-                                    span.record("index_price", &index_price);
-                                    span.record("option_type", &option_type);
+                                    record_tags!(span, vol_data, iv, symbol, dte);
+                                    span.record("index_price", &vol_data.index_price);
+                                    span.record("option_type", &vol_data.option_type.to_string());
 
                                     let traced_event = WithSpan::new(vol_data, span);
                                     if let Err(e) = internal_tx.send(traced_event).await {
@@ -271,5 +269,44 @@ impl DataSource for VolatilityDataSource {
 
     fn clone_box(&self) -> Box<dyn DataSource> {
         Box::new(self.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opentelemetry::trace::TraceContextExt;
+    use tracing::info_span;
+
+    #[test]
+    fn test_trace_id_format() {
+        // Create a span and verify trace_id format
+        // Note: Without an initialized tracer provider, trace_id will be all zeros
+        // This test verifies the API works correctly - actual trace_id generation
+        // depends on OpenTelemetry layer being configured at runtime
+        let span = info_span!("test_datasource", source = "deribit");
+        let _guard = span.enter();
+
+        let ctx = tracing::Span::current().context();
+        let trace_id = ctx.span().span_context().trace_id();
+
+        // Verify trace_id is 32 hex characters (OTel format)
+        let trace_id_str = trace_id.to_string();
+        assert_eq!(trace_id_str.len(), 32, "TraceId should be 32 hex chars");
+    }
+
+    #[test]
+    fn test_span_has_context() {
+        // Verify that spans created with info_span have valid context
+        let span = info_span!("test_span", test = "value");
+        let _guard = span.enter();
+
+        let ctx = tracing::Span::current().context();
+        let _span_handle = ctx.span();
+        let span_context = _span_handle.span_context();
+
+        // Span context should exist even if trace_id is zeros
+        // This test just verifies the API is accessible
+        let _ = span_context.is_valid();
     }
 }

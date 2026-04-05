@@ -9,6 +9,7 @@ use open_lark::communication::im::im::v1::message::create::{CreateMessageRequest
 use open_lark::communication::im::im::v1::message::models::ReceiveIdType;
 use serde_json::json;
 use tracing::{info, warn, info_span};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use opentelemetry::trace::TraceContextExt;
 use opentelemetry::Context;
 
@@ -326,6 +327,19 @@ impl NotificationHandler for FeishuNotification {
             // Fall back to plain text
             self.send_message("text", &json!({ "text": text_content }).to_string()).await?;
         }
+
+        // Extract current trace_id for logging
+        let trace_id = tracing::Span::current()
+            .context()
+            .span()
+            .span_context()
+            .trace_id();
+
+        tracing::info!(
+            trace_id = %trace_id,
+            recipient = %self.receive_id,
+            "notification sent"
+        );
 
         Ok(())
     }
