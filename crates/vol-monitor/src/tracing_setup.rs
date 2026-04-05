@@ -4,22 +4,32 @@
 //! - Console layer (compact format, colored)
 //! - File layer (JSON format, rolling daily, 7-day retention)
 //! - Error file layer (ERROR level only)
+//! - OpenTelemetry layer (OTLP gRPC to Jaeger)
 
 use std::sync::OnceLock;
 
+use opentelemetry::{global, KeyValue, trace::TracerProvider as _};
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::{trace::{self, Sampler}, Resource};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+use tracing_subscriber::{
+    fmt,
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+    EnvFilter,
+    Layer,
+    Registry,
+};
+use tracing::subscriber::set_global_default;
 
 use vol_config::{LoggingConfig, TracingConfig};
 
 static TRACING_INITIALIZED: OnceLock<()> = OnceLock::new();
+static OTEL_TRACER_PROVIDER: OnceLock<trace::TracerProvider> = OnceLock::new();
 
 /// Initialize tracing and logging.
-///
-/// Call this once at application startup.
-/// Subsequent calls are no-ops.
 pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Check if already initialized (prevent double init in tests)
+    // Check if already initialized
     if TRACING_INITIALIZED.get().is_some() {
         return Ok(());
     }
@@ -38,7 +48,6 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
         .with_thread_names(false)
         .with_file(true)
         .with_line_number(true)
-        .compact()
         .with_ansi(true);
 
     // 2. File layer (JSON, rolling)
@@ -53,65 +62,140 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
         .json()
         .with_writer(file_appender);
 
-    // 3. Error file layer (ERROR only)
-    let error_layer = config.logging.error_file.then(|| {
-        let error_appender = create_error_appender(&config.logging);
-        let error_filter = tracing_subscriber::filter::LevelFilter::ERROR;
-        fmt::layer()
-            .with_ansi(false)
-            .with_target(true)
-            .with_thread_ids(true)
-            .with_thread_names(true)
-            .with_file(true)
-            .with_line_number(true)
-            .json()
-            .with_writer(error_appender)
-            .with_filter(error_filter)
-    });
+    // 3. OpenTelemetry layer (OTLP gRPC to Jaeger)
+    let endpoint = std::env::var("OTEL_ENDPOINT")
+        .unwrap_or_else(|_| config.opentelemetry.endpoint.clone());
 
-    // Build subscriber - handle both cases
-    match error_layer {
-        None => {
-            tracing_subscriber::Registry::default()
+    let service_name = std::env::var("OTEL_SERVICE_NAME")
+        .unwrap_or_else(|_| config.opentelemetry.service_name.clone());
+
+    let sample_rate: f64 = std::env::var("OTEL_SAMPLE_RATE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(config.opentelemetry.sample_rate);
+
+    if config.opentelemetry.enabled && sample_rate > 0.0 {
+        let resource = Resource::new(vec![
+            KeyValue::new("service.name", service_name.clone()),
+            KeyValue::new("service.namespace", config.opentelemetry.service_namespace.clone()),
+            KeyValue::new("deployment.environment", config.opentelemetry.deployment_environment.clone()),
+        ]);
+
+        let exporter = opentelemetry_otlp::new_exporter()
+            .tonic()
+            .with_endpoint(&endpoint)
+            .with_timeout(std::time::Duration::from_millis(config.opentelemetry.batch.max_export_timeout_millis))
+            .build_span_exporter()?;
+
+        let tracer_provider = trace::TracerProvider::builder()
+            .with_config(trace::Config::default()
+                .with_sampler(Sampler::TraceIdRatioBased(sample_rate))
+                .with_resource(resource)
+            )
+            .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+            .build();
+
+        let tracer = tracer_provider.tracer(service_name.clone());
+        let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+
+        OTEL_TRACER_PROVIDER.set(tracer_provider.clone()).ok();
+        global::set_tracer_provider(tracer_provider);
+
+        tracing::info!(
+            "OpenTelemetry tracing enabled: endpoint={} service={} sample_rate={}",
+            endpoint,
+            service_name,
+            sample_rate
+        );
+
+        // Build subscriber with all layers using Registry as base
+        let subscriber = Registry::default()
+            .with(env_filter)
+            .with(console_layer)
+            .with(file_layer)
+            .with(otel_layer);
+
+        // Add error layer if enabled
+        if config.logging.error_file {
+            let error_appender = create_error_appender(&config.logging);
+            let error_layer = fmt::layer()
+                .with_ansi(false)
+                .with_target(true)
+                .with_thread_ids(true)
+                .with_thread_names(true)
+                .with_file(true)
+                .with_line_number(true)
+                .json()
+                .with_writer(error_appender)
+                .with_filter(tracing_subscriber::filter::LevelFilter::ERROR);
+
+            subscriber.with(error_layer).init();
+        } else {
+            subscriber.init();
+        }
+    } else {
+        // OpenTelemetry disabled - use simple init like original
+        let error_appender = create_error_appender(&config.logging);
+
+        if config.logging.error_file {
+            let error_filter = tracing_subscriber::filter::LevelFilter::ERROR;
+            let error_layer = fmt::layer()
+                .with_ansi(false)
+                .with_target(true)
+                .with_thread_ids(true)
+                .with_thread_names(true)
+                .with_file(true)
+                .with_line_number(true)
+                .json()
+                .with_writer(error_appender)
+                .with_filter(error_filter);
+
+            Registry::default()
+                .with(env_filter)
+                .with(console_layer)
+                .with(file_layer)
+                .with(error_layer)
+                .init();
+        } else {
+            Registry::default()
                 .with(env_filter)
                 .with(console_layer)
                 .with(file_layer)
                 .init();
         }
-        Some(error) => {
-            tracing_subscriber::Registry::default()
-                .with(env_filter)
-                .with(console_layer)
-                .with(file_layer)
-                .with(error)
-                .init();
-        }
+
+        tracing::info!("OpenTelemetry tracing disabled");
     }
 
     // Mark as initialized
     TRACING_INITIALIZED.get_or_init(|| ());
 
-    tracing::info!("Tracing initialized");
+    tracing::info!("Tracing initialized: logging={} opentelemetry={}",
+        config.logging.log_dir,
+        config.opentelemetry.enabled);
 
     Ok(())
 }
 
 fn create_file_appender(config: &LoggingConfig) -> RollingFileAppender {
-    RollingFileAppender::new(
-        Rotation::DAILY,
-        &config.log_dir,
-        format!("{}.log", config.log_prefix),
-    )
+    RollingFileAppender::builder()
+        .rotation(Rotation::DAILY)
+        .filename_prefix(config.log_prefix.clone())
+        .filename_suffix("log")
+        .build(&config.log_dir)
+        .expect("Failed to create file appender")
 }
 
 fn create_error_appender(config: &LoggingConfig) -> RollingFileAppender {
-    RollingFileAppender::new(
-        Rotation::DAILY,
-        &config.log_dir,
-        format!("{}.error.log", config.log_prefix),
-    )
+    RollingFileAppender::builder()
+        .rotation(Rotation::DAILY)
+        .filename_prefix(config.log_prefix.clone())
+        .filename_suffix("error.log")
+        .build(&config.log_dir)
+        .expect("Failed to create error appender")
 }
 
 pub fn shutdown() {
     tracing::info!("Shutting down OpenTelemetry");
+    global::shutdown_tracer_provider();
 }
