@@ -2,10 +2,10 @@
 
 mod state;
 mod registry;
+mod tracing_setup;
 
 use anyhow::Result;
 use tracing::{info, warn};
-use tracing_subscriber::{self, EnvFilter};
 
 use vol_config::{Config, DataSourceConfig, NotificationConfig, RuleConfig};
 use vol_engine::{MonitoringEngineBuilder, EngineConfig};
@@ -16,21 +16,21 @@ use vol_config::{TermStructureConfig, SkewConfig};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env().add_directive("vol_monitor=info".parse().unwrap()))
-        .init();
-
-    info!("===========================================");
-    info!("  Deribit Volatility Monitor v0.3.0");
-    info!("===========================================");
-
     // Load configuration
     let config = Config::load("config.toml").unwrap_or_else(|e| {
         warn!("Failed to load config.toml: {}", e);
         warn!("Using default configuration");
         create_default_config()
     });
+
+    // Initialize tracing and logging
+    if let Err(e) = tracing_setup::init(&config.tracing) {
+        eprintln!("Failed to initialize tracing: {}", e);
+    }
+
+    info!("===========================================");
+    info!("  Deribit Volatility Monitor v0.3.0");
+    info!("===========================================");
 
     // Create engine config
     let engine_config = EngineConfig {
@@ -183,6 +183,9 @@ async fn main() -> Result<()> {
     // TODO: Handle shutdown signal and save state
     let _ = engine.run().await;
 
+    // Shutdown tracing
+    tracing_setup::shutdown();
+
     Ok(())
 }
 
@@ -210,6 +213,7 @@ fn create_default_config() -> Config {
         datasources: vec![],
         notifications: vec![],
         rules: vec![],
+        tracing: vol_config::TracingConfig::default(),
         data_sources: None,
         alerts: None,
         state: None,

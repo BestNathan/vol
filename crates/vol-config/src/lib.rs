@@ -8,12 +8,14 @@ pub mod datasource;
 pub mod metrics;
 pub mod notification;
 pub mod rule;
+pub mod tracing;
 
 pub use client::*;
 pub use datasource::*;
 pub use metrics::*;
 pub use notification::*;
 pub use rule::*;
+pub use tracing::*;
 
 // Re-export legacy types for backwards compatibility
 pub use client::{DeribitClientConfig as DeribitConfig, DeribitAuthConfig};
@@ -83,6 +85,9 @@ pub struct Config {
     pub notifications: Vec<NotificationConfig>,
     #[serde(default)]
     pub rules: Vec<RuleConfig>,
+    /// Tracing and logging configuration
+    #[serde(default)]
+    pub tracing: TracingConfig,
     /// Legacy format support - for backwards compatibility
     #[serde(default)]
     pub data_sources: Option<LegacyDataSourcesConfig>,
