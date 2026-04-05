@@ -148,6 +148,117 @@ traced.enter_span("rule_evaluate", |span| {
 
 The `follows_from()` relationship establishes causal links between spans across channel boundaries.
 
+## TracedEvent: 跨 Channel Trace 上下文传递
+
+`TracedEvent<T>` 用于在 channel 间传递事件时保持 trace 上下文一致：
+
+```rust
+use vol_tracing::{new_trace_id, TracedEvent};
+use tracing::info_span;
+
+// Datasource 生成 trace_id
+let trace_id = new_trace_id();
+let span = info_span!("datasource_receive", trace_id = %trace_id);
+let traced = TracedEvent::new(data, span, trace_id);
+channel.send(traced).await?;
+
+// Rule 提取 trace_id
+let traced = channel.recv().await?;
+let (data, parent_span, trace_id) = traced.split();
+let span = info_span!("rule_evaluate", trace_id = %trace_id);
+```
+
+关键点：
+- trace_id 在 datasource 入口生成
+- 通过 TracedEvent 贯穿整个处理链
+- 各层创建新 span 时注入相同 trace_id
+- 业务数据 (Alert) 不携带 trace_id
+
+### TracedEvent vs WithSpan
+
+| Feature | WithSpan<T> | TracedEvent<T> |
+|---------|-------------|----------------|
+| Span propagation | 完整 span 上下文 | 仅 trace_id |
+| Memory overhead | 较高 (保存完整 span) | 较低 (仅 16 字节 trace_id) |
+| Use case | 短生命周期 channel | 跨模块/跨线程长生命周期 |
+| Business data coupling | 否 | 否 |
+
+`TracedEvent` 的优势：
+1. **低内存开销**：不持有完整 span，仅传递 trace_id
+2. **避免 span 生命周期问题**：适合事件队列、持久化场景
+3. **业务数据纯净**：泛型 `T` 不依赖 tracing 类型
+
+### 使用示例
+
+```rust
+// 1. DataSource 入口生成 trace_id
+async fn run(self, mut tx: Sender<TracedEvent<VolatilityData>>) {
+    loop {
+        let ticker = self.client.recv().await?;
+        let vol_data = ticker.to_volatility_data();
+        
+        // 生成 trace_id
+        let trace_id = new_trace_id();
+        let span = info_span!("datasource_receive", 
+            trace_id = %trace_id,
+            symbol = %vol_data.symbol,
+            iv = %vol_data.iv
+        );
+        
+        // 包装为 TracedEvent
+        let traced = TracedEvent::new(vol_data, span, trace_id);
+        tx.send(traced).await?;
+    }
+}
+
+// 2. Rule Engine 提取 trace_id 创建新 span
+async fn evaluate(&self, event: TracedEvent<VolatilityData>) {
+    let (data, _parent_span, trace_id) = event.split();
+    
+    // 创建新 span，注入相同 trace_id
+    let span = info_span!("rule_evaluate",
+        trace_id = %trace_id,
+        rule_id = %self.id,
+        tenor = %self.tenor
+    );
+    
+    // 在 span 内执行规则评估
+    let _guard = span.enter();
+    if let Some(alert) = self.check(&data) {
+        // Alert 不携带 trace_id，由上层处理
+        tx.send((alert, trace_id)).await?;
+    }
+}
+
+// 3. Alert 处理时生成通知 span
+async fn handle_alert(&self, alert: Alert, trace_id: TraceId) {
+    let span = info_span!("alert_handle",
+        trace_id = %trace_id,
+        alert_type = %alert.alert_type,
+        symbol = %alert.symbol
+    );
+    
+    let _guard = span.enter();
+    self.notify.send(&alert).await?;
+}
+```
+
+### 完整数据流
+
+```
+Deribit WebSocket
+       ↓
+DataSource: new_trace_id() → TracedEvent::new(data, span, trace_id)
+       ↓ (mpsc channel)
+Rule Engine: event.split() → info_span!(trace_id = %trace_id)
+       ↓
+Alert + trace_id (业务数据与 trace 分离)
+       ↓
+Notification: info_span!(trace_id = %trace_id)
+       ↓
+Feishu: [tr_xxx] 消息前缀
+```
+
 ## Recommended Patterns
 
 ### Using .instrument() for Async Operations
