@@ -148,6 +148,56 @@ traced.enter_span("rule_evaluate", |span| {
 
 The `follows_from()` relationship establishes causal links between spans across channel boundaries.
 
+## Recommended Patterns
+
+### Using .instrument() for Async Operations
+
+For async operations that cross `.await` points, use the `.instrument()` trait:
+
+```rust
+use vol_tracing::{new_trace_id, Instrument};
+use tracing::info_span;
+
+// Generate trace_id at entry point
+let trace_id = new_trace_id();
+let span = info_span!("datasource_receive",
+    source = "deribit",
+    trace_id = %trace_id,
+    iv = %vol_data.iv,
+    symbol = %vol_data.symbol,
+);
+
+// Use .instrument() for async operations
+tx.send(event).instrument(span).await?;
+```
+
+### Extracting trace_id for Messages
+
+```rust
+use vol_tracing::current_trace_id;
+
+// Extract trace_id for Feishu message prefix
+let trace_id_prefix = format!("[tr_{}]", &current_trace_id()[..8]);
+```
+
+### Cross-Channel Span Propagation
+
+```rust
+use vol_tracing::WithSpan;
+
+// Sender side
+let span = info_span!("datasource_receive", ...);
+let traced = WithSpan::new(event, span);
+tx.send(traced).await?;
+
+// Receiver side
+let traced = rx.recv().await?;
+traced.enter_span(info_span!("rule_evaluate"), |span| {
+    span.follows_from(parent_span.id());
+    // Process event
+});
+```
+
 ### Trace ID Format
 
 Trace IDs follow OpenTelemetry standard: 128-bit (16 bytes) represented as 32 hex characters.
