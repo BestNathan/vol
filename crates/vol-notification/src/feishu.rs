@@ -8,10 +8,8 @@ use open_lark::Client;
 use open_lark::communication::im::im::v1::message::create::{CreateMessageRequest, CreateMessageBody};
 use open_lark::communication::im::im::v1::message::models::ReceiveIdType;
 use serde_json::json;
-use tracing::{info, warn, info_span};
-use tracing_opentelemetry::OpenTelemetrySpanExt;
-use opentelemetry::trace::TraceContextExt;
-use opentelemetry::Context;
+use vol_tracing::current_trace_id;
+use tracing::{info, warn, info_span, Instrument};
 
 /// Feishu/Lark notification handler
 #[derive(Clone)]
@@ -271,77 +269,39 @@ impl FeishuNotification {
     }
 }
 
-/// Extract trace_id from current span context and return short prefix like [tr_abc1234]
-fn get_trace_id_prefix() -> String {
-    // Get the current OpenTelemetry context
-    let context = Context::current();
-
-    // Extract span from context
-    let span = context.span();
-    let span_context = span.span_context();
-
-    // Get trace_id
-    let trace_id = span_context.trace_id().to_string();
-
-    // Shorten to 8 chars like tr_abc1234
-    if trace_id.len() >= 8 {
-        format!("[tr_{}]", &trace_id[..8])
-    } else {
-        format!("[tr_{}]", trace_id)
-    }
-}
-
-    #[async_trait::async_trait]
+#[async_trait::async_trait]
 impl NotificationHandler for FeishuNotification {
     fn name(&self) -> &str {
         "feishu"
     }
 
     async fn send(&self, alert: &Alert) -> Result<()> {
-        // Create span for notification with business attributes
         let span = info_span!(
             "notification_send",
             channel = "feishu",
             alert_type = %alert.alert_type,
             tenor = ?alert.tenor,
             symbol = %alert.symbol,
-            iv = %alert.iv
+            iv = %alert.iv,
+            dte = alert.dte,
+            index_price = %alert.index_price,
         );
 
-        // Record additional alert attributes
-        span.record("alert.dte", &alert.dte);
-        span.record("alert.index_price", &alert.index_price);
+        async {
+            let trace_id_prefix = format!("[tr_{}]", &current_trace_id()[..8]);
+            let card_content = self.format_interactive_card(alert, &trace_id_prefix);
+            let text_content = self.format_message(alert, &trace_id_prefix);
 
-        let _guard = span.enter();
+            if let Err(e) = self.send_message("interactive", &card_content).await {
+                warn!("Interactive card failed, falling back to text: {:?}", e);
+                self.send_message("text", &json!({ "text": text_content }).to_string()).await?;
+            }
 
-        // Extract trace_id from current span context for reverse tracing
-        let trace_id_prefix = get_trace_id_prefix();
-
-        // Try to send as interactive card first, fall back to text
-        let card_content = self.format_interactive_card(alert, &trace_id_prefix);
-        let text_content = self.format_message(alert, &trace_id_prefix);
-
-        // Send as interactive card (msg_type must be "interactive" per Feishu API docs)
-        if let Err(e) = self.send_message("interactive", &card_content).await {
-            warn!("Interactive card failed, falling back to text: {:?}", e);
-            // Fall back to plain text
-            self.send_message("text", &json!({ "text": text_content }).to_string()).await?;
+            tracing::info!(recipient = %self.receive_id, "notification sent to feishu");
+            Ok(())
         }
-
-        // Extract current trace_id for logging
-        let trace_id = tracing::Span::current()
-            .context()
-            .span()
-            .span_context()
-            .trace_id();
-
-        tracing::info!(
-            trace_id = %trace_id,
-            recipient = %self.receive_id,
-            "notification sent"
-        );
-
-        Ok(())
+        .instrument(span)
+        .await
     }
 
     fn clone_box(&self) -> Box<dyn NotificationHandler> {
