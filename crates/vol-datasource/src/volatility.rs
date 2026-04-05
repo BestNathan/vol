@@ -4,27 +4,14 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::{mpsc, Mutex};
 use tracing::{info, error, warn, info_span};
 use vol_config::DeribitClientConfig;
 use vol_core::{DataSource, HealthStatus, Result, VolatilityData, MonitoringEvent, EventType};
 use vol_deribit::{ChannelType, ChannelData, DeribitClient};
 use vol_tracing::{WithSpan, record_tags};
-
-/// Global counter for generating unique trace IDs
-static TRACE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-/// Generate a unique trace ID based on timestamp and counter
-fn generate_trace_id() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_micros() as u64;
-    let counter = TRACE_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-    (timestamp << 16) ^ counter
-}
+use opentelemetry::trace::TraceContextExt;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Index price state - thread-safe shared state
 #[derive(Debug, Clone, Default)]
@@ -193,16 +180,23 @@ impl VolatilityDataSource {
                                 }
 
                                 if let Some(vol_data) = option.to_volatility_data_with_index(index_price) {
-                                    // Create tracing span with business context from VolatilityData
-                                    let trace_id = generate_trace_id();
-                                    let span = info_span!(
-                                        "datasource_receive",
-                                        trace_id = %trace_id,
-                                        source = "deribit"
-                                    );
-                                    record_tags!(span, vol_data, iv, symbol, dte);
-                                    span.record("index_price", &vol_data.index_price);
-                                    span.record("option_type", &vol_data.option_type.to_string());
+                                    // Extract values before creating span
+                                    let iv = vol_data.iv;
+                                    let symbol = vol_data.symbol.clone();
+                                    let dte = vol_data.dte;
+                                    let index_price = vol_data.index_price;
+                                    let option_type = vol_data.option_type.to_string();
+
+                                    // Create tracing span and extract OTel TraceId
+                                    let span = info_span!("datasource_receive", source = "deribit");
+                                    let trace_id = span.context().span().span_context().trace_id();
+                                    let trace_id_hex = format!("tr_{}", trace_id.to_string());
+                                    span.record("trace_id", &trace_id_hex);
+                                    span.record("iv", &iv);
+                                    span.record("symbol", &symbol);
+                                    span.record("dte", &dte);
+                                    span.record("index_price", &index_price);
+                                    span.record("option_type", &option_type);
 
                                     let traced_event = WithSpan::new(vol_data, span);
                                     if let Err(e) = internal_tx.send(traced_event).await {

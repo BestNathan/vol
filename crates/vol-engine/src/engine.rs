@@ -174,8 +174,7 @@ impl MonitoringEngine {
                             span.follows_from(parent.id());
 
                             // Inherit trace_id from parent for log correlation
-                            let parent_ctx = parent.context();
-                            let parent_trace_id = parent_ctx.span().span_context().trace_id();
+                            let parent_trace_id = parent.context().span().span_context().trace_id();
                             span.record("parent_trace_id", &parent_trace_id.to_string());
                         }
 
@@ -199,16 +198,23 @@ impl MonitoringEngine {
                             );
 
                             // Inherit trace_id from rule_evaluate span
-                            let rule_trace_id = tracing::Span::current()
-                                .context()
-                                .span()
-                                .span_context()
-                                .trace_id();
+                            let rule_trace_id = span.context().span().span_context().trace_id();
                             alert_span.record("trace_id", &rule_trace_id.to_string());
 
-                            // Record business attributes from Alert using record_tags! macro
-                            record_tags!(alert_span, alert, iv, index_price, dte, moneyness, mark_price_coin);
-                            alert_span.record("option_type", &alert.option_type.to_string());
+                            // Record additional alert attributes before moving span
+                            let iv = alert.iv;
+                            let index_price = alert.index_price;
+                            let dte = alert.dte;
+                            let moneyness = alert.moneyness;
+                            let mark_price_coin = alert.mark_price_coin.clone();
+                            let option_type = alert.option_type.to_string();
+
+                            alert_span.record("iv", &iv);
+                            alert_span.record("index_price", &index_price);
+                            alert_span.record("dte", &dte);
+                            alert_span.record("moneyness", &moneyness);
+                            alert_span.record("mark_price_coin", &mark_price_coin);
+                            alert_span.record("option_type", &option_type);
 
                             // Send alert within span context (notification layer will add its own span)
                             if let Err(e) = tx.send(alert).await {

@@ -7,13 +7,18 @@ metadata:
     app: vol-monitor
 data:
   config.toml: |
-    # config.toml for vol-monitor - Provider-based datasource configuration
+    # config.toml for vol-monitor - Separated client and datasource configuration
 
     [engine]
     hot_reload = true
     hot_reload_interval_secs = 30
     channel_buffer_size = 1000
     alert_cooldown_secs = 300
+
+    [engine.tenor_cooldowns]
+    short_secs = 600
+    medium_secs = 3600
+    long_secs = 14400
 
     [tenors]
     short_max_dte = 7
@@ -22,37 +27,23 @@ data:
     long_min_dte = 80
     long_max_dte = 200
 
-    # Data sources - organized by provider
-    [[datasources]]
-    id = "deribit-markets"
-    provider = "deribit"
+    # Client configuration - global, by type
+    [clients.deribit]
     ws_url = "wss://www.deribit.com/ws/api/v2"
-    symbols = ["BTC", "ETH"]
-    poll_interval_secs = 60
-    enabled = true
-
-    [datasources.auth]
     client_id = "nhXng7Bj"
     client_secret = "OxCGY10HlzgKfRoXPBRQqg5IBQcZguGPhE1tewP5U3Y"
 
-    # Example: Internal portfolio data source (HTTP polling)
-    # [[datasources]]
-    # id = "internal-portfolio"
-    # provider = "internal"
-    # url = "https://internal-api/portfolio"
-    # poll_interval_secs = 30
-    # enabled = false
+    # Data sources - data-specific configuration only
+    [[datasources]]
+    id = "deribit-markets"
+    type = "volatility"
+    symbols = ["BTC", "ETH"]
 
-    # Example: Binance data source
-    # [[datasources]]
-    # id = "binance-options"
-    # provider = "binance"
-    # api_url = "https://options.binance.com"
-    # symbols = ["BTC", "ETH"]
-    # poll_interval_secs = 60
-    # enabled = false
-    # api_key = "your-api-key"
-    # api_secret = "your-api-secret"
+    [[datasources]]
+    id = "portfolio"
+    type = "portfolio"
+    currencies = ["BTC", "ETH"]
+    poll_interval_secs = 30
 
     # Notifications
     [[notifications]]
@@ -79,7 +70,6 @@ data:
     short_atm_threshold = 0.05
     medium_atm_threshold = 0.08
     long_atm_threshold = 0.10
-    # Per-DTE ATM thresholds (overrides tenor-based for specific DTE values)
     dte_atm_thresholds = { "1" = 0.02, "2" = 0.03, "3" = 0.04 }
     enabled = true
     notifications = ["feishu-alerts", "stdout"]
@@ -94,7 +84,6 @@ data:
     short_atm_threshold = 0.07
     medium_atm_threshold = 0.10
     long_atm_threshold = 0.12
-    # Per-DTE ATM thresholds (overrides tenor-based for specific DTE values)
     dte_atm_thresholds = { "1" = 0.03, "2" = 0.04, "3" = 0.05 }
     enabled = true
     notifications = ["feishu-alerts", "stdout"]
@@ -141,3 +130,38 @@ data:
     min_threshold = 1.2
     enabled = false
     notifications = ["feishu-alerts"]
+
+    [[rules]]
+    id = "portfolio-greeks"
+    type = "portfolio"
+    enabled = true
+    metrics = [
+        { type = "delta_exposure", enabled = true, min_threshold = -100.0, max_threshold = 100.0 },
+        { type = "total_greeks", enabled = true, gamma_threshold = 50.0, vega_threshold = 200.0, theta_threshold = 100.0 },
+        { type = "free_balance", enabled = true, min_threshold = 0.5 },
+        { type = "margin_ratio", enabled = true, min_threshold = 1.25 },
+    ]
+    notifications = ["feishu-alerts", "stdout"]
+
+    [tracing]
+    [tracing.logging]
+    log_dir = "logs"
+    log_prefix = "vol-monitor"
+    retention_days = 7
+    json_format = true
+    console_level = "info"
+    error_file = true
+
+    [tracing.opentelemetry]
+    enabled = true
+    endpoint = "http://jaeger-collector.observability:4317"
+    service_name = "vol-monitor"
+    service_namespace = "deribit"
+    deployment_environment = "production"
+    sample_rate = 1.0
+
+    [tracing.opentelemetry.batch]
+    max_queue_size = 2048
+    max_batch_size = 512
+    scheduled_delay_millis = 5000
+    max_export_timeout_millis = 30000
