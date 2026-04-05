@@ -1,129 +1,43 @@
 //! Data source configuration types.
 //!
-//! Configuration is organized by provider type (Deribit, Binance, etc.)
-//! rather than transport mechanism (WebSocket vs HTTP).
+//! Data-specific configuration only. Transport-layer configuration
+//! is defined globally in [clients] section.
 
 use serde::{Deserialize, Serialize};
 
-/// Deribit authentication configuration
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct DeribitAuthConfig {
-    #[serde(default)]
-    pub client_id: Option<String>,
-    #[serde(default)]
-    pub client_secret: Option<String>,
-}
-
-impl DeribitAuthConfig {
-    /// Get client ID, checking environment variables first.
-    pub fn client_id(&self) -> Option<String> {
-        std::env::var("DERIBIT_CLIENT_ID")
-            .ok()
-            .or_else(|| self.client_id.clone())
-    }
-
-    /// Get client secret, checking environment variables first.
-    pub fn client_secret(&self) -> Option<String> {
-        std::env::var("DERIBIT_CLIENT_SECRET")
-            .ok()
-            .or_else(|| self.client_secret.clone())
-    }
-}
-
-/// Deribit data source configuration
+/// Volatility data source configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeribitDataSourceConfig {
+pub struct VolatilityConfig {
     pub id: String,
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    pub ws_url: String,
     #[serde(default = "default_symbols")]
     pub symbols: Vec<String>,
-    #[serde(default = "default_60")]
-    pub poll_interval_secs: u64,
-    #[serde(default)]
-    pub auth: Option<DeribitAuthConfig>,
-}
-
-/// Internal/portfolio data source configuration (HTTP polling)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InternalDataSourceConfig {
-    pub id: String,
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    pub url: String,
-    #[serde(default = "default_30")]
-    pub poll_interval_secs: u64,
-    #[serde(default)]
-    pub headers: std::collections::HashMap<String, String>,
-}
-
-/// Binance data source configuration (for future expansion)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BinanceDataSourceConfig {
-    pub id: String,
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    pub api_url: String,
-    #[serde(default = "default_symbols")]
-    pub symbols: Vec<String>,
-    #[serde(default = "default_60")]
-    pub poll_interval_secs: u64,
-    #[serde(default)]
-    pub api_key: Option<String>,
-    #[serde(default)]
-    pub api_secret: Option<String>,
 }
 
 /// Portfolio data source configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PortfolioDataSourceConfig {
+pub struct PortfolioConfig {
     pub id: String,
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    #[serde(default = "default_60")]
-    pub poll_interval_secs: u64,
     #[serde(default = "default_currencies")]
     pub currencies: Vec<String>,
+    #[serde(default = "default_30")]
+    pub poll_interval_secs: u64,
 }
 
-/// Data source configuration enum - organized by provider
+/// Data source configuration enum - organized by data type
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "provider", rename_all = "lowercase")]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum DataSourceConfig {
-    Deribit(DeribitDataSourceConfig),
-    Binance(BinanceDataSourceConfig),
-    Internal(InternalDataSourceConfig),
-    #[serde(rename = "deribit-portfolio")]
-    Portfolio(PortfolioDataSourceConfig),
+    Volatility(VolatilityConfig),
+    Portfolio(PortfolioConfig),
 }
 
 impl DataSourceConfig {
     pub fn id(&self) -> &str {
         match self {
-            DataSourceConfig::Deribit(c) => &c.id,
-            DataSourceConfig::Binance(c) => &c.id,
-            DataSourceConfig::Internal(c) => &c.id,
+            DataSourceConfig::Volatility(c) => &c.id,
             DataSourceConfig::Portfolio(c) => &c.id,
         }
     }
-
-    pub fn enabled(&self) -> bool {
-        match self {
-            DataSourceConfig::Deribit(c) => c.enabled,
-            DataSourceConfig::Binance(c) => c.enabled,
-            DataSourceConfig::Internal(c) => c.enabled,
-            DataSourceConfig::Portfolio(c) => c.enabled,
-        }
-    }
-}
-
-fn default_true() -> bool {
-    true
-}
-
-fn default_60() -> u64 {
-    60
 }
 
 fn default_30() -> u64 {
