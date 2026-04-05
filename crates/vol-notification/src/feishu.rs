@@ -342,6 +342,7 @@ mod tests {
             option_type: OptionType::Call,
             moneyness: 0.02,
             mark_price_coin: 0.0183,
+            trace_id: "tr_test123".to_string(),
         };
 
         // Test the template replacement by calling format_message

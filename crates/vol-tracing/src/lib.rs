@@ -18,6 +18,7 @@ mod traced_event;
 ///
 /// let span = info_span!("my_event");
 /// let trace_id = new_trace_id();
+/// let event = 42; // Your event data
 /// let traced = TracedEvent::new(event, span, trace_id);
 /// ```
 #[deprecated(since = "0.5.0", note = "Use TracedEvent instead, which explicitly stores trace_id for distributed tracing")]
