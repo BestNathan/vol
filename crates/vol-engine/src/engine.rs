@@ -6,7 +6,7 @@ use tokio::sync::{mpsc, broadcast};
 use tokio::task::JoinHandle;
 use tracing::{info, error, warn, debug, info_span};
 use std::sync::Arc;
-use vol_tracing::{WithSpan, Instrument};
+use vol_tracing::{TracedEvent, Instrument};
 use crate::config::EngineConfig;
 
 /// Monitoring engine - the main event loop coordinator
@@ -55,9 +55,9 @@ impl MonitoringEngine {
 
         // Create channels
         // Use broadcast for events (multiple rules can subscribe)
-        let (event_tx, _) = broadcast::channel::<WithSpan<MonitoringEvent>>(self.config.event_buffer_size);
+        let (event_tx, _) = broadcast::channel::<TracedEvent<MonitoringEvent>>(self.config.event_buffer_size);
         // Use mpsc for alerts (single queue for all notifications)
-        let (alert_tx, alert_rx) = mpsc::channel::<Alert>(self.config.alert_buffer_size);
+        let (alert_tx, alert_rx) = mpsc::channel::<TracedEvent<Alert>>(self.config.alert_buffer_size);
 
         // Spawn datasources - each runs independently
         let ds_handles = self.spawn_datasources(event_tx.clone());
@@ -92,7 +92,7 @@ impl MonitoringEngine {
 
     fn spawn_datasources(
         &self,
-        event_tx: broadcast::Sender<WithSpan<MonitoringEvent>>,
+        event_tx: broadcast::Sender<TracedEvent<MonitoringEvent>>,
     ) -> Vec<JoinHandle<Result<()>>> {
         self.datasources
             .iter()
@@ -109,18 +109,22 @@ impl MonitoringEngine {
                         ds_clone.run(ds_tx).await
                     });
 
-                    // Forward events to broadcast channel, wrapping each in WithSpan
+                    // Forward events to broadcast channel, wrapping each in TracedEvent
                     while let Some(event) = ds_rx.recv().await {
+                        // Generate trace_id for this event
+                        let trace_id = vol_tracing::new_trace_id();
+
                         // Create a new span for this event with business context
                         let span = info_span!(
                             "datasource_event",
                             source = %event.source(),
-                            event_type = ?event.event_type()
+                            event_type = ?event.event_type(),
+                            trace_id = %trace_id,
                         );
                         span.record("timestamp", &event.timestamp());
 
-                        // Wrap event with span for propagation to rules
-                        let traced_event = WithSpan::new(event, span);
+                        // Wrap event with span and trace_id for propagation to rules
+                        let traced_event = TracedEvent::new(event, span, trace_id);
 
                         if tx.send(traced_event).is_err() {
                             warn!("No event receivers, stopping datasource");
@@ -136,8 +140,8 @@ impl MonitoringEngine {
 
     fn spawn_rules(
         &self,
-        event_tx: broadcast::Sender<WithSpan<MonitoringEvent>>,
-        alert_tx: mpsc::Sender<Alert>,
+        event_tx: broadcast::Sender<TracedEvent<MonitoringEvent>>,
+        alert_tx: mpsc::Sender<TracedEvent<Alert>>,
     ) -> Vec<JoinHandle<Result<()>>> {
         self.rules
             .iter()
@@ -151,8 +155,8 @@ impl MonitoringEngine {
                 tokio::spawn(async move {
                     info!("Starting rule: {}", rule_id);
                     while let Ok(traced_event) = rx.recv().await {
-                        // Extract event and span from the wrapper
-                        let (event, parent_span) = traced_event.split();
+                        // Extract event, parent_span, and trace_id from the wrapper
+                        let (event, _parent_span, trace_id) = traced_event.split();
 
                         // Fast path: skip events we're not interested in
                         if !interests.contains(&event.event_type()) {
@@ -167,19 +171,15 @@ impl MonitoringEngine {
                             event_type = ?event.event_type(),
                             event_timestamp = %event.timestamp(),
                             event_source = %event.source(),
+                            trace_id = %trace_id,
                         );
-
-                        // Establish causal relationship with parent span if present
-                        if let Some(parent) = parent_span {
-                            span.follows_from(parent.id());
-                        }
 
                         // Evaluate rule within span context
                         let alerts = rule_clone.evaluate(&event).instrument(span).await;
 
                         // Process each alert with its own span
                         for alert in alerts {
-                            // Create child span for alert
+                            // Create child span for alert with same trace_id
                             let alert_span = info_span!(
                                 "alert_generated",
                                 alert_type = %alert.alert_type,
@@ -188,10 +188,14 @@ impl MonitoringEngine {
                                 iv = %alert.iv,
                                 dte = alert.dte,
                                 index_price = %alert.index_price,
+                                trace_id = %trace_id,
                             );
 
-                            // Send alert within span context (notification layer will add its own span)
-                            if let Err(e) = tx.send(alert).instrument(alert_span).await {
+                            // Wrap alert with span and trace_id for notification layer
+                            let traced_alert = TracedEvent::new(alert, alert_span.clone(), trace_id.clone());
+
+                            // Send alert within span context
+                            if let Err(e) = tx.send(traced_alert).instrument(alert_span).await {
                                 error!(error = %e, "Failed to send alert");
                                 break;
                             }
@@ -205,7 +209,7 @@ impl MonitoringEngine {
 
     fn spawn_notifications(
         &self,
-        mut alert_rx: mpsc::Receiver<Alert>,
+        mut alert_rx: mpsc::Receiver<TracedEvent<Alert>>,
         alert_manager: AlertManager,
     ) -> Vec<JoinHandle<Result<()>>> {
         // For notifications, we use a fan-out pattern where each notification channel
@@ -224,16 +228,29 @@ impl MonitoringEngine {
         let alert_manager = Arc::new(alert_manager);
         vec![tokio::spawn(async move {
             info!("Starting {} notification channels", num_notifications);
-            while let Some(alert) = alert_rx.recv().await {
+            while let Some(traced_alert) = alert_rx.recv().await {
+                // Extract alert, span, and trace_id from the wrapper
+                let (alert, _span, trace_id) = traced_alert.split();
+
+                // Create notification span with the same trace_id
+                let notif_span = info_span!(
+                    "notification_send",
+                    trace_id = %trace_id,
+                    alert_type = %alert.alert_type,
+                    channel = "stdout"
+                );
+
                 // Check cooldown before sending
                 if !alert_manager.can_send(&alert) {
-                    debug!("Alert in cooldown, skipping: {}:{}:{}",
+                    debug!(parent: &notif_span, "Alert in cooldown, skipping: {}:{}:{}",
                         alert.alert_type, alert.tenor, alert.symbol);
                     continue;
                 }
+
+                // Send to each notification channel within span context
                 for notif in &notifications {
-                    if let Err(e) = notif.send(&alert).await {
-                        error!("Notification {} failed: {}", notif.name(), e);
+                    if let Err(e) = notif.send(&alert).instrument(notif_span.clone()).await {
+                        error!(parent: &notif_span, "Notification {} failed: {}", notif.name(), e);
                     }
                 }
             }
