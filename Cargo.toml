@@ -47,6 +47,13 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# Tracing & Observability
+tracing-appender = "0.2"
+tracing-opentelemetry = "0.22"
+opentelemetry = "0.21"
+opentelemetry_sdk = { version = "0.21", features = ["tokio", "trace"] }
+opentelemetry-otlp = { version = "0.14", features = ["tokio", "grpc-tonic"] }
+
 # Feishu/Lark SDK
 openlark = { version = "0.15.0-rc.2", default-features = false, features = ["auth", "communication"] }
 
