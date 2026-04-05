@@ -2,32 +2,52 @@ use tracing::Span;
 use std::clone::Clone;
 
 /// Wrapper for sending events across channel boundaries with span context.
+///
+/// Carries the trace_id explicitly for distributed tracing across channel boundaries.
 #[derive(Clone)]
 pub struct WithSpan<T> {
     value: T,
     parent_span: Option<Span>,
+    trace_id: String,
 }
 
 impl<T> WithSpan<T> {
-    /// Create a new WithSpan with an attached span.
-    pub fn new(value: T, span: Span) -> Self {
+    /// Create a new WithSpan with an attached span and trace_id.
+    pub fn new(value: T, span: Span, trace_id: String) -> Self {
         Self {
             value,
             parent_span: Some(span),
+            trace_id,
         }
     }
 
     /// Create a WithSpan without a span (for events that don't need tracing).
+    /// Generates a new trace_id.
     pub fn without_span(value: T) -> Self {
         Self {
             value,
             parent_span: None,
+            trace_id: crate::new_trace_id(),
         }
     }
 
-    /// Split the wrapper to get the value and optional span.
-    pub fn split(self) -> (T, Option<Span>) {
-        (self.value, self.parent_span)
+    /// Create a WithSpan with explicit trace_id (for continuing a trace from another component).
+    pub fn with_trace_id(value: T, span: Option<Span>, trace_id: String) -> Self {
+        Self {
+            value,
+            parent_span: span,
+            trace_id,
+        }
+    }
+
+    /// Split the wrapper to get the value, optional span, and trace_id.
+    pub fn split(self) -> (T, Option<Span>, String) {
+        (self.value, self.parent_span, self.trace_id)
+    }
+
+    /// Get the trace_id for this event.
+    pub fn trace_id(&self) -> &str {
+        &self.trace_id
     }
 
     /// Enter a new span that follows from the parent span.
@@ -40,7 +60,8 @@ impl<T> WithSpan<T> {
     /// # use vol_tracing::WithSpan;
     /// # let event = ();
     /// # let parent_span = Span::current();
-    /// let traced = WithSpan::new(event, parent_span);
+    /// # let trace_id = "tr_abc123".to_string();
+    /// let traced = WithSpan::new(event, parent_span, trace_id);
     /// traced.enter_span(tracing::info_span!("rule_evaluate"), |span| {
     ///     span.record("rule.id", &"my-rule");
     ///     // process(&event)
@@ -50,7 +71,7 @@ impl<T> WithSpan<T> {
     where
         F: FnOnce(Span) -> R,
     {
-        let (_value, parent_span) = self.split();
+        let (_value, parent_span, _trace_id) = self.split();
 
         // Establish causal relationship with parent span
         if let Some(parent) = parent_span {
