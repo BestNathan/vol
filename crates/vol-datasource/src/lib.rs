@@ -15,3 +15,4 @@ pub use csv::CsvDataSource;
 pub use registry::DataSourceRegistry;
 pub use portfolio::PortfolioDataSource;
 pub use vol_config::PortfolioConfig;
+pub use vol_tracing::WithSpan;

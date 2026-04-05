@@ -4,11 +4,27 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::{mpsc, Mutex};
-use tracing::{info, error, warn};
+use tracing::{info, error, warn, info_span};
 use vol_config::DeribitClientConfig;
 use vol_core::{DataSource, HealthStatus, Result, VolatilityData, MonitoringEvent, EventType};
 use vol_deribit::{ChannelType, ChannelData, DeribitClient};
+use vol_tracing::WithSpan;
+
+/// Global counter for generating unique trace IDs
+static TRACE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Generate a unique trace ID based on timestamp and counter
+fn generate_trace_id() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_micros() as u64;
+    let counter = TRACE_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    (timestamp << 16) ^ counter
+}
 
 /// Index price state - thread-safe shared state
 #[derive(Debug, Clone, Default)]
@@ -72,7 +88,7 @@ impl VolatilityDataSource {
 
     /// Run the datasource, sending events to the provided channel
     pub async fn run_internal(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()> {
-        let (internal_tx, mut internal_rx) = mpsc::channel::<VolatilityData>(1024);
+        let (internal_tx, mut internal_rx) = mpsc::channel::<WithSpan<VolatilityData>>(1024);
 
         // Build list of all channels to subscribe to
         let mut all_channels = Vec::new();
@@ -177,7 +193,21 @@ impl VolatilityDataSource {
                                 }
 
                                 if let Some(vol_data) = option.to_volatility_data_with_index(index_price) {
-                                    if let Err(e) = internal_tx.send(vol_data).await {
+                                    // Create tracing span with business context from VolatilityData
+                                    let trace_id = generate_trace_id();
+                                    let span = info_span!(
+                                        "datasource_receive",
+                                        trace_id = %trace_id,
+                                        source = "deribit",
+                                        symbol = %vol_data.symbol,
+                                        iv = %vol_data.iv,
+                                        mark_price = %vol_data.index_price,
+                                        dte = %vol_data.dte,
+                                        option_type = %vol_data.option_type
+                                    );
+
+                                    let traced_event = WithSpan::new(vol_data, span);
+                                    if let Err(e) = internal_tx.send(traced_event).await {
                                         error!(
                                             instrument = %option.instrument_name,
                                             error = %e,
@@ -198,9 +228,11 @@ impl VolatilityDataSource {
         });
 
         // Forward VolatilityData events as MonitoringEvent::Volatility
-        while let Some(vol_data) = internal_rx.recv().await {
-            let event = MonitoringEvent::Volatility(vol_data);
-            if let Err(e) = tx.send(event).await {
+        while let Some(traced_vol_data) = internal_rx.recv().await {
+            // Enter the span to process the event, preserving trace context
+            let event = traced_vol_data.into_value();
+            let monitoring_event = MonitoringEvent::Volatility(event);
+            if let Err(e) = tx.send(monitoring_event).await {
                 error!("Failed to send event: {}", e);
                 break;
             }

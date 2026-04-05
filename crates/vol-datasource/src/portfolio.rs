@@ -1,11 +1,26 @@
 //! Portfolio data source - Deribit WebSocket + REST polling.
 
 use async_trait::async_trait;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::mpsc;
-use tracing::{info, warn, error};
+use tracing::{info, warn, error, info_span};
 use vol_config::{DeribitClientConfig, PortfolioConfig};
 use vol_core::{DataSource, MonitoringEvent, PortfolioSnapshot, Result, HealthStatus, EventType};
 use vol_deribit::DeribitClient;
+
+/// Global counter for generating unique trace IDs
+static TRACE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Generate a unique trace ID based on timestamp and counter
+fn generate_trace_id() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_micros() as u64;
+    let counter = TRACE_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    (timestamp << 16) ^ counter
+}
 
 pub struct PortfolioDataSource {
     id: String,
@@ -126,6 +141,22 @@ impl DataSource for PortfolioDataSource {
             for currency in &self.currencies {
                 match self.fetch_snapshot(currency).await {
                     Ok(snapshot) => {
+                        // Create tracing span with business context
+                        let trace_id = generate_trace_id();
+                        let span = info_span!(
+                            "datasource_poll",
+                            trace_id = %trace_id,
+                            source = "deribit-portfolio",
+                            currency = %snapshot.currency,
+                            equity = %snapshot.equity,
+                            delta = %snapshot.delta_total,
+                            vega = %snapshot.options_vega
+                        );
+                        span.record("balance", &snapshot.balance);
+                        span.record("margin_balance", &snapshot.margin_balance);
+
+                        // Enter span while sending the event
+                        let _guard = span.enter();
                         let event = MonitoringEvent::Portfolio(snapshot);
                         if let Err(e) = tx.send(event).await {
                             error!("Failed to send portfolio event: {}", e);

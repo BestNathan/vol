@@ -18,3 +18,4 @@ futures-util = "0.3"
 vol-core = { workspace = true }
 vol-deribit = { workspace = true }
 vol-config = { workspace = true }
+vol-tracing = { path = "../vol-tracing" }
