@@ -62,9 +62,7 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
         .with_file(true)
         .with_line_number(true)
         .json()
-        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         .with_current_span(true)
-        .with_span_list(true)
         .with_writer(file_appender);
 
     // 3. OpenTelemetry layer (OTLP gRPC to Jaeger)
@@ -134,6 +132,7 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
                 .with_file(true)
                 .with_line_number(true)
                 .json()
+                .with_current_span(true)
                 .with_writer(error_appender)
                 .with_filter(tracing_subscriber::filter::LevelFilter::ERROR);
 
