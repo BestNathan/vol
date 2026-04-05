@@ -4,4 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-tracing = { workspace = true }
+# Tracing with attributes support for #[instrument] macro
+tracing = { workspace = true, features = ["attributes"] }
+# UUID for generating standard trace IDs
+uuid = { version = "1.0", features = ["v4"] }

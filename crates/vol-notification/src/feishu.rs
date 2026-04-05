@@ -8,7 +8,6 @@ use open_lark::Client;
 use open_lark::communication::im::im::v1::message::create::{CreateMessageRequest, CreateMessageBody};
 use open_lark::communication::im::im::v1::message::models::ReceiveIdType;
 use serde_json::json;
-use vol_tracing::current_trace_id;
 use tracing::{info, warn, info_span, Instrument};
 
 /// Feishu/Lark notification handler
@@ -276,6 +275,7 @@ impl NotificationHandler for FeishuNotification {
     }
 
     async fn send(&self, alert: &Alert) -> Result<()> {
+        let trace_id = vol_tracing::new_trace_id();
         let span = info_span!(
             "notification_send",
             channel = "feishu",
@@ -285,10 +285,11 @@ impl NotificationHandler for FeishuNotification {
             iv = %alert.iv,
             dte = alert.dte,
             index_price = %alert.index_price,
+            trace_id = %trace_id,
         );
 
         async {
-            let trace_id_prefix = format!("[tr_{}]", &current_trace_id()[..8]);
+            let trace_id_prefix = format!("[tr_{}]", &trace_id[..8]);
             let card_content = self.format_interactive_card(alert, &trace_id_prefix);
             let text_content = self.format_message(alert, &trace_id_prefix);
 

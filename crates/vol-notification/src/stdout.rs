@@ -1,7 +1,7 @@
 //! Stdout notification handler for testing.
 
 use vol_core::{NotificationHandler, Alert, Result};
-use vol_tracing::current_trace_id;
+use vol_tracing::new_trace_id;
 use tracing::{info, info_span};
 
 /// Stdout notification handler - prints alerts to console
@@ -27,6 +27,9 @@ impl NotificationHandler for StdoutNotification {
     }
 
     async fn send(&self, alert: &Alert) -> Result<()> {
+        // Generate trace_id at entry
+        let trace_id = new_trace_id();
+
         // Create span for notification with business attributes
         let span = info_span!(
             "notification_send",
@@ -34,7 +37,8 @@ impl NotificationHandler for StdoutNotification {
             alert_type = %alert.alert_type,
             tenor = ?alert.tenor,
             symbol = %alert.symbol,
-            iv = %alert.iv
+            iv = %alert.iv,
+            trace_id = %trace_id,
         );
 
         // Record additional alert attributes
@@ -43,8 +47,6 @@ impl NotificationHandler for StdoutNotification {
         span.record("alert.option_type", &alert.option_type.to_string());
 
         let _guard = span.enter();
-
-        let trace_id = current_trace_id();
 
         tracing::info!(
             trace_id = %trace_id,

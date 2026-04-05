@@ -4,7 +4,8 @@
       "Bash(*)",
       "Skill(*)",
       "WebFetch(domain:*)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:www.doubao.com)"
     ]
   }
 }

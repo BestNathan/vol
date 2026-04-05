@@ -2685,9 +2685,11 @@ name = "vol-alert"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "opentelemetry",
  "serde",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
  "vol-config",
  "vol-core",
  "vol-tracing",
@@ -2761,10 +2763,12 @@ name = "vol-engine"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "opentelemetry",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
  "vol-alert",
  "vol-config",
  "vol-core",
@@ -2846,6 +2850,7 @@ name = "vol-tracing"
 version = "0.1.0"
 dependencies = [
  "tracing",
+ "uuid",
 ]
 
 [[package]]
