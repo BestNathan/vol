@@ -9,6 +9,8 @@ use open_lark::communication::im::im::v1::message::create::{CreateMessageRequest
 use open_lark::communication::im::im::v1::message::models::ReceiveIdType;
 use serde_json::json;
 use tracing::{info, warn, info_span};
+use opentelemetry::trace::TraceContextExt;
+use opentelemetry::Context;
 
 /// Feishu/Lark notification handler
 #[derive(Clone)]
@@ -62,8 +64,8 @@ impl FeishuNotification {
     }
 
     /// Format message using template
-    fn format_message(&self, alert: &Alert) -> String {
-        self.message_template
+    fn format_message(&self, alert: &Alert, trace_id_prefix: &str) -> String {
+        let formatted = self.message_template
             .replace("{tenor}", &alert.tenor.to_string())
             .replace("{alert_type}", &alert.alert_type.to_string())
             .replace("{symbol}", &alert.symbol)
@@ -78,49 +80,52 @@ impl FeishuNotification {
             ))
             .replace("{mark_price_coin}", &format!("{:.4}", alert.mark_price_coin))
             .replace("{mark_price_usd}", &format!("{:.2}", alert.mark_price_usd()))
-            .replace("{strike}", &alert.message)
+            .replace("{strike}", &alert.message);
+
+        // Prepend trace_id prefix
+        format!("{} {}", trace_id_prefix, formatted)
     }
 
     /// Format alert as an interactive card (rich message)
-    fn format_interactive_card(&self, alert: &Alert) -> String {
+    fn format_interactive_card(&self, alert: &Alert, trace_id_prefix: &str) -> String {
         let (title, content) = match &alert.alert_type {
-            vol_core::AlertType::AbsoluteIv { .. } => ("🚨 IV 阈值告警", format!(
+            vol_core::AlertType::AbsoluteIv { .. } => (format!("{} 🚨 IV 阈值告警", trace_id_prefix), format!(
                 "**合约**: {}\n**期限**: {}\n**类型**: {}\n**IV**: {:.1}%\n**指数价格**: {:.2} USD\n**DTE**: {} 天\n**合约价格**: {:.4} {} ({:.2} USD)\n**实虚值**: {}",
                 alert.symbol, self.tenor_cn(alert.tenor), self.option_type_cn(alert.option_type),
                 alert.iv * 100.0, alert.index_price, alert.dte,
                 alert.mark_price_coin, alert.symbol.split('-').next().unwrap_or("BTC").to_uppercase(),
                 alert.mark_price_usd(), self.moneyness_str(alert.moneyness)
             )),
-            vol_core::AlertType::RateChange { .. } => ("📈 IV 快速变化告警", format!(
+            vol_core::AlertType::RateChange { .. } => (format!("{} 📈 IV 快速变化告警", trace_id_prefix), format!(
                 "**合约**: {}\n**期限**: {}\n**类型**: {}\n**IV**: {:.1}%\n**指数价格**: {:.2} USD\n**DTE**: {} 天\n**合约价格**: {:.4} {} ({:.2} USD)\n**实虚值**: {}",
                 alert.symbol, self.tenor_cn(alert.tenor), self.option_type_cn(alert.option_type),
                 alert.iv * 100.0, alert.index_price, alert.dte,
                 alert.mark_price_coin, alert.symbol.split('-').next().unwrap_or("BTC").to_uppercase(),
                 alert.mark_price_usd(), self.moneyness_str(alert.moneyness)
             )),
-            vol_core::AlertType::TermStructure { .. } => ("📊 期限结构异常告警", format!(
+            vol_core::AlertType::TermStructure { .. } => (format!("{} 📊 期限结构异常告警", trace_id_prefix), format!(
                 "**策略**: {}\n**期限**: {}\n**类型**: {}\n**IV Spread**: {:.1}%\n**指数价格**: {:.2} USD",
                 alert.symbol, self.tenor_cn(alert.tenor), self.option_type_cn(alert.option_type),
                 alert.iv * 100.0, alert.index_price
             )),
-            vol_core::AlertType::Skew { .. } => ("⚖️ Skew 偏离告警", format!(
+            vol_core::AlertType::Skew { .. } => (format!("{} ⚖️ Skew 偏离告警", trace_id_prefix), format!(
                 "**标的**: {}\n**期限**: {}\n**Skew**: {:.1}%\n**指数价格**: {:.2} USD",
                 alert.symbol, self.tenor_cn(alert.tenor), alert.iv * 100.0, alert.index_price
             )),
-            vol_core::AlertType::PortfolioMargin { current, threshold } => ("💰 保证金比率告警", format!(
+            vol_core::AlertType::PortfolioMargin { current, threshold } => (format!("{} 💰 保证金比率告警", trace_id_prefix), format!(
                 "**账户**: PORTFOLIO_{}\n**保证金比率**: {:.2}\n**阈值**: {:.2}\n**可用资金**: {:.4}\n**初始保证金**: {:.4}\n**维持保证金**: {:.4}",
                 alert.symbol.replace("PORTFOLIO_", ""), current, threshold,
                 alert.mark_price_coin, alert.index_price, alert.moneyness
             )),
-            vol_core::AlertType::PortfolioBalance { current, threshold } => ("💵 余额告警", format!(
+            vol_core::AlertType::PortfolioBalance { current, threshold } => (format!("{} 💵 余额告警", trace_id_prefix), format!(
                 "**账户**: PORTFOLIO_{}\n**可用余额**: {:.4}\n**阈值**: {:.4}\n**总权益**: {:.4}",
                 alert.symbol.replace("PORTFOLIO_", ""), current, threshold, alert.index_price
             )),
-            vol_core::AlertType::PortfolioDelta { current } => ("📉 Delta 敞口告警", format!(
+            vol_core::AlertType::PortfolioDelta { current } => (format!("{} 📉 Delta 敞口告警", trace_id_prefix), format!(
                 "**账户**: PORTFOLIO_{}\n**总 Delta**: {:.2}\n**指数价格**: {:.2} USD",
                 alert.symbol.replace("PORTFOLIO_", ""), current, alert.index_price
             )),
-            vol_core::AlertType::PortfolioPnL { current, threshold } => ("📊 P&L 告警", format!(
+            vol_core::AlertType::PortfolioPnL { current, threshold } => (format!("{} 📊 P&L 告警", trace_id_prefix), format!(
                 "**账户**: PORTFOLIO_{}\n**Session PnL**: {:.4}\n**阈值**: {:.4}",
                 alert.symbol.replace("PORTFOLIO_", ""), current, threshold
             )),
@@ -131,7 +136,7 @@ impl FeishuNotification {
                     "vega" => "Vega",
                     _ => "Greek",
                 };
-                ("📈 Greek 告警", format!(
+                (format!("{} 📈 Greek 告警", trace_id_prefix), format!(
                     "**账户**: PORTFOLIO_{}\n**{}**: {:.6}\n**阈值**: {:.6}",
                     alert.symbol.replace("PORTFOLIO_", ""), greek_name, current, threshold
                 ))
@@ -265,6 +270,26 @@ impl FeishuNotification {
     }
 }
 
+/// Extract trace_id from current span context and return short prefix like [tr_abc1234]
+fn get_trace_id_prefix() -> String {
+    // Get the current OpenTelemetry context
+    let context = Context::current();
+
+    // Extract span from context
+    let span = context.span();
+    let span_context = span.span_context();
+
+    // Get trace_id
+    let trace_id = span_context.trace_id().to_string();
+
+    // Shorten to 8 chars like tr_abc1234
+    if trace_id.len() >= 8 {
+        format!("[tr_{}]", &trace_id[..8])
+    } else {
+        format!("[tr_{}]", trace_id)
+    }
+}
+
     #[async_trait::async_trait]
 impl NotificationHandler for FeishuNotification {
     fn name(&self) -> &str {
@@ -288,9 +313,12 @@ impl NotificationHandler for FeishuNotification {
 
         let _guard = span.enter();
 
+        // Extract trace_id from current span context for reverse tracing
+        let trace_id_prefix = get_trace_id_prefix();
+
         // Try to send as interactive card first, fall back to text
-        let card_content = self.format_interactive_card(alert);
-        let text_content = self.format_message(alert);
+        let card_content = self.format_interactive_card(alert, &trace_id_prefix);
+        let text_content = self.format_message(alert, &trace_id_prefix);
 
         // Send as interactive card (msg_type must be "interactive" per Feishu API docs)
         if let Err(e) = self.send_message("interactive", &card_content).await {
@@ -341,7 +369,7 @@ mod tests {
         };
 
         // Test the template replacement by calling format_message
-        let formatted = handler.format_message(&alert);
+        let formatted = handler.format_message(&alert, "[tr_test]");
 
         // Verify all new fields are replaced correctly
         assert!(formatted.contains("85.0%"), "IV value should be formatted as percentage");
