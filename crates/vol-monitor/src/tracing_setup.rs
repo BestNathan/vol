@@ -14,6 +14,7 @@ use opentelemetry_sdk::{trace::{self, Sampler}, Resource};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
     fmt,
+    fmt::format::FmtSpan,
     layer::SubscriberExt,
     util::SubscriberInitExt,
     EnvFilter,
@@ -43,12 +44,13 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
 
     // 1. Console layer (compact, colored)
     let console_layer = fmt::layer()
-        .with_target(false)
+        .with_target(true)
         .with_thread_ids(false)
         .with_thread_names(false)
         .with_file(true)
         .with_line_number(true)
-        .with_ansi(true);
+        .with_ansi(true)
+        .with_span_events(FmtSpan::NEW);
 
     // 2. File layer (JSON, rolling)
     let file_appender = create_file_appender(&config.logging);
@@ -60,6 +62,7 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
         .with_file(true)
         .with_line_number(true)
         .json()
+        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         .with_writer(file_appender);
 
     // 3. OpenTelemetry layer (OTLP gRPC to Jaeger)
@@ -96,7 +99,10 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
             .build();
 
         let tracer = tracer_provider.tracer(service_name.clone());
-        let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+        let otel_layer = tracing_opentelemetry::layer()
+            .with_tracer(tracer)
+            .with_location(true)
+            .with_threads(true);
 
         OTEL_TRACER_PROVIDER.set(tracer_provider.clone()).ok();
         global::set_tracer_provider(tracer_provider);
