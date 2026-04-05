@@ -2820,6 +2820,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
  "vol-config",
  "vol-core",
  "vol-deribit",
