@@ -2,6 +2,25 @@ mod with_span;
 mod macros;
 mod traced_event;
 
+/// @deprecated Use `TracedEvent` instead.
+///
+/// `WithSpan` only carries a `Span` but does not explicitly store the `trace_id`,
+/// which is required for distributed tracing across async boundaries.
+///
+/// # Example
+/// ```
+/// // Old (deprecated):
+/// // let traced = WithSpan::new(event, span);
+///
+/// // New (recommended):
+/// use vol_tracing::{TracedEvent, new_trace_id};
+/// use tracing::info_span;
+///
+/// let span = info_span!("my_event");
+/// let trace_id = new_trace_id();
+/// let traced = TracedEvent::new(event, span, trace_id);
+/// ```
+#[deprecated(since = "0.5.0", note = "Use TracedEvent instead, which explicitly stores trace_id for distributed tracing")]
 pub use with_span::WithSpan;
 pub use traced_event::TracedEvent;
 // Re-export tracing core types for downstream crates
