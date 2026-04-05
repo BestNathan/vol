@@ -390,3 +390,36 @@ docs/deribit/
 ### Adding a notification channel
 1. Implement `NotificationHandler` trait from `vol-core`
 2. Register in `crates/vol-monitor/src/main.rs`
+
+## Tracing & Logging
+
+### View logs
+
+```bash
+tail -f logs/vol-monitor.log
+tail -f logs/vol-monitor.error.log  # ERROR only
+cat logs/vol-monitor.log | jq '.span.trace_id'  # Extract trace IDs
+```
+
+### Query logs by trace_id
+
+```bash
+cat logs/vol-monitor.log | jq 'select(.span.trace_id == "tr_abc1234")'
+```
+
+### Test tracing locally
+
+```bash
+# Start Jaeger
+docker run --rm -d --name jaeger -p 4317:4317 -p 16686:16686 jaegertracing/all-in-one:latest
+
+# Run with tracing
+./target/release/vol-monitor
+
+# Open Jaeger UI
+open http://localhost:16686
+```
+
+### Documentation
+
+See [docs/tracing.md](docs/tracing.md) for comprehensive tracing architecture documentation.

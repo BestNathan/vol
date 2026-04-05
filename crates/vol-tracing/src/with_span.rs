@@ -33,11 +33,15 @@ impl<T> WithSpan<T> {
     /// The closure receives the new span so you can record attributes.
     ///
     /// # Example
-    /// ```
+    /// ```no_run
+    /// # use tracing::Span;
+    /// # use vol_tracing::WithSpan;
+    /// # let event = ();
+    /// # let parent_span = Span::current();
     /// let traced = WithSpan::new(event, parent_span);
     /// traced.enter_span(tracing::info_span!("rule_evaluate"), |span| {
-    ///     span.record("rule.id", &self.id);
-    ///     process(&event)
+    ///     span.record("rule.id", &"my-rule");
+    ///     // process(&event)
     /// });
     /// ```
     pub fn enter_span<F, R>(self, new_span: Span, f: F) -> R
