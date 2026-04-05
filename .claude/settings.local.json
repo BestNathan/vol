@@ -3,7 +3,8 @@
     "allow": [
       "Bash(*)",
       "Skill(*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:*)",
+      "WebSearch"
     ]
   }
 }
