@@ -6,7 +6,9 @@ use tokio::sync::{mpsc, broadcast};
 use tokio::task::JoinHandle;
 use tracing::{info, error, warn, debug, info_span};
 use std::sync::Arc;
-use vol_tracing::record_tags;
+use vol_tracing::{record_tags, WithSpan};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+use opentelemetry::trace::TraceContextExt;
 use crate::config::EngineConfig;
 
 /// Monitoring engine - the main event loop coordinator
@@ -55,7 +57,7 @@ impl MonitoringEngine {
 
         // Create channels
         // Use broadcast for events (multiple rules can subscribe)
-        let (event_tx, _) = broadcast::channel::<MonitoringEvent>(self.config.event_buffer_size);
+        let (event_tx, _) = broadcast::channel::<WithSpan<MonitoringEvent>>(self.config.event_buffer_size);
         // Use mpsc for alerts (single queue for all notifications)
         let (alert_tx, alert_rx) = mpsc::channel::<Alert>(self.config.alert_buffer_size);
 
@@ -92,7 +94,7 @@ impl MonitoringEngine {
 
     fn spawn_datasources(
         &self,
-        event_tx: broadcast::Sender<MonitoringEvent>,
+        event_tx: broadcast::Sender<WithSpan<MonitoringEvent>>,
     ) -> Vec<JoinHandle<Result<()>>> {
         self.datasources
             .iter()
@@ -109,9 +111,20 @@ impl MonitoringEngine {
                         ds_clone.run(ds_tx).await
                     });
 
-                    // Forward events to broadcast channel
+                    // Forward events to broadcast channel, wrapping each in WithSpan
                     while let Some(event) = ds_rx.recv().await {
-                        if tx.send(event).is_err() {
+                        // Create a new span for this event with business context
+                        let span = info_span!(
+                            "datasource_event",
+                            source = %event.source(),
+                            event_type = ?event.event_type()
+                        );
+                        span.record("timestamp", &event.timestamp());
+
+                        // Wrap event with span for propagation to rules
+                        let traced_event = WithSpan::new(event, span);
+
+                        if tx.send(traced_event).is_err() {
                             warn!("No event receivers, stopping datasource");
                             break;
                         }
@@ -125,7 +138,7 @@ impl MonitoringEngine {
 
     fn spawn_rules(
         &self,
-        event_tx: broadcast::Sender<MonitoringEvent>,
+        event_tx: broadcast::Sender<WithSpan<MonitoringEvent>>,
         alert_tx: mpsc::Sender<Alert>,
     ) -> Vec<JoinHandle<Result<()>>> {
         self.rules
@@ -139,7 +152,10 @@ impl MonitoringEngine {
                 let rule_clone = rule.clone_box_rule();
                 tokio::spawn(async move {
                     info!("Starting rule: {}", rule_id);
-                    while let Ok(event) = rx.recv().await {
+                    while let Ok(traced_event) = rx.recv().await {
+                        // Extract event and span from the wrapper
+                        let (event, parent_span) = traced_event.split();
+
                         // Fast path: skip events we're not interested in
                         if !interests.contains(&event.event_type()) {
                             continue;
@@ -153,12 +169,24 @@ impl MonitoringEngine {
                             event_type = ?event.event_type()
                         );
 
+                        // Establish causal relationship with parent span if present
+                        if let Some(parent) = parent_span {
+                            span.follows_from(parent.id());
+
+                            // Inherit trace_id from parent for log correlation
+                            let parent_ctx = parent.context();
+                            let parent_trace_id = parent_ctx.span().span_context().trace_id();
+                            span.record("parent_trace_id", &parent_trace_id.to_string());
+                        }
+
                         // Record additional event-specific attributes
                         span.record("event.timestamp", &event.timestamp());
                         span.record("event.source", event.source());
 
                         // Evaluate rule within span context
+                        let _guard = span.enter();
                         let alerts = rule_clone.evaluate(&event).await;
+                        drop(_guard);
 
                         // Process each alert with its own span
                         for alert in alerts {
@@ -169,6 +197,14 @@ impl MonitoringEngine {
                                 tenor = ?alert.tenor,
                                 symbol = %alert.symbol
                             );
+
+                            // Inherit trace_id from rule_evaluate span
+                            let rule_trace_id = tracing::Span::current()
+                                .context()
+                                .span()
+                                .span_context()
+                                .trace_id();
+                            alert_span.record("trace_id", &rule_trace_id.to_string());
 
                             // Record business attributes from Alert using record_tags! macro
                             record_tags!(alert_span, alert, iv, index_price, dte, moneyness, mark_price_coin);
