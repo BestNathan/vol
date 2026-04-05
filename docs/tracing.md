@@ -98,6 +98,33 @@ JSON format in `logs/vol-monitor.log` (daily rolling):
 
 Separate file for ERROR level only: `logs/vol-monitor.error.log`
 
+### Trace ID in Logs
+
+All log output now includes trace_id for correlation:
+
+**Console:**
+```
+INFO [tr_0000018c9a62f3d0] vol_datasource::volatility: received ticker symbol=BTC
+```
+
+**File JSON:**
+```json
+{
+  "trace_id": "0000018c9a62f3d00000000000000000",
+  "span": {"name": "datasource_receive"},
+  "fields": {"message": "received ticker", "symbol": "BTC"}
+}
+```
+
+**Querying by trace_id:**
+```bash
+# Find all logs for a specific trace
+grep 'tr_0000018c9a62f3d0' logs/vol-monitor.log
+
+# Extract trace_id from JSON logs
+grep -o '"trace_id":"[^"]*"' logs/vol-monitor.log | sort -u
+```
+
 ## Distributed Tracing
 
 ### Span Context Propagation
@@ -123,7 +150,12 @@ The `follows_from()` relationship establishes causal links between spans across 
 
 ### Trace ID Format
 
-Trace IDs are generated as `tr_` + 16 hex characters: `tr_0000018c9a62f3d0`
+Trace IDs follow OpenTelemetry standard: 128-bit (16 bytes) represented as 32 hex characters.
+
+- **Format**: `tr_` + 32 hex chars (e.g., `tr_0000018c9a62f3d0a1b2c3d4e5f6g7h8`)
+- **Generation**: Created at DataSource when ticker is received
+- **Propagation**: Via span context through WithSpan wrapper
+- **Jaeger compatibility**: Native 128-bit TraceId type
 
 ## Jaeger UI
 
