@@ -1,7 +1,7 @@
 //! Stdout notification handler for testing.
 
 use vol_core::{NotificationHandler, Alert, Result};
-use tracing::info;
+use tracing::{info, info_span};
 
 /// Stdout notification handler - prints alerts to console
 #[derive(Clone)]
@@ -26,6 +26,23 @@ impl NotificationHandler for StdoutNotification {
     }
 
     async fn send(&self, alert: &Alert) -> Result<()> {
+        // Create span for notification with business attributes
+        let span = info_span!(
+            "notification_send",
+            channel = "stdout",
+            alert_type = %alert.alert_type,
+            tenor = ?alert.tenor,
+            symbol = %alert.symbol,
+            iv = %alert.iv
+        );
+
+        // Record additional alert attributes
+        span.record("alert.dte", &alert.dte);
+        span.record("alert.index_price", &alert.index_price);
+        span.record("alert.option_type", &alert.option_type.to_string());
+
+        let _guard = span.enter();
+
         let underlying = alert.symbol.split('-').next().unwrap_or("BTC").to_uppercase();
         let message = format!(
             "[ALERT] {} | {} | {} | IV: {:.1}% | 指数：{:.2} | DTE: {}天 | {} | 价格：{:.4} {} ({:.2} USD)",

@@ -76,3 +76,4 @@ vol-alert = { path = "crates/vol-alert" }
 vol-notification = { path = "crates/vol-notification" }
 vol-engine = { path = "crates/vol-engine" }
 vol-rules = { path = "crates/vol-rules" }
+vol-tracing = { path = "crates/vol-tracing" }

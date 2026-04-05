@@ -15,3 +15,4 @@ openlark = { workspace = true }
 vol-core = { workspace = true }
 vol-config = { workspace = true }
 vol-deribit = { workspace = true }
+vol-tracing = { workspace = true }

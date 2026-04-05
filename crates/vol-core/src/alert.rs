@@ -83,6 +83,21 @@ pub struct Alert {
 }
 
 impl Alert {
+    /// Get the threshold value from the alert type (if applicable)
+    pub fn get_threshold(&self) -> f64 {
+        match &self.alert_type {
+            AlertType::AbsoluteIv { threshold } => *threshold,
+            AlertType::RateChange { change_pct, .. } => *change_pct,
+            AlertType::TermStructure { spread_pct } => *spread_pct,
+            AlertType::Skew { skew_pct } => *skew_pct,
+            AlertType::PortfolioMargin { threshold, .. } => *threshold,
+            AlertType::PortfolioBalance { threshold, .. } => *threshold,
+            AlertType::PortfolioDelta { .. } => 0.0, // No threshold for delta
+            AlertType::PortfolioPnL { threshold, .. } => *threshold,
+            AlertType::PortfolioGreek { threshold, .. } => *threshold,
+        }
+    }
+
     /// Get option mark price in USD
     pub fn mark_price_usd(&self) -> f64 {
         self.mark_price_coin * self.index_price

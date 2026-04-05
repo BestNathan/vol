@@ -8,7 +8,7 @@ use open_lark::Client;
 use open_lark::communication::im::im::v1::message::create::{CreateMessageRequest, CreateMessageBody};
 use open_lark::communication::im::im::v1::message::models::ReceiveIdType;
 use serde_json::json;
-use tracing::{info, warn};
+use tracing::{info, warn, info_span};
 
 /// Feishu/Lark notification handler
 #[derive(Clone)]
@@ -265,13 +265,29 @@ impl FeishuNotification {
     }
 }
 
-#[async_trait::async_trait]
+    #[async_trait::async_trait]
 impl NotificationHandler for FeishuNotification {
     fn name(&self) -> &str {
         "feishu"
     }
 
     async fn send(&self, alert: &Alert) -> Result<()> {
+        // Create span for notification with business attributes
+        let span = info_span!(
+            "notification_send",
+            channel = "feishu",
+            alert_type = %alert.alert_type,
+            tenor = ?alert.tenor,
+            symbol = %alert.symbol,
+            iv = %alert.iv
+        );
+
+        // Record additional alert attributes
+        span.record("alert.dte", &alert.dte);
+        span.record("alert.index_price", &alert.index_price);
+
+        let _guard = span.enter();
+
         // Try to send as interactive card first, fall back to text
         let card_content = self.format_interactive_card(alert);
         let text_content = self.format_message(alert);

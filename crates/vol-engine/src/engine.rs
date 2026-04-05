@@ -4,7 +4,7 @@ use vol_core::{DataSource, RuleProcessor, NotificationHandler, MonitoringEvent, 
 use vol_alert::AlertManager;
 use tokio::sync::{mpsc, broadcast};
 use tokio::task::JoinHandle;
-use tracing::{info, error, warn, debug};
+use tracing::{info, error, warn, debug, info_span};
 use std::sync::Arc;
 use crate::config::EngineConfig;
 
@@ -131,21 +131,52 @@ impl MonitoringEngine {
             .iter()
             .map(|rule| {
                 let interests = rule.interests();
+                let rule_id = rule.id().to_string();
+                let rule_type = rule.rule_type().to_string();
                 let mut rx = event_tx.subscribe();
                 let tx = alert_tx.clone();
                 let rule_clone = rule.clone_box_rule();
                 tokio::spawn(async move {
-                    info!("Starting rule: {}", rule_clone.id());
+                    info!("Starting rule: {}", rule_id);
                     while let Ok(event) = rx.recv().await {
                         // Fast path: skip events we're not interested in
                         if !interests.contains(&event.event_type()) {
                             continue;
                         }
 
+                        // Create span for rule evaluation with business attributes
+                        let span = info_span!(
+                            "rule_evaluate",
+                            rule_id = %rule_id,
+                            rule_type = %rule_type,
+                            event_type = ?event.event_type()
+                        );
+
+                        // Record additional event-specific attributes
+                        span.record("event.timestamp", &event.timestamp());
+                        span.record("event.source", event.source());
+
+                        // Evaluate rule within span context
                         let alerts = rule_clone.evaluate(&event).await;
+
+                        // Process each alert with its own span
                         for alert in alerts {
+                            // Create child span for alert
+                            let alert_span = info_span!(
+                                "alert_generated",
+                                alert_type = %alert.alert_type,
+                                tenor = ?alert.tenor,
+                                symbol = %alert.symbol,
+                                iv = %alert.iv
+                            );
+
+                            // Record additional alert attributes
+                            alert_span.record("alert.threshold", &alert.get_threshold());
+                            alert_span.record("alert.message", &alert.message);
+
+                            // Send alert within span context (notification layer will add its own span)
                             if let Err(e) = tx.send(alert).await {
-                                error!("Failed to send alert: {}", e);
+                                error!(error = %e, "Failed to send alert");
                                 break;
                             }
                         }
