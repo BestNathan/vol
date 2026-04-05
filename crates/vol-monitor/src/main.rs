@@ -9,11 +9,10 @@ use tracing_subscriber::{self, EnvFilter};
 
 use vol_config::{Config, DataSourceConfig, NotificationConfig, RuleConfig};
 use vol_engine::{MonitoringEngineBuilder, EngineConfig};
-use vol_datasource::{DeribitDataSource, PortfolioDataSource};
+use vol_datasource::{VolatilityDataSource, PortfolioDataSource};
 use vol_notification::{StdoutNotification, FeishuNotification};
 use vol_rules::{AbsoluteIvRule, RateChangeRule, TermStructureRule, SkewRule, PortfolioRule};
 use vol_config::{TermStructureConfig, SkewConfig};
-use vol_deribit::DeribitClient;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -48,65 +47,32 @@ async fn main() -> Result<()> {
     // Add datasources
     for ds_config in &config.datasources {
         match ds_config {
-            DataSourceConfig::Deribit(deribit_cfg) => {
-                if !deribit_cfg.enabled {
-                    continue;
-                }
+            DataSourceConfig::Volatility(vol_cfg) => {
+                // Get Deribit client config
+                let deribit_config = config.clients.deribit.clone()
+                    .expect("VolatilityDataSource requires [clients.deribit] configuration");
 
-                let mut ds = DeribitDataSource::new(
-                    deribit_cfg.ws_url.clone(),
-                    deribit_cfg.symbols.clone(),
-                    deribit_cfg.poll_interval_secs,
-                    deribit_cfg.id.clone(),
+                let ds = VolatilityDataSource::from_config(
+                    deribit_config,
+                    vol_cfg.symbols.clone(),
+                    vol_cfg.id.clone(),
                 );
 
-                // Use proxy if configured
-                if let Ok(proxy) = std::env::var("HTTPS_PROXY").or_else(|_| std::env::var("HTTP_PROXY")) {
-                    info!("Using proxy: {}", proxy);
-                    ds = ds.with_proxy(proxy);
-                }
-
                 builder = builder.with_datasource(Box::new(ds));
-                info!("Added datasource: {} (provider: deribit)", deribit_cfg.id);
-            }
-            DataSourceConfig::Binance(_) => {
-                warn!("Binance datasource not yet implemented");
-            }
-            DataSourceConfig::Internal(_) => {
-                warn!("Internal datasource not yet implemented");
+                info!("Added datasource: {} (type: volatility, symbols: {:?})", vol_cfg.id, vol_cfg.symbols);
             }
             DataSourceConfig::Portfolio(portfolio_cfg) => {
-                if !portfolio_cfg.enabled {
-                    continue;
-                }
+                // Get Deribit client config
+                let deribit_config = config.clients.deribit.clone()
+                    .expect("PortfolioDataSource requires [clients.deribit] configuration");
 
-                // Find Deribit datasource config for auth credentials
-                let deribit_auth = config.datasources.iter()
-                    .find_map(|ds| {
-                        if let DataSourceConfig::Deribit(d) = ds {
-                            d.auth.clone()
-                        } else {
-                            None
-                        }
-                    });
-
-                // Create DeribitClient with auth
-                let mut client = DeribitClient::new("wss://www.deribit.com/ws/api/v2");
-                if let Some(auth) = deribit_auth {
-                    if let (Some(client_id), Some(client_secret)) = (auth.client_id(), auth.client_secret()) {
-                        client = client.with_auth(client_id, client_secret);
-                    }
-                }
-
-                let ds = PortfolioDataSource::new(
-                    portfolio_cfg.id.clone(),
-                    client,
-                    portfolio_cfg.poll_interval_secs,
-                    portfolio_cfg.currencies.clone(),
+                let ds = PortfolioDataSource::from_config(
+                    deribit_config,
+                    portfolio_cfg.clone(),
                 );
 
                 builder = builder.with_datasource(Box::new(ds));
-                info!("Added portfolio datasource: {}", portfolio_cfg.id);
+                info!("Added datasource: {} (type: portfolio, currencies: {:?})", portfolio_cfg.id, portfolio_cfg.currencies);
             }
         }
     }
@@ -233,6 +199,7 @@ fn create_default_config() -> Config {
                 long_secs: Some(14400),   // 4 hours
             },
         },
+        clients: vol_config::ClientConfigs::default(),
         tenors: vol_config::TenorConfig {
             short_max_dte: 7,
             medium_min_dte: 20,

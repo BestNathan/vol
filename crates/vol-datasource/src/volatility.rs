@@ -1,12 +1,12 @@
-//! Deribit WebSocket data source implementation.
+//! Volatility data source implementation.
 //!
-//! Uses DeribitClient for low-level WebSocket communication
-//! and implements the DataSource trait for integration.
+//! Uses DeribitClient for low-level WebSocket communication.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{info, error, warn};
+use vol_config::DeribitClientConfig;
 use vol_core::{DataSource, HealthStatus, Result, VolatilityData, MonitoringEvent, EventType};
 use vol_deribit::{ChannelType, ChannelData, DeribitClient};
 
@@ -34,31 +34,40 @@ impl IndexPriceState {
     }
 }
 
-/// Deribit WebSocket data source
+/// Volatility data source
 #[derive(Clone)]
-pub struct DeribitDataSource {
+pub struct VolatilityDataSource {
     client: DeribitClient,
     index_price_state: IndexPriceState,
     symbols: Vec<String>,
-    poll_interval_secs: u64,
     id: String,
 }
 
-impl DeribitDataSource {
-    pub fn new(ws_url: String, symbols: Vec<String>, poll_interval_secs: u64, id: String) -> Self {
-        let client = DeribitClient::new(ws_url);
+impl VolatilityDataSource {
+    /// Create a new VolatilityDataSource from client configuration
+    pub fn from_config(client_config: DeribitClientConfig, symbols: Vec<String>, id: String) -> Self {
+        let mut client = DeribitClient::new(&client_config.ws_url);
+
+        // Configure proxy if available via environment
+        if let Ok(proxy) = std::env::var("HTTPS_PROXY").or_else(|_| std::env::var("HTTP_PROXY")) {
+            info!("Using proxy: {}", proxy);
+            client = client.with_proxy(proxy);
+        }
+
+        // Configure auth if available
+        let auth_opt = &client_config.auth;
+        if let Some(auth) = auth_opt {
+            if let (Some(client_id), Some(client_secret)) = (auth.client_id(), auth.client_secret()) {
+                client = client.with_auth(client_id, client_secret);
+            }
+        }
+
         Self {
             client,
             index_price_state: IndexPriceState::new(),
             symbols,
-            poll_interval_secs,
             id,
         }
-    }
-
-    pub fn with_proxy(mut self, proxy_url: String) -> Self {
-        self.client = self.client.with_proxy(proxy_url);
-        self
     }
 
     /// Run the datasource, sending events to the provided channel
@@ -205,7 +214,7 @@ impl DeribitDataSource {
 }
 
 #[async_trait::async_trait]
-impl DataSource for DeribitDataSource {
+impl DataSource for VolatilityDataSource {
     fn id(&self) -> &str {
         &self.id
     }
@@ -215,11 +224,11 @@ impl DataSource for DeribitDataSource {
     }
 
     fn name(&self) -> &str {
-        "deribit"
+        "volatility"
     }
 
     async fn connect(&mut self) -> Result<()> {
-        info!("Initializing Deribit data source");
+        info!("Initializing volatility data source");
         Ok(())
     }
 

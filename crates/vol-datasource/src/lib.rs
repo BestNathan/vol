@@ -5,12 +5,13 @@
 //! - CSV file reader (for testing)
 //! - Portfolio polling via REST API
 
-mod deribit;
+mod volatility;
 mod csv;
 mod registry;
 mod portfolio;
 
-pub use deribit::DeribitDataSource;
+pub use volatility::VolatilityDataSource;
 pub use csv::CsvDataSource;
 pub use registry::DataSourceRegistry;
-pub use portfolio::{PortfolioDataSource, PortfolioDataSourceConfig};
+pub use portfolio::PortfolioDataSource;
+pub use vol_config::PortfolioConfig;
