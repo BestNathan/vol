@@ -1,4 +1,4 @@
-# config.toml for vol-monitor - Provider-based datasource configuration
+# config.toml for vol-monitor - Separated client and datasource configuration
 
 [engine]
 hot_reload = true
@@ -19,37 +19,24 @@ medium_max_dte = 40
 long_min_dte = 80
 long_max_dte = 200
 
-# Data sources - organized by provider
-[[datasources]]
-id = "deribit-markets"
-provider = "deribit"
+# Client configuration - global, by type
+[clients.deribit]
 ws_url = "wss://www.deribit.com/ws/api/v2"
-symbols = ["BTC", "ETH"]
-poll_interval_secs = 60
-enabled = true
-
-[datasources.auth]
 client_id = "nhXng7Bj"
 client_secret = "OxCGY10HlzgKfRoXPBRQqg5IBQcZguGPhE1tewP5U3Y"
+
+# Data sources - data-specific configuration only
+[[datasources]]
+id = "deribit-markets"
+type = "volatility"
+symbols = ["BTC", "ETH"]
 
 # Portfolio data source - monitors account positions and Greeks
 [[datasources]]
 id = "portfolio"
-provider = "deribit-portfolio"
-poll_interval_secs = 30
+type = "portfolio"
 currencies = ["BTC", "ETH"]
-enabled = true
-
-# Example: Binance data source
-# [[datasources]]
-# id = "binance-options"
-# provider = "binance"
-# api_url = "https://options.binance.com"
-# symbols = ["BTC", "ETH"]
-# poll_interval_secs = 60
-# enabled = false
-# api_key = "your-api-key"
-# api_secret = "your-api-secret"
+poll_interval_secs = 30
 
 # Notifications
 [[notifications]]

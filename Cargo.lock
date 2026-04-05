@@ -2377,6 +2377,7 @@ dependencies = [
  "tokio-rustls 0.25.0",
  "tokio-tungstenite",
  "tracing",
+ "vol-config",
  "vol-core",
  "vol-deribit",
  "webpki-roots 0.26.11",

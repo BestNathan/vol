@@ -3,18 +3,20 @@
 use serde::{Deserialize, Serialize};
 use vol_core::Tenor;
 
+pub mod client;
 pub mod datasource;
 pub mod metrics;
 pub mod notification;
 pub mod rule;
 
+pub use client::*;
 pub use datasource::*;
 pub use metrics::*;
 pub use notification::*;
 pub use rule::*;
 
 // Re-export legacy types for backwards compatibility
-pub use datasource::{DeribitDataSourceConfig as DeribitConfig, DeribitAuthConfig};
+pub use client::{DeribitClientConfig as DeribitConfig, DeribitAuthConfig};
 
 /// Tenor-specific cooldown configuration
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -72,6 +74,8 @@ impl EngineConfigFile {
 pub struct Config {
     #[serde(default)]
     pub engine: EngineConfigFile,
+    #[serde(default)]
+    pub clients: ClientConfigs,
     pub tenors: TenorConfig,
     #[serde(default)]
     pub datasources: Vec<DataSourceConfig>,

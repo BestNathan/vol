@@ -3,26 +3,9 @@
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 use tracing::{info, warn, error};
+use vol_config::{DeribitClientConfig, PortfolioConfig};
 use vol_core::{DataSource, MonitoringEvent, PortfolioSnapshot, Result, HealthStatus, EventType};
 use vol_deribit::DeribitClient;
-
-/// Portfolio data source configuration
-#[derive(Debug, Clone)]
-pub struct PortfolioDataSourceConfig {
-    pub id: String,
-    pub poll_interval_secs: u64,
-    pub currencies: Vec<String>,
-}
-
-impl Default for PortfolioDataSourceConfig {
-    fn default() -> Self {
-        Self {
-            id: "deribit-portfolio".to_string(),
-            poll_interval_secs: 60,
-            currencies: vec!["BTC".to_string(), "ETH".to_string()],
-        }
-    }
-}
 
 pub struct PortfolioDataSource {
     id: String,
@@ -32,13 +15,30 @@ pub struct PortfolioDataSource {
 }
 
 impl PortfolioDataSource {
-    pub fn new(id: String, client: DeribitClient, poll_interval_secs: u64, currencies: Vec<String>) -> Self {
-        Self { id, client, poll_interval_secs, currencies }
-    }
+    /// Create a new PortfolioDataSource from client configuration
+    pub fn from_config(client_config: DeribitClientConfig, portfolio_config: PortfolioConfig) -> Self {
+        let client = DeribitClient::new(&client_config.ws_url);
 
-    /// Create from configuration
-    pub fn from_config(config: PortfolioDataSourceConfig, client: DeribitClient) -> Self {
-        Self::new(config.id, client, config.poll_interval_secs, config.currencies)
+        // Configure auth if available
+        let auth_opt = &client_config.auth;
+        if let Some(auth) = auth_opt {
+            if let (Some(client_id), Some(client_secret)) = (auth.client_id(), auth.client_secret()) {
+                let client_with_auth = client.with_auth(client_id, client_secret);
+                return Self {
+                    id: portfolio_config.id,
+                    client: client_with_auth,
+                    poll_interval_secs: portfolio_config.poll_interval_secs,
+                    currencies: portfolio_config.currencies,
+                };
+            }
+        }
+
+        Self {
+            id: portfolio_config.id,
+            client,
+            poll_interval_secs: portfolio_config.poll_interval_secs,
+            currencies: portfolio_config.currencies,
+        }
     }
 
     /// Fetch portfolio snapshot for a currency

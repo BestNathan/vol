@@ -223,7 +223,7 @@ This is a Cargo workspace with 7 crates:
 ### Data Flow
 
 ```
-Deribit WebSocket → DeribitDataSource → mpsc channel → main event loop
+Deribit WebSocket → VolatilityDataSource → mpsc channel → main event loop
                                                ↓
                                     AlertManager (cooldown check)
                                                ↓
@@ -254,11 +254,46 @@ Deribit WebSocket → DeribitDataSource → mpsc channel → main event loop
 
 Main config file: `config.toml`
 
-Key sections:
-- `[data_sources.deribit]` - WebSocket URL, symbols (BTC/ETH), poll interval
+**Configuration has been separated (v0.4.0+):**
+- `[clients.deribit]` - Client transport configuration (ws_url, auth)
+- `[[datasources]]` - Data source configuration (symbols, currencies, poll intervals)
 - `[tenors]` - DTE boundaries for tenor classification
 - `[alerts]` - Cooldown period and per-type thresholds
 - `[notifications]` - Notification channels (stdout, feishu)
+
+### Client Configuration (v0.4.0+)
+
+Client configuration is defined globally under `[clients]` section:
+
+```toml
+[clients.deribit]
+ws_url = "wss://www.deribit.com/ws/api/v2"
+client_id = "your_client_id"
+client_secret = "your_client_secret"
+```
+
+### Data Source Configuration (v0.4.0+)
+
+Data sources only define data-specific settings and reference client configuration implicitly:
+
+```toml
+[[datasources]]
+id = "market-data"
+type = "volatility"
+symbols = ["BTC", "ETH"]
+
+[[datasources]]
+id = "portfolio"
+type = "portfolio"
+currencies = ["BTC", "ETH"]
+poll_interval_secs = 30
+```
+
+**Migration from v0.3.x:**
+- Move `ws_url` and `auth` from `[[datasources]]` to `[clients.deribit]`
+- Change `provider = "deribit"` to `type = "volatility"`
+- Change `provider = "deribit-portfolio"` to `type = "portfolio"`
+- Remove `enabled` field (not needed, unused datasources can be commented out)
 
 ### Feishu (Lark) Configuration
 
@@ -296,9 +331,9 @@ The `vol-deribit` crate (`crates/vol-deribit/src/`) contains all Deribit-specifi
 | `message.rs` | JSON-RPC 2.0 types: `SubscriptionNotification`, `JsonRpcRequest`, `JsonRpcResponse` |
 | `subscription.rs` | Channel builders (`markprice_options()`, `ticker_base()`, etc.) and presets |
 
-### Deribit DataSource
+### Volatility DataSource
 
-The Deribit datasource (`crates/vol-datasource/src/deribit.rs`) uses `DeribitClient`:
+The Volatility datasource (`crates/vol-datasource/src/volatility.rs`) uses `DeribitClient`:
 
 1. Wraps `DeribitClient` for low-level WebSocket communication
 2. Implements `DataSource` trait from `vol-core`
