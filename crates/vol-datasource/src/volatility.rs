@@ -10,7 +10,7 @@ use tracing::{info, error, warn, info_span};
 use vol_config::DeribitClientConfig;
 use vol_core::{DataSource, HealthStatus, Result, VolatilityData, MonitoringEvent, EventType};
 use vol_deribit::{ChannelType, ChannelData, DeribitClient};
-use vol_tracing::WithSpan;
+use vol_tracing::{WithSpan, record_tags};
 
 /// Global counter for generating unique trace IDs
 static TRACE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -198,13 +198,11 @@ impl VolatilityDataSource {
                                     let span = info_span!(
                                         "datasource_receive",
                                         trace_id = %trace_id,
-                                        source = "deribit",
-                                        symbol = %vol_data.symbol,
-                                        iv = %vol_data.iv,
-                                        mark_price = %vol_data.index_price,
-                                        dte = %vol_data.dte,
-                                        option_type = %vol_data.option_type
+                                        source = "deribit"
                                     );
+                                    record_tags!(span, vol_data, iv, symbol, dte);
+                                    span.record("index_price", &vol_data.index_price);
+                                    span.record("option_type", &vol_data.option_type.to_string());
 
                                     let traced_event = WithSpan::new(vol_data, span);
                                     if let Err(e) = internal_tx.send(traced_event).await {
@@ -229,7 +227,8 @@ impl VolatilityDataSource {
 
         // Forward VolatilityData events as MonitoringEvent::Volatility
         while let Some(traced_vol_data) = internal_rx.recv().await {
-            // Enter the span to process the event, preserving trace context
+            // Extract span metadata (trace_id, etc.) before consuming the span
+            // The span context will be preserved in the same async task context
             let event = traced_vol_data.into_value();
             let monitoring_event = MonitoringEvent::Volatility(event);
             if let Err(e) = tx.send(monitoring_event).await {

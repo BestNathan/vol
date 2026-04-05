@@ -6,6 +6,7 @@ use tokio::sync::{mpsc, broadcast};
 use tokio::task::JoinHandle;
 use tracing::{info, error, warn, debug, info_span};
 use std::sync::Arc;
+use vol_tracing::record_tags;
 use crate::config::EngineConfig;
 
 /// Monitoring engine - the main event loop coordinator
@@ -166,13 +167,12 @@ impl MonitoringEngine {
                                 "alert_generated",
                                 alert_type = %alert.alert_type,
                                 tenor = ?alert.tenor,
-                                symbol = %alert.symbol,
-                                iv = %alert.iv
+                                symbol = %alert.symbol
                             );
 
-                            // Record additional alert attributes
-                            alert_span.record("alert.threshold", &alert.get_threshold());
-                            alert_span.record("alert.message", &alert.message);
+                            // Record business attributes from Alert using record_tags! macro
+                            record_tags!(alert_span, alert, iv, index_price, dte, moneyness, mark_price_coin);
+                            alert_span.record("option_type", &alert.option_type.to_string());
 
                             // Send alert within span context (notification layer will add its own span)
                             if let Err(e) = tx.send(alert).await {

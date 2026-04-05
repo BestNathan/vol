@@ -7,6 +7,7 @@ use tracing::{info, warn, error, info_span};
 use vol_config::{DeribitClientConfig, PortfolioConfig};
 use vol_core::{DataSource, MonitoringEvent, PortfolioSnapshot, Result, HealthStatus, EventType};
 use vol_deribit::DeribitClient;
+use vol_tracing::record_tags;
 
 /// Global counter for generating unique trace IDs
 static TRACE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -146,14 +147,9 @@ impl DataSource for PortfolioDataSource {
                         let span = info_span!(
                             "datasource_poll",
                             trace_id = %trace_id,
-                            source = "deribit-portfolio",
-                            currency = %snapshot.currency,
-                            equity = %snapshot.equity,
-                            delta = %snapshot.delta_total,
-                            vega = %snapshot.options_vega
+                            source = "deribit-portfolio"
                         );
-                        span.record("balance", &snapshot.balance);
-                        span.record("margin_balance", &snapshot.margin_balance);
+                        record_tags!(span, snapshot, currency, equity, delta_total, options_vega, balance, margin_balance);
 
                         // Enter span while sending the event
                         let _guard = span.enter();

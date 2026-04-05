@@ -2690,6 +2690,7 @@ dependencies = [
  "tracing",
  "vol-config",
  "vol-core",
+ "vol-tracing",
 ]
 
 [[package]]
@@ -2730,6 +2731,7 @@ dependencies = [
  "vol-config",
  "vol-core",
  "vol-deribit",
+ "vol-tracing",
  "webpki-roots 0.26.11",
 ]
 
@@ -2764,6 +2766,7 @@ dependencies = [
  "vol-alert",
  "vol-config",
  "vol-core",
+ "vol-tracing",
 ]
 
 [[package]]
@@ -2817,6 +2820,7 @@ dependencies = [
  "vol-config",
  "vol-core",
  "vol-deribit",
+ "vol-tracing",
 ]
 
 [[package]]
