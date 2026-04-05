@@ -2,6 +2,8 @@
 
 use vol_core::{AlertHandler, Alert, AlertType, AlertAction, VolatilityData, Tenor, Result};
 use vol_config::{AbsoluteIvConfig, SymbolIvConfig};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+use opentelemetry::trace::TraceContextExt;
 
 /// Alert handler for absolute IV threshold breaches
 pub struct AbsoluteIvHandler {
@@ -60,7 +62,7 @@ impl AlertHandler for AbsoluteIvHandler {
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0);
             let tenor = tenor.unwrap(); // Safe - we know it's Some at this point
-            Some(Alert::new(
+            let alert = Alert::new(
                 AlertType::AbsoluteIv { threshold: iv_threshold },
                 tenor,
                 data.symbol.clone(),
@@ -77,7 +79,18 @@ impl AlertHandler for AbsoluteIvHandler {
                 data.option_type,
                 moneyness,
                 mark_price,
-            ))
+            );
+
+            // Record trace context from current span
+            let current_span = tracing::Span::current();
+            let trace_id = current_span
+                .context()
+                .span()
+                .span_context()
+                .trace_id();
+            current_span.record("alert.trace_id", &trace_id.to_string());
+
+            Some(alert)
         } else {
             None
         }
