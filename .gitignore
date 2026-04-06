@@ -23,4 +23,5 @@ logs/
 .worktrees/
 
 # Temp
+temp/
 temp/.worktrees
