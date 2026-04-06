@@ -126,7 +126,7 @@ impl MonitoringEngine {
     fn spawn_rules(
         &self,
         event_tx: broadcast::Sender<TracedEvent<MonitoringEvent>>,
-        alert_tx: mpsc::Sender<TracedEvent<Alert>>,
+        alert_tx: broadcast::Sender<TracedEvent<Alert>>,
     ) -> Vec<JoinHandle<Result<()>>> {
         self.rules
             .iter()
@@ -188,8 +188,10 @@ impl MonitoringEngine {
                             let traced_alert = TracedEvent::new(alert, alert_span.clone(), trace_id.clone());
 
                             // Send alert within span context
+                            // broadcast::send returns Result<usize, SendError> where usize is receiver count
+                            // Error only when no receivers are subscribed (shouldn't happen in normal operation)
                             if let Err(e) = tx.send(traced_alert).instrument(alert_span).await {
-                                error!(error = %e, "Failed to send alert");
+                                error!(error = %e, "Failed to broadcast alert (no receivers)");
                                 break;
                             }
                         }
