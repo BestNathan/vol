@@ -101,31 +101,16 @@ impl MonitoringEngine {
                 let ds_clone = ds.clone_box();
                 tokio::spawn(async move {
                     info!("Starting datasource: {}", ds_clone.name());
-                    // Create mpsc channel for this datasource
-                    let (ds_tx, mut ds_rx) = mpsc::channel::<MonitoringEvent>(100);
+                    // Create mpsc channel for this datasource - now carries TracedEvent for tracing context
+                    let (ds_tx, mut ds_rx) = mpsc::channel::<TracedEvent<MonitoringEvent>>(100);
 
                     // Run datasource in a separate task
                     let ds_task = tokio::spawn(async move {
                         ds_clone.run(ds_tx).await
                     });
 
-                    // Forward events to broadcast channel, wrapping each in TracedEvent
-                    while let Some(event) = ds_rx.recv().await {
-                        // Generate trace_id for this event
-                        let trace_id = vol_tracing::new_trace_id();
-
-                        // Create a new span for this event with business context
-                        let span = info_span!(
-                            "datasource_event",
-                            source = %event.source(),
-                            event_type = ?event.event_type(),
-                            trace_id = %trace_id,
-                        );
-                        span.record("timestamp", &event.timestamp());
-
-                        // Wrap event with span and trace_id for propagation to rules
-                        let traced_event = TracedEvent::new(event, span, trace_id);
-
+                    // Forward events to broadcast channel
+                    while let Some(traced_event) = ds_rx.recv().await {
                         if tx.send(traced_event).is_err() {
                             warn!("No event receivers, stopping datasource");
                             break;
@@ -156,7 +141,7 @@ impl MonitoringEngine {
                     info!("Starting rule: {}", rule_id);
                     while let Ok(traced_event) = rx.recv().await {
                         // Extract event, parent_span, and trace_id from the wrapper
-                        let (event, _parent_span, trace_id) = traced_event.split();
+                        let (event, parent_span, trace_id) = traced_event.split();
 
                         // Fast path: skip events we're not interested in
                         if !interests.contains(&event.event_type()) {
@@ -174,8 +159,13 @@ impl MonitoringEngine {
                             trace_id = %trace_id,
                         );
 
+                        // Establish causal relationship with parent span from datasource
+                        if let Some(parent) = parent_span {
+                            span.follows_from(parent.id());
+                        }
+
                         // Evaluate rule within span context
-                        let alerts = rule_clone.evaluate(&event).instrument(span).await;
+                        let alerts = rule_clone.evaluate(&event).instrument(span.clone()).await;
 
                         // Process each alert with its own span
                         for alert in alerts {
@@ -190,6 +180,9 @@ impl MonitoringEngine {
                                 index_price = %alert.index_price,
                                 trace_id = %trace_id,
                             );
+
+                            // Establish causal relationship with rule_evaluate span
+                            alert_span.follows_from(span.id());
 
                             // Wrap alert with span and trace_id for notification layer
                             let traced_alert = TracedEvent::new(alert, alert_span.clone(), trace_id.clone());
@@ -230,7 +223,7 @@ impl MonitoringEngine {
             info!("Starting {} notification channels", num_notifications);
             while let Some(traced_alert) = alert_rx.recv().await {
                 // Extract alert, span, and trace_id from the wrapper
-                let (mut alert, _span, trace_id) = traced_alert.split();
+                let (mut alert, parent_span, trace_id) = traced_alert.split();
 
                 // Set trace_id on alert for notification layer to use
                 alert.trace_id = trace_id.clone();
@@ -242,6 +235,11 @@ impl MonitoringEngine {
                     alert_type = %alert.alert_type,
                     channel = "stdout"
                 );
+
+                // Establish causal relationship with alert_generated span
+                if let Some(parent) = parent_span {
+                    notif_span.follows_from(parent.id());
+                }
 
                 // Check cooldown before sending
                 if !alert_manager.can_send(&alert) {

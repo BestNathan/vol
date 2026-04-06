@@ -6,7 +6,7 @@ use tracing::{info, warn, error, info_span};
 use vol_config::{DeribitClientConfig, PortfolioConfig};
 use vol_core::{DataSource, MonitoringEvent, PortfolioSnapshot, Result, HealthStatus, EventType};
 use vol_deribit::DeribitClient;
-use vol_tracing::{new_trace_id, Instrument};
+use vol_tracing::{new_trace_id, Instrument, TracedEvent};
 
 
 pub struct PortfolioDataSource {
@@ -114,7 +114,7 @@ impl DataSource for PortfolioDataSource {
         Ok(())
     }
 
-    async fn run(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()> {
+    async fn run(&self, tx: mpsc::Sender<TracedEvent<MonitoringEvent>>) -> Result<()> {
         info!("Starting portfolio data source with {} currencies", self.currencies.len());
 
         let base_interval = self.poll_interval_secs;
@@ -142,8 +142,10 @@ impl DataSource for PortfolioDataSource {
                             margin_balance = %snapshot.margin_balance
                         );
 
-                        let event = MonitoringEvent::Portfolio(snapshot);
-                        if let Err(e) = tx.send(event).instrument(span).await {
+                        // Wrap event with TracedEvent for span propagation
+                        let traced_event = TracedEvent::new(MonitoringEvent::Portfolio(snapshot), span.clone(), trace_id);
+
+                        if let Err(e) = tx.send(traced_event).instrument(span).await {
                             error!("Failed to send portfolio event: {}", e);
                             success = false;
                             break;

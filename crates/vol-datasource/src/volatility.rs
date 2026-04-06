@@ -72,7 +72,7 @@ impl VolatilityDataSource {
     }
 
     /// Run the datasource, sending events to the provided channel
-    pub async fn run_internal(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()> {
+    pub async fn run_internal(&self, tx: mpsc::Sender<TracedEvent<MonitoringEvent>>) -> Result<()> {
         let (internal_tx, mut internal_rx) = mpsc::channel::<TracedEvent<VolatilityData>>(1024);
 
         // Build list of all channels to subscribe to
@@ -211,11 +211,29 @@ impl VolatilityDataSource {
             }
         });
 
-        // Forward VolatilityData events as MonitoringEvent::Volatility
+        // Forward VolatilityData events as MonitoringEvent::Volatility with preserved tracing context
         while let Some(traced_vol_data) = internal_rx.recv().await {
-            let event = traced_vol_data.into_value();
-            let monitoring_event = MonitoringEvent::Volatility(event);
-            if let Err(e) = tx.send(monitoring_event).await {
+            // Split to get value, parent_span, and trace_id
+            let (vol_data, parent_span, trace_id) = traced_vol_data.split();
+            let monitoring_event = MonitoringEvent::Volatility(vol_data);
+
+            // Create forwarding span that follows from the original datasource_receive span
+            let forward_span = info_span!(
+                "datasource_forward",
+                source = %monitoring_event.source(),
+                event_type = "volatility",
+                trace_id = %trace_id,
+            );
+
+            // Establish causal relationship with the original span
+            if let Some(parent) = parent_span {
+                forward_span.follows_from(parent.id());
+            }
+
+            // Wrap with TracedEvent for propagation to engine
+            let traced_monitoring = TracedEvent::new(monitoring_event, forward_span.clone(), trace_id);
+
+            if let Err(e) = tx.send(traced_monitoring).instrument(forward_span).await {
                 error!("Failed to send event: {}", e);
                 break;
             }
@@ -247,7 +265,7 @@ impl DataSource for VolatilityDataSource {
         Ok(())
     }
 
-    async fn run(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()> {
+    async fn run(&self, tx: mpsc::Sender<TracedEvent<MonitoringEvent>>) -> Result<()> {
         self.run_internal(tx).await
     }
 

@@ -2,6 +2,7 @@ use crate::error::Result;
 use crate::event::MonitoringEvent;
 use async_trait::async_trait;
 use tokio::sync::mpsc;
+use vol_tracing::TracedEvent;
 
 /// Health status for a data source
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,7 +31,9 @@ pub trait DataSource: Send + Sync {
 
     /// Run the datasource, sending events to the provided channel.
     /// Returns when the connection is closed or an error occurs.
-    async fn run(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()>;
+    ///
+    /// Events are wrapped in TracedEvent for span propagation across channel boundaries.
+    async fn run(&self, tx: mpsc::Sender<TracedEvent<MonitoringEvent>>) -> Result<()>;
 
     /// Health check
     async fn health_check(&self) -> HealthStatus;
@@ -58,7 +61,7 @@ impl DataSource for Box<dyn DataSource> {
         (**self).connect().await
     }
 
-    async fn run(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()> {
+    async fn run(&self, tx: mpsc::Sender<TracedEvent<MonitoringEvent>>) -> Result<()> {
         (**self).run(tx).await
     }
 

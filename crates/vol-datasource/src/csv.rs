@@ -3,6 +3,7 @@
 use std::path::Path;
 use tokio::sync::mpsc;
 use vol_core::{DataSource, HealthStatus, VolError, Result, MonitoringEvent, EventType};
+use vol_tracing::TracedEvent;
 
 /// CSV file data source - reads volatility data from a CSV file
 #[derive(Clone)]
@@ -41,7 +42,7 @@ impl DataSource for CsvDataSource {
         Ok(())
     }
 
-    async fn run(&self, tx: mpsc::Sender<MonitoringEvent>) -> Result<()> {
+    async fn run(&self, tx: mpsc::Sender<TracedEvent<MonitoringEvent>>) -> Result<()> {
         // TODO: Read CSV file and stream data
         // For now, just close the channel
         drop(tx);
