@@ -27,12 +27,12 @@ impl Default for AgentConfig {
 /// ReAct Agent
 pub struct ReActAgent {
     llm: Arc<dyn LLMClient>,
-    tools: vol_llm_tool::ToolRegistry,
+    tools: Arc<vol_llm_tool::ToolRegistry>,
     config: AgentConfig,
 }
 
 impl ReActAgent {
-    pub fn new(llm: Arc<dyn LLMClient>, tools: vol_llm_tool::ToolRegistry, config: AgentConfig) -> Self {
+    pub fn new(llm: Arc<dyn LLMClient>, tools: Arc<vol_llm_tool::ToolRegistry>, config: AgentConfig) -> Self {
         Self { llm, tools, config }
     }
 
