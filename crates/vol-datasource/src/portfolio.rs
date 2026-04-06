@@ -21,25 +21,39 @@ impl PortfolioDataSource {
     pub fn from_config(client_config: DeribitClientConfig, portfolio_config: PortfolioConfig) -> Self {
         let client = DeribitClient::new(&client_config.ws_url);
 
-        // Configure auth if available
+        // Configure auth: check config first, then fallback to environment variables
         let auth_opt = &client_config.auth;
-        if let Some(auth) = auth_opt {
+        let client = if let Some(auth) = auth_opt {
             if let (Some(client_id), Some(client_secret)) = (auth.client_id(), auth.client_secret()) {
-                let client_with_auth = client.with_auth(client_id, client_secret);
-                return Self {
-                    id: portfolio_config.id,
-                    client: client_with_auth,
-                    poll_interval_secs: portfolio_config.poll_interval_secs,
-                    currencies: portfolio_config.currencies,
-                };
+                client.with_auth(client_id, client_secret)
+            } else {
+                // Config auth exists but values are None, try environment fallback
+                Self::try_env_auth(client)
             }
-        }
+        } else {
+            // No auth config section, try environment variables directly
+            Self::try_env_auth(client)
+        };
 
         Self {
             id: portfolio_config.id,
             client,
             poll_interval_secs: portfolio_config.poll_interval_secs,
             currencies: portfolio_config.currencies,
+        }
+    }
+
+    /// Try to configure auth from environment variables
+    fn try_env_auth(client: DeribitClient) -> DeribitClient {
+        let env_client_id = std::env::var("DERIBIT_CLIENT_ID").ok();
+        let env_client_secret = std::env::var("DERIBIT_CLIENT_SECRET").ok();
+
+        if let (Some(client_id), Some(client_secret)) = (env_client_id, env_client_secret) {
+            info!("Using Deribit credentials from environment variables");
+            client.with_auth(client_id, client_secret)
+        } else {
+            warn!("No Deribit credentials configured - private API calls will fail");
+            client
         }
     }
 
