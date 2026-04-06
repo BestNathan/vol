@@ -207,236 +207,39 @@ Deribit WebSocket → VolatilityDataSource → mpsc channel → main event loop
 
 ## Configuration
 
-**IMPORTANT (v0.5.0+):** Sensitive credentials must be injected via environment variables.
-Do not commit actual credentials to config files.
+⚠️ **Credentials must be injected via environment variables. Never commit secrets.**
 
-### Configuration Files
-
-| File | Purpose | Contains Secrets |
-|------|---------|------------------|
-| `config.toml` | Default (production mode) | No (env var injection) |
-| `config.dev.toml` | Local development | No |
-| `config.prod.toml` | Production | No |
-| `.env` | Local environment vars | **Yes** (gitignored) |
-
-### Environment Variables
-
-**Required for Deribit:**
+### Quick Start
 ```bash
-DERIBIT_CLIENT_ID="your-client-id"
-DERIBIT_CLIENT_SECRET="your-client-secret"
-DERIBIT_WS_URL="wss://www.deribit.com/ws/api/v2"
-```
-
-**Required for Feishu Notifications:**
-```bash
-FEISHU_APP_ID="cli_xxx"
-FEISHU_APP_SECRET="xxx"
-FEISHU_RECEIVE_ID="oc_xxx"
-```
-
-**Optional:**
-```bash
-HTTPS_PROXY="http://proxy:port"
-RUST_LOG="info"
-OTEL_ENDPOINT="http://jaeger:4317"
-```
-
-### Quick Start (Local Development)
-
-```bash
-# 1. Copy environment template
-cp .env.example .env
-
-# 2. Edit with your credentials
-vim .env
-
-# 3. Run development mode
+cp .env.example .env && vim .env
 ./scripts/run-dev.sh dev
-
-# Or manually:
-source .env
-cargo run --release -- --config config.dev.toml
 ```
 
-### Command Line
+### Required Environment Variables
+| Variable | Purpose |
+|----------|---------|
+| `DERIBIT_CLIENT_ID` | Deribit API client ID |
+| `DERIBIT_CLIENT_SECRET` | Deribit API client secret |
+| `FEISHU_APP_ID` | Feishu app ID |
+| `FEISHU_APP_SECRET` | Feishu app secret |
+| `FEISHU_RECEIVE_ID` | Feishu recipient ID |
 
+### Common Commands
 ```bash
-# Use specific config file
-./target/release/vol-monitor --config config.prod.toml
-./target/release/vol-monitor -c config.dev.toml
+# Run with config
+./target/release/vol-monitor --config config.dev.toml
 
-# Show help
-./target/release/vol-monitor --help
-```
-
-### Configuration Structure
-
-```toml
-[engine]
-hot_reload = true
-alert_cooldown_secs = 300
-
-[engine.tenor_cooldowns]
-short_secs = 600
-medium_secs = 3600
-long_secs = 14400
-
-[tenors]
-short_max_dte = 7
-medium_min_dte = 20
-medium_max_dte = 40
-long_min_dte = 80
-long_max_dte = 200
-
-[clients.deribit]
-ws_url = "wss://www.deribit.com/ws/api/v2"
-# Credentials from env vars (not in file)
-
-[[datasources]]
-id = "deribit-markets"
-type = "volatility"
-symbols = ["BTC", "ETH"]
-
-[[datasources]]
-id = "portfolio"
-type = "portfolio"
-currencies = ["BTC", "ETH"]
-poll_interval_secs = 30
-
-[[notifications]]
-id = "feishu-alerts"
-type = "feishu"
-# Credentials from env vars
-enabled = true
-
-[[notifications]]
-id = "stdout"
-type = "stdout"
-enabled = true
-
-[[rules]]
-# ... rule configurations
-```
-
-### Dev vs Prod Differences
-
-| Setting | Dev | Prod |
-|---------|-----|------|
-| Cooldowns | Short (60-600s) | Long (300-14400s) |
-| IV Thresholds | Relaxed (0.70-0.90) | Strict (0.51-0.75) |
-| Log Level | debug | info |
-| Log Format | Human-readable | JSON |
-| Feishu | Disabled | Enabled |
-| OpenTelemetry | Disabled | Enabled |
-
-### Kubernetes Deployment
-
-**1. Create Secrets (one-time):**
-```bash
-kubectl create namespace deribit
-
-kubectl create secret generic vol-monitor-secrets \
-  --from-literal=DERIBIT_CLIENT_ID=<actual-id> \
-  --from-literal=DERIBIT_CLIENT_SECRET=<actual-secret> \
-  --from-literal=FEISHU_APP_ID=<actual-app-id> \
-  --from-literal=FEISHU_APP_SECRET=<actual-app-secret> \
-  --from-literal=FEISHU_RECEIVE_ID=<actual-receive-id> \
-  -n deribit
-```
-
-**2. Deploy ConfigMap (non-sensitive config):**
-```bash
-kubectl apply -f k8s/configmap.yaml
-```
-
-**3. Deploy application:**
-```bash
-kubectl apply -f k8s/deployment.yaml
-# Or use the deploy script
-./k8s/deploy.sh latest
-```
-
-**Pod Spec Highlights:**
-```yaml
-spec:
-  nodeSelector:
-    kubernetes.io/arch: amd64
-  containers:
-  - name: vol-monitor
-    image: <acr-image>:latest
-    workingDir: /etc/vol-monitor
-    args:
-      - "--config"
-      - "config.toml"
-    env:
-    - name: DERIBIT_CLIENT_ID
-      valueFrom:
-        secretKeyRef:
-          name: vol-monitor-secrets
-          key: DERIBIT_CLIENT_ID
-    - name: DERIBIT_CLIENT_SECRET
-      valueFrom:
-        secretKeyRef:
-          name: vol-monitor-secrets
-          key: DERIBIT_CLIENT_SECRET
-    # ... more env vars from secrets
-    volumeMounts:
-    - name: config
-      mountPath: /etc/vol-monitor
-      readOnly: true
-  volumes:
-  - name: config
-    configMap:
-      name: vol-monitor-config
-```
-
-### Management Commands
-
-```bash
-# View logs
-kubectl -n deribit logs -f deployment/vol-monitor
-
-# View status
-kubectl -n deribit get pods -l app=vol-monitor
+# Kubernetes deploy
+kubectl apply -f k8s/
 
 # Restart deployment
 kubectl -n deribit rollout restart deployment/vol-monitor
-
-# Rollback
-kubectl -n deribit rollout undo deployment/vol-monitor
-
-# Update secrets (then restart)
-kubectl create secret generic vol-monitor-secrets \
-  --from-literal=DERIBIT_CLIENT_ID=<new-id> \
-  --from-literal=DERIBIT_CLIENT_SECRET=<new-secret> \
-  -n deribit --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n deribit rollout restart deployment/vol-monitor
 ```
 
-### Migration from v0.4.x
+### Full Documentation
+- **Configuration Guide**: [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+- **Design Document**: [docs/superpowers/specs/2026-04-06-config-separation-design.md](docs/superpowers/specs/2026-04-06-config-separation-design.md)
 
-If your config files contain actual credentials:
-
-1. **Move credentials to .env:**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your credentials
-   ```
-
-2. **Clean config files:**
-   ```bash
-   # Remove client_id, client_secret, app_id, app_secret, receive_id from config files
-   # They will be loaded from environment variables
-   ```
-
-3. **For K8s, create Secrets:**
-   ```bash
-   # Create secrets as shown above
-   # Update deployment.yaml if needed
-   ```
-
-**Full documentation:** See [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
 ## Deribit Integration
 
 ### vol-deribit Package
