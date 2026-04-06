@@ -2702,6 +2702,7 @@ dependencies = [
  "serde",
  "toml",
  "vol-core",
+ "vol-llm-provider",
 ]
 
 [[package]]
@@ -2807,7 +2808,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
- "vol-config",
  "vol-core",
  "vol-llm-agent",
  "vol-llm-core",
@@ -2882,6 +2882,8 @@ dependencies = [
  "vol-datasource",
  "vol-deribit",
  "vol-engine",
+ "vol-llm-bridge",
+ "vol-llm-provider",
  "vol-notification",
  "vol-rules",
 ]

@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Main tracing configuration
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct TracingConfig {
     /// Logging configuration
     #[serde(default)]
@@ -17,15 +17,6 @@ pub struct TracingConfig {
     /// OpenTelemetry/Jaeger configuration
     #[serde(default)]
     pub opentelemetry: OpenTelemetryConfig,
-}
-
-impl Default for TracingConfig {
-    fn default() -> Self {
-        Self {
-            logging: LoggingConfig::default(),
-            opentelemetry: OpenTelemetryConfig::default(),
-        }
-    }
 }
 
 /// Console and file logging configuration
