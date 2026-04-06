@@ -38,6 +38,39 @@ pub struct DeribitClientConfig {
     pub auth: Option<DeribitAuthConfig>,
 }
 
+impl DeribitClientConfig {
+    /// Get client ID, checking config first then environment variables.
+    /// This works even when `auth` section is not present in config.
+    pub fn client_id(&self) -> Option<String> {
+        // Try config first
+        if let Some(ref auth) = self.auth {
+            if let Some(ref id) = auth.client_id {
+                return Some(id.clone());
+            }
+        }
+        // Fallback to environment
+        std::env::var("DERIBIT_CLIENT_ID").ok()
+    }
+
+    /// Get client secret, checking config first then environment variables.
+    /// This works even when `auth` section is not present in config.
+    pub fn client_secret(&self) -> Option<String> {
+        // Try config first
+        if let Some(ref auth) = self.auth {
+            if let Some(ref secret) = auth.client_secret {
+                return Some(secret.clone());
+            }
+        }
+        // Fallback to environment
+        std::env::var("DERIBIT_CLIENT_SECRET").ok()
+    }
+
+    /// Check if both client ID and secret are available (from config or env).
+    pub fn has_auth(&self) -> bool {
+        self.client_id().is_some() && self.client_secret().is_some()
+    }
+}
+
 /// Binance client configuration - transport layer settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BinanceClientConfig {

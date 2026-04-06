@@ -55,18 +55,15 @@ impl VolatilityDataSource {
             client = client.with_proxy(proxy);
         }
 
-        // Configure auth: check config first, then fallback to environment variables
-        let auth_opt = &client_config.auth;
-        client = if let Some(auth) = auth_opt {
-            if let (Some(client_id), Some(client_secret)) = (auth.client_id(), auth.client_secret()) {
-                client.with_auth(client_id, client_secret)
-            } else {
-                // Config auth exists but values are None, try environment fallback
-                Self::try_env_auth(client)
-            }
+        // Configure auth from config or environment variables
+        let client = if client_config.has_auth() {
+            let client_id = client_config.client_id().expect("client_id should exist after has_auth check");
+            let client_secret = client_config.client_secret().expect("client_secret should exist after has_auth check");
+            info!("Using Deribit credentials from config or environment variables");
+            client.with_auth(client_id, client_secret)
         } else {
-            // No auth config section, try environment variables directly
-            Self::try_env_auth(client)
+            warn!("No Deribit credentials configured - private API calls will fail");
+            client
         };
 
         Self {
@@ -74,20 +71,6 @@ impl VolatilityDataSource {
             index_price_state: IndexPriceState::new(),
             symbols,
             id,
-        }
-    }
-
-    /// Try to configure auth from environment variables
-    fn try_env_auth(client: DeribitClient) -> DeribitClient {
-        let env_client_id = std::env::var("DERIBIT_CLIENT_ID").ok();
-        let env_client_secret = std::env::var("DERIBIT_CLIENT_SECRET").ok();
-
-        if let (Some(client_id), Some(client_secret)) = (env_client_id, env_client_secret) {
-            info!("Using Deribit credentials from environment variables");
-            client.with_auth(client_id, client_secret)
-        } else {
-            warn!("No Deribit credentials configured - private API calls will fail");
-            client
         }
     }
 
