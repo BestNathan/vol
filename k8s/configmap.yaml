@@ -16,6 +16,9 @@ data:
     # - FEISHU_APP_ID: Feishu app ID
     # - FEISHU_APP_SECRET: Feishu app secret
     # - FEISHU_RECEIVE_ID: Feishu message recipient ID
+    # - HTTPS_PROXY: HTTP proxy for restricted environments
+    # - HTTP_PROXY: HTTP proxy for restricted environments
+    # - NO_PROXY: Comma-separated list of hosts to bypass proxy
 
     [engine]
     hot_reload = true

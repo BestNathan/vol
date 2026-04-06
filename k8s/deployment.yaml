@@ -71,9 +71,13 @@ spec:
         # Logging
         - name: RUST_LOG
           value: "info"
-        # Network
+        # Network (required in restricted environment)
         - name: HTTPS_PROXY
           value: "http://192.168.2.98:8890"
+        - name: HTTP_PROXY
+          value: "http://192.168.2.98:8890"
+        - name: NO_PROXY
+          value: "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,kubernetes.default.svc,.svc.cluster.local"
       volumes:
       - name: config
         configMap:
