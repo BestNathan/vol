@@ -11,13 +11,13 @@ cargo build --release
 # Check without building
 cargo check --workspace
 
-# Run the monitor
-HTTPS_PROXY=http://<proxy>:<port> ./target/release/vol-monitor
+# Run with environment variables (after setting up .env)
+source .env && ./target/release/vol-monitor --config config.dev.toml
 
 # Run with logging
-RUST_LOG=info HTTPS_PROXY=http://<proxy>:<port> ./target/release/vol-monitor
+RUST_LOG=info ./target/release/vol-monitor --config config.dev.toml
 
-# Run tests (if any exist)
+# Run tests
 cargo test --workspace
 ```
 
@@ -154,54 +154,9 @@ docker buildx imagetools inspect crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.al
 | Namespace | `deribit` | - |
 | Deployment | `vol-monitor` | `deribit` |
 | ConfigMap | `vol-monitor-config` | `deribit` |
+| Secret | `vol-monitor-secrets` | `deribit` |
 
-### Pod Spec Highlights
-
-```yaml
-spec:
-  nodeSelector:
-    kubernetes.io/arch: amd64  # Required: image is amd64 only
-  containers:
-  - name: vol-monitor
-    image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:latest
-    workingDir: /etc/vol-monitor  # Config mounted here
-    args:
-      - "--config"
-      - "config.toml"
-    env:
-    - name: RUST_LOG
-      value: "info"
-    - name: HTTPS_PROXY
-      value: "http://192.168.2.98:8890"  # Required for Deribit API access
-    volumeMounts:
-    - name: config
-      mountPath: /etc/vol-monitor
-      readOnly: true
-  volumes:
-  - name: config
-    configMap:
-      name: vol-monitor-config
-```
-
-### Management Commands
-
-```bash
-# View logs
-kubectl -n deribit logs -f deployment/vol-monitor
-
-# View status
-kubectl -n deribit get pods -l app=vol-monitor
-
-# Restart deployment
-kubectl -n deribit rollout restart deployment/vol-monitor
-
-# Rollback
-kubectl -n deribit rollout undo deployment/vol-monitor
-
-# Update ConfigMap
-kubectl -n deribit delete configmap vol-monitor-config
-kubectl -n deribit create configmap vol-monitor-config --from-file=config.toml=/root/nq-deribit/config.toml
-```
+See **Configuration** section above for pod spec details and management commands.
 
 ## Architecture Overview
 
@@ -252,33 +207,94 @@ Deribit WebSocket → VolatilityDataSource → mpsc channel → main event loop
 
 ## Configuration
 
-Main config file: `config.toml`
+**IMPORTANT (v0.5.0+):** Sensitive credentials must be injected via environment variables.
+Do not commit actual credentials to config files.
 
-**Configuration has been separated (v0.4.0+):**
-- `[clients.deribit]` - Client transport configuration (ws_url, auth)
-- `[[datasources]]` - Data source configuration (symbols, currencies, poll intervals)
-- `[tenors]` - DTE boundaries for tenor classification
-- `[alerts]` - Cooldown period and per-type thresholds
-- `[notifications]` - Notification channels (stdout, feishu)
+### Configuration Files
 
-### Client Configuration (v0.4.0+)
+| File | Purpose | Contains Secrets |
+|------|---------|------------------|
+| `config.toml` | Default (production mode) | No (env var injection) |
+| `config.dev.toml` | Local development | No |
+| `config.prod.toml` | Production | No |
+| `.env` | Local environment vars | **Yes** (gitignored) |
 
-Client configuration is defined globally under `[clients]` section:
+### Environment Variables
 
-```toml
-[clients.deribit]
-ws_url = "wss://www.deribit.com/ws/api/v2"
-client_id = "your_client_id"
-client_secret = "your_client_secret"
+**Required for Deribit:**
+```bash
+DERIBIT_CLIENT_ID="your-client-id"
+DERIBIT_CLIENT_SECRET="your-client-secret"
+DERIBIT_WS_URL="wss://www.deribit.com/ws/api/v2"
 ```
 
-### Data Source Configuration (v0.4.0+)
+**Required for Feishu Notifications:**
+```bash
+FEISHU_APP_ID="cli_xxx"
+FEISHU_APP_SECRET="xxx"
+FEISHU_RECEIVE_ID="oc_xxx"
+```
 
-Data sources only define data-specific settings and reference client configuration implicitly:
+**Optional:**
+```bash
+HTTPS_PROXY="http://proxy:port"
+RUST_LOG="info"
+OTEL_ENDPOINT="http://jaeger:4317"
+```
+
+### Quick Start (Local Development)
+
+```bash
+# 1. Copy environment template
+cp .env.example .env
+
+# 2. Edit with your credentials
+vim .env
+
+# 3. Run development mode
+./scripts/run-dev.sh dev
+
+# Or manually:
+source .env
+cargo run --release -- --config config.dev.toml
+```
+
+### Command Line
+
+```bash
+# Use specific config file
+./target/release/vol-monitor --config config.prod.toml
+./target/release/vol-monitor -c config.dev.toml
+
+# Show help
+./target/release/vol-monitor --help
+```
+
+### Configuration Structure
 
 ```toml
+[engine]
+hot_reload = true
+alert_cooldown_secs = 300
+
+[engine.tenor_cooldowns]
+short_secs = 600
+medium_secs = 3600
+long_secs = 14400
+
+[tenors]
+short_max_dte = 7
+medium_min_dte = 20
+medium_max_dte = 40
+long_min_dte = 80
+long_max_dte = 200
+
+[clients.deribit]
+ws_url = "wss://www.deribit.com/ws/api/v2"
+# Credentials from env vars (not in file)
+
 [[datasources]]
-id = "market-data"
+id = "deribit-markets"
 type = "volatility"
 symbols = ["BTC", "ETH"]
 
@@ -287,35 +303,140 @@ id = "portfolio"
 type = "portfolio"
 currencies = ["BTC", "ETH"]
 poll_interval_secs = 30
+
+[[notifications]]
+id = "feishu-alerts"
+type = "feishu"
+# Credentials from env vars
+enabled = true
+
+[[notifications]]
+id = "stdout"
+type = "stdout"
+enabled = true
+
+[[rules]]
+# ... rule configurations
 ```
 
-**Migration from v0.3.x:**
-- Move `ws_url` and `auth` from `[[datasources]]` to `[clients.deribit]`
-- Change `provider = "deribit"` to `type = "volatility"`
-- Change `provider = "deribit-portfolio"` to `type = "portfolio"`
-- Remove `enabled` field (not needed, unused datasources can be commented out)
+### Dev vs Prod Differences
 
-### Feishu (Lark) Configuration
+| Setting | Dev | Prod |
+|---------|-----|------|
+| Cooldowns | Short (60-600s) | Long (300-14400s) |
+| IV Thresholds | Relaxed (0.70-0.90) | Strict (0.51-0.75) |
+| Log Level | debug | info |
+| Log Format | Human-readable | JSON |
+| Feishu | Disabled | Enabled |
+| OpenTelemetry | Disabled | Enabled |
 
-Feishu notification uses OAuth 2.0 app access token:
+### Kubernetes Deployment
 
-```toml
-[notifications.feishu]
-app_id = "cli_xxx"           # Get from https://open.feishu.cn/app
-app_secret = "xxx"           # App secret from Feishu console
-receive_id = "oc_xxx"        # Chat ID or user ID to receive messages
-message_template = "🚨 {tenor} {alert_type}: {symbol} IV={value}"
+**1. Create Secrets (one-time):**
+```bash
+kubectl create namespace deribit
+
+kubectl create secret generic vol-monitor-secrets \
+  --from-literal=DERIBIT_CLIENT_ID=<actual-id> \
+  --from-literal=DERIBIT_CLIENT_SECRET=<actual-secret> \
+  --from-literal=FEISHU_APP_ID=<actual-app-id> \
+  --from-literal=FEISHU_APP_SECRET=<actual-app-secret> \
+  --from-literal=FEISHU_RECEIVE_ID=<actual-receive-id> \
+  -n deribit
 ```
 
-**Getting Feishu credentials:**
-1. Create a bot app at https://open.feishu.cn/app
-2. Get `app_id` and `app_secret` from app credentials
-3. Add bot to a group chat, get the `chat_id` as `receive_id`
-4. Enable "Bot" and "Send messages" permissions
+**2. Deploy ConfigMap (non-sensitive config):**
+```bash
+kubectl apply -f k8s/configmap.yaml
+```
 
-**API Reference:**
-- Access Token: `POST /open-apis/auth/v3/app_access_token/internal`
-- Send Message: `POST /open-apis/im/v1/messages`
+**3. Deploy application:**
+```bash
+kubectl apply -f k8s/deployment.yaml
+# Or use the deploy script
+./k8s/deploy.sh latest
+```
+
+**Pod Spec Highlights:**
+```yaml
+spec:
+  nodeSelector:
+    kubernetes.io/arch: amd64
+  containers:
+  - name: vol-monitor
+    image: <acr-image>:latest
+    workingDir: /etc/vol-monitor
+    args:
+      - "--config"
+      - "config.toml"
+    env:
+    - name: DERIBIT_CLIENT_ID
+      valueFrom:
+        secretKeyRef:
+          name: vol-monitor-secrets
+          key: DERIBIT_CLIENT_ID
+    - name: DERIBIT_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: vol-monitor-secrets
+          key: DERIBIT_CLIENT_SECRET
+    # ... more env vars from secrets
+    volumeMounts:
+    - name: config
+      mountPath: /etc/vol-monitor
+      readOnly: true
+  volumes:
+  - name: config
+    configMap:
+      name: vol-monitor-config
+```
+
+### Management Commands
+
+```bash
+# View logs
+kubectl -n deribit logs -f deployment/vol-monitor
+
+# View status
+kubectl -n deribit get pods -l app=vol-monitor
+
+# Restart deployment
+kubectl -n deribit rollout restart deployment/vol-monitor
+
+# Rollback
+kubectl -n deribit rollout undo deployment/vol-monitor
+
+# Update secrets (then restart)
+kubectl create secret generic vol-monitor-secrets \
+  --from-literal=DERIBIT_CLIENT_ID=<new-id> \
+  --from-literal=DERIBIT_CLIENT_SECRET=<new-secret> \
+  -n deribit --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n deribit rollout restart deployment/vol-monitor
+```
+
+### Migration from v0.4.x
+
+If your config files contain actual credentials:
+
+1. **Move credentials to .env:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your credentials
+   ```
+
+2. **Clean config files:**
+   ```bash
+   # Remove client_id, client_secret, app_id, app_secret, receive_id from config files
+   # They will be loaded from environment variables
+   ```
+
+3. **For K8s, create Secrets:**
+   ```bash
+   # Create secrets as shown above
+   # Update deployment.yaml if needed
+   ```
+
+**Full documentation:** See [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
 ## Deribit Integration
 
 ### vol-deribit Package
@@ -350,8 +471,21 @@ The Volatility datasource (`crates/vol-datasource/src/volatility.rs`) uses `Deri
 ### Proxy Support
 
 Set `HTTPS_PROXY` environment variable for HTTP proxy tunneling:
+
 ```bash
-HTTPS_PROXY=http://192.168.2.98:8890 ./target/release/vol-monitor
+# In .env file (local development)
+HTTPS_PROXY="http://192.168.2.98:8890"
+
+# Or as environment variable
+export HTTPS_PROXY="http://192.168.2.98:8890"
+./target/release/vol-monitor --config config.toml
+```
+
+For Kubernetes, set in `deployment.yaml`:
+```yaml
+env:
+- name: HTTPS_PROXY
+  value: "http://192.168.2.98:8890"
 ```
 
 ## Deribit API Documentation
