@@ -43,6 +43,8 @@ pub struct AgentAdviceService {
     config: AgentAdviceConfig,
     registry: LLMProviderRegistry,
     tools: Arc<ToolRegistry>,
+    /// TDengine client - reserved for future TDengine integration
+    #[allow(dead_code)]
     tdengine: Arc<TdengineClient>,
     feishu: FeishuNotification,
 }
@@ -112,13 +114,16 @@ impl AgentAdviceService {
         let advice = self.generate_advice(alert).await
             .unwrap_or_else(|e| format!("Failed to generate advice: {}", e));
 
-        // Send advice to Feishu using the stored feishu client
-        self.feishu.send_advice(&advice, alert, trace_id).await?;
+        // Send advice to Feishu
+        self.send_advice(&advice, alert, trace_id).await?;
 
         Ok(())
     }
 
     /// Fetch history data from TDengine
+    ///
+    /// TODO: Integrate into generate_advice for contextual analysis
+    #[allow(dead_code)]
     async fn fetch_history(&self, _symbol: &str) -> String {
         // TODO: Implement TDengine integration
         // For now, return placeholder
