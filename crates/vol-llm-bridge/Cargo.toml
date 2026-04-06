@@ -1,0 +1,18 @@
+[package]
+name = "vol-llm-bridge"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+vol-core = { workspace = true }
+vol-config = { workspace = true }
+vol-tracing = { workspace = true }
+vol-notification = { workspace = true }
+vol-llm-core = { path = "../vol-llm-core" }
+vol-llm-agent = { path = "../vol-llm-agent" }
+vol-llm-tool = { path = "../vol-llm-tool" }
+vol-llm-provider = { path = "../vol-llm-provider" }

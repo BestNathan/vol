@@ -1,0 +1,15 @@
+[package]
+name = "vol-llm-provider"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { workspace = true }
+tracing = { workspace = true }
+toml = { workspace = true }
+vol-llm-core = { path = "../vol-llm-core" }

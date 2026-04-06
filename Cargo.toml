@@ -12,6 +12,11 @@ members = [
     "crates/vol-engine",
     "crates/vol-rules",
     "crates/vol-tracing",
+    "crates/vol-llm-core",
+    "crates/vol-llm-provider",
+    "crates/vol-llm-tool",
+    "crates/vol-llm-agent",
+    "crates/vol-llm-bridge",
 ]
 
 [workspace.package]
@@ -36,6 +41,12 @@ reqwest = { version = "0.11", default-features = false, features = ["json", "rus
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"
+
+# Internal crates
+vol-llm-core = { path = "crates/vol-llm-core" }
+vol-llm-provider = { path = "crates/vol-llm-provider" }
+vol-llm-tool = { path = "crates/vol-llm-tool" }
+vol-llm-agent = { path = "crates/vol-llm-agent" }
 
 # Time
 chrono = { version = "0.4", features = ["serde"] }

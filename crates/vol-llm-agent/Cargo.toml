@@ -1,0 +1,14 @@
+[package]
+name = "vol-llm-agent"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+vol-llm-core = { path = "../vol-llm-core" }
+vol-llm-tool = { path = "../vol-llm-tool" }

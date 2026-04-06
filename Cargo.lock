@@ -2786,6 +2786,80 @@ dependencies = [
 ]
 
 [[package]]
+name = "vol-llm-agent"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "vol-llm-core",
+ "vol-llm-tool",
+]
+
+[[package]]
+name = "vol-llm-bridge"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "vol-config",
+ "vol-core",
+ "vol-llm-agent",
+ "vol-llm-core",
+ "vol-llm-provider",
+ "vol-llm-tool",
+ "vol-notification",
+ "vol-tracing",
+]
+
+[[package]]
+name = "vol-llm-core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "vol-core",
+]
+
+[[package]]
+name = "vol-llm-provider"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "toml",
+ "tracing",
+ "vol-llm-core",
+]
+
+[[package]]
+name = "vol-llm-tool"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "vol-core",
+ "vol-llm-core",
+]
+
+[[package]]
 name = "vol-monitor"
 version = "0.1.0"
 dependencies = [
