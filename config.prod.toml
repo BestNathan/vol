@@ -1,13 +1,13 @@
-# config.toml - Default vol-monitor configuration
-# 默认配置文件
+# config.prod.toml - Production configuration
+# 生产环境配置
 #
-# 注意：敏感凭证应通过环境变量注入
-# Sensitive credentials should be injected via environment variables
+# 注意：敏感凭证已通过环境变量注入
+# 本文件不包含任何敏感信息
 #
 # Required environment variables:
 # - DERIBIT_CLIENT_ID: Deribit API client ID
 # - DERIBIT_CLIENT_SECRET: Deribit API client secret
-# - FEISHU_APP_ID: Feishu app ID (if using Feishu notifications)
+# - FEISHU_APP_ID: Feishu app ID
 # - FEISHU_APP_SECRET: Feishu app secret
 # - FEISHU_RECEIVE_ID: Feishu message recipient ID
 
@@ -32,7 +32,9 @@ long_max_dte = 200
 # Client configuration - credentials from environment variables
 [clients.deribit]
 ws_url = "wss://www.deribit.com/ws/api/v2"
-# Credentials from env: DERIBIT_CLIENT_ID, DERIBIT_CLIENT_SECRET
+# Credentials injected via environment variables:
+# - DERIBIT_CLIENT_ID
+# - DERIBIT_CLIENT_SECRET
 
 # Data sources
 [[datasources]]
@@ -50,7 +52,10 @@ poll_interval_secs = 30
 [[notifications]]
 id = "feishu-alerts"
 type = "feishu"
-# Credentials from env: FEISHU_APP_ID, FEISHU_APP_SECRET, FEISHU_RECEIVE_ID
+# Credentials injected via environment variables:
+# - FEISHU_APP_ID
+# - FEISHU_APP_SECRET
+# - FEISHU_RECEIVE_ID
 enabled = true
 
 [[notifications]]
@@ -58,7 +63,7 @@ id = "stdout"
 type = "stdout"
 enabled = true
 
-# Rules
+# Rules - production thresholds
 [[rules]]
 id = "absolute-iv-btc"
 type = "absolute-iv"
@@ -142,7 +147,7 @@ metrics = [
 ]
 notifications = ["feishu-alerts", "stdout"]
 
-# Tracing configuration
+# Tracing configuration for production
 [tracing]
 [tracing.logging]
 log_dir = "/var/log/vol-monitor"
@@ -155,6 +160,7 @@ error_file = true
 
 [tracing.opentelemetry]
 enabled = true
+# Override with OTEL_ENDPOINT env var
 endpoint = "http://jaeger-collector.observability.svc.cluster.local:4317"
 service_name = "vol-monitor"
 service_namespace = "deribit"

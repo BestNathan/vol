@@ -36,9 +36,38 @@ spec:
           mountPath: /etc/vol-monitor
           readOnly: true
         env:
+        # Deribit API credentials (from Secrets)
+        - name: DERIBIT_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: vol-monitor-secrets
+              key: DERIBIT_CLIENT_ID
+        - name: DERIBIT_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: vol-monitor-secrets
+              key: DERIBIT_CLIENT_SECRET
+
+        # Feishu credentials (from Secrets)
+        - name: FEISHU_APP_ID
+          valueFrom:
+            secretKeyRef:
+              name: vol-monitor-secrets
+              key: FEISHU_APP_ID
+        - name: FEISHU_APP_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: vol-monitor-secrets
+              key: FEISHU_APP_SECRET
+        - name: FEISHU_RECEIVE_ID
+          valueFrom:
+            secretKeyRef:
+              name: vol-monitor-secrets
+              key: FEISHU_RECEIVE_ID
+
         # Tracing
         - name: OTEL_ENDPOINT
-          value: "http://jaeger-collector.observability:14250"
+          value: "http://jaeger-collector.observability.svc.cluster.local:4317"
         # Logging
         - name: RUST_LOG
           value: "info"

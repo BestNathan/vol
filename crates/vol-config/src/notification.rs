@@ -16,11 +16,37 @@ pub struct FeishuNotificationConfig {
     pub id: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    #[serde(default)]
     pub app_id: String,
+    #[serde(default)]
     pub app_secret: String,
+    #[serde(default)]
     pub receive_id: String,
     #[serde(default = "default_template")]
     pub message_template: String,
+}
+
+impl FeishuNotificationConfig {
+    /// Get app ID, checking environment variables first.
+    pub fn app_id(&self) -> String {
+        std::env::var("FEISHU_APP_ID")
+            .ok()
+            .unwrap_or_else(|| self.app_id.clone())
+    }
+
+    /// Get app secret, checking environment variables first.
+    pub fn app_secret(&self) -> String {
+        std::env::var("FEISHU_APP_SECRET")
+            .ok()
+            .unwrap_or_else(|| self.app_secret.clone())
+    }
+
+    /// Get receive ID, checking environment variables first.
+    pub fn receive_id(&self) -> String {
+        std::env::var("FEISHU_RECEIVE_ID")
+            .ok()
+            .unwrap_or_else(|| self.receive_id.clone())
+    }
 }
 
 /// Feishu config for backwards compatibility with vol-notification

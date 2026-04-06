@@ -7,7 +7,15 @@ metadata:
     app: vol-monitor
 data:
   config.toml: |
-    # config.toml for vol-monitor - Separated client and datasource configuration
+    # config.toml for vol-monitor - Production configuration
+    # Sensitive credentials are injected via environment variables from Secrets
+    #
+    # Required environment variables:
+    # - DERIBIT_CLIENT_ID: Deribit API client ID
+    # - DERIBIT_CLIENT_SECRET: Deribit API client secret
+    # - FEISHU_APP_ID: Feishu app ID
+    # - FEISHU_APP_SECRET: Feishu app secret
+    # - FEISHU_RECEIVE_ID: Feishu message recipient ID
 
     [engine]
     hot_reload = true
@@ -27,13 +35,14 @@ data:
     long_min_dte = 80
     long_max_dte = 200
 
-    # Client configuration - global, by type
+    # Client configuration - credentials from environment variables
     [clients.deribit]
     ws_url = "wss://www.deribit.com/ws/api/v2"
-    client_id = "nhXng7Bj"
-    client_secret = "OxCGY10HlzgKfRoXPBRQqg5IBQcZguGPhE1tewP5U3Y"
+    # Credentials injected via:
+    # - DERIBIT_CLIENT_ID
+    # - DERIBIT_CLIENT_SECRET
 
-    # Data sources - data-specific configuration only
+    # Data sources
     [[datasources]]
     id = "deribit-markets"
     type = "volatility"
@@ -45,13 +54,14 @@ data:
     currencies = ["BTC", "ETH"]
     poll_interval_secs = 30
 
-    # Notifications
+    # Notifications - credentials from environment variables
     [[notifications]]
     id = "feishu-alerts"
     type = "feishu"
-    app_id = "cli_a936b13197385bde"
-    app_secret = "JnWnFrrOvzHi4deDmFY9kd1NMGbiWuNz"
-    receive_id = "oc_c29208d94757e2aefd97bfa5f57e0b26"
+    # Credentials injected via:
+    # - FEISHU_APP_ID
+    # - FEISHU_APP_SECRET
+    # - FEISHU_RECEIVE_ID
     enabled = true
 
     [[notifications]]
@@ -143,18 +153,20 @@ data:
     ]
     notifications = ["feishu-alerts", "stdout"]
 
+    # Tracing configuration
     [tracing]
     [tracing.logging]
-    log_dir = "logs"
+    log_dir = "/var/log/vol-monitor"
     log_prefix = "vol-monitor"
     retention_days = 7
     json_format = true
     console_level = "info"
+    file_level = "debug"
     error_file = true
 
     [tracing.opentelemetry]
     enabled = true
-    endpoint = "http://jaeger-collector.observability:4317"
+    endpoint = "http://jaeger-collector.observability.svc.cluster.local:4317"
     service_name = "vol-monitor"
     service_namespace = "deribit"
     deployment_environment = "production"

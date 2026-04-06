@@ -25,3 +25,8 @@ logs/
 # Temp
 temp/
 temp/.worktrees
+
+# Environment files (sensitive)
+.env
+.env.local
+.env.*.local

@@ -14,11 +14,60 @@ use vol_notification::{StdoutNotification, FeishuNotification};
 use vol_rules::{AbsoluteIvRule, RateChangeRule, TermStructureRule, SkewRule, PortfolioRule};
 use vol_config::{TermStructureConfig, SkewConfig};
 
+/// Parse command line arguments
+fn parse_args() -> Option<String> {
+    let args: Vec<String> = std::env::args().collect();
+    let mut config_path = None;
+
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--config" | "-c" => {
+                if i + 1 < args.len() {
+                    config_path = Some(args[i + 1].clone());
+                    i += 2;
+                } else {
+                    eprintln!("Error: --config requires a file path");
+                    std::process::exit(1);
+                }
+            }
+            "--help" | "-h" => {
+                println!("vol-monitor - Deribit Volatility Monitor");
+                println!();
+                println!("Usage: vol-monitor [OPTIONS]");
+                println!();
+                println!("Options:");
+                println!("  -c, --config <FILE>  Configuration file path (default: config.toml)");
+                println!("  -h, --help           Print this help message");
+                println!();
+                println!("Environment variables:");
+                println!("  DERIBIT_CLIENT_ID      Deribit API client ID");
+                println!("  DERIBIT_CLIENT_SECRET  Deribit API client secret");
+                println!("  FEISHU_APP_ID          Feishu app ID");
+                println!("  FEISHU_APP_SECRET      Feishu app secret");
+                println!("  FEISHU_RECEIVE_ID      Feishu message recipient ID");
+                println!("  HTTPS_PROXY            HTTP proxy for API calls");
+                println!("  RUST_LOG               Log level filter");
+                std::process::exit(0);
+            }
+            _ => {
+                eprintln!("Unknown option: {}", args[i]);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    config_path
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Parse command line arguments
+    let config_path = parse_args().unwrap_or_else(|| "config.toml".to_string());
+
     // Load configuration
-    let config = Config::load("config.toml").unwrap_or_else(|e| {
-        warn!("Failed to load config.toml: {}", e);
+    let config = Config::load(&config_path).unwrap_or_else(|e| {
+        warn!("Failed to load {}: {}", config_path, e);
         warn!("Using default configuration");
         create_default_config()
     });
@@ -92,10 +141,11 @@ async fn main() -> Result<()> {
                 if !feishu_cfg.enabled {
                     continue;
                 }
+                // Use environment variable methods from FeishuNotificationConfig
                 let feishu_config = vol_config::FeishuConfig {
-                    app_id: Some(feishu_cfg.app_id.clone()),
-                    app_secret: Some(feishu_cfg.app_secret.clone()),
-                    receive_id: Some(feishu_cfg.receive_id.clone()),
+                    app_id: Some(feishu_cfg.app_id()),
+                    app_secret: Some(feishu_cfg.app_secret()),
+                    receive_id: Some(feishu_cfg.receive_id()),
                     message_template: feishu_cfg.message_template.clone(),
                 };
                 match FeishuNotification::new(feishu_config) {
