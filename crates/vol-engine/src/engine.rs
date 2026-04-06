@@ -56,8 +56,8 @@ impl MonitoringEngine {
         // Create channels
         // Use broadcast for events (multiple rules can subscribe)
         let (event_tx, _) = broadcast::channel::<TracedEvent<MonitoringEvent>>(self.config.event_buffer_size);
-        // Use mpsc for alerts (single queue for all notifications)
-        let (alert_tx, alert_rx) = mpsc::channel::<TracedEvent<Alert>>(self.config.alert_buffer_size);
+        // Use broadcast for alerts (multiple subscribers: notifications + AgentAdviceService)
+        let (alert_tx, _) = broadcast::channel::<TracedEvent<Alert>>(self.config.alert_buffer_size);
 
         // Spawn datasources - each runs independently
         let ds_handles = self.spawn_datasources(event_tx.clone());
@@ -68,10 +68,10 @@ impl MonitoringEngine {
         // Create AlertManager with config
         // AlertManager is created here in run() because it needs to be moved into
         // spawn_notifications, which takes ownership to transfer to the spawned task
-        let alert_manager = AlertManager::new(self.config.config_file.clone());
+        let alert_manager = Arc::new(AlertManager::new(self.config.config_file.clone()));
 
-        // Spawn notifications - single consumer for alerts
-        let notif_handles = self.spawn_notifications(alert_rx, alert_manager);
+        // Spawn notifications - subscribe to broadcast for alerts
+        let notif_handles = self.spawn_notifications(alert_tx.subscribe(), alert_manager);
 
         // Collect all handles
         let all_handles = ds_handles.into_iter()
@@ -126,7 +126,7 @@ impl MonitoringEngine {
     fn spawn_rules(
         &self,
         event_tx: broadcast::Sender<TracedEvent<MonitoringEvent>>,
-        alert_tx: mpsc::Sender<TracedEvent<Alert>>,
+        alert_tx: broadcast::Sender<TracedEvent<Alert>>,
     ) -> Vec<JoinHandle<Result<()>>> {
         self.rules
             .iter()
@@ -188,8 +188,12 @@ impl MonitoringEngine {
                             let traced_alert = TracedEvent::new(alert, alert_span.clone(), trace_id.clone());
 
                             // Send alert within span context
-                            if let Err(e) = tx.send(traced_alert).instrument(alert_span).await {
-                                error!(error = %e, "Failed to send alert");
+                            // broadcast::send is synchronous (returns Result<usize, SendError>)
+                            // usize is the number of receivers that successfully received
+                            // Error only when no receivers are subscribed (shouldn't happen in normal operation)
+                            let _span = alert_span.enter();
+                            if let Err(e) = tx.send(traced_alert) {
+                                error!(error = %e, "Failed to broadcast alert (no receivers)");
                                 break;
                             }
                         }
@@ -202,8 +206,8 @@ impl MonitoringEngine {
 
     fn spawn_notifications(
         &self,
-        mut alert_rx: mpsc::Receiver<TracedEvent<Alert>>,
-        alert_manager: AlertManager,
+        alert_rx: broadcast::Receiver<TracedEvent<Alert>>,
+        alert_manager: Arc<AlertManager>,
     ) -> Vec<JoinHandle<Result<()>>> {
         // For notifications, we use a fan-out pattern where each notification channel
         // runs in the same task to avoid needing mpsc resubscribe
@@ -218,10 +222,10 @@ impl MonitoringEngine {
         }
 
         let num_notifications = notifications.len();
-        let alert_manager = Arc::new(alert_manager);
         vec![tokio::spawn(async move {
             info!("Starting {} notification channels", num_notifications);
-            while let Some(traced_alert) = alert_rx.recv().await {
+            let mut rx = alert_rx;
+            while let Ok(traced_alert) = rx.recv().await {
                 // Extract alert, span, and trace_id from the wrapper
                 let (mut alert, parent_span, trace_id) = traced_alert.split();
 

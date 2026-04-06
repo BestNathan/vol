@@ -97,3 +97,33 @@ pub trait Tool: Send + Sync {
     async fn execute(&self, args: &str, context: &ToolContext)
         -> std::result::Result<ToolResult, Box<dyn Error + Send>>;
 }
+
+/// Blanket implementation of Tool for any type that implements ExecutableTool
+#[async_trait]
+impl<T: ExecutableTool + Send + Sync> Tool for T {
+    fn name(&self) -> &str {
+        self.name()
+    }
+
+    fn description(&self) -> &str {
+        self.description()
+    }
+
+    fn parameters(&self) -> Option<serde_json::Value> {
+        Some(self.parameters())
+    }
+
+    async fn execute(
+        &self,
+        args: &str,
+        context: &ToolContext,
+    ) -> std::result::Result<ToolResult, Box<dyn Error + Send>> {
+        // Parse JSON arguments
+        let json_args: serde_json::Value = serde_json::from_str(args)
+            .map_err(|e| -> Box<dyn Error + Send> { Box::new(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Invalid JSON: {}", e))) })?;
+
+        self.execute(&json_args, context)
+            .await
+            .map_err(|e| -> Box<dyn Error + Send> { Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Tool execution failed: {}", e))) })
+    }
+}

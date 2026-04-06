@@ -27,6 +27,7 @@ impl Default for TdengineConfig {
 }
 
 /// TDengine client
+#[derive(Clone)]
 pub struct TdengineClient {
     client: Client,
     base_url: String,

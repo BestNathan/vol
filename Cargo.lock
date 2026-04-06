@@ -2804,6 +2804,7 @@ dependencies = [
 name = "vol-llm-bridge"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "serde",
  "serde_json",
  "tokio",
@@ -2883,8 +2884,10 @@ dependencies = [
  "vol-datasource",
  "vol-deribit",
  "vol-engine",
+ "vol-llm-agent",
  "vol-llm-bridge",
  "vol-llm-provider",
+ "vol-llm-tool",
  "vol-notification",
  "vol-rules",
 ]
