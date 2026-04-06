@@ -82,7 +82,7 @@ pub struct AgentAdviceService {
     registry: LLMProviderRegistry,
     tools: ToolRegistry,           // NEW: for agent tool calling
     tdengine: TdengineClient,      // NEW: for historical data
-    feishu: FeishuClient,          // NEW: dedicated Feishu client
+    feishu: FeishuNotification,    // NEW: uses openlark SDK
 }
 ```
 
@@ -90,7 +90,7 @@ pub struct AgentAdviceService {
 - `new(config, registry, tools, tdengine, feishu) -> Self`
 - `process_alert(&self, alert: &Alert) -> Result<()>` - existing, adapted
 - `generate_advice(&self, alert: &Alert) -> Result<String>` - uses agent
-- `send_advice(&self, advice: &str, alert: &Alert) -> Result<()>` - uses Feishu
+- `send_advice(&self, advice: &str, alert: &Alert) -> Result<()>` - uses FeishuNotification
 
 ### 2. NotificationHandler Implementation
 
@@ -124,40 +124,32 @@ impl NotificationHandler for AgentAdviceService {
 }
 ```
 
-### 3. Dedicated Feishu Client
+### 3. Feishu Client (using openlark)
 
-**Location:** `crates/vol-llm-bridge/src/feishu.rs` (NEW)
+**Location:** Reuse existing `FeishuNotification` from `vol-notification`
+
+**Note:** No need to create a new Feishu client. The existing `FeishuNotification` in `vol-notification` already uses the `openlark` SDK and can be reused.
 
 ```rust
-pub struct FeishuClient {
-    app_id: String,
-    app_secret: String,
-    receive_id: String,
-    client: reqwest::Client,
-}
+use vol_notification::FeishuNotification;
+use vol_config::FeishuConfig;
 
-impl FeishuClient {
-    pub fn new(app_id: String, app_secret: String, receive_id: String) -> Self;
-    pub async fn send_advice(&self, advice: &str, alert: &Alert) -> Result<()>;
-}
+// In main.rs
+let feishu_config = FeishuConfig {
+    app_id: config.feishu_app_id.clone(),
+    app_secret: config.feishu_app_secret.clone(),
+    receive_id: config.feishu_receive_id.clone(),
+    message_template: "{tenor} {alert_type} {symbol} | IV={value} | AI Analysis: {advice}".to_string(),
+};
+let feishu = FeishuNotification::new(feishu_config)?;
 ```
 
-**Message Format:**
-```
-【AI 分析建议】
+**For AgentAdvice custom message format:**
 
-预警类型：{alert_type}
-标的物：{symbol}
-期限：{tenor}
-当前 IV: {iv}
-阈值：{threshold}
+Option A: Extend `FeishuNotification` with a custom `send_advice()` method
+Option B: Create a lightweight wrapper that uses the internal `openlark::Client`
 
-分析建议：
-{advice}
-
----
-Trace ID: {trace_id}
-```
+**Recommended:** Option A - Add a method to `FeishuNotification` for sending AI analysis messages with a different template.
 
 ### 4. ToolRegistry Setup
 
@@ -211,12 +203,14 @@ let mut tools = ToolRegistry::new();
 tools.register(AlertHistoryTool::new(Some(tdengine_config.clone())));
 // ... register other tools
 
-// Initialize Feishu client for AgentAdvice
-let agent_feishu = FeishuClient::new(
-    config.feishu_app_id.clone(),
-    config.feishu_app_secret.clone(),
-    config.feishu_receive_id.clone(),
-);
+// Initialize Feishu notification (reuses openlark SDK)
+let feishu_config = FeishuConfig {
+    app_id: config.feishu_app_id.clone(),
+    app_secret: config.feishu_app_secret.clone(),
+    receive_id: config.feishu_receive_id.clone(),
+    message_template: "{tenor} {alert_type} {symbol} | IV={value}\n\nAI Analysis:\n{advice}".to_string(),
+};
+let feishu = FeishuNotification::new(feishu_config)?;
 
 // Create AgentAdviceService
 let agent_service = AgentAdviceService::new(
@@ -224,7 +218,7 @@ let agent_service = AgentAdviceService::new(
     llm_registry.clone(),
     tools,
     tdengine_client,
-    agent_feishu,
+    feishu,
 );
 
 // Add as notification handler
