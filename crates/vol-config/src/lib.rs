@@ -342,6 +342,88 @@ mod tests {
     }
 
     #[test]
+    fn test_deribit_client_config_env_priority() {
+        // Set env vars for testing
+        std::env::set_var("DERIBIT_CLIENT_ID", "env_client_id");
+        std::env::set_var("DERIBIT_CLIENT_SECRET", "env_client_secret");
+
+        let config = DeribitClientConfig {
+            ws_url: "wss://test.com".to_string(),
+            auth: Some(DeribitAuthConfig {
+                client_id: Some("file_client_id".to_string()),
+                client_secret: Some("file_client_secret".to_string()),
+            }),
+        };
+
+        // Env vars should take precedence over config file
+        assert_eq!(config.client_id(), Some("env_client_id".to_string()));
+        assert_eq!(config.client_secret(), Some("env_client_secret".to_string()));
+        assert!(config.has_auth());
+
+        // Clean up
+        std::env::remove_var("DERIBIT_CLIENT_ID");
+        std::env::remove_var("DERIBIT_CLIENT_SECRET");
+    }
+
+    #[test]
+    fn test_deribit_client_config_fallback_to_config() {
+        // Ensure env vars are not set
+        std::env::remove_var("DERIBIT_CLIENT_ID");
+        std::env::remove_var("DERIBIT_CLIENT_SECRET");
+
+        let config = DeribitClientConfig {
+            ws_url: "wss://test.com".to_string(),
+            auth: Some(DeribitAuthConfig {
+                client_id: Some("file_client_id".to_string()),
+                client_secret: Some("file_client_secret".to_string()),
+            }),
+        };
+
+        // Should fallback to config file values
+        assert_eq!(config.client_id(), Some("file_client_id".to_string()));
+        assert_eq!(config.client_secret(), Some("file_client_secret".to_string()));
+        assert!(config.has_auth());
+    }
+
+    #[test]
+    fn test_deribit_client_config_no_auth_section() {
+        // Ensure env vars are not set
+        std::env::remove_var("DERIBIT_CLIENT_ID");
+        std::env::remove_var("DERIBIT_CLIENT_SECRET");
+
+        let config = DeribitClientConfig {
+            ws_url: "wss://test.com".to_string(),
+            auth: None,
+        };
+
+        // No credentials available
+        assert_eq!(config.client_id(), None);
+        assert_eq!(config.client_secret(), None);
+        assert!(!config.has_auth());
+    }
+
+    #[test]
+    fn test_deribit_client_config_env_only() {
+        // Set env vars for testing
+        std::env::set_var("DERIBIT_CLIENT_ID", "env_client_id");
+        std::env::set_var("DERIBIT_CLIENT_SECRET", "env_client_secret");
+
+        let config = DeribitClientConfig {
+            ws_url: "wss://test.com".to_string(),
+            auth: None,
+        };
+
+        // Should get credentials from environment
+        assert_eq!(config.client_id(), Some("env_client_id".to_string()));
+        assert_eq!(config.client_secret(), Some("env_client_secret".to_string()));
+        assert!(config.has_auth());
+
+        // Clean up
+        std::env::remove_var("DERIBIT_CLIENT_ID");
+        std::env::remove_var("DERIBIT_CLIENT_SECRET");
+    }
+
+    #[test]
     fn test_metric_config_free_balance_parsing() {
         // Test FreeBalance variant parsing
         let toml_str = r#"

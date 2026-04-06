@@ -39,30 +39,22 @@ pub struct DeribitClientConfig {
 }
 
 impl DeribitClientConfig {
-    /// Get client ID, checking config first then environment variables.
-    /// This works even when `auth` section is not present in config.
+    /// Get client ID, checking environment variables first then config.
+    /// Environment variables take precedence over config file values.
     pub fn client_id(&self) -> Option<String> {
-        // Try config first
-        if let Some(ref auth) = self.auth {
-            if let Some(ref id) = auth.client_id {
-                return Some(id.clone());
-            }
-        }
-        // Fallback to environment
+        // Try environment first (higher priority)
         std::env::var("DERIBIT_CLIENT_ID").ok()
+            // Fallback to config
+            .or_else(|| self.auth.as_ref().and_then(|auth| auth.client_id.clone()))
     }
 
-    /// Get client secret, checking config first then environment variables.
-    /// This works even when `auth` section is not present in config.
+    /// Get client secret, checking environment variables first then config.
+    /// Environment variables take precedence over config file values.
     pub fn client_secret(&self) -> Option<String> {
-        // Try config first
-        if let Some(ref auth) = self.auth {
-            if let Some(ref secret) = auth.client_secret {
-                return Some(secret.clone());
-            }
-        }
-        // Fallback to environment
+        // Try environment first (higher priority)
         std::env::var("DERIBIT_CLIENT_SECRET").ok()
+            // Fallback to config
+            .or_else(|| self.auth.as_ref().and_then(|auth| auth.client_secret.clone()))
     }
 
     /// Check if both client ID and secret are available (from config or env).
