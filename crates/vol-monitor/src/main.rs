@@ -264,6 +264,7 @@ fn create_default_config() -> Config {
         notifications: vec![],
         rules: vec![],
         tracing: vol_config::TracingConfig::default(),
+        llm_providers: vec![],
         data_sources: None,
         alerts: None,
         state: None,

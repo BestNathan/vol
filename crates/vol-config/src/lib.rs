@@ -88,6 +88,9 @@ pub struct Config {
     /// Tracing and logging configuration
     #[serde(default)]
     pub tracing: TracingConfig,
+    /// LLM providers configuration
+    #[serde(default)]
+    pub llm_providers: Vec<vol_llm_provider::LLMProviderConfig>,
     /// Legacy format support - for backwards compatibility
     #[serde(default)]
     pub data_sources: Option<LegacyDataSourcesConfig>,
