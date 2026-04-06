@@ -15,12 +15,68 @@ pub struct ToolResult {
     pub data: Option<serde_json::Value>,
 }
 
+impl ToolResult {
+    pub fn success(content: impl Into<String>) -> Self {
+        Self {
+            success: true,
+            content: content.into(),
+            error: None,
+            data: None,
+            call_id: String::new(),
+        }
+    }
+
+    pub fn failure(content: impl Into<String>) -> Self {
+        let content_str = content.into();
+        Self {
+            success: false,
+            content: content_str.clone(),
+            error: Some(content_str),
+            data: None,
+            call_id: String::new(),
+        }
+    }
+}
+
 /// Tool execution context
 #[derive(Debug, Clone, Default)]
 pub struct ToolContext {
     pub alert: Option<Alert>,
+    pub instrument: String,
     pub messages: Vec<Message>,
     pub metadata: std::collections::HashMap<String, String>,
+}
+
+/// Tool error
+#[derive(Debug, thiserror::Error)]
+pub enum ToolError {
+    #[error("Invalid arguments: {0}")]
+    InvalidArguments(String),
+    #[error("Execution failed: {0}")]
+    ExecutionFailed(String),
+    #[error("Tool not found: {0}")]
+    NotFound(String),
+}
+
+/// Result type alias
+pub type ToolResultType<T> = std::result::Result<T, ToolError>;
+
+/// Result type alias for backward compatibility
+pub type Result<T> = ToolResultType<T>;
+
+/// Executable tool trait for legacy compatibility
+#[async_trait]
+pub trait ExecutableTool: Send + Sync {
+    fn name(&self) -> &'static str;
+    fn description(&self) -> &'static str;
+    fn parameters(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {}
+        })
+    }
+
+    async fn execute(&self, args: &serde_json::Value, context: &ToolContext) -> ToolResultType<ToolResult>;
 }
 
 /// Tool trait
@@ -39,5 +95,5 @@ pub trait Tool: Send + Sync {
     }
 
     async fn execute(&self, args: &str, context: &ToolContext)
-        -> Result<ToolResult, Box<dyn Error + Send>>;
+        -> std::result::Result<ToolResult, Box<dyn Error + Send>>;
 }
