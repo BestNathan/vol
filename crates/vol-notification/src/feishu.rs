@@ -266,6 +266,49 @@ impl FeishuNotification {
             }
         }
     }
+
+    /// Send AI analysis advice to Feishu
+    pub async fn send_advice(
+        &self,
+        advice: &str,
+        alert: &Alert,
+        trace_id: &str,
+    ) -> Result<()> {
+        let span = info_span!(
+            "agent_advice_send",
+            channel = "agent_advice",
+            alert_type = %alert.alert_type,
+            tenor = ?alert.tenor,
+            symbol = %alert.symbol,
+            trace_id = %trace_id,
+        );
+
+        async {
+            // Build custom message for AI advice
+            let content = format!(
+                "🤖 AI 分析建议\n\n\
+                 预警类型：{}\n\
+                 标的物：{}\n\
+                 期限：{}\n\
+                 当前 IV: {:.1}%\n\
+                 指数价格：{:.2} USD\n\n\
+                 分析建议:\n{}\n\n\
+                 ---\nTrace ID: {}",
+                alert.alert_type,
+                alert.symbol,
+                self.tenor_cn(alert.tenor),
+                alert.iv * 100.0,
+                alert.index_price,
+                advice,
+                trace_id
+            );
+
+            // Send as text message
+            self.send_message("text", &json!({ "text": content }).to_string()).await
+        }
+        .instrument(span)
+        .await
+    }
 }
 
 #[async_trait::async_trait]
