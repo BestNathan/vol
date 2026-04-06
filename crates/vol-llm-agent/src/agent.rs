@@ -1,5 +1,6 @@
 //! ReAct Agent implementation.
 
+use std::sync::Arc;
 use vol_llm_core::{LLMClient, Message, ConversationRequest, ToolChoice};
 use vol_llm_tool::ToolContext;
 use tracing::{info, debug};
@@ -25,13 +26,13 @@ impl Default for AgentConfig {
 
 /// ReAct Agent
 pub struct ReActAgent {
-    llm: Box<dyn LLMClient>,
+    llm: Arc<dyn LLMClient>,
     tools: vol_llm_tool::ToolRegistry,
     config: AgentConfig,
 }
 
 impl ReActAgent {
-    pub fn new(llm: Box<dyn LLMClient>, tools: vol_llm_tool::ToolRegistry, config: AgentConfig) -> Self {
+    pub fn new(llm: Arc<dyn LLMClient>, tools: vol_llm_tool::ToolRegistry, config: AgentConfig) -> Self {
         Self { llm, tools, config }
     }
 

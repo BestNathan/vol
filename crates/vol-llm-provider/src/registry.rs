@@ -1,6 +1,7 @@
 //! Multi-provider registry for managing multiple LLM configurations.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use vol_llm_core::{LLMClient, LLMError};
 use crate::config::LLMConfig;
 use crate::factory::create_provider;
@@ -17,7 +18,7 @@ pub struct LLMProviderConfig {
 
 /// Registry for managing multiple LLM providers
 pub struct LLMProviderRegistry {
-    providers: HashMap<String, Box<dyn LLMClient>>,
+    providers: HashMap<String, Arc<dyn LLMClient>>,
 }
 
 impl LLMProviderRegistry {
@@ -33,14 +34,14 @@ impl LLMProviderRegistry {
         let mut registry = Self::new();
         for config in configs {
             let provider = create_provider(&config.config)?;
-            registry.providers.insert(config.id.clone(), provider);
+            registry.providers.insert(config.id.clone(), Arc::from(provider));
         }
         Ok(registry)
     }
 
     /// Get a provider by ID
-    pub fn get(&self, id: &str) -> Option<&dyn LLMClient> {
-        self.providers.get(id).map(|p| p.as_ref())
+    pub fn get(&self, id: &str) -> Option<Arc<dyn LLMClient>> {
+        self.providers.get(id).cloned()
     }
 
     /// Get all registered provider IDs

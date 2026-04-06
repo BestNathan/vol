@@ -1,12 +1,13 @@
 //! Agent builder.
 
+use std::sync::Arc;
 use vol_llm_core::LLMClient;
 use vol_llm_tool::{Tool, ToolRegistry};
 use crate::agent::{AgentConfig, ReActAgent};
 
 /// Agent builder
 pub struct AgentBuilder {
-    llm: Option<Box<dyn LLMClient>>,
+    llm: Option<Arc<dyn LLMClient>>,
     tools: Vec<Box<dyn Tool>>,
     config: AgentConfig,
 }
@@ -20,7 +21,7 @@ impl AgentBuilder {
         }
     }
 
-    pub fn with_llm(mut self, llm: Box<dyn LLMClient>) -> Self {
+    pub fn with_llm(mut self, llm: Arc<dyn LLMClient>) -> Self {
         self.llm = Some(llm);
         self
     }

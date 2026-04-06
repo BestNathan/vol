@@ -9,8 +9,7 @@ use vol_core::Alert;
 use vol_tracing::TracedEvent;
 use vol_llm_agent::{ReActAgent, AgentConfig};
 use vol_llm_tool::{ToolRegistry, ToolContext};
-use vol_llm_provider::{create_provider, LLMConfig};
-use vol_llm_core::LLMProvider;
+use vol_llm_provider::LLMProviderRegistry;
 
 use crate::limiter::FrequencyLimiter;
 use crate::prompt::{system_prompt, build_user_prompt, get_threshold_from_alert};
@@ -21,7 +20,7 @@ pub struct AgentAdviceConfig {
     pub enabled: bool,
     pub cooldown_secs: u64,
     pub max_analyses_per_hour: u32,
-    pub llm: LLMConfig,
+    pub llm_provider_id: String,
 }
 
 impl Default for AgentAdviceConfig {
@@ -30,12 +29,7 @@ impl Default for AgentAdviceConfig {
             enabled: true,
             cooldown_secs: 300, // 5 minutes
             max_analyses_per_hour: 20,
-            llm: LLMConfig {
-                provider: LLMProvider::Anthropic,
-                model: "claude-sonnet-4-6".to_string(),
-                api_key_env: "ANTHROPIC_AUTH_TOKEN".to_string(),
-                endpoint: Some("https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string()),
-            },
+            llm_provider_id: "anthropic-main".to_string(),
         }
     }
 }
@@ -44,14 +38,19 @@ impl Default for AgentAdviceConfig {
 pub struct AgentAdviceService {
     limiter: FrequencyLimiter,
     config: AgentAdviceConfig,
+    registry: LLMProviderRegistry,
 }
 
 impl AgentAdviceService {
     /// Create a new agent advice service
-    pub fn new(config: AgentAdviceConfig) -> Self {
+    pub fn new(
+        config: AgentAdviceConfig,
+        registry: LLMProviderRegistry,
+    ) -> Self {
         Self {
             limiter: FrequencyLimiter::new(config.cooldown_secs, config.max_analyses_per_hour),
             config,
+            registry,
         }
     }
 
@@ -138,9 +137,9 @@ impl AgentAdviceService {
         // Create tool registry with default tools
         let tools = ToolRegistry::new();
 
-        // Load LLM config from environment
-        let llm_config = &self.config.llm;
-        let llm = create_provider(llm_config)?;
+        // Get provider from registry by ID
+        let llm = self.registry.get(&self.config.llm_provider_id)
+            .ok_or_else(|| format!("Unknown provider: {}", self.config.llm_provider_id))?;
 
         // Create agent
         let agent = ReActAgent::new(
