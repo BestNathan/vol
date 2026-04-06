@@ -113,7 +113,7 @@ impl AgentAdviceService {
             .unwrap_or_else(|e| format!("Failed to generate advice: {}", e));
 
         // Send advice to Feishu
-        self.send_advice(&advice, trace_id).await?;
+        self.send_advice(&advice, &alert, &trace_id).await?;
 
         // Record this analysis
         self.limiter.record_analysis(&alert);
@@ -175,11 +175,12 @@ impl AgentAdviceService {
     async fn send_advice(
         &self,
         advice: &str,
-        trace_id: String,
+        _alert: &Alert,
+        trace_id: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // TODO: Use actual Feishu notification
         // For now, log the advice
-        info!("Feishu message (trace_id: {}):\n{}", trace_id, advice);
+        info!("Feishu message (trace_id: {}):\n{}", &trace_id[..8.min(trace_id.len())], advice);
         Ok(())
     }
 }
