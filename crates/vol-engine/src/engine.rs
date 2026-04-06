@@ -190,7 +190,8 @@ impl MonitoringEngine {
                             // Send alert within span context
                             // broadcast::send returns Result<usize, SendError> where usize is receiver count
                             // Error only when no receivers are subscribed (shouldn't happen in normal operation)
-                            if let Err(e) = tx.send(traced_alert).instrument(alert_span).await {
+                            let _span = alert_span.enter();
+                            if let Err(e) = tx.send(traced_alert) {
                                 error!(error = %e, "Failed to broadcast alert (no receivers)");
                                 break;
                             }
