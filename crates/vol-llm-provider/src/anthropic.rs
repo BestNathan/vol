@@ -20,9 +20,9 @@ impl AnthropicProvider {
     pub fn new(config: &LLMConfig) -> Result<Self> {
         Ok(Self {
             client: Client::new(),
-            api_key: config.api_key()?,
+            api_key: config.resolve_api_key()?,
             model: config.model.clone(),
-            base_url: config.endpoint.clone().unwrap_or_else(|| "https://api.anthropic.com".to_string()),
+            base_url: config.base_url.clone(),
         })
     }
 
