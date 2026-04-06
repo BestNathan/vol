@@ -113,7 +113,7 @@ async fn test_agent_executes_full_react_cycle() {
         verbose: true,
     };
 
-    let agent = ReActAgent::new(Box::new(mock_llm), registry, config);
+    let agent = ReActAgent::new(Box::new(mock_llm), Arc::new(registry), config);
 
     let context = ToolContext::default();
     let result = agent.run("What is the BTC price?", context).await;
@@ -206,7 +206,7 @@ async fn test_agent_max_iterations() {
         verbose: false,
     };
 
-    let agent = ReActAgent::new(Box::new(mock_llm), registry, config);
+    let agent = ReActAgent::new(Box::new(mock_llm), Arc::new(registry), config);
 
     let context = ToolContext::default();
     let result = agent.run("Keep querying...", context).await;

@@ -211,7 +211,7 @@ async fn test_code_agent_market_data_query() {
         verbose: true,
     };
 
-    let agent = ReActAgent::new(Box::new(mock_llm), registry, config);
+    let agent = ReActAgent::new(Box::new(mock_llm), Arc::new(registry), config);
 
     // Test: Query BTC price
     let context = ToolContext::default();
@@ -258,7 +258,7 @@ async fn test_code_agent_volatility_query() {
         verbose: true,
     };
 
-    let agent = ReActAgent::new(Box::new(mock_llm), registry, config);
+    let agent = ReActAgent::new(Box::new(mock_llm), Arc::new(registry), config);
 
     // Test: Query volatility - use "ETH volatility" to trigger volatility path
     let context = ToolContext {
@@ -300,7 +300,7 @@ async fn test_code_agent_multi_turn_conversation() {
         verbose: true,
     };
 
-    let agent = ReActAgent::new(Box::new(mock_llm), registry, config);
+    let agent = ReActAgent::new(Box::new(mock_llm), Arc::new(registry), config);
 
     // Test: Multi-turn with follow-up
     let context = ToolContext::default();
@@ -337,7 +337,7 @@ async fn test_code_agent_tool_choice_auto() {
         verbose: true,
     };
 
-    let agent = ReActAgent::new(Box::new(mock_llm), registry, config);
+    let agent = ReActAgent::new(Box::new(mock_llm), Arc::new(registry), config);
 
     // Test: Simple greeting (may not need tools)
     let context = ToolContext::default();

@@ -76,7 +76,8 @@ impl AgentAdviceService {
         loop {
             match alert_rx.recv().await {
                 Ok(traced_alert) => {
-                    if let Err(e) = self.process_alert(traced_alert).await {
+                    let alert = traced_alert.value().clone();
+                    if let Err(e) = self.process_alert(&alert).await {
                         error!("Failed to process alert: {}", e);
                     }
                 }
@@ -93,42 +94,26 @@ impl AgentAdviceService {
         Ok(())
     }
 
-    /// Process a single alert
+    /// Process a single alert and send AI advice
     async fn process_alert(
         &self,
-        traced_alert: TracedEvent<Alert>,
+        alert: &Alert,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let alert = traced_alert.value().clone();
-        let trace_id = traced_alert.trace_id().to_string();
+        let trace_id = &alert.trace_id;
 
-        // Check frequency limit
-        if !self.limiter.can_analyze(&alert) {
-            info!(
-                "Skipping analysis for {}:{} (frequency limited)",
-                alert.symbol, alert.alert_type
-            );
-            return Ok(());
-        }
-
-        info!(
-            "Analyzing alert: {}:{} (trace_id: {})",
-            alert.symbol, alert.alert_type, trace_id
+        tracing::info!(
+            "Processing alert for AI analysis: {}:{} (trace_id: {})",
+            alert.symbol,
+            alert.alert_type,
+            trace_id
         );
 
-        // Fetch history data
-        let history_summary = self.fetch_history(&alert.symbol).await;
-
-        // Build agent and generate advice
-        let advice = self
-            .generate_advice(&alert, history_summary)
-            .await
+        // Generate advice using ReAct Agent
+        let advice = self.generate_advice(alert).await
             .unwrap_or_else(|e| format!("Failed to generate advice: {}", e));
 
-        // Send advice to Feishu
-        self.send_advice(&advice, &alert, &trace_id).await?;
-
-        // Record this analysis
-        self.limiter.record_analysis(&alert);
+        // Send advice to Feishu using the stored feishu client
+        self.feishu.send_advice(&advice, alert, trace_id).await?;
 
         Ok(())
     }
@@ -144,19 +129,15 @@ impl AgentAdviceService {
     async fn generate_advice(
         &self,
         alert: &Alert,
-        history_summary: String,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        // Create tool registry with default tools
-        let tools = ToolRegistry::new();
-
         // Get provider from registry by ID
         let llm = self.registry.get(&self.config.llm_provider_id)
             .ok_or_else(|| format!("Unknown provider: {}", self.config.llm_provider_id))?;
 
-        // Create agent
+        // Create agent with tools
         let agent = ReActAgent::new(
             llm,
-            tools,
+            self.tools.clone(),
             AgentConfig {
                 max_iterations: 5,
                 system_prompt: system_prompt().to_string(),
@@ -173,11 +154,17 @@ impl AgentAdviceService {
             &alert.symbol,
             alert.iv,
             threshold,
-            &history_summary,
+            "History data will be queried by agent",
         );
 
-        // Run agent
-        let context = ToolContext::default();
+        // Run agent with context
+        let context = ToolContext {
+            alert: Some(alert.clone()),
+            instrument: alert.symbol.clone(),
+            messages: Vec::new(),
+            metadata: std::collections::HashMap::new(),
+        };
+
         let response = agent.run(&user_prompt, context).await?;
 
         Ok(response.content)
@@ -187,12 +174,10 @@ impl AgentAdviceService {
     async fn send_advice(
         &self,
         advice: &str,
-        _alert: &Alert,
+        alert: &Alert,
         trace_id: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // TODO: Use actual Feishu notification
-        // For now, log the advice
-        info!("Feishu message (trace_id: {}):\n{}", &trace_id[..8.min(trace_id.len())], advice);
+        self.feishu.send_advice(advice, alert, trace_id).await?;
         Ok(())
     }
 }
@@ -218,9 +203,8 @@ impl NotificationHandler for AgentAdviceService {
             return Ok(());
         }
 
-        // Process the alert (create TracedEvent without span since we're receiving
-        // the alert from the notification channel without existing trace context)
-        if let Err(e) = self.process_alert(TracedEvent::without_span(alert.clone())).await {
+        // Process the alert
+        if let Err(e) = self.process_alert(alert).await {
             tracing::error!("AgentAdviceService failed to process alert: {}", e);
             // Don't return error - we don't want to block other notifications
         }

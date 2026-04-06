@@ -54,7 +54,7 @@ impl AgentBuilder {
             registry.register_boxed(tool);
         }
 
-        Ok(ReActAgent::new(llm, registry, self.config))
+        Ok(ReActAgent::new(llm, Arc::new(registry), self.config))
     }
 }
 
