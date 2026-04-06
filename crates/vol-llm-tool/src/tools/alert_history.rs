@@ -1,83 +1,88 @@
 //! Alert history tool.
 
 use async_trait::async_trait;
-use serde::Deserialize;
-use std::error::Error;
-use crate::tool::{Tool, ToolResult, ToolContext};
+use serde_json::json;
+use tracing::info;
+use crate::tool::{ExecutableTool, ToolResult, ToolContext, Result, ToolError};
+use crate::tdengine::{TdengineClient, TdengineConfig};
 
 /// Alert history tool
 pub struct AlertHistoryTool {
-    window_hours: u32,
+    client: TdengineClient,
 }
 
 impl AlertHistoryTool {
-    pub fn new(window_hours: u32) -> Self {
-        Self { window_hours }
+    pub fn new(config: Option<TdengineConfig>) -> Self {
+        Self {
+            client: TdengineClient::new(config.unwrap_or_default()),
+        }
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct AlertHistoryArgs {
-    symbol: String,
-    tenor: Option<String>,
-    alert_type: Option<String>,
 }
 
 #[async_trait]
-impl Tool for AlertHistoryTool {
-    fn name(&self) -> &str {
+impl ExecutableTool for AlertHistoryTool {
+    fn name(&self) -> &'static str {
         "alert_history"
     }
 
-    fn description(&self) -> &str {
-        "查询指定 symbol 的历史告警记录，用于分析告警频率和模式"
+    fn description(&self) -> &'static str {
+        "Get recent volatility index history from TDengine (deribit_volatility_index table)"
     }
 
-    fn parameters(&self) -> Option<serde_json::Value> {
-        Some(serde_json::json!({
+    fn parameters(&self) -> serde_json::Value {
+        json!({
             "type": "object",
             "properties": {
                 "symbol": {
                     "type": "string",
-                    "description": "标的符号，如 'BTC', 'ETH'"
+                    "description": "Symbol to query (e.g., BTC-PERP)"
                 },
-                "tenor": {
-                    "type": "string",
-                    "enum": ["short", "medium", "long"],
-                    "description": "期限类型"
+                "limit": {
+                    "type": "integer",
+                    "description": "Number of alerts to retrieve",
+                    "default": 10
                 },
-                "alert_type": {
-                    "type": "string",
-                    "description": "告警类型（可选）"
+                "hours": {
+                    "type": "integer",
+                    "description": "Time window in hours"
                 }
             },
             "required": ["symbol"]
-        }))
+        })
     }
 
-    async fn execute(&self, args: &str, _context: &ToolContext)
-        -> Result<ToolResult, Box<dyn Error + Send>> {
+    async fn execute(&self, args: &serde_json::Value, context: &ToolContext) -> Result<ToolResult> {
+        let symbol = args["symbol"]
+            .as_str()
+            .or_else(|| {
+                let s = context.instrument.as_str();
+                if s.is_empty() { None } else { Some(s) }
+            })
+            .ok_or_else(|| ToolError::InvalidArguments("symbol required".to_string()))?;
 
-        let args: AlertHistoryArgs = serde_json::from_str(args)
-            .map_err(|e| Box::new(e) as Box<dyn Error + Send>)?;
+        let limit = args["limit"].as_u64().unwrap_or(10) as u32;
+        let hours = args["hours"].as_u64().map(|h| h as u32);
 
-        // Placeholder response - TODO: integrate with TDengine
-        let content = format!(
-            "查询 {} 历史告警 (窗口：{} 小时)",
-            args.symbol, self.window_hours
-        );
+        info!("Querying alert history for {} (limit={}, hours={:?})", symbol, limit, hours);
 
-        Ok(ToolResult {
-            call_id: String::new(),
-            success: true,
-            content,
-            error: None,
-            data: Some(serde_json::json!({
-                "symbol": args.symbol,
-                "count": 0,
-                "alerts": []
-            })),
-        })
+        match self.client.query_alert_history(symbol, limit, hours).await {
+            Ok(response) => {
+                if response.code == 0 {
+                    let data = response.data.unwrap_or(json!([]));
+                    let count = data.as_array().map(|a| a.len()).unwrap_or(0);
+
+                    Ok(ToolResult::success(format!(
+                        "Retrieved {} alerts for {} (time window: {:?} hours)",
+                        count, symbol, hours
+                    )))
+                } else {
+                    Err(ToolError::ExecutionFailed(
+                        response.desc.unwrap_or_else(|| "Query failed".to_string())
+                    ))
+                }
+            }
+            Err(e) => Err(ToolError::ExecutionFailed(format!("TDengine error: {}", e))),
+        }
     }
 }
 
@@ -85,9 +90,9 @@ impl Tool for AlertHistoryTool {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_alert_history_tool() {
-        let tool = AlertHistoryTool::new(24);
+    #[test]
+    fn test_alert_history_tool_creation() {
+        let tool = AlertHistoryTool::new(None);
         assert_eq!(tool.name(), "alert_history");
     }
 }

@@ -1,66 +1,93 @@
 //! IV curve tool.
 
 use async_trait::async_trait;
-use serde::Deserialize;
-use std::error::Error;
-use crate::tool::{Tool, ToolResult, ToolContext};
-
-#[derive(Debug, Deserialize)]
-struct IvCurveArgs {
-    symbol: String,
-    tenor: Option<String>,
-}
+use serde_json::json;
+use tracing::info;
+use crate::tool::{ExecutableTool, ToolResult, ToolContext, Result, ToolError};
+use crate::tdengine::{TdengineClient, TdengineConfig};
 
 /// IV curve tool
-pub struct IvCurveTool;
+pub struct IvCurveTool {
+    client: TdengineClient,
+}
+
+impl IvCurveTool {
+    pub fn new(config: Option<TdengineConfig>) -> Self {
+        Self {
+            client: TdengineClient::new(config.unwrap_or_default()),
+        }
+    }
+}
 
 #[async_trait]
-impl Tool for IvCurveTool {
-    fn name(&self) -> &str {
+impl ExecutableTool for IvCurveTool {
+    fn name(&self) -> &'static str {
         "iv_curve"
     }
 
-    fn description(&self) -> &str {
-        "获取标的的隐含波动率曲面数据，包括不同行权价和期限的 IV"
+    fn description(&self) -> &'static str {
+        "Get implied volatility curve data for an instrument from TDengine"
     }
 
-    fn parameters(&self) -> Option<serde_json::Value> {
-        Some(serde_json::json!({
+    fn parameters(&self) -> serde_json::Value {
+        json!({
             "type": "object",
             "properties": {
-                "symbol": {
+                "instrument": {
                     "type": "string",
-                    "description": "标的符号"
+                    "description": "Instrument name (e.g., BTC-29DEC23)"
                 },
-                "tenor": {
-                    "type": "string",
-                    "enum": ["short", "medium", "long"],
-                    "description": "期限"
+                "delta": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Delta values to query"
                 }
             },
-            "required": ["symbol"]
-        }))
+            "required": ["instrument"]
+        })
     }
 
-    async fn execute(&self, args: &str, _context: &ToolContext)
-        -> Result<ToolResult, Box<dyn Error + Send>> {
+    async fn execute(&self, args: &serde_json::Value, context: &ToolContext) -> Result<ToolResult> {
+        let instrument = args["instrument"]
+            .as_str()
+            .or_else(|| {
+                let s = context.instrument.as_str();
+                if s.is_empty() { None } else { Some(s) }
+            })
+            .ok_or_else(|| ToolError::InvalidArguments("instrument required".to_string()))?;
 
-        let args: IvCurveArgs = serde_json::from_str(args)
-            .map_err(|e| Box::new(e) as Box<dyn Error + Send>)?;
+        let delta = args["delta"].as_array().map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_f64())
+                .collect::<Vec<f64>>()
+        });
 
-        // Placeholder - TODO: integrate with TDengine
-        let content = format!("获取 {} IV 曲线数据", args.symbol);
+        info!("Querying IV curve for {} (deltas: {:?})", instrument, delta);
 
-        Ok(ToolResult {
-            call_id: String::new(),
-            success: true,
-            content,
-            error: None,
-            data: Some(serde_json::json!({
-                "symbol": args.symbol,
-                "iv_data": []
-            })),
-        })
+        let delta_slice: Option<&[f64]> = delta.as_deref();
+        match self.client.query_iv_curve(instrument, delta_slice).await {
+            Ok(response) => {
+                if response.code == 0 {
+                    let data = response.data.unwrap_or(json!([]));
+                    let count = data.as_array().map(|a| a.len()).unwrap_or(0);
+
+                    let delta_info = match delta_slice {
+                        Some(d) => format!(" at {} delta points", d.len()),
+                        None => String::new(),
+                    };
+
+                    Ok(ToolResult::success(format!(
+                        "Retrieved {} IV curve data points for {}{}",
+                        count, instrument, delta_info
+                    )))
+                } else {
+                    Err(ToolError::ExecutionFailed(
+                        response.desc.unwrap_or_else(|| "Query failed".to_string())
+                    ))
+                }
+            }
+            Err(e) => Err(ToolError::ExecutionFailed(format!("TDengine error: {}", e))),
+        }
     }
 }
 
@@ -69,8 +96,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_iv_curve_tool() {
-        let tool = IvCurveTool;
+    fn test_iv_curve_tool_creation() {
+        let tool = IvCurveTool::new(None);
         assert_eq!(tool.name(), "iv_curve");
     }
 }

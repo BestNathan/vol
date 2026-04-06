@@ -1,4 +1,4 @@
-//! Built-in tools.
+//! Built-in tools for LLM Agent.
 
 pub mod alert_history;
 pub mod iv_curve;

@@ -1,66 +1,99 @@
 //! Market data tool.
 
 use async_trait::async_trait;
-use serde::Deserialize;
-use std::error::Error;
-use crate::tool::{Tool, ToolResult, ToolContext};
-
-#[derive(Debug, Deserialize)]
-struct MarketDataArgs {
-    symbol: String,
-    data_type: Option<String>,
-}
+use serde_json::json;
+use tracing::info;
+use crate::tool::{ExecutableTool, ToolResult, ToolContext, Result, ToolError};
+use crate::tdengine::{TdengineClient, TdengineConfig};
 
 /// Market data tool
-pub struct MarketDataTool;
+pub struct MarketDataTool {
+    client: TdengineClient,
+}
+
+impl MarketDataTool {
+    pub fn new(config: Option<TdengineConfig>) -> Self {
+        Self {
+            client: TdengineClient::new(config.unwrap_or_default()),
+        }
+    }
+}
 
 #[async_trait]
-impl Tool for MarketDataTool {
-    fn name(&self) -> &str {
+impl ExecutableTool for MarketDataTool {
+    fn name(&self) -> &'static str {
         "market_data"
     }
 
-    fn description(&self) -> &str {
-        "获取实时市场数据，包括价格、涨跌幅、成交量等"
+    fn description(&self) -> &'static str {
+        "Get current market price data from TDengine (deribit_index_price table)"
     }
 
-    fn parameters(&self) -> Option<serde_json::Value> {
-        Some(serde_json::json!({
+    fn parameters(&self) -> serde_json::Value {
+        json!({
             "type": "object",
             "properties": {
-                "symbol": {
+                "instrument": {
                     "type": "string",
-                    "description": "标的符号"
+                    "description": "Index name (e.g., btc_usd, eth_usd)"
                 },
                 "data_type": {
                     "type": "string",
-                    "enum": ["price", "volume", "funding_rate", "open_interest"],
-                    "description": "数据类型"
+                    "description": "Type of data to retrieve",
+                    "enum": ["price", "all"]
                 }
             },
-            "required": ["symbol"]
-        }))
+            "required": ["instrument"]
+        })
     }
 
-    async fn execute(&self, args: &str, _context: &ToolContext)
-        -> Result<ToolResult, Box<dyn Error + Send>> {
+    async fn execute(&self, args: &serde_json::Value, context: &ToolContext) -> Result<ToolResult> {
+        let instrument = args["instrument"]
+            .as_str()
+            .or_else(|| {
+                let s = context.instrument.as_str();
+                if s.is_empty() { None } else { Some(s) }
+            })
+            .ok_or_else(|| ToolError::InvalidArguments("instrument required".to_string()))?;
 
-        let args: MarketDataArgs = serde_json::from_str(args)
-            .map_err(|e| Box::new(e) as Box<dyn Error + Send>)?;
+        let data_type = args["data_type"].as_str().unwrap_or("all");
 
-        // Placeholder - TODO: integrate with market data API
-        let content = format!("获取 {} 市场数据", args.symbol);
+        info!("Querying market data for {} (type={})", instrument, data_type);
 
-        Ok(ToolResult {
-            call_id: String::new(),
-            success: true,
-            content,
-            error: None,
-            data: Some(serde_json::json!({
-                "symbol": args.symbol,
-                "data": {}
-            })),
-        })
+        match self.client.query_market_data(instrument).await {
+            Ok(response) => {
+                if response.code == 0 {
+                    let data = response.data.unwrap_or(json!([]));
+                    let row = data.as_array().and_then(|a| a.first());
+
+                    match row {
+                        Some(r) => {
+                            // TDengine response: [_ts, price, index_name]
+                            let price = r.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0);
+
+                            let content = match data_type {
+                                "price" => format!("{} price: {}", instrument, price),
+                                _ => format!(
+                                    "{} market data - Price: {}",
+                                    instrument, price
+                                ),
+                            };
+
+                            Ok(ToolResult::success(content))
+                        }
+                        None => Ok(ToolResult::success(format!(
+                            "No market data found for {}",
+                            instrument
+                        ))),
+                    }
+                } else {
+                    Err(ToolError::ExecutionFailed(
+                        response.desc.unwrap_or_else(|| "Query failed".to_string())
+                    ))
+                }
+            }
+            Err(e) => Err(ToolError::ExecutionFailed(format!("TDengine error: {}", e))),
+        }
     }
 }
 
@@ -69,8 +102,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_market_data_tool() {
-        let tool = MarketDataTool;
+    fn test_market_data_tool_creation() {
+        let tool = MarketDataTool::new(None);
         assert_eq!(tool.name(), "market_data");
     }
 }

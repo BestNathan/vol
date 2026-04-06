@@ -1,60 +1,81 @@
 //! Rule info tool.
 
 use async_trait::async_trait;
-use serde::Deserialize;
-use std::error::Error;
-use crate::tool::{Tool, ToolResult, ToolContext};
-
-#[derive(Debug, Deserialize)]
-struct RuleInfoArgs {
-    alert_type: String,
-}
+use serde_json::json;
+use tracing::info;
+use crate::tool::{ExecutableTool, ToolResult, ToolContext, Result, ToolError};
+use crate::tdengine::{TdengineClient, TdengineConfig};
 
 /// Rule info tool
-pub struct RuleInfoTool;
+pub struct RuleInfoTool {
+    client: TdengineClient,
+}
+
+impl RuleInfoTool {
+    pub fn new(config: Option<TdengineConfig>) -> Self {
+        Self {
+            client: TdengineClient::new(config.unwrap_or_default()),
+        }
+    }
+}
 
 #[async_trait]
-impl Tool for RuleInfoTool {
-    fn name(&self) -> &str {
+impl ExecutableTool for RuleInfoTool {
+    fn name(&self) -> &'static str {
         "rule_info"
     }
 
-    fn description(&self) -> &str {
-        "查询告警规则的详细信息，包括触发条件和阈值"
+    fn description(&self) -> &'static str {
+        "Get realized volatility data from TDengine (deribit_rv table)"
     }
 
-    fn parameters(&self) -> Option<serde_json::Value> {
-        Some(serde_json::json!({
+    fn parameters(&self) -> serde_json::Value {
+        json!({
             "type": "object",
             "properties": {
-                "alert_type": {
+                "index_name": {
                     "type": "string",
-                    "description": "告警类型，如 'absolute_iv', 'rate_change'"
+                    "description": "Index name (e.g., btc_usd, eth_usd)"
+                },
+                "list_all": {
+                    "type": "boolean",
+                    "description": "List all available data"
                 }
-            },
-            "required": ["alert_type"]
-        }))
+            }
+        })
     }
 
-    async fn execute(&self, args: &str, _context: &ToolContext)
-        -> Result<ToolResult, Box<dyn Error + Send>> {
+    async fn execute(&self, args: &serde_json::Value, _context: &ToolContext) -> Result<ToolResult> {
+        let index_name = args["index_name"].as_str();
+        let list_all = args["list_all"].as_bool().unwrap_or(false);
 
-        let args: RuleInfoArgs = serde_json::from_str(args)
-            .map_err(|e| Box::new(e) as Box<dyn Error + Send>)?;
+        let index_name_opt = if list_all { None } else { index_name };
 
-        // Placeholder - TODO: query rule configuration
-        let content = format!("查询告警规则：{}", args.alert_type);
+        info!("Querying RV data (index={:?}, list_all={})", index_name_opt, list_all);
 
-        Ok(ToolResult {
-            call_id: String::new(),
-            success: true,
-            content,
-            error: None,
-            data: Some(serde_json::json!({
-                "alert_type": args.alert_type,
-                "rule": {}
-            })),
-        })
+        match self.client.query_rules(index_name_opt).await {
+            Ok(response) => {
+                if response.code == 0 {
+                    let data = response.data.unwrap_or(json!([]));
+                    let count = data.as_array().map(|a| a.len()).unwrap_or(0);
+
+                    let content = if list_all {
+                        format!("Available RV data: {} records found", count)
+                    } else if let Some(name) = index_name {
+                        format!("RV data for {}: {} record(s) found", name, count)
+                    } else {
+                        "Please specify index_name or set list_all=true".to_string()
+                    };
+
+                    Ok(ToolResult::success(content))
+                } else {
+                    Err(ToolError::ExecutionFailed(
+                        response.desc.unwrap_or_else(|| "Query failed".to_string())
+                    ))
+                }
+            }
+            Err(e) => Err(ToolError::ExecutionFailed(format!("TDengine error: {}", e))),
+        }
     }
 }
 
@@ -63,8 +84,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_rule_info_tool() {
-        let tool = RuleInfoTool;
+    fn test_rule_info_tool_creation() {
+        let tool = RuleInfoTool::new(None);
         assert_eq!(tool.name(), "rule_info");
     }
 }

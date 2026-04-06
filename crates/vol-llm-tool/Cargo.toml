@@ -10,5 +10,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
+reqwest = { workspace = true }
 vol-llm-core = { path = "../vol-llm-core" }
 vol-core = { workspace = true }
