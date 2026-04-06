@@ -2884,8 +2884,10 @@ dependencies = [
  "vol-datasource",
  "vol-deribit",
  "vol-engine",
+ "vol-llm-agent",
  "vol-llm-bridge",
  "vol-llm-provider",
+ "vol-llm-tool",
  "vol-notification",
  "vol-rules",
 ]

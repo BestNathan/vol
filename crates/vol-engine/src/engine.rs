@@ -188,7 +188,8 @@ impl MonitoringEngine {
                             let traced_alert = TracedEvent::new(alert, alert_span.clone(), trace_id.clone());
 
                             // Send alert within span context
-                            // broadcast::send returns Result<usize, SendError> where usize is receiver count
+                            // broadcast::send is synchronous (returns Result<usize, SendError>)
+                            // usize is the number of receivers that successfully received
                             // Error only when no receivers are subscribed (shouldn't happen in normal operation)
                             let _span = alert_span.enter();
                             if let Err(e) = tx.send(traced_alert) {

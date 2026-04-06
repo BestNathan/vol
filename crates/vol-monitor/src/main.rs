@@ -12,8 +12,10 @@ use vol_engine::{MonitoringEngineBuilder, EngineConfig};
 use vol_datasource::{VolatilityDataSource, PortfolioDataSource};
 use vol_notification::{StdoutNotification, FeishuNotification};
 use vol_rules::{AbsoluteIvRule, RateChangeRule, TermStructureRule, SkewRule, PortfolioRule};
-use vol_config::{TermStructureConfig, SkewConfig};
+use vol_config::{TermStructureConfig, SkewConfig, FeishuConfig};
 use vol_llm_provider::LLMProviderRegistry;
+use vol_llm_bridge::{AgentAdviceService, AgentAdviceConfig};
+use vol_llm_tool::{ToolRegistry, TdengineClient, TdengineConfig};
 
 /// Parse command line arguments
 fn parse_args() -> Option<String> {
@@ -111,12 +113,53 @@ async fn main() -> Result<()> {
         None
     };
 
-    // TODO: Start AgentAdviceService when engine supports broadcast alerts
-    // The service needs to subscribe to alert broadcast, which requires engine modification.
-    // For now, LLM providers are initialized and ready for integration.
-    if config.agent_advice.enabled && llm_registry.is_some() {
-        info!("AgentAdvice is enabled but requires engine broadcast channel for alerts");
-    }
+    // Initialize TDengine client for historical data queries
+    let tdengine_config = TdengineConfig::default();
+    let tdengine_client = TdengineClient::new(tdengine_config.clone());
+    info!("TDengine client initialized");
+
+    // Initialize tool registry with AlertHistoryTool
+    let mut tools = ToolRegistry::new();
+    tools.register(vol_llm_tool::tools::AlertHistoryTool::new(Some(tdengine_config)));
+    info!("Tool registry initialized with {} tools", tools.tool_names().len());
+
+    // Initialize Feishu notification for AI advice using environment variables
+    let feishu_config = FeishuConfig {
+        app_id: std::env::var("FEISHU_APP_ID").ok(),
+        app_secret: std::env::var("FEISHU_APP_SECRET").ok(),
+        receive_id: std::env::var("FEISHU_RECEIVE_ID").ok(),
+        message_template: "{tenor} {alert_type} {symbol} | IV={value}".to_string(),
+    };
+    let feishu = FeishuNotification::new(feishu_config)
+        .unwrap_or_else(|e| {
+            warn!("Failed to initialize Feishu: {}", e);
+            // Create dummy config for fallback
+            FeishuNotification::new(FeishuConfig {
+                app_id: Some("dummy".to_string()),
+                app_secret: Some("dummy".to_string()),
+                receive_id: Some("oc_dummy".to_string()),
+                message_template: "dummy".to_string(),
+            }).unwrap()
+        });
+    info!("Feishu notification initialized");
+
+    // Create AgentAdviceService (only if LLM providers are configured)
+    let agent_service = llm_registry.as_ref().map(|registry| {
+        // Convert vol_config::AgentAdviceConfig to vol_llm_bridge::AgentAdviceConfig
+        let agent_config = AgentAdviceConfig {
+            enabled: config.agent_advice.enabled,
+            cooldown_secs: config.agent_advice.cooldown_secs,
+            max_analyses_per_hour: config.agent_advice.max_analyses_per_hour,
+            llm_provider_id: config.agent_advice.llm_provider_id.clone(),
+        };
+        AgentAdviceService::new(
+            agent_config,
+            registry.clone(),
+            std::sync::Arc::new(tools),
+            std::sync::Arc::new(tdengine_client),
+            feishu,
+        )
+    });
 
     // Create engine config
     let engine_config = EngineConfig {
@@ -195,6 +238,14 @@ async fn main() -> Result<()> {
                     }
                 }
             }
+        }
+    }
+
+    // Add AgentAdviceService as notification handler if enabled
+    if config.agent_advice.enabled {
+        if let Some(service) = agent_service {
+            builder = builder.with_notification(Box::new(service));
+            info!("Added AgentAdviceService notification handler");
         }
     }
 

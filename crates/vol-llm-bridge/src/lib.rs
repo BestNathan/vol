@@ -8,5 +8,5 @@ pub mod service;
 pub mod prompt;
 
 pub use limiter::FrequencyLimiter;
-pub use service::AgentAdviceService;
+pub use service::{AgentAdviceService, AgentAdviceConfig};
 pub use prompt::system_prompt;
