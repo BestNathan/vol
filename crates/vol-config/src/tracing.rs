@@ -43,6 +43,10 @@ pub struct LoggingConfig {
     #[serde(default = "default_log_retention_days")]
     pub retention_days: u32,
 
+    /// Maximum log file size in MB before rotation (default: 100MB)
+    #[serde(default = "default_max_file_size_mb")]
+    pub max_file_size_mb: u64,
+
     /// Enable JSON format for file logs
     #[serde(default = "default_true")]
     pub json_format: bool,
@@ -66,6 +70,7 @@ impl Default for LoggingConfig {
             log_dir: default_log_dir(),
             log_prefix: default_log_prefix(),
             retention_days: default_log_retention_days(),
+            max_file_size_mb: default_max_file_size_mb(),
             json_format: true,
             console_level: default_console_level(),
             file_level: default_file_level(),
@@ -166,6 +171,10 @@ fn default_log_retention_days() -> u32 {
     7
 }
 
+fn default_max_file_size_mb() -> u64 {
+    100
+}
+
 fn default_true() -> bool {
     true
 }
@@ -243,6 +252,7 @@ mod tests {
         let config = TracingConfig::default();
         assert_eq!(config.logging.log_dir, "logs");
         assert_eq!(config.logging.retention_days, 7);
+        assert_eq!(config.logging.max_file_size_mb, 100);
         assert!(config.opentelemetry.enabled);
         assert_eq!(config.opentelemetry.endpoint, "http://localhost:4317");
         assert_eq!(config.opentelemetry.service_name, "vol-monitor");

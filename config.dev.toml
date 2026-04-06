@@ -140,6 +140,7 @@ notifications = ["stdout"]
 log_dir = "./logs"
 log_prefix = "vol-monitor-dev"
 retention_days = 3
+max_file_size_mb = 100  # 100MB max file size before rotation
 json_format = false  # Human-readable for local dev
 console_level = "debug"
 file_level = "debug"

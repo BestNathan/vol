@@ -2,9 +2,12 @@
 //!
 //! Sets up:
 //! - Console layer (compact format, colored)
-//! - File layer (JSON format, rolling daily, 7-day retention)
+//! - File layer (JSON format, rolling hourly, 7-day retention)
 //! - Error file layer (ERROR level only)
 //! - OpenTelemetry layer (OTLP gRPC to Jaeger)
+//!
+//! Log rotation: Files are rotated hourly to prevent excessive file sizes.
+//! Retention: Log files older than `retention_days` are automatically cleaned up.
 
 use std::sync::OnceLock;
 
@@ -186,18 +189,20 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
 
 fn create_file_appender(config: &LoggingConfig) -> RollingFileAppender {
     RollingFileAppender::builder()
-        .rotation(Rotation::DAILY)
+        .rotation(Rotation::HOURLY)
         .filename_prefix(config.log_prefix.clone())
         .filename_suffix("log")
+        .max_log_files((config.retention_days * 24).try_into().unwrap())  // Keep retention_days worth of hourly logs
         .build(&config.log_dir)
         .expect("Failed to create file appender")
 }
 
 fn create_error_appender(config: &LoggingConfig) -> RollingFileAppender {
     RollingFileAppender::builder()
-        .rotation(Rotation::DAILY)
+        .rotation(Rotation::HOURLY)
         .filename_prefix(config.log_prefix.clone())
         .filename_suffix("error.log")
+        .max_log_files((config.retention_days * 24).try_into().unwrap())  // Keep retention_days worth of hourly logs
         .build(&config.log_dir)
         .expect("Failed to create error appender")
 }

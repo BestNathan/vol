@@ -162,6 +162,7 @@ data:
     log_dir = "/var/log/vol-monitor"
     log_prefix = "vol-monitor"
     retention_days = 7
+    max_file_size_mb = 100  # 100MB max file size before rotation
     json_format = true
     console_level = "info"
     file_level = "debug"
