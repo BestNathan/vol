@@ -8,9 +8,11 @@ use tracing::{info, warn, error};
 use vol_core::Alert;
 use vol_tracing::TracedEvent;
 use vol_llm_agent::{ReActAgent, AgentConfig};
-use vol_llm_tool::{ToolRegistry, ToolContext};
+use vol_llm_tool::{ToolRegistry, ToolContext, TdengineClient};
 use vol_llm_provider::LLMProviderRegistry;
+use vol_notification::FeishuNotification;
 
+use std::sync::Arc;
 use crate::limiter::FrequencyLimiter;
 use crate::prompt::{system_prompt, build_user_prompt, get_threshold_from_alert};
 
@@ -35,10 +37,14 @@ impl Default for AgentAdviceConfig {
 }
 
 /// Agent Advice Service
+#[derive(Clone)]
 pub struct AgentAdviceService {
     limiter: FrequencyLimiter,
     config: AgentAdviceConfig,
     registry: LLMProviderRegistry,
+    tools: Arc<ToolRegistry>,
+    tdengine: Arc<TdengineClient>,
+    feishu: FeishuNotification,
 }
 
 impl AgentAdviceService {
@@ -46,11 +52,17 @@ impl AgentAdviceService {
     pub fn new(
         config: AgentAdviceConfig,
         registry: LLMProviderRegistry,
+        tools: Arc<ToolRegistry>,
+        tdengine: Arc<TdengineClient>,
+        feishu: FeishuNotification,
     ) -> Self {
         Self {
             limiter: FrequencyLimiter::new(config.cooldown_secs, config.max_analyses_per_hour),
             config,
             registry,
+            tools,
+            tdengine,
+            feishu,
         }
     }
 

@@ -18,6 +18,7 @@ pub fn limiter_key(alert: &Alert) -> String {
 }
 
 /// Frequency limiter
+#[derive(Clone)]
 pub struct FrequencyLimiter {
     cooldown_secs: u64,
     max_per_hour: u32,

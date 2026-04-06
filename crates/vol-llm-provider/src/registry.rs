@@ -17,6 +17,7 @@ pub struct LLMProviderConfig {
 }
 
 /// Registry for managing multiple LLM providers
+#[derive(Clone)]
 pub struct LLMProviderRegistry {
     providers: HashMap<String, Arc<dyn LLMClient>>,
 }
