@@ -111,6 +111,7 @@ Credentials via environment variables (never commit secrets):
 | `FEISHU_APP_ID` | Feishu app ID |
 | `FEISHU_APP_SECRET` | Feishu app secret |
 | `FEISHU_RECEIVE_ID` | Feishu recipient ID |
+| `HTTPS_PROXY` | HTTP proxy (restricted dev environment) |
 
 ```bash
 # Quick start
