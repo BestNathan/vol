@@ -238,3 +238,85 @@ If migrating from the old single-file config:
    # Restart deployment
    kubectl rollout restart deployment/vol-monitor
    ```
+
+## LLM Configuration
+
+### Overview
+
+The Agent Advice system uses LLM providers to generate analysis and recommendations for alerts. Multiple providers can be configured for failover or different use cases.
+
+### Secret Value Format
+
+The `api_key` field supports flexible value formats:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| Literal | `"sk-xxx-key"` | Direct API key value |
+| Env Var | `"${API_KEY}"` | Read from environment variable |
+| Env + Default | `"${API_KEY:sk-fallback}"` | Env var with fallback value |
+
+### Configuring LLM Providers
+
+Add provider configurations to your `config.toml`:
+
+```toml
+# Single provider with environment variable
+[[llm_providers]]
+id = "anthropic-main"
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+api_key = "${ANTHROPIC_AUTH_TOKEN}"
+base_url = "https://coding.dashscope.aliyuncs.com/apps/anthropic"
+```
+
+### Multiple Providers
+
+Configure multiple providers for failover or different models:
+
+```toml
+# Primary provider
+[[llm_providers]]
+id = "anthropic-primary"
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+api_key = "${ANTHROPIC_AUTH_TOKEN}"
+base_url = "https://coding.dashscope.aliyuncs.com/apps/anthropic"
+
+# Backup provider
+[[llm_providers]]
+id = "openai-backup"
+provider = "openai"
+model = "gpt-4o"
+api_key = "${OPENAI_API_KEY:sk-fallback-key}"
+base_url = "https://api.openai.com/v1"
+```
+
+### Agent Advice Configuration
+
+Configure the Agent Advice system to use a specific provider:
+
+```toml
+[agent_advice]
+enabled = true
+cooldown_secs = 300  # 5 minutes between analyses
+max_analyses_per_hour = 20
+llm_provider_id = "anthropic-main"  # Must match a [[llm_providers]] id
+```
+
+### Environment Variables
+
+Add LLM API keys to your `.env` file:
+
+```bash
+# LLM API Keys
+ANTHROPIC_AUTH_TOKEN="sk-xxx-actual-key"
+OPENAI_API_KEY="sk-xxx-actual-key"
+```
+
+### Provider ID Reference
+
+The `llm_provider_id` in `[agent_advice]` must match the `id` field of a `[[llm_providers]]` entry. If the provider is not found, the system will log a warning and Agent Advice will not be able to generate recommendations.
+
+### Example Configuration File
+
+See `config/llm.example.toml` for a complete example with comments.
