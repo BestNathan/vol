@@ -320,3 +320,48 @@ The `llm_provider_id` in `[agent_advice]` must match the `id` field of a `[[llm_
 ### Example Configuration File
 
 See `config/llm.example.toml` for a complete example with comments.
+
+## Agent Advice Configuration
+
+The Agent Advice feature provides AI-powered analysis of alerts via Feishu.
+
+```toml
+[agent_advice]
+enabled = true              # Enable AI analysis
+cooldown_secs = 300         # Minimum seconds between analyses
+max_analyses_per_hour = 20  # Rate limit
+llm_provider_id = "anthropic-main"  # LLM provider to use
+```
+
+### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable/disable AI analysis of alerts |
+| `cooldown_secs` | integer | `300` | Minimum seconds between consecutive analyses |
+| `max_analyses_per_hour` | integer | `20` | Maximum number of analyses per hour |
+| `llm_provider_id` | string | - | ID of the LLM provider to use (must match `[[llm_providers]]` entry) |
+
+### How It Works
+
+When enabled, the system will:
+
+1. Subscribe to all alerts via broadcast channel
+2. Apply rate limiting to prevent API abuse
+3. Use ReAct Agent with tools to analyze alerts
+4. Send AI-generated advice via Feishu
+
+### Rate Limiting
+
+The rate limiting system uses two mechanisms:
+
+- **Cooldown**: Enforces a minimum delay between consecutive analyses
+- **Hourly limit**: Caps the total number of analyses per rolling hour
+
+Both limits must be satisfied for an analysis to proceed.
+
+### Provider ID Reference
+
+The `llm_provider_id` in `[agent_advice]` must match the `id` field of a `[[llm_providers]]` entry. If the provider is not found, the system will log a warning and Agent Advice will not be able to generate recommendations.
+
+See the [LLM Configuration](#llm-configuration) section above for provider configuration details.
