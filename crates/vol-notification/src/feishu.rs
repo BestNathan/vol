@@ -300,7 +300,7 @@ impl FeishuNotification {
                 alert.iv * 100.0,
                 alert.index_price,
                 advice,
-                trace_id
+                &trace_id[..8.min(trace_id.len())]
             );
 
             // Send as text message
