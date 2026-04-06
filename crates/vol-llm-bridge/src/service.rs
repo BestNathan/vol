@@ -5,7 +5,7 @@
 
 use tokio::sync::broadcast;
 use tracing::{info, warn, error};
-use vol_core::Alert;
+use vol_core::{Alert, NotificationHandler, Result as VolResult};
 use vol_tracing::TracedEvent;
 use vol_llm_agent::{ReActAgent, AgentConfig};
 use vol_llm_tool::{ToolRegistry, ToolContext, TdengineClient};
@@ -194,5 +194,44 @@ impl AgentAdviceService {
         // For now, log the advice
         info!("Feishu message (trace_id: {}):\n{}", &trace_id[..8.min(trace_id.len())], advice);
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl NotificationHandler for AgentAdviceService {
+    fn name(&self) -> &str {
+        "agent_advice"
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.config.enabled
+    }
+
+    async fn send(&self, alert: &Alert) -> VolResult<()> {
+        // Check frequency limit first
+        if !self.limiter.can_analyze(alert) {
+            tracing::info!(
+                "Skipping AI analysis for {}:{} (frequency limited)",
+                alert.symbol,
+                alert.alert_type
+            );
+            return Ok(());
+        }
+
+        // Process the alert (create TracedEvent without span since we're receiving
+        // the alert from the notification channel without existing trace context)
+        if let Err(e) = self.process_alert(TracedEvent::without_span(alert.clone())).await {
+            tracing::error!("AgentAdviceService failed to process alert: {}", e);
+            // Don't return error - we don't want to block other notifications
+        }
+
+        // Record this analysis
+        self.limiter.record_analysis(alert);
+
+        Ok(())
+    }
+
+    fn clone_box(&self) -> Box<dyn NotificationHandler> {
+        Box::new(self.clone())
     }
 }
