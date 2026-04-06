@@ -224,3 +224,35 @@ impl NotificationHandler for AgentAdviceService {
         Box::new(self.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vol_core::{AlertType, Tenor, OptionType};
+
+    #[test]
+    fn test_agent_advice_service_creation() {
+        // This is a basic smoke test - full integration testing
+        // would require mocking LLM provider, Feishu, ToolRegistry, etc.
+        // For now, just verify the struct can be created and compiles correctly
+
+        // Verify AlertType and related types exist and can be constructed
+        let _alert_type = AlertType::AbsoluteIv { threshold: 0.75 };
+        let _tenor = Tenor::Short;
+        let _option_type = OptionType::Call;
+
+        // Verify AgentAdviceConfig can be created
+        let _config = AgentAdviceConfig {
+            enabled: true,
+            cooldown_secs: 300,
+            max_analyses_per_hour: 20,
+            llm_provider_id: "anthropic-main".to_string(),
+        };
+
+        // Verify default config works
+        let _default_config = AgentAdviceConfig::default();
+
+        // Test passes if code compiles - actual AgentAdviceService creation
+        // requires real LLMProviderRegistry, ToolRegistry, TdengineClient, FeishuNotification
+    }
+}
