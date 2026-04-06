@@ -20,6 +20,35 @@ pub use tracing::*;
 // Re-export legacy types for backwards compatibility
 pub use client::{DeribitClientConfig as DeribitConfig, DeribitAuthConfig};
 
+/// Agent advice configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AgentAdviceConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_cooldown_secs")]
+    pub cooldown_secs: u64,
+    #[serde(default = "default_max_per_hour")]
+    pub max_analyses_per_hour: u32,
+    #[serde(default = "default_provider_id")]
+    pub llm_provider_id: String,
+}
+
+impl Default for AgentAdviceConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            cooldown_secs: 300,
+            max_analyses_per_hour: 20,
+            llm_provider_id: "anthropic-main".to_string(),
+        }
+    }
+}
+
+fn default_true() -> bool { true }
+fn default_cooldown_secs() -> u64 { 300 }
+fn default_max_per_hour() -> u32 { 20 }
+fn default_provider_id() -> String { "anthropic-main".to_string() }
+
 /// Tenor-specific cooldown configuration
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct TenorCooldownsConfig {
@@ -91,6 +120,9 @@ pub struct Config {
     /// LLM providers configuration
     #[serde(default)]
     pub llm_providers: Vec<vol_llm_provider::LLMProviderConfig>,
+    /// Agent advice configuration
+    #[serde(default)]
+    pub agent_advice: AgentAdviceConfig,
     /// Legacy format support - for backwards compatibility
     #[serde(default)]
     pub data_sources: Option<LegacyDataSourcesConfig>,

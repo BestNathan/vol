@@ -13,6 +13,7 @@ use vol_datasource::{VolatilityDataSource, PortfolioDataSource};
 use vol_notification::{StdoutNotification, FeishuNotification};
 use vol_rules::{AbsoluteIvRule, RateChangeRule, TermStructureRule, SkewRule, PortfolioRule};
 use vol_config::{TermStructureConfig, SkewConfig};
+use vol_llm_provider::LLMProviderRegistry;
 
 /// Parse command line arguments
 fn parse_args() -> Option<String> {
@@ -80,6 +81,42 @@ async fn main() -> Result<()> {
     info!("===========================================");
     info!("  Deribit Volatility Monitor v0.3.0");
     info!("===========================================");
+
+    // Initialize LLM provider registry if providers are configured
+    let llm_registry: Option<LLMProviderRegistry> = if !config.llm_providers.is_empty() {
+        info!("Initializing LLM providers: {} configured", config.llm_providers.len());
+        match LLMProviderRegistry::from_configs(&config.llm_providers) {
+            Ok(registry) => {
+                info!("Available LLM providers: {:?}", registry.ids());
+
+                // Verify agent_advice provider if configured
+                if config.agent_advice.enabled {
+                    if registry.contains(&config.agent_advice.llm_provider_id) {
+                        info!("AgentAdvice will use provider: {}", config.agent_advice.llm_provider_id);
+                    } else {
+                        warn!("AgentAdvice provider '{}' not found in configured providers",
+                              config.agent_advice.llm_provider_id);
+                    }
+                }
+
+                Some(registry)
+            }
+            Err(e) => {
+                warn!("Failed to initialize LLM providers: {}", e);
+                None
+            }
+        }
+    } else {
+        info!("No LLM providers configured");
+        None
+    };
+
+    // TODO: Start AgentAdviceService when engine supports broadcast alerts
+    // The service needs to subscribe to alert broadcast, which requires engine modification.
+    // For now, LLM providers are initialized and ready for integration.
+    if config.agent_advice.enabled && llm_registry.is_some() {
+        info!("AgentAdvice is enabled but requires engine broadcast channel for alerts");
+    }
 
     // Create engine config
     let engine_config = EngineConfig {
@@ -265,6 +302,7 @@ fn create_default_config() -> Config {
         rules: vec![],
         tracing: vol_config::TracingConfig::default(),
         llm_providers: vec![],
+        agent_advice: vol_config::AgentAdviceConfig::default(),
         data_sources: None,
         alerts: None,
         state: None,

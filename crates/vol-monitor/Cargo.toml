@@ -34,3 +34,5 @@ vol-notification = { workspace = true }
 vol-engine = { workspace = true }
 vol-rules = { workspace = true }
 vol-deribit = { workspace = true }
+vol-llm-provider = { workspace = true }
+vol-llm-bridge = { workspace = true }
