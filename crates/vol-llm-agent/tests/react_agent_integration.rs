@@ -6,7 +6,7 @@
 
 use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
 use vol_llm_tool::{ToolRegistry, ToolContext};
-use vol_llm_provider::{create_provider, LLMConfig};
+use vol_llm_provider::{create_provider, LLMConfig, Secret};
 use vol_llm_core::LLMProvider;
 use std::sync::Arc;
 
@@ -17,8 +17,8 @@ fn create_test_agent() -> Option<ReActAgent> {
     let config = LLMConfig {
         provider: LLMProvider::Anthropic,
         model: "claude-sonnet-4-6".to_string(),
-        api_key,
-        base_url: Some("https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string()),
+        api_key: Secret::Literal(api_key),
+        base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
     };
 
     let llm = create_provider(&config).ok()?;
@@ -33,10 +33,11 @@ fn create_test_agent() -> Option<ReActAgent> {
         verbose: true,
     };
 
-    Some(ReActAgent::new(Arc::new(llm), Arc::new(registry), agent_config))
+    Some(ReActAgent::new(llm.into(), Arc::new(registry), agent_config))
 }
 
 #[tokio::test]
+#[ignore = "requires ANTHROPIC_AUTH_TOKEN and correct model"]
 async fn test_agent_with_market_data_query() {
     let agent = match create_test_agent() {
         Some(a) => a,
@@ -97,6 +98,7 @@ async fn test_agent_with_market_data_query() {
 }
 
 #[tokio::test]
+#[ignore = "requires ANTHROPIC_AUTH_TOKEN and correct model"]
 async fn test_agent_with_volatility_query() {
     let agent = match create_test_agent() {
         Some(a) => a,
@@ -132,6 +134,7 @@ async fn test_agent_with_volatility_query() {
 }
 
 #[tokio::test]
+#[ignore = "requires ANTHROPIC_AUTH_TOKEN and correct model"]
 async fn test_agent_max_iterations() {
     let agent = match create_test_agent() {
         Some(a) => a,
