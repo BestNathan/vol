@@ -30,3 +30,47 @@ pub enum AgentError {
     #[error("Context error: {0}")]
     Context(String),
 }
+
+/// Agent streaming event
+#[derive(Debug)]
+pub enum AgentStreamEvent {
+    /// Agent started execution
+    AgentStart { input: String },
+
+    /// LLM thinking completed
+    ThinkingComplete { thinking: String },
+
+    /// About to call tool
+    ToolCallBegin { tool_name: String, arguments: String },
+
+    /// Tool call completed
+    ToolCallComplete { tool_name: String, result: String },
+
+    /// One iteration completed (Reason-Act-Observation)
+    IterationComplete {
+        iteration: u32,
+        tool_calls: Vec<vol_llm_core::ToolCall>,
+        final_answer: Option<String>,
+    },
+
+    /// Agent execution completed
+    AgentComplete { response: AgentResponse },
+
+    /// Error occurred
+    Error { error: AgentError },
+}
+
+/// Agent stream receiver
+pub struct AgentStreamReceiver {
+    rx: tokio::sync::mpsc::Receiver<Result<AgentStreamEvent, AgentError>>,
+}
+
+impl AgentStreamReceiver {
+    pub fn new(rx: tokio::sync::mpsc::Receiver<Result<AgentStreamEvent, AgentError>>) -> Self {
+        Self { rx }
+    }
+
+    pub async fn recv(&mut self) -> Option<Result<AgentStreamEvent, AgentError>> {
+        self.rx.recv().await
+    }
+}
