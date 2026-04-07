@@ -1,10 +1,11 @@
 //! ReAct Agent implementation.
 
 use std::sync::Arc;
-use vol_llm_core::{LLMClient, Message, ConversationRequest, ToolChoice};
+use tokio::sync::mpsc;
+use vol_llm_core::{LLMClient, Message, ConversationRequest, ToolChoice, StreamEventData, StreamReceiver};
 use vol_llm_tool::ToolContext;
 use tracing::{info, debug};
-use crate::{AgentResponse, AgentError};
+use crate::{AgentResponse, AgentError, AgentStreamEvent, AgentStreamReceiver};
 
 /// Agent configuration
 #[derive(Debug, Clone)]
@@ -116,4 +117,30 @@ impl ReActAgent {
             });
         }
     }
+}
+
+/// Consume LLM stream response and accumulate into complete data
+async fn consume_llm_stream(
+    mut stream: StreamReceiver,
+) -> Result<(String, Vec<vol_llm_core::ToolCall>, String), crate::AgentError> {
+    let mut thinking = String::new();
+    let mut tool_calls = Vec::new();
+    let mut content = String::new();
+
+    while let Some(result) = stream.recv().await {
+        match result?.data {
+            StreamEventData::ThinkingComplete { thinking: t } => {
+                thinking = t;
+            }
+            StreamEventData::ToolCallComplete { tool_call } => {
+                tool_calls.push(tool_call);
+            }
+            StreamEventData::ContentComplete { content: c } => {
+                content = c;
+            }
+            _ => {}
+        }
+    }
+
+    Ok((thinking, tool_calls, content))
 }
