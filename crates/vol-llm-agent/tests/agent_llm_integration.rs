@@ -7,7 +7,7 @@
 use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
 use vol_llm_tool::{ToolRegistry, ToolContext, MarketDataTool};
 use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
-use vol_llm_core::{LLMProvider, LLMClient, Message, ConversationResponse, TokenUsage, FinishReason, ToolDefinition, StreamEvent, StreamEventData};
+use vol_llm_core::{LLMProvider, LLMClient, ToolDefinition, StreamEvent, StreamEventData};
 use async_trait::async_trait;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -26,7 +26,7 @@ fn log_to_file(path: &str, content: &str) {
 
 /// Mock LLM that uses real Anthropic API for first call, then returns fixed response
 struct IntegrationMock {
-    provider: AnthropicProvider,
+    provider: Arc<AnthropicProvider>,
     call_count: AtomicUsize,
     log_path: String,
 }
@@ -47,7 +47,7 @@ impl IntegrationMock {
             .expect("Failed to create Anthropic provider");
 
         Self {
-            provider,
+            provider: Arc::new(provider),
             call_count: AtomicUsize::new(0),
             log_path: "/tmp/llm_api_calls.log".to_string(),
         }
@@ -127,15 +127,16 @@ impl LLMClient for IntegrationMock {
             log_to_file(&self.log_path, &params_log);
 
             // Clone for the spawned task
-            let provider = self.provider.clone();
+            let provider = Arc::clone(&self.provider);
             let log_path = self.log_path.clone();
+            let tx_clone = tx.clone();
 
             tokio::spawn(async move {
                 match provider.converse_stream(request).await {
                     Ok(mut stream) => {
                         while let Some(result) = stream.recv().await {
                             if let Ok(event) = result {
-                                let _ = tx.send(Ok(event)).await;
+                                let _ = tx_clone.send(Ok(event)).await;
                             }
                         }
                     }
