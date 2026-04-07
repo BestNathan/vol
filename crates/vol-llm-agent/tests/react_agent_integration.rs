@@ -20,6 +20,7 @@ fn create_test_agent() -> Option<ReActAgent> {
         model: "claude-sonnet-4-6".to_string(),
         api_key: Secret::Literal(api_key),
         base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
+    };
 
     let llm = create_provider(&config).ok()?;
 
@@ -34,6 +35,7 @@ fn create_test_agent() -> Option<ReActAgent> {
         max_iterations: 5,
         system_prompt: "You are a helpful assistant.".to_string(),
         verbose: true,
+    };
 
     Some(ReActAgent::new(llm.into(), Arc::new(registry), agent_config))
 }
@@ -47,6 +49,7 @@ async fn test_agent_with_market_data_query() {
             eprintln!("Skipping test - LLM provider not configured");
             return;
         }
+    };
 
     let context = ToolContext::default();
 
@@ -104,6 +107,7 @@ async fn test_agent_with_volatility_query() {
             eprintln!("Skipping test - LLM provider not configured");
             return;
         }
+    };
 
     let context = ToolContext::default();
 
@@ -136,6 +140,7 @@ async fn test_agent_max_iterations() {
             eprintln!("Skipping test - LLM provider not configured");
             return;
         }
+    };
 
     // This query should trigger multiple iterations
     let context = ToolContext::default();
