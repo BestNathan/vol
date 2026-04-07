@@ -6,6 +6,8 @@ use serde_json::json;
 use tracing::info;
 use vol_llm_core::*;
 use crate::LLMConfig;
+use tokio::sync::mpsc;
+use futures_util::StreamExt;
 
 /// Anthropic Provider
 pub struct AnthropicProvider {
@@ -265,15 +267,139 @@ impl LLMClient for AnthropicProvider {
         })
     }
 
-    async fn converse_stream(&self, _request: ConversationRequest) -> Result<StreamReceiver> {
-        Err(LLMError::Parse("Streaming not implemented".to_string()))
+    async fn converse_stream(&self, request: ConversationRequest) -> Result<StreamReceiver> {
+        // max_tokens is required for Anthropic
+        let max_tokens = request.model_config.max_tokens.unwrap_or(1024);
+
+        // Convert messages
+        let anthropic_messages = self.convert_messages(&request.messages)?;
+
+        // Build request body
+        let mut body = json!({
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "messages": anthropic_messages,
+            "stream": true,  // Enable streaming
+        });
+
+        // System message separately
+        if let Some(system) = request.system {
+            body["system"] = json!(system);
+        }
+
+        // Optional parameters
+        if let Some(temp) = request.model_config.temperature {
+            body["temperature"] = json!(temp);
+        }
+        if let Some(top_p) = request.model_config.top_p {
+            body["top_p"] = json!(top_p);
+        }
+        if let Some(tools) = request.tools {
+            body["tools"] = self.convert_tools(&tools);
+        }
+
+        // Send request
+        let url = format!("{}/v1/messages", self.base_url);
+
+        let response = self.client
+            .post(&url)
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("Content-Type", "application/json")
+            .header("User-Agent", "claude-code/1.0.0")
+            .json(&body)
+            .send()
+            .await
+            .map_err(LLMError::Network)?;
+
+        // Handle non-success status
+        if !response.status().is_success() {
+            let status = response.status().as_u16();
+            let error_text = response.text().await.unwrap_or_default();
+
+            if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
+                let message = error_json["error"]["message"]
+                    .as_str()
+                    .unwrap_or(&error_text)
+                    .to_string();
+                return Err(LLMError::Api { status, message });
+            }
+
+            return Err(LLMError::Api { status, message: error_text });
+        }
+
+        // Create channel for streaming events
+        let (tx, rx) = mpsc::channel(100);
+
+        // Spawn async task to process SSE stream
+        let mut session = StreamingSession::new();
+
+        tokio::spawn(async move {
+            let mut stream = response.bytes_stream();
+            let mut buffer = String::new();
+
+            while let Some(chunk_result) = stream.next().await {
+                match chunk_result {
+                    Ok(chunk) => {
+                        // Decode chunk to string
+                        let text = match std::str::from_utf8(&chunk) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                let _ = tx.send(Err(LLMError::Parse(e.to_string()))).await;
+                                break;
+                            }
+                        };
+
+                        buffer.push_str(text);
+
+                        // Process complete lines
+                        while let Some(newline_pos) = buffer.find('\n') {
+                            let line = buffer[..newline_pos].trim().to_string();
+                            buffer.drain(..=newline_pos);
+
+                            // Process SSE line
+                            if let Some(event_result) = session.process_anthropic_sse(&line) {
+                                match event_result {
+                                    Ok(event) => {
+                                        if tx.send(Ok(event)).await.is_err() {
+                                            return; // Receiver dropped
+                                        }
+                                    }
+                                    Err(e) => {
+                                        let _ = tx.send(Err(e)).await;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Err(LLMError::Network(e))).await;
+                        break;
+                    }
+                }
+            }
+
+            // Emit any remaining events (finalization)
+            for event_result in session.finalize() {
+                match event_result {
+                    Ok(event) => {
+                        if tx.send(Ok(event)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Err(e)).await;
+                    }
+                }
+            }
+        });
+
+        Ok(StreamReceiver::new(rx))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_user_agent_header_constant() {
         // Verify the User-Agent header constant is set correctly
