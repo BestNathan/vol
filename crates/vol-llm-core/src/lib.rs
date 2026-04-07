@@ -8,6 +8,7 @@ pub mod conversation;
 pub mod stream;
 pub mod client;
 pub mod error;
+pub mod streaming;
 
 pub use provider::*;
 pub use message::*;
@@ -17,3 +18,4 @@ pub use conversation::*;
 pub use stream::*;
 pub use client::*;
 pub use error::*;
+pub use streaming::*;
