@@ -1,8 +1,14 @@
 #!/bin/bash
-# scripts/build-multiarch.sh - Test multi-arch cross-compile build
+# scripts/build-multiarch.sh - Test single-image dual-binary build
 #
-# This script builds and pushes a multi-architecture image using cross-compilation
-# Tag: beta - for testing purposes only, not for production deployment
+# This script builds a single image containing BOTH amd64 and arm64 binaries
+# The correct binary is selected at runtime based on uname -m
+#
+# Features:
+#   - Cross-compilation for arm64 using gcc-aarch64-linux-gnu
+#   - Single image works on both architectures
+#   - No QEMU emulation needed during build (native cross-compile)
+#   - Tag: beta - for testing purposes only
 #
 # Usage: ./scripts/build-multiarch.sh
 
@@ -15,59 +21,67 @@ VERSION="beta"
 DOCKERFILE="Dockerfile.cross-compile"
 
 echo "============================================"
-echo "  vol-monitor Multi-Arch Cross-Compile Build"
+echo "  vol-monitor Single-Image Multi-Arch Build"
 echo "============================================"
 echo "Registry: $DOCKER_REGISTRY"
 echo "Image: $IMAGE_NAME:$VERSION"
 echo "Dockerfile: $DOCKERFILE"
 echo ""
+echo "Build strategy:"
+echo "  - Cross-compile arm64 from amd64 host"
+echo "  - Single image contains both binaries"
+echo "  - Runtime selects correct binary via uname -m"
+echo ""
 
 # Step 0: Login to ACR
-echo "[0/5] Logging in to ACR..."
+echo "[0/4] Logging in to ACR..."
 if ! docker info 2>&1 | grep -q "$DOCKER_REGISTRY"; then
     echo "Logging in to $DOCKER_REGISTRY..."
     docker login "$DOCKER_REGISTRY" -u "308719298@qq.com" -p "zhangdage2011"
 fi
 
-# Step 1: Create multi-arch builder (if not exists)
-echo "[1/5] Setting up multi-arch builder..."
-if ! docker buildx ls 2>/dev/null | grep -q "multiarch-builder"; then
-    docker buildx create --name multiarch-builder --driver docker-container --use
-    docker buildx inspect multiarch-builder --bootstrap
-    echo "Created new builder: multiarch-builder"
-else
-    docker buildx use multiarch-builder
-    echo "Using existing builder: multiarch-builder"
-fi
+# Step 1: Pull base images
+echo "[1/4] Pulling base images..."
+docker pull docker.1panel.live/library/rust:latest || true
+docker pull docker.1panel.live/library/debian:bookworm-slim || true
 
-# Step 2: Build and push multi-arch image
-echo "[2/5] Building multi-arch image (cross-compile)..."
-echo "This should take ~5-8 minutes for both architectures..."
-docker buildx build --platform linux/amd64,linux/arm64 \
-    --push \
+# Step 2: Build the image (single command, cross-compiles both architectures)
+echo "[2/4] Building image with cross-compilation..."
+echo "This will compile for both amd64 (native) and arm64 (cross-compile)..."
+echo "Expected time: ~8-12 minutes"
+docker build -f "$DOCKERFILE" \
     --tag "$IMAGE_NAME:$VERSION" \
-    --tag "$IMAGE_NAME:cross-compile-test" \
-    -f "$DOCKERFILE" \
+    --tag "$IMAGE_NAME:single-image-test" \
+    --progress=plain \
     .
 
+# Step 3: Push to registry
+echo "[3/4] Pushing image to registry..."
+docker push "$IMAGE_NAME:$VERSION"
+docker push "$IMAGE_NAME:single-image-test"
+
 echo ""
-echo "[3/5] Build complete! Verifying image..."
+echo "[4/4] Build complete! Verifying image..."
 
-# Step 3: Verify the multi-arch image
-echo "[4/5] Inspecting manifest..."
-docker buildx imagetools inspect "$IMAGE_NAME:$VERSION"
-
+# Get image size
+IMAGE_SIZE=$(docker images "$IMAGE_NAME:$VERSION" --format "{{.Size}}")
 echo ""
 echo "============================================"
 echo "  Build Complete!"
 echo "============================================"
 echo ""
+echo "Image: $IMAGE_NAME:$VERSION"
+echo "Size: $IMAGE_SIZE (expected: ~180-200MB with both binaries)"
+echo ""
 echo "Image tags:"
 echo "  - $IMAGE_NAME:$VERSION"
-echo "  - $IMAGE_NAME:cross-compile-test"
+echo "  - $IMAGE_NAME:single-image-test"
 echo ""
-echo "To test locally (amd64):"
-echo "  docker run --rm $IMAGE_NAME:$VERSION --version"
+echo "To test locally:"
+echo "  docker run --rm $IMAGE_NAME:$VERSION --help"
+echo ""
+echo "To verify architecture inside container:"
+echo "  docker run --rm $IMAGE_NAME:$VERSION sh -c 'uname -m && cat /proc/cpuinfo | head -1'"
 echo ""
 echo "To deploy to Kubernetes:"
 echo "  kubectl set image deployment/vol-monitor -n deribit vol-monitor=$IMAGE_NAME:$VERSION"

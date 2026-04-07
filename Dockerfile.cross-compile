@@ -1,11 +1,26 @@
-# Multi-architecture cross-compile Dockerfile
-# Build both amd64 and arm64 binaries in a single builder stage
-# Then extract architecture-specific binary at runtime using TARGETARCH
+# Multi-architecture single-image with dual binaries
+# =============================================================================
+# This Dockerfile creates a SINGLE image containing BOTH amd64 and arm64 binaries
+# At runtime, an entrypoint script selects the correct binary based on architecture
+#
+# Pros:
+#   - Single image works on both architectures
+#   - No need for docker buildx multi-platform builds
+#   - Simple docker build command
+#
+# Cons:
+#   - Image size is ~2x (contains both binaries)
+#   - Build time includes compiling for both architectures
+#
+# Build command (single arch build, single image):
+#   docker build -f Dockerfile.cross-compile -t vol-monitor:beta .
+#
+# =============================================================================
 
 # =============================================================================
 # Stage 1: Builder - Cross-compile for both amd64 and arm64
 # =============================================================================
-FROM rust:latest AS builder
+FROM docker.1panel.live/library/rust:latest AS builder
 
 WORKDIR /app
 
@@ -27,39 +42,57 @@ COPY .cargo ./.cargo
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 
-# Build release binaries for both architectures
-# amd64 (x86_64) - native on most build machines
-RUN cargo build --release --target x86_64-unknown-linux-gnu
+# Build amd64 binary (native)
+RUN echo "=== Building amd64 binary (native) ===" && \
+    cargo build --release
 
-# arm64 (aarch64) - cross-compiled
-RUN cargo build --release --target aarch64-unknown-linux-gnu
-
-# =============================================================================
-# Stage 2: Binaries Extractor - Organize binaries by architecture
-# =============================================================================
-FROM scratch AS binaries
-
-# Copy both architecture binaries to separate directories
-COPY --from=builder /app/target/x86_64-unknown-linux-gnu/release/vol-monitor /amd64/vol-monitor
-COPY --from=builder /app/target/aarch64-unknown-linux-gnu/release/vol-monitor /arm64/vol-monitor
+# Build arm64 binary (cross-compile)
+RUN echo "=== Building arm64 binary (cross-compile) ===" && \
+    cargo build --release --target aarch64-unknown-linux-gnu
 
 # =============================================================================
-# Stage 3: Runtime - Architecture-specific minimal image
+# Stage 2: Runtime - Single image with both binaries
 # =============================================================================
-FROM debian:bookworm-slim
-
-# TARGETARCH is automatically set by docker buildx
-# Values: "amd64" or "arm64"
-ARG TARGETARCH=amd64
+FROM docker.1panel.live/library/debian:bookworm-slim
 
 # Install CA certificates for HTTPS using Aliyun mirror
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
     apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Copy only the binary for the current architecture
-COPY --from=binaries /${TARGETARCH}/vol-monitor /usr/local/bin/vol-monitor
+# Install dumb-init for proper signal handling
+RUN apt-get update && apt-get install -y dumb-init && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Run the binary
-ENTRYPOINT ["/usr/local/bin/vol-monitor"]
+# Copy both binaries with architecture-specific names
+COPY --from=builder /app/target/release/vol-monitor /usr/local/bin/vol-monitor-amd64
+COPY --from=builder /app/target/aarch64-unknown-linux-gnu/release/vol-monitor /usr/local/bin/vol-monitor-arm64
+
+# Create entrypoint script that selects the correct binary
+COPY <<'EOF' /entrypoint.sh
+#!/bin/sh
+# Entrypoint script to select correct binary based on architecture
+
+ARCH=$(uname -m)
+
+case "$ARCH" in
+    x86_64)
+        echo "Detected architecture: amd64 (x86_64)"
+        exec /usr/local/bin/vol-monitor-amd64 "$@"
+        ;;
+    aarch64)
+        echo "Detected architecture: arm64 (aarch64)"
+        exec /usr/local/bin/vol-monitor-arm64 "$@"
+        ;;
+    *)
+        echo "ERROR: Unsupported architecture: $ARCH"
+        echo "Supported architectures: x86_64, aarch64"
+        exit 1
+        ;;
+esac
+EOF
+
+RUN chmod +x /entrypoint.sh
+
+# Use dumb-init as PID 1 for proper signal handling
+ENTRYPOINT ["/usr/bin/dumb-init", "/entrypoint.sh"]
