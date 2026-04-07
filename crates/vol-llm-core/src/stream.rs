@@ -1,51 +1,42 @@
 //! Streaming response types.
 
 use serde::{Deserialize, Serialize};
-use crate::{TokenUsage, FinishReason};
+use crate::{TokenUsage, FinishReason, ToolCall};
 
 /// Stream event
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct StreamEvent {
     pub id: String,
-    pub event: StreamEventType,
     pub data: StreamEventData,
 }
 
-/// Stream event type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum StreamEventType {
-    ResponseStart,
-    ContentDelta,
-    ToolCallDelta,
-    UsageUpdate,
-    ResponseComplete,
-    Error,
-}
-
-/// Stream event data
+/// Stream event data - unified enum combining event type and payload
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(untagged)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum StreamEventData {
-    ContentDelta { delta: String },
-    ToolCallDelta { tool_call_index: usize, delta: ToolCallDelta },
-    UsageUpdate { usage: TokenUsage },
+    // Lifecycle events
+    ResponseStart { model: String },
     ResponseComplete { finish_reason: FinishReason },
+
+    // Content (text output)
+    ContentDelta { delta: String },
+    ContentComplete { content: String },
+
+    // Thinking (model reasoning)
+    ThinkingDelta { thinking: String },
+    ThinkingComplete { thinking: String },
+
+    // Tool calls
+    ToolCallComplete { tool_call: ToolCall },
+
+    // Usage
+    UsageUpdate { usage: TokenUsage },
+
+    // Error handling
     Error { code: String, message: String },
 }
 
-/// Tool call delta
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ToolCallDelta {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub arguments: Option<String>,
-}
-
-/// Stream receiver
+/// Stream receiver - receives streaming events from provider
 pub struct StreamReceiver {
     rx: tokio::sync::mpsc::Receiver<Result<StreamEvent, crate::LLMError>>,
 }
@@ -68,9 +59,22 @@ mod tests {
     fn test_stream_event_creation() {
         let event = StreamEvent {
             id: "event_1".to_string(),
-            event: StreamEventType::ContentDelta,
             data: StreamEventData::ContentDelta { delta: "Hello".to_string() },
         };
         assert_eq!(event.id, "event_1");
+    }
+
+    #[test]
+    fn test_stream_event_complete() {
+        let event = StreamEvent {
+            id: "event_2".to_string(),
+            data: StreamEventData::ContentComplete { content: "Hello world".to_string() },
+        };
+        match event.data {
+            StreamEventData::ContentComplete { ref content } => {
+                assert_eq!(content, "Hello world");
+            }
+            _ => panic!("Expected ContentComplete"),
+        }
     }
 }
