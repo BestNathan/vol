@@ -4,19 +4,21 @@
 //!
 //! These tests verify the ReAct Agent workflow with real LLM provider and TDengine tools.
 
-use vol_llm_agent::{ReActAgent, AgentBuilder};
+use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
 use vol_llm_tool::{ToolRegistry, ToolContext};
 use vol_llm_provider::{create_provider, LLMConfig};
 use vol_llm_core::LLMProvider;
+use std::sync::Arc;
 
 /// Create a test agent with TDengine tools
 fn create_test_agent() -> Option<ReActAgent> {
     // Load LLM provider using Anthropic API key from environment
+    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").ok()?;
     let config = LLMConfig {
         provider: LLMProvider::Anthropic,
         model: "claude-sonnet-4-6".to_string(),
-        api_key_env: "ANTHROPIC_AUTH_TOKEN".to_string(),
-        endpoint: Some("https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string()),
+        api_key,
+        base_url: Some("https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string()),
     };
 
     let llm = create_provider(&config).ok()?;
@@ -25,12 +27,13 @@ fn create_test_agent() -> Option<ReActAgent> {
     let mut registry = ToolRegistry::new();
     registry.register_default_tools();
 
-    AgentBuilder::new()
-        .with_llm(llm)
-        .with_tools(registry)
-        .with_max_iterations(5)
-        .verbose()
-        .build()
+    let agent_config = AgentConfig {
+        max_iterations: 5,
+        system_prompt: "You are a helpful assistant.".to_string(),
+        verbose: true,
+    };
+
+    Some(ReActAgent::new(Arc::new(llm), Arc::new(registry), agent_config))
 }
 
 #[tokio::test]
@@ -48,23 +51,43 @@ async fn test_agent_with_market_data_query() {
         ..Default::default()
     };
 
-    let result = agent.run("What is the current BTC price?", context).await;
+    let stream_result = agent.run("What is the current BTC price?", context).await;
 
-    match result {
-        Ok(response) => {
-            println!("Agent response: {}", response.content);
-            println!("Iterations: {}", response.iterations);
-            println!("Tool calls: {}", response.tool_calls.len());
+    match stream_result {
+        Ok(mut stream) => {
+            let mut final_response = None;
+            let mut tool_calls_count = 0;
+
+            while let Some(event) = stream.recv().await {
+                match event.unwrap() {
+                    AgentStreamEvent::ToolCallBegin { tool_name, .. } => {
+                        println!("Tool call begin: {}", tool_name);
+                        tool_calls_count += 1;
+                    }
+                    AgentStreamEvent::ToolCallComplete { tool_name, result } => {
+                        println!("Tool call complete: {} = {}", tool_name, result);
+                    }
+                    AgentStreamEvent::AgentComplete { response } => {
+                        println!("Agent response: {}", response.content);
+                        println!("Iterations: {}", response.iterations);
+                        println!("Tool calls: {}", response.tool_calls.len());
+                        final_response = Some(response.content);
+                    }
+                    _ => {}
+                }
+            }
 
             // Verify agent used tools
-            assert!(!response.tool_calls.is_empty(), "Agent should have called at least one tool");
+            assert!(tool_calls_count > 0, "Agent should have called at least one tool");
 
             // Verify response mentions price or market data
-            let content_lower = response.content.to_lowercase();
-            assert!(
-                content_lower.contains("price") || content_lower.contains("market") || content_lower.contains("btc"),
-                "Response should mention price or BTC"
-            );
+            if let Some(content) = final_response {
+                let content_lower = content.to_lowercase();
+                assert!(
+                    content_lower.contains("price") || content_lower.contains("market") || content_lower.contains("btc"),
+                    "Response should mention price or BTC"
+                );
+            }
         }
         Err(e) => {
             eprintln!("Agent error: {:?}", e);
@@ -88,12 +111,19 @@ async fn test_agent_with_volatility_query() {
         ..Default::default()
     };
 
-    let result = agent.run("Show me the recent volatility data for ETH", context).await;
+    let stream_result = agent.run("Show me the recent volatility data for ETH", context).await;
 
-    match result {
-        Ok(response) => {
-            println!("Agent response: {}", response.content);
-            println!("Iterations: {}", response.iterations);
+    match stream_result {
+        Ok(mut stream) => {
+            while let Some(event) = stream.recv().await {
+                match event.unwrap() {
+                    AgentStreamEvent::AgentComplete { response } => {
+                        println!("Agent response: {}", response.content);
+                        println!("Iterations: {}", response.iterations);
+                    }
+                    _ => {}
+                }
+            }
         }
         Err(e) => {
             eprintln!("Agent error: {:?}", e);
@@ -114,12 +144,19 @@ async fn test_agent_max_iterations() {
     // This query should trigger multiple iterations
     let context = ToolContext::default();
 
-    let result = agent.run("Compare BTC and ETH volatility and explain the difference", context).await;
+    let stream_result = agent.run("Compare BTC and ETH volatility and explain the difference", context).await;
 
-    match result {
-        Ok(response) => {
-            println!("Agent completed in {} iterations", response.iterations);
-            println!("Response: {}", response.content);
+    match stream_result {
+        Ok(mut stream) => {
+            while let Some(event) = stream.recv().await {
+                match event.unwrap() {
+                    AgentStreamEvent::AgentComplete { response } => {
+                        println!("Agent completed in {} iterations", response.iterations);
+                        println!("Response: {}", response.content);
+                    }
+                    _ => {}
+                }
+            }
         }
         Err(vol_llm_agent::AgentError::MaxIterationsReached { max }) => {
             println!("Hit max iterations ({}) - this is expected for complex queries", max);
