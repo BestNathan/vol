@@ -319,7 +319,7 @@ async fn test_code_agent_volatility_query() {
 
     // Test: Query volatility - use "ETH volatility" to trigger volatility path
     let context = ToolContext {
-        instrument: "eth_usd".to_string(),
+        ..
         ..Default::default()
     };
     let stream_result = agent.run("Show me ETH volatility", context).await;

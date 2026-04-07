@@ -52,7 +52,7 @@ async fn test_agent_with_market_data_query() {
     };
 
     let context = ToolContext {
-        instrument: "btc_usd".to_string(),
+        ..
         ..Default::default()
     };
 
@@ -113,7 +113,7 @@ async fn test_agent_with_volatility_query() {
     };
 
     let context = ToolContext {
-        instrument: "eth_usd".to_string(),
+        ..
         ..Default::default()
     };
 
