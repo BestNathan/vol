@@ -11,7 +11,6 @@ use vol_llm_core::{
     LLMClient, Message, ConversationRequest, ConversationResponse,
     TokenUsage, FinishReason, LLMProvider, StreamEvent, StreamEventData,
     MessageRole, SupportedParam,
-};
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -55,7 +54,6 @@ impl CodeAgentSimulator {
                     name: "volatility_index".to_string(),
                     arguments: r#"{"symbol": "btc_usd", "limit": 10, "hours": 24}"#.to_string(),
                     r#type: "function".to_string(),
-                };
 
                 return ConversationResponse {
                     message: Message::assistant_with_tools(
@@ -71,7 +69,6 @@ impl CodeAgentSimulator {
                     },
                     finish_reason: FinishReason::ToolCalls,
                     raw: None,
-                };
             }
 
             // Check for price/market/btc/eth queries
@@ -84,7 +81,6 @@ impl CodeAgentSimulator {
                     name: "index_price".to_string(),
                     arguments: r#"{"instrument": "btc_usd", "limit": 1}"#.to_string(),
                     r#type: "function".to_string(),
-                };
 
                 return ConversationResponse {
                     message: Message::assistant_with_tools(
@@ -100,7 +96,6 @@ impl CodeAgentSimulator {
                     },
                     finish_reason: FinishReason::ToolCalls,
                     raw: None,
-                };
             }
         }
 
@@ -132,7 +127,6 @@ impl CodeAgentSimulator {
                     "I've successfully retrieved the requested data from TDengine."
                 } else {
                     "I've successfully queried the requested data. Here's what I found based on the tool results."
-                };
 
                 return ConversationResponse {
                     message: Message::assistant(response_text.to_string()),
@@ -145,7 +139,6 @@ impl CodeAgentSimulator {
                     },
                     finish_reason: FinishReason::Stop,
                     raw: None,
-                };
             }
         }
 
@@ -237,7 +230,6 @@ async fn test_code_agent_market_data_query() {
         max_iterations: 5,
         system_prompt: "You are a helpful market data assistant.".to_string(),
         verbose: true,
-    };
 
     let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
 
@@ -313,15 +305,11 @@ async fn test_code_agent_volatility_query() {
         max_iterations: 5,
         system_prompt: "You are a volatility analysis assistant.".to_string(),
         verbose: true,
-    };
 
     let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
 
     // Test: Query volatility - use "ETH volatility" to trigger volatility path
-    let context = ToolContext {
-        ..
-        ..Default::default()
-    };
+    let context = ToolContext::default();
     let stream_result = agent.run("Show me ETH volatility", context).await;
 
     match stream_result {
@@ -380,7 +368,6 @@ async fn test_code_agent_multi_turn_conversation() {
         max_iterations: 5,
         system_prompt: "You are a helpful market data assistant.".to_string(),
         verbose: true,
-    };
 
     let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
 
@@ -437,7 +424,6 @@ async fn test_code_agent_tool_choice_auto() {
         max_iterations: 3,
         system_prompt: "You are a helpful assistant.".to_string(),
         verbose: true,
-    };
 
     let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
 
