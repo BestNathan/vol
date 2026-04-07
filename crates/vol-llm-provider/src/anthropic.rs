@@ -358,7 +358,7 @@ impl LLMClient for AnthropicProvider {
                             buffer.drain(..=newline_pos);
 
                             // Process SSE line
-                            if let Some(event_result) = session.process_anthropic_sse(&line) {
+                            for event_result in session.process_anthropic_sse(&line) {
                                 match event_result {
                                     Ok(event) => {
                                         if tx.send(Ok(event)).await.is_err() {

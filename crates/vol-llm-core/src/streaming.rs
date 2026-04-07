@@ -48,27 +48,36 @@ impl StreamingSession {
     }
 
     /// Process a single SSE line from Anthropic API
-    /// Returns Some(StreamEvent) if the line produces an event, None otherwise
-    pub fn process_anthropic_sse(&mut self, line: &str) -> Option<Result<StreamEvent, LLMError>> {
+    /// Returns a vector of StreamEvents (may be empty if the line produces no events)
+    pub fn process_anthropic_sse(&mut self, line: &str) -> Vec<Result<StreamEvent, LLMError>> {
         // Skip empty lines and non-data lines
         let line = line.trim();
         if line.is_empty() || !line.starts_with("data:") {
-            return None;
+            return Vec::new();
         }
 
         // Extract JSON from "data: {...}"
-        let json_str = line.strip_prefix("data:")?.trim();
-        let data: Value = serde_json::from_str(json_str).ok()?;
-        let event_type = data["type"].as_str()?;
+        let json_str = match line.strip_prefix("data:") {
+            Some(s) => s.trim(),
+            None => return Vec::new(),
+        };
+        let data: Value = match serde_json::from_str(json_str) {
+            Ok(v) => v,
+            Err(_) => return Vec::new(),
+        };
+        let event_type = match data["type"].as_str() {
+            Some(s) => s,
+            None => return Vec::new(),
+        };
 
         match event_type {
-            "message_start" => Some(self.handle_message_start(&data)),
-            "content_block_start" => self.handle_content_block_start(&data),
-            "content_block_delta" => self.handle_content_block_delta(&data),
+            "message_start" => vec![self.handle_message_start(&data)],
+            "content_block_start" => self.handle_content_block_start(&data).into_iter().collect(),
+            "content_block_delta" => self.handle_content_block_delta(&data).into_iter().collect(),
             "content_block_stop" => self.handle_content_block_stop(&data),
-            "message_delta" => Some(self.handle_message_delta(&data)),
-            "message_stop" => Some(self.handle_message_stop(&data)),
-            _ => None,
+            "message_delta" => vec![self.handle_message_delta(&data)],
+            "message_stop" => self.handle_message_stop(&data),
+            _ => Vec::new(),
         }
     }
 
@@ -140,7 +149,7 @@ impl StreamingSession {
         None
     }
 
-    fn handle_content_block_stop(&mut self, _data: &Value) -> Option<Result<StreamEvent, LLMError>> {
+    fn handle_content_block_stop(&mut self, _data: &Value) -> Vec<Result<StreamEvent, LLMError>> {
         let mut events = Vec::new();
 
         // Check if thinking just completed
@@ -162,7 +171,7 @@ impl StreamingSession {
             }
         }
 
-        events.pop()
+        events
     }
 
     fn handle_message_delta(&mut self, data: &Value) -> Result<StreamEvent, LLMError> {
@@ -186,15 +195,15 @@ impl StreamingSession {
         })
     }
 
-    fn handle_message_stop(&mut self, data: &Value) -> Result<StreamEvent, LLMError> {
+    fn handle_message_stop(&mut self, data: &Value) -> Vec<Result<StreamEvent, LLMError>> {
         let mut events = Vec::new();
 
         if !self.content_buffer.is_empty() {
             let content = std::mem::take(&mut self.content_buffer);
-            events.push(StreamEvent {
+            events.push(Ok(StreamEvent {
                 id: self.next_id(),
                 data: StreamEventData::ContentComplete { content },
-            });
+            }));
         }
 
         let finish_reason = match data["stop_reason"].as_str() {
@@ -204,17 +213,12 @@ impl StreamingSession {
             _ => FinishReason::Other,
         };
 
-        events.push(StreamEvent {
+        events.push(Ok(StreamEvent {
             id: self.next_id(),
             data: StreamEventData::ResponseComplete { finish_reason },
-        });
+        }));
 
-        events.pop().map(Ok).unwrap_or_else(|| {
-            Ok(StreamEvent {
-                id: self.next_id(),
-                data: StreamEventData::ResponseComplete { finish_reason },
-            })
-        })
+        events
     }
 
     /// Finalize the session and emit any remaining aggregate events
@@ -270,11 +274,11 @@ mod tests {
         let delta1 = r#"data: {"type": "content_block_delta", "delta": {"text": "Hello"}}"#;
         let delta2 = r#"data: {"type": "content_block_delta", "delta": {"text": " world"}}"#;
 
-        let event1 = session.process_anthropic_sse(delta1);
-        let event2 = session.process_anthropic_sse(delta2);
+        let events1 = session.process_anthropic_sse(delta1);
+        let events2 = session.process_anthropic_sse(delta2);
 
-        assert!(event1.is_some());
-        assert!(event2.is_some());
+        assert!(!events1.is_empty());
+        assert!(!events2.is_empty());
         assert_eq!(session.content_buffer, "Hello world");
     }
 
@@ -291,10 +295,10 @@ mod tests {
         session.process_anthropic_sse(delta2);
 
         let stop = r#"data: {"type": "content_block_stop"}"#;
-        let event = session.process_anthropic_sse(stop);
+        let events = session.process_anthropic_sse(stop);
 
-        assert!(event.is_some());
-        if let Some(Ok(StreamEvent { data: StreamEventData::ToolCallComplete { tool_call }, .. })) = event {
+        assert!(!events.is_empty());
+        if let Ok(StreamEvent { data: StreamEventData::ToolCallComplete { tool_call }, .. }) = &events[0] {
             assert_eq!(tool_call.id, "tool_1");
             assert_eq!(tool_call.name, "get_weather");
             assert_eq!(tool_call.arguments, r#"{"city": "Beijing"}"#);
@@ -308,10 +312,10 @@ mod tests {
         let mut session = StreamingSession::new();
 
         let start = r#"data: {"type": "message_start", "message": {"model": "qwen3.5-plus"}}"#;
-        let event = session.process_anthropic_sse(start);
+        let events = session.process_anthropic_sse(start);
 
-        assert!(event.is_some());
-        if let Some(Ok(StreamEvent { data: StreamEventData::ResponseStart { model }, .. })) = event {
+        assert!(!events.is_empty());
+        if let Ok(StreamEvent { data: StreamEventData::ResponseStart { model }, .. }) = &events[0] {
             assert_eq!(model, "qwen3.5-plus");
         } else {
             panic!("Expected ResponseStart event");
@@ -322,9 +326,9 @@ mod tests {
     fn test_empty_and_malformed_lines() {
         let mut session = StreamingSession::new();
 
-        assert!(session.process_anthropic_sse("").is_none());
-        assert!(session.process_anthropic_sse("   ").is_none());
-        assert!(session.process_anthropic_sse(": ping").is_none());
-        assert!(session.process_anthropic_sse("data: {invalid json}").is_none());
+        assert!(session.process_anthropic_sse("").is_empty());
+        assert!(session.process_anthropic_sse("   ").is_empty());
+        assert!(session.process_anthropic_sse(": ping").is_empty());
+        assert!(session.process_anthropic_sse("data: {invalid json}").is_empty());
     }
 }
