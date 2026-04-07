@@ -4,10 +4,10 @@
 //!
 //! This test verifies the agent can work with real Anthropic-compatible LLM API.
 
-use vol_llm_agent::{ReActAgent, AgentConfig};
+use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
 use vol_llm_tool::{ToolRegistry, ToolContext, MarketDataTool};
 use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
-use vol_llm_core::{LLMProvider, LLMClient, Message, ConversationResponse, TokenUsage, FinishReason, ToolDefinition};
+use vol_llm_core::{LLMProvider, LLMClient, ToolDefinition, StreamEvent, StreamEventData};
 use async_trait::async_trait;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -26,7 +26,7 @@ fn log_to_file(path: &str, content: &str) {
 
 /// Mock LLM that uses real Anthropic API for first call, then returns fixed response
 struct IntegrationMock {
-    provider: AnthropicProvider,
+    provider: Arc<AnthropicProvider>,
     call_count: AtomicUsize,
     log_path: String,
 }
@@ -47,7 +47,7 @@ impl IntegrationMock {
             .expect("Failed to create Anthropic provider");
 
         Self {
-            provider,
+            provider: Arc::new(provider),
             call_count: AtomicUsize::new(0),
             log_path: "/tmp/llm_api_calls.log".to_string(),
         }
@@ -73,12 +73,19 @@ impl LLMClient for IntegrationMock {
         ]
     }
 
-    async fn converse(&self, request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
+    async fn converse(&self, _request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
+        unimplemented!("Use converse_stream instead")
+    }
+
+    async fn converse_stream(&self, request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
+        use tokio::sync::mpsc;
+
         let count = self.call_count.fetch_add(1, Ordering::SeqCst);
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+        let (tx, rx) = mpsc::channel(10);
 
         // 记录调用参数
-        let mut params_log = format!(
+        let params_log = format!(
             "\n================================================================================\n\
             [CALL #{}] {} - LLM Request Parameters\n\
             ================================================================================\n\
@@ -117,106 +124,45 @@ impl LLMClient for IntegrationMock {
                 .with_tools(tools)
                 .with_tool_choice(vol_llm_core::ToolChoice::Auto);
 
-            // 更新参数日志
-            params_log = format!(
-                "\n================================================================================\n\
-                [CALL #{}] {} - LLM Request Parameters\n\
-                ================================================================================\n\
-                Model: qwen3.5-plus\n\
-                Endpoint: https://coding.dashscope.aliyuncs.com/apps/anthropic/v1/messages\n\
-                Messages: {:#?}\n\
-                Tools: {:#?}\n\
-                Tool Choice: Auto\n\
-                ",
-                count + 1,
-                timestamp,
-                request.messages,
-                request.tools
-            );
-
             log_to_file(&self.log_path, &params_log);
 
-            let response = self.provider.converse(request).await;
+            // Clone for the spawned task
+            let provider = Arc::clone(&self.provider);
+            let log_path = self.log_path.clone();
+            let tx_clone = tx.clone();
 
-            // 记录响应
-            match &response {
-                Ok(resp) => {
-                    let response_log = format!(
-                        "\n--------------------------------------------------------------------------------\n\
-                        [CALL #{}] LLM Response\n\
-                        --------------------------------------------------------------------------------\n\
-                        Model: {}\n\
-                        Finish Reason: {:?}\n\
-                        Usage: {} prompt + {} completion = {} total tokens\n\
-                        Message Content: {:?}\n\
-                        Tool Calls: {:#?}\n\
-                        Raw Response: {:#?}\n\
-                        ================================================================================\n",
-                        count + 1,
-                        resp.model,
-                        resp.finish_reason,
-                        resp.usage.prompt_tokens,
-                        resp.usage.completion_tokens,
-                        resp.usage.total_tokens,
-                        resp.message.content,
-                        resp.message.tool_calls,
-                        resp.raw
-                    );
-                    log_to_file(&self.log_path, &response_log);
+            tokio::spawn(async move {
+                match provider.converse_stream(request).await {
+                    Ok(mut stream) => {
+                        while let Some(result) = stream.recv().await {
+                            if let Ok(event) = result {
+                                let _ = tx_clone.send(Ok(event)).await;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let error_log = format!("\n[CALL #1] LLM Error: {:?}\n", e);
+                        log_to_file(&log_path, &error_log);
+                    }
                 }
-                Err(e) => {
-                    let error_log = format!(
-                        "\n--------------------------------------------------------------------------------\n\
-                        [CALL #{}] LLM Error: {:?}\n\
-                        ================================================================================\n",
-                        count + 1,
-                        e
-                    );
-                    log_to_file(&self.log_path, &error_log);
-                }
-            }
+            });
 
-            response
+            Ok(vol_llm_core::StreamReceiver::new(rx))
         } else {
             // Second call: return final answer
             log_to_file(&self.log_path, &params_log);
 
-            let response = Ok(ConversationResponse {
-                message: Message::assistant("Based on the market data, the current BTC price is approximately $69,000 USD."),
-                model: "mock".to_string(),
-                usage: TokenUsage { prompt_tokens: 150, completion_tokens: 25, total_tokens: 175, cached_tokens: None },
-                finish_reason: FinishReason::Stop,
-                raw: None,
+            tokio::spawn(async move {
+                let _ = tx.send(Ok(StreamEvent {
+                    id: "event_final".to_string(),
+                    data: StreamEventData::ContentComplete {
+                        content: "Based on the market data, the current BTC price is approximately $69,000 USD.".to_string(),
+                    },
+                })).await;
             });
 
-            // 记录响应
-            if let Ok(ref resp) = response {
-                let response_log = format!(
-                    "\n--------------------------------------------------------------------------------\n\
-                    [CALL #{}] LLM Response (Mock Final Answer)\n\
-                    --------------------------------------------------------------------------------\n\
-                    Model: {}\n\
-                    Finish Reason: {:?}\n\
-                    Usage: {} prompt + {} completion = {} total tokens\n\
-                    Message Content: {:?}\n\
-                    ================================================================================\n",
-                    count + 1,
-                    resp.model,
-                    resp.finish_reason,
-                    resp.usage.prompt_tokens,
-                    resp.usage.completion_tokens,
-                    resp.usage.total_tokens,
-                    resp.message.content
-                );
-                log_to_file(&self.log_path, &response_log);
-            }
-
-            response
+            Ok(vol_llm_core::StreamReceiver::new(rx))
         }
-    }
-
-    async fn converse_stream(&self, _request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
-        unimplemented!()
     }
 }
 
@@ -269,27 +215,42 @@ async fn test_agent_with_real_anthropic_api() {
 
     println!("\n--- Running agent with user input: 'What is the BTC price?' ---\n");
 
-    let result = agent.run("What is the BTC price?", context).await;
+    let stream_result = agent.run("What is the BTC price?", context).await;
 
     println!("\n========== TEST RESULTS ==========\n");
 
     let mut output_log = String::new();
+    let mut iterations = 0u32;
+    let mut final_content = String::new();
 
-    match result {
-        Ok(response) => {
-            output_log.push_str("=== Agent Execution Result ===\n\n");
-            output_log.push_str(&format!("Status: Success\n"));
-            output_log.push_str(&format!("Content: {}\n", response.content));
-            output_log.push_str(&format!("Iterations: {}\n", response.iterations));
-            output_log.push_str(&format!("Tool calls in final response: {}\n", response.tool_calls.len()));
+    match stream_result {
+        Ok(mut stream) => {
+            while let Some(event) = stream.recv().await {
+                match event.unwrap() {
+                    AgentStreamEvent::IterationComplete { iteration, final_answer, .. } => {
+                        iterations = iteration;
+                        if let Some(answer) = final_answer {
+                            final_content = answer;
+                        }
+                    }
+                    AgentStreamEvent::AgentComplete { response } => {
+                        output_log.push_str("=== Agent Execution Result ===\n\n");
+                        output_log.push_str(&format!("Status: Success\n"));
+                        output_log.push_str(&format!("Content: {}\n", response.content));
+                        output_log.push_str(&format!("Iterations: {}\n", response.iterations));
+                        output_log.push_str(&format!("Tool calls in final response: {}\n", response.tool_calls.len()));
 
-            println!("✓ Agent completed successfully");
-            println!("Content: {}", response.content);
-            println!("Iterations: {}", response.iterations);
+                        println!("✓ Agent completed successfully");
+                        println!("Content: {}", response.content);
+                        println!("Iterations: {}", response.iterations);
+                    }
+                    _ => {}
+                }
+            }
 
             // Verify agent ran the full ReAct cycle
-            assert!(response.iterations >= 2, "Should have at least 2 iterations");
-            assert!(!response.content.is_empty(), "Response should have content");
+            assert!(iterations >= 2, "Should have at least 2 iterations");
+            assert!(!final_content.is_empty(), "Response should have content");
 
             output_log.push_str("\n=== Verification ===\n");
             output_log.push_str("✓ Agent executed full ReAct cycle (2+ iterations)\n");

@@ -4,16 +4,17 @@
 //!
 //! This test simulates a real Code Agent calling the LLM API with proper request/response format.
 
-use vol_llm_agent::{ReActAgent, AgentConfig};
+use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
 use vol_llm_tool::{ToolRegistry, ToolContext};
 use vol_llm_core::{
     LLMClient, Message, ConversationRequest, ConversationResponse,
-    TokenUsage, FinishReason, LLMProvider, FunctionCall,
+    TokenUsage, FinishReason, LLMProvider, StreamEvent, StreamEventData,
     MessageRole, SupportedParam,
 };
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use tokio::sync::mpsc;
 
 /// Simulates a real Code Agent LLM client that properly handles tool calls
 struct CodeAgentSimulator {
@@ -50,11 +51,9 @@ impl CodeAgentSimulator {
                 // Return tool call for alert_history (volatility index)
                 let tool_call = vol_llm_core::ToolCall {
                     id: "toolu_volatility123456".to_string(),
+                    name: "alert_history".to_string(),
+                    arguments: r#"{"symbol": "btc_usd", "limit": 10, "hours": 24}"#.to_string(),
                     r#type: "function".to_string(),
-                    function: FunctionCall {
-                        name: "alert_history".to_string(),
-                        arguments: r#"{"symbol": "btc_usd", "limit": 10, "hours": 24}"#.to_string(),
-                    },
                 };
 
                 return ConversationResponse {
@@ -81,11 +80,9 @@ impl CodeAgentSimulator {
                 // Return tool call for market_data
                 let tool_call = vol_llm_core::ToolCall {
                     id: "toolu_01234567890abcdef".to_string(),
+                    name: "market_data".to_string(),
+                    arguments: r#"{"instrument": "btc_usd", "data_type": "price"}"#.to_string(),
                     r#type: "function".to_string(),
-                    function: FunctionCall {
-                        name: "market_data".to_string(),
-                        arguments: r#"{"instrument": "btc_usd", "data_type": "price"}"#.to_string(),
-                    },
                 };
 
                 return ConversationResponse {
@@ -183,11 +180,38 @@ impl LLMClient for CodeAgentSimulator {
 
     async fn converse(&self, request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
         // Simulate API call with realistic response
+        // Note: converse_stream is used by the agent, this is just for completeness
         Ok(self.generate_tool_response(&request))
     }
 
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
-        unimplemented!("Streaming not implemented in simulator")
+    async fn converse_stream(&self, request: ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
+        // Use the same logic as converse but emit streaming events
+        let response = self.generate_tool_response(&request);
+        let (tx, rx) = mpsc::channel(10);
+
+        tokio::spawn(async move {
+            // Emit content from the response
+            if let Some(content) = response.message.content {
+                let _ = tx.send(Ok(StreamEvent {
+                    id: "event_1".to_string(),
+                    data: StreamEventData::ContentComplete {
+                        content: content.as_str().to_string(),
+                    },
+                })).await;
+            }
+
+            // Emit tool calls if present
+            if let Some(tool_calls) = response.message.tool_calls {
+                for tool_call in tool_calls {
+                    let _ = tx.send(Ok(StreamEvent {
+                        id: "event_tool".to_string(),
+                        data: StreamEventData::ToolCallComplete { tool_call },
+                    })).await;
+                }
+            }
+        });
+
+        Ok(vol_llm_core::stream::StreamReceiver::new(rx))
     }
 }
 
@@ -211,31 +235,57 @@ async fn test_code_agent_market_data_query() {
         verbose: true,
     };
 
-    let agent = ReActAgent::new(Box::new(mock_llm), Arc::new(registry), config);
+    let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
 
     // Test: Query BTC price
     let context = ToolContext::default();
-    let result = agent.run("What is the current BTC price?", context).await;
+    let stream_result = agent.run("What is the current BTC price?", context).await;
 
-    match result {
-        Ok(response) => {
-            println!("✓ Agent completed successfully");
-            println!("  Response: {}", response.content);
-            println!("  Iterations: {}", response.iterations);
-            println!("  Tool calls: {}", response.tool_calls.len());
+    match stream_result {
+        Ok(mut stream) => {
+            let mut final_response = None;
+            let mut all_tool_calls = Vec::new();
 
-            // Verify tool was called
-            assert!(response.tool_calls.len() >= 1, "Should call at least one tool");
-            assert_eq!(response.tool_calls[0].function.name, "market_data");
+            while let Some(event) = stream.recv().await {
+                match event.unwrap() {
+                    AgentStreamEvent::ToolCallBegin { tool_name, .. } => {
+                        println!("Tool call begin: {}", tool_name);
+                    }
+                    AgentStreamEvent::ToolCallComplete { tool_name, result } => {
+                        println!("Tool call complete: {} = {}", tool_name, result);
+                        all_tool_calls.push(tool_name);
+                    }
+                    AgentStreamEvent::AgentComplete { response } => {
+                        println!("Agent complete: {}", response.content);
+                        println!("Iterations: {}", response.iterations);
+                        println!("Tool calls in response: {}", response.tool_calls.len());
+                        final_response = Some(response);
+                    }
+                    _ => {}
+                }
+            }
 
-            // Verify response mentions trading or data (more flexible)
-            let content_lower = response.content.to_lowercase();
-            assert!(
-                content_lower.contains("price") || content_lower.contains("btc") ||
-                content_lower.contains("market") || content_lower.contains("trading") ||
-                content_lower.contains("data"),
-                "Response should mention price, BTC, market, trading, or data"
-            );
+            if let Some(response) = final_response {
+                println!("Agent completed successfully");
+                println!("  Response: {}", response.content);
+                println!("  Iterations: {}", response.iterations);
+                println!("  Tools called during execution: {:?}", all_tool_calls);
+
+                // Verify tool was called during execution
+                assert!(!all_tool_calls.is_empty(), "Should call at least one tool");
+                assert!(all_tool_calls.contains(&"market_data".to_string()), "Should call market_data tool");
+
+                // Verify response mentions trading or data (more flexible)
+                let content_lower = response.content.to_lowercase();
+                assert!(
+                    content_lower.contains("price") || content_lower.contains("btc") ||
+                    content_lower.contains("market") || content_lower.contains("trading") ||
+                    content_lower.contains("data"),
+                    "Response should mention price, BTC, market, trading, or data"
+                );
+            } else {
+                panic!("Expected final response");
+            }
         }
         Err(e) => {
             panic!("Agent failed: {:?}", e);
@@ -258,26 +308,48 @@ async fn test_code_agent_volatility_query() {
         verbose: true,
     };
 
-    let agent = ReActAgent::new(Box::new(mock_llm), Arc::new(registry), config);
+    let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
 
     // Test: Query volatility - use "ETH volatility" to trigger volatility path
     let context = ToolContext {
         instrument: "eth_usd".to_string(),
         ..Default::default()
     };
-    let result = agent.run("Show me ETH volatility", context).await;
+    let stream_result = agent.run("Show me ETH volatility", context).await;
 
-    match result {
-        Ok(response) => {
-            println!("✓ Agent completed successfully");
-            println!("  Response: {}", response.content);
-            println!("  Iterations: {}", response.iterations);
-            println!("  Tool calls: {}", response.tool_calls.len());
+    match stream_result {
+        Ok(mut stream) => {
+            let mut final_response = None;
+            let mut all_tool_calls = Vec::new();
 
-            // Verify a tool was called (any tool is acceptable for this query)
-            assert!(response.tool_calls.len() >= 1, "Should call at least one tool");
-            let called_tool = &response.tool_calls[0].function.name;
-            println!("  Called tool: {}", called_tool);
+            while let Some(event) = stream.recv().await {
+                match event.unwrap() {
+                    AgentStreamEvent::ToolCallBegin { tool_name, .. } => {
+                        println!("Tool call begin: {}", tool_name);
+                        all_tool_calls.push(tool_name);
+                    }
+                    AgentStreamEvent::AgentComplete { response } => {
+                        println!("Agent complete: {}", response.content);
+                        println!("Iterations: {}", response.iterations);
+                        final_response = Some(response);
+                    }
+                    _ => {}
+                }
+            }
+
+            if let Some(response) = final_response {
+                println!("Agent completed successfully");
+                println!("  Response: {}", response.content);
+                println!("  Iterations: {}", response.iterations);
+                println!("  Tools called during execution: {:?}", all_tool_calls);
+
+                // Verify a tool was called (any tool is acceptable for this query)
+                assert!(!all_tool_calls.is_empty(), "Should call at least one tool");
+                let called_tool = &all_tool_calls[0];
+                println!("  Called tool: {}", called_tool);
+            } else {
+                panic!("Expected final response");
+            }
         }
         Err(e) => {
             panic!("Agent failed: {:?}", e);
@@ -300,21 +372,38 @@ async fn test_code_agent_multi_turn_conversation() {
         verbose: true,
     };
 
-    let agent = ReActAgent::new(Box::new(mock_llm), Arc::new(registry), config);
+    let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
 
     // Test: Multi-turn with follow-up
     let context = ToolContext::default();
-    let result = agent.run("What is the BTC price and how does it compare to ETH?", context).await;
+    let stream_result = agent.run("What is the BTC price and how does it compare to ETH?", context).await;
 
-    match result {
-        Ok(response) => {
-            println!("✓ Agent completed multi-turn conversation");
-            println!("  Response: {}", response.content);
-            println!("  Iterations: {}", response.iterations);
-            println!("  Tool calls: {}", response.tool_calls.len());
+    match stream_result {
+        Ok(mut stream) => {
+            let mut final_response = None;
 
-            // Should complete within reasonable iterations
-            assert!(response.iterations <= 5, "Should complete within max iterations");
+            while let Some(event) = stream.recv().await {
+                match event.unwrap() {
+                    AgentStreamEvent::AgentComplete { response } => {
+                        println!("Agent complete: {}", response.content);
+                        println!("Iterations: {}", response.iterations);
+                        final_response = Some(response);
+                    }
+                    _ => {}
+                }
+            }
+
+            if let Some(response) = final_response {
+                println!("Agent completed multi-turn conversation");
+                println!("  Response: {}", response.content);
+                println!("  Iterations: {}", response.iterations);
+                println!("  Tool calls: {}", response.tool_calls.len());
+
+                // Should complete within reasonable iterations
+                assert!(response.iterations <= 5, "Should complete within max iterations");
+            } else {
+                panic!("Expected final response");
+            }
         }
         Err(e) => {
             panic!("Agent failed: {:?}", e);
@@ -337,20 +426,37 @@ async fn test_code_agent_tool_choice_auto() {
         verbose: true,
     };
 
-    let agent = ReActAgent::new(Box::new(mock_llm), Arc::new(registry), config);
+    let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
 
     // Test: Simple greeting (may not need tools)
     let context = ToolContext::default();
-    let result = agent.run("Hello, can you help me?", context).await;
+    let stream_result = agent.run("Hello, can you help me?", context).await;
 
-    match result {
-        Ok(response) => {
-            println!("✓ Agent responded to greeting");
-            println!("  Response: {}", response.content);
-            println!("  Iterations: {}", response.iterations);
+    match stream_result {
+        Ok(mut stream) => {
+            let mut final_response = None;
 
-            // Greeting should complete in 1 iteration without tools
-            assert_eq!(response.iterations, 1, "Greeting should complete in 1 iteration");
+            while let Some(event) = stream.recv().await {
+                match event.unwrap() {
+                    AgentStreamEvent::AgentComplete { response } => {
+                        println!("Agent complete: {}", response.content);
+                        println!("Iterations: {}", response.iterations);
+                        final_response = Some(response);
+                    }
+                    _ => {}
+                }
+            }
+
+            if let Some(response) = final_response {
+                println!("Agent responded to greeting");
+                println!("  Response: {}", response.content);
+                println!("  Iterations: {}", response.iterations);
+
+                // Greeting should complete in 1 iteration without tools
+                assert_eq!(response.iterations, 1, "Greeting should complete in 1 iteration");
+            } else {
+                panic!("Expected final response");
+            }
         }
         Err(e) => {
             panic!("Agent failed: {:?}", e);
@@ -359,19 +465,19 @@ async fn test_code_agent_tool_choice_auto() {
 }
 
 #[tokio::test]
-async fn test_code_agent_with_tool_definitions() {
+async fn test_code_agent_tool_definitions() {
     println!("\n=== Test: Tool Definitions Verification ===\n");
 
     // Verify tools are properly registered
     let mut registry = ToolRegistry::new();
     registry.register_default_tools();
 
-    let tools = registry.tools();
+    let tools = registry.definitions();
 
     println!("Registered tools:");
     for tool in &tools {
-        println!("  - {}: {}", tool.function.name, tool.function.description.as_deref().unwrap_or("No description"));
-        if let Some(params) = &tool.function.parameters {
+        println!("  - {}: {}", tool.name, tool.description.as_deref().unwrap_or("No description"));
+        if let Some(params) = &tool.parameters {
             println!("    Parameters: {}", params);
         }
     }
@@ -380,11 +486,11 @@ async fn test_code_agent_with_tool_definitions() {
     assert_eq!(tools.len(), 4, "Should have 4 default tools");
 
     // Verify tool names
-    let tool_names: Vec<&str> = tools.iter().map(|t| t.function.name.as_str()).collect();
+    let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
     assert!(tool_names.contains(&"alert_history"));
     assert!(tool_names.contains(&"iv_curve"));
     assert!(tool_names.contains(&"market_data"));
     assert!(tool_names.contains(&"rule_info"));
 
-    println!("✓ All tools properly registered");
+    println!("All tools properly registered");
 }

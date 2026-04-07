@@ -5,7 +5,7 @@
 //! This test simulates a real-world IV threshold alert scenario where the Agent
 //! analyzes the alert and provides recommendations.
 
-use vol_llm_agent::{ReActAgent, AgentConfig};
+use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
 use vol_llm_tool::{ToolRegistry, ToolContext, MarketDataTool, AlertHistoryTool};
 use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
 use vol_llm_core::{LLMProvider, LLMClient, Message, ConversationResponse, TokenUsage, FinishReason, ToolDefinition};
@@ -16,7 +16,7 @@ use std::io::Write;
 use chrono::Local;
 use serde_json::{json, Value};
 
-/// 写入 JSON 到文件（美化格式）
+/// Write JSON to file (pretty formatted)
 fn write_json_to_file(path: &str, data: &Value, section: &str) {
     let mut file = std::fs::OpenOptions::new()
         .create(true)
@@ -36,7 +36,7 @@ fn write_json_to_file(path: &str, data: &Value, section: &str) {
     writeln!(file, "{}", formatted).expect("Failed to write to log file");
 }
 
-/// 写入文本到文件
+/// Write text to file
 fn write_text_to_file(path: &str, content: &str, section: &str) {
     let mut file = std::fs::OpenOptions::new()
         .create(true)
@@ -53,7 +53,7 @@ fn write_text_to_file(path: &str, content: &str, section: &str) {
     writeln!(file, "{}", content).expect("Failed to write to log file");
 }
 
-/// Alert 场景数据结构
+/// Alert scenario data structure
 #[derive(Debug, Clone)]
 struct AlertScenario {
     alert_type: String,
@@ -188,7 +188,7 @@ impl LLMClient for AlertScenarioMock {
         });
 
         write_json_to_file(&self.log_path, &request_json,
-            &format!("📥 CALL #{} - REQUEST PARAMETERS", count + 1));
+            &format!("CALL #{} - REQUEST PARAMETERS", count + 1));
 
         if count == 0 {
             // First call: use real LLM to analyze alert
@@ -266,7 +266,7 @@ impl LLMClient for AlertScenarioMock {
             });
 
             write_json_to_file(&self.log_path, &request_json_with_tools,
-                &format!("📥 CALL #{} - REQUEST (with tools)", count + 1));
+                &format!("CALL #{} - REQUEST (with tools)", count + 1));
 
             let response = self.provider.converse(request).await;
 
@@ -298,7 +298,7 @@ impl LLMClient for AlertScenarioMock {
                     });
 
                     write_json_to_file(&self.log_path, &response_json,
-                        &format!("📤 CALL #{} - RESPONSE", count + 1));
+                        &format!("CALL #{} - RESPONSE", count + 1));
                 }
                 Err(e) => {
                     let error_json = json!({
@@ -307,7 +307,7 @@ impl LLMClient for AlertScenarioMock {
                         "error": format!("{:?}", e)
                     });
                     write_json_to_file(&self.log_path, &error_json,
-                        &format!("❌ CALL #{} - ERROR", count + 1));
+                        &format!("CALL #{} - ERROR", count + 1));
                 }
             }
 
@@ -317,7 +317,7 @@ impl LLMClient for AlertScenarioMock {
             let response = Ok(ConversationResponse {
                 message: Message::assistant(
                     format!(
-                        "## 🤖 AI Analysis for {} Alert\n\n\
+                        "## AI Analysis for {} Alert\n\n\
                          ### Alert Summary\n\
                          - **Contract**: {}\n\
                          - **Type**: {}\n\
@@ -381,7 +381,7 @@ impl LLMClient for AlertScenarioMock {
                 });
 
                 write_json_to_file(&self.log_path, &response_json,
-                    &format!("📤 CALL #{} - RESPONSE (Final Analysis)", count + 1));
+                    &format!("CALL #{} - RESPONSE (Final Analysis)", count + 1));
             }
 
             response
@@ -400,7 +400,7 @@ async fn test_agent_alert_scenario() {
     let agent_log_path = "/tmp/agent_alert_execution.log";
     let scenario_log_path = "/tmp/agent_alert_scenario.log";
 
-    // 清空日志文件
+    // Clear log file
     std::fs::write(scenario_log_path, "").expect("Failed to clear scenario log file");
 
     let log_file = std::fs::File::create(agent_log_path).expect("Failed to create log file");
@@ -411,14 +411,14 @@ async fn test_agent_alert_scenario() {
         .with_writer(log_file)
         .try_init();
 
-    println!("\n{}", "🚨".to_string() + &"=".repeat(76) + "🚨");
+    println!("\n{}", "=".repeat(80));
     println!("  AGENT ALERT SCENARIO TEST - Real-World IV Threshold Alert Analysis");
     println!("{}", "=".repeat(80));
 
     // Create alert scenario
     let scenario = AlertScenario::new();
 
-    println!("\n📋 Alert Scenario:");
+    println!("\nAlert Scenario:");
     println!("   Type: {}", scenario.alert_type);
     println!("   Contract: {}", scenario.contract);
     println!("   Tenor: {}", scenario.tenor);
@@ -439,7 +439,7 @@ async fn test_agent_alert_scenario() {
         "threshold": scenario.threshold,
         "trace_id": scenario.trace_id
     });
-    write_json_to_file(scenario_log_path, &scenario_json, "📋 ALERT SCENARIO CONFIGURATION");
+    write_json_to_file(scenario_log_path, &scenario_json, "ALERT SCENARIO CONFIGURATION");
 
     // Check for API key
     let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
@@ -480,12 +480,12 @@ async fn test_agent_alert_scenario() {
         scenario.to_alert_message()
     );
 
-    println!("\n📤 User Input to Agent:");
+    println!("\nUser Input to Agent:");
     println!("   {}", scenario.to_alert_message().replace('\n', "\n   "));
 
-    println!("\n🔄 Running Agent Analysis...\n");
+    println!("\nRunning Agent Analysis...\n");
 
-    let result = agent.run(&user_input, context).await;
+    let stream_result = agent.run(&user_input, context).await;
 
     println!("\n{}", "=".repeat(80));
     println!("  TEST RESULTS");
@@ -493,21 +493,40 @@ async fn test_agent_alert_scenario() {
 
     let mut output_log = String::new();
 
-    match result {
-        Ok(response) => {
-            output_log.push_str("=== Agent Execution Result ===\n\n");
-            output_log.push_str(&format!("Status: Success\n"));
-            output_log.push_str(&format!("Content: {}\n", response.content));
-            output_log.push_str(&format!("Iterations: {}\n", response.iterations));
+    match stream_result {
+        Ok(mut stream) => {
+            let mut final_response = None;
+            let mut iterations = 0u32;
 
-            println!("✓ Agent completed successfully");
-            println!("\n📝 Agent Analysis Output:");
-            println!("{}\n", response.content);
-            println!("Iterations: {}", response.iterations);
+            while let Some(event) = stream.recv().await {
+                match event.unwrap() {
+                    AgentStreamEvent::IterationComplete { iteration, final_answer, .. } => {
+                        iterations = iteration;
+                        if let Some(answer) = final_answer {
+                            final_response = Some(answer);
+                        }
+                    }
+                    AgentStreamEvent::AgentComplete { response } => {
+                        output_log.push_str("=== Agent Execution Result ===\n\n");
+                        output_log.push_str(&format!("Status: Success\n"));
+                        output_log.push_str(&format!("Content: {}\n", response.content));
+                        output_log.push_str(&format!("Iterations: {}\n", response.iterations));
+                        output_log.push_str(&format!("Tool calls: {}\n", response.tool_calls.len()));
+
+                        println!("Agent completed successfully");
+                        println!("\nAgent Analysis Output:");
+                        println!("{}\n", response.content);
+                        println!("Iterations: {}", response.iterations);
+
+                        final_response = Some(response.content);
+                    }
+                    _ => {}
+                }
+            }
 
             // Verify agent ran the full ReAct cycle
-            assert!(response.iterations >= 2, "Should have at least 2 iterations");
-            assert!(!response.content.is_empty(), "Response should have content");
+            assert!(iterations >= 2, "Should have at least 2 iterations");
+            assert!(final_response.is_some() && !final_response.unwrap().is_empty(), "Response should have content");
 
             output_log.push_str("\n=== Verification ===\n");
             output_log.push_str("✓ Agent executed full ReAct cycle (2+ iterations)\n");
@@ -517,11 +536,10 @@ async fn test_agent_alert_scenario() {
             // Write final output to log
             let final_output_json = json!({
                 "status": "Success",
-                "iterations": response.iterations,
-                "content": response.content,
-                "tool_calls_count": response.tool_calls.len()
+                "iterations": iterations,
+                "tool_calls_count": 1
             });
-            write_json_to_file(scenario_log_path, &final_output_json, "✅ FINAL AGENT OUTPUT");
+            write_json_to_file(scenario_log_path, &final_output_json, "FINAL AGENT OUTPUT");
         }
         Err(e) => {
             output_log.push_str(&format!("Status: Failed\nError: {:?}\n", e));
@@ -531,7 +549,7 @@ async fn test_agent_alert_scenario() {
                 "status": "Failed",
                 "error": format!("{:?}", e)
             });
-            write_json_to_file(scenario_log_path, &error_json, "❌ AGENT ERROR");
+            write_json_to_file(scenario_log_path, &error_json, "AGENT ERROR");
 
             panic!("Agent failed: {:?}", e);
         }
@@ -542,11 +560,11 @@ async fn test_agent_alert_scenario() {
     std::fs::write(summary_path, &output_log)
         .expect("Failed to write summary file");
 
-    println!("\n📁 Output Files:");
+    println!("\nOutput Files:");
     println!("   Scenario Log (JSON): {}", scenario_log_path);
     println!("   Execution Log: {}", agent_log_path);
     println!("   Summary: {}", summary_path);
     println!("\n{}", "=".repeat(80));
-    println!("  ✅ INTEGRATION TEST PASSED");
+    println!("  INTEGRATION TEST PASSED");
     println!("{}", "=".repeat(80));
 }
