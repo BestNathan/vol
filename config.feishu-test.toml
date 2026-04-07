@@ -1,11 +1,10 @@
-# config.agent-test.toml - Agent Advice 测试配置
-# 用于测试 Agent 接入的简化配置
+# config.feishu-test.toml - Agent 飞书通知测试配置
 
 [engine]
 hot_reload = false
 hot_reload_interval_secs = 30
 channel_buffer_size = 100
-alert_cooldown_secs = 30  # 更短的冷却时间用于测试
+alert_cooldown_secs = 30
 
 [engine.tenor_cooldowns]
 short_secs = 60
@@ -19,7 +18,7 @@ medium_max_dte = 40
 long_min_dte = 80
 long_max_dte = 200
 
-# Deribit 客户端配置
+# Deribit 客户端配置 - 生产环境
 [clients.deribit]
 ws_url = "wss://www.deribit.com/ws/api/v2"
 
@@ -29,10 +28,10 @@ id = "deribit-markets"
 type = "volatility"
 symbols = ["BTC", "ETH"]
 
-# 通知 - 仅 stdout 用于测试
+# 通知 - 启用飞书
 [[notifications]]
-id = "stdout"
-type = "stdout"
+id = "feishu"
+type = "feishu"
 enabled = true
 
 # 规则 - 使用非常宽松的阈值以便触发测试
@@ -40,14 +39,14 @@ enabled = true
 id = "absolute-iv-btc"
 type = "absolute-iv"
 symbol = "BTC"
-short_threshold = 0.10  # 非常低的阈值，容易触发
+short_threshold = 0.10
 medium_threshold = 0.10
 long_threshold = 0.10
 short_atm_threshold = 0.05
 medium_atm_threshold = 0.05
 long_atm_threshold = 0.05
 enabled = true
-notifications = ["stdout"]
+notifications = ["feishu"]
 
 [[rules]]
 id = "absolute-iv-eth"
@@ -60,13 +59,13 @@ short_atm_threshold = 0.05
 medium_atm_threshold = 0.05
 long_atm_threshold = 0.05
 enabled = true
-notifications = ["stdout"]
+notifications = ["feishu"]
 
 # 追踪配置
 [tracing]
 [tracing.logging]
 log_dir = "./logs"
-log_prefix = "vol-monitor-agent-test"
+log_prefix = "vol-monitor-feishu-test"
 retention_days = 1
 max_file_size_mb = 50
 json_format = false
@@ -77,7 +76,7 @@ error_file = true
 [tracing.opentelemetry]
 enabled = false
 
-# LLM Provider 配置 - 使用阿里云 Qwen3.5-plus
+# LLM Provider 配置 - 使用阿里云 DashScope 兼容端点
 [[llm_providers]]
 id = "anthropic-main"
 provider = "anthropic"
@@ -88,6 +87,6 @@ base_url = "https://coding.dashscope.aliyuncs.com/apps/anthropic"
 # Agent Advice 配置
 [agent_advice]
 enabled = true
-cooldown_secs = 30  # 30 秒冷却用于测试
+cooldown_secs = 30
 max_analyses_per_hour = 10
 llm_provider_id = "anthropic-main"

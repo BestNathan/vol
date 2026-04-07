@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use vol_llm_core::{ToolDefinition, ToolCall};
 use crate::tool::{Tool, ToolResult, ToolContext};
+use crate::tools::{AlertHistoryTool, IvCurveTool, MarketDataTool, RuleInfoTool};
 
 /// Tool registry
 pub struct ToolRegistry {
@@ -21,6 +22,14 @@ impl ToolRegistry {
     /// Register a boxed tool
     pub fn register_boxed(&mut self, tool: Box<dyn Tool>) {
         self.tools.insert(tool.name().to_string(), tool);
+    }
+
+    /// Register all default tools
+    pub fn register_default_tools(&mut self) {
+        self.register(AlertHistoryTool::new(None));
+        self.register(IvCurveTool::new(None));
+        self.register(MarketDataTool::new(None));
+        self.register(RuleInfoTool::new(None));
     }
 
     pub fn definitions(&self) -> Vec<ToolDefinition> {

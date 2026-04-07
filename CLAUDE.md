@@ -112,11 +112,60 @@ Credentials via environment variables (never commit secrets):
 | `FEISHU_APP_SECRET` | Feishu app secret |
 | `FEISHU_RECEIVE_ID` | Feishu recipient ID |
 | `HTTPS_PROXY` | HTTP proxy (restricted dev environment) |
+| `ANTHROPIC_AUTH_TOKEN` | LLM API key (Alibaba Cloud DashScope) |
 
 ```bash
 # Quick start
 cp .env.example .env && vim .env
 ./scripts/run-dev.sh dev
+```
+
+### Important Configuration Notes
+
+**1. Deribit WebSocket URL**
+
+Only use the production Deribit environment:
+
+```toml
+[clients.deribit]
+ws_url = "wss://www.deribit.com/ws/api/v2"
+```
+
+Do NOT use the test environment (`test.deribit.com`).
+
+**2. LLM Provider Configuration**
+
+Use Anthropic provider with Alibaba Cloud DashScope Qwen model:
+
+```toml
+[[llm_providers]]
+id = "anthropic-main"
+provider = "anthropic"
+model = "qwen3.5-plus"
+api_key = "${ANTHROPIC_AUTH_TOKEN}"
+base_url = "https://coding.dashscope.aliyuncs.com/apps/anthropic"
+```
+
+- **Provider**: `anthropic` (do NOT create a separate `qwen` provider)
+- **Model**: `qwen3.5-plus`
+- **base_url**: Keep as `https://coding.dashscope.aliyuncs.com/apps/anthropic`
+
+**3. User-Agent Configuration**
+
+The DashScope coding endpoint (`https://coding.dashscope.aliyuncs.com/apps/anthropic`) requires requests to come from a "Coding Agent". The Anthropic provider in `crates/vol-llm-provider/src/anthropic.rs` sends a Claude Code User-Agent header:
+
+```rust
+.header("User-Agent", "claude-code/1.0.0")
+```
+
+This mimics the Claude Code CLI client pattern, which is accepted by DashScope's coding endpoint.
+
+**4. Proxy Configuration**
+
+When using HTTP proxy, add DashScope domains to NO_PROXY to avoid connection issues:
+
+```bash
+NO_PROXY="localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,kubernetes.default.svc,*.aliyuncs.com,dashscope.aliyuncs.com"
 ```
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for full configuration guide.

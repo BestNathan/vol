@@ -21,8 +21,7 @@ use vol_llm_core::LLMError;
 /// ```toml
 /// api_key = "${API_KEY:sk-fallback-key}"
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, Serialize)]
 pub enum Secret {
     /// Direct literal value
     Literal(String),
@@ -32,6 +31,39 @@ pub enum Secret {
         #[serde(default)]
         default: Option<String>,
     },
+}
+
+impl<'de> Deserialize<'de> for Secret {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+
+        // Check for environment variable reference pattern: ${VAR_NAME} or ${VAR_NAME:default}
+        if s.starts_with("${") && s.ends_with('}') {
+            let inner = &s[2..s.len() - 1]; // Remove ${ and }
+
+            // Check for default value pattern: ${VAR_NAME:default}
+            if let Some(colon_pos) = inner.find(':') {
+                let var_name = inner[..colon_pos].to_string();
+                let default_value = inner[colon_pos + 1..].to_string();
+                Ok(Secret::Env {
+                    env: var_name,
+                    default: Some(default_value),
+                })
+            } else {
+                // No default: ${VAR_NAME}
+                Ok(Secret::Env {
+                    env: inner.to_string(),
+                    default: None,
+                })
+            }
+        } else {
+            // Plain literal value
+            Ok(Secret::Literal(s))
+        }
+    }
 }
 
 impl Secret {
@@ -112,5 +144,63 @@ mod tests {
         std::env::remove_var("TEST_MUST_FAIL");
         let secret = Secret::env("TEST_MUST_FAIL");
         assert!(secret.resolve().is_err());
+    }
+
+    #[test]
+    fn test_deserialize_env_var_reference() {
+        // Test ${VAR_NAME} pattern - need to parse as part of a TOML struct
+        #[derive(Deserialize)]
+        struct Wrapper { key: Secret }
+
+        let wrapper: Wrapper = toml::from_str(r#"key = "${TEST_VAR}""#).unwrap();
+        match wrapper.key {
+            Secret::Env { env, default } => {
+                assert_eq!(env, "TEST_VAR");
+                assert_eq!(default, None);
+            }
+            _ => panic!("Expected Secret::Env"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_env_var_with_default() {
+        // Test ${VAR_NAME:default} pattern
+        #[derive(Deserialize)]
+        struct Wrapper { key: Secret }
+
+        let wrapper: Wrapper = toml::from_str(r#"key = "${TEST_VAR:default_value}""#).unwrap();
+        match wrapper.key {
+            Secret::Env { env, default } => {
+                assert_eq!(env, "TEST_VAR");
+                assert_eq!(default, Some("default_value".to_string()));
+            }
+            _ => panic!("Expected Secret::Env"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_literal_value() {
+        // Test plain literal value
+        #[derive(Deserialize)]
+        struct Wrapper { key: Secret }
+
+        let wrapper: Wrapper = toml::from_str(r#"key = "my-literal-key""#).unwrap();
+        match wrapper.key {
+            Secret::Literal(val) => {
+                assert_eq!(val, "my-literal-key");
+            }
+            _ => panic!("Expected Secret::Literal"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_env_and_resolve() {
+        std::env::set_var("DESER_TEST", "resolved-value");
+
+        #[derive(Deserialize)]
+        struct Wrapper { key: Secret }
+
+        let wrapper: Wrapper = toml::from_str(r#"key = "${DESER_TEST}""#).unwrap();
+        assert_eq!(wrapper.key.resolve().unwrap(), "resolved-value");
     }
 }

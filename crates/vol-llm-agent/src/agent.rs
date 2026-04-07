@@ -78,12 +78,13 @@ impl ReActAgent {
                     // Act phase - execute tools
                     let mut observations = Vec::new();
                     for call in tool_calls {
+                        info!("Executing tool: {} with args: {}", call.name, call.arguments);
                         let result = self.tools.execute(call, &context).await
                             .map_err(|e| AgentError::ToolExecution {
                                 tool: call.name.clone(),
                                 error: e,
                             })?;
-
+                        info!("Tool {} returned: {}", call.name, result.content);
                         observations.push((call.id.clone(), result.content.clone()));
                     }
 
