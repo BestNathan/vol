@@ -8,7 +8,8 @@ use tracing::{info, warn, error};
 use vol_core::{Alert, NotificationHandler, Result as VolResult};
 use vol_tracing::TracedEvent;
 use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
-use vol_llm_tool::{ToolRegistry, ToolContext, TdengineClient};
+use vol_llm_tool::{ToolRegistry, ToolContext};
+use vol_tdengine::TdengineClient;
 use vol_llm_provider::LLMProviderRegistry;
 use vol_notification::FeishuNotification;
 

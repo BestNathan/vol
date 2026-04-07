@@ -17,3 +17,5 @@ vol-llm-provider = { path = "../vol-llm-provider" }
 [dev-dependencies]
 tracing-subscriber = "0.3"
 chrono = "0.4"
+vol-tdengine = { path = "../vol-tdengine" }
+vol-llm-tdengine = { path = "../vol-llm-tdengine" }

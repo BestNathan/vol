@@ -15,4 +15,6 @@ vol-notification = { workspace = true }
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-agent = { path = "../vol-llm-agent" }
 vol-llm-tool = { path = "../vol-llm-tool" }
+vol-llm-tdengine = { path = "../vol-llm-tdengine" }
+vol-tdengine = { path = "../vol-tdengine" }
 vol-llm-provider = { path = "../vol-llm-provider" }

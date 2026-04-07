@@ -5,7 +5,8 @@
 //! This test verifies the agent can work with real Anthropic-compatible LLM API.
 
 use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
-use vol_llm_tool::{ToolRegistry, ToolContext, MarketDataTool};
+use vol_llm_tool::{ToolRegistry, ToolContext};
+use vol_llm_tdengine::{IndexPriceTool};
 use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
 use vol_llm_core::{LLMProvider, LLMClient, ToolDefinition, StreamEvent, StreamEventData};
 use async_trait::async_trait;
@@ -199,7 +200,7 @@ async fn test_agent_with_real_anthropic_api() {
 
     // Create tool registry
     let mut registry = ToolRegistry::new();
-    registry.register(MarketDataTool::new(None));
+    registry.register(IndexPriceTool::new(None));
 
     let agent_config = AgentConfig {
         max_iterations: 5,

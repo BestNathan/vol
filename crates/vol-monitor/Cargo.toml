@@ -38,3 +38,5 @@ vol-llm-provider = { workspace = true }
 vol-llm-bridge = { workspace = true }
 vol-llm-tool = { workspace = true }
 vol-llm-agent = { workspace = true }
+vol-tdengine = { workspace = true }
+vol-llm-tdengine = { workspace = true }

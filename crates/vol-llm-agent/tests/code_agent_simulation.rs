@@ -6,6 +6,7 @@
 
 use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
 use vol_llm_tool::{ToolRegistry, ToolContext};
+use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
 use vol_llm_core::{
     LLMClient, Message, ConversationRequest, ConversationResponse,
     TokenUsage, FinishReason, LLMProvider, StreamEvent, StreamEventData,
@@ -48,10 +49,10 @@ impl CodeAgentSimulator {
 
             // Priority: volatility/iv queries
             if query_lower.contains("volatility") || query_lower.contains("iv") {
-                // Return tool call for alert_history (volatility index)
+                // Return tool call for volatility_index
                 let tool_call = vol_llm_core::ToolCall {
                     id: "toolu_volatility123456".to_string(),
-                    name: "alert_history".to_string(),
+                    name: "volatility_index".to_string(),
                     arguments: r#"{"symbol": "btc_usd", "limit": 10, "hours": 24}"#.to_string(),
                     r#type: "function".to_string(),
                 };
@@ -77,11 +78,11 @@ impl CodeAgentSimulator {
             if query_lower.contains("price") || query_lower.contains("market") ||
                query_lower.contains("btc") || query_lower.contains("eth") {
 
-                // Return tool call for market_data
+                // Return tool call for index_price
                 let tool_call = vol_llm_core::ToolCall {
                     id: "toolu_01234567890abcdef".to_string(),
-                    name: "market_data".to_string(),
-                    arguments: r#"{"instrument": "btc_usd", "data_type": "price"}"#.to_string(),
+                    name: "index_price".to_string(),
+                    arguments: r#"{"instrument": "btc_usd", "limit": 1}"#.to_string(),
                     r#type: "function".to_string(),
                 };
 
@@ -121,10 +122,10 @@ impl CodeAgentSimulator {
                 // Check which tool was called based on content
                 let first_content = tool_content.first().map(|s| *s).unwrap_or("");
 
-                let response_text = if first_content.contains("market_data") || first_content.contains("price") || first_content.contains("BTC") {
+                let response_text = if first_content.contains("index_price") || first_content.contains("price") || first_content.contains("Index") {
                     "Based on the latest market data, BTC is currently trading at approximately $69,000.
                     This price reflects the most recent index price from our data source."
-                } else if first_content.contains("volatility") || first_content.contains("alert") {
+                } else if first_content.contains("volatility") || first_content.contains("Volatility") {
                     "The volatility data shows recent price movements. Based on the historical data,
                     we can observe the volatility trends over the specified time period."
                 } else if first_content.contains("Retrieved") {
@@ -227,7 +228,10 @@ async fn test_code_agent_market_data_query() {
 
     // Setup tools
     let mut registry = ToolRegistry::new();
-    registry.register_default_tools();
+    registry.register(VolatilityIndexTool::new(None));
+    registry.register(IndexPriceTool::new(None));
+    registry.register(OptionsTool::new(None));
+    registry.register(RvTool::new(None));
 
     let config = AgentConfig {
         max_iterations: 5,
@@ -273,7 +277,7 @@ async fn test_code_agent_market_data_query() {
 
                 // Verify tool was called during execution
                 assert!(!all_tool_calls.is_empty(), "Should call at least one tool");
-                assert!(all_tool_calls.contains(&"market_data".to_string()), "Should call market_data tool");
+                assert!(all_tool_calls.contains(&"index_price".to_string()), "Should call index_price tool");
 
                 // Verify response mentions trading or data (more flexible)
                 let content_lower = response.content.to_lowercase();
@@ -300,7 +304,10 @@ async fn test_code_agent_volatility_query() {
     let mock_llm = CodeAgentSimulator::new("claude-sonnet-4-6");
 
     let mut registry = ToolRegistry::new();
-    registry.register_default_tools();
+    registry.register(VolatilityIndexTool::new(None));
+    registry.register(IndexPriceTool::new(None));
+    registry.register(OptionsTool::new(None));
+    registry.register(RvTool::new(None));
 
     let config = AgentConfig {
         max_iterations: 5,
@@ -364,7 +371,10 @@ async fn test_code_agent_multi_turn_conversation() {
     let mock_llm = CodeAgentSimulator::new("claude-sonnet-4-6");
 
     let mut registry = ToolRegistry::new();
-    registry.register_default_tools();
+    registry.register(VolatilityIndexTool::new(None));
+    registry.register(IndexPriceTool::new(None));
+    registry.register(OptionsTool::new(None));
+    registry.register(RvTool::new(None));
 
     let config = AgentConfig {
         max_iterations: 5,
@@ -418,7 +428,10 @@ async fn test_code_agent_tool_choice_auto() {
     let mock_llm = CodeAgentSimulator::new("claude-sonnet-4-6");
 
     let mut registry = ToolRegistry::new();
-    registry.register_default_tools();
+    registry.register(VolatilityIndexTool::new(None));
+    registry.register(IndexPriceTool::new(None));
+    registry.register(OptionsTool::new(None));
+    registry.register(RvTool::new(None));
 
     let config = AgentConfig {
         max_iterations: 3,
@@ -470,7 +483,10 @@ async fn test_code_agent_tool_definitions() {
 
     // Verify tools are properly registered
     let mut registry = ToolRegistry::new();
-    registry.register_default_tools();
+    registry.register(VolatilityIndexTool::new(None));
+    registry.register(IndexPriceTool::new(None));
+    registry.register(OptionsTool::new(None));
+    registry.register(RvTool::new(None));
 
     let tools = registry.definitions();
 
@@ -483,14 +499,14 @@ async fn test_code_agent_tool_definitions() {
     }
 
     // Verify all 4 tools are registered
-    assert_eq!(tools.len(), 4, "Should have 4 default tools");
+    assert_eq!(tools.len(), 4, "Should have 4 tools");
 
     // Verify tool names
     let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
-    assert!(tool_names.contains(&"alert_history"));
-    assert!(tool_names.contains(&"iv_curve"));
-    assert!(tool_names.contains(&"market_data"));
-    assert!(tool_names.contains(&"rule_info"));
+    assert!(tool_names.contains(&"volatility_index"));
+    assert!(tool_names.contains(&"index_price"));
+    assert!(tool_names.contains(&"options"));
+    assert!(tool_names.contains(&"rv"));
 
     println!("All tools properly registered");
 }

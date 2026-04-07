@@ -17,6 +17,8 @@ members = [
     "crates/vol-llm-tool",
     "crates/vol-llm-agent",
     "crates/vol-llm-bridge",
+    "crates/vol-tdengine",
+    "crates/vol-llm-tdengine",
 ]
 
 [workspace.package]
@@ -48,6 +50,8 @@ vol-llm-provider = { path = "crates/vol-llm-provider" }
 vol-llm-tool = { path = "crates/vol-llm-tool" }
 vol-llm-agent = { path = "crates/vol-llm-agent" }
 vol-llm-bridge = { path = "crates/vol-llm-bridge" }
+vol-tdengine = { path = "crates/vol-tdengine" }
+vol-llm-tdengine = { path = "crates/vol-llm-tdengine" }
 
 # Time
 chrono = { version = "0.4", features = ["serde"] }

@@ -1,30 +1,8 @@
 //! TDengine client for querying historical data.
 
 use reqwest::Client;
-use serde::Deserialize;
-use serde_json::Value;
-
-/// TDengine client configuration
-#[derive(Debug, Clone)]
-pub struct TdengineConfig {
-    pub host: String,
-    pub port: u16,
-    pub user: String,
-    pub password: String,
-    pub database: String,
-}
-
-impl Default for TdengineConfig {
-    fn default() -> Self {
-        Self {
-            host: "192.168.2.106".to_string(),
-            port: 6041,
-            user: "root".to_string(),
-            password: "taosdata".to_string(),
-            database: "deribit".to_string(),
-        }
-    }
-}
+use crate::config::TdengineConfig;
+use crate::types::TdengineResponse;
 
 /// TDengine client
 #[derive(Clone)]
@@ -32,20 +10,6 @@ pub struct TdengineClient {
     client: Client,
     base_url: String,
     config: TdengineConfig,
-}
-
-/// TDengine response format (TDengine 3.x REST API)
-#[derive(Debug, Deserialize)]
-pub struct TdengineResponse {
-    pub code: i32,
-    #[serde(default)]
-    pub desc: Option<String>,
-    #[serde(default)]
-    pub data: Option<Value>,
-    #[serde(default)]
-    pub column_meta: Option<Value>,
-    #[serde(default)]
-    pub rows: Option<u32>,
 }
 
 impl TdengineClient {
@@ -59,15 +23,23 @@ impl TdengineClient {
         }
     }
 
+    /// Create new TDengine client with custom reqwest::Client
+    pub fn with_client(client: Client, config: TdengineConfig) -> Self {
+        let base_url = format!("http://{}:{}/rest", config.host, config.port);
+        Self {
+            client,
+            base_url,
+            config,
+        }
+    }
+
     /// Execute SQL query
     pub async fn query(&self, sql: &str) -> Result<TdengineResponse, reqwest::Error> {
-        // TDengine REST API: POST http://host:6041/rest/sql/database
         self.query_with_db(sql).await
     }
 
     /// Execute SQL query with database
     pub async fn query_with_db(&self, sql: &str) -> Result<TdengineResponse, reqwest::Error> {
-        // TDengine REST API: POST http://host:6041/rest/sql/database
         let url = format!("{}/sql/{}", self.base_url, self.config.database);
 
         self.client
@@ -117,8 +89,6 @@ impl TdengineClient {
         instrument: &str,
         _deltas: Option<&[f64]>,
     ) -> Result<TdengineResponse, reqwest::Error> {
-        // Parse instrument name to extract expiry and strike
-        // Format: BTC-29DEC23-3000-C or similar
         let sql = format!(
             "SELECT _ts, instrument_name, iv, mark_price, expiry_date, strike_price, type \
              FROM deribit_options \

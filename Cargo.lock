@@ -2810,7 +2810,9 @@ dependencies = [
  "tracing-subscriber",
  "vol-llm-core",
  "vol-llm-provider",
+ "vol-llm-tdengine",
  "vol-llm-tool",
+ "vol-tdengine",
 ]
 
 [[package]]
@@ -2826,8 +2828,10 @@ dependencies = [
  "vol-llm-agent",
  "vol-llm-core",
  "vol-llm-provider",
+ "vol-llm-tdengine",
  "vol-llm-tool",
  "vol-notification",
+ "vol-tdengine",
  "vol-tracing",
 ]
 
@@ -2861,11 +2865,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "vol-llm-tdengine"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "vol-llm-core",
+ "vol-llm-tool",
+ "vol-tdengine",
+]
+
+[[package]]
 name = "vol-llm-tool"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "reqwest 0.11.27",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -2901,9 +2919,11 @@ dependencies = [
  "vol-llm-agent",
  "vol-llm-bridge",
  "vol-llm-provider",
+ "vol-llm-tdengine",
  "vol-llm-tool",
  "vol-notification",
  "vol-rules",
+ "vol-tdengine",
 ]
 
 [[package]]
@@ -2938,6 +2958,16 @@ dependencies = [
  "tracing",
  "vol-config",
  "vol-core",
+]
+
+[[package]]
+name = "vol-tdengine"
+version = "0.1.0"
+dependencies = [
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

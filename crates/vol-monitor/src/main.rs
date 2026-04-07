@@ -15,7 +15,9 @@ use vol_rules::{AbsoluteIvRule, RateChangeRule, TermStructureRule, SkewRule, Por
 use vol_config::{TermStructureConfig, SkewConfig, FeishuConfig};
 use vol_llm_provider::LLMProviderRegistry;
 use vol_llm_bridge::{AgentAdviceService, AgentAdviceConfig};
-use vol_llm_tool::{ToolRegistry, TdengineClient, TdengineConfig};
+use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
+use vol_tdengine::{TdengineClient, TdengineConfig};
+use vol_llm_tool::ToolRegistry;
 
 /// Parse command line arguments
 fn parse_args() -> Option<String> {
@@ -118,9 +120,12 @@ async fn main() -> Result<()> {
     let tdengine_client = TdengineClient::new(tdengine_config.clone());
     info!("TDengine client initialized");
 
-    // Initialize tool registry with AlertHistoryTool
+    // Initialize tool registry with TDengine-based tools
     let mut tools = ToolRegistry::new();
-    tools.register(vol_llm_tool::tools::AlertHistoryTool::new(Some(tdengine_config)));
+    tools.register(VolatilityIndexTool::new(Some(tdengine_config.clone())));
+    tools.register(IndexPriceTool::new(Some(tdengine_config.clone())));
+    tools.register(OptionsTool::new(Some(tdengine_config.clone())));
+    tools.register(RvTool::new(Some(tdengine_config.clone())));
     info!("Tool registry initialized with {} tools", tools.tool_names().len());
 
     // Initialize Feishu notification for AI advice using environment variables

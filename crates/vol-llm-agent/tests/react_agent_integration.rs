@@ -8,6 +8,7 @@ use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
 use vol_llm_tool::{ToolRegistry, ToolContext};
 use vol_llm_provider::{create_provider, LLMConfig, Secret};
 use vol_llm_core::LLMProvider;
+use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
 use std::sync::Arc;
 
 /// Create a test agent with TDengine tools
@@ -25,7 +26,10 @@ fn create_test_agent() -> Option<ReActAgent> {
 
     // Create tool registry with TDengine tools
     let mut registry = ToolRegistry::new();
-    registry.register_default_tools();
+    registry.register(VolatilityIndexTool::new(None));
+    registry.register(IndexPriceTool::new(None));
+    registry.register(OptionsTool::new(None));
+    registry.register(RvTool::new(None));
 
     let agent_config = AgentConfig {
         max_iterations: 5,

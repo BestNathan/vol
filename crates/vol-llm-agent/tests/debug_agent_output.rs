@@ -5,7 +5,8 @@
 //! This test verifies the agent can produce output using real LLM.
 
 use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
-use vol_llm_tool::{ToolRegistry, ToolContext, MarketDataTool};
+use vol_llm_tool::{ToolRegistry, ToolContext};
+use vol_llm_tdengine::{IndexPriceTool};
 use vol_llm_core::{LLMProvider, LLMClient, Message, ConversationRequest, ConversationResponse, TokenUsage, FinishReason, ToolCall};
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -57,8 +58,8 @@ impl LLMClient for SimpleMock {
                     data: StreamEventData::ToolCallComplete {
                         tool_call: ToolCall {
                             id: "call_1".to_string(),
-                            name: "market_data".to_string(),
-                            arguments: r#"{"instrument": "btc_usd"}"#.to_string(),
+                            name: "index_price".to_string(),
+                            arguments: r#"{"instrument": "btc_usd", "limit": 1}"#.to_string(),
                             r#type: "function".to_string(),
                         },
                     },
@@ -91,7 +92,7 @@ async fn test_agent_produces_output() {
 
     // Create tool registry with market_data tool
     let mut registry = ToolRegistry::new();
-    registry.register(MarketDataTool::new(None));
+    registry.register(IndexPriceTool::new(None));
 
     let agent_config = AgentConfig {
         max_iterations: 3,

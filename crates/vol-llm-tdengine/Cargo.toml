@@ -1,14 +1,15 @@
 [package]
-name = "vol-llm-tool"
+name = "vol-llm-tdengine"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
+vol-tdengine = { path = "../vol-tdengine" }
+vol-llm-tool = { path = "../vol-llm-tool" }
+vol-llm-core = { path = "../vol-llm-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
-vol-llm-core = { path = "../vol-llm-core" }
-vol-core = { workspace = true }

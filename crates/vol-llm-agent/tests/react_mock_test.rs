@@ -6,6 +6,7 @@
 
 use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
 use vol_llm_tool::{ToolRegistry, ToolContext};
+use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
 use vol_llm_core::{LLMClient, Message, ConversationRequest, ConversationResponse, TokenUsage, FinishReason, LLMProvider};
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -57,8 +58,8 @@ impl LLMClient for SimpleMock {
                     data: StreamEventData::ToolCallComplete {
                         tool_call: vol_llm_core::ToolCall {
                             id: "call_1".to_string(),
-                            name: "market_data".to_string(),
-                            arguments: r#"{"instrument": "btc_usd"}"#.to_string(),
+                            name: "index_price".to_string(),
+                            arguments: r#"{"instrument": "btc_usd", "limit": 1}"#.to_string(),
                             r#type: "function".to_string(),
                         },
                     },
@@ -90,7 +91,10 @@ async fn test_agent_executes_full_react_cycle() {
 
     // Create tool registry with TDengine tools
     let mut registry = ToolRegistry::new();
-    registry.register_default_tools();
+    registry.register(VolatilityIndexTool::new(None));
+    registry.register(IndexPriceTool::new(None));
+    registry.register(OptionsTool::new(None));
+    registry.register(RvTool::new(None));
 
     let config = AgentConfig {
         max_iterations: 5,
@@ -199,8 +203,8 @@ async fn test_agent_max_iterations() {
                     data: StreamEventData::ToolCallComplete {
                         tool_call: vol_llm_core::ToolCall {
                             id: "call_loop".to_string(),
-                            name: "market_data".to_string(),
-                            arguments: r#"{"instrument": "btc_usd"}"#.to_string(),
+                            name: "index_price".to_string(),
+                            arguments: r#"{"instrument": "btc_usd", "limit": 1}"#.to_string(),
                             r#type: "function".to_string(),
                         },
                     },
@@ -214,7 +218,10 @@ async fn test_agent_max_iterations() {
     let mock_llm = LoopMock::new();
 
     let mut registry = ToolRegistry::new();
-    registry.register_default_tools();
+    registry.register(VolatilityIndexTool::new(None));
+    registry.register(IndexPriceTool::new(None));
+    registry.register(OptionsTool::new(None));
+    registry.register(RvTool::new(None));
 
     let config = AgentConfig {
         max_iterations: 3,
