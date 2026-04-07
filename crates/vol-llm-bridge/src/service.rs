@@ -165,10 +165,7 @@ impl AgentAdviceService {
 
         // Run agent with context
         let context = ToolContext {
-            alert: Some(alert.clone()),
-            instrument: alert.symbol.clone(),
             messages: Vec::new(),
-            metadata: std::collections::HashMap::new(),
         };
 
         // Consume stream to get final response
