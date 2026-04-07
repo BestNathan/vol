@@ -3,15 +3,6 @@
 # This Dockerfile creates a SINGLE image containing BOTH amd64 and arm64 binaries
 # At runtime, an entrypoint script selects the correct binary based on architecture
 #
-# Pros:
-#   - Single image works on both architectures
-#   - No need for docker buildx multi-platform builds
-#   - Simple docker build command
-#
-# Cons:
-#   - Image size is ~2x (contains both binaries)
-#   - Build time includes compiling for both architectures
-#
 # Build command (single arch build, single image):
 #   docker build -f Dockerfile.cross-compile -t vol-monitor:beta .
 #
@@ -20,12 +11,15 @@
 # =============================================================================
 # Stage 1: Builder - Cross-compile for both amd64 and arm64
 # =============================================================================
-FROM docker.1panel.live/library/rust:latest AS builder
+# Use rust:latest for modern Cargo support (Cargo lock file v4)
+FROM library/rust:latest AS builder
 
 WORKDIR /app
 
 # Install cross-compilation toolchain for arm64
-RUN apt-get update && apt-get install -y \
+# Configure apt sources to use Aliyun mirror for China network environment
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y \
     gcc-aarch64-linux-gnu \
     && rm -rf /var/lib/apt/lists/*
 
@@ -35,7 +29,7 @@ RUN rustup target add aarch64-unknown-linux-gnu
 # Configure arm64 linker
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 
-# Copy cargo config for registry mirror (China)
+# Copy cargo config for crates.io mirror (China)
 COPY .cargo ./.cargo
 
 # Copy dependency definitions first for better caching
@@ -53,14 +47,15 @@ RUN echo "=== Building arm64 binary (cross-compile) ===" && \
 # =============================================================================
 # Stage 2: Runtime - Single image with both binaries
 # =============================================================================
-FROM docker.1panel.live/library/debian:bookworm-slim
+FROM library/debian:bookworm-slim
 
 # Install CA certificates for HTTPS using Aliyun mirror
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
     apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Install dumb-init for proper signal handling
-RUN apt-get update && apt-get install -y dumb-init && rm -rf /var/lib/apt/lists/*
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y dumb-init && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
