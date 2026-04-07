@@ -1,0 +1,65 @@
+# Multi-architecture cross-compile Dockerfile
+# Build both amd64 and arm64 binaries in a single builder stage
+# Then extract architecture-specific binary at runtime using TARGETARCH
+
+# =============================================================================
+# Stage 1: Builder - Cross-compile for both amd64 and arm64
+# =============================================================================
+FROM rust:latest AS builder
+
+WORKDIR /app
+
+# Install cross-compilation toolchain for arm64
+RUN apt-get update && apt-get install -y \
+    gcc-aarch64-linux-gnu \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add arm64 target to Rust
+RUN rustup target add aarch64-unknown-linux-gnu
+
+# Configure arm64 linker
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+
+# Copy cargo config for registry mirror (China)
+COPY .cargo ./.cargo
+
+# Copy dependency definitions first for better caching
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ ./crates/
+
+# Build release binaries for both architectures
+# amd64 (x86_64) - native on most build machines
+RUN cargo build --release --target x86_64-unknown-linux-gnu
+
+# arm64 (aarch64) - cross-compiled
+RUN cargo build --release --target aarch64-unknown-linux-gnu
+
+# =============================================================================
+# Stage 2: Binaries Extractor - Organize binaries by architecture
+# =============================================================================
+FROM scratch AS binaries
+
+# Copy both architecture binaries to separate directories
+COPY --from=builder /app/target/x86_64-unknown-linux-gnu/release/vol-monitor /amd64/vol-monitor
+COPY --from=builder /app/target/aarch64-unknown-linux-gnu/release/vol-monitor /arm64/vol-monitor
+
+# =============================================================================
+# Stage 3: Runtime - Architecture-specific minimal image
+# =============================================================================
+FROM debian:bookworm-slim
+
+# TARGETARCH is automatically set by docker buildx
+# Values: "amd64" or "arm64"
+ARG TARGETARCH=amd64
+
+# Install CA certificates for HTTPS using Aliyun mirror
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Copy only the binary for the current architecture
+COPY --from=binaries /${TARGETARCH}/vol-monitor /usr/local/bin/vol-monitor
+
+WORKDIR /app
+
+# Run the binary
+ENTRYPOINT ["/usr/local/bin/vol-monitor"]
