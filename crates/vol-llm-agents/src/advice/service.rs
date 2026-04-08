@@ -7,11 +7,12 @@ use tokio::sync::broadcast;
 use tracing::{info, warn, error};
 use vol_core::{Alert, NotificationHandler, Result as VolResult};
 use vol_tracing::TracedEvent;
-use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
-use vol_llm_tool::{ToolRegistry, ToolContext};
+use vol_llm_agent::{ReActAgent, AgentBuilder, AgentStreamEvent, AgentStreamReceiver};
+use vol_llm_tool::{ToolContext, ToolRegistry};
 use vol_tdengine::TdengineClient;
 use vol_llm_provider::LLMProviderRegistry;
 use vol_notification::FeishuNotification;
+use vol_llm_tdengine::{IndexPriceTool, VolatilityIndexTool, OptionsTool, RvTool};
 
 use std::sync::Arc;
 use super::limiter::FrequencyLimiter;
@@ -141,12 +142,12 @@ impl AdviceAgent {
             .ok_or_else(|| format!("Unknown provider: {}", self.config.llm_provider_id))?;
 
         // Create agent with tools using builder
-        let agent = ReActAgent::builder()
+        let agent = AgentBuilder::new()
             .with_llm(llm)
-            .with_tool(crate::tools::IndexPriceTool::new(None))
-            .with_tool(crate::tools::VolatilityIndexTool::new(None))
-            .with_tool(crate::tools::OptionsTool::new(None))
-            .with_tool(crate::tools::RvTool::new(None))
+            .with_tool(IndexPriceTool::new(None))
+            .with_tool(VolatilityIndexTool::new(None))
+            .with_tool(OptionsTool::new(None))
+            .with_tool(RvTool::new(None))
             .with_max_iterations(5)
             .with_system_prompt(system_prompt().to_string())
             .with_verbose(false)
@@ -171,7 +172,7 @@ impl AdviceAgent {
         };
 
         // Consume stream to get final response
-        let mut stream = agent.run(&user_prompt, context).await?;
+        let mut stream: AgentStreamReceiver = agent.run(&user_prompt, context).await?;
         let mut final_response = None;
 
         while let Some(event) = stream.recv().await {
