@@ -10,6 +10,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
+uuid = { version = "1.6", features = ["v4"] }
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-tool = { path = "../vol-llm-tool" }
 vol-llm-provider = { path = "../vol-llm-provider" }

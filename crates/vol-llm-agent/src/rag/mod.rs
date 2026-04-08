@@ -22,12 +22,12 @@
 //!
 //! ```rust,no_run
 //! use vol_llm_agent::{RagAgent, RagConfig, Document};
-//! use vol_llm_agent::rag::{Embedder, EmbeddingStore};
+//! use vol_llm_agent::rag::{Embedder, EmbeddingStore, InMemoryStore};
 //!
-//! // Implement Embedder and EmbeddingStore for your use case
-//! // Then create RagAgent:
-//! // let rag = RagAgent::new(llm, store, embedder, config);
-//! // let response = rag.query("your question").await?;
+//! // Implement Embedder for your use case
+//! // Then create RagAgent with InMemoryStore for testing:
+//! // let store = InMemoryStore::new();
+//! // let rag = RagAgent::new(llm, Arc::new(store), embedder, config);
 //! ```
 
 mod agent;
@@ -35,9 +35,11 @@ mod config;
 mod document;
 mod embedding;
 mod store;
+mod memory_store;
 
 pub use agent::{RagAgent, RagResponse};
 pub use config::RagConfig;
 pub use document::Document;
 pub use embedding::Embedder;
 pub use store::EmbeddingStore;
+pub use memory_store::InMemoryStore;
