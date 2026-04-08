@@ -4,6 +4,7 @@ use std::sync::Arc;
 use vol_llm_core::LLMClient;
 use vol_llm_tool::{Tool, ToolRegistry};
 use super::agent::{AgentConfig, ReActAgent};
+use super::plugin::AgentPlugin;
 use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
 
 /// Agent builder
@@ -56,6 +57,16 @@ impl AgentBuilder {
 
     pub fn with_session(mut self, session: Arc<Session>) -> Self {
         self.session = Some(session);
+        self
+    }
+
+    pub fn with_plugin<P: AgentPlugin + 'static>(mut self, plugin: P) -> Self {
+        self.config.plugin_registry.register(plugin);
+        self
+    }
+
+    pub fn with_plugin_registry(mut self, registry: super::PluginRegistry) -> Self {
+        self.config.plugin_registry = registry;
         self
     }
 

@@ -5,16 +5,17 @@ use tokio::sync::mpsc;
 use vol_llm_core::{LLMClient, Message, ConversationRequest, ToolChoice, StreamEventData, StreamReceiver};
 use vol_llm_tool::ToolContext;
 use tracing::{info, debug};
-use super::{AgentResponse, AgentStreamEvent, AgentStreamReceiver};
+use super::{AgentResponse, AgentStreamEvent, AgentStreamReceiver, PluginRegistry, PluginContext, PluginStream};
 use crate::session::{Session, SessionMessage};
 
 /// Agent configuration
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AgentConfig {
     pub max_iterations: u32,
     pub max_history_messages: usize,
     pub system_prompt: String,
     pub verbose: bool,
+    pub plugin_registry: PluginRegistry,
 }
 
 impl Default for AgentConfig {
@@ -24,6 +25,7 @@ impl Default for AgentConfig {
             max_history_messages: 20,
             system_prompt: super::default_system_prompt().to_string(),
             verbose: false,
+            plugin_registry: PluginRegistry::new(),
         }
     }
 }
@@ -77,6 +79,9 @@ impl ReActAgent {
         let config = self.config.clone();
         let session = self.session.clone();
         let user_input = user_input.to_string();
+        let plugin_registry = config.plugin_registry.clone();
+        let session_id = session.id.clone();
+        let user_input_for_plugins = user_input.clone();
 
         tokio::spawn(async move {
             // Send AgentStart event
@@ -222,7 +227,17 @@ impl ReActAgent {
             }
         });
 
-        Ok(AgentStreamReceiver::new(rx))
+        // Wrap receiver with plugin stream
+        let raw_receiver = AgentStreamReceiver::new(rx);
+        let plugins = plugin_registry.plugins().to_vec();
+        let plugin_ctx = PluginContext::new(
+            uuid::Uuid::new_v4().to_string(),
+            user_input_for_plugins,
+            session_id,
+        );
+        let plugin_stream = PluginStream::new(raw_receiver, plugins, plugin_ctx);
+
+        Ok(plugin_stream.into_receiver())
     }
 }
 
@@ -262,6 +277,7 @@ mod tests {
         assert_eq!(config.max_iterations, 5);
         assert_eq!(config.max_history_messages, 20);
         assert_eq!(config.verbose, false);
+        assert_eq!(config.plugin_registry.plugins().len(), 0);
     }
 
     #[test]
@@ -271,6 +287,7 @@ mod tests {
             max_history_messages: 50,
             system_prompt: "test".to_string(),
             verbose: true,
+            plugin_registry: PluginRegistry::new(),
         };
         assert_eq!(config.max_history_messages, 50);
     }

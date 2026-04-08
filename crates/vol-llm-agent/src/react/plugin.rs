@@ -114,6 +114,7 @@ pub trait AgentPlugin: Send + Sync {
 }
 
 /// Plugin registry - manages plugin lifecycle and execution order
+#[derive(Clone)]
 pub struct PluginRegistry {
     plugins: Vec<Arc<dyn AgentPlugin>>,
 }
