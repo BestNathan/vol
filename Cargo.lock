@@ -2816,7 +2816,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vol-llm-bridge"
+name = "vol-llm-agents"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -2889,7 +2889,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
- "vol-core",
  "vol-llm-core",
 ]
 
@@ -2917,7 +2916,7 @@ dependencies = [
  "vol-deribit",
  "vol-engine",
  "vol-llm-agent",
- "vol-llm-bridge",
+ "vol-llm-agents",
  "vol-llm-provider",
  "vol-llm-tdengine",
  "vol-llm-tool",

@@ -35,7 +35,7 @@ vol-engine = { workspace = true }
 vol-rules = { workspace = true }
 vol-deribit = { workspace = true }
 vol-llm-provider = { workspace = true }
-vol-llm-bridge = { workspace = true }
+vol-llm-agents = { workspace = true }
 vol-llm-tool = { workspace = true }
 vol-llm-agent = { workspace = true }
 vol-tdengine = { workspace = true }

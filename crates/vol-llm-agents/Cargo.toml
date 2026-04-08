@@ -1,5 +1,5 @@
 [package]
-name = "vol-llm-bridge"
+name = "vol-llm-agents"
 version.workspace = true
 edition.workspace = true
 

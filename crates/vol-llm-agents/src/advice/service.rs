@@ -14,8 +14,8 @@ use vol_llm_provider::LLMProviderRegistry;
 use vol_notification::FeishuNotification;
 
 use std::sync::Arc;
-use crate::limiter::FrequencyLimiter;
-use crate::prompt::{system_prompt, build_user_prompt, get_threshold_from_alert};
+use super::limiter::FrequencyLimiter;
+use super::prompt::{system_prompt, build_user_prompt, get_threshold_from_alert};
 
 /// Agent advice configuration
 #[derive(Clone)]

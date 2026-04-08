@@ -14,7 +14,7 @@ use vol_notification::{StdoutNotification, FeishuNotification};
 use vol_rules::{AbsoluteIvRule, RateChangeRule, TermStructureRule, SkewRule, PortfolioRule};
 use vol_config::{TermStructureConfig, SkewConfig, FeishuConfig};
 use vol_llm_provider::LLMProviderRegistry;
-use vol_llm_bridge::{AgentAdviceService, AgentAdviceConfig};
+use vol_llm_agents::{AgentAdviceService, AgentAdviceConfig};
 use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
 use vol_tdengine::{TdengineClient, TdengineConfig};
 use vol_llm_tool::ToolRegistry;
@@ -150,7 +150,7 @@ async fn main() -> Result<()> {
 
     // Create AgentAdviceService (only if LLM providers are configured)
     let agent_service = llm_registry.as_ref().map(|registry| {
-        // Convert vol_config::AgentAdviceConfig to vol_llm_bridge::AgentAdviceConfig
+        // Convert vol_config::AgentAdviceConfig to vol_llm_agents::AgentAdviceConfig
         let agent_config = AgentAdviceConfig {
             enabled: config.agent_advice.enabled,
             cooldown_secs: config.agent_advice.cooldown_secs,
