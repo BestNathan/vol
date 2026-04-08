@@ -177,6 +177,10 @@ impl ReActAgent {
 
                         // Add tool result to messages
                         messages.push(Message::tool(result.content.clone(), call.id.clone()));
+
+                        // Save tool result to session
+                        let tool_msg = SessionMessage::new(session.id.clone(), Message::tool(result.content.clone(), call.id.clone()));
+                        let _ = session.add_message(tool_msg).await;
                     }
 
                     // Send IterationComplete
