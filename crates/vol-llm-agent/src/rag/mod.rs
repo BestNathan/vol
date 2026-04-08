@@ -21,13 +21,15 @@
 //! # Usage
 //!
 //! ```rust,no_run
-//! use vol_llm_agent::{RagAgent, RagConfig, Document};
-//! use vol_llm_agent::rag::{Embedder, EmbeddingStore, InMemoryStore};
+//! use vol_llm_agent::{RagAgent, RagConfig};
+//! use vol_llm_agent::rag::{Embedder, EmbeddingStore, InMemoryStore, DashScopeEmbedder};
 //!
-//! // Implement Embedder for your use case
-//! // Then create RagAgent with InMemoryStore for testing:
-//! // let store = InMemoryStore::new();
-//! // let rag = RagAgent::new(llm, Arc::new(store), embedder, config);
+//! // Create embedder and store
+//! let embedder = DashScopeEmbedder::from_env();
+//! let store = InMemoryStore::new();
+//!
+//! // Then create RagAgent:
+//! // let rag = RagAgent::new(llm, Arc::new(store), Arc::new(embedder), config);
 //! ```
 
 mod agent;
@@ -36,6 +38,7 @@ mod document;
 mod embedding;
 mod store;
 mod memory_store;
+mod dashscope_embedder;
 
 pub use agent::{RagAgent, RagResponse};
 pub use config::RagConfig;
@@ -43,3 +46,4 @@ pub use document::Document;
 pub use embedding::Embedder;
 pub use store::EmbeddingStore;
 pub use memory_store::InMemoryStore;
+pub use dashscope_embedder::{DashScopeEmbedder, DashScopeConfig, DashScopeModel};
