@@ -66,6 +66,15 @@ async fn main() {
     println!("       .with_session(session)");
     println!("       .build()?;");
 
+    // 8. Demonstrate max_history_messages configuration
+    println!("\n8. Configure conversation history limit:");
+    println!("   Default history limit: 20 messages");
+    println!("\n9. Custom history limit via builder:");
+    println!("   let agent = ReActAgent::builder()");
+    println!("       .with_llm(llm)");
+    println!("       .with_max_history_messages(50)  // Load up to 50 history messages");
+    println!("       .build()?;");
+
     println!("\n=== Example Complete ===");
     println!("Session and MessageStore are ready for use with ReActAgent!");
 }
