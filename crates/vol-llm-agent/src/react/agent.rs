@@ -90,7 +90,7 @@ impl ReActAgent {
             messages.push(Message::system(config.system_prompt.clone()));
 
             // Get historical messages from session
-            let history = session.get_messages(config.max_iterations as usize).await.unwrap_or_default();
+            let history = session.get_messages(config.max_history_messages).await.unwrap_or_default();
 
             // Add history
             for session_msg in &history {
