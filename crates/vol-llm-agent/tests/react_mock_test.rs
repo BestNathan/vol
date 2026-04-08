@@ -98,6 +98,7 @@ async fn test_agent_executes_full_react_cycle() {
 
     let config = AgentConfig {
         max_iterations: 5,
+        max_history_messages: 20,
         system_prompt: "You are a test assistant.".to_string(),
         verbose: true,
     };

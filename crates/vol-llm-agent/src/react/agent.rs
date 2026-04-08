@@ -12,6 +12,7 @@ use crate::session::{Session, SessionMessage};
 #[derive(Debug, Clone)]
 pub struct AgentConfig {
     pub max_iterations: u32,
+    pub max_history_messages: usize,
     pub system_prompt: String,
     pub verbose: bool,
 }
@@ -20,6 +21,7 @@ impl Default for AgentConfig {
     fn default() -> Self {
         Self {
             max_iterations: 5,
+            max_history_messages: 20,
             system_prompt: super::default_system_prompt().to_string(),
             verbose: false,
         }
@@ -35,6 +37,11 @@ pub struct ReActAgent {
 }
 
 impl ReActAgent {
+    /// Create agent builder
+    pub fn builder() -> super::AgentBuilder {
+        super::AgentBuilder::new()
+    }
+
     pub fn new(llm: Arc<dyn LLMClient>, tools: Arc<vol_llm_tool::ToolRegistry>, config: AgentConfig, session: Arc<Session>) -> Self {
         Self { llm, tools, config, session }
     }
@@ -239,4 +246,28 @@ async fn consume_llm_stream(
     }
 
     Ok((thinking, tool_calls, content))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_agent_config_default() {
+        let config = AgentConfig::default();
+        assert_eq!(config.max_iterations, 5);
+        assert_eq!(config.max_history_messages, 20);
+        assert_eq!(config.verbose, false);
+    }
+
+    #[test]
+    fn test_agent_config_custom() {
+        let config = AgentConfig {
+            max_iterations: 10,
+            max_history_messages: 50,
+            system_prompt: "test".to_string(),
+            verbose: true,
+        };
+        assert_eq!(config.max_history_messages, 50);
+    }
 }

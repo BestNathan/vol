@@ -49,6 +49,11 @@ impl AgentBuilder {
         self
     }
 
+    pub fn with_max_history_messages(mut self, max: usize) -> Self {
+        self.config.max_history_messages = max;
+        self
+    }
+
     pub fn with_session(mut self, session: Arc<Session>) -> Self {
         self.session = Some(session);
         self
