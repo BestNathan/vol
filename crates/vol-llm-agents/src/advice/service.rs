@@ -19,14 +19,14 @@ use super::prompt::{system_prompt, build_user_prompt, get_threshold_from_alert};
 
 /// Agent advice configuration
 #[derive(Clone)]
-pub struct AgentAdviceConfig {
+pub struct AdviceAgentConfig {
     pub enabled: bool,
     pub cooldown_secs: u64,
     pub max_analyses_per_hour: u32,
     pub llm_provider_id: String,
 }
 
-impl Default for AgentAdviceConfig {
+impl Default for AdviceAgentConfig {
     fn default() -> Self {
         Self {
             enabled: true,
@@ -39,9 +39,9 @@ impl Default for AgentAdviceConfig {
 
 /// Agent Advice Service
 #[derive(Clone)]
-pub struct AgentAdviceService {
+pub struct AdviceAgent {
     limiter: FrequencyLimiter,
-    config: AgentAdviceConfig,
+    config: AdviceAgentConfig,
     registry: LLMProviderRegistry,
     tools: Arc<ToolRegistry>,
     /// TDengine client - reserved for future TDengine integration
@@ -50,10 +50,10 @@ pub struct AgentAdviceService {
     feishu: FeishuNotification,
 }
 
-impl AgentAdviceService {
+impl AdviceAgent {
     /// Create a new agent advice service
     pub fn new(
-        config: AgentAdviceConfig,
+        config: AdviceAgentConfig,
         registry: LLMProviderRegistry,
         tools: Arc<ToolRegistry>,
         tdengine: Arc<TdengineClient>,
@@ -74,7 +74,7 @@ impl AgentAdviceService {
         &self,
         mut alert_rx: broadcast::Receiver<TracedEvent<Alert>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        info!("AgentAdviceService started");
+        info!("AdviceAgent started");
 
         loop {
             match alert_rx.recv().await {
@@ -85,7 +85,7 @@ impl AgentAdviceService {
                     }
                 }
                 Err(broadcast::error::RecvError::Closed) => {
-                    info!("Alert channel closed, stopping AgentAdviceService");
+                    info!("Alert channel closed, stopping AdviceAgent");
                     break;
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -202,7 +202,7 @@ impl AgentAdviceService {
 }
 
 #[async_trait::async_trait]
-impl NotificationHandler for AgentAdviceService {
+impl NotificationHandler for AdviceAgent {
     fn name(&self) -> &str {
         "agent_advice"
     }
@@ -224,7 +224,7 @@ impl NotificationHandler for AgentAdviceService {
 
         // Process the alert
         if let Err(e) = self.process_alert(alert).await {
-            tracing::error!("AgentAdviceService failed to process alert: {}", e);
+            tracing::error!("AdviceAgent failed to process alert: {}", e);
             // Don't return error - we don't want to block other notifications
         }
 
@@ -245,7 +245,7 @@ mod tests {
     use vol_core::{AlertType, Tenor, OptionType};
 
     #[test]
-    fn test_agent_advice_service_creation() {
+    fn test_advice_agent_creation() {
         // This is a basic smoke test - full integration testing
         // would require mocking LLM provider, Feishu, ToolRegistry, etc.
         // For now, just verify the struct can be created and compiles correctly
@@ -255,8 +255,8 @@ mod tests {
         let _tenor = Tenor::Short;
         let _option_type = OptionType::Call;
 
-        // Verify AgentAdviceConfig can be created
-        let _config = AgentAdviceConfig {
+        // Verify AdviceAgentConfig can be created
+        let _config = AdviceAgentConfig {
             enabled: true,
             cooldown_secs: 300,
             max_analyses_per_hour: 20,
@@ -264,9 +264,9 @@ mod tests {
         };
 
         // Verify default config works
-        let _default_config = AgentAdviceConfig::default();
+        let _default_config = AdviceAgentConfig::default();
 
-        // Test passes if code compiles - actual AgentAdviceService creation
+        // Test passes if code compiles - actual AdviceAgent creation
         // requires real LLMProviderRegistry, ToolRegistry, TdengineClient, FeishuNotification
     }
 }

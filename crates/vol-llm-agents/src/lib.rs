@@ -2,6 +2,6 @@
 
 pub mod advice;
 
-pub use advice::{AgentAdviceService, AgentAdviceConfig};
+pub use advice::{AdviceAgent, AdviceAgentConfig};
 pub use advice::FrequencyLimiter;
 pub use advice::system_prompt;
