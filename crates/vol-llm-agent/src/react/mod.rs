@@ -35,9 +35,15 @@ pub mod builder;
 pub mod response;
 pub mod stream;
 pub mod prompt;
+pub mod plugin;
+pub mod plugin_stream;
+pub mod hitl;
 
 pub use agent::{ReActAgent, AgentConfig};
 pub use builder::AgentBuilder;
 pub use response::{AgentResponse, AgentError};
 pub use stream::{AgentStreamEvent, AgentStreamReceiver};
 pub use prompt::{default_system_prompt, SystemPromptBuilder};
+pub use plugin::{AgentPlugin, PluginContext, PluginAction, PluginRegistry};
+pub use plugin_stream::PluginStream;
+pub use hitl::{ApprovalChannel, ApprovalRequest, ApprovalResponse, ApprovalType, HitlConfig, ApprovalTrigger, TimeoutBehavior};
