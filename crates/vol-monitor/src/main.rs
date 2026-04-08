@@ -14,7 +14,7 @@ use vol_notification::{StdoutNotification, FeishuNotification};
 use vol_rules::{AbsoluteIvRule, RateChangeRule, TermStructureRule, SkewRule, PortfolioRule};
 use vol_config::{TermStructureConfig, SkewConfig, FeishuConfig};
 use vol_llm_provider::LLMProviderRegistry;
-use vol_llm_agents::{AgentAdviceService, AgentAdviceConfig};
+use vol_llm_agents::{AdviceAgent, AdviceAgentConfig};
 use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
 use vol_tdengine::{TdengineClient, TdengineConfig};
 use vol_llm_tool::ToolRegistry;
@@ -148,16 +148,16 @@ async fn main() -> Result<()> {
         });
     info!("Feishu notification initialized");
 
-    // Create AgentAdviceService (only if LLM providers are configured)
+    // Create AdviceAgent (only if LLM providers are configured)
     let agent_service = llm_registry.as_ref().map(|registry| {
-        // Convert vol_config::AgentAdviceConfig to vol_llm_agents::AgentAdviceConfig
-        let agent_config = AgentAdviceConfig {
+        // Convert vol_config::AgentAdviceConfig to vol_llm_agents::AdviceAgentConfig
+        let agent_config = AdviceAgentConfig {
             enabled: config.agent_advice.enabled,
             cooldown_secs: config.agent_advice.cooldown_secs,
             max_analyses_per_hour: config.agent_advice.max_analyses_per_hour,
             llm_provider_id: config.agent_advice.llm_provider_id.clone(),
         };
-        AgentAdviceService::new(
+        AdviceAgent::new(
             agent_config,
             registry.clone(),
             std::sync::Arc::new(tools),
@@ -246,11 +246,11 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Add AgentAdviceService as notification handler if enabled
+    // Add AdviceAgent as notification handler if enabled
     if config.agent_advice.enabled {
         if let Some(service) = agent_service {
             builder = builder.with_notification(Box::new(service));
-            info!("Added AgentAdviceService notification handler");
+            info!("Added AdviceAgent notification handler");
         }
     }
 
