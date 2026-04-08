@@ -1,13 +1,12 @@
 //! vol-llm-agent: ReAct Agent and RAG Agent workflow orchestration.
 
-pub mod agent;
-pub mod response;
-pub mod builder;
-pub mod prompt;
+pub mod embedding;
+pub mod react;
 pub mod rag;
+pub mod session;
 
-pub use agent::*;
-pub use response::*;
-pub use builder::*;
-pub use prompt::*;
-pub use rag::{RagAgent, RagResponse, RagConfig, Document, Embedder, EmbeddingStore};
+pub use react::{ReActAgent, AgentConfig, AgentBuilder, AgentResponse, AgentError, AgentStreamEvent, AgentStreamReceiver};
+pub use embedding::{Embedder, DashScopeEmbedder, DashScopeConfig, DashScopeModel};
+pub use rag::{RagAgent, RagResponse, RagConfig, Document, EmbeddingStore};
+// Session exports will be enabled once implementation is complete
+// pub use session::{Session, SessionMessage, SessionStore, MessageStore, InMemorySessionStore, InMemoryMessageStore};
