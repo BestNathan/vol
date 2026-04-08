@@ -4,7 +4,7 @@
 //!
 //! This test verifies the ReAct Agent streaming workflow using a simple mock.
 
-use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
+use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent, react::plugin::PluginRegistry};
 use vol_llm_tool::{ToolRegistry, ToolContext};
 use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
 use vol_llm_core::{LLMClient, Message, ConversationRequest, ConversationResponse, TokenUsage, FinishReason, LLMProvider};
@@ -101,6 +101,7 @@ async fn test_agent_executes_full_react_cycle() {
         max_history_messages: 20,
         system_prompt: "You are a test assistant.".to_string(),
         verbose: true,
+        plugin_registry: PluginRegistry::new(),
     };
 
     let agent = ReActAgent::builder()
