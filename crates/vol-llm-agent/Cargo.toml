@@ -16,6 +16,13 @@ vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-tool = { path = "../vol-llm-tool" }
 vol-llm-provider = { path = "../vol-llm-provider" }
 
+# Optional HTTP channel support
+axum = { version = "0.7", optional = true }
+
+[features]
+default = []
+http = ["axum"]
+
 [dev-dependencies]
 tracing-subscriber = "0.3"
 chrono = "0.4"

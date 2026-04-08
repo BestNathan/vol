@@ -10,4 +10,4 @@ pub use react::{ReActAgent, AgentConfig, AgentBuilder, AgentResponse, AgentError
 pub use embedding::{Embedder, DashScopeEmbedder, DashScopeConfig, DashScopeModel};
 pub use rag::{RagAgent, RagResponse, RagConfig, Document, EmbeddingStore};
 pub use session::{Session, SessionMessage, SessionStore, MessageStore, InMemorySessionStore, InMemoryMessageStore};
-pub use plugins::CliApprovalChannel;
+pub use plugins::{CliApprovalChannel, HttpApprovalChannel, SimpleHttpApprovalChannel};
