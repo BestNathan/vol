@@ -14,8 +14,7 @@ pub mod session;
 pub mod store;
 pub mod memory_store;
 
-// Types will be exported once implemented in subsequent tasks
-// pub use message::SessionMessage;
-// pub use session::Session;
-// pub use store::{SessionStore, MessageStore};
-// pub use memory_store::{InMemorySessionStore, InMemoryMessageStore};
+pub use message::SessionMessage;
+pub use session::Session;
+pub use store::{SessionStore, MessageStore};
+pub use memory_store::{InMemorySessionStore, InMemoryMessageStore};

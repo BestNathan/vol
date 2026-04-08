@@ -8,5 +8,4 @@ pub mod session;
 pub use react::{ReActAgent, AgentConfig, AgentBuilder, AgentResponse, AgentError, AgentStreamEvent, AgentStreamReceiver};
 pub use embedding::{Embedder, DashScopeEmbedder, DashScopeConfig, DashScopeModel};
 pub use rag::{RagAgent, RagResponse, RagConfig, Document, EmbeddingStore};
-// Session exports will be enabled once implementation is complete
-// pub use session::{Session, SessionMessage, SessionStore, MessageStore, InMemorySessionStore, InMemoryMessageStore};
+pub use session::{Session, SessionMessage, SessionStore, MessageStore, InMemorySessionStore, InMemoryMessageStore};
