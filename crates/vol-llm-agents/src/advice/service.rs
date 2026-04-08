@@ -140,16 +140,18 @@ impl AdviceAgent {
         let llm = self.registry.get(&self.config.llm_provider_id)
             .ok_or_else(|| format!("Unknown provider: {}", self.config.llm_provider_id))?;
 
-        // Create agent with tools
-        let agent = ReActAgent::new(
-            llm,
-            self.tools.clone(),
-            AgentConfig {
-                max_iterations: 5,
-                system_prompt: system_prompt().to_string(),
-                verbose: false,
-            },
-        );
+        // Create agent with tools using builder
+        let agent = ReActAgent::builder()
+            .with_llm(llm)
+            .with_tool(crate::tools::IndexPriceTool::new(None))
+            .with_tool(crate::tools::VolatilityIndexTool::new(None))
+            .with_tool(crate::tools::OptionsTool::new(None))
+            .with_tool(crate::tools::RvTool::new(None))
+            .with_max_iterations(5)
+            .with_system_prompt(system_prompt().to_string())
+            .with_verbose(false)
+            .build()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
         // Get threshold from alert type
         let threshold = get_threshold_from_alert(&alert.alert_type);

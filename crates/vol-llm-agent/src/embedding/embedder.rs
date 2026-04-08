@@ -1,4 +1,7 @@
-//! Embedding generation trait.
+//! Embedder trait definition.
+//!
+//! This module defines the `Embedder` trait for embedding generation.
+//! Implementors can use API calls (OpenAI, DashScope, etc.) or local models.
 
 use async_trait::async_trait;
 use vol_llm_core::Result;

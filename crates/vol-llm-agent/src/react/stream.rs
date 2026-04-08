@@ -1,35 +1,7 @@
-//! Agent response and error types.
+//! Agent streaming events and receiver.
 
-use thiserror::Error;
-use vol_llm_core::{LLMError, ToolCall};
-
-/// Agent response
-#[derive(Debug, Clone)]
-pub struct AgentResponse {
-    pub content: String,
-    pub reasoning: String,
-    pub iterations: u32,
-    pub tool_calls: Vec<ToolCall>,
-}
-
-/// Agent error
-#[derive(Debug, Error)]
-pub enum AgentError {
-    #[error("LLM error: {0}")]
-    Llm(#[from] LLMError),
-
-    #[error("Tool execution failed: {tool}: {error}")]
-    ToolExecution { tool: String, error: String },
-
-    #[error("Max iterations ({max}) reached without final response")]
-    MaxIterationsReached { max: u32 },
-
-    #[error("Invalid tool response: {0}")]
-    InvalidToolResponse(String),
-
-    #[error("Context error: {0}")]
-    Context(String),
-}
+use vol_llm_core::ToolCall;
+use super::response::AgentResponse;
 
 /// Agent streaming event
 #[derive(Debug, Clone)]
@@ -59,15 +31,15 @@ pub enum AgentStreamEvent {
 
 /// Agent stream receiver
 pub struct AgentStreamReceiver {
-    rx: tokio::sync::mpsc::Receiver<Result<AgentStreamEvent, AgentError>>,
+    rx: tokio::sync::mpsc::Receiver<Result<AgentStreamEvent, super::response::AgentError>>,
 }
 
 impl AgentStreamReceiver {
-    pub fn new(rx: tokio::sync::mpsc::Receiver<Result<AgentStreamEvent, AgentError>>) -> Self {
+    pub fn new(rx: tokio::sync::mpsc::Receiver<Result<AgentStreamEvent, super::response::AgentError>>) -> Self {
         Self { rx }
     }
 
-    pub async fn recv(&mut self) -> Option<Result<AgentStreamEvent, AgentError>> {
+    pub async fn recv(&mut self) -> Option<Result<AgentStreamEvent, super::response::AgentError>> {
         self.rx.recv().await
     }
 }

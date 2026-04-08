@@ -102,7 +102,17 @@ async fn test_agent_executes_full_react_cycle() {
         verbose: true,
     };
 
-    let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
+    let agent = ReActAgent::builder()
+        .with_llm(Arc::new(mock_llm))
+        .with_tool(IndexPriceTool::new(None))
+        .with_tool(VolatilityIndexTool::new(None))
+        .with_tool(OptionsTool::new(None))
+        .with_tool(RvTool::new(None))
+        .with_max_iterations(5)
+        .with_system_prompt("You are a test assistant.".to_string())
+        .with_verbose(true)
+        .build()
+        .unwrap();
 
     let context = ToolContext::default();
     let stream_result = agent.run("What is the BTC price?", context).await;
@@ -217,19 +227,17 @@ async fn test_agent_max_iterations() {
 
     let mock_llm = LoopMock::new();
 
-    let mut registry = ToolRegistry::new();
-    registry.register(VolatilityIndexTool::new(None));
-    registry.register(IndexPriceTool::new(None));
-    registry.register(OptionsTool::new(None));
-    registry.register(RvTool::new(None));
-
-    let config = AgentConfig {
-        max_iterations: 3,
-        system_prompt: "You are a test assistant.".to_string(),
-        verbose: false,
-    };
-
-    let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
+    let agent = ReActAgent::builder()
+        .with_llm(Arc::new(mock_llm))
+        .with_tool(VolatilityIndexTool::new(None))
+        .with_tool(IndexPriceTool::new(None))
+        .with_tool(OptionsTool::new(None))
+        .with_tool(RvTool::new(None))
+        .with_max_iterations(3)
+        .with_system_prompt("You are a test assistant.".to_string())
+        .with_verbose(false)
+        .build()
+        .unwrap();
 
     let context = ToolContext::default();
     let stream_result = agent.run("Keep querying...", context).await;

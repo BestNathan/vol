@@ -226,20 +226,18 @@ async fn test_code_agent_market_data_query() {
 
     let mock_llm = CodeAgentSimulator::new("claude-sonnet-4-6");
 
-    // Setup tools
-    let mut registry = ToolRegistry::new();
-    registry.register(VolatilityIndexTool::new(None));
-    registry.register(IndexPriceTool::new(None));
-    registry.register(OptionsTool::new(None));
-    registry.register(RvTool::new(None));
-
-    let config = AgentConfig {
-        max_iterations: 5,
-        system_prompt: "You are a helpful market data assistant.".to_string(),
-        verbose: true,
-    };
-
-    let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
+    // Create agent with builder
+    let agent = ReActAgent::builder()
+        .with_llm(Arc::new(mock_llm))
+        .with_tool(VolatilityIndexTool::new(None))
+        .with_tool(IndexPriceTool::new(None))
+        .with_tool(OptionsTool::new(None))
+        .with_tool(RvTool::new(None))
+        .with_max_iterations(5)
+        .with_system_prompt("You are a helpful market data assistant.".to_string())
+        .with_verbose(true)
+        .build()
+        .unwrap();
 
     // Test: Query BTC price
     let context = ToolContext::default();
@@ -303,19 +301,18 @@ async fn test_code_agent_volatility_query() {
 
     let mock_llm = CodeAgentSimulator::new("claude-sonnet-4-6");
 
-    let mut registry = ToolRegistry::new();
-    registry.register(VolatilityIndexTool::new(None));
-    registry.register(IndexPriceTool::new(None));
-    registry.register(OptionsTool::new(None));
-    registry.register(RvTool::new(None));
-
-    let config = AgentConfig {
-        max_iterations: 5,
-        system_prompt: "You are a volatility analysis assistant.".to_string(),
-        verbose: true,
-    };
-
-    let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
+    // Create agent with builder
+    let agent = ReActAgent::builder()
+        .with_llm(Arc::new(mock_llm))
+        .with_tool(VolatilityIndexTool::new(None))
+        .with_tool(IndexPriceTool::new(None))
+        .with_tool(OptionsTool::new(None))
+        .with_tool(RvTool::new(None))
+        .with_max_iterations(5)
+        .with_system_prompt("You are a volatility analysis assistant.".to_string())
+        .with_verbose(true)
+        .build()
+        .unwrap();
 
     // Test: Query volatility - use "ETH volatility" to trigger volatility path
     let context = ToolContext::default();
@@ -367,19 +364,18 @@ async fn test_code_agent_multi_turn_conversation() {
 
     let mock_llm = CodeAgentSimulator::new("claude-sonnet-4-6");
 
-    let mut registry = ToolRegistry::new();
-    registry.register(VolatilityIndexTool::new(None));
-    registry.register(IndexPriceTool::new(None));
-    registry.register(OptionsTool::new(None));
-    registry.register(RvTool::new(None));
-
-    let config = AgentConfig {
-        max_iterations: 5,
-        system_prompt: "You are a helpful market data assistant.".to_string(),
-        verbose: true,
-    };
-
-    let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
+    // Create agent with builder
+    let agent = ReActAgent::builder()
+        .with_llm(Arc::new(mock_llm))
+        .with_tool(VolatilityIndexTool::new(None))
+        .with_tool(IndexPriceTool::new(None))
+        .with_tool(OptionsTool::new(None))
+        .with_tool(RvTool::new(None))
+        .with_max_iterations(5)
+        .with_system_prompt("You are a helpful market data assistant.".to_string())
+        .with_verbose(true)
+        .build()
+        .unwrap();
 
     // Test: Multi-turn with follow-up
     let context = ToolContext::default();
@@ -424,19 +420,18 @@ async fn test_code_agent_tool_choice_auto() {
 
     let mock_llm = CodeAgentSimulator::new("claude-sonnet-4-6");
 
-    let mut registry = ToolRegistry::new();
-    registry.register(VolatilityIndexTool::new(None));
-    registry.register(IndexPriceTool::new(None));
-    registry.register(OptionsTool::new(None));
-    registry.register(RvTool::new(None));
-
-    let config = AgentConfig {
-        max_iterations: 3,
-        system_prompt: "You are a helpful assistant.".to_string(),
-        verbose: true,
-    };
-
-    let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), config);
+    // Create agent with builder
+    let agent = ReActAgent::builder()
+        .with_llm(Arc::new(mock_llm))
+        .with_tool(VolatilityIndexTool::new(None))
+        .with_tool(IndexPriceTool::new(None))
+        .with_tool(OptionsTool::new(None))
+        .with_tool(RvTool::new(None))
+        .with_max_iterations(3)
+        .with_system_prompt("You are a helpful assistant.".to_string())
+        .with_verbose(true)
+        .build()
+        .unwrap();
 
     // Test: Simple greeting (may not need tools)
     let context = ToolContext::default();

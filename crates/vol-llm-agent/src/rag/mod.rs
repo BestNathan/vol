@@ -35,15 +35,14 @@
 mod agent;
 mod config;
 mod document;
-mod embedding;
-mod store;
 mod memory_store;
-mod dashscope_embedder;
+mod store;
 
 pub use agent::{RagAgent, RagResponse};
 pub use config::RagConfig;
 pub use document::Document;
-pub use embedding::Embedder;
-pub use store::EmbeddingStore;
 pub use memory_store::InMemoryStore;
-pub use dashscope_embedder::{DashScopeEmbedder, DashScopeConfig, DashScopeModel};
+pub use store::EmbeddingStore;
+
+// Re-export embedding types from embedding module for backward compatibility
+pub use crate::embedding::{Embedder, DashScopeEmbedder, DashScopeConfig, DashScopeModel};

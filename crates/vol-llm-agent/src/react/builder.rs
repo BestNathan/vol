@@ -3,13 +3,15 @@
 use std::sync::Arc;
 use vol_llm_core::LLMClient;
 use vol_llm_tool::{Tool, ToolRegistry};
-use crate::agent::{AgentConfig, ReActAgent};
+use super::agent::{AgentConfig, ReActAgent};
+use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
 
 /// Agent builder
 pub struct AgentBuilder {
     llm: Option<Arc<dyn LLMClient>>,
     tools: Vec<Box<dyn Tool>>,
     config: AgentConfig,
+    session: Option<Arc<Session>>,
 }
 
 impl AgentBuilder {
@@ -18,6 +20,7 @@ impl AgentBuilder {
             llm: None,
             tools: Vec::new(),
             config: AgentConfig::default(),
+            session: None,
         }
     }
 
@@ -46,6 +49,11 @@ impl AgentBuilder {
         self
     }
 
+    pub fn with_session(mut self, session: Arc<Session>) -> Self {
+        self.session = Some(session);
+        self
+    }
+
     pub fn build(self) -> Result<ReActAgent, AgentBuilderError> {
         let llm = self.llm.ok_or(AgentBuilderError::MissingLlm)?;
 
@@ -54,7 +62,16 @@ impl AgentBuilder {
             registry.register_boxed(tool);
         }
 
-        Ok(ReActAgent::new(llm, Arc::new(registry), self.config))
+        // Create session if not provided
+        let session = self.session.unwrap_or_else(|| {
+            Arc::new(Session::new(
+                uuid::Uuid::new_v4().to_string(),
+                Arc::new(InMemorySessionStore::new()),
+                Arc::new(InMemoryMessageStore::new()),
+            ))
+        });
+
+        Ok(ReActAgent::new(llm, Arc::new(registry), self.config, session))
     }
 }
 

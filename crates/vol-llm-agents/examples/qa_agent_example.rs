@@ -1,17 +1,33 @@
-//! RAG Agent Example - Using QaAgent with DashScopeEmbedder
+//! RAG Agent Example - Using QaAgent with Mock Embedder
 //!
 //! This example demonstrates how to use QaAgent for question answering:
-//! - `DashScopeEmbedder` for generating embeddings
+//! - `MockEmbedder` for generating embeddings (no API required)
 //! - `InMemoryStore` for vector storage
 //! - `QaAgent` for Q&A business logic
 //!
 //! Run with: `cargo run --example qa_agent_example`
 
 use std::sync::Arc;
-use vol_llm_agents::{QaAgent, QaAgentConfig};
+use async_trait::async_trait;
 use vol_llm_agent::{
-    rag::{DashScopeEmbedder, Document, EmbeddingStore, InMemoryStore},
+    rag::{Document, Embedder, EmbeddingStore, InMemoryStore},
+    RagConfig,
 };
+use vol_llm_agents::{QaAgent, QaAgentConfig};
+
+// Mock Embedder for demonstration (no API call needed)
+struct MockEmbedder;
+
+#[async_trait]
+impl Embedder for MockEmbedder {
+    async fn embed(&self, _text: &str) -> vol_llm_core::Result<Vec<f32>> {
+        Ok(vec![0.5f32; 128])
+    }
+
+    async fn embed_batch(&self, texts: &[&str]) -> vol_llm_core::Result<Vec<Vec<f32>>> {
+        Ok(texts.iter().map(|_| vec![0.5f32; 128]).collect())
+    }
+}
 
 // Mock LLM for demonstration
 struct MockLlm;
@@ -45,14 +61,12 @@ impl vol_llm_core::LLMClient for MockLlm {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!("=== QaAgent Example ===\n");
 
-    // 1. Create embedder
-    let api_key = std::env::var("DASHSCOPE_API_KEY")
-        .unwrap_or_else(|_| "your-api-key".to_string());
-    let embedder = Arc::new(DashScopeEmbedder::new(&api_key));
-    println!("1. Created DashScopeEmbedder");
+    // 1. Create embedder (mock, no API required)
+    let embedder = Arc::new(MockEmbedder);
+    println!("1. Created MockEmbedder");
 
     // 2. Create store and populate with knowledge
     let store = Arc::new(InMemoryStore::new());
@@ -69,11 +83,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     for (topic, content) in &knowledge {
-        // Use dummy embedding (replace with embedder.embed() in real usage)
-        let embedding = vec![0.1f32; 1536];
+        // Use embedder to generate real embedding
+        let embedding = embedder.embed(&format!("{}: {}", topic, content)).await?;
         let doc = Document::new(format!("{}: {}", topic, content))
             .with_metadata("source", "trading_knowledge")
-            .with_metadata("topic", topic.to_string());
+            .with_metadata("topic", *topic);
         store.insert(doc, embedding).await?;
     }
     println!("   Added {} knowledge items", knowledge.len());
@@ -104,8 +118,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\n=== Example Complete ===");
     println!("\nTo use with real embeddings and LLM:");
-    println!("1. Set DASHSCOPE_API_KEY and LLM API keys");
-    println!("2. Replace dummy embeddings with embedder.embed()");
+    println!("1. Replace MockEmbedder with DashScopeEmbedder");
+    println!("2. Set DASHSCOPE_API_KEY and LLM API keys");
     println!("3. Use real LLM client instead of MockLlm");
 
     Ok(())

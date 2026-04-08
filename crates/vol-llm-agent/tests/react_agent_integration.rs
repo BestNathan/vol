@@ -24,20 +24,20 @@ fn create_test_agent() -> Option<ReActAgent> {
 
     let llm = create_provider(&config).ok()?;
 
-    // Create tool registry with TDengine tools
-    let mut registry = ToolRegistry::new();
-    registry.register(VolatilityIndexTool::new(None));
-    registry.register(IndexPriceTool::new(None));
-    registry.register(OptionsTool::new(None));
-    registry.register(RvTool::new(None));
+    // Create agent with builder
+    let agent = ReActAgent::builder()
+        .with_llm(llm.into())
+        .with_tool(VolatilityIndexTool::new(None))
+        .with_tool(IndexPriceTool::new(None))
+        .with_tool(OptionsTool::new(None))
+        .with_tool(RvTool::new(None))
+        .with_max_iterations(5)
+        .with_system_prompt("You are a helpful assistant.".to_string())
+        .with_verbose(true)
+        .build()
+        .ok()?;
 
-    let agent_config = AgentConfig {
-        max_iterations: 5,
-        system_prompt: "You are a helpful assistant.".to_string(),
-        verbose: true,
-    };
-
-    Some(ReActAgent::new(llm.into(), Arc::new(registry), agent_config))
+    Some(agent)
 }
 
 #[tokio::test]

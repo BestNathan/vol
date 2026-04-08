@@ -90,17 +90,15 @@ async fn test_agent_produces_output() {
     // Create mock LLM
     let mock_llm = SimpleMock;
 
-    // Create tool registry with market_data tool
-    let mut registry = ToolRegistry::new();
-    registry.register(IndexPriceTool::new(None));
-
-    let agent_config = AgentConfig {
-        max_iterations: 3,
-        system_prompt: "You are a test assistant. Use tools to get information.".to_string(),
-        verbose: true,
-    };
-
-    let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), agent_config);
+    // Create agent with builder
+    let agent = ReActAgent::builder()
+        .with_llm(Arc::new(mock_llm))
+        .with_tool(IndexPriceTool::new(None))
+        .with_max_iterations(3)
+        .with_system_prompt("You are a test assistant. Use tools to get information.".to_string())
+        .with_verbose(true)
+        .build()
+        .unwrap();
 
     let context = ToolContext::default();
     let stream_result = agent.run("What is the BTC price?", context).await;

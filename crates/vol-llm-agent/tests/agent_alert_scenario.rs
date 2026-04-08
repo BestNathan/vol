@@ -449,28 +449,24 @@ async fn test_agent_alert_scenario() {
     // Create mock with real provider
     let mock_llm = AlertScenarioMock::new(scenario.clone());
 
-    // Create tool registry
-    let mut registry = ToolRegistry::new();
-    registry.register(VolatilityIndexTool::new(None));
-    registry.register(IndexPriceTool::new(None));
-
-    let system_prompt = format!(
-        "You are an AI assistant for the Deribit Volatility Monitor system. \
-         You analyze volatility alerts and provide actionable insights to traders. \
-         Use available tools to gather context before providing recommendations. \
-         Be concise but informative.\n\n\
-         Current Alert:\n\
-         {}",
-        scenario.to_alert_message()
-    );
-
-    let agent_config = AgentConfig {
-        max_iterations: 5,
-        system_prompt,
-        verbose: true,
-    };
-
-    let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), agent_config);
+    // Create agent with builder
+    let agent = ReActAgent::builder()
+        .with_llm(Arc::new(mock_llm))
+        .with_tool(VolatilityIndexTool::new(None))
+        .with_tool(IndexPriceTool::new(None))
+        .with_max_iterations(5)
+        .with_system_prompt(format!(
+            "You are an AI assistant for the Deribit Volatility Monitor system. \
+             You analyze volatility alerts and provide actionable insights to traders. \
+             Use available tools to gather context before providing recommendations. \
+             Be concise but informative.\n\n\
+             Current Alert:\n\
+             {}",
+            scenario.to_alert_message()
+        ))
+        .with_verbose(true)
+        .build()
+        .unwrap();
 
     let context = ToolContext::default();
 

@@ -199,18 +199,18 @@ async fn test_agent_with_real_anthropic_api() {
     let mock_llm = IntegrationMock::new();
 
     // Create tool registry
-    let mut registry = ToolRegistry::new();
-    registry.register(IndexPriceTool::new(None));
-
-    let agent_config = AgentConfig {
-        max_iterations: 5,
-        system_prompt: "You are a helpful cryptocurrency market assistant. \
+    let agent = ReActAgent::builder()
+        .with_llm(Arc::new(mock_llm))
+        .with_tool(IndexPriceTool::new(None))
+        .with_max_iterations(5)
+        .with_system_prompt(
+            "You are a helpful cryptocurrency market assistant. \
             Use the market_data tool to get current prices before answering questions. \
-            Always provide clear, concise responses.".to_string(),
-        verbose: true,
-    };
-
-    let agent = ReActAgent::new(Arc::new(mock_llm), Arc::new(registry), agent_config);
+            Always provide clear, concise responses.".to_string()
+        )
+        .with_verbose(true)
+        .build()
+        .unwrap();
 
     let context = ToolContext::default();
 

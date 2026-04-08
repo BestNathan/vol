@@ -5,7 +5,8 @@ use tokio::sync::mpsc;
 use vol_llm_core::{LLMClient, Message, ConversationRequest, ToolChoice, StreamEventData, StreamReceiver};
 use vol_llm_tool::ToolContext;
 use tracing::{info, debug};
-use crate::{AgentResponse, AgentStreamEvent, AgentStreamReceiver};
+use super::{AgentResponse, AgentStreamEvent, AgentStreamReceiver};
+use crate::session::{Session, SessionMessage};
 
 /// Agent configuration
 #[derive(Debug, Clone)]
@@ -19,7 +20,7 @@ impl Default for AgentConfig {
     fn default() -> Self {
         Self {
             max_iterations: 5,
-            system_prompt: crate::default_system_prompt().to_string(),
+            system_prompt: super::default_system_prompt().to_string(),
             verbose: false,
         }
     }
@@ -30,11 +31,29 @@ pub struct ReActAgent {
     llm: Arc<dyn LLMClient>,
     tools: Arc<vol_llm_tool::ToolRegistry>,
     config: AgentConfig,
+    session: Arc<Session>,
 }
 
 impl ReActAgent {
-    pub fn new(llm: Arc<dyn LLMClient>, tools: Arc<vol_llm_tool::ToolRegistry>, config: AgentConfig) -> Self {
-        Self { llm, tools, config }
+    pub fn new(llm: Arc<dyn LLMClient>, tools: Arc<vol_llm_tool::ToolRegistry>, config: AgentConfig, session: Arc<Session>) -> Self {
+        Self { llm, tools, config, session }
+    }
+
+    /// Create agent with new session
+    pub fn with_new_session(&self, session_id: String) -> Self {
+        use crate::session::{InMemorySessionStore, InMemoryMessageStore};
+
+        let new_session = Arc::new(Session::new(
+            session_id,
+            Arc::new(InMemorySessionStore::new()),
+            Arc::new(InMemoryMessageStore::new()),
+        ));
+        Self {
+            session: new_session,
+            llm: self.llm.clone(),
+            tools: self.tools.clone(),
+            config: self.config.clone(),
+        }
     }
 
     /// Run ReAct loop with streaming events
@@ -49,6 +68,7 @@ impl ReActAgent {
         let llm = self.llm.clone();
         let tools = self.tools.clone();
         let config = self.config.clone();
+        let session = self.session.clone();
         let user_input = user_input.to_string();
 
         tokio::spawn(async move {
@@ -61,6 +81,15 @@ impl ReActAgent {
             let mut iteration = 0;
 
             messages.push(Message::system(config.system_prompt.clone()));
+
+            // Get historical messages from session
+            let history = session.get_messages(config.max_iterations as usize).await.unwrap_or_default();
+
+            // Add history
+            for session_msg in &history {
+                messages.push(session_msg.message.clone());
+            }
+
             messages.push(Message::user(user_input.clone()));
 
             loop {
@@ -161,6 +190,13 @@ impl ReActAgent {
                     tool_calls: Vec::new(),
                     final_answer: Some(content.clone()),
                 })).await;
+
+                // Save user input and assistant response to session
+                let user_msg = SessionMessage::new(session.id.clone(), Message::user(user_input.clone()));
+                let _ = session.add_message(user_msg).await;
+
+                let assistant_msg = SessionMessage::new(session.id.clone(), Message::assistant(content.clone()));
+                let _ = session.add_message(assistant_msg).await;
 
                 // Send AgentComplete
                 let response = AgentResponse {
