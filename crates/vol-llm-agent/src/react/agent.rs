@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 use vol_llm_core::{LLMClient, Message, ConversationRequest, ToolChoice, StreamEventData, StreamReceiver};
 use vol_llm_tool::ToolContext;
 use tracing::{info, debug};
@@ -12,6 +13,22 @@ use super::{
 use super::plugin_stream::run_interceptor_loop;
 use crate::session::Session;
 use crate::prompt_context::PromptContext;
+
+/// Guard struct that aborts a JoinHandle when dropped.
+///
+/// This ensures that spawned listener tasks are cleaned up on all exit paths,
+/// including early returns, breaks, and panics.
+struct ListenerGuard {
+    handle: Option<JoinHandle<()>>,
+}
+
+impl Drop for ListenerGuard {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
+    }
+}
 
 /// Agent configuration
 #[derive(Clone)]
@@ -126,8 +143,9 @@ impl ReActAgent {
         let (tx, rx) = mpsc::channel(100);
 
         tokio::spawn(async move {
-            // Ensure listener is cleaned up when we exit
-            let _listener_handle = listener_handle;
+            // Use a Drop guard to ensure the listener is cleaned up on all exit paths
+            let _guard = ListenerGuard { handle: Some(listener_handle) };
+
             // === Emit and intercept AgentStart ===
             let start_event = AgentStreamEvent::AgentStart {
                 input: user_input.clone()
@@ -314,8 +332,7 @@ impl ReActAgent {
                 run_ctx.emit(complete_event.clone()).await;
                 let _ = tx.send(Ok(complete_event)).await;
 
-                // Cleanup: abort the listener task when we exit
-                _listener_handle.abort();
+                // Guard will abort listener on drop - no manual cleanup needed
                 break;
             }
         });
