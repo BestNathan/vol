@@ -4,8 +4,8 @@
 //!
 //! This test verifies the agent can work with real Anthropic-compatible LLM API.
 
-use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
-use vol_llm_tool::{ToolRegistry, ToolContext};
+use vol_llm_agent::{ReActAgent, AgentStreamEvent};
+use vol_llm_tool::ToolContext;
 use vol_llm_tdengine::{IndexPriceTool};
 use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
 use vol_llm_core::{LLMProvider, LLMClient, ToolDefinition, StreamEvent, StreamEventData};

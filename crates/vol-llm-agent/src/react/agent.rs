@@ -10,23 +10,29 @@ use super::{
     PluginStream, PluginAction, create_shortcircuit_stream, create_skip_stream,
 };
 use crate::session::{Session, SessionMessage};
+use crate::prompt_context::PromptContext;
 
 /// Agent configuration
 #[derive(Clone)]
 pub struct AgentConfig {
     pub max_iterations: u32,
     pub max_history_messages: usize,
-    pub system_prompt: String,
+    pub prompt_context: PromptContext,
     pub verbose: bool,
     pub plugin_registry: PluginRegistry,
 }
 
 impl Default for AgentConfig {
     fn default() -> Self {
+        use crate::prompt_context::PromptTemplate;
+
+        let template = PromptTemplate::new("default", "You are a helpful assistant.");
+        let prompt_context = PromptContext::new(template);
+
         Self {
             max_iterations: 5,
             max_history_messages: 20,
-            system_prompt: super::default_system_prompt().to_string(),
+            prompt_context,
             verbose: false,
             plugin_registry: PluginRegistry::new(),
         }
@@ -139,7 +145,9 @@ impl ReActAgent {
             let mut messages = Vec::new();
             let mut iteration = 0u32;
 
-            messages.push(Message::system(config.system_prompt.clone()));
+            // Use PromptContext to assemble messages
+            let system_prompt = config.prompt_context.build_system();
+            messages.push(Message::system(system_prompt));
 
             // Get historical messages from session
             let history = session.get_messages(config.max_history_messages).await.unwrap_or_default();
@@ -149,7 +157,9 @@ impl ReActAgent {
                 messages.push(session_msg.message.clone());
             }
 
-            messages.push(Message::user(user_input.clone()));
+            // Use PromptContext to build user message
+            let user_msg = config.prompt_context.build_user(&user_input, None);
+            messages.push(Message::user(user_msg));
 
             loop {
                 iteration += 1;
@@ -324,10 +334,15 @@ mod tests {
 
     #[test]
     fn test_agent_config_custom() {
+        use crate::prompt_context::{PromptTemplate, PromptContext};
+
+        let template = PromptTemplate::new("test", "test prompt");
+        let prompt_context = PromptContext::new(template);
+
         let config = AgentConfig {
             max_iterations: 10,
             max_history_messages: 50,
-            system_prompt: "test".to_string(),
+            prompt_context,
             verbose: true,
             plugin_registry: PluginRegistry::new(),
         };

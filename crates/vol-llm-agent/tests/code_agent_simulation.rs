@@ -4,8 +4,8 @@
 //!
 //! This test simulates a real Code Agent calling the LLM API with proper request/response format.
 
-use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
-use vol_llm_tool::{ToolRegistry, ToolContext};
+use vol_llm_agent::{ReActAgent, AgentStreamEvent};
+use vol_llm_tool::{ToolContext, ToolRegistry};
 use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
 use vol_llm_core::{
     LLMClient, Message, ConversationRequest, ConversationResponse,

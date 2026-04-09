@@ -4,10 +4,10 @@
 //!
 //! This test verifies the ReAct Agent streaming workflow using a simple mock.
 
-use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent, react::plugin::PluginRegistry};
-use vol_llm_tool::{ToolRegistry, ToolContext};
+use vol_llm_agent::{ReActAgent, AgentStreamEvent};
+use vol_llm_tool::ToolContext;
 use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
-use vol_llm_core::{LLMClient, Message, ConversationRequest, ConversationResponse, TokenUsage, FinishReason, LLMProvider};
+use vol_llm_core::{LLMClient, ConversationRequest, ConversationResponse, LLMProvider};
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -43,7 +43,7 @@ impl LLMClient for SimpleMock {
         unimplemented!("Use converse_stream instead")
     }
 
-    async fn converse_stream(&self, request: ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
+    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
         use tokio::sync::mpsc;
         use vol_llm_core::{StreamEvent, StreamEventData};
 
@@ -88,21 +88,6 @@ impl LLMClient for SimpleMock {
 #[tokio::test]
 async fn test_agent_executes_full_react_cycle() {
     let mock_llm = SimpleMock::new();
-
-    // Create tool registry with TDengine tools
-    let mut registry = ToolRegistry::new();
-    registry.register(VolatilityIndexTool::new(None));
-    registry.register(IndexPriceTool::new(None));
-    registry.register(OptionsTool::new(None));
-    registry.register(RvTool::new(None));
-
-    let config = AgentConfig {
-        max_iterations: 5,
-        max_history_messages: 20,
-        system_prompt: "You are a test assistant.".to_string(),
-        verbose: true,
-        plugin_registry: PluginRegistry::new(),
-    };
 
     let agent = ReActAgent::builder()
         .with_llm(Arc::new(mock_llm))

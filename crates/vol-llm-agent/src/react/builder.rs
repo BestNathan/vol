@@ -6,6 +6,7 @@ use vol_llm_tool::{Tool, ToolRegistry};
 use super::agent::{AgentConfig, ReActAgent};
 use super::plugin::AgentPlugin;
 use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
+use crate::prompt_context::PromptContext;
 
 /// Agent builder
 pub struct AgentBuilder {
@@ -41,7 +42,10 @@ impl AgentBuilder {
     }
 
     pub fn with_system_prompt(mut self, prompt: String) -> Self {
-        self.config.system_prompt = prompt;
+        use crate::prompt_context::{PromptTemplate, PromptContext};
+
+        let template = PromptTemplate::new("custom_system_prompt", &prompt);
+        self.config.prompt_context = PromptContext::new(template);
         self
     }
 
@@ -52,6 +56,11 @@ impl AgentBuilder {
 
     pub fn with_max_history_messages(mut self, max: usize) -> Self {
         self.config.max_history_messages = max;
+        self
+    }
+
+    pub fn with_prompt_context(mut self, prompt_context: PromptContext) -> Self {
+        self.config.prompt_context = prompt_context;
         self
     }
 

@@ -1,5 +1,7 @@
 //! RAG configuration.
 
+use crate::prompt_context::PromptContext;
+
 /// RAG agent configuration
 #[derive(Debug, Clone)]
 pub struct RagConfig {
@@ -13,16 +15,24 @@ pub struct RagConfig {
     pub max_tokens: u32,
     /// Temperature for generation (low for accuracy)
     pub temperature: f32,
+    /// Prompt context for System/User message separation
+    pub prompt_context: PromptContext,
 }
 
 impl Default for RagConfig {
     fn default() -> Self {
+        use crate::prompt_context::PromptTemplate;
+
+        let template = PromptTemplate::new("rag-default", "你是一名知识助手。请根据提供的参考资料回答问题。");
+        let prompt_context = PromptContext::new(template);
+
         Self {
             top_k: 5,
             similarity_threshold: 0.3,
             return_scores: true,
             max_tokens: 1024,
             temperature: 0.1, // Low temperature for factual accuracy
+            prompt_context,
         }
     }
 }
@@ -43,6 +53,12 @@ impl RagConfig {
     /// Set temperature
     pub fn with_temperature(mut self, temp: f32) -> Self {
         self.temperature = temp;
+        self
+    }
+
+    /// Set prompt context
+    pub fn with_prompt_context(mut self, context: PromptContext) -> Self {
+        self.prompt_context = context;
         self
     }
 }

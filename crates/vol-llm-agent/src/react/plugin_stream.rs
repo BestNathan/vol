@@ -94,22 +94,16 @@ impl PluginStream {
 pub struct AgentConfigSnapshot {
     pub max_iterations: u32,
     pub max_history_messages: usize,
-    pub system_prompt_hash: String,
+    pub prompt_context_cache_key: String,
     pub verbose: bool,
 }
 
 impl From<&super::AgentConfig> for AgentConfigSnapshot {
     fn from(config: &super::AgentConfig) -> Self {
-        use std::hash::{Hash, Hasher};
-        use std::collections::hash_map::DefaultHasher;
-
-        let mut hasher = DefaultHasher::new();
-        config.system_prompt.hash(&mut hasher);
-
         Self {
             max_iterations: config.max_iterations,
             max_history_messages: config.max_history_messages,
-            system_prompt_hash: format!("{:x}", hasher.finish()),
+            prompt_context_cache_key: config.prompt_context.cache_key().to_string(),
             verbose: config.verbose,
         }
     }
@@ -120,7 +114,7 @@ impl Default for AgentConfigSnapshot {
         Self {
             max_iterations: 5,
             max_history_messages: 20,
-            system_prompt_hash: String::new(),
+            prompt_context_cache_key: String::new(),
             verbose: false,
         }
     }

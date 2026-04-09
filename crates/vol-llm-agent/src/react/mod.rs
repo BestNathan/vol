@@ -49,3 +49,6 @@ pub use plugin::{AgentPlugin, PluginAction, PluginRegistry};
 pub use plugin_stream::{PluginStream, create_shortcircuit_stream, create_skip_stream};
 pub use run_context::RunContext;
 pub use hitl::{ApprovalChannel, ApprovalRequest, ApprovalResponse, ApprovalType, HitlConfig, ApprovalTrigger, TimeoutBehavior};
+
+// Re-export prompt_context types for convenience
+pub use crate::prompt_context::{PromptContext, PromptTemplate, PromptFragment, FragmentType, MessageAssembler};

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use vol_llm_core::{LLMClient, Message, ConversationRequest};
 use vol_llm_core::Result;
 use super::{Document, Embedder, EmbeddingStore, RagConfig};
+use crate::prompt_context::PromptContext;
 
 /// RAG response containing answer and source documents
 pub struct RagResponse {
@@ -22,6 +23,7 @@ pub struct RagAgent {
     store: Arc<dyn EmbeddingStore>,
     embedder: Arc<dyn Embedder>,
     config: RagConfig,
+    prompt_context: PromptContext,
 }
 
 impl RagAgent {
@@ -32,7 +34,18 @@ impl RagAgent {
         embedder: Arc<dyn Embedder>,
         config: RagConfig,
     ) -> Self {
-        Self { llm, store, embedder, config }
+        Self {
+            llm,
+            store,
+            embedder,
+            prompt_context: config.prompt_context.clone(),
+            config,
+        }
+    }
+
+    /// Get a reference to the prompt context
+    pub fn prompt_context(&self) -> &PromptContext {
+        &self.prompt_context
     }
 
     /// Retrieve relevant documents for a query
@@ -65,10 +78,10 @@ impl RagAgent {
     /// Useful when you want to control retrieval separately or re-use documents.
     pub async fn generate(&self, query: &str, docs: &[Document]) -> Result<String> {
         // Build RAG prompt with context
-        let prompt = self.build_rag_prompt(query, docs);
+        let messages = self.build_rag_prompt(query, docs);
 
         // Call LLM
-        let request = ConversationRequest::with_history(None, vec![prompt]);
+        let request = ConversationRequest::with_history(None, messages);
         let response = self.llm.converse(request).await?;
 
         Ok(response.message.content
@@ -93,30 +106,23 @@ impl RagAgent {
     }
 
     /// Build RAG prompt with retrieved context
-    fn build_rag_prompt(&self, query: &str, docs: &[Document]) -> Message {
-        let context: String = docs
-            .iter()
+    ///
+    /// Uses PromptContext to properly separate System and User messages.
+    fn build_rag_prompt(&self, query: &str, docs: &[Document]) -> Vec<Message> {
+        // Format RAG context from documents
+        let rag_context = docs.iter()
             .map(|d| d.content.as_str())
             .collect::<Vec<_>>()
             .join("\n\n---\n\n");
 
-        let system_prompt = r#"你是一名知识助手。请根据提供的参考资料回答问题。
+        // Use PromptContext to build System and User messages
+        let system_prompt = self.prompt_context.build_system();
+        let user_msg = self.prompt_context.build_user(query, Some(&rag_context));
 
-要求：
-1. 只基于参考资料回答，不要编造信息
-2. 如果参考资料不足以回答问题，明确告知用户
-3. 回答时注明信息来源
-
-参考资料：
-{context}
-
-用户问题：{query}"#;
-
-        let formatted = system_prompt
-            .replace("{context}", &context)
-            .replace("{query}", query);
-
-        Message::user(formatted)
+        vec![
+            Message::system(system_prompt),
+            Message::user(user_msg),
+        ]
     }
 }
 
@@ -200,5 +206,89 @@ mod tests {
         let config = RagConfig::default();
         assert_eq!(config.top_k, 5);
         assert_eq!(config.similarity_threshold, 0.3);
+    }
+
+    #[test]
+    fn test_build_rag_prompt_system_user_separation() {
+        use crate::prompt_context::{PromptTemplate, PromptContext, PromptFragment, FragmentType};
+        use vol_llm_core::{MessageRole, MessageContent};
+
+        // Create a custom prompt context for RAG
+        let template = PromptTemplate::new("rag-test", "你是一名知识助手。");
+        let prompt_context = PromptContext::new(template)
+            .with_fragment(PromptFragment::new("instructions", "请根据参考资料回答问题。", FragmentType::Rules));
+
+        let config = RagConfig {
+            prompt_context,
+            ..RagConfig::default()
+        };
+
+        let llm = Arc::new(MockLlm);
+        let store = Arc::new(MockStore);
+        let embedder = Arc::new(MockEmbedder);
+
+        // Create agent with custom prompt context
+        let agent = RagAgent::new(llm, store, embedder, config);
+
+        let docs = vec![
+            Document::new("Document 1 content".to_string()),
+            Document::new("Document 2 content".to_string()),
+        ];
+
+        let messages = agent.build_rag_prompt("What is the answer?", &docs);
+
+        // Should have 2 messages: System + User
+        assert_eq!(messages.len(), 2);
+
+        // First message should be System
+        assert_eq!(messages[0].role, MessageRole::System);
+        if let MessageContent::Text(content) = messages[0].content.as_ref().unwrap() {
+            assert!(content.contains("你是一名知识助手。"));
+        } else {
+            panic!("Expected Text content");
+        }
+
+        // Second message should be User with RAG context
+        assert_eq!(messages[1].role, MessageRole::User);
+        if let MessageContent::Text(user_content) = messages[1].content.as_ref().unwrap() {
+            assert!(user_content.contains("参考资料:"));
+            assert!(user_content.contains("Document 1 content"));
+            assert!(user_content.contains("Document 2 content"));
+            assert!(user_content.contains("问题：What is the answer?"));
+        } else {
+            panic!("Expected Text content");
+        }
+    }
+
+    #[test]
+    fn test_build_rag_prompt_empty_docs() {
+        use crate::prompt_context::{PromptTemplate, PromptContext};
+        use vol_llm_core::{MessageRole, MessageContent};
+
+        let template = PromptTemplate::new("rag-test", "You are a helper.");
+        let prompt_context = PromptContext::new(template);
+
+        let config = RagConfig {
+            prompt_context,
+            ..RagConfig::default()
+        };
+
+        let llm = Arc::new(MockLlm);
+        let store = Arc::new(MockStore);
+        let embedder = Arc::new(MockEmbedder);
+
+        let agent = RagAgent::new(llm, store, embedder, config);
+
+        let docs = vec![];
+        let messages = agent.build_rag_prompt("Simple question", &docs);
+
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, MessageRole::System);
+        assert_eq!(messages[1].role, MessageRole::User);
+        if let MessageContent::Text(content) = messages[1].content.as_ref().unwrap() {
+            assert!(content.contains("问题：Simple question"));
+        } else {
+            panic!("Expected Text content");
+        }
     }
 }
