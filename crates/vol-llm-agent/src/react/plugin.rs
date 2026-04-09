@@ -6,42 +6,10 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use super::run_context::RunContext;
-use super::{AgentStreamEvent, AgentResponse, AgentError};
+use super::AgentStreamEvent;
 
 /// Plugin unique identifier
 pub type PluginId = String;
-
-/// Stream event type alias
-pub type StreamEvent = Result<AgentStreamEvent, AgentError>;
-
-/// Action returned by plugin hooks
-#[derive(Debug)]
-pub enum PluginAction<T = ()> {
-    Continue(T),
-    ShortCircuit(AgentResponse),
-    Skip,
-    Abort(AgentError),
-}
-
-impl<T> PluginAction<T> {
-    pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> PluginAction<U> {
-        match self {
-            PluginAction::Continue(v) => PluginAction::Continue(f(v)),
-            PluginAction::ShortCircuit(r) => PluginAction::ShortCircuit(r),
-            PluginAction::Skip => PluginAction::Skip,
-            PluginAction::Abort(e) => PluginAction::Abort(e),
-        }
-    }
-
-    pub fn map_err<F: FnOnce(AgentError) -> AgentError>(self, f: F) -> PluginAction<T> {
-        match self {
-            PluginAction::Continue(v) => PluginAction::Continue(v),
-            PluginAction::ShortCircuit(r) => PluginAction::ShortCircuit(r),
-            PluginAction::Skip => PluginAction::Skip,
-            PluginAction::Abort(e) => PluginAction::Abort(f(e)),
-        }
-    }
-}
 
 /// Decision returned by intercept() hook
 #[derive(Debug, Clone)]
@@ -61,36 +29,27 @@ pub trait AgentPlugin: Send + Sync {
 
     fn priority(&self) -> u32 { 100 }
 
-    /// Called before agent execution starts
-    /// Return ShortCircuit to skip actual execution and return cached/synthetic response
-    async fn on_start(&self, _ctx: &RunContext) -> PluginAction<()> {
-        PluginAction::Continue(())
-    }
-
-    /// Called for each event in the stream
-    /// Return Ok(None) to drop the event
-    /// Return ShortCircuit to replace remaining stream with the given response
+    /// Interceptor hook - sync, serial, can block flow
+    ///
+    /// Called before event execution. Can modify or block the event.
+    /// Returns PluginDecision to continue, skip, or abort.
     async fn intercept(
         &self,
-        event: StreamEvent,
-        ctx: &RunContext,
-    ) -> PluginAction<Option<StreamEvent>>;
-
-    /// Called when agent completes successfully
-    async fn on_complete(
-        &self,
-        ctx: &RunContext,
-        response: &AgentResponse,
-    ) -> PluginAction<()>;
-
-    /// Called when agent encounters an error
-    async fn on_error(
-        &self,
-        _ctx: &RunContext,
-        _error: &AgentError,
-    ) -> PluginAction<()> {
-        PluginAction::Continue(())
+        _event: &AgentStreamEvent,
+        _ctx: &RunContext
+    ) -> PluginDecision {
+        PluginDecision::Continue  // Default: no-op
     }
+
+    /// Listener hook - async, parallel, fire-and-forget
+    ///
+    /// Called after event execution. Used for observability, logging, etc.
+    /// Does not affect event flow.
+    async fn listen(
+        &self,
+        _event: &AgentStreamEvent,
+        _ctx: &RunContext
+    );
 }
 
 /// Plugin registry - manages plugin lifecycle and execution order
@@ -139,20 +98,12 @@ mod tests {
         fn id(&self) -> PluginId { self.id.clone() }
         fn priority(&self) -> u32 { self.priority }
 
-        async fn on_start(&self, _ctx: &RunContext) -> PluginAction<()> {
-            PluginAction::Continue(())
+        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+            PluginDecision::Continue
         }
 
-        async fn intercept(&self, event: StreamEvent, _ctx: &RunContext) -> PluginAction<Option<StreamEvent>> {
-            PluginAction::Continue(Some(event))
-        }
-
-        async fn on_complete(&self, _ctx: &RunContext, _response: &AgentResponse) -> PluginAction<()> {
-            PluginAction::Continue(())
-        }
-
-        async fn on_error(&self, _ctx: &RunContext, _error: &AgentError) -> PluginAction<()> {
-            PluginAction::Continue(())
+        async fn listen(&self, _event: &AgentStreamEvent, _ctx: &RunContext) {
+            // no-op
         }
     }
 
@@ -166,13 +117,6 @@ mod tests {
         // Should be ordered: high (10), mid (50), low (100)
         let ids: Vec<String> = registry.plugins().iter().map(|p| p.id()).collect();
         assert_eq!(ids, vec!["high", "mid", "low"]);
-    }
-
-    #[test]
-    fn test_plugin_action_map() {
-        let action: PluginAction<i32> = PluginAction::Continue(42);
-        let mapped = action.map(|x| x * 2);
-        assert!(matches!(mapped, PluginAction::Continue(84)));
     }
 
     #[test]

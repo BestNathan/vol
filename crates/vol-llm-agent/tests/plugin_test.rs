@@ -24,18 +24,14 @@ async fn test_plugin_priority_ordering() {
 
         async fn intercept(
             &self,
-            event: Result<AgentStreamEvent, AgentError>,
+            event: &AgentStreamEvent,
             _ctx: &RunContext,
-        ) -> PluginAction<Option<Result<AgentStreamEvent, AgentError>>> {
-            PluginAction::Continue(Some(event))
+        ) -> PluginDecision {
+            PluginDecision::Continue
         }
 
-        async fn on_complete(
-            &self,
-            _ctx: &RunContext,
-            _response: &AgentResponse,
-        ) -> PluginAction<()> {
-            PluginAction::Continue(())
+        async fn listen(&self, _event: &AgentStreamEvent, _ctx: &RunContext) {
+            // no-op
         }
     }
 
@@ -47,56 +43,6 @@ async fn test_plugin_priority_ordering() {
     // Should be ordered by priority: high (10), mid (50), low (100)
     let ids: Vec<String> = registry.plugins().iter().map(|p| p.id()).collect();
     assert_eq!(ids, vec!["high", "mid", "low"]);
-}
-
-#[tokio::test]
-async fn test_plugin_short_circuit() {
-    // Create a plugin that short-circuits on_start
-    struct ShortCircuitPlugin;
-
-    #[async_trait::async_trait]
-    impl AgentPlugin for ShortCircuitPlugin {
-        fn id(&self) -> PluginId {
-            "short_circuit".to_string()
-        }
-
-        async fn on_start(&self, _ctx: &RunContext) -> PluginAction<()> {
-            PluginAction::ShortCircuit(AgentResponse {
-                content: "Cached response".to_string(),
-                reasoning: "Returned from cache".to_string(),
-                iterations: 0,
-                tool_calls: Vec::new(),
-            })
-        }
-
-        async fn intercept(
-            &self,
-            event: Result<AgentStreamEvent, AgentError>,
-            _ctx: &RunContext,
-        ) -> PluginAction<Option<Result<AgentStreamEvent, AgentError>>> {
-            PluginAction::Continue(Some(event))
-        }
-
-        async fn on_complete(
-            &self,
-            _ctx: &RunContext,
-            _response: &AgentResponse,
-        ) -> PluginAction<()> {
-            PluginAction::Continue(())
-        }
-    }
-
-    let mut registry = PluginRegistry::new();
-    registry.register(ShortCircuitPlugin);
-
-    let config = AgentConfig {
-        plugin_registry: registry,
-        ..Default::default()
-    };
-
-    // Verify the plugin is registered
-    assert_eq!(config.plugin_registry.plugins().len(), 1);
-    assert_eq!(config.plugin_registry.plugins()[0].id(), "short_circuit");
 }
 
 #[tokio::test]
@@ -138,38 +84,18 @@ async fn test_run_context_data_storage() {
 }
 
 #[tokio::test]
-async fn test_plugin_action_variants() {
-    use PluginAction::*;
+async fn test_plugin_decision_variants() {
+    use PluginDecision::*;
 
     // Test Continue
-    let continue_action: PluginAction<i32> = Continue(42);
-    assert!(matches!(continue_action, Continue(42)));
-
-    // Test ShortCircuit
-    let response = AgentResponse {
-        content: "test".to_string(),
-        reasoning: String::new(),
-        iterations: 0,
-        tool_calls: Vec::new(),
-    };
-    let shortcircuit_action: PluginAction<()> = ShortCircuit(response.clone());
-    assert!(matches!(shortcircuit_action, ShortCircuit(_)));
+    let continue_decision = Continue;
+    assert!(matches!(continue_decision, Continue));
 
     // Test Skip
-    let skip_action: PluginAction<()> = Skip;
-    assert!(matches!(skip_action, Skip));
+    let skip_decision = Skip;
+    assert!(matches!(skip_decision, Skip));
 
     // Test Abort
-    let error = AgentError::MaxIterationsReached { max: 5 };
-    let abort_action: PluginAction<()> = Abort(error);
-    assert!(matches!(abort_action, Abort(_)));
-
-    // Test map on Continue
-    let mapped = Continue(21).map(|x| x * 2);
-    assert!(matches!(mapped, Continue(42)));
-
-    // Test map_err on Abort
-    let mapped_err: PluginAction<()> = Abort(AgentError::MaxIterationsReached { max: 5 })
-        .map_err(|e| AgentError::Context(format!("Wrapped: {}", e)));
-    assert!(matches!(mapped_err, Abort(AgentError::Context(_))));
+    let abort_decision = Abort("reason".to_string());
+    assert!(matches!(abort_decision, Abort(_)));
 }

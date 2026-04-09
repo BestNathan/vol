@@ -7,7 +7,7 @@ use vol_llm_tool::ToolContext;
 use tracing::{info, debug};
 use super::{
     AgentResponse, AgentStreamEvent, AgentStreamReceiver, PluginRegistry, RunContext,
-    PluginStream, PluginAction, create_shortcircuit_stream, create_skip_stream,
+    PluginStream,
 };
 use crate::session::Session;
 use crate::prompt_context::PromptContext;
@@ -98,34 +98,6 @@ impl ReActAgent {
 
         // === Phase 2: Initialize messages (call once before loop) ===
         run_ctx.init_messages().await?;
-
-        // === Phase 3: Execute on_start hooks ===
-        for plugin in self.config.plugin_registry.plugins() {
-            match plugin.on_start(&run_ctx).await {
-                PluginAction::Continue(()) => {
-                    // Continue to next plugin
-                }
-                PluginAction::ShortCircuit(response) => {
-                    tracing::info!(
-                        run_id = %run_id,
-                        plugin = %plugin.id(),
-                        "Plugin short-circuited execution"
-                    );
-                    return create_shortcircuit_stream(response, run_ctx, run_id).await;
-                }
-                PluginAction::Skip => {
-                    tracing::warn!(
-                        run_id = %run_id,
-                        plugin = %plugin.id(),
-                        "Plugin requested skip"
-                    );
-                    return create_skip_stream(run_ctx, run_id).await;
-                }
-                PluginAction::Abort(error) => {
-                    return Err(error);
-                }
-            }
-        }
 
         // === Phase 3: Clone for spawned task ===
         let llm = self.llm.clone();

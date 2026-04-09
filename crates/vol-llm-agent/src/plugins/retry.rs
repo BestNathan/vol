@@ -2,8 +2,7 @@
 
 use crate::react::plugin::*;
 use crate::react::run_context::RunContext;
-use crate::{AgentError, AgentResponse};
-use std::sync::atomic::{AtomicU32, Ordering};
+use crate::AgentStreamEvent;
 
 /// Retry configuration
 #[derive(Debug, Clone)]
@@ -28,15 +27,11 @@ impl Default for RetryConfig {
 /// Retry plugin
 pub struct RetryPlugin {
     config: RetryConfig,
-    attempt: AtomicU32,
 }
 
 impl RetryPlugin {
     pub fn new(config: RetryConfig) -> Self {
-        Self {
-            config,
-            attempt: AtomicU32::new(0),
-        }
+        Self { config }
     }
 }
 
@@ -50,51 +45,23 @@ impl AgentPlugin for RetryPlugin {
         30
     }
 
-    async fn on_start(&self, ctx: &RunContext) -> PluginAction<()> {
-        self.attempt.store(0, Ordering::SeqCst);
-        let _ = ctx.set("retry.attempt", 0u32).await;
-        PluginAction::Continue(())
+    /// Interceptor hook - no-op for retry (retry logic handled externally)
+    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+        PluginDecision::Continue
     }
 
-    async fn intercept(
-        &self,
-        event: crate::react::plugin::StreamEvent,
-        _ctx: &RunContext,
-    ) -> PluginAction<Option<crate::react::plugin::StreamEvent>> {
-        PluginAction::Continue(Some(event))
-    }
-
-    async fn on_error(
-        &self,
-        ctx: &RunContext,
-        _error: &AgentError,
-    ) -> PluginAction<()> {
-        let attempt = self.attempt.fetch_add(1, Ordering::SeqCst);
-
-        if attempt < self.config.max_retries {
-            let delay = (self.config.initial_delay_ms as f64
-                * self.config.multiplier.powf(attempt as f64)) as u64;
-            let delay = delay.min(self.config.max_delay_ms);
-
-            tracing::warn!(
-                run_id = %ctx.run_id,
-                attempt = attempt + 1,
-                delay_ms = delay,
-                "Retrying agent run"
-            );
-
-            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+    /// Listener hook - logs retry events
+    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
+        match event {
+            AgentStreamEvent::AgentAborted { reason } => {
+                tracing::warn!(
+                    run_id = %ctx.run_id,
+                    reason = %reason,
+                    "Retry: agent aborted"
+                );
+            }
+            _ => {}
         }
-
-        PluginAction::Continue(())
-    }
-
-    async fn on_complete(
-        &self,
-        _ctx: &RunContext,
-        _response: &AgentResponse,
-    ) -> PluginAction<()> {
-        PluginAction::Continue(())
     }
 }
 
@@ -120,8 +87,8 @@ mod tests {
         )
     }
 
-    #[tokio::test]
-    async fn test_retry_plugin_config_default() {
+    #[test]
+    fn test_retry_config_default() {
         let config = RetryConfig::default();
         assert_eq!(config.max_retries, 3);
         assert_eq!(config.initial_delay_ms, 100);
@@ -129,16 +96,22 @@ mod tests {
         assert_eq!(config.multiplier, 2.0);
     }
 
-    #[tokio::test]
-    async fn test_retry_plugin_on_start() {
+    #[test]
+    fn test_retry_plugin_id() {
         let plugin = RetryPlugin::new(RetryConfig::default());
+        assert_eq!(plugin.id(), "retry");
+    }
 
+    #[tokio::test]
+    async fn test_retry_plugin_intercept() {
+        let plugin = RetryPlugin::new(RetryConfig::default());
         let ctx = create_test_run_context();
 
-        match plugin.on_start(&ctx).await {
-            PluginAction::Continue(()) => {
-                assert_eq!(ctx.get::<u32>("retry.attempt").await, Some(0));
-            }
+        let event = AgentStreamEvent::AgentStart {
+            input: "test".to_string(),
+        };
+        match plugin.intercept(&event, &ctx).await {
+            PluginDecision::Continue => {}
             _ => panic!("Expected Continue"),
         }
     }

@@ -2,8 +2,7 @@
 
 use crate::react::plugin::*;
 use crate::react::run_context::RunContext;
-use crate::{AgentStreamEvent, AgentResponse, AgentError};
-use std::time::Instant;
+use crate::AgentStreamEvent;
 
 /// Audit event for logging
 #[derive(Debug, Clone, serde::Serialize)]
@@ -16,7 +15,6 @@ pub struct AuditEvent {
 
 /// Observability plugin
 pub struct ObservabilityPlugin {
-    run_start: Instant,
     audit_tx: Option<tokio::sync::mpsc::Sender<AuditEvent>>,
 }
 
@@ -26,7 +24,6 @@ impl ObservabilityPlugin {
     ) -> Self {
         Self {
             audit_tx,
-            run_start: Instant::now(),
         }
     }
 
@@ -54,81 +51,31 @@ impl AgentPlugin for ObservabilityPlugin {
         10
     }
 
-    async fn on_start(&self, ctx: &RunContext) -> PluginAction<()> {
-        tracing::info!(
-            run_id = %ctx.run_id,
-            session_id = %ctx.session_id,
-            input = %ctx.user_input,
-            "Agent run started"
-        );
-
-        PluginAction::Continue(())
+    /// Interceptor hook - no-op for observability (doesn't block flow)
+    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+        PluginDecision::Continue
     }
 
-    async fn intercept(
-        &self,
-        event: crate::react::plugin::StreamEvent,
-        ctx: &RunContext,
-    ) -> PluginAction<Option<crate::react::plugin::StreamEvent>> {
-        match &event {
-            Ok(agent_event) => {
-                tracing::debug!(
-                    run_id = %ctx.run_id,
-                    event_type = Self::get_event_type(agent_event),
-                    "Agent event"
-                );
+    /// Listener hook - logs events for observability and audit
+    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
+        let event_type = Self::get_event_type(event);
 
-                // Send audit log
-                if let Some(ref audit_tx) = self.audit_tx {
-                    let audit_event = AuditEvent {
-                        run_id: ctx.run_id.clone(),
-                        timestamp: chrono::Utc::now(),
-                        event_type: Self::get_event_type(agent_event).to_string(),
-                        data: serde_json::json!({ "event": "logged" }),
-                    };
-                    let _ = audit_tx.send(audit_event).await;
-                }
-            }
-            Err(e) => {
-                tracing::error!(run_id = %ctx.run_id, error = %e, "Agent error");
-            }
+        tracing::debug!(
+            run_id = %ctx.run_id,
+            event_type = event_type,
+            "Agent event"
+        );
+
+        // Send audit log
+        if let Some(ref audit_tx) = self.audit_tx {
+            let audit_event = AuditEvent {
+                run_id: ctx.run_id.clone(),
+                timestamp: chrono::Utc::now(),
+                event_type: event_type.to_string(),
+                data: serde_json::json!({ "event": event_type }),
+            };
+            let _ = audit_tx.send(audit_event).await;
         }
-
-        PluginAction::Continue(Some(event))
-    }
-
-    async fn on_complete(
-        &self,
-        ctx: &RunContext,
-        response: &AgentResponse,
-    ) -> PluginAction<()> {
-        let elapsed = self.run_start.elapsed();
-
-        tracing::info!(
-            run_id = %ctx.run_id,
-            duration_ms = elapsed.as_millis(),
-            iterations = response.iterations,
-            "Agent run completed"
-        );
-
-        PluginAction::Continue(())
-    }
-
-    async fn on_error(
-        &self,
-        ctx: &RunContext,
-        error: &AgentError,
-    ) -> PluginAction<()> {
-        let elapsed = self.run_start.elapsed();
-
-        tracing::error!(
-            run_id = %ctx.run_id,
-            error = %error,
-            duration_ms = elapsed.as_millis(),
-            "Agent run failed"
-        );
-
-        PluginAction::Continue(())
     }
 }
 
@@ -136,9 +83,8 @@ impl AgentPlugin for ObservabilityPlugin {
 mod tests {
     use super::*;
     use std::sync::Arc;
-    use crate::AgentStreamEvent;
     use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-    use crate::react::AgentConfig;
+    use crate::react::{AgentConfig, RunContext};
 
     fn create_test_run_context() -> RunContext {
         RunContext::new(
@@ -162,21 +108,12 @@ mod tests {
 
         let ctx = create_test_run_context();
 
-        // on_start should log
-        match plugin.on_start(&ctx).await {
-            PluginAction::Continue(()) => {}
-            _ => panic!("Expected Continue"),
-        }
-
-        // intercept should send audit event
-        let event = Ok(AgentStreamEvent::AgentStart {
+        // listen should send audit event
+        let event = AgentStreamEvent::AgentStart {
             input: "test".to_string(),
-        });
+        };
 
-        match plugin.intercept(event, &ctx).await {
-            PluginAction::Continue(Some(_)) => {}
-            _ => panic!("Expected Continue"),
-        }
+        plugin.listen(&event, &ctx).await;
 
         // Should have received audit event
         let audit_event = tokio::time::timeout(
@@ -191,22 +128,15 @@ mod tests {
         assert_eq!(audit_event.event_type, "AgentStart");
     }
 
-    #[tokio::test]
-    async fn test_observability_plugin_on_complete() {
+    #[test]
+    fn test_observability_plugin_id() {
         let plugin = ObservabilityPlugin::new(None);
+        assert_eq!(plugin.id(), "observability");
+    }
 
-        let ctx = create_test_run_context();
-
-        let response = AgentResponse {
-            content: "test response".to_string(),
-            reasoning: String::new(),
-            iterations: 2,
-            tool_calls: Vec::new(),
-        };
-
-        match plugin.on_complete(&ctx, &response).await {
-            PluginAction::Continue(()) => {}
-            _ => panic!("Expected Continue"),
-        }
+    #[test]
+    fn test_observability_plugin_priority() {
+        let plugin = ObservabilityPlugin::new(None);
+        assert_eq!(plugin.priority(), 10);
     }
 }

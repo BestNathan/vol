@@ -28,46 +28,33 @@ impl PluginStream {
             // Get next event from inner stream
             let raw_event = self.inner.recv().await?;
 
-            // Pass through plugin interceptors
-            let mut current = Some(raw_event);
-
-            for plugin in &self.plugins {
-                match current {
-                    Some(event) => {
-                        match plugin.intercept(event, &self.ctx).await {
-                            PluginAction::Continue(Some(e)) => current = Some(e),
-                            PluginAction::Continue(None) => {
-                                // Event dropped, continue outer loop to get next event
-                                current = None;
+            // Apply plugin interceptors sequentially
+            match raw_event {
+                Ok(event) => {
+                    // Apply interceptors
+                    for plugin in &self.plugins {
+                        match plugin.intercept(&event, &self.ctx).await {
+                            PluginDecision::Continue => {
+                                // Continue to next plugin
+                            }
+                            PluginDecision::Skip => {
+                                // Skip this event, continue outer loop to get next event
                                 break;
                             }
-                            PluginAction::ShortCircuit(response) => {
-                                // Short-circuit: send final response immediately
-                                return Some(Ok(AgentStreamEvent::AgentComplete { response }));
-                            }
-                            PluginAction::Skip => {
-                                // Skip this event, continue outer loop
-                                current = None;
-                                break;
-                            }
-                            PluginAction::Abort(e) => {
-                                return Some(Err(e));
+                            PluginDecision::Abort(reason) => {
+                                return Some(Err(AgentError::Context(reason)));
                             }
                         }
                     }
-                    None => {
-                        // Event was dropped or skipped, continue outer loop
-                        current = None;
-                        break;
-                    }
+
+                    // If we get here, event was not skipped or aborted
+                    return Some(Ok(event));
+                }
+                Err(e) => {
+                    // Error events pass through unchanged
+                    return Some(Err(e));
                 }
             }
-
-            // If we have an event after all plugins, return it
-            if current.is_some() {
-                return current;
-            }
-            // Otherwise, continue loop to get next event
         }
     }
 

@@ -112,15 +112,9 @@ impl Default for HitlConfig {
 }
 
 use super::plugin::*;
-use super::{AgentStreamEvent, AgentResponse, AgentError};
+use super::AgentStreamEvent;
 use super::run_context::RunContext;
 use std::sync::Arc;
-
-enum ApprovalResult {
-    Continue,
-    Rejected { reason: String },
-    Stop,
-}
 
 /// Human-in-the-Loop plugin
 pub struct HitlPlugin<C: ApprovalChannel> {
@@ -158,7 +152,7 @@ impl<C: ApprovalChannel> HitlPlugin<C> {
         })
     }
 
-    async fn request_approval(&self, request: ApprovalRequest) -> Result<ApprovalResult, ApprovalError> {
+    async fn request_approval(&self, request: ApprovalRequest) -> Result<ApprovalResponse, ApprovalError> {
         let timeout = if self.config.timeout_secs > 0 {
             Some(Duration::from_secs(self.config.timeout_secs))
         } else {
@@ -166,18 +160,13 @@ impl<C: ApprovalChannel> HitlPlugin<C> {
         };
 
         match self.channel.request_approval(request, timeout).await {
-            Ok(Some(response)) => {
-                match response {
-                    ApprovalResponse::Approved => Ok(ApprovalResult::Continue),
-                    ApprovalResponse::Rejected { reason } => Ok(ApprovalResult::Rejected { reason }),
-                }
-            }
+            Ok(Some(response)) => Ok(response),
             Ok(None) => {
-                Ok(match self.config.on_timeout {
-                    TimeoutBehavior::Approve => ApprovalResult::Continue,
-                    TimeoutBehavior::Reject { ref reason } => ApprovalResult::Rejected { reason: reason.clone() },
-                    TimeoutBehavior::Stop => ApprovalResult::Stop,
-                })
+                match &self.config.on_timeout {
+                    TimeoutBehavior::Approve => Ok(ApprovalResponse::Approved),
+                    TimeoutBehavior::Reject { reason } => Ok(ApprovalResponse::Rejected { reason: reason.clone() }),
+                    TimeoutBehavior::Stop => Err(ApprovalError::Timeout),
+                }
             }
             Err(e) => Err(e),
         }
@@ -194,9 +183,10 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
         25
     }
 
-    async fn intercept(&self, event: StreamEvent, ctx: &RunContext) -> PluginAction<Option<StreamEvent>> {
-        match &event {
-            Ok(AgentStreamEvent::ToolCallBegin { tool_name, arguments }) => {
+    /// Interceptor hook - checks for approval requirements
+    async fn intercept(&self, event: &AgentStreamEvent, ctx: &RunContext) -> PluginDecision {
+        match event {
+            AgentStreamEvent::ToolCallBegin { tool_name, arguments } => {
                 if self.needs_tool_approval(tool_name) {
                     let request = ApprovalRequest {
                         run_id: ctx.run_id.clone(),
@@ -206,24 +196,20 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
                     };
 
                     match self.request_approval(request).await {
-                        Ok(ApprovalResult::Continue) => {}
-                        Ok(ApprovalResult::Rejected { reason }) => {
-                            return PluginAction::Continue(Some(Ok(AgentStreamEvent::ToolCallComplete {
-                                tool_name: tool_name.clone(),
-                                result: format!("Rejected: {}", reason),
-                            })));
+                        Ok(ApprovalResponse::Approved) => PluginDecision::Continue,
+                        Ok(ApprovalResponse::Rejected { reason }) => {
+                            // Return skip with rejection reason - caller should handle
+                            PluginDecision::Abort(format!("Rejected: {}", reason))
                         }
-                        Ok(ApprovalResult::Stop) => {
-                            return PluginAction::Abort(AgentError::Context("Stopped by user (HITL)".to_string()));
-                        }
-                        Err(e) => {
-                            return PluginAction::Abort(AgentError::Context(format!("Approval error: {}", e)));
-                        }
+                        Err(ApprovalError::Timeout) => PluginDecision::Abort("Approval timeout".to_string()),
+                        Err(e) => PluginDecision::Abort(format!("Approval error: {}", e)),
                     }
+                } else {
+                    PluginDecision::Continue
                 }
             }
 
-            Ok(AgentStreamEvent::IterationComplete { iteration, final_answer, .. }) => {
+            AgentStreamEvent::IterationComplete { iteration, final_answer, .. } => {
                 if self.needs_iteration_pause() && final_answer.is_none() {
                     let request = ApprovalRequest {
                         run_id: ctx.run_id.clone(),
@@ -233,38 +219,45 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
                     };
 
                     match self.request_approval(request).await {
-                        Ok(ApprovalResult::Continue) => {}
-                        Ok(ApprovalResult::Rejected { reason }) => {
-                            return PluginAction::ShortCircuit(AgentResponse {
-                                content: String::new(),
-                                reasoning: format!("Stopped after iteration {}: {}", iteration, reason),
-                                iterations: *iteration,
-                                tool_calls: Vec::new(),
-                            });
+                        Ok(ApprovalResponse::Approved) => PluginDecision::Continue,
+                        Ok(ApprovalResponse::Rejected { reason }) => {
+                            PluginDecision::Abort(format!("Stopped after iteration {}: {}", iteration, reason))
                         }
-                        Ok(ApprovalResult::Stop) => {
-                            return PluginAction::Abort(AgentError::Context("Stopped by user (HITL)".to_string()));
-                        }
-                        Err(e) => {
-                            return PluginAction::Abort(AgentError::Context(format!("Approval error: {}", e)));
-                        }
+                        Err(ApprovalError::Timeout) => PluginDecision::Abort("Approval timeout".to_string()),
+                        Err(e) => PluginDecision::Abort(format!("Approval error: {}", e)),
                     }
+                } else {
+                    PluginDecision::Continue
                 }
             }
 
+            _ => PluginDecision::Continue,
+        }
+    }
+
+    /// Listener hook - logs HITL events for audit
+    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
+        match event {
+            AgentStreamEvent::ToolCallBegin { tool_name, .. } => {
+                if self.needs_tool_approval(tool_name) {
+                    tracing::info!(
+                        run_id = %ctx.run_id,
+                        tool_name = %tool_name,
+                        "HITL: Tool execution requires approval"
+                    );
+                }
+            }
+            AgentStreamEvent::IterationComplete { iteration, .. } => {
+                if self.needs_iteration_pause() {
+                    tracing::info!(
+                        run_id = %ctx.run_id,
+                        iteration = %iteration,
+                        "HITL: Iteration pause requires approval"
+                    );
+                }
+            }
             _ => {}
         }
-
-        PluginAction::Continue(Some(event))
-    }
-
-    async fn on_complete(&self, _ctx: &RunContext, _response: &AgentResponse) -> PluginAction<()> {
-        PluginAction::Continue(())
-    }
-
-    async fn on_error(&self, ctx: &RunContext, error: &AgentError) -> PluginAction<()> {
-        tracing::error!(run_id = %ctx.run_id, error = %error, "Agent error");
-        PluginAction::Continue(())
     }
 }
 

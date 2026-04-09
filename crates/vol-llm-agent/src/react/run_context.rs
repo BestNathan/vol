@@ -12,7 +12,6 @@ use crate::session::Session;
 use crate::session::SessionMessage;
 use vol_llm_tool::ToolRegistry;
 use super::AgentConfig;
-use super::response::AgentError;
 
 /// RunContext encapsulates all state and resources for a single run() invocation.
 ///
