@@ -9,7 +9,7 @@ use super::{
     AgentResponse, AgentStreamEvent, AgentStreamReceiver, PluginRegistry, RunContext,
     PluginStream, PluginAction, create_shortcircuit_stream, create_skip_stream,
 };
-use crate::session::{Session, SessionMessage};
+use crate::session::Session;
 use crate::prompt_context::PromptContext;
 
 /// Agent configuration
@@ -96,7 +96,10 @@ impl ReActAgent {
             config,
         );
 
-        // === Phase 2: Execute on_start hooks ===
+        // === Phase 2: Initialize messages (call once before loop) ===
+        run_ctx.init_messages().await?;
+
+        // === Phase 3: Execute on_start hooks ===
         for plugin in self.config.plugin_registry.plugins() {
             match plugin.on_start(&run_ctx).await {
                 PluginAction::Continue(()) => {
@@ -128,7 +131,7 @@ impl ReActAgent {
         let llm = self.llm.clone();
         let tools = self.tools.clone();
         let config = self.config.clone();
-        let session = self.session.clone();
+        let _session = self.session.clone();
         let user_input = user_input.to_string();
         let plugin_registry = config.plugin_registry.clone();
         let run_ctx_for_stream = run_ctx.clone();
@@ -142,27 +145,10 @@ impl ReActAgent {
                 input: user_input.clone()
             })).await;
 
-            let mut messages = Vec::new();
-            let mut iteration = 0u32;
-
-            // Use PromptContext to assemble messages
-            let system_prompt = config.prompt_context.build_system();
-            messages.push(Message::system(system_prompt));
-
-            // Get historical messages from session
-            let history = session.get_messages(config.max_history_messages).await.unwrap_or_default();
-
-            // Add history
-            for session_msg in &history {
-                messages.push(session_msg.message.clone());
-            }
-
-            // Use PromptContext to build user message
-            let user_msg = config.prompt_context.build_user(&user_input, None);
-            messages.push(Message::user(user_msg));
-
             loop {
-                iteration += 1;
+                // Increment iteration via ctx
+                run_ctx.next_iteration();
+                let iteration = run_ctx.current_iteration();
 
                 if iteration > config.max_iterations {
                     let _ = tx.send(Err(crate::AgentError::MaxIterationsReached {
@@ -177,7 +163,11 @@ impl ReActAgent {
 
                 // Reason phase - call LLM with streaming
                 let tools_defs = tools.definitions();
-                let request = ConversationRequest::with_history(None, messages.clone())
+
+                // Get messages from ctx (not local variable)
+                let messages = run_ctx.get_messages().await;
+
+                let request = ConversationRequest::with_history(None, messages)
                     .with_tools(tools_defs)
                     .with_tool_choice(ToolChoice::Auto);
 
@@ -237,12 +227,14 @@ impl ReActAgent {
                             result: result.content.clone(),
                         })).await;
 
-                        // Add tool result to messages
-                        messages.push(Message::tool(result.content.clone(), call.id.clone()));
+                        // Add tool result to ctx (syncs to session automatically)
+                        if let Err(e) = run_ctx.add_message(Message::tool(result.content.clone(), call.id.clone())).await {
+                            let _ = tx.send(Err(crate::AgentError::from(e))).await;
+                            break;
+                        }
 
-                        // Save tool result to session
-                        let tool_msg = SessionMessage::new(session.id.clone(), Message::tool(result.content.clone(), call.id.clone()));
-                        let _ = session.add_message(tool_msg).await;
+                        // Clear current tool calls for next iteration
+                        run_ctx.clear_current_tool_calls().await;
                     }
 
                     // Send IterationComplete
@@ -264,12 +256,17 @@ impl ReActAgent {
                     final_answer: Some(content.clone()),
                 })).await;
 
-                // Save user input and assistant response to session
-                let user_msg = SessionMessage::new(session.id.clone(), Message::user(user_input.clone()));
-                let _ = session.add_message(user_msg).await;
+                // Save user input and assistant response to session via ctx
+                // Note: user input is added first to maintain correct conversation order
+                if let Err(e) = run_ctx.add_message(Message::user(user_input.clone())).await {
+                    let _ = tx.send(Err(crate::AgentError::from(e))).await;
+                    break;
+                }
 
-                let assistant_msg = SessionMessage::new(session.id.clone(), Message::assistant(content.clone()));
-                let _ = session.add_message(assistant_msg).await;
+                if let Err(e) = run_ctx.add_message(Message::assistant(content.clone())).await {
+                    let _ = tx.send(Err(crate::AgentError::from(e))).await;
+                    break;
+                }
 
                 // Send AgentComplete
                 let response = AgentResponse {

@@ -9,8 +9,10 @@ use std::collections::HashMap;
 use vol_llm_core::Message;
 use vol_llm_core::ToolCall;
 use crate::session::Session;
+use crate::session::SessionMessage;
 use vol_llm_tool::ToolRegistry;
 use super::AgentConfig;
+use super::response::AgentError;
 
 /// RunContext encapsulates all state and resources for a single run() invocation.
 ///
@@ -62,6 +64,42 @@ impl RunContext {
         }
     }
 
+    /// Initialize messages array - must be called once before the loop
+    ///
+    /// This method:
+    /// 1. Builds System message from `config.prompt_context.build_system()`
+    /// 2. Gets historical messages from session (only once, limited by `max_history_messages`)
+    /// 3. Adds user input
+    /// 4. Writes all to `self.messages`
+    ///
+    /// # Returns
+    /// `Ok(())` on success, `Err(AgentError)` if session access fails
+    pub async fn init_messages(&self) -> Result<(), crate::AgentError> {
+        let mut messages = Vec::new();
+
+        // 1. System message from prompt_context
+        let system_content = self.config.prompt_context.build_system();
+        messages.push(Message::system(system_content));
+
+        // 2. Historical messages from session (only once)
+        let history = self.session
+            .get_messages(self.config.max_history_messages)
+            .await
+            .unwrap_or_default();
+
+        for session_msg in history {
+            messages.push(session_msg.message);
+        }
+
+        // 3. User input
+        messages.push(Message::user(self.user_input.clone()));
+
+        // Write to shared state
+        *self.messages.write().await = messages;
+
+        Ok(())
+    }
+
     /// Get the current iteration number
     pub fn current_iteration(&self) -> u32 {
         self.iteration.load(std::sync::atomic::Ordering::SeqCst)
@@ -72,9 +110,18 @@ impl RunContext {
         self.iteration.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// Add a message to the messages list
-    pub async fn add_message(&self, message: Message) {
-        self.messages.write().await.push(message);
+    /// Add a message to the messages list and sync to session
+    pub async fn add_message(&self, message: Message) -> Result<(), crate::AgentError> {
+        // 1. Add to runtime messages array
+        self.messages.write().await.push(message.clone());
+
+        // 2. Persist to session
+        let session_msg = SessionMessage::new(self.session_id.clone(), message);
+        self.session.add_message(session_msg).await.map_err(|e| crate::AgentError::SessionError {
+            source: e,
+        })?;
+
+        Ok(())
     }
 
     /// Get a clone of all messages
@@ -137,7 +184,8 @@ impl Clone for RunContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session::{InMemorySessionStore, InMemoryMessageStore};
+    use crate::session::{InMemorySessionStore, InMemoryMessageStore, SessionMessage};
+    use vol_llm_core::MessageRole;
 
     fn create_test_context() -> RunContext {
         RunContext::new(
@@ -209,5 +257,171 @@ mod tests {
         ctx.set("key1", "value1").await.unwrap();
         let val: Option<String> = ctx.get("key1").await;
         assert_eq!(val, Some("value1".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_init_messages_system_message() {
+        use crate::prompt_context::{PromptTemplate, PromptContext};
+
+        let template = PromptTemplate::new("test", "You are a helpful assistant.");
+        let prompt_context = PromptContext::new(template);
+
+        let config = AgentConfig {
+            prompt_context,
+            ..Default::default()
+        };
+
+        let ctx = RunContext::new(
+            "test-run".to_string(),
+            "test input".to_string(),
+            "session-1".to_string(),
+            Arc::new(Session::new(
+                "session-1".to_string(),
+                Arc::new(InMemorySessionStore::new()),
+                Arc::new(InMemoryMessageStore::new()),
+            )),
+            Arc::new(vol_llm_tool::ToolRegistry::new()),
+            config,
+        );
+
+        ctx.init_messages().await.unwrap();
+        let messages = ctx.get_messages().await;
+
+        // First message should be system message
+        assert!(messages.len() >= 1);
+        assert_eq!(messages[0].role, MessageRole::System);
+        assert!(messages[0].content.as_ref().unwrap().as_str().contains("You are a helpful assistant."));
+    }
+
+    #[tokio::test]
+    async fn test_init_messages_history() {
+        use crate::prompt_context::{PromptTemplate, PromptContext};
+
+        let template = PromptTemplate::new("test", "System");
+        let prompt_context = PromptContext::new(template);
+
+        let config = AgentConfig {
+            prompt_context,
+            max_history_messages: 10,
+            ..Default::default()
+        };
+
+        let session_store = Arc::new(InMemorySessionStore::new());
+        let message_store = Arc::new(InMemoryMessageStore::new());
+        let session = Arc::new(Session::new(
+            "session-1".to_string(),
+            session_store.clone(),
+            message_store.clone(),
+        ));
+
+        // Add a historical message to session
+        let history_msg = SessionMessage::new(
+            "session-1".to_string(),
+            Message::user("Previous conversation"),
+        );
+        session.add_message(history_msg).await.unwrap();
+
+        let ctx = RunContext::new(
+            "test-run".to_string(),
+            "new input".to_string(),
+            "session-1".to_string(),
+            session.clone(),
+            Arc::new(vol_llm_tool::ToolRegistry::new()),
+            config,
+        );
+
+        ctx.init_messages().await.unwrap();
+        let messages = ctx.get_messages().await;
+
+        // Should have: system + history + user input = 3 messages
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[1].role, MessageRole::User);
+        assert!(messages[1].content.as_ref().unwrap().as_str().contains("Previous conversation"));
+    }
+
+    #[tokio::test]
+    async fn test_init_messages_user_input() {
+        use crate::prompt_context::{PromptTemplate, PromptContext};
+
+        let template = PromptTemplate::new("test", "System");
+        let prompt_context = PromptContext::new(template);
+
+        let config = AgentConfig {
+            prompt_context,
+            ..Default::default()
+        };
+
+        let ctx = RunContext::new(
+            "test-run".to_string(),
+            "analyze market volatility".to_string(),
+            "session-1".to_string(),
+            Arc::new(Session::new(
+                "session-1".to_string(),
+                Arc::new(InMemorySessionStore::new()),
+                Arc::new(InMemoryMessageStore::new()),
+            )),
+            Arc::new(vol_llm_tool::ToolRegistry::new()),
+            config,
+        );
+
+        ctx.init_messages().await.unwrap();
+        let messages = ctx.get_messages().await;
+
+        // Last message should be user input
+        assert!(messages.len() >= 1);
+        let last_msg = messages.last().unwrap();
+        assert_eq!(last_msg.role, MessageRole::User);
+        assert!(last_msg.content.as_ref().unwrap().as_str().contains("analyze market volatility"));
+    }
+
+    #[tokio::test]
+    async fn test_init_messages_only_once() {
+        use crate::prompt_context::{PromptTemplate, PromptContext};
+
+        let template = PromptTemplate::new("test", "System");
+        let prompt_context = PromptContext::new(template);
+
+        let config = AgentConfig {
+            prompt_context,
+            ..Default::default()
+        };
+
+        let session_store = Arc::new(InMemorySessionStore::new());
+        let message_store = Arc::new(InMemoryMessageStore::new());
+        let session = Arc::new(Session::new(
+            "session-1".to_string(),
+            session_store.clone(),
+            message_store.clone(),
+        ));
+
+        // Add a historical message
+        let history_msg = SessionMessage::new(
+            "session-1".to_string(),
+            Message::user("History"),
+        );
+        session.add_message(history_msg).await.unwrap();
+
+        let ctx = RunContext::new(
+            "test-run".to_string(),
+            "input".to_string(),
+            "session-1".to_string(),
+            session.clone(),
+            Arc::new(vol_llm_tool::ToolRegistry::new()),
+            config,
+        );
+
+        // Call init_messages multiple times
+        ctx.init_messages().await.unwrap();
+        let messages_after_first = ctx.get_messages().await.len();
+
+        ctx.init_messages().await.unwrap();
+        let messages_after_second = ctx.get_messages().await.len();
+
+        // Multiple calls should NOT duplicate - second call overwrites
+        // This is the expected behavior: init_messages replaces, not appends
+        assert_eq!(messages_after_first, messages_after_second);
+
+        // Verify we have: system + history + user = 3 messages
+        assert_eq!(messages_after_second, 3);
     }
 }

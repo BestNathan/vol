@@ -30,4 +30,10 @@ pub enum AgentError {
 
     #[error("Context error: {0}")]
     Context(String),
+
+    #[error("Session error: {source}")]
+    SessionError {
+        #[source]
+        source: LLMError,
+    },
 }
