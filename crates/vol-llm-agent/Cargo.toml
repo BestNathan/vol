@@ -13,6 +13,8 @@ tracing = { workspace = true }
 chrono = { workspace = true }
 uuid = { version = "1.6", features = ["v4"] }
 reqwest = { workspace = true }
+regex = "1.10"
+once_cell = "1.19"
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-tool = { path = "../vol-llm-tool" }
 vol-llm-provider = { path = "../vol-llm-provider" }
