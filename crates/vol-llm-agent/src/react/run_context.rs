@@ -52,11 +52,52 @@ pub struct RunContext {
 
     // Event bus
     pub event_tx: broadcast::Sender<AgentStreamEvent>,
+    /// Plugin event channel sender.
+    ///
+    /// # Important: Receiver is intentionally Dropped in `new()`
+    ///
+    /// The corresponding receiver (`mpsc::Receiver<PluginRequest>`) is created
+    /// but immediately dropped in [`RunContext::new()`]. This is by design.
+    ///
+    /// ## Usage Pattern
+    ///
+    /// 1. **Creation**: `RunContext::new()` creates the channel and drops the receiver
+    /// 2. **Listener Setup**: A plugin listener task (created later in `PluginStream`)
+    ///    will create a NEW receiver to intercept events
+    /// 3. **Interception**: Once the listener is wired up, calls to
+    ///    [`RunContext::intercept()`] will route events through the plugin system
+    ///
+    /// ## Why This Pattern?
+    ///
+    /// The sender is stored here to allow `RunContext` to be created early in the
+    /// initialization flow, while the plugin listener is set up later by the
+    /// `PluginStream` component. This separation of concerns allows:
+    ///
+    /// - Early context creation before plugin infrastructure is ready
+    /// - Flexible plugin listener lifecycle management
+    /// - No blocking during `RunContext` initialization
+    ///
+    /// ## Behavior Before Listener is Wired
+    ///
+    /// If [`intercept()`](RunContext::intercept) is called before a plugin listener
+    /// has created a receiver, the send will fail with `SendError` (converted to
+    /// `AgentError::Context`). This is expected - plugins are optional and the
+    /// caller should handle this gracefully.
     pub plugin_event_tx: mpsc::Sender<PluginRequest>,
 }
 
 impl RunContext {
-    /// Create a new RunContext
+    /// Create a new RunContext.
+    ///
+    /// # Note: Plugin Event Channel Receiver
+    ///
+    /// The plugin event channel receiver (`mpsc::Receiver<PluginRequest>`) is
+    /// intentionally dropped here. This is expected behavior - a plugin listener
+    /// task will be created later (in `PluginStream`) to handle plugin event routing.
+    ///
+    /// The `plugin_event_tx` sender stored in this struct will work once that
+    /// listener is wired up. Until then, calls to `intercept()` will fail gracefully
+    /// with a channel error.
     pub fn new(
         run_id: String,
         user_input: String,
@@ -194,11 +235,18 @@ impl RunContext {
         let _ = self.event_tx.send(event);
     }
 
-    /// Intercept an event for plugin processing (blocking, returns decision)
+    /// Intercept an event for plugin processing (blocking, returns decision).
     ///
     /// This sends the event to the plugin channel and waits for a decision.
-    /// Returns PluginDecision::Continue to proceed, Skip to skip the event,
-    /// or Abort to stop the entire agent execution.
+    /// Returns `PluginDecision::Continue` to proceed, `Skip` to skip the event,
+    /// or `Abort` to stop the entire agent execution.
+    ///
+    /// # Note
+    ///
+    /// This method requires a plugin listener to be active (created by `PluginStream`).
+    /// If no listener has set up a receiver, this will return an error indicating
+    /// the channel is closed. See [`plugin_event_tx`](RunContext::plugin_event_tx)
+    /// for the full usage pattern.
     pub async fn intercept(&self, event: &AgentStreamEvent) -> Result<PluginDecision, crate::AgentError> {
         let (tx, rx) = oneshot::channel();
         self.plugin_event_tx.send(PluginRequest::Intercept {
