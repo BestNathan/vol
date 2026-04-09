@@ -101,7 +101,7 @@ impl ReActAgent {
         run_ctx.init_messages().await?;
 
         // === Phase 2.5: Spawn listener and interceptor tasks ===
-        let _listener_handle = PluginStream::spawn_listener_task(
+        let listener_handle = PluginStream::spawn_listener_task(
             self.config.plugin_registry.plugins().to_vec(),
             run_ctx.clone(),
         );
@@ -126,6 +126,8 @@ impl ReActAgent {
         let (tx, rx) = mpsc::channel(100);
 
         tokio::spawn(async move {
+            // Ensure listener is cleaned up when we exit
+            let _listener_handle = listener_handle;
             // === Emit and intercept AgentStart ===
             let start_event = AgentStreamEvent::AgentStart {
                 input: user_input.clone()
@@ -311,6 +313,9 @@ impl ReActAgent {
                 let complete_event = AgentStreamEvent::AgentComplete { response: response.clone() };
                 run_ctx.emit(complete_event.clone()).await;
                 let _ = tx.send(Ok(complete_event)).await;
+
+                // Cleanup: abort the listener task when we exit
+                _listener_handle.abort();
                 break;
             }
         });
