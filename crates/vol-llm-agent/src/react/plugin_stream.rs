@@ -48,6 +48,16 @@ impl PluginStream {
                     }
 
                     // If we get here, event was not skipped or aborted
+                    // Call listen() on all plugins for observability and audit logging
+                    let plugins_clone = self.plugins.clone();
+                    let event_clone = event.clone();
+                    let ctx_clone = self.ctx.clone();
+                    tokio::spawn(async move {
+                        for plugin in &plugins_clone {
+                            plugin.listen(&event_clone, &ctx_clone).await;
+                        }
+                    });
+
                     return Some(Ok(event));
                 }
                 Err(e) => {

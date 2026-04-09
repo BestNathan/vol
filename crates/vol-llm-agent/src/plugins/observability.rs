@@ -74,7 +74,9 @@ impl AgentPlugin for ObservabilityPlugin {
                 event_type: event_type.to_string(),
                 data: serde_json::json!({ "event": event_type }),
             };
-            let _ = audit_tx.send(audit_event).await;
+            if let Err(e) = audit_tx.send(audit_event).await {
+                tracing::warn!(run_id = %ctx.run_id, error = %e, "Failed to send audit event");
+            }
         }
     }
 }
