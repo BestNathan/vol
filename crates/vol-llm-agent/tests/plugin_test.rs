@@ -4,6 +4,26 @@ use vol_llm_agent::*;
 use vol_llm_agent::react::*;
 use vol_llm_agent::react::plugin::PluginId;
 
+/// Helper function to create a test RunContext
+fn create_test_run_context() -> RunContext {
+    use std::sync::Arc;
+    use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore};
+    use vol_llm_tool::ToolRegistry;
+
+    RunContext::new(
+        "test-run".to_string(),
+        "test input".to_string(),
+        "session-1".to_string(),
+        Arc::new(Session::new(
+            "session-1".to_string(),
+            Arc::new(InMemorySessionStore::new()),
+            Arc::new(InMemoryMessageStore::new()),
+        )),
+        Arc::new(ToolRegistry::new()),
+        AgentConfig::default(),
+    )
+}
+
 #[tokio::test]
 async fn test_plugin_priority_ordering() {
     // Create a mock plugin with custom priority
@@ -25,15 +45,15 @@ async fn test_plugin_priority_ordering() {
         async fn intercept(
             &self,
             event: Result<AgentStreamEvent, AgentError>,
-            _ctx: &PluginContext,
+            _ctx: &RunContext,
         ) -> PluginAction<Option<Result<AgentStreamEvent, AgentError>>> {
             PluginAction::Continue(Some(event))
         }
 
         async fn on_complete(
             &self,
-            _ctx: &PluginContext,
-            _response: Option<&AgentResponse>,
+            _ctx: &RunContext,
+            _response: &AgentResponse,
         ) -> PluginAction<()> {
             PluginAction::Continue(())
         }
@@ -60,7 +80,7 @@ async fn test_plugin_short_circuit() {
             "short_circuit".to_string()
         }
 
-        async fn on_start(&self, _ctx: &mut PluginContext) -> PluginAction<()> {
+        async fn on_start(&self, _ctx: &RunContext) -> PluginAction<()> {
             PluginAction::ShortCircuit(AgentResponse {
                 content: "Cached response".to_string(),
                 reasoning: "Returned from cache".to_string(),
@@ -72,15 +92,15 @@ async fn test_plugin_short_circuit() {
         async fn intercept(
             &self,
             event: Result<AgentStreamEvent, AgentError>,
-            _ctx: &PluginContext,
+            _ctx: &RunContext,
         ) -> PluginAction<Option<Result<AgentStreamEvent, AgentError>>> {
             PluginAction::Continue(Some(event))
         }
 
         async fn on_complete(
             &self,
-            _ctx: &PluginContext,
-            _response: Option<&AgentResponse>,
+            _ctx: &RunContext,
+            _response: &AgentResponse,
         ) -> PluginAction<()> {
             PluginAction::Continue(())
         }
@@ -100,24 +120,35 @@ async fn test_plugin_short_circuit() {
 }
 
 #[tokio::test]
-async fn test_plugin_context_data_storage() {
-    let mut ctx = PluginContext::new(
+async fn test_run_context_data_storage() {
+    use std::sync::Arc;
+    use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore};
+    use vol_llm_tool::ToolRegistry;
+
+    let ctx = RunContext::new(
         "test-run-123".to_string(),
         "test input".to_string(),
         "session-456".to_string(),
+        Arc::new(Session::new(
+            "session-456".to_string(),
+            Arc::new(InMemorySessionStore::new()),
+            Arc::new(InMemoryMessageStore::new()),
+        )),
+        Arc::new(ToolRegistry::new()),
+        AgentConfig::default(),
     );
 
     // Test setting and getting data
-    ctx.set("counter", 42i32).unwrap();
-    let value: Option<i32> = ctx.get("counter");
+    ctx.set("counter", 42i32).await.unwrap();
+    let value: Option<i32> = ctx.get("counter").await;
     assert_eq!(value, Some(42));
 
     // Test getting with wrong type
-    let wrong_type: Option<String> = ctx.get("counter");
+    let wrong_type: Option<String> = ctx.get("counter").await;
     assert_eq!(wrong_type, None);
 
     // Test getting non-existent key
-    let missing: Option<String> = ctx.get("missing");
+    let missing: Option<String> = ctx.get("missing").await;
     assert_eq!(missing, None);
 
     // Verify context fields
