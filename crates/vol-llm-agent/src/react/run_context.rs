@@ -4,7 +4,7 @@
 
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, broadcast, mpsc, oneshot};
 use std::collections::HashMap;
 use vol_llm_core::Message;
 use vol_llm_core::ToolCall;
@@ -12,6 +12,19 @@ use crate::session::Session;
 use crate::session::SessionMessage;
 use vol_llm_tool::ToolRegistry;
 use super::AgentConfig;
+use super::plugin::PluginDecision;
+use super::stream::AgentStreamEvent;
+
+/// Request type for plugin event bus communication
+pub enum PluginRequest {
+    Intercept {
+        event: AgentStreamEvent,
+        tx: oneshot::Sender<PluginDecision>,
+    },
+    Emit {
+        event: AgentStreamEvent,
+    },
+}
 
 /// RunContext encapsulates all state and resources for a single run() invocation.
 ///
@@ -36,6 +49,10 @@ pub struct RunContext {
     pub session: Arc<Session>,
     pub tools: Arc<ToolRegistry>,
     pub config: AgentConfig,
+
+    // Event bus
+    pub event_tx: broadcast::Sender<AgentStreamEvent>,
+    pub plugin_event_tx: mpsc::Sender<PluginRequest>,
 }
 
 impl RunContext {
@@ -48,6 +65,9 @@ impl RunContext {
         tools: Arc<ToolRegistry>,
         config: AgentConfig,
     ) -> Self {
+        let (event_tx, _) = broadcast::channel(100);
+        let (plugin_event_tx, _) = mpsc::channel(100);
+
         Self {
             run_id,
             user_input,
@@ -60,6 +80,8 @@ impl RunContext {
             session,
             tools,
             config,
+            event_tx,
+            plugin_event_tx,
         }
     }
 
@@ -163,6 +185,33 @@ impl RunContext {
         self.data.write().await.insert(key.to_string(), serde_json::to_value(value)?);
         Ok(())
     }
+
+    /// Emit an event to the event bus (non-blocking, fire-and-forget)
+    ///
+    /// This sends the event to all subscribers via the broadcast channel.
+    /// Used by plugins to emit custom events.
+    pub async fn emit(&self, event: AgentStreamEvent) {
+        let _ = self.event_tx.send(event);
+    }
+
+    /// Intercept an event for plugin processing (blocking, returns decision)
+    ///
+    /// This sends the event to the plugin channel and waits for a decision.
+    /// Returns PluginDecision::Continue to proceed, Skip to skip the event,
+    /// or Abort to stop the entire agent execution.
+    pub async fn intercept(&self, event: &AgentStreamEvent) -> Result<PluginDecision, crate::AgentError> {
+        let (tx, rx) = oneshot::channel();
+        self.plugin_event_tx.send(PluginRequest::Intercept {
+            event: event.clone(),
+            tx,
+        }).await.map_err(|e| {
+            crate::AgentError::Context(format!("Plugin channel error: {}", e))
+        })?;
+
+        rx.await.map_err(|e| {
+            crate::AgentError::Context(format!("Plugin response error: {}", e))
+        })
+    }
 }
 
 impl Clone for RunContext {
@@ -179,6 +228,8 @@ impl Clone for RunContext {
             session: self.session.clone(),
             tools: self.tools.clone(),
             config: self.config.clone(),
+            event_tx: self.event_tx.clone(),
+            plugin_event_tx: self.plugin_event_tx.clone(),
         }
     }
 }
