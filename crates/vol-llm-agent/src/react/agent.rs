@@ -6,7 +6,7 @@ use vol_llm_core::{LLMClient, Message, ConversationRequest, ToolChoice, StreamEv
 use vol_llm_tool::ToolContext;
 use tracing::{info, debug};
 use super::{
-    AgentResponse, AgentStreamEvent, AgentStreamReceiver, PluginRegistry, PluginContext,
+    AgentResponse, AgentStreamEvent, AgentStreamReceiver, PluginRegistry, RunContext,
     PluginStream, PluginAction, create_shortcircuit_stream, create_skip_stream,
 };
 use crate::session::{Session, SessionMessage};
@@ -74,18 +74,25 @@ impl ReActAgent {
         user_input: &str,
         context: ToolContext,
     ) -> Result<AgentStreamReceiver, crate::AgentError> {
-        // === Phase 1: Generate run_id and create PluginContext ===
+        // === Phase 1: Generate run_id and create RunContext ===
         let run_id = format!("run_{}", uuid::Uuid::new_v4().simple());
 
-        let mut plugin_ctx = PluginContext::new(
+        let tools = self.tools.clone();
+        let config = self.config.clone();
+        let session = self.session.clone();
+
+        let run_ctx = RunContext::new(
             run_id.clone(),
             user_input.to_string(),
             self.session.id.clone(),
+            session,
+            tools,
+            config,
         );
 
         // === Phase 2: Execute on_start hooks ===
         for plugin in self.config.plugin_registry.plugins() {
-            match plugin.on_start(&mut plugin_ctx).await {
+            match plugin.on_start(&run_ctx).await {
                 PluginAction::Continue(()) => {
                     // Continue to next plugin
                 }
@@ -95,7 +102,7 @@ impl ReActAgent {
                         plugin = %plugin.id(),
                         "Plugin short-circuited execution"
                     );
-                    return create_shortcircuit_stream(response, plugin_ctx, run_id).await;
+                    return create_shortcircuit_stream(response, run_ctx, run_id).await;
                 }
                 PluginAction::Skip => {
                     tracing::warn!(
@@ -103,7 +110,7 @@ impl ReActAgent {
                         plugin = %plugin.id(),
                         "Plugin requested skip"
                     );
-                    return create_skip_stream(plugin_ctx, run_id).await;
+                    return create_skip_stream(run_ctx, run_id).await;
                 }
                 PluginAction::Abort(error) => {
                     return Err(error);
@@ -118,7 +125,7 @@ impl ReActAgent {
         let session = self.session.clone();
         let user_input = user_input.to_string();
         let plugin_registry = config.plugin_registry.clone();
-        let plugin_ctx_for_stream = plugin_ctx.clone();
+        let run_ctx_for_stream = run_ctx.clone();
         let _run_id_for_tracing = run_id.clone();
 
         let (tx, rx) = mpsc::channel(100);
@@ -270,7 +277,7 @@ impl ReActAgent {
         // === Phase 4: Wrap with plugin stream for intercept hooks ===
         let raw_receiver = AgentStreamReceiver::new(rx);
         let plugins = plugin_registry.plugins().to_vec();
-        let plugin_stream = PluginStream::new(raw_receiver, plugins, plugin_ctx_for_stream);
+        let plugin_stream = PluginStream::new(raw_receiver, plugins, run_ctx_for_stream);
 
         Ok(plugin_stream.into_receiver())
     }

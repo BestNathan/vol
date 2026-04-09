@@ -1,6 +1,7 @@
 //! Rate limiter plugin for concurrency control.
 
 use crate::react::plugin::*;
+use crate::react::run_context::RunContext;
 use crate::{AgentError, AgentResponse};
 use tokio::sync::Semaphore;
 use std::sync::Arc;
@@ -28,7 +29,7 @@ impl AgentPlugin for RateLimiterPlugin {
         5
     }
 
-    async fn on_start(&self, ctx: &mut PluginContext) -> PluginAction<()> {
+    async fn on_start(&self, ctx: &RunContext) -> PluginAction<()> {
         match self.semaphore.clone().acquire_owned().await {
             Ok(_permit) => {
                 // Permit acquired, continue
@@ -48,15 +49,15 @@ impl AgentPlugin for RateLimiterPlugin {
     async fn intercept(
         &self,
         event: crate::react::plugin::StreamEvent,
-        _ctx: &PluginContext,
+        _ctx: &RunContext,
     ) -> PluginAction<Option<crate::react::plugin::StreamEvent>> {
         PluginAction::Continue(Some(event))
     }
 
     async fn on_complete(
         &self,
-        _ctx: &PluginContext,
-        _response: Option<&AgentResponse>,
+        _ctx: &RunContext,
+        _response: &AgentResponse,
     ) -> PluginAction<()> {
         // Permit is automatically released when dropped
         PluginAction::Continue(())
@@ -64,7 +65,7 @@ impl AgentPlugin for RateLimiterPlugin {
 
     async fn on_error(
         &self,
-        _ctx: &PluginContext,
+        _ctx: &RunContext,
         _error: &AgentError,
     ) -> PluginAction<()> {
         // Permit is automatically released when dropped
@@ -75,19 +76,33 @@ impl AgentPlugin for RateLimiterPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
+    use crate::react::AgentConfig;
+
+    fn create_test_run_context() -> RunContext {
+        RunContext::new(
+            "test-run".to_string(),
+            "test input".to_string(),
+            "session-1".to_string(),
+            Arc::new(Session::new(
+                "session-1".to_string(),
+                Arc::new(InMemorySessionStore::new()),
+                Arc::new(InMemoryMessageStore::new()),
+            )),
+            Arc::new(vol_llm_tool::ToolRegistry::new()),
+            AgentConfig::default(),
+        )
+    }
 
     #[tokio::test]
     async fn test_rate_limiter_allows_concurrent() {
         let plugin = RateLimiterPlugin::new(2);
 
-        let mut ctx = PluginContext::new(
-            "test-run".to_string(),
-            "test input".to_string(),
-            "session-1".to_string(),
-        );
+        let ctx = create_test_run_context();
 
         // Should acquire permit
-        match plugin.on_start(&mut ctx).await {
+        match plugin.on_start(&ctx).await {
             PluginAction::Continue(()) => {}
             _ => panic!("Expected Continue"),
         }
@@ -98,13 +113,9 @@ mod tests {
         let plugin = RateLimiterPlugin::new(1);
 
         // Acquire the only permit
-        let mut ctx1 = PluginContext::new(
-            "test-run-1".to_string(),
-            "test input 1".to_string(),
-            "session-1".to_string(),
-        );
+        let ctx1 = create_test_run_context();
 
-        match plugin.on_start(&mut ctx1).await {
+        match plugin.on_start(&ctx1).await {
             PluginAction::Continue(()) => {}
             _ => panic!("Expected Continue"),
         }

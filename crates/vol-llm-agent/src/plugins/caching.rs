@@ -1,6 +1,7 @@
 //! Caching plugin with semantic cache support.
 
 use crate::react::plugin::*;
+use crate::react::run_context::RunContext;
 use crate::{AgentResponse, AgentError};
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -105,7 +106,7 @@ impl AgentPlugin for CachingPlugin {
         20
     }
 
-    async fn on_start(&self, ctx: &mut PluginContext) -> PluginAction<()> {
+    async fn on_start(&self, ctx: &RunContext) -> PluginAction<()> {
         let key = self.cache.cache_key(&ctx.user_input);
 
         if let Some(cached_response) = self.cache.get(&key).await {
@@ -114,47 +115,45 @@ impl AgentPlugin for CachingPlugin {
                 cache_key = %key,
                 "Cache hit"
             );
-            let _ = ctx.set("cache.hit", true);
+            let _ = ctx.set("cache.hit", true).await;
             return PluginAction::ShortCircuit(cached_response);
         }
 
-        let _ = ctx.set("cache.hit", false);
+        let _ = ctx.set("cache.hit", false).await;
         PluginAction::Continue(())
     }
 
     async fn intercept(
         &self,
         event: crate::react::plugin::StreamEvent,
-        _ctx: &PluginContext,
+        _ctx: &RunContext,
     ) -> PluginAction<Option<crate::react::plugin::StreamEvent>> {
         PluginAction::Continue(Some(event))
     }
 
     async fn on_complete(
         &self,
-        ctx: &PluginContext,
-        final_response: Option<&AgentResponse>,
+        ctx: &RunContext,
+        final_response: &AgentResponse,
     ) -> PluginAction<()> {
         // Skip if cache hit (response was from cache)
-        if ctx.get::<bool>("cache.hit").unwrap_or(false) {
+        if ctx.get::<bool>("cache.hit").await.unwrap_or(false) {
             return PluginAction::Continue(());
         }
 
         // Cache the final response
-        if let Some(response) = final_response {
-            let key = self.cache.cache_key(&ctx.user_input);
-            self.cache
-                .set(key, response.clone(), self.ttl_secs)
-                .await;
-            tracing::info!(run_id = %ctx.run_id, "Cached response");
-        }
+        let key = self.cache.cache_key(&ctx.user_input);
+        self.cache
+            .set(key, final_response.clone(), self.ttl_secs)
+            .await;
+        tracing::info!(run_id = %ctx.run_id, "Cached response");
 
         PluginAction::Continue(())
     }
 
     async fn on_error(
         &self,
-        _ctx: &PluginContext,
+        _ctx: &RunContext,
         _error: &AgentError,
     ) -> PluginAction<()> {
         // Don't cache errors
@@ -165,22 +164,36 @@ impl AgentPlugin for CachingPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
+    use crate::react::AgentConfig;
+
+    fn create_test_run_context() -> RunContext {
+        RunContext::new(
+            "test-run".to_string(),
+            "test input".to_string(),
+            "session-1".to_string(),
+            Arc::new(Session::new(
+                "session-1".to_string(),
+                Arc::new(InMemorySessionStore::new()),
+                Arc::new(InMemoryMessageStore::new()),
+            )),
+            Arc::new(vol_llm_tool::ToolRegistry::new()),
+            AgentConfig::default(),
+        )
+    }
 
     #[tokio::test]
     async fn test_caching_plugin_shortcircuit() {
         let cache = SemanticCache::new();
         let plugin = CachingPlugin::new(300).with_cache(cache.clone());
 
-        let mut ctx = PluginContext::new(
-            "test-run".to_string(),
-            "test input".to_string(),
-            "session-1".to_string(),
-        );
+        let ctx = create_test_run_context();
 
         // First call - cache miss
-        match plugin.on_start(&mut ctx).await {
+        match plugin.on_start(&ctx).await {
             PluginAction::Continue(()) => {
-                assert_eq!(ctx.get::<bool>("cache.hit"), Some(false));
+                assert_eq!(ctx.get::<bool>("cache.hit").await, Some(false));
             }
             _ => panic!("Expected Continue on cache miss"),
         }
@@ -202,13 +215,9 @@ mod tests {
 
         // Second call - cache hit, should short-circuit
         let plugin2 = CachingPlugin::new(300).with_cache(cache);
-        let mut ctx2 = PluginContext::new(
-            "test-run-2".to_string(),
-            "test input".to_string(),
-            "session-1".to_string(),
-        );
+        let ctx2 = create_test_run_context();
 
-        match plugin2.on_start(&mut ctx2).await {
+        match plugin2.on_start(&ctx2).await {
             PluginAction::ShortCircuit(cached) => {
                 assert_eq!(cached.content, "cached response");
             }
@@ -221,14 +230,10 @@ mod tests {
         let cache = SemanticCache::new();
         let plugin = CachingPlugin::new(300).with_cache(cache.clone());
 
-        let mut ctx = PluginContext::new(
-            "test-run".to_string(),
-            "test input".to_string(),
-            "session-1".to_string(),
-        );
+        let ctx = create_test_run_context();
 
         // Mark as cache miss
-        let _ = ctx.set("cache.hit", false);
+        let _ = ctx.set("cache.hit", false).await;
 
         let response = AgentResponse {
             content: "new response".to_string(),
@@ -237,7 +242,7 @@ mod tests {
             tool_calls: Vec::new(),
         };
 
-        plugin.on_complete(&ctx, Some(&response)).await;
+        plugin.on_complete(&ctx, &response).await;
 
         // Verify response was cached
         let key = plugin.cache.cache_key("test input");

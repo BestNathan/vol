@@ -113,6 +113,7 @@ impl Default for HitlConfig {
 
 use super::plugin::*;
 use super::{AgentStreamEvent, AgentResponse, AgentError};
+use super::run_context::RunContext;
 use std::sync::Arc;
 
 enum ApprovalResult {
@@ -193,7 +194,7 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
         25
     }
 
-    async fn intercept(&self, event: StreamEvent, ctx: &PluginContext) -> PluginAction<Option<StreamEvent>> {
+    async fn intercept(&self, event: StreamEvent, ctx: &RunContext) -> PluginAction<Option<StreamEvent>> {
         match &event {
             Ok(AgentStreamEvent::ToolCallBegin { tool_name, arguments }) => {
                 if self.needs_tool_approval(tool_name) {
@@ -257,11 +258,11 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
         PluginAction::Continue(Some(event))
     }
 
-    async fn on_complete(&self, _ctx: &PluginContext, _response: Option<&AgentResponse>) -> PluginAction<()> {
+    async fn on_complete(&self, _ctx: &RunContext, _response: &AgentResponse) -> PluginAction<()> {
         PluginAction::Continue(())
     }
 
-    async fn on_error(&self, ctx: &PluginContext, error: &AgentError) -> PluginAction<()> {
+    async fn on_error(&self, ctx: &RunContext, error: &AgentError) -> PluginAction<()> {
         tracing::error!(run_id = %ctx.run_id, error = %error, "Agent error");
         PluginAction::Continue(())
     }

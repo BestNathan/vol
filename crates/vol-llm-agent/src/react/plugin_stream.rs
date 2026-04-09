@@ -2,6 +2,7 @@
 
 use super::plugin::*;
 use super::{AgentStreamEvent, AgentResponse, AgentStreamReceiver, AgentError};
+use super::run_context::RunContext;
 use tokio::sync::mpsc;
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
@@ -10,14 +11,14 @@ use serde::{Deserialize, Serialize};
 pub struct PluginStream {
     inner: AgentStreamReceiver,
     plugins: Vec<Arc<dyn AgentPlugin>>,
-    ctx: PluginContext,
+    ctx: RunContext,
 }
 
 impl PluginStream {
     pub fn new(
         inner: AgentStreamReceiver,
         plugins: Vec<Arc<dyn AgentPlugin>>,
-        ctx: PluginContext,
+        ctx: RunContext,
     ) -> Self {
         Self { inner, plugins, ctx }
     }
@@ -128,7 +129,7 @@ impl Default for AgentConfigSnapshot {
 /// Create a stream that immediately returns a response (short-circuit)
 pub async fn create_shortcircuit_stream(
     response: AgentResponse,
-    ctx: PluginContext,
+    ctx: RunContext,
     _run_id: String,
 ) -> Result<AgentStreamReceiver, AgentError> {
     let (tx, rx) = mpsc::channel(10);
@@ -146,7 +147,7 @@ pub async fn create_shortcircuit_stream(
 
 /// Create a stream that returns empty response (skip)
 pub async fn create_skip_stream(
-    ctx: PluginContext,
+    ctx: RunContext,
     _run_id: String,
 ) -> Result<AgentStreamReceiver, AgentError> {
     let (tx, rx) = mpsc::channel(10);

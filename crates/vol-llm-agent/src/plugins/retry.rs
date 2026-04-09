@@ -1,6 +1,7 @@
 //! Retry plugin with exponential backoff.
 
 use crate::react::plugin::*;
+use crate::react::run_context::RunContext;
 use crate::{AgentError, AgentResponse};
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -49,23 +50,23 @@ impl AgentPlugin for RetryPlugin {
         30
     }
 
-    async fn on_start(&self, ctx: &mut PluginContext) -> PluginAction<()> {
+    async fn on_start(&self, ctx: &RunContext) -> PluginAction<()> {
         self.attempt.store(0, Ordering::SeqCst);
-        let _ = ctx.set("retry.attempt", 0u32);
+        let _ = ctx.set("retry.attempt", 0u32).await;
         PluginAction::Continue(())
     }
 
     async fn intercept(
         &self,
         event: crate::react::plugin::StreamEvent,
-        _ctx: &PluginContext,
+        _ctx: &RunContext,
     ) -> PluginAction<Option<crate::react::plugin::StreamEvent>> {
         PluginAction::Continue(Some(event))
     }
 
     async fn on_error(
         &self,
-        ctx: &PluginContext,
+        ctx: &RunContext,
         _error: &AgentError,
     ) -> PluginAction<()> {
         let attempt = self.attempt.fetch_add(1, Ordering::SeqCst);
@@ -90,8 +91,8 @@ impl AgentPlugin for RetryPlugin {
 
     async fn on_complete(
         &self,
-        _ctx: &PluginContext,
-        _response: Option<&AgentResponse>,
+        _ctx: &RunContext,
+        _response: &AgentResponse,
     ) -> PluginAction<()> {
         PluginAction::Continue(())
     }
@@ -100,6 +101,24 @@ impl AgentPlugin for RetryPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
+    use crate::react::AgentConfig;
+
+    fn create_test_run_context() -> RunContext {
+        RunContext::new(
+            "test-run".to_string(),
+            "test input".to_string(),
+            "session-1".to_string(),
+            Arc::new(Session::new(
+                "session-1".to_string(),
+                Arc::new(InMemorySessionStore::new()),
+                Arc::new(InMemoryMessageStore::new()),
+            )),
+            Arc::new(vol_llm_tool::ToolRegistry::new()),
+            AgentConfig::default(),
+        )
+    }
 
     #[tokio::test]
     async fn test_retry_plugin_config_default() {
@@ -114,15 +133,11 @@ mod tests {
     async fn test_retry_plugin_on_start() {
         let plugin = RetryPlugin::new(RetryConfig::default());
 
-        let mut ctx = PluginContext::new(
-            "test-run".to_string(),
-            "test input".to_string(),
-            "session-1".to_string(),
-        );
+        let ctx = create_test_run_context();
 
-        match plugin.on_start(&mut ctx).await {
+        match plugin.on_start(&ctx).await {
             PluginAction::Continue(()) => {
-                assert_eq!(ctx.get::<u32>("retry.attempt"), Some(0));
+                assert_eq!(ctx.get::<u32>("retry.attempt").await, Some(0));
             }
             _ => panic!("Expected Continue"),
         }

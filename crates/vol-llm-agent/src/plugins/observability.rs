@@ -1,6 +1,7 @@
 //! Observability plugin for tracing, metrics, and audit logging.
 
 use crate::react::plugin::*;
+use crate::react::run_context::RunContext;
 use crate::{AgentStreamEvent, AgentResponse, AgentError};
 use std::time::Instant;
 
@@ -51,7 +52,7 @@ impl AgentPlugin for ObservabilityPlugin {
         10
     }
 
-    async fn on_start(&self, ctx: &mut PluginContext) -> PluginAction<()> {
+    async fn on_start(&self, ctx: &RunContext) -> PluginAction<()> {
         tracing::info!(
             run_id = %ctx.run_id,
             session_id = %ctx.session_id,
@@ -65,7 +66,7 @@ impl AgentPlugin for ObservabilityPlugin {
     async fn intercept(
         &self,
         event: crate::react::plugin::StreamEvent,
-        ctx: &PluginContext,
+        ctx: &RunContext,
     ) -> PluginAction<Option<crate::react::plugin::StreamEvent>> {
         match &event {
             Ok(agent_event) => {
@@ -96,15 +97,15 @@ impl AgentPlugin for ObservabilityPlugin {
 
     async fn on_complete(
         &self,
-        ctx: &PluginContext,
-        response: Option<&AgentResponse>,
+        ctx: &RunContext,
+        response: &AgentResponse,
     ) -> PluginAction<()> {
         let elapsed = self.run_start.elapsed();
 
         tracing::info!(
             run_id = %ctx.run_id,
             duration_ms = elapsed.as_millis(),
-            iterations = response.map(|r| r.iterations).unwrap_or(0),
+            iterations = response.iterations,
             "Agent run completed"
         );
 
@@ -113,7 +114,7 @@ impl AgentPlugin for ObservabilityPlugin {
 
     async fn on_error(
         &self,
-        ctx: &PluginContext,
+        ctx: &RunContext,
         error: &AgentError,
     ) -> PluginAction<()> {
         let elapsed = self.run_start.elapsed();
@@ -132,21 +133,35 @@ impl AgentPlugin for ObservabilityPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use crate::AgentStreamEvent;
+    use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
+    use crate::react::AgentConfig;
+
+    fn create_test_run_context() -> RunContext {
+        RunContext::new(
+            "test-run".to_string(),
+            "test input".to_string(),
+            "session-1".to_string(),
+            Arc::new(Session::new(
+                "session-1".to_string(),
+                Arc::new(InMemorySessionStore::new()),
+                Arc::new(InMemoryMessageStore::new()),
+            )),
+            Arc::new(vol_llm_tool::ToolRegistry::new()),
+            AgentConfig::default(),
+        )
+    }
 
     #[tokio::test]
     async fn test_observability_plugin_logs_events() {
         let (audit_tx, mut audit_rx) = tokio::sync::mpsc::channel(100);
         let plugin = ObservabilityPlugin::new(Some(audit_tx));
 
-        let mut ctx = PluginContext::new(
-            "test-run".to_string(),
-            "test input".to_string(),
-            "session-1".to_string(),
-        );
+        let ctx = create_test_run_context();
 
         // on_start should log
-        match plugin.on_start(&mut ctx).await {
+        match plugin.on_start(&ctx).await {
             PluginAction::Continue(()) => {}
             _ => panic!("Expected Continue"),
         }
@@ -178,11 +193,7 @@ mod tests {
     async fn test_observability_plugin_on_complete() {
         let plugin = ObservabilityPlugin::new(None);
 
-        let ctx = PluginContext::new(
-            "test-run".to_string(),
-            "test input".to_string(),
-            "session-1".to_string(),
-        );
+        let ctx = create_test_run_context();
 
         let response = AgentResponse {
             content: "test response".to_string(),
@@ -191,7 +202,7 @@ mod tests {
             tool_calls: Vec::new(),
         };
 
-        match plugin.on_complete(&ctx, Some(&response)).await {
+        match plugin.on_complete(&ctx, &response).await {
             PluginAction::Continue(()) => {}
             _ => panic!("Expected Continue"),
         }

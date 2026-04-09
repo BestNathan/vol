@@ -4,9 +4,8 @@
 //! implement cross-cutting concerns like observability, caching, etc.
 
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
+use super::run_context::RunContext;
 use super::{AgentStreamEvent, AgentResponse, AgentError};
 
 /// Plugin unique identifier
@@ -14,36 +13,6 @@ pub type PluginId = String;
 
 /// Stream event type alias
 pub type StreamEvent = Result<AgentStreamEvent, AgentError>;
-
-/// Plugin context - shared state passed through plugin pipeline
-#[derive(Debug, Clone)]
-pub struct PluginContext {
-    pub run_id: String,
-    pub user_input: String,
-    pub session_id: String,
-    data: HashMap<String, serde_json::Value>,
-}
-
-impl PluginContext {
-    pub fn new(run_id: String, user_input: String, session_id: String) -> Self {
-        Self {
-            run_id,
-            user_input,
-            session_id,
-            data: HashMap::new(),
-        }
-    }
-
-    pub fn get<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Option<T> {
-        self.data.get(key)
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
-    }
-
-    pub fn set<T: Serialize>(&mut self, key: &str, value: T) -> Result<(), serde_json::Error> {
-        self.data.insert(key.to_string(), serde_json::to_value(value)?);
-        Ok(())
-    }
-}
 
 /// Action returned by plugin hooks
 #[derive(Debug)]
@@ -83,7 +52,7 @@ pub trait AgentPlugin: Send + Sync {
 
     /// Called before agent execution starts
     /// Return ShortCircuit to skip actual execution and return cached/synthetic response
-    async fn on_start(&self, _ctx: &mut PluginContext) -> PluginAction<()> {
+    async fn on_start(&self, _ctx: &RunContext) -> PluginAction<()> {
         PluginAction::Continue(())
     }
 
@@ -93,20 +62,20 @@ pub trait AgentPlugin: Send + Sync {
     async fn intercept(
         &self,
         event: StreamEvent,
-        ctx: &PluginContext,
+        ctx: &RunContext,
     ) -> PluginAction<Option<StreamEvent>>;
 
     /// Called when agent completes successfully
     async fn on_complete(
         &self,
-        ctx: &PluginContext,
-        final_response: Option<&AgentResponse>,
+        ctx: &RunContext,
+        response: &AgentResponse,
     ) -> PluginAction<()>;
 
     /// Called when agent encounters an error
     async fn on_error(
         &self,
-        _ctx: &PluginContext,
+        _ctx: &RunContext,
         _error: &AgentError,
     ) -> PluginAction<()> {
         PluginAction::Continue(())
@@ -158,10 +127,20 @@ mod tests {
     impl AgentPlugin for TestPlugin {
         fn id(&self) -> PluginId { self.id.clone() }
         fn priority(&self) -> u32 { self.priority }
-        async fn intercept(&self, event: StreamEvent, _ctx: &PluginContext) -> PluginAction<Option<StreamEvent>> {
+
+        async fn on_start(&self, _ctx: &RunContext) -> PluginAction<()> {
+            PluginAction::Continue(())
+        }
+
+        async fn intercept(&self, event: StreamEvent, _ctx: &RunContext) -> PluginAction<Option<StreamEvent>> {
             PluginAction::Continue(Some(event))
         }
-        async fn on_complete(&self, _ctx: &PluginContext, _response: Option<&AgentResponse>) -> PluginAction<()> {
+
+        async fn on_complete(&self, _ctx: &RunContext, _response: &AgentResponse) -> PluginAction<()> {
+            PluginAction::Continue(())
+        }
+
+        async fn on_error(&self, _ctx: &RunContext, _error: &AgentError) -> PluginAction<()> {
             PluginAction::Continue(())
         }
     }
