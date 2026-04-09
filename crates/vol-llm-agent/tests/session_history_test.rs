@@ -88,11 +88,11 @@ async fn test_history_limit_applied() {
     }
 
     // Verify: session should have loaded only 10 history messages
-    // The agent should have added 2 more messages (user query + assistant response)
-    // But the history loaded for the LLM request should have been limited to 10
+    // The agent should have added 1 message (assistant response)
+    // User input is added to runtime messages but NOT persisted to session
     let history = session.get_messages(100).await.unwrap();
-    // 30 original messages + 2 new (user query + assistant response) = 32 total
-    assert_eq!(history.len(), 32, "Should have 32 total messages (30 original + 2 new)");
+    // 30 original messages + 1 assistant response = 31 total
+    assert_eq!(history.len(), 31, "Should have 31 total messages (30 original + 1 assistant response)");
 }
 
 #[tokio::test]

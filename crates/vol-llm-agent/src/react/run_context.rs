@@ -72,12 +72,15 @@ impl RunContext {
     /// 3. Adds user input
     /// 4. Writes all to `self.messages`
     ///
+    /// Note: User input is NOT persisted to session here - it's only added to the
+    /// runtime messages array. Callers should persist user input separately if needed.
+    ///
     /// # Returns
     /// `Ok(())` on success, `Err(AgentError)` if session access fails
     pub async fn init_messages(&self) -> Result<(), crate::AgentError> {
         let mut messages = Vec::new();
 
-        // 1. System message from prompt_context
+        // 1. System message from prompt_context (not persisted to session)
         let system_content = self.config.prompt_context.build_system();
         messages.push(Message::system(system_content));
 
@@ -91,7 +94,7 @@ impl RunContext {
             messages.push(session_msg.message);
         }
 
-        // 3. User input
+        // 3. User input (not persisted to session here)
         messages.push(Message::user(self.user_input.clone()));
 
         // Write to shared state
@@ -185,7 +188,7 @@ impl Clone for RunContext {
 mod tests {
     use super::*;
     use crate::session::{InMemorySessionStore, InMemoryMessageStore, SessionMessage};
-    use vol_llm_core::MessageRole;
+    use vol_llm_core::{MessageRole, MessageContent};
 
     fn create_test_context() -> RunContext {
         RunContext::new(
