@@ -43,6 +43,17 @@ impl<T> PluginAction<T> {
     }
 }
 
+/// Decision returned by intercept() hook
+#[derive(Debug, Clone)]
+pub enum PluginDecision {
+    /// Continue to next interceptor or execute event
+    Continue,
+    /// Skip current event (don't execute tool/loop)
+    Skip,
+    /// Abort entire agent execution with reason
+    Abort(String),
+}
+
 /// Plugin trait for extending agent functionality
 #[async_trait]
 pub trait AgentPlugin: Send + Sync {
@@ -162,5 +173,17 @@ mod tests {
         let action: PluginAction<i32> = PluginAction::Continue(42);
         let mapped = action.map(|x| x * 2);
         assert!(matches!(mapped, PluginAction::Continue(84)));
+    }
+
+    #[test]
+    fn test_plugin_decision_variants() {
+        let continue_decision = PluginDecision::Continue;
+        assert!(matches!(continue_decision, PluginDecision::Continue));
+
+        let skip_decision = PluginDecision::Skip;
+        assert!(matches!(skip_decision, PluginDecision::Skip));
+
+        let abort_decision = PluginDecision::Abort("reason".to_string());
+        assert!(matches!(abort_decision, PluginDecision::Abort(_)));
     }
 }
