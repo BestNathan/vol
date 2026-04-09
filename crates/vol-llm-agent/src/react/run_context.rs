@@ -224,9 +224,36 @@ mod tests {
     #[tokio::test]
     async fn test_run_context_messages() {
         let ctx = create_test_context();
-        ctx.add_message(Message::system("test".to_string())).await;
+        ctx.add_message(Message::system("test".to_string())).await.unwrap();
         let msgs = ctx.get_messages().await;
         assert_eq!(msgs.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_add_message_syncs_to_session() {
+        let ctx = create_test_context();
+
+        // Add a message via add_message (should sync to session)
+        let message = Message::user("test message".to_string());
+        ctx.add_message(message.clone()).await.unwrap();
+
+        // Verify message is in runtime messages
+        let msgs = ctx.get_messages().await;
+        assert_eq!(msgs.len(), 1);
+        if let Some(MessageContent::Text(content)) = &msgs[0].content {
+            assert_eq!(content, "test message");
+        } else {
+            panic!("Expected Text content");
+        }
+
+        // Verify message is persisted to session
+        let session_msgs = ctx.session.get_messages(10).await.unwrap();
+        assert_eq!(session_msgs.len(), 1);
+        if let Some(MessageContent::Text(content)) = &session_msgs[0].message.content {
+            assert_eq!(content, "test message");
+        } else {
+            panic!("Expected Text content");
+        }
     }
 
     #[tokio::test]

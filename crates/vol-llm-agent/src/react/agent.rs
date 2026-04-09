@@ -256,13 +256,7 @@ impl ReActAgent {
                     final_answer: Some(content.clone()),
                 })).await;
 
-                // Save user input and assistant response to session via ctx
-                // Note: user input is added first to maintain correct conversation order
-                if let Err(e) = run_ctx.add_message(Message::user(user_input.clone())).await {
-                    let _ = tx.send(Err(crate::AgentError::from(e))).await;
-                    break;
-                }
-
+                // Save assistant response to session via ctx (user input already saved in init_messages)
                 if let Err(e) = run_ctx.add_message(Message::assistant(content.clone())).await {
                     let _ = tx.send(Err(crate::AgentError::from(e))).await;
                     break;
