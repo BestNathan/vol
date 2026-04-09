@@ -189,6 +189,83 @@ let channel = Arc::new(CliApprovalChannel);
 let plugin = HitlPlugin::new(config, channel);
 ```
 
+### Observability
+
+Tracing, metrics, and audit logging plugin.
+
+```rust
+use vol_llm_agent::plugins::{ObservabilityPlugin, AuditEvent};
+
+// Optional: create audit event channel
+let (audit_tx, mut audit_rx) = tokio::sync::mpsc::channel(100);
+
+// Create plugin with audit logging
+let plugin = ObservabilityPlugin::new(Some(audit_tx));
+
+// Logs:
+// - "Agent run started" on on_start
+// - Each event (debug level) on intercept
+// - "Agent run completed" with duration on on_complete
+// - "Agent run failed" on error
+```
+
+### Caching
+
+Semantic cache with TTL for agent responses.
+
+```rust
+use vol_llm_agent::plugins::{CachingPlugin, SemanticCache};
+
+// Create cache with 5-minute TTL
+let plugin = CachingPlugin::new(300);
+
+// Or use a shared cache
+let cache = SemanticCache::new();
+let plugin = CachingPlugin::new(300).with_cache(cache.clone());
+
+// Behavior:
+// - on_start: checks cache for user_input
+// - Cache hit: short-circuits with cached response
+// - Cache miss: continues execution
+// - on_complete: caches final response if not a cache hit
+```
+
+### Retry
+
+Automatic retry with exponential backoff on errors.
+
+```rust
+use vol_llm_agent::plugins::{RetryPlugin, RetryConfig};
+
+// Default config: 3 retries, 100ms initial delay, 5s max delay, 2x multiplier
+let config = RetryConfig::default();
+let plugin = RetryPlugin::new(config);
+
+// Custom config
+let config = RetryConfig {
+    max_retries: 5,
+    initial_delay_ms: 200,
+    max_delay_ms: 10000,
+    multiplier: 1.5,
+};
+let plugin = RetryPlugin::new(config);
+```
+
+### Rate Limiter
+
+Concurrency control using a semaphore.
+
+```rust
+use vol_llm_agent::plugins::RateLimiterPlugin;
+
+// Allow max 10 concurrent agent runs
+let plugin = RateLimiterPlugin::new(10);
+
+// Priority: 5 (executes first, before other plugins)
+// Acquires permit on on_start
+// Permit released when dropped (on complete or error)
+```
+
 ### HTTP Approval Channel
 
 For remote approval via HTTP callbacks:

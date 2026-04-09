@@ -5,7 +5,10 @@ use tokio::sync::mpsc;
 use vol_llm_core::{LLMClient, Message, ConversationRequest, ToolChoice, StreamEventData, StreamReceiver};
 use vol_llm_tool::ToolContext;
 use tracing::{info, debug};
-use super::{AgentResponse, AgentStreamEvent, AgentStreamReceiver, PluginRegistry, PluginContext, PluginStream};
+use super::{
+    AgentResponse, AgentStreamEvent, AgentStreamReceiver, PluginRegistry, PluginContext,
+    PluginStream, PluginAction, create_shortcircuit_stream, create_skip_stream,
+};
 use crate::session::{Session, SessionMessage};
 
 /// Agent configuration
@@ -71,17 +74,54 @@ impl ReActAgent {
         user_input: &str,
         context: ToolContext,
     ) -> Result<AgentStreamReceiver, crate::AgentError> {
-        let (tx, rx) = mpsc::channel(100);
+        // === Phase 1: Generate run_id and create PluginContext ===
+        let run_id = format!("run_{}", uuid::Uuid::new_v4().simple());
 
-        // Clone necessary data for the spawned task
+        let mut plugin_ctx = PluginContext::new(
+            run_id.clone(),
+            user_input.to_string(),
+            self.session.id.clone(),
+        );
+
+        // === Phase 2: Execute on_start hooks ===
+        for plugin in self.config.plugin_registry.plugins() {
+            match plugin.on_start(&mut plugin_ctx).await {
+                PluginAction::Continue(()) => {
+                    // Continue to next plugin
+                }
+                PluginAction::ShortCircuit(response) => {
+                    tracing::info!(
+                        run_id = %run_id,
+                        plugin = %plugin.id(),
+                        "Plugin short-circuited execution"
+                    );
+                    return create_shortcircuit_stream(response, plugin_ctx, run_id).await;
+                }
+                PluginAction::Skip => {
+                    tracing::warn!(
+                        run_id = %run_id,
+                        plugin = %plugin.id(),
+                        "Plugin requested skip"
+                    );
+                    return create_skip_stream(plugin_ctx, run_id).await;
+                }
+                PluginAction::Abort(error) => {
+                    return Err(error);
+                }
+            }
+        }
+
+        // === Phase 3: Clone for spawned task ===
         let llm = self.llm.clone();
         let tools = self.tools.clone();
         let config = self.config.clone();
         let session = self.session.clone();
         let user_input = user_input.to_string();
         let plugin_registry = config.plugin_registry.clone();
-        let session_id = session.id.clone();
-        let user_input_for_plugins = user_input.clone();
+        let plugin_ctx_for_stream = plugin_ctx.clone();
+        let _run_id_for_tracing = run_id.clone();
+
+        let (tx, rx) = mpsc::channel(100);
 
         tokio::spawn(async move {
             // Send AgentStart event
@@ -90,7 +130,7 @@ impl ReActAgent {
             })).await;
 
             let mut messages = Vec::new();
-            let mut iteration = 0;
+            let mut iteration = 0u32;
 
             messages.push(Message::system(config.system_prompt.clone()));
 
@@ -227,15 +267,10 @@ impl ReActAgent {
             }
         });
 
-        // Wrap receiver with plugin stream
+        // === Phase 4: Wrap with plugin stream for intercept hooks ===
         let raw_receiver = AgentStreamReceiver::new(rx);
         let plugins = plugin_registry.plugins().to_vec();
-        let plugin_ctx = PluginContext::new(
-            uuid::Uuid::new_v4().to_string(),
-            user_input_for_plugins,
-            session_id,
-        );
-        let plugin_stream = PluginStream::new(raw_receiver, plugins, plugin_ctx);
+        let plugin_stream = PluginStream::new(raw_receiver, plugins, plugin_ctx_for_stream);
 
         Ok(plugin_stream.into_receiver())
     }
