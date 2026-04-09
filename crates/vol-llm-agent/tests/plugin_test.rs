@@ -4,26 +4,6 @@ use vol_llm_agent::*;
 use vol_llm_agent::react::*;
 use vol_llm_agent::react::plugin::PluginId;
 
-/// Helper function to create a test RunContext
-fn create_test_run_context() -> RunContext {
-    use std::sync::Arc;
-    use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-    use vol_llm_tool::ToolRegistry;
-
-    RunContext::new(
-        "test-run".to_string(),
-        "test input".to_string(),
-        "session-1".to_string(),
-        Arc::new(Session::new(
-            "session-1".to_string(),
-            Arc::new(InMemorySessionStore::new()),
-            Arc::new(InMemoryMessageStore::new()),
-        )),
-        Arc::new(ToolRegistry::new()),
-        AgentConfig::default(),
-    )
-}
-
 #[tokio::test]
 async fn test_plugin_priority_ordering() {
     // Create a mock plugin with custom priority
