@@ -27,6 +27,15 @@ pub enum AgentStreamEvent {
 
     /// Agent execution completed
     AgentComplete { response: AgentResponse },
+
+    /// Agent was aborted with reason
+    AgentAborted { reason: String },
+
+    /// Custom event from plugin
+    PluginEvent {
+        name: String,
+        data: serde_json::Map<String, serde_json::Value>,
+    },
 }
 
 /// Agent stream receiver
@@ -87,6 +96,37 @@ mod tests {
                 assert_eq!(final_answer, Some("The answer".to_string()));
             }
             _ => panic!("Expected IterationComplete"),
+        }
+    }
+
+    #[test]
+    fn test_agent_stream_event_aborted() {
+        let event = AgentStreamEvent::AgentAborted {
+            reason: "max iterations".to_string(),
+        };
+        match event {
+            AgentStreamEvent::AgentAborted { reason } => {
+                assert_eq!(reason, "max iterations");
+            }
+            _ => panic!("Expected AgentAborted"),
+        }
+    }
+
+    #[test]
+    fn test_agent_stream_event_plugin_event() {
+        use serde_json::Map;
+        let mut data = Map::new();
+        data.insert("key".to_string(), serde_json::Value::String("value".to_string()));
+
+        let event = AgentStreamEvent::PluginEvent {
+            name: "custom".to_string(),
+            data,
+        };
+        match event {
+            AgentStreamEvent::PluginEvent { name, .. } => {
+                assert_eq!(name, "custom");
+            }
+            _ => panic!("Expected PluginEvent"),
         }
     }
 }

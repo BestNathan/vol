@@ -38,6 +38,8 @@ impl ObservabilityPlugin {
             AgentStreamEvent::ToolCallComplete { .. } => "ToolCallComplete",
             AgentStreamEvent::IterationComplete { .. } => "IterationComplete",
             AgentStreamEvent::AgentComplete { .. } => "AgentComplete",
+            AgentStreamEvent::AgentAborted { .. } => "AgentAborted",
+            AgentStreamEvent::PluginEvent { .. } => "PluginEvent",
         }
     }
 }
