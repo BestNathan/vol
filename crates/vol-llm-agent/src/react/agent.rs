@@ -7,8 +7,9 @@ use vol_llm_tool::ToolContext;
 use tracing::{info, debug};
 use super::{
     AgentResponse, AgentStreamEvent, AgentStreamReceiver, PluginRegistry, RunContext,
-    PluginStream,
+    PluginStream, PluginDecision, create_skip_stream,
 };
+use super::plugin_stream::run_interceptor_loop;
 use crate::session::Session;
 use crate::prompt_context::PromptContext;
 
@@ -99,23 +100,57 @@ impl ReActAgent {
         // === Phase 2: Initialize messages (call once before loop) ===
         run_ctx.init_messages().await?;
 
+        // === Phase 2.5: Spawn listener and interceptor tasks ===
+        let _listener_handle = PluginStream::spawn_listener_task(
+            self.config.plugin_registry.plugins().to_vec(),
+            run_ctx.clone(),
+        );
+
+        let (_plugin_tx, plugin_rx) = mpsc::channel(100);
+        let interceptor_run_ctx = run_ctx.clone();
+        let interceptor_plugins = self.config.plugin_registry.plugins().to_vec();
+        tokio::spawn(async move {
+            run_interceptor_loop(plugin_rx, interceptor_plugins, interceptor_run_ctx).await;
+        });
+
         // === Phase 3: Clone for spawned task ===
         let llm = self.llm.clone();
         let tools = self.tools.clone();
         let config = self.config.clone();
         let _session = self.session.clone();
         let user_input = user_input.to_string();
-        let plugin_registry = config.plugin_registry.clone();
+        let plugin_registry = self.config.plugin_registry.clone();
         let run_ctx_for_stream = run_ctx.clone();
         let _run_id_for_tracing = run_id.clone();
 
         let (tx, rx) = mpsc::channel(100);
 
         tokio::spawn(async move {
-            // Send AgentStart event
-            let _ = tx.send(Ok(AgentStreamEvent::AgentStart {
+            // === Emit and intercept AgentStart ===
+            let start_event = AgentStreamEvent::AgentStart {
                 input: user_input.clone()
-            })).await;
+            };
+            run_ctx.emit(start_event.clone()).await;
+
+            match run_ctx.intercept(&start_event).await {
+                Ok(PluginDecision::Continue) => {
+                    // Continue with normal flow
+                }
+                Ok(PluginDecision::Skip) => {
+                    // Create skip stream and return
+                    let _ = create_skip_stream(run_ctx, run_id.clone()).await;
+                    return;
+                }
+                Ok(PluginDecision::Abort(reason)) => {
+                    run_ctx.emit(AgentStreamEvent::AgentAborted { reason: reason.clone() }).await;
+                    let _ = tx.send(Err(crate::AgentError::Context(reason))).await;
+                    return;
+                }
+                Err(e) => {
+                    // Plugin channel error - log and continue (plugins are optional)
+                    debug!("Plugin intercept error (plugins may not be wired up yet): {}", e);
+                }
+            }
 
             loop {
                 // Increment iteration via ctx
@@ -123,6 +158,10 @@ impl ReActAgent {
                 let iteration = run_ctx.current_iteration();
 
                 if iteration > config.max_iterations {
+                    // Emit max iterations reached event
+                    let reason = format!("Max iterations ({}) reached", config.max_iterations);
+                    run_ctx.emit(AgentStreamEvent::AgentAborted { reason: reason.clone() }).await;
+
                     let _ = tx.send(Err(crate::AgentError::MaxIterationsReached {
                         max: config.max_iterations
                     })).await;
@@ -160,9 +199,11 @@ impl ReActAgent {
                     }
                 };
 
-                // Send ThinkingComplete if we have thinking content
+                // Emit ThinkingComplete if we have thinking content
                 if !thinking.is_empty() {
-                    let _ = tx.send(Ok(AgentStreamEvent::ThinkingComplete { thinking })).await;
+                    let thinking_event = AgentStreamEvent::ThinkingComplete { thinking };
+                    run_ctx.emit(thinking_event.clone()).await;
+                    let _ = tx.send(Ok(thinking_event)).await;
                 }
 
                 // Check if tool calls
@@ -173,11 +214,36 @@ impl ReActAgent {
                     for call in &tool_calls {
                         info!("Executing tool: {} with args: {}", call.name, call.arguments);
 
-                        // Send ToolCallBegin
-                        let _ = tx.send(Ok(AgentStreamEvent::ToolCallBegin {
+                        // === Emit and intercept ToolCallBegin ===
+                        let tool_event = AgentStreamEvent::ToolCallBegin {
                             tool_name: call.name.clone(),
                             arguments: call.arguments.clone(),
-                        })).await;
+                        };
+                        run_ctx.emit(tool_event.clone()).await;
+
+                        let tool_decision = match run_ctx.intercept(&tool_event).await {
+                            Ok(decision) => decision,
+                            Err(e) => {
+                                debug!("Plugin intercept error: {}", e);
+                                PluginDecision::Continue
+                            }
+                        };
+
+                        match tool_decision {
+                            PluginDecision::Continue => {
+                                // Execute tool
+                            }
+                            PluginDecision::Skip => {
+                                // Skip this tool, continue to next
+                                debug!("Plugin intercepted to skip tool: {}", call.name);
+                                continue;
+                            }
+                            PluginDecision::Abort(reason) => {
+                                run_ctx.emit(AgentStreamEvent::AgentAborted { reason: reason.clone() }).await;
+                                let _ = tx.send(Err(crate::AgentError::Context(reason))).await;
+                                break;
+                            }
+                        }
 
                         // Execute tool
                         let result = match tools.execute(call, &context).await {
@@ -234,7 +300,7 @@ impl ReActAgent {
                     break;
                 }
 
-                // Send AgentComplete
+                // === Emit AgentComplete ===
                 let response = AgentResponse {
                     content,
                     reasoning: String::new(),
@@ -242,7 +308,9 @@ impl ReActAgent {
                     tool_calls,
                 };
 
-                let _ = tx.send(Ok(AgentStreamEvent::AgentComplete { response })).await;
+                let complete_event = AgentStreamEvent::AgentComplete { response: response.clone() };
+                run_ctx.emit(complete_event.clone()).await;
+                let _ = tx.send(Ok(complete_event)).await;
                 break;
             }
         });
