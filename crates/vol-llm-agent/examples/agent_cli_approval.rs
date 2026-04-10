@@ -17,8 +17,6 @@ use vol_llm_core::{LLMClient, ConversationRequest, ConversationResponse, LLMProv
 use async_trait::async_trait;
 use std::sync::Arc;
 use serde_json::json;
-use vol_llm_agent::AgentStreamEvent;
-use vol_llm_agent::AgentError;
 
 // ============================================================================
 // Mock Tools for Demo
@@ -278,64 +276,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Run agent
     let context = ToolContext::default();
-    let stream_result: Result<vol_llm_agent::AgentStreamReceiver, vol_llm_agent::AgentError> = agent.run(query, context).await;
+    let result: Result<(), vol_llm_agent::AgentError> = agent.run(query, context).await;
 
-    // Consume stream and display events
     println!();
     println!("═══════════════════════════════════════════════════════════");
     println!("  Agent Execution Results");
     println!("═══════════════════════════════════════════════════════════");
     println!();
 
-    match stream_result {
-        Ok(mut stream) => {
-            let mut got_final_answer = false;
-            while let Some(event_result) = stream.recv().await {
-                match event_result {
-                    Ok(event) => {
-                        match &event {
-                            AgentStreamEvent::AgentStart { input } => {
-                                println!("[AgentStart] Input: {}", input);
-                            }
-                            AgentStreamEvent::ThinkingComplete { thinking } => {
-                                println!("[ThinkingComplete] Length: {} chars", thinking.len());
-                            }
-                            AgentStreamEvent::ToolCallBegin { tool_name, arguments } => {
-                                println!("[ToolCallBegin] {}({})", tool_name, arguments);
-                            }
-                            AgentStreamEvent::ToolCallComplete { tool_name, result } => {
-                                println!("[ToolCallComplete] {} => {}", tool_name, result);
-                            }
-                            AgentStreamEvent::IterationComplete { iteration, tool_calls, final_answer } => {
-                                println!("[IterationComplete] iteration={}, tools={}", iteration, tool_calls.len());
-                                if let Some(answer) = final_answer {
-                                    println!("  Final Answer: {}", answer);
-                                    got_final_answer = true;
-                                }
-                            }
-                            AgentStreamEvent::AgentComplete { response } => {
-                                println!("[AgentComplete] iterations={}, tools={}",
-                                    response.iterations, response.tool_calls.len());
-                            }
-                            AgentStreamEvent::AgentAborted { reason } => {
-                                println!("[AgentAborted] Reason: {}", reason);
-                            }
-                            AgentStreamEvent::PluginEvent { name, data } => {
-                                println!("[PluginEvent] {}: {:?}", name, data);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("[Error] {}", e);
-                        break;
-                    }
-                }
-            }
-
-            if !got_final_answer {
-                println!();
-                println!("Note: Agent completed without a final answer.");
-            }
+    match result {
+        Ok(()) => {
+            println!("Agent completed successfully.");
+            println!("Check observability logs for event details.");
         }
         Err(e) => {
             eprintln!("Agent run failed: {:?}", e);
