@@ -1,5 +1,6 @@
 //! ReAct Agent implementation.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -37,6 +38,20 @@ pub struct AgentConfig {
     pub prompt_context: PromptContext,
     pub verbose: bool,
     pub plugin_registry: PluginRegistry,
+
+    // Observability fields
+    pub agent_id: String,
+    pub log_base_path: PathBuf,
+}
+
+/// Generate a short random agent ID if not provided
+fn generate_agent_id() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    format!("agent_{:x}", timestamp % 0xFFFFFF)
 }
 
 impl Default for AgentConfig {
@@ -52,6 +67,8 @@ impl Default for AgentConfig {
             prompt_context,
             verbose: false,
             plugin_registry: PluginRegistry::new(),
+            agent_id: generate_agent_id(),
+            log_base_path: PathBuf::from("logs/agents"),
         }
     }
 }
@@ -112,6 +129,16 @@ impl ReActAgent {
             tools,
             config,
         );
+
+        // === Phase 1.5: Run log cleanup (best effort, non-blocking) ===
+        let log_base_path = self.config.log_base_path.clone();
+        let agent_id = self.config.agent_id.clone();
+        tokio::spawn(async move {
+            let agent_path = log_base_path.join(&agent_id);
+            if let Err(e) = crate::observability::cleanup_old_logs(&agent_path).await {
+                tracing::warn!(agent_id = %agent_id, error = %e, "Log cleanup failed");
+            }
+        });
 
         // === Phase 2: Initialize messages (call once before loop) ===
         run_ctx.init_messages().await?;
@@ -393,7 +420,25 @@ mod tests {
             prompt_context,
             verbose: true,
             plugin_registry: PluginRegistry::new(),
+            agent_id: "custom_agent".to_string(),
+            log_base_path: PathBuf::from("custom/logs"),
         };
         assert_eq!(config.max_history_messages, 50);
+        assert_eq!(config.agent_id, "custom_agent");
+        assert_eq!(config.log_base_path, PathBuf::from("custom/logs"));
+    }
+
+    #[test]
+    fn test_agent_config_with_observability() {
+        use std::path::PathBuf;
+
+        let config = AgentConfig {
+            agent_id: "test_agent".to_string(),
+            log_base_path: PathBuf::from("logs/agents"),
+            ..Default::default()
+        };
+
+        assert_eq!(config.agent_id, "test_agent");
+        assert_eq!(config.log_base_path, PathBuf::from("logs/agents"));
     }
 }

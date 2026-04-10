@@ -79,15 +79,6 @@ impl AgentBuilder {
         self
     }
 
-    pub fn with_observability_plugin(mut self) -> Self {
-        let plugin = crate::observability::ObservabilityPlugin::new(
-            self.config.agent_id.clone(),
-            self.config.log_base_path.clone(),
-        );
-        self.config.plugin_registry.register(plugin);
-        self
-    }
-
     pub fn with_agent_id(mut self, agent_id: String) -> Self {
         self.config.agent_id = agent_id;
         self
@@ -95,6 +86,15 @@ impl AgentBuilder {
 
     pub fn with_log_base_path(mut self, path: std::path::PathBuf) -> Self {
         self.config.log_base_path = path;
+        self
+    }
+
+    pub fn with_observability_plugin(mut self) -> Self {
+        let plugin = crate::observability::ObservabilityPlugin::new(
+            self.config.agent_id.clone(),
+            self.config.log_base_path.clone(),
+        );
+        self.config.plugin_registry.register(plugin);
         self
     }
 
