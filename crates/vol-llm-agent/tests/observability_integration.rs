@@ -103,22 +103,9 @@ async fn test_full_agent_run_with_observability() {
         .unwrap();
 
     let context = ToolContext::default();
-    let mut stream = agent.run("Test query", context).await.unwrap();
+    agent.run("Test query", context).await.unwrap();
 
-    // Consume stream
-    let mut found_agent_complete = false;
-    while let Some(event) = stream.recv().await {
-        match event.unwrap() {
-            AgentStreamEvent::AgentComplete { .. } => {
-                found_agent_complete = true;
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    // Verify agent completed
-    assert!(found_agent_complete, "Should have received AgentComplete event");
+    // Verify agent completed successfully (if we get here without error, it completed)
 
     // Verify observability plugin received events
     let count = *event_count.lock().await;

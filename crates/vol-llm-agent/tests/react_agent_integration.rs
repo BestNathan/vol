@@ -4,8 +4,8 @@
 //!
 //! These tests verify the ReAct Agent workflow with real LLM provider and TDengine tools.
 
-use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
-use vol_llm_tool::{ToolRegistry, ToolContext};
+use vol_llm_agent::ReActAgent;
+use vol_llm_tool::ToolContext;
 use vol_llm_provider::{create_provider, LLMConfig, Secret};
 use vol_llm_core::LLMProvider;
 use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
@@ -52,50 +52,7 @@ async fn test_agent_with_market_data_query() {
     };
 
     let context = ToolContext::default();
-
-    let stream_result = agent.run("What is the current BTC price?", context).await;
-
-    match stream_result {
-        Ok(mut stream) => {
-            let mut final_response = None;
-            let mut tool_calls_count = 0;
-
-            while let Some(event) = stream.recv().await {
-                match event.unwrap() {
-                    AgentStreamEvent::ToolCallBegin { tool_name, .. } => {
-                        println!("Tool call begin: {}", tool_name);
-                        tool_calls_count += 1;
-                    }
-                    AgentStreamEvent::ToolCallComplete { tool_name, result } => {
-                        println!("Tool call complete: {} = {}", tool_name, result);
-                    }
-                    AgentStreamEvent::AgentComplete { response } => {
-                        println!("Agent response: {}", response.content);
-                        println!("Iterations: {}", response.iterations);
-                        println!("Tool calls: {}", response.tool_calls.len());
-                        final_response = Some(response.content);
-                    }
-                    _ => {}
-                }
-            }
-
-            // Verify agent used tools
-            assert!(tool_calls_count > 0, "Agent should have called at least one tool");
-
-            // Verify response mentions price or market data
-            if let Some(content) = final_response {
-                let content_lower = content.to_lowercase();
-                assert!(
-                    content_lower.contains("price") || content_lower.contains("market") || content_lower.contains("btc"),
-                    "Response should mention price or BTC"
-                );
-            }
-        }
-        Err(e) => {
-            eprintln!("Agent error: {:?}", e);
-            // Don't fail test - could be API rate limit or network issue
-        }
-    }
+    agent.run("What is the current BTC price?", context).await.unwrap();
 }
 
 #[tokio::test]
@@ -110,25 +67,7 @@ async fn test_agent_with_volatility_query() {
     };
 
     let context = ToolContext::default();
-
-    let stream_result = agent.run("Show me the recent volatility data for ETH", context).await;
-
-    match stream_result {
-        Ok(mut stream) => {
-            while let Some(event) = stream.recv().await {
-                match event.unwrap() {
-                    AgentStreamEvent::AgentComplete { response } => {
-                        println!("Agent response: {}", response.content);
-                        println!("Iterations: {}", response.iterations);
-                    }
-                    _ => {}
-                }
-            }
-        }
-        Err(e) => {
-            eprintln!("Agent error: {:?}", e);
-        }
-    }
+    agent.run("Show me the recent volatility data for ETH", context).await.unwrap();
 }
 
 #[tokio::test]
@@ -144,26 +83,5 @@ async fn test_agent_max_iterations() {
 
     // This query should trigger multiple iterations
     let context = ToolContext::default();
-
-    let stream_result = agent.run("Compare BTC and ETH volatility and explain the difference", context).await;
-
-    match stream_result {
-        Ok(mut stream) => {
-            while let Some(event) = stream.recv().await {
-                match event.unwrap() {
-                    AgentStreamEvent::AgentComplete { response } => {
-                        println!("Agent completed in {} iterations", response.iterations);
-                        println!("Response: {}", response.content);
-                    }
-                    _ => {}
-                }
-            }
-        }
-        Err(vol_llm_agent::AgentError::MaxIterationsReached { max }) => {
-            println!("Hit max iterations ({}) - this is expected for complex queries", max);
-        }
-        Err(e) => {
-            eprintln!("Agent error: {:?}", e);
-        }
-    }
+    agent.run("Compare BTC and ETH volatility and explain the difference", context).await.unwrap();
 }

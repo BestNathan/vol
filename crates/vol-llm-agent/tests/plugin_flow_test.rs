@@ -133,25 +133,9 @@ async fn test_plugin_interceptor_chain_executes() {
         .unwrap();
 
     let context = ToolContext::default();
-    let stream_result = agent.run("Say hello", context).await;
+    agent.run("Say hello", context).await.unwrap();
 
-    match stream_result {
-        Ok(mut stream) => {
-            let mut found_agent_complete = false;
-            while let Some(event) = stream.recv().await {
-                match event.unwrap() {
-                    AgentStreamEvent::AgentComplete { .. } => {
-                        found_agent_complete = true;
-                    }
-                    _ => {}
-                }
-            }
-            assert!(found_agent_complete, "Should have received AgentComplete event");
-        }
-        Err(e) => {
-            panic!("Agent failed: {:?}", e);
-        }
-    }
+    // Verify agent completed successfully (if we get here without error, it completed)
 
     // Verify intercept and listen were called
     let intercepts = intercept_count.load(Ordering::SeqCst);
@@ -213,25 +197,10 @@ async fn test_plugin_skip_stops_current_event() {
         .unwrap();
 
     let context = ToolContext::default();
-    let stream_result = agent.run("Say hello", context).await;
+    agent.run("Say hello", context).await.unwrap();
 
-    assert!(stream_result.is_ok(), "Stream should be created");
-
-    let mut stream = stream_result.unwrap();
-
-    // Consume stream - should complete normally (Skip just skips the event, doesn't abort)
-    let mut found_agent_complete = false;
-    while let Some(event) = stream.recv().await {
-        match event.unwrap() {
-            AgentStreamEvent::AgentComplete { .. } => {
-                found_agent_complete = true;
-            }
-            _ => {}
-        }
-    }
-
-    // Agent should still complete (Skip doesn't abort, just skips the event)
-    assert!(found_agent_complete, "Should have found AgentComplete");
+    // Agent should complete successfully (Skip just skips the event, doesn't abort)
+    // Verify plugin was called
     assert!(call_count.load(Ordering::SeqCst) > 0, "Plugin should have been called");
 }
 

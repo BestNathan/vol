@@ -2,7 +2,7 @@
 //!
 //! Run with: cargo test --test session_history_test
 
-use vol_llm_agent::{ReActAgent, AgentConfig, AgentStreamEvent};
+use vol_llm_agent::{ReActAgent, AgentConfig};
 use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore, SessionMessage};
 use vol_llm_tool::ToolContext;
 use vol_llm_core::{LLMClient, LLMProvider, Message, ConversationRequest, ConversationResponse, SupportedParam};
@@ -77,15 +77,9 @@ async fn test_history_limit_applied() {
 
     // Run agent
     let context = ToolContext::default();
-    let mut stream = agent.run("Test query", context).await.unwrap();
+    agent.run("Test query", context).await.unwrap();
 
-    // Consume stream
-    while let Some(event) = stream.recv().await {
-        match event.unwrap() {
-            AgentStreamEvent::AgentComplete { .. } => break,
-            _ => {}
-        }
-    }
+    // If we get here without error, agent completed successfully
 
     // Verify: session should have loaded only 10 history messages
     // The agent should have added 1 message (assistant response)

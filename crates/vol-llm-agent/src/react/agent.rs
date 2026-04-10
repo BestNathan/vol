@@ -140,7 +140,7 @@ impl ReActAgent {
             run_interceptor_loop(plugin_rx, interceptor_plugins, interceptor_run_ctx).await;
         });
 
-        // === Phase 3: Clone for spawned task ===
+        // === Phase 3: Spawn agent loop task and await it ===
         let llm = self.llm.clone();
         let tools = self.tools.clone();
         let config = self.config.clone();
@@ -148,7 +148,7 @@ impl ReActAgent {
         let user_input = user_input.to_string();
         let _run_id_for_tracing = run_id.clone();
 
-        tokio::spawn(async move {
+        let agent_task = tokio::spawn(async move {
             // === Emit and intercept AgentStart ===
             let start_event = AgentStreamEvent::AgentStart {
                 input: user_input.clone()
@@ -326,9 +326,11 @@ impl ReActAgent {
             }
         });
 
-        // All events are emitted via RunContext event bus.
-        // The spawned task returns Ok(()) when complete.
-        Ok(())
+        // Wait for agent loop to complete
+        match agent_task.await {
+            Ok(result) => result,
+            Err(join_err) => Err(crate::AgentError::Context(format!("Agent task panicked: {}", join_err))),
+        }
     }
 }
 
