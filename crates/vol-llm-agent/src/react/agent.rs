@@ -97,7 +97,7 @@ impl ReActAgent {
         context: ToolContext,
     ) -> Result<(), crate::AgentError> {
         // === Phase 1: Generate run_id and create RunContext ===
-        let run_id = format!("run_{}", uuid::Uuid::new_v4().simple());
+        let run_id = uuid::Uuid::new_v4().simple().to_string();
 
         let tools = self.tools.clone();
         let config = self.config.clone();
