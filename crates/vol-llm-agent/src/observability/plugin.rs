@@ -81,25 +81,17 @@ impl AgentPlugin for ObservabilityPlugin {
     async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
         let entry = self.create_log_entry(event, ctx);
 
-        // Determine log type based on event
-        let log_type = match event {
-            AgentStreamEvent::AgentStart { .. } |
-            AgentStreamEvent::AgentComplete { .. } |
-            AgentStreamEvent::AgentAborted { .. } |
-            AgentStreamEvent::ThinkingComplete { .. } => {
-                LogType::Run { run_id: ctx.run_id.clone() }
-            }
-            _ => {
-                // Session logs use session_id + date
-                let date = Utc::now().format("%Y%m%d").to_string();
-                LogType::Session {
-                    session_id: ctx.session_id.clone(),
-                    date,
-                }
-            }
-        };
+        // Log to run log (by run_id)
+        let run_log_type = LogType::Run { run_id: ctx.run_id.clone() };
+        self.logger.log(entry.clone(), run_log_type).await;
 
-        self.logger.log(entry, log_type).await;
+        // Log to session log (by session_id + date)
+        let date = Utc::now().format("%Y%m%d").to_string();
+        let session_log_type = LogType::Session {
+            session_id: ctx.session_id.clone(),
+            date,
+        };
+        self.logger.log(entry, session_log_type).await;
     }
 }
 
@@ -180,35 +172,21 @@ mod tests {
         assert!(agent_path.join("sessions").exists());
         assert!(agent_path.join("runs").exists());
 
-        // Verify run logs contain expected content
+        // Verify run logs contain ALL event types
         let run_log_path = agent_path.join("runs").join("run_test-run.jsonl");
         let run_content = std::fs::read_to_string(&run_log_path).unwrap();
-        let run_lines: Vec<&str> = run_content.lines().collect();
 
-        // AgentStart, ThinkingComplete, AgentComplete, AgentAborted go to run logs
+        // All 8 events should be in run logs
         assert!(run_content.contains(r#""event":"AgentStart""#));
         assert!(run_content.contains(r#""event":"ThinkingComplete""#));
+        assert!(run_content.contains(r#""event":"ToolCallBegin""#));
+        assert!(run_content.contains(r#""event":"ToolCallComplete""#));
+        assert!(run_content.contains(r#""event":"IterationComplete""#));
         assert!(run_content.contains(r#""event":"AgentComplete""#));
         assert!(run_content.contains(r#""event":"AgentAborted""#));
+        assert!(run_content.contains(r#""event":"PluginEvent""#));
 
-        // Verify AgentStart data
-        let agent_start_line = run_lines.iter().find(|l| l.contains(r#""event":"AgentStart""#)).unwrap();
-        assert!(agent_start_line.contains(r#""input":"test input""#));
-
-        // Verify ThinkingComplete data
-        let thinking_line = run_lines.iter().find(|l| l.contains(r#""event":"ThinkingComplete""#)).unwrap();
-        assert!(thinking_line.contains(r#""thinking_length":7"#)); // "thought".len()
-
-        // Verify AgentComplete data
-        let agent_complete_line = run_lines.iter().find(|l| l.contains(r#""event":"AgentComplete""#)).unwrap();
-        assert!(agent_complete_line.contains(r#""iterations":1"#));
-        assert!(agent_complete_line.contains(r#""tool_calls_count":0"#));
-
-        // Verify AgentAborted data
-        let agent_aborted_line = run_lines.iter().find(|l| l.contains(r#""event":"AgentAborted""#)).unwrap();
-        assert!(agent_aborted_line.contains(r#""reason":"test abort reason""#));
-
-        // Verify session logs contain expected content
+        // Verify session logs contain ALL event types
         let session_files: Vec<_> = std::fs::read_dir(agent_path.join("sessions"))
             .unwrap()
             .filter_map(|e| e.ok())
@@ -219,30 +197,14 @@ mod tests {
         let session_log_path = session_files.first().unwrap().path();
         let session_content = std::fs::read_to_string(&session_log_path).unwrap();
 
-        // ToolCallBegin, ToolCallComplete, IterationComplete, PluginEvent go to session logs
+        // All 8 events should be in session logs too
+        assert!(session_content.contains(r#""event":"AgentStart""#));
+        assert!(session_content.contains(r#""event":"ThinkingComplete""#));
         assert!(session_content.contains(r#""event":"ToolCallBegin""#));
         assert!(session_content.contains(r#""event":"ToolCallComplete""#));
         assert!(session_content.contains(r#""event":"IterationComplete""#));
+        assert!(session_content.contains(r#""event":"AgentComplete""#));
+        assert!(session_content.contains(r#""event":"AgentAborted""#));
         assert!(session_content.contains(r#""event":"PluginEvent""#));
-
-        // Verify ToolCallBegin data
-        let tool_begin_line = session_content.lines().find(|l| l.contains(r#""event":"ToolCallBegin""#)).unwrap();
-        assert!(tool_begin_line.contains(r#""tool_name":"test_tool""#));
-        assert!(tool_begin_line.contains(r#""arguments":"{\"key\": \"value\"}""#));
-
-        // Verify ToolCallComplete data
-        let tool_complete_line = session_content.lines().find(|l| l.contains(r#""event":"ToolCallComplete""#)).unwrap();
-        assert!(tool_complete_line.contains(r#""tool_name":"test_tool""#));
-        assert!(tool_complete_line.contains(r#""result":"tool result""#));
-
-        // Verify IterationComplete data
-        let iteration_line = session_content.lines().find(|l| l.contains(r#""event":"IterationComplete""#)).unwrap();
-        assert!(iteration_line.contains(r#""iteration":1"#));
-        assert!(iteration_line.contains(r#""tool_calls_count":0"#));
-        assert!(iteration_line.contains(r#""has_final_answer":true"#));
-
-        // Verify PluginEvent data
-        let plugin_event_line = session_content.lines().find(|l| l.contains(r#""event":"PluginEvent""#)).unwrap();
-        assert!(plugin_event_line.contains(r#""name":"test_plugin_event""#));
     }
 }

@@ -118,22 +118,22 @@ logs/agents/
 
 ## 4. 支持的事件类型
 
-可观测插件记录所有 8 种 `AgentStreamEvent` 事件：
+可观测插件记录所有 8 种 `AgentStreamEvent` 事件，**每个事件同时记录到 Run 日志和 Session 日志**：
 
-| 事件 | 日志类型 | 记录内容 |
-|------|---------|---------|
-| `AgentStart` | Run | input |
-| `ThinkingComplete` | Run | thinking_length |
-| `ToolCallBegin` | Session | tool_name, arguments |
-| `ToolCallComplete` | Session | tool_name, result |
-| `IterationComplete` | Session | iteration, tool_calls_count, has_final_answer |
-| `AgentComplete` | Run | iterations, tool_calls_count |
-| `AgentAborted` | Run | reason |
-| `PluginEvent` | Session | name, data |
+| 事件 | 记录内容 |
+|------|---------|
+| `AgentStart` | input |
+| `ThinkingComplete` | thinking_length |
+| `ToolCallBegin` | tool_name, arguments |
+| `ToolCallComplete` | tool_name, result |
+| `IterationComplete` | iteration, tool_calls_count, has_final_answer |
+| `AgentComplete` | iterations, tool_calls_count |
+| `AgentAborted` | reason |
+| `PluginEvent` | name, data |
 
 **日志类型说明**:
-- **Run 日志**: Agent 生命周期事件（启动、完成、中止）
-- **Session 日志**: 详细交互事件（工具调用、迭代）
+- **Run 日志** (`run_{run_id}.jsonl`): 包含所有事件，按 run_id 组织，便于追踪单次 Agent 运行的完整流程
+- **Session 日志** (`session_{session_id}_{YYYYMMDD}.jsonl`): 包含所有事件，按 session 和日期组织，便于跨 run 聚合分析
 
 ---
 
