@@ -6,7 +6,7 @@ use vol_llm_core::{LLMClient, Message, ConversationRequest, ToolChoice, StreamEv
 use vol_llm_tool::ToolContext;
 use tracing::{info, debug};
 use super::{
-    AgentResponse, AgentStreamEvent, PluginRegistry, RunContext,
+    AgentResponse, AgentStreamEvent, PluginRegistry, RunContext, PluginContext,
     PluginDecision,
 };
 use crate::session::Session;
@@ -128,16 +128,25 @@ impl ReActAgent {
         // === Phase 2.5: Spawn listener and interceptor tasks ===
         use super::plugin_stream::{spawn_listener_task, run_interceptor_loop};
 
-        let _listener_handle = spawn_listener_task(
+        // Spawn listener task - subscribes to event broadcast channel
+        // Handle stored for graceful shutdown wait
+        // Note: We create plugin_ctx and subscribe here to avoid cloning RunContext
+        // (which would clone senders and prevent channel close)
+        let listener_event_rx = run_ctx.event_tx.subscribe();
+        let plugin_ctx = PluginContext::from_run_ctx(&run_ctx);
+        let listener_handle = spawn_listener_task(
             self.config.plugin_registry.plugins().to_vec(),
-            run_ctx.clone(),
+            plugin_ctx,
+            listener_event_rx,
         );
 
         // Spawn interceptor loop task - receives from plugin_rx channel
-        let interceptor_run_ctx = run_ctx.clone();
+        // When plugin_rx is closed (agent drops run_ctx), interceptor exits
+        let interceptor_event_tx = run_ctx.event_tx.clone();
         let interceptor_plugins = self.config.plugin_registry.plugins().to_vec();
-        tokio::spawn(async move {
-            run_interceptor_loop(plugin_rx, interceptor_plugins, interceptor_run_ctx).await;
+        let interceptor_plugin_ctx = PluginContext::from_run_ctx(&run_ctx);
+        let interceptor_handle = tokio::spawn(async move {
+            run_interceptor_loop(plugin_rx, interceptor_plugins, interceptor_event_tx, interceptor_plugin_ctx).await;
         });
 
         // === Phase 3: Spawn agent loop task and await it ===
@@ -198,6 +207,31 @@ impl ReActAgent {
                 // Get messages from ctx (not local variable)
                 let messages = run_ctx.get_messages().await;
 
+                // DEBUG: Log conversation history before LLM call
+                if config.verbose {
+                    debug!("=== Conversation History ({} messages) ===", messages.len());
+                    for (idx, msg) in messages.iter().enumerate() {
+                        let role_str = match msg.role {
+                            vol_llm_core::MessageRole::System => "system",
+                            vol_llm_core::MessageRole::User => "user",
+                            vol_llm_core::MessageRole::Assistant => "assistant",
+                            vol_llm_core::MessageRole::Tool => "tool",
+                        };
+                        let content_str = msg.content.as_ref().map(|c| c.as_str()).unwrap_or("<none>");
+                        let tool_call_id = msg.tool_call_id.as_deref().unwrap_or("");
+                        let tool_calls_count = msg.tool_calls.as_ref().map(|v| v.len()).unwrap_or(0);
+
+                        if msg.role == vol_llm_core::MessageRole::Tool {
+                            debug!("  [{}] {}: tool_call_id={} content={:.100}", idx, role_str, tool_call_id, content_str);
+                        } else if tool_calls_count > 0 {
+                            debug!("  [{}] {}: tool_calls={} content={:.100}", idx, role_str, tool_calls_count, content_str);
+                        } else {
+                            debug!("  [{}] {}: content={:.100}", idx, role_str, content_str);
+                        }
+                    }
+                    debug!("=== End Conversation History ===");
+                }
+
                 let request = ConversationRequest::with_history(None, messages)
                     .with_tools(tools_defs)
                     .with_tool_choice(ToolChoice::Auto);
@@ -224,6 +258,18 @@ impl ReActAgent {
                 // Check if tool calls
                 if !tool_calls.is_empty() {
                     debug!("Tool calls: {:?}", tool_calls);
+
+                    // IMPORTANT: Add assistant message with tool calls to history
+                    // This tells the LLM what tools it decided to call in the next iteration
+                    let assistant_message = if !content.is_empty() {
+                        Message::assistant_with_tools(content.clone(), tool_calls.clone())
+                    } else {
+                        // If no content, still need to record the tool call decision
+                        Message::assistant_with_tools("Calling tools to get information.".to_string(), tool_calls.clone())
+                    };
+                    if let Err(e) = run_ctx.add_message(assistant_message).await {
+                        return Err(crate::AgentError::from(e));
+                    }
 
                     // Act phase - execute tools
                     for call in &tool_calls {
@@ -327,10 +373,58 @@ impl ReActAgent {
         });
 
         // Wait for agent loop to complete
-        match agent_task.await {
+        let agent_result = match agent_task.await {
             Ok(result) => result,
-            Err(join_err) => Err(crate::AgentError::Context(format!("Agent task panicked: {}", join_err))),
+            Err(join_err) => {
+                return Err(crate::AgentError::Context(format!("Agent task panicked: {}", join_err)));
+            }
+        };
+
+        // Wait for interceptor to finish with timeout
+        // Interceptor exits when plugin_rx is closed (happens when agent_task drops run_ctx)
+        let interceptor_result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            interceptor_handle
+        ).await;
+
+        // Wait for listener to finish with timeout
+        // Listener exits when event_tx broadcast channel is closed (all senders dropped)
+        let listener_result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            listener_handle
+        ).await;
+
+        // Handle interceptor result (log but don't fail - plugins are optional)
+        match interceptor_result {
+            Ok(Ok(())) => {
+                if config.verbose {
+                    tracing::info!("Interceptor task completed gracefully");
+                }
+            }
+            Ok(Err(join_err)) => {
+                tracing::warn!(%join_err, "Interceptor task panicked");
+            }
+            Err(_timeout) => {
+                tracing::warn!("Interceptor task timeout after 5s - task may be hanging, proceeding anyway");
+            }
         }
+
+        // Handle listener result (log but don't fail - plugins are optional)
+        match listener_result {
+            Ok(Ok(())) => {
+                if config.verbose {
+                    tracing::info!("Listener task completed gracefully");
+                }
+            }
+            Ok(Err(join_err)) => {
+                tracing::warn!(%join_err, "Listener task panicked");
+            }
+            Err(_timeout) => {
+                tracing::warn!("Listener task timeout after 5s - task may be hanging, proceeding anyway");
+            }
+        }
+
+        agent_result
     }
 }
 
