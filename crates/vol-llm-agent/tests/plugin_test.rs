@@ -3,6 +3,7 @@
 use vol_llm_agent::*;
 use vol_llm_agent::react::*;
 use vol_llm_agent::react::plugin::PluginId;
+use vol_llm_agent::react::PluginContext;
 
 #[tokio::test]
 async fn test_plugin_priority_ordering() {
@@ -25,12 +26,12 @@ async fn test_plugin_priority_ordering() {
         async fn intercept(
             &self,
             _event: &AgentStreamEvent,
-            _ctx: &RunContext,
+            _ctx: &PluginContext,
         ) -> PluginDecision {
             PluginDecision::Continue
         }
 
-        async fn listen(&self, _event: &AgentStreamEvent, _ctx: &RunContext) {
+        async fn listen(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) {
             // no-op
         }
     }

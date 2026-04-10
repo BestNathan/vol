@@ -47,7 +47,7 @@ pub use stream::{AgentStreamEvent, AgentStreamReceiver};
 pub use prompt::{default_system_prompt, SystemPromptBuilder};
 pub use plugin::{AgentPlugin, PluginDecision, PluginRegistry};
 pub use plugin_stream::{create_shortcircuit_stream, create_skip_stream, run_interceptor_loop, spawn_listener_task};
-pub use run_context::{RunContext, PluginRequest};
+pub use run_context::{RunContext, PluginContext, PluginRequest};
 pub use hitl::{ApprovalChannel, ApprovalRequest, ApprovalResponse, ApprovalType, HitlConfig, ApprovalTrigger, TimeoutBehavior};
 
 // Re-export prompt_context types for convenience

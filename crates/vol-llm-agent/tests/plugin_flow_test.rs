@@ -5,7 +5,7 @@
 //! This file tests the plugin flow integration with a mock LLM.
 
 use vol_llm_agent::{ReActAgent, AgentStreamEvent};
-use vol_llm_agent::react::{AgentPlugin, PluginDecision, RunContext};
+use vol_llm_agent::react::{AgentPlugin, PluginDecision, PluginContext};
 use vol_llm_tool::{ToolContext, ToolRegistry};
 use vol_llm_core::{LLMClient, ConversationRequest, ConversationResponse, LLMProvider, StreamEvent, StreamEventData};
 use async_trait::async_trait;
@@ -95,12 +95,12 @@ impl AgentPlugin for TrackingPlugin {
         self.priority
     }
 
-    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
         self.intercept_count.fetch_add(1, Ordering::SeqCst);
         PluginDecision::Continue
     }
 
-    async fn listen(&self, _event: &AgentStreamEvent, _ctx: &RunContext) {
+    async fn listen(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) {
         self.listen_count.fetch_add(1, Ordering::SeqCst);
     }
 }
@@ -168,7 +168,7 @@ async fn test_plugin_skip_stops_current_event() {
             10
         }
 
-        async fn intercept(&self, event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+        async fn intercept(&self, event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
             let count = self.call_count.fetch_add(1, Ordering::SeqCst);
 
             // Skip the first event (AgentStart)
@@ -179,7 +179,7 @@ async fn test_plugin_skip_stops_current_event() {
             }
         }
 
-        async fn listen(&self, _event: &AgentStreamEvent, _ctx: &RunContext) {}
+        async fn listen(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) {}
     }
 
     let call_count = Arc::new(AtomicUsize::new(0));
@@ -224,11 +224,11 @@ async fn test_listener_parallel_execution() {
             100
         }
 
-        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
             PluginDecision::Continue
         }
 
-        async fn listen(&self, _event: &AgentStreamEvent, _ctx: &RunContext) {
+        async fn listen(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) {
             // Simulate slow operation
             tokio::time::sleep(Duration::from_millis(self.delay_ms)).await;
         }
@@ -242,7 +242,7 @@ async fn test_listener_parallel_execution() {
     ];
 
     let event = AgentStreamEvent::AgentStart { input: "test".to_string() };
-    let ctx = create_test_context();
+    let ctx = create_test_plugin_context();
 
     // Execute listeners in parallel (spawn each one)
     let start = Instant::now();
@@ -269,9 +269,9 @@ async fn test_listener_parallel_execution() {
     assert!(elapsed < Duration::from_millis(100), "Listeners should execute in parallel, but took {:?}", elapsed);
 }
 
-fn create_test_context() -> RunContext {
+fn create_test_plugin_context() -> PluginContext {
     use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-    use vol_llm_agent::react::AgentConfig;
+    use vol_llm_agent::react::{AgentConfig, RunContext};
 
     let (ctx, _rx) = RunContext::new(
         "test-run".to_string(),
@@ -286,5 +286,5 @@ fn create_test_context() -> RunContext {
         AgentConfig::default(),
     );
 
-    ctx
+    PluginContext::from_run_ctx(&ctx)
 }

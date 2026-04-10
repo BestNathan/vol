@@ -40,7 +40,7 @@ impl VolatilityIndexTool {
                 let name = row[2].as_str().unwrap_or(index_name);
                 return format!(
                     "Index: {} | Volatility: {:.2}% | Timestamp: {} | Rows: {}",
-                    name, volatility * 100.0, timestamp, rows
+                    name, volatility, timestamp, rows
                 );
             }
         }

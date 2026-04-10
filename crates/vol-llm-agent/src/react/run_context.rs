@@ -15,6 +15,86 @@ use super::AgentConfig;
 use super::plugin::PluginDecision;
 use super::stream::AgentStreamEvent;
 
+/// PluginContext - Read-only context for plugin hooks.
+///
+/// This struct contains all the data plugins need for `intercept()` and `listen()`
+/// hooks, but EXCLUDES the broadcast channel senders (`event_tx`, `plugin_event_tx`).
+///
+/// # Why This Exists
+///
+/// The `RunContext::Clone` implementation clones sender references, which increments
+/// the broadcast channel sender count. This prevents the channel from ever closing
+/// (sender count never reaches 0), causing listener tasks to hang.
+///
+/// `PluginContext` provides a cloneable context without senders, allowing:
+/// 1. Plugins to access all necessary read-only data
+/// 2. Sender count to remain accurate (only agent + interceptor hold senders)
+/// 3. Graceful shutdown when agent drops its sender
+///
+/// # Usage
+///
+/// - `spawn_listener_task()` should create a `PluginContext` and clone it for each plugin
+/// - `run_interceptor_loop()` should use `PluginContext` for plugin.intercept() calls
+/// - Plugins receive `&PluginContext` instead of `&RunContext`
+#[derive(Clone)]
+pub struct PluginContext {
+    pub run_id: String,
+    pub user_input: String,
+    pub session_id: String,
+    pub session: Arc<Session>,
+    pub tools: Arc<ToolRegistry>,
+    pub config: AgentConfig,
+    pub messages: Arc<RwLock<Vec<Message>>>,
+    pub all_tool_calls: Arc<RwLock<Vec<ToolCall>>>,
+    pub current_tool_calls: Arc<RwLock<Vec<ToolCall>>>,
+    pub data: Arc<RwLock<HashMap<String, serde_json::Value>>>,
+}
+
+impl PluginContext {
+    /// Create a PluginContext from a RunContext (without cloning senders)
+    pub fn from_run_ctx(ctx: &RunContext) -> Self {
+        Self {
+            run_id: ctx.run_id.clone(),
+            user_input: ctx.user_input.clone(),
+            session_id: ctx.session_id.clone(),
+            session: ctx.session.clone(),
+            tools: ctx.tools.clone(),
+            config: ctx.config.clone(),
+            messages: ctx.messages.clone(),
+            all_tool_calls: ctx.all_tool_calls.clone(),
+            current_tool_calls: ctx.current_tool_calls.clone(),
+            data: ctx.data.clone(),
+        }
+    }
+
+    /// Get a clone of all messages
+    pub async fn get_messages(&self) -> Vec<Message> {
+        self.messages.read().await.clone()
+    }
+
+    /// Get a clone of current tool calls
+    pub async fn get_current_tool_calls(&self) -> Vec<ToolCall> {
+        self.current_tool_calls.read().await.clone()
+    }
+
+    /// Get a clone of all tool calls
+    pub async fn get_all_tool_calls(&self) -> Vec<ToolCall> {
+        self.all_tool_calls.read().await.clone()
+    }
+
+    /// Get a value from the data store
+    pub async fn get<T: for<'de> serde::Deserialize<'de>>(&self, key: &str) -> Option<T> {
+        self.data.read().await.get(key)
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+    }
+
+    /// Set a value in the data store
+    pub async fn set<T: serde::Serialize>(&self, key: &str, value: T) -> Result<(), serde_json::Error> {
+        self.data.write().await.insert(key.to_string(), serde_json::to_value(value)?);
+        Ok(())
+    }
+}
+
 /// Request type for plugin event bus communication
 pub enum PluginRequest {
     Intercept {
@@ -83,6 +163,16 @@ pub struct RunContext {
     /// has created a receiver, the send will fail with `SendError` (converted to
     /// `AgentError::Context`). This is expected - plugins are optional and the
     /// caller should handle this gracefully.
+    ///
+    /// ## Broadcast Channel Close Sequence
+    ///
+    /// The `event_tx` broadcast channel is used as a shutdown signal:
+    /// 1. When `agent_task` completes, it drops its `RunContext` (one sender dropped)
+    /// 2. `interceptor_handle` then exits (plugin_rx closed) and drops its `RunContext`
+    /// 3. `listener_handle` sees `RecvError` (all senders dropped) and exits
+    ///
+    /// This ensures listener tasks have time to complete their `plugin.listen()` calls
+    /// before the agent run is considered complete.
     pub plugin_event_tx: mpsc::Sender<PluginRequest>,
 }
 

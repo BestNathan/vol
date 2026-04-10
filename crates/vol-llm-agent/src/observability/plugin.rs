@@ -1,7 +1,7 @@
 //! ObservabilityPlugin implementation.
 
 use crate::react::plugin::{AgentPlugin, PluginDecision, PluginId};
-use crate::react::run_context::RunContext;
+use crate::react::run_context::PluginContext;
 use crate::AgentStreamEvent;
 use super::logger::{ObservabilityLogger, LogEntry, LogType};
 use std::sync::Arc;
@@ -19,7 +19,7 @@ impl ObservabilityPlugin {
         Self { logger }
     }
 
-    fn create_log_entry(&self, event: &AgentStreamEvent, ctx: &RunContext) -> LogEntry {
+    fn create_log_entry(&self, event: &AgentStreamEvent, ctx: &PluginContext) -> LogEntry {
         // Extract event type name and data separately for structured logging
         let (event_name, data) = match event {
             AgentStreamEvent::AgentStart { input } => {
@@ -80,38 +80,38 @@ impl AgentPlugin for ObservabilityPlugin {
         10
     }
 
-    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
         PluginDecision::Continue
     }
 
-    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
+    async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
         let entry = self.create_log_entry(event, ctx);
 
-        // Log to run log (by run_id)
+        // Log to run log (by run_id) - this also emits to stdout via tracing
         let run_log_type = LogType::Run { run_id: ctx.run_id.clone() };
-        self.logger.log(entry.clone(), run_log_type).await;
+        self.logger.log(&entry, &run_log_type).await;
 
-        // Log to session log (by session_id + date)
+        // Log to session log (by session_id + date) - same entry, different file
         let date = Utc::now().format("%Y%m%d").to_string();
         let session_log_type = LogType::Session {
             session_id: ctx.session_id.clone(),
             date,
         };
-        self.logger.log(entry, session_log_type).await;
+        self.logger.log(&entry, &session_log_type).await;
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::react::run_context::RunContext;
+    use crate::react::run_context::{RunContext, PluginContext};
     use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
     use crate::react::AgentConfig;
     use std::sync::Arc;
     use tempfile::TempDir;
     use crate::AgentResponse;
 
-    fn create_test_context() -> RunContext {
+    fn create_test_plugin_context() -> PluginContext {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
@@ -124,14 +124,14 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
         );
-        ctx
+        PluginContext::from_run_ctx(&ctx)
     }
 
     #[tokio::test]
     async fn test_observability_plugin_logs_event() {
         let temp_dir = TempDir::new().unwrap();
         let plugin = ObservabilityPlugin::new("test_agent".to_string(), temp_dir.path().to_path_buf());
-        let ctx = create_test_context();
+        let ctx = create_test_plugin_context();
 
         let event = AgentStreamEvent::AgentStart {
             input: "test".to_string(),
@@ -145,7 +145,7 @@ mod tests {
         assert!(runs_path.exists());
 
         // Check run log contains expected entry
-        let run_log_path = runs_path.join("run_test-run.jsonl");
+        let run_log_path = runs_path.join("test-run.jsonl");
         let content = std::fs::read_to_string(&run_log_path).unwrap();
         assert!(content.contains("AgentStart"));
     }
@@ -154,7 +154,7 @@ mod tests {
     async fn test_observability_plugin_logs_all_event_types() {
         let temp_dir = TempDir::new().unwrap();
         let plugin = ObservabilityPlugin::new("test_agent".to_string(), temp_dir.path().to_path_buf());
-        let ctx = create_test_context();
+        let ctx = create_test_plugin_context();
 
         // Test all event types
         let events = vec![
@@ -179,7 +179,7 @@ mod tests {
         assert!(agent_path.join("runs").exists());
 
         // Verify run logs contain ALL event types
-        let run_log_path = agent_path.join("runs").join("run_test-run.jsonl");
+        let run_log_path = agent_path.join("runs").join("test-run.jsonl");
         let run_content = std::fs::read_to_string(&run_log_path).unwrap();
 
         // All 8 events should be in run logs

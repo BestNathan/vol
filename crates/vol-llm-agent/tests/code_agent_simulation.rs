@@ -5,6 +5,8 @@
 //! This test simulates a real Code Agent calling the LLM API with proper request/response format.
 
 use vol_llm_agent::{ReActAgent, AgentStreamEvent};
+use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision};
+use vol_llm_agent::react::PluginContext;
 use vol_llm_tool::{ToolContext, ToolRegistry};
 use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
 use vol_llm_core::{
@@ -227,9 +229,8 @@ async fn test_code_agent_market_data_query() {
     let mock_llm = CodeAgentSimulator::new("claude-sonnet-4-6");
 
     // Track tool calls via plugin
-    use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision};
+    use vol_llm_agent::react::plugin::AgentPlugin;
     use vol_llm_agent::AgentStreamEvent;
-    use vol_llm_agent::react::run_context::RunContext;
 
     struct ToolCallTracker {
         calls: Arc<tokio::sync::Mutex<Vec<String>>>,
@@ -245,11 +246,11 @@ async fn test_code_agent_market_data_query() {
             100
         }
 
-        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
             PluginDecision::Continue
         }
 
-        async fn listen(&self, event: &AgentStreamEvent, _ctx: &RunContext) {
+        async fn listen(&self, event: &AgentStreamEvent, _ctx: &PluginContext) {
             if let AgentStreamEvent::ToolCallComplete { tool_name, .. } = event {
                 let mut calls = self.calls.lock().await;
                 calls.push(tool_name.clone());

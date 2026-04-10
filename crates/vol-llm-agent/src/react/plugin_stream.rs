@@ -1,30 +1,46 @@
 //! Plugin interceptor and listener utilities.
 
 use super::plugin::{AgentPlugin, PluginDecision};
-use super::run_context::{PluginRequest, RunContext};
+use super::run_context::{PluginRequest, RunContext, PluginContext};
 use super::{AgentStreamEvent, AgentResponse, AgentStreamReceiver, AgentError};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, broadcast};
 use std::sync::Arc;
 
 /// Spawn a listener task that subscribes to the event bus and calls
 /// `plugin.listen()` on all events (fire-and-forget, parallel execution).
 ///
-/// This is called once at agent startup to wire up the plugin listener.
+/// # Shutdown Behavior
+///
+/// The listener task exits when the broadcast channel is closed, which happens
+/// when all `RunContext` instances holding senders are dropped. The shutdown
+/// sequence is:
+/// 1. Agent completes → drops its `RunContext` (1 sender dropped)
+/// 2. Interceptor exits (plugin_rx closed) → drops its `RunContext` (1 sender dropped)
+/// 3. Listener sees `RecvError` (all senders dropped) → exits
+///
+/// This ensures all pending `plugin.listen()` calls have time to complete.
+///
+/// # Sender Reference Counting
+///
+/// This function accepts a `PluginContext` which does NOT contain sender references.
+/// The broadcast subscription is created separately and passed in.
+/// This ensures the broadcast channel sender count remains at 2 (agent + interceptor)
+/// and drops to 0 when both drop their RunContext instances.
 pub fn spawn_listener_task(
     plugins: Vec<Arc<dyn AgentPlugin>>,
-    ctx: RunContext,
+    plugin_ctx: PluginContext,
+    mut event_rx: broadcast::Receiver<AgentStreamEvent>,
 ) -> tokio::task::JoinHandle<()> {
-    let mut event_rx = ctx.event_tx.subscribe();
-
     tokio::spawn(async move {
         while let Ok(event) = event_rx.recv().await {
-            // Fire all listeners in parallel, don't wait
+            // Fire all listeners in parallel
             for plugin in &plugins {
                 let plugin = plugin.clone();
                 let event = event.clone();
-                let ctx = ctx.clone();
+                let plugin_ctx = plugin_ctx.clone();
+
                 tokio::spawn(async move {
-                    plugin.listen(&event, &ctx).await;
+                    plugin.listen(&event, &plugin_ctx).await;
                 });
             }
         }
@@ -40,17 +56,25 @@ pub fn spawn_listener_task(
 /// - For `Emit` requests: broadcasts the event to the event bus
 ///
 /// This is called once at agent startup to handle all plugin interception.
+///
+/// # Sender Reference Counting
+///
+/// This function accepts only the broadcast sender and PluginContext, not a full RunContext.
+/// PluginContext does NOT contain sender references, so the broadcast channel sender
+/// count remains at 1 (just the agent).
 pub async fn run_interceptor_loop(
     mut plugin_rx: mpsc::Receiver<PluginRequest>,
     plugins: Vec<Arc<dyn AgentPlugin>>,
-    ctx: RunContext,
+    event_tx: broadcast::Sender<AgentStreamEvent>,
+    plugin_ctx: PluginContext,
 ) {
     while let Some(msg) = plugin_rx.recv().await {
         match msg {
             PluginRequest::Intercept { event, tx } => {
+                // Run plugins sequentially - first non-Continue decision wins
                 let mut decision = PluginDecision::Continue;
                 for plugin in &plugins {
-                    match plugin.intercept(&event, &ctx).await {
+                    match plugin.intercept(&event, &plugin_ctx).await {
                         PluginDecision::Continue => continue,
                         PluginDecision::Skip => {
                             decision = PluginDecision::Skip;
@@ -65,7 +89,8 @@ pub async fn run_interceptor_loop(
                 let _ = tx.send(decision);
             }
             PluginRequest::Emit { event } => {
-                let _ = ctx.event_tx.send(event);
+                // Only Emit uses the event_tx sender
+                let _ = event_tx.send(event);
             }
         }
     }

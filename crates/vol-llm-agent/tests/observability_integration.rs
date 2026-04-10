@@ -3,6 +3,7 @@
 //! Run with: cargo test -p vol-llm-agent --test observability_integration
 
 use vol_llm_agent::{ReActAgent, AgentStreamEvent};
+use vol_llm_agent::react::{PluginContext, PluginDecision};
 use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore};
 use vol_llm_tool::ToolContext;
 use vol_llm_core::{LLMClient, ConversationRequest, LLMProvider, StreamEvent, StreamEventData};
@@ -68,17 +69,15 @@ impl vol_llm_agent::react::plugin::AgentPlugin for TestObservabilityPlugin {
         10
     }
 
-    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &vol_llm_agent::react::run_context::RunContext) -> vol_llm_agent::react::plugin::PluginDecision {
+    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
         PluginDecision::Continue
     }
 
-    async fn listen(&self, _event: &AgentStreamEvent, _ctx: &vol_llm_agent::react::run_context::RunContext) {
+    async fn listen(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) {
         let mut count = self.event_count.lock().await;
         *count += 1;
     }
 }
-
-use vol_llm_agent::react::plugin::PluginDecision;
 
 #[tokio::test]
 async fn test_full_agent_run_with_observability() {

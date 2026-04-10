@@ -1,7 +1,7 @@
 //! Observability plugin for tracing, metrics, and audit logging.
 
 use crate::react::plugin::*;
-use crate::react::run_context::RunContext;
+use crate::react::run_context::PluginContext;
 use crate::AgentStreamEvent;
 
 /// Audit event for logging
@@ -52,12 +52,12 @@ impl AgentPlugin for ObservabilityPlugin {
     }
 
     /// Interceptor hook - no-op for observability (doesn't block flow)
-    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
         PluginDecision::Continue
     }
 
     /// Listener hook - logs events for observability and audit
-    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
+    async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
         let event_type = Self::get_event_type(event);
 
         tracing::debug!(
@@ -86,9 +86,9 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-    use crate::react::{AgentConfig, RunContext};
+    use crate::react::{AgentConfig, RunContext, PluginContext};
 
-    fn create_test_run_context() -> RunContext {
+    fn create_test_plugin_context() -> PluginContext {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
@@ -101,7 +101,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
         );
-        ctx
+        PluginContext::from_run_ctx(&ctx)
     }
 
     #[tokio::test]
@@ -109,7 +109,7 @@ mod tests {
         let (audit_tx, mut audit_rx) = tokio::sync::mpsc::channel(100);
         let plugin = ObservabilityPlugin::new(Some(audit_tx));
 
-        let ctx = create_test_run_context();
+        let ctx = create_test_plugin_context();
 
         // listen should send audit event
         let event = AgentStreamEvent::AgentStart {

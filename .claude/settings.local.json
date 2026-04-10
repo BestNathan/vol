@@ -5,7 +5,8 @@
       "Skill(*)",
       "WebFetch(domain:*)",
       "WebSearch",
-      "WebFetch(domain:www.doubao.com)"
+      "WebFetch(domain:www.doubao.com)",
+      "WebFetch(domain:docs.rs)"
     ]
   }
 }

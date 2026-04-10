@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use super::run_context::RunContext;
+use super::run_context::PluginContext;
 use super::AgentStreamEvent;
 
 /// Plugin unique identifier
@@ -36,7 +36,7 @@ pub trait AgentPlugin: Send + Sync {
     async fn intercept(
         &self,
         _event: &AgentStreamEvent,
-        _ctx: &RunContext
+        _ctx: &PluginContext
     ) -> PluginDecision {
         PluginDecision::Continue  // Default: no-op
     }
@@ -48,7 +48,7 @@ pub trait AgentPlugin: Send + Sync {
     async fn listen(
         &self,
         _event: &AgentStreamEvent,
-        _ctx: &RunContext
+        _ctx: &PluginContext
     );
 }
 
@@ -92,6 +92,26 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use tokio::sync::Mutex;
+    use crate::react::run_context::{RunContext, PluginContext};
+    use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
+    use vol_llm_tool::ToolRegistry;
+    use super::super::AgentConfig;
+
+    fn create_test_plugin_context() -> PluginContext {
+        let (ctx, _rx) = RunContext::new(
+            "test-run".to_string(),
+            "test input".to_string(),
+            "session-1".to_string(),
+            Arc::new(Session::new(
+                "session-1".to_string(),
+                Arc::new(InMemorySessionStore::new()),
+                Arc::new(InMemoryMessageStore::new()),
+            )),
+            Arc::new(ToolRegistry::new()),
+            AgentConfig::default(),
+        );
+        PluginContext::from_run_ctx(&ctx)
+    }
 
     struct TestPlugin { id: String, priority: u32 }
 
@@ -100,11 +120,11 @@ mod tests {
         fn id(&self) -> PluginId { self.id.clone() }
         fn priority(&self) -> u32 { self.priority }
 
-        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
             PluginDecision::Continue
         }
 
-        async fn listen(&self, _event: &AgentStreamEvent, _ctx: &RunContext) {
+        async fn listen(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) {
             // no-op
         }
     }
@@ -147,13 +167,13 @@ mod tests {
             fn id(&self) -> PluginId { self.id.clone() }
             fn priority(&self) -> u32 { self.priority }
 
-            async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+            async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
                 let mut order = self.order.lock().await;
                 order.push(self.id.clone());
                 PluginDecision::Continue
             }
 
-            async fn listen(&self, _event: &AgentStreamEvent, _ctx: &RunContext) {}
+            async fn listen(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) {}
         }
 
         let order = Arc::new(Mutex::new(Vec::new()));
@@ -164,7 +184,7 @@ mod tests {
         plugins.sort_by_key(|p| p.priority());
 
         let event = AgentStreamEvent::AgentStart { input: "test".to_string() };
-        let ctx = create_test_context();
+        let ctx = create_test_plugin_context();
 
         for plugin in &plugins {
             plugin.intercept(&event, &ctx).await;
@@ -188,7 +208,7 @@ mod tests {
             fn id(&self) -> PluginId { self.id.clone() }
             fn priority(&self) -> u32 { 100 }
 
-            async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+            async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
                 let mut count = self.call_count.lock().await;
                 *count += 1;
 
@@ -199,7 +219,7 @@ mod tests {
                 }
             }
 
-            async fn listen(&self, _event: &AgentStreamEvent, _ctx: &RunContext) {}
+            async fn listen(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) {}
         }
 
         let call_count = Arc::new(Mutex::new(0usize));
@@ -217,7 +237,7 @@ mod tests {
         ];
 
         let event = AgentStreamEvent::AgentStart { input: "test".to_string() };
-        let ctx = create_test_context();
+        let ctx = create_test_plugin_context();
 
         // Simulate interceptor chain - should stop at first plugin (abort_at: 1)
         for plugin in &plugins {
@@ -246,7 +266,7 @@ mod tests {
             fn id(&self) -> PluginId { self.id.clone() }
             fn priority(&self) -> u32 { 100 }
 
-            async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+            async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
                 let mut count = self.call_count.lock().await;
                 *count += 1;
 
@@ -257,7 +277,7 @@ mod tests {
                 }
             }
 
-            async fn listen(&self, _event: &AgentStreamEvent, _ctx: &RunContext) {}
+            async fn listen(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) {}
         }
 
         let call_count = Arc::new(Mutex::new(0usize));
@@ -275,7 +295,7 @@ mod tests {
         ];
 
         let event = AgentStreamEvent::AgentStart { input: "test".to_string() };
-        let ctx = create_test_context();
+        let ctx = create_test_plugin_context();
 
         let mut final_decision = PluginDecision::Continue;
         for plugin in &plugins {
@@ -298,25 +318,5 @@ mod tests {
         // Both plugins should have been called (skip doesn't stop chain from being evaluated)
         let final_count = call_count.lock().await;
         assert_eq!(*final_count, 1); // Only first plugin called because we break on Skip
-    }
-
-    fn create_test_context() -> RunContext {
-        use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-        use vol_llm_tool::ToolRegistry;
-        use super::super::AgentConfig;
-
-        let (ctx, _rx) = RunContext::new(
-            "test-run".to_string(),
-            "test input".to_string(),
-            "session-1".to_string(),
-            Arc::new(Session::new(
-                "session-1".to_string(),
-                Arc::new(InMemorySessionStore::new()),
-                Arc::new(InMemoryMessageStore::new()),
-            )),
-            Arc::new(ToolRegistry::new()),
-            AgentConfig::default(),
-        );
-        ctx
     }
 }

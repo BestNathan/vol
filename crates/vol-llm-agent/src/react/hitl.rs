@@ -113,7 +113,7 @@ impl Default for HitlConfig {
 
 use super::plugin::*;
 use super::AgentStreamEvent;
-use super::run_context::RunContext;
+use super::run_context::PluginContext;
 use std::sync::Arc;
 
 /// Human-in-the-Loop plugin
@@ -184,7 +184,7 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
     }
 
     /// Interceptor hook - checks for approval requirements
-    async fn intercept(&self, event: &AgentStreamEvent, ctx: &RunContext) -> PluginDecision {
+    async fn intercept(&self, event: &AgentStreamEvent, ctx: &PluginContext) -> PluginDecision {
         match event {
             AgentStreamEvent::ToolCallBegin { tool_name, arguments } => {
                 if self.needs_tool_approval(tool_name) {
@@ -236,7 +236,7 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
     }
 
     /// Listener hook - logs HITL events for audit
-    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
+    async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
         match event {
             AgentStreamEvent::ToolCallBegin { tool_name, .. } => {
                 if self.needs_tool_approval(tool_name) {

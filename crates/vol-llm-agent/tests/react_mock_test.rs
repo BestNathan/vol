@@ -5,6 +5,8 @@
 //! This test verifies the ReAct Agent streaming workflow using a simple mock.
 
 use vol_llm_agent::{ReActAgent, AgentStreamEvent};
+use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision};
+use vol_llm_agent::react::PluginContext;
 use vol_llm_tool::ToolContext;
 use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
 use vol_llm_core::{LLMClient, ConversationRequest, ConversationResponse, LLMProvider};
@@ -89,7 +91,6 @@ impl LLMClient for SimpleMock {
 async fn test_agent_executes_full_react_cycle() {
     // Track tool calls via a counting plugin
     use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision};
-    use vol_llm_agent::react::run_context::RunContext;
 
     struct ToolCallCounter {
         count: Arc<AtomicUsize>,
@@ -113,11 +114,11 @@ async fn test_agent_executes_full_react_cycle() {
             100
         }
 
-        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
             PluginDecision::Continue
         }
 
-        async fn listen(&self, event: &AgentStreamEvent, _ctx: &RunContext) {
+        async fn listen(&self, event: &AgentStreamEvent, _ctx: &PluginContext) {
             if let AgentStreamEvent::ToolCallBegin { .. } = event {
                 self.count.fetch_add(1, Ordering::SeqCst);
             }

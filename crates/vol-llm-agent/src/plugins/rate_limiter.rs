@@ -1,7 +1,7 @@
 //! Rate limiter plugin for concurrency control.
 
 use crate::react::plugin::*;
-use crate::react::run_context::RunContext;
+use crate::react::run_context::PluginContext;
 use crate::AgentStreamEvent;
 use tokio::sync::Semaphore;
 use std::sync::Arc;
@@ -30,12 +30,12 @@ impl AgentPlugin for RateLimiterPlugin {
     }
 
     /// Interceptor hook - no-op for rate limiter (flow control handled externally)
-    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
         PluginDecision::Continue
     }
 
     /// Listener hook - logs rate limiting events
-    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
+    async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
         match event {
             AgentStreamEvent::AgentStart { .. } => {
                 tracing::debug!(run_id = %ctx.run_id, "Rate limiter: agent started");
@@ -53,9 +53,9 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-    use crate::react::AgentConfig;
+    use crate::react::{AgentConfig, RunContext, PluginContext};
 
-    fn create_test_run_context() -> RunContext {
+    fn create_test_plugin_context() -> PluginContext {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
@@ -68,7 +68,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
         );
-        ctx
+        PluginContext::from_run_ctx(&ctx)
     }
 
     #[test]
@@ -86,7 +86,7 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_allows_concurrent() {
         let plugin = RateLimiterPlugin::new(2);
-        let ctx = create_test_run_context();
+        let ctx = create_test_plugin_context();
 
         // Plugin should always return Continue from intercept
         let event = AgentStreamEvent::AgentStart {

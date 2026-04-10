@@ -1,7 +1,7 @@
 //! Retry plugin with exponential backoff.
 
 use crate::react::plugin::*;
-use crate::react::run_context::RunContext;
+use crate::react::run_context::PluginContext;
 use crate::AgentStreamEvent;
 
 /// Retry configuration
@@ -46,12 +46,12 @@ impl AgentPlugin for RetryPlugin {
     }
 
     /// Interceptor hook - no-op for retry (retry logic handled externally)
-    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
         PluginDecision::Continue
     }
 
     /// Listener hook - logs retry events
-    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
+    async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
         match event {
             AgentStreamEvent::AgentAborted { reason } => {
                 tracing::warn!(
@@ -70,9 +70,9 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-    use crate::react::AgentConfig;
+    use crate::react::{AgentConfig, RunContext, PluginContext};
 
-    fn create_test_run_context() -> RunContext {
+    fn create_test_plugin_context() -> PluginContext {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
@@ -85,7 +85,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
         );
-        ctx
+        PluginContext::from_run_ctx(&ctx)
     }
 
     #[test]
@@ -106,7 +106,7 @@ mod tests {
     #[tokio::test]
     async fn test_retry_plugin_intercept() {
         let plugin = RetryPlugin::new(RetryConfig::default());
-        let ctx = create_test_run_context();
+        let ctx = create_test_plugin_context();
 
         let event = AgentStreamEvent::AgentStart {
             input: "test".to_string(),
