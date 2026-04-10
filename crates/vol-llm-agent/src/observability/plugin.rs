@@ -160,14 +160,14 @@ mod tests {
 
         // Test all event types
         let events = vec![
-            AgentStreamEvent::AgentStart { input: "test".to_string() },
+            AgentStreamEvent::AgentStart { input: "test input".to_string() },
             AgentStreamEvent::ThinkingComplete { thinking: "thought".to_string() },
-            AgentStreamEvent::ToolCallBegin { tool_name: "test_tool".to_string(), arguments: "{}".to_string() },
-            AgentStreamEvent::ToolCallComplete { tool_name: "test_tool".to_string(), result: "result".to_string() },
-            AgentStreamEvent::IterationComplete { iteration: 1, tool_calls: vec![], final_answer: None },
+            AgentStreamEvent::ToolCallBegin { tool_name: "test_tool".to_string(), arguments: "{\"key\": \"value\"}".to_string() },
+            AgentStreamEvent::ToolCallComplete { tool_name: "test_tool".to_string(), result: "tool result".to_string() },
+            AgentStreamEvent::IterationComplete { iteration: 1, tool_calls: vec![], final_answer: Some("answer".to_string()) },
             AgentStreamEvent::AgentComplete { response: AgentResponse { content: "done".to_string(), reasoning: String::new(), iterations: 1, tool_calls: vec![] } },
-            AgentStreamEvent::AgentAborted { reason: "test".to_string() },
-            AgentStreamEvent::PluginEvent { name: "test".to_string(), data: serde_json::Map::new() },
+            AgentStreamEvent::AgentAborted { reason: "test abort reason".to_string() },
+            AgentStreamEvent::PluginEvent { name: "test_plugin_event".to_string(), data: serde_json::Map::new() },
         ];
 
         for event in events {
@@ -179,5 +179,70 @@ mod tests {
         assert!(agent_path.exists());
         assert!(agent_path.join("sessions").exists());
         assert!(agent_path.join("runs").exists());
+
+        // Verify run logs contain expected content
+        let run_log_path = agent_path.join("runs").join("run_test-run.jsonl");
+        let run_content = std::fs::read_to_string(&run_log_path).unwrap();
+        let run_lines: Vec<&str> = run_content.lines().collect();
+
+        // AgentStart, ThinkingComplete, AgentComplete, AgentAborted go to run logs
+        assert!(run_content.contains(r#""event":"AgentStart""#));
+        assert!(run_content.contains(r#""event":"ThinkingComplete""#));
+        assert!(run_content.contains(r#""event":"AgentComplete""#));
+        assert!(run_content.contains(r#""event":"AgentAborted""#));
+
+        // Verify AgentStart data
+        let agent_start_line = run_lines.iter().find(|l| l.contains(r#""event":"AgentStart""#)).unwrap();
+        assert!(agent_start_line.contains(r#""input":"test input""#));
+
+        // Verify ThinkingComplete data
+        let thinking_line = run_lines.iter().find(|l| l.contains(r#""event":"ThinkingComplete""#)).unwrap();
+        assert!(thinking_line.contains(r#""thinking_length":7"#)); // "thought".len()
+
+        // Verify AgentComplete data
+        let agent_complete_line = run_lines.iter().find(|l| l.contains(r#""event":"AgentComplete""#)).unwrap();
+        assert!(agent_complete_line.contains(r#""iterations":1"#));
+        assert!(agent_complete_line.contains(r#""tool_calls_count":0"#));
+
+        // Verify AgentAborted data
+        let agent_aborted_line = run_lines.iter().find(|l| l.contains(r#""event":"AgentAborted""#)).unwrap();
+        assert!(agent_aborted_line.contains(r#""reason":"test abort reason""#));
+
+        // Verify session logs contain expected content
+        let session_files: Vec<_> = std::fs::read_dir(agent_path.join("sessions"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().starts_with("session_session-1_"))
+            .collect();
+        assert!(!session_files.is_empty(), "Expected session log file");
+
+        let session_log_path = session_files.first().unwrap().path();
+        let session_content = std::fs::read_to_string(&session_log_path).unwrap();
+
+        // ToolCallBegin, ToolCallComplete, IterationComplete, PluginEvent go to session logs
+        assert!(session_content.contains(r#""event":"ToolCallBegin""#));
+        assert!(session_content.contains(r#""event":"ToolCallComplete""#));
+        assert!(session_content.contains(r#""event":"IterationComplete""#));
+        assert!(session_content.contains(r#""event":"PluginEvent""#));
+
+        // Verify ToolCallBegin data
+        let tool_begin_line = session_content.lines().find(|l| l.contains(r#""event":"ToolCallBegin""#)).unwrap();
+        assert!(tool_begin_line.contains(r#""tool_name":"test_tool""#));
+        assert!(tool_begin_line.contains(r#""arguments":"{\"key\": \"value\"}""#));
+
+        // Verify ToolCallComplete data
+        let tool_complete_line = session_content.lines().find(|l| l.contains(r#""event":"ToolCallComplete""#)).unwrap();
+        assert!(tool_complete_line.contains(r#""tool_name":"test_tool""#));
+        assert!(tool_complete_line.contains(r#""result":"tool result""#));
+
+        // Verify IterationComplete data
+        let iteration_line = session_content.lines().find(|l| l.contains(r#""event":"IterationComplete""#)).unwrap();
+        assert!(iteration_line.contains(r#""iteration":1"#));
+        assert!(iteration_line.contains(r#""tool_calls_count":0"#));
+        assert!(iteration_line.contains(r#""has_final_answer":true"#));
+
+        // Verify PluginEvent data
+        let plugin_event_line = session_content.lines().find(|l| l.contains(r#""event":"PluginEvent""#)).unwrap();
+        assert!(plugin_event_line.contains(r#""name":"test_plugin_event""#));
     }
 }
