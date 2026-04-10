@@ -130,6 +130,16 @@ impl ReActAgent {
             config,
         );
 
+        // === Phase 1.5: Run log cleanup (best effort, non-blocking) ===
+        let log_base_path = self.config.log_base_path.clone();
+        let agent_id = self.config.agent_id.clone();
+        tokio::spawn(async move {
+            let agent_path = log_base_path.join(&agent_id);
+            if let Err(e) = crate::observability::cleanup_old_logs(&agent_path).await {
+                tracing::warn!(agent_id = %agent_id, error = %e, "Log cleanup failed");
+            }
+        });
+
         // === Phase 2: Initialize messages (call once before loop) ===
         run_ctx.init_messages().await?;
 
