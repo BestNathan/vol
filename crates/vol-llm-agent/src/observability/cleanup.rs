@@ -63,9 +63,9 @@ pub async fn cleanup_run_logs(runs_path: &Path, max_runs: usize) -> Result<usize
     let mut run_files: Vec<_> = fs::read_dir(runs_path)?
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.file_name()
-                .to_string_lossy()
-                .starts_with("run_")
+            let name = e.file_name().to_string_lossy().to_string();
+            // Match pure UUID format: 32 hex chars + .jsonl extension = 38 chars
+            name.len() == 38 && name.ends_with(".jsonl")
         })
         .collect();
 
@@ -143,9 +143,9 @@ mod tests {
         let runs_path = temp_dir.path().join("runs");
         fs::create_dir_all(&runs_path).unwrap();
 
-        // Create 15 run logs
+        // Create 15 run logs with UUID-like names (32 hex chars)
         for i in 0..15 {
-            let file = runs_path.join(format!("run_{:03}.jsonl", i));
+            let file = runs_path.join(format!("{:032x}.jsonl", i));
             fs::write(&file, format!("log {}", i)).unwrap();
         }
 
@@ -154,8 +154,8 @@ mod tests {
         assert_eq!(deleted, 5);
 
         // First 5 should be deleted, last 10 should remain
-        assert!(!runs_path.join("run_000.jsonl").exists());
-        assert!(runs_path.join("run_005.jsonl").exists());
-        assert!(runs_path.join("run_014.jsonl").exists());
+        assert!(!runs_path.join(format!("{:032x}.jsonl", 0)).exists());
+        assert!(runs_path.join(format!("{:032x}.jsonl", 5)).exists());
+        assert!(runs_path.join(format!("{:032x}.jsonl", 14)).exists());
     }
 }
