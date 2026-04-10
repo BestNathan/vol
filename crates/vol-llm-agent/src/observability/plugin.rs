@@ -20,37 +20,43 @@ impl ObservabilityPlugin {
     }
 
     fn create_log_entry(&self, event: &AgentStreamEvent, ctx: &RunContext) -> LogEntry {
+        // Extract event type name and data separately for structured logging
         let (event_name, data) = match event {
             AgentStreamEvent::AgentStart { input } => {
-                ("AgentStart", json!({"input": input}))
+                ("AgentStart", json!({ "input": input }))
             }
             AgentStreamEvent::ThinkingComplete { thinking } => {
-                ("ThinkingComplete", json!({"thinking_length": thinking.len()}))
+                ("ThinkingComplete", json!({ "thinking": thinking }))
             }
             AgentStreamEvent::ToolCallBegin { tool_name, arguments } => {
-                ("ToolCallBegin", json!({"tool_name": tool_name, "arguments": arguments}))
+                ("ToolCallBegin", json!({
+                    "tool_name": tool_name,
+                    "arguments": arguments
+                }))
             }
             AgentStreamEvent::ToolCallComplete { tool_name, result } => {
-                ("ToolCallComplete", json!({"tool_name": tool_name, "result": result}))
+                ("ToolCallComplete", json!({
+                    "tool_name": tool_name,
+                    "result": result
+                }))
             }
             AgentStreamEvent::IterationComplete { iteration, tool_calls, final_answer } => {
                 ("IterationComplete", json!({
                     "iteration": iteration,
-                    "tool_calls_count": tool_calls.len(),
-                    "has_final_answer": final_answer.is_some(),
+                    "tool_calls": tool_calls,
+                    "final_answer": final_answer,
                 }))
             }
             AgentStreamEvent::AgentComplete { response } => {
                 ("AgentComplete", json!({
-                    "iterations": response.iterations,
-                    "tool_calls_count": response.tool_calls.len(),
+                    "response": response
                 }))
             }
             AgentStreamEvent::AgentAborted { reason } => {
-                ("AgentAborted", json!({"reason": reason}))
+                ("AgentAborted", json!({ "reason": reason }))
             }
             AgentStreamEvent::PluginEvent { name, data } => {
-                ("PluginEvent", json!({"name": name, "data": data}))
+                ("PluginEvent", json!({ "name": name, "data": data }))
             }
         };
 

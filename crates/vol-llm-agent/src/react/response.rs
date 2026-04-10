@@ -3,9 +3,10 @@
 use thiserror::Error;
 use vol_llm_core::LLMError;
 use vol_llm_core::ToolCall;
+use serde::Serialize;
 
 /// Agent response
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct AgentResponse {
     pub content: String,
     pub reasoning: String,
