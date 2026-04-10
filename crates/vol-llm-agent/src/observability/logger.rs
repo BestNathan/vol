@@ -30,6 +30,11 @@ impl ObservabilityLogger {
         }
     }
 
+    /// Get the agent ID
+    pub fn agent_id(&self) -> &str {
+        &self.agent_id
+    }
+
     fn get_session_log_path(&self, session_id: &str, date: &str) -> PathBuf {
         self.agent_path
             .join("sessions")
