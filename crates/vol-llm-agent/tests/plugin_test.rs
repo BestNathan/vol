@@ -24,7 +24,7 @@ async fn test_plugin_priority_ordering() {
 
         async fn intercept(
             &self,
-            event: &AgentStreamEvent,
+            _event: &AgentStreamEvent,
             _ctx: &RunContext,
         ) -> PluginDecision {
             PluginDecision::Continue
