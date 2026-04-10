@@ -51,7 +51,7 @@ async fn test_run_context_data_storage() {
     use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore};
     use vol_llm_tool::ToolRegistry;
 
-    let ctx = RunContext::new(
+    let (ctx, _rx) = RunContext::new(
         "test-run-123".to_string(),
         "test input".to_string(),
         "session-456".to_string(),

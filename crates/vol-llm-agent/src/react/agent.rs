@@ -8,9 +8,8 @@ use vol_llm_tool::ToolContext;
 use tracing::{info, debug};
 use super::{
     AgentResponse, AgentStreamEvent, AgentStreamReceiver, PluginRegistry, RunContext,
-    PluginStream, PluginDecision, create_skip_stream,
+    PluginDecision,
 };
-use super::plugin_stream::run_interceptor_loop;
 use crate::session::Session;
 use crate::prompt_context::PromptContext;
 
@@ -105,7 +104,7 @@ impl ReActAgent {
         let config = self.config.clone();
         let session = self.session.clone();
 
-        let run_ctx = RunContext::new(
+        let (run_ctx, plugin_rx) = RunContext::new(
             run_id.clone(),
             user_input.to_string(),
             self.session.id.clone(),
@@ -118,12 +117,14 @@ impl ReActAgent {
         run_ctx.init_messages().await?;
 
         // === Phase 2.5: Spawn listener and interceptor tasks ===
-        let listener_handle = PluginStream::spawn_listener_task(
+        use super::plugin_stream::{spawn_listener_task, run_interceptor_loop};
+
+        let listener_handle = spawn_listener_task(
             self.config.plugin_registry.plugins().to_vec(),
             run_ctx.clone(),
         );
 
-        let (_plugin_tx, plugin_rx) = mpsc::channel(100);
+        // Spawn interceptor loop task - receives from plugin_rx channel
         let interceptor_run_ctx = run_ctx.clone();
         let interceptor_plugins = self.config.plugin_registry.plugins().to_vec();
         tokio::spawn(async move {
@@ -136,8 +137,6 @@ impl ReActAgent {
         let config = self.config.clone();
         let _session = self.session.clone();
         let user_input = user_input.to_string();
-        let plugin_registry = self.config.plugin_registry.clone();
-        let run_ctx_for_stream = run_ctx.clone();
         let _run_id_for_tracing = run_id.clone();
 
         let (tx, rx) = mpsc::channel(100);
@@ -157,9 +156,8 @@ impl ReActAgent {
                     // Continue with normal flow
                 }
                 Ok(PluginDecision::Skip) => {
-                    // Create skip stream and return
-                    let _ = create_skip_stream(run_ctx, run_id.clone()).await;
-                    return;
+                    // Skip AgentStart event but continue with normal flow
+                    // Skip only affects the current event, not the entire run
                 }
                 Ok(PluginDecision::Abort(reason)) => {
                     run_ctx.emit(AgentStreamEvent::AgentAborted { reason: reason.clone() }).await;
@@ -337,12 +335,9 @@ impl ReActAgent {
             }
         });
 
-        // === Phase 4: Wrap with plugin stream for intercept hooks ===
-        let raw_receiver = AgentStreamReceiver::new(rx);
-        let plugins = plugin_registry.plugins().to_vec();
-        let plugin_stream = PluginStream::new(raw_receiver, plugins, run_ctx_for_stream);
-
-        Ok(plugin_stream.into_receiver())
+        // Return the raw stream receiver - all plugin intercept/listen logic
+        // is already handled via RunContext event bus in the spawned task above
+        Ok(AgentStreamReceiver::new(rx))
     }
 }
 

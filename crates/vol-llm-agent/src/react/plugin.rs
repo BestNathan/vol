@@ -305,7 +305,7 @@ mod tests {
         use vol_llm_tool::ToolRegistry;
         use super::super::AgentConfig;
 
-        RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
             "session-1".to_string(),
@@ -316,6 +316,7 @@ mod tests {
             )),
             Arc::new(ToolRegistry::new()),
             AgentConfig::default(),
-        )
+        );
+        ctx
     }
 }

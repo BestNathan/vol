@@ -89,15 +89,10 @@ pub struct RunContext {
 impl RunContext {
     /// Create a new RunContext.
     ///
-    /// # Note: Plugin Event Channel Receiver
+    /// Returns `(RunContext, mpsc::Receiver<PluginRequest>)`.
     ///
-    /// The plugin event channel receiver (`mpsc::Receiver<PluginRequest>`) is
-    /// intentionally dropped here. This is expected behavior - a plugin listener
-    /// task will be created later (in `PluginStream`) to handle plugin event routing.
-    ///
-    /// The `plugin_event_tx` sender stored in this struct will work once that
-    /// listener is wired up. Until then, calls to `intercept()` will fail gracefully
-    /// with a channel error.
+    /// The receiver should be passed to `run_interceptor_loop()` to handle
+    /// plugin interception requests.
     pub fn new(
         run_id: String,
         user_input: String,
@@ -105,11 +100,11 @@ impl RunContext {
         session: Arc<Session>,
         tools: Arc<ToolRegistry>,
         config: AgentConfig,
-    ) -> Self {
+    ) -> (Self, mpsc::Receiver<PluginRequest>) {
         let (event_tx, _) = broadcast::channel(100);
-        let (plugin_event_tx, _) = mpsc::channel(100);
+        let (plugin_event_tx, plugin_event_rx) = mpsc::channel(100);
 
-        Self {
+        let ctx = Self {
             run_id,
             user_input,
             session_id,
@@ -123,7 +118,9 @@ impl RunContext {
             config,
             event_tx,
             plugin_event_tx,
-        }
+        };
+
+        (ctx, plugin_event_rx)
     }
 
     /// Initialize messages array - must be called once before the loop
@@ -289,7 +286,7 @@ mod tests {
     use vol_llm_core::{MessageRole, MessageContent};
 
     fn create_test_context() -> RunContext {
-        RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
             "session-1".to_string(),
@@ -300,7 +297,8 @@ mod tests {
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
-        )
+        );
+        ctx
     }
 
     #[tokio::test]
@@ -399,7 +397,7 @@ mod tests {
             ..Default::default()
         };
 
-        let ctx = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
             "session-1".to_string(),
@@ -449,7 +447,7 @@ mod tests {
         );
         session.add_message(history_msg).await.unwrap();
 
-        let ctx = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "new input".to_string(),
             "session-1".to_string(),
@@ -479,7 +477,7 @@ mod tests {
             ..Default::default()
         };
 
-        let ctx = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "analyze market volatility".to_string(),
             "session-1".to_string(),
@@ -529,7 +527,7 @@ mod tests {
         );
         session.add_message(history_msg).await.unwrap();
 
-        let ctx = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "input".to_string(),
             "session-1".to_string(),

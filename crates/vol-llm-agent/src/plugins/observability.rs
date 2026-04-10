@@ -89,7 +89,7 @@ mod tests {
     use crate::react::{AgentConfig, RunContext};
 
     fn create_test_run_context() -> RunContext {
-        RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
             "session-1".to_string(),
@@ -100,7 +100,8 @@ mod tests {
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
-        )
+        );
+        ctx
     }
 
     #[tokio::test]

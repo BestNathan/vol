@@ -304,7 +304,7 @@ fn create_test_context() -> RunContext {
     use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore};
     use vol_llm_agent::react::AgentConfig;
 
-    RunContext::new(
+    let (ctx, _rx) = RunContext::new(
         "test-run".to_string(),
         "test input".to_string(),
         "session-1".to_string(),
@@ -315,5 +315,7 @@ fn create_test_context() -> RunContext {
         )),
         Arc::new(ToolRegistry::new()),
         AgentConfig::default(),
-    )
+    );
+
+    ctx
 }

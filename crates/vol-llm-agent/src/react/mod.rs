@@ -46,7 +46,7 @@ pub use response::{AgentResponse, AgentError};
 pub use stream::{AgentStreamEvent, AgentStreamReceiver};
 pub use prompt::{default_system_prompt, SystemPromptBuilder};
 pub use plugin::{AgentPlugin, PluginDecision, PluginRegistry};
-pub use plugin_stream::{PluginStream, create_shortcircuit_stream, create_skip_stream, run_interceptor_loop};
+pub use plugin_stream::{create_shortcircuit_stream, create_skip_stream, run_interceptor_loop, spawn_listener_task};
 pub use run_context::{RunContext, PluginRequest};
 pub use hitl::{ApprovalChannel, ApprovalRequest, ApprovalResponse, ApprovalType, HitlConfig, ApprovalTrigger, TimeoutBehavior};
 
