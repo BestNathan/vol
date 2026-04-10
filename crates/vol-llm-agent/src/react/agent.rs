@@ -2,33 +2,15 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 use vol_llm_core::{LLMClient, Message, ConversationRequest, ToolChoice, StreamEventData, StreamReceiver};
 use vol_llm_tool::ToolContext;
 use tracing::{info, debug};
 use super::{
-    AgentResponse, AgentStreamEvent, AgentStreamReceiver, PluginRegistry, RunContext,
+    AgentResponse, AgentStreamEvent, PluginRegistry, RunContext,
     PluginDecision,
 };
 use crate::session::Session;
 use crate::prompt_context::PromptContext;
-
-/// Guard struct that aborts a JoinHandle when dropped.
-///
-/// This ensures that spawned listener tasks are cleaned up on all exit paths,
-/// including early returns, breaks, and panics.
-struct ListenerGuard {
-    handle: Option<JoinHandle<()>>,
-}
-
-impl Drop for ListenerGuard {
-    fn drop(&mut self) {
-        if let Some(handle) = self.handle.take() {
-            handle.abort();
-        }
-    }
-}
 
 /// Agent configuration
 #[derive(Clone)]
@@ -108,12 +90,12 @@ impl ReActAgent {
         }
     }
 
-    /// Run ReAct loop with streaming events
+    /// Run ReAct loop. All events are emitted via RunContext event bus.
     pub async fn run(
         &self,
         user_input: &str,
         context: ToolContext,
-    ) -> Result<AgentStreamReceiver, crate::AgentError> {
+    ) -> Result<(), crate::AgentError> {
         // === Phase 1: Generate run_id and create RunContext ===
         let run_id = format!("run_{}", uuid::Uuid::new_v4().simple());
 
@@ -146,7 +128,7 @@ impl ReActAgent {
         // === Phase 2.5: Spawn listener and interceptor tasks ===
         use super::plugin_stream::{spawn_listener_task, run_interceptor_loop};
 
-        let listener_handle = spawn_listener_task(
+        let _listener_handle = spawn_listener_task(
             self.config.plugin_registry.plugins().to_vec(),
             run_ctx.clone(),
         );
@@ -166,12 +148,7 @@ impl ReActAgent {
         let user_input = user_input.to_string();
         let _run_id_for_tracing = run_id.clone();
 
-        let (tx, rx) = mpsc::channel(100);
-
         tokio::spawn(async move {
-            // Use a Drop guard to ensure the listener is cleaned up on all exit paths
-            let _guard = ListenerGuard { handle: Some(listener_handle) };
-
             // === Emit and intercept AgentStart ===
             let start_event = AgentStreamEvent::AgentStart {
                 input: user_input.clone()
@@ -188,8 +165,7 @@ impl ReActAgent {
                 }
                 Ok(PluginDecision::Abort(reason)) => {
                     run_ctx.emit(AgentStreamEvent::AgentAborted { reason: reason.clone() }).await;
-                    let _ = tx.send(Err(crate::AgentError::Context(reason))).await;
-                    return;
+                    return Err(crate::AgentError::Context(reason));
                 }
                 Err(e) => {
                     // Plugin channel error - log and continue (plugins are optional)
@@ -207,10 +183,9 @@ impl ReActAgent {
                     let reason = format!("Max iterations ({}) reached", config.max_iterations);
                     run_ctx.emit(AgentStreamEvent::AgentAborted { reason: reason.clone() }).await;
 
-                    let _ = tx.send(Err(crate::AgentError::MaxIterationsReached {
+                    return Err(crate::AgentError::MaxIterationsReached {
                         max: config.max_iterations
-                    })).await;
-                    break;
+                    });
                 }
 
                 if config.verbose {
@@ -230,8 +205,7 @@ impl ReActAgent {
                 let llm_stream = match llm.converse_stream(request).await {
                     Ok(stream) => stream,
                     Err(e) => {
-                        let _ = tx.send(Err(crate::AgentError::Llm(e))).await;
-                        break;
+                        return Err(crate::AgentError::Llm(e));
                     }
                 };
 
@@ -239,17 +213,13 @@ impl ReActAgent {
                 let (thinking, tool_calls, content) = match consume_llm_stream(llm_stream).await {
                     Ok(data) => data,
                     Err(e) => {
-                        let _ = tx.send(Err(e)).await;
-                        break;
+                        return Err(e);
                     }
                 };
 
-                // Emit ThinkingComplete if we have thinking content
-                if !thinking.is_empty() {
-                    let thinking_event = AgentStreamEvent::ThinkingComplete { thinking };
-                    run_ctx.emit(thinking_event.clone()).await;
-                    let _ = tx.send(Ok(thinking_event)).await;
-                }
+                // Emit ThinkingComplete unconditionally (even if empty)
+                let thinking_event = AgentStreamEvent::ThinkingComplete { thinking };
+                run_ctx.emit(thinking_event).await;
 
                 // Check if tool calls
                 if !tool_calls.is_empty() {
@@ -285,8 +255,7 @@ impl ReActAgent {
                             }
                             PluginDecision::Abort(reason) => {
                                 run_ctx.emit(AgentStreamEvent::AgentAborted { reason: reason.clone() }).await;
-                                let _ = tx.send(Err(crate::AgentError::Context(reason))).await;
-                                break;
+                                return Err(crate::AgentError::Context(reason));
                             }
                         }
 
@@ -294,55 +263,52 @@ impl ReActAgent {
                         let result = match tools.execute(call, &context).await {
                             Ok(r) => r,
                             Err(e) => {
-                                let _ = tx.send(Err(crate::AgentError::ToolExecution {
+                                return Err(crate::AgentError::ToolExecution {
                                     tool: call.name.clone(),
                                     error: e.to_string(),
-                                })).await;
-                                break;
+                                });
                             }
                         };
 
                         info!("Tool {} returned: {}", call.name, result.content);
 
-                        // Send ToolCallComplete
-                        let _ = tx.send(Ok(AgentStreamEvent::ToolCallComplete {
+                        // Emit ToolCallComplete
+                        run_ctx.emit(AgentStreamEvent::ToolCallComplete {
                             tool_name: call.name.clone(),
                             result: result.content.clone(),
-                        })).await;
+                        }).await;
 
                         // Add tool result to ctx (syncs to session automatically)
                         if let Err(e) = run_ctx.add_message(Message::tool(result.content.clone(), call.id.clone())).await {
-                            let _ = tx.send(Err(crate::AgentError::from(e))).await;
-                            break;
+                            return Err(crate::AgentError::from(e));
                         }
 
                         // Clear current tool calls for next iteration
                         run_ctx.clear_current_tool_calls().await;
                     }
 
-                    // Send IterationComplete
-                    let _ = tx.send(Ok(AgentStreamEvent::IterationComplete {
+                    // Emit IterationComplete
+                    run_ctx.emit(AgentStreamEvent::IterationComplete {
                         iteration,
                         tool_calls: tool_calls.clone(),
                         final_answer: None,
-                    })).await;
+                    }).await;
 
                     // Continue to next iteration
                     continue;
                 }
 
                 // No tool calls - we have final answer
-                // Send IterationComplete with final answer
-                let _ = tx.send(Ok(AgentStreamEvent::IterationComplete {
+                // Emit IterationComplete with final answer
+                run_ctx.emit(AgentStreamEvent::IterationComplete {
                     iteration,
                     tool_calls: Vec::new(),
                     final_answer: Some(content.clone()),
-                })).await;
+                }).await;
 
                 // Save assistant response to session via ctx (user input already saved in init_messages)
                 if let Err(e) = run_ctx.add_message(Message::assistant(content.clone())).await {
-                    let _ = tx.send(Err(crate::AgentError::from(e))).await;
-                    break;
+                    return Err(crate::AgentError::from(e));
                 }
 
                 // === Emit AgentComplete ===
@@ -354,17 +320,15 @@ impl ReActAgent {
                 };
 
                 let complete_event = AgentStreamEvent::AgentComplete { response: response.clone() };
-                run_ctx.emit(complete_event.clone()).await;
-                let _ = tx.send(Ok(complete_event)).await;
+                run_ctx.emit(complete_event).await;
 
-                // Guard will abort listener on drop - no manual cleanup needed
-                break;
+                return Ok(());
             }
         });
 
-        // Return the raw stream receiver - all plugin intercept/listen logic
-        // is already handled via RunContext event bus in the spawned task above
-        Ok(AgentStreamReceiver::new(rx))
+        // All events are emitted via RunContext event bus.
+        // The spawned task returns Ok(()) when complete.
+        Ok(())
     }
 }
 
