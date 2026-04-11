@@ -1,7 +1,7 @@
 //! PPT Agent 渲染器。
 
 use std::path::PathBuf;
-use crate::ppt::{PptTemplate, Slide};
+use crate::ppt::PptTemplate;
 
 /// PPTX 渲染器
 pub struct PptxRenderer {

@@ -19,7 +19,7 @@ impl ContentGeneratorTool {
 
     /// 扩展大纲内容为详细 bullet points
     pub async fn expand(&self, outline: &Outline) -> Result<Outline, ContentError> {
-        let system_message = Message::system(prompts::CONTENT_SYSTEM_PROMPT.to_string());
+        let _system_message = Message::system(prompts::CONTENT_SYSTEM_PROMPT.to_string());
         let user_message = Message::user(prompts::build_content_user_prompt(
             &serde_json::to_string_pretty(outline).unwrap_or_default()
         ));
