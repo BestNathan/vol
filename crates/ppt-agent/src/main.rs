@@ -97,10 +97,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Create agent
             println!("Initializing PPT Agent...");
-            let _agent = PptAgent::new(config).await?;
+            let agent = PptAgent::new(config).await?;
 
-            // Generate PPT
-            let _input = match &context {
+            // Build input
+            let input = match &context {
                 Some(ctx) => {
                     println!("Topic: {}", text);
                     println!("Context: {}", ctx);
@@ -112,25 +112,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
+            // Override template in input if specified via CLI
+            let input_with_template = match (&template, input) {
+                (Some(tpl_id), PptInput::Text { description, context }) => {
+                    PptInput::Text {
+                        description,
+                        context: Some(match context {
+                            Some(ctx) => format!("{}. Use template: {}", ctx, tpl_id),
+                            None => format!("Use template: {}", tpl_id),
+                        }),
+                    }
+                },
+                (None, input) => input,
+            };
+
             if let Some(template_id) = &template {
                 println!("Using template: {}", template_id);
             }
 
             println!();
             println!("Generating presentation...");
+            println!();
 
-            // TODO: Implement actual generation
-            // For now, return a placeholder response
+            // Generate PPT
+            let result = agent.generate(input_with_template).await?;
+
+            // Show results
+            println!("═══════════════════════════════════════════════════════════");
+            println!("  Generation Complete");
+            println!("═══════════════════════════════════════════════════════════");
             println!();
-            println!("⚠️  PPT generation is not yet fully implemented.");
-            println!("   This is a placeholder for the MVP.");
+            println!("  Output file: {:?}", result.output_path);
+            println!("  Slide count: {}", result.slide_count);
+            println!("  Template:    {}", result.template_id);
             println!();
-            println!("Topic received: {}", text);
-            if let Some(ctx) = &context {
-                println!("Context: {}", ctx);
+            println!("Slides:");
+            for (i, slide) in result.slides.iter().enumerate() {
+                println!("  {}. {} ({:?})", i + 1, slide.title, slide.layout);
             }
-            println!("Template: {}", template.as_deref().unwrap_or("(auto-select)"));
-            println!("Output: {}", output.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "(default)".to_string()));
         }
 
         Commands::Templates { action } => {
