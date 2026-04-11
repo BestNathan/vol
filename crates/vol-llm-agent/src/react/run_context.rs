@@ -366,6 +366,38 @@ impl RunContext {
             crate::AgentError::Context(format!("Plugin response error: {}", e))
         })
     }
+
+    /// Record a reasoning step
+    pub async fn record_reasoning_step(&self, thinking: String, duration_ms: Option<u64>) {
+        let iteration = self.iteration.load(std::sync::atomic::Ordering::SeqCst);
+        let step = ReasoningStep::new(iteration, thinking, duration_ms);
+        self.reasoning_chain.write().await.push(step);
+    }
+
+    /// Record a tool call
+    pub async fn record_tool_call(&self, record: ToolCallRecord) {
+        self.tool_call_records.write().await.push(record);
+    }
+
+    /// Set final answer content
+    pub async fn set_final_content(&self, content: String) {
+        *self.final_content.write().await = Some(content);
+    }
+
+    /// Set error information
+    pub async fn set_error(&self, error: String) {
+        *self.error.write().await = Some(error);
+    }
+
+    /// Get a clone of the reasoning chain
+    pub async fn get_reasoning_chain(&self) -> Vec<ReasoningStep> {
+        self.reasoning_chain.read().await.clone()
+    }
+
+    /// Get a clone of tool call records
+    pub async fn get_tool_call_records(&self) -> Vec<ToolCallRecord> {
+        self.tool_call_records.read().await.clone()
+    }
 }
 
 impl Clone for RunContext {
