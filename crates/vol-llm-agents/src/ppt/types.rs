@@ -73,3 +73,47 @@ pub struct SlideContent {
     pub bullets: Vec<String>,
     pub speaker_notes: Option<String>,
 }
+
+/// 结构化需求
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StructuredRequirement {
+    pub topic: String,
+    pub audience: Option<String>,
+    pub style: Option<String>,
+    pub purpose: Option<String>,
+}
+
+/// PPT 大纲
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Outline {
+    pub title: String,
+    pub slides: Vec<SlideDef>,
+}
+
+/// 幻灯片定义
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SlideDef {
+    #[serde(rename = "type")]
+    pub slide_type: SlideType,
+    pub title: String,
+    #[serde(default)]
+    pub subtitle: Option<String>,
+    #[serde(default)]
+    pub bullets: Vec<String>,
+    #[serde(default)]
+    pub sections: Vec<String>,
+}
+
+impl SlideDef {
+    pub fn to_slide(&self, layout: SlideLayout) -> Slide {
+        Slide {
+            slide_type: self.slide_type.clone(),
+            layout,
+            title: self.title.clone(),
+            content: SlideContent {
+                bullets: self.bullets.clone(),
+                speaker_notes: None,
+            },
+        }
+    }
+}
