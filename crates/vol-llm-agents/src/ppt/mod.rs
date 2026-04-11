@@ -6,6 +6,7 @@ pub mod types;
 pub mod template;
 pub mod renderer;
 pub mod tools;
+pub mod prompts;
 
 pub use agent::PptAgent;
 pub use config::PptAgentConfig;
