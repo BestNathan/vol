@@ -7,7 +7,6 @@
 use vol_llm_agent::{ReActAgent, AgentStreamEvent};
 use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision};
 use vol_llm_agent::react::PluginContext;
-use vol_llm_tool::ToolContext;
 use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
 use vol_llm_core::{LLMClient, ConversationRequest, ConversationResponse, LLMProvider};
 use async_trait::async_trait;
@@ -142,8 +141,8 @@ async fn test_agent_executes_full_react_cycle() {
         .build()
         .unwrap();
 
-    let context = ToolContext::default();
-    agent.run("What is the BTC price?", context).await.unwrap();
+    
+    agent.run("What is the BTC price?").await.unwrap();
 
     // Verify tool was called via plugin counter
     let tool_calls = tool_counter.count.load(Ordering::SeqCst);
@@ -224,10 +223,10 @@ async fn test_agent_max_iterations() {
         .build()
         .unwrap();
 
-    let context = ToolContext::default();
+    
 
     // Agent should return MaxIterationsReached error when max_iterations is exceeded
-    let result = agent.run("Keep querying...", context).await;
+    let result = agent.run("Keep querying...").await;
 
     match result {
         Err(vol_llm_agent::AgentError::MaxIterationsReached { max }) => {
@@ -235,6 +234,6 @@ async fn test_agent_max_iterations() {
             assert_eq!(max, 3);
         }
         Err(e) => panic!("Expected MaxIterationsReached, got: {:?}", e),
-        Ok(()) => panic!("Expected MaxIterationsReached error but got Ok"),
+        Ok(_) => panic!("Expected MaxIterationsReached error but got Ok"),
     }
 }

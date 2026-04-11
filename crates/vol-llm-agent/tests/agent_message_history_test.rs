@@ -5,7 +5,6 @@
 //! This test verifies that tool results are properly passed to subsequent LLM iterations.
 
 use vol_llm_agent::{ReActAgent, AgentStreamEvent, react::plugin::{AgentPlugin, PluginDecision}, react::PluginContext};
-use vol_llm_tool::ToolContext;
 use vol_llm_core::{LLMClient, ConversationRequest, ConversationResponse, LLMProvider, ToolCall, StreamEvent, StreamEventData, MessageRole};
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -152,8 +151,7 @@ async fn test_tool_results_passed_to_next_iteration() {
         .build()
         .unwrap();
 
-    let context = ToolContext::default();
-    agent.run("What is the BTC price?", context).await.unwrap();
+    agent.run("What is the BTC price?").await.unwrap();
 
     // Check tracked messages (from LLM perspective)
     let tracked = message_tracker.lock().await;
@@ -230,8 +228,7 @@ async fn test_message_history_grows_correctly() {
         .build()
         .unwrap();
 
-    let context = ToolContext::default();
-    agent.run("What is the BTC price?", context).await.unwrap();
+    agent.run("What is the BTC price?").await.unwrap();
 
     let tracked = message_tracker.lock().await;
     

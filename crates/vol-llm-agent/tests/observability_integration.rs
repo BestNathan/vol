@@ -5,7 +5,6 @@
 use vol_llm_agent::{ReActAgent, AgentStreamEvent};
 use vol_llm_agent::react::{PluginContext, PluginDecision};
 use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-use vol_llm_tool::ToolContext;
 use vol_llm_core::{LLMClient, ConversationRequest, LLMProvider, StreamEvent, StreamEventData};
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -101,8 +100,8 @@ async fn test_full_agent_run_with_observability() {
         .build()
         .unwrap();
 
-    let context = ToolContext::default();
-    agent.run("Test query", context).await.unwrap();
+    
+    agent.run("Test query").await.unwrap();
 
     // Verify agent completed successfully (if we get here without error, it completed)
 

@@ -5,7 +5,6 @@
 //! This test verifies the agent can produce output using real LLM.
 
 use vol_llm_agent::ReActAgent;
-use vol_llm_tool::ToolContext;
 use vol_llm_tdengine::{IndexPriceTool};
 use vol_llm_core::{LLMProvider, LLMClient, ConversationRequest, ConversationResponse, ToolCall, StreamEvent, StreamEventData};
 use async_trait::async_trait;
@@ -100,17 +99,18 @@ async fn test_agent_produces_output() {
         .build()
         .unwrap();
 
-    let context = ToolContext::default();
+    
 
     println!("\n--- Running agent with user input: 'What is the BTC price?' ---\n");
 
-    let result = agent.run("What is the BTC price?", context).await;
+    let result = agent.run("What is the BTC price?").await;
 
     println!("\n========== TEST RESULTS ==========\n");
 
     match result {
-        Ok(()) => {
+        Ok(response) => {
             println!("✓ Agent completed successfully");
+            println!("Final answer: {}", response.content);
             println!("\n========== TEST PASSED ==========\n");
         }
         Err(e) => {

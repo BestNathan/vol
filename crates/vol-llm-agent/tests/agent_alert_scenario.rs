@@ -6,7 +6,6 @@
 //! analyzes the alert and provides recommendations.
 
 use vol_llm_agent::ReActAgent;
-use vol_llm_tool::ToolContext;
 use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool};
 use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
 use vol_llm_core::{LLMProvider, LLMClient, Message, ConversationResponse, TokenUsage, FinishReason, ToolDefinition};
@@ -468,7 +467,7 @@ async fn test_agent_alert_scenario() {
         .build()
         .unwrap();
 
-    let context = ToolContext::default();
+    
 
     // Build user input from alert
     let user_input = format!(
@@ -482,7 +481,7 @@ async fn test_agent_alert_scenario() {
 
     println!("\nRunning Agent Analysis...\n");
 
-    let stream_result = agent.run(&user_input, context).await;
+    let stream_result = agent.run(&user_input).await;
 
     println!("\n{}", "=".repeat(80));
     println!("  TEST RESULTS");
@@ -490,11 +489,12 @@ async fn test_agent_alert_scenario() {
 
     let mut output_log = String::new();
 
-    // Agent returns Result<(), AgentError> - if Ok, the run completed successfully
+    // Agent returns Result<AgentResponse, AgentError> - if Ok, the run completed successfully
     match stream_result {
-        Ok(()) => {
+        Ok(response) => {
             output_log.push_str("=== Agent Execution Result ===\n\n");
             output_log.push_str("Status: Success\n");
+            output_log.push_str(&format!("Final answer: {:.100}...\n", response.content));
 
             println!("Agent completed successfully");
 

@@ -4,7 +4,6 @@
 
 use vol_llm_agent::{ReActAgent, AgentConfig};
 use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore, SessionMessage};
-use vol_llm_tool::ToolContext;
 use vol_llm_core::{LLMClient, LLMProvider, Message, ConversationRequest, ConversationResponse, SupportedParam};
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -76,8 +75,8 @@ async fn test_history_limit_applied() {
         .unwrap();
 
     // Run agent
-    let context = ToolContext::default();
-    agent.run("Test query", context).await.unwrap();
+    
+    agent.run("Test query").await.unwrap();
 
     // If we get here without error, agent completed successfully
 

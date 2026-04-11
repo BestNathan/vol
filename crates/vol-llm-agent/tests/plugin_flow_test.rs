@@ -132,8 +132,8 @@ async fn test_plugin_interceptor_chain_executes() {
         .build()
         .unwrap();
 
-    let context = ToolContext::default();
-    agent.run("Say hello", context).await.unwrap();
+    
+    agent.run("Say hello").await.unwrap();
 
     // Verify agent completed successfully (if we get here without error, it completed)
 
@@ -196,8 +196,8 @@ async fn test_plugin_skip_stops_current_event() {
         .build()
         .unwrap();
 
-    let context = ToolContext::default();
-    agent.run("Say hello", context).await.unwrap();
+    
+    agent.run("Say hello").await.unwrap();
 
     // Agent should complete successfully (Skip just skips the event, doesn't abort)
     // Verify plugin was called

@@ -7,8 +7,8 @@ use tokio::sync::broadcast;
 use tracing::{info, warn, error};
 use vol_core::{Alert, NotificationHandler, Result as VolResult};
 use vol_tracing::TracedEvent;
-use vol_llm_agent::{ReActAgent, AgentBuilder, AgentStreamEvent, AgentStreamReceiver};
-use vol_llm_tool::{ToolContext, ToolRegistry};
+use vol_llm_agent::AgentBuilder;
+use vol_llm_tool::ToolRegistry;
 use vol_tdengine::TdengineClient;
 use vol_llm_provider::LLMProviderRegistry;
 use vol_notification::FeishuNotification;
@@ -166,28 +166,9 @@ impl AdviceAgent {
             "History data will be queried by agent",
         );
 
-        // Run agent with context
-        let context = ToolContext {
-            messages: Vec::new(),
-        };
-
-        // Consume stream to get final response
-        let mut stream: AgentStreamReceiver = agent.run(&user_prompt, context).await?;
-        let mut final_response = None;
-
-        while let Some(event) = stream.recv().await {
-            match event? {
-                AgentStreamEvent::AgentComplete { response } => {
-                    final_response = Some(response);
-                    break;
-                }
-                _ => {}
-            }
-        }
-
-        let response = final_response.ok_or_else(|| vol_llm_agent::AgentError::Context(
-            "No final response from agent".to_string()
-        ))?;
+        // Run agent and get response directly (no ToolContext needed)
+        let response = agent.run(&user_prompt).await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
         Ok(response.content)
     }

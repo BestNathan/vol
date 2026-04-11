@@ -275,8 +275,8 @@ async fn test_code_agent_market_data_query() {
         .unwrap();
 
     // Test: Query BTC price
-    let context = ToolContext::default();
-    agent.run("What is the current BTC price?", context).await.unwrap();
+    
+    agent.run("What is the current BTC price?").await.unwrap();
 
     // Verify tool was called
     let calls = tool_calls.lock().await;
@@ -305,8 +305,8 @@ async fn test_code_agent_volatility_query() {
         .unwrap();
 
     // Test: Query volatility
-    let context = ToolContext::default();
-    agent.run("Show me ETH volatility", context).await.unwrap();
+    
+    agent.run("Show me ETH volatility").await.unwrap();
 
     println!("Agent completed successfully");
 }
@@ -331,8 +331,8 @@ async fn test_code_agent_multi_turn_conversation() {
         .unwrap();
 
     // Test: Multi-turn with follow-up
-    let context = ToolContext::default();
-    agent.run("What is the BTC price and how does it compare to ETH?", context).await.unwrap();
+    
+    agent.run("What is the BTC price and how does it compare to ETH?").await.unwrap();
 
     println!("Agent completed multi-turn conversation");
 }
@@ -357,8 +357,8 @@ async fn test_code_agent_tool_choice_auto() {
         .unwrap();
 
     // Test: Simple greeting (may not need tools)
-    let context = ToolContext::default();
-    agent.run("Hello, can you help me?", context).await.unwrap();
+    
+    agent.run("Hello, can you help me?").await.unwrap();
 
     println!("Agent responded to greeting");
 }

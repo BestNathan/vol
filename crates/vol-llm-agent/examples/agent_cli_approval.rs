@@ -275,8 +275,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Run agent
-    let context = ToolContext::default();
-    let result: Result<(), vol_llm_agent::AgentError> = agent.run(query, context).await;
+    let result = agent.run(query).await;
 
     println!();
     println!("═══════════════════════════════════════════════════════════");
@@ -285,8 +284,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     match result {
-        Ok(()) => {
+        Ok(response) => {
             println!("Agent completed successfully.");
+            println!("Final answer: {}", response.content);
             println!("Check observability logs for event details.");
         }
         Err(e) => {

@@ -5,7 +5,6 @@
 //! This test verifies the agent can work with real Anthropic-compatible LLM API.
 
 use vol_llm_agent::ReActAgent;
-use vol_llm_tool::ToolContext;
 use vol_llm_tdengine::{IndexPriceTool};
 use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
 use vol_llm_core::{LLMProvider, LLMClient, ToolDefinition, StreamEvent, StreamEventData};
@@ -212,21 +211,22 @@ async fn test_agent_with_real_anthropic_api() {
         .build()
         .unwrap();
 
-    let context = ToolContext::default();
+    
 
     println!("\n--- Running agent with user input: 'What is the BTC price?' ---\n");
 
-    let result = agent.run("What is the BTC price?", context).await;
+    let result = agent.run("What is the BTC price?").await;
 
     println!("\n========== TEST RESULTS ==========\n");
 
     let mut output_log = String::new();
 
-    // Agent returns Result<(), AgentError> - if Ok, the run completed successfully
+    // Agent returns Result<AgentResponse, AgentError> - if Ok, the run completed successfully
     match result {
-        Ok(()) => {
+        Ok(response) => {
             output_log.push_str("=== Agent Execution Result ===\n\n");
             output_log.push_str("Status: Success\n");
+            output_log.push_str(&format!("Final answer: {}\n", response.content));
 
             println!("✓ Agent completed successfully");
 

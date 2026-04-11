@@ -14,7 +14,6 @@
 //! Log files will be written to: logs/agents/market_analyst_agent/
 
 use vol_llm_agent::react::*;
-use vol_llm_tool::ToolContext;
 use vol_llm_provider::LLMConfig;
 use vol_llm_core::LLMProvider;
 use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
@@ -115,8 +114,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Query: {}", query);
     println!();
 
-    let context = ToolContext::default();
-    let result = agent.run(query, context).await;
+    
+    let result = agent.run(query).await;
 
     println!();
     println!("═══════════════════════════════════════════════════════════");
@@ -125,8 +124,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     match result {
-        Ok(()) => {
+        Ok(response) => {
             println!("Agent completed successfully.");
+            println!("Final answer: {}", response.content);
             println!("Events were logged to observability plugin.");
         }
         Err(e) => {
