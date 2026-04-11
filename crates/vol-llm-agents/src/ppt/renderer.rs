@@ -1,97 +1,392 @@
 //! PPT Agent 渲染器。
 
+use pptx::{
+    Presentation,
+    dml::ColorFormat,
+    slide::{SlideRef, SlideLayoutRef},
+    shapes::ShapeTree,
+    Emu, PptxError,
+};
 use std::path::PathBuf;
 use std::sync::Arc;
-use crate::ppt::{PptTemplate, Outline};
-
-/// 渲染错误
-#[derive(Debug, thiserror::Error)]
-pub enum RendererError {
-    #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
-    #[error("Failed to create presentation: {0}")]
-    CreateError(String),
-    #[error("Failed to add slide: {0}")]
-    SlideError(String),
-    #[error("Failed to save presentation: {0}")]
-    SaveError(String),
-}
+use crate::ppt::{PptTemplate, Outline, SlideType};
 
 /// PPTX 渲染器
 pub struct PptxRenderer {
+    presentation: Presentation,
     template: Arc<PptTemplate>,
-    // TODO: Use ppt-rs Presentation
-    slides: Vec<String>,  // Placeholder for MVP
+    next_shape_id: u32,
 }
 
 impl PptxRenderer {
+    /// 创建新的渲染器
     pub fn new(template: Arc<PptTemplate>) -> Self {
         Self {
+            presentation: Presentation::new().expect("Failed to create presentation"),
             template,
-            slides: Vec::new(),
+            next_shape_id: 1,
         }
     }
 
-    /// 渲染大纲到幻灯片
+    /// 添加封面页
+    pub fn add_title_slide(&mut self, title: &str, subtitle: &str) -> Result<(), RendererError> {
+        let layout = self.get_first_layout()?;
+        let slide = self.presentation.add_slide(&layout)?;
+
+        // Add title textbox
+        let title_color = self.resolve_color("{{primary}}");
+        self.add_textbox_to_slide(
+            &slide,
+            title,
+            457_200,    // 0.5 inch (left)
+            914_400,    // 1.0 inch (top)
+            8_229_600,  // 9 inches (width)
+            1_371_600,  // 1.5 inches (height)
+            44.0,       // font size
+            &title_color,
+        )?;
+
+        // Add subtitle textbox
+        let subtitle_color = self.resolve_color("{{text_secondary}}");
+        self.add_textbox_to_slide(
+            &slide,
+            subtitle,
+            457_200,
+            2_743_200,  // 3.0 inches (top)
+            8_229_600,
+            914_400,    // 1.0 inch (height)
+            24.0,
+            &subtitle_color,
+        )?;
+
+        Ok(())
+    }
+
+    /// 添加目录页
+    pub fn add_toc_slide(&mut self, title: &str, sections: &[String]) -> Result<(), RendererError> {
+        let layout = self.get_first_layout()?;
+        let slide = self.presentation.add_slide(&layout)?;
+
+        // Add title
+        let title_color = self.resolve_color("{{primary}}");
+        self.add_textbox_to_slide(
+            &slide,
+            title,
+            457_200,
+            457_200,    // 0.5 inch (top)
+            8_229_600,
+            914_400,
+            32.0,
+            &title_color,
+        )?;
+
+        // Add sections
+        let mut y_offset = 1_371_600; // 1.5 inches
+        for (i, section) in sections.iter().enumerate() {
+            let text_color = self.resolve_color("{{text_primary}}");
+            let bullet_text = format!("{}. {}", i + 1, section);
+            self.add_textbox_to_slide(
+                &slide,
+                &bullet_text,
+                685_800,    // 0.75 inch (left)
+                y_offset,
+                7_772_400,  // 8.5 inches (width)
+                457_200,    // 0.5 inch (height)
+                18.0,
+                &text_color,
+            )?;
+            y_offset += 548_640; // 0.6 inch spacing
+        }
+
+        Ok(())
+    }
+
+    /// 添加内容页
+    pub fn add_content_slide(&mut self, title: &str, bullets: &[String]) -> Result<(), RendererError> {
+        let layout = self.get_first_layout()?;
+        let slide = self.presentation.add_slide(&layout)?;
+
+        // Add title
+        let title_color = self.resolve_color("{{primary}}");
+        self.add_textbox_to_slide(
+            &slide,
+            title,
+            457_200,
+            457_200,
+            8_229_600,
+            914_400,
+            28.0,
+            &title_color,
+        )?;
+
+        // Add bullets
+        let mut y_offset = 1_371_600; // 1.5 inches
+        for bullet in bullets {
+            let text_color = self.resolve_color("{{text_primary}}");
+            let bullet_text = format!("• {}", bullet);
+            self.add_textbox_to_slide(
+                &slide,
+                &bullet_text,
+                685_800,    // 0.75 inch (left)
+                y_offset,
+                7_772_400,
+                457_200,
+                16.0,
+                &text_color,
+            )?;
+            y_offset += 457_200; // 0.5 inch spacing
+        }
+
+        Ok(())
+    }
+
+    /// 从大纲构建完整 PPT
     pub fn render_outline(&mut self, outline: &Outline) -> Result<(), RendererError> {
-        // MVP placeholder - just track slide titles
-        for slide in &outline.slides {
-            self.slides.push(slide.title.clone());
+        // Add title slide
+        let subtitle = "Generated by PPT Agent";
+        self.add_title_slide(&outline.title, subtitle)?;
+
+        // Collect sections for TOC
+        let sections: Vec<String> = outline.slides.iter()
+            .filter(|s| matches!(s.slide_type, SlideType::Content))
+            .map(|s| s.title.clone())
+            .collect();
+
+        // Add TOC slide if there are content slides
+        if !sections.is_empty() {
+            self.add_toc_slide("目录", &sections)?;
         }
+
+        // Add content slides
+        for slide_def in &outline.slides {
+            if matches!(slide_def.slide_type, SlideType::Content) {
+                self.add_content_slide(&slide_def.title, &slide_def.bullets)?;
+            }
+        }
+
         Ok(())
     }
 
-    /// 添加标题幻灯片
-    pub fn add_title_slide(&mut self, _title: &str, _subtitle: &str, _template: &PptTemplate) {
-        // TODO: Implement with ppt-rs
-    }
+    /// 保存到文件
+    pub fn save(&self, path: &PathBuf) -> Result<(), RendererError> {
+        // Create parent directories if needed
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| RendererError::IoError(e.to_string()))?;
+        }
 
-    /// 添加目录幻灯片
-    pub fn add_toc_slide(&mut self, _title: &str, _sections: &[String], _template: &PptTemplate) {
-        // TODO: Implement with ppt-rs
-    }
-
-    /// 添加内容幻灯片
-    pub fn add_content_slide(&mut self, _title: &str, _bullets: &[String], _template: &PptTemplate) {
-        // TODO: Implement with ppt-rs
-    }
-
-    /// 保存 PPTX 文件
-    pub fn save(&self, _path: &PathBuf) -> Result<(), RendererError> {
-        // TODO: Implement with ppt-rs
-        // For MVP, just create an empty file to indicate completion
-        std::fs::write(_path, b"")?;
+        self.presentation.save(path)
+            .map_err(|e| RendererError::PptxError(e.to_string()))?;
         Ok(())
+    }
+
+    /// 解析颜色模板变量
+    fn resolve_color(&self, color: &str) -> ColorFormat {
+        if let Some(stripped) = color.strip_prefix("{{").and_then(|s| s.strip_suffix("}}")) {
+            match stripped {
+                "primary" => hex_to_color(&self.template.color_scheme.primary),
+                "secondary" => hex_to_color(&self.template.color_scheme.secondary),
+                "text_primary" => hex_to_color(&self.template.color_scheme.text_primary),
+                "text_secondary" => hex_to_color(&self.template.color_scheme.text_secondary),
+                "accent" => hex_to_color(&self.template.color_scheme.accent),
+                "background" => hex_to_color(&self.template.color_scheme.background),
+                _ => ColorFormat::rgb(0, 0, 0),
+            }
+        } else {
+            hex_to_color(color)
+        }
+    }
+
+    /// XML escape helper
+    fn xml_escape(s: &str) -> String {
+        s.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&apos;")
+    }
+
+    /// Generate textbox XML with text content
+    fn create_textbox_xml(
+        shape_id: u32,
+        text: &str,
+        left: i64,
+        top: i64,
+        width: i64,
+        height: i64,
+        font_size: f64,
+        color: &ColorFormat,
+    ) -> String {
+        let escaped_text = Self::xml_escape(text);
+        let color_hex = match color {
+            ColorFormat::Rgb { r, g, b } => format!("{:02X}{:02X}{:02X}", r, g, b),
+            _ => "000000".to_string(),
+        };
+
+        format!(
+            r#"<p:sp xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:nvSpPr>
+    <p:cNvPr id="{}" name="TextBox {}"/>
+    <p:cNvSpPr txBox="1"/>
+    <p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="{}" y="{}"/>
+      <a:ext cx="{}" cy="{}"/>
+    </a:xfrm>
+    <a:prstGeom prst="rect">
+      <a:avLst/>
+    </a:prstGeom>
+    <a:noFill/>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr wrap="square" rtlCol="0" anchor="t"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:r>
+        <a:rPr lang="en-US" sz="{}" dirty="0" err="0" b="0">
+          <a:solidFill>
+            <a:srgbClr val="{}"/>
+          </a:solidFill>
+        </a:rPr>
+        <a:t>{}</a:t>
+      </a:r>
+      <a:endParaRPr lang="en-US" sz="{}"/>
+    </a:p>
+  </p:txBody>
+</p:sp>"#,
+            shape_id,
+            shape_id,
+            left,
+            top,
+            width,
+            height,
+            (font_size * 100.0) as i64, // font size in 1/100 pt
+            color_hex,
+            escaped_text,
+            (font_size * 100.0) as i64,
+        )
+    }
+
+    /// 添加 textbox 到幻灯片
+    fn add_textbox_to_slide(
+        &mut self,
+        slide: &SlideRef,
+        text: &str,
+        left: i64,
+        top: i64,
+        width: i64,
+        height: i64,
+        font_size: f64,
+        color: &ColorFormat,
+    ) -> Result<(), RendererError> {
+        // Get current slide XML
+        let slide_xml = self.presentation.slide_xml(slide)
+            .map_err(|e| RendererError::PptxError(e.to_string()))?;
+
+        // Create textbox XML with text content
+        let textbox_xml = Self::create_textbox_xml(
+            self.next_shape_id,
+            text,
+            left,
+            top,
+            width,
+            height,
+            font_size,
+            color,
+        );
+        self.next_shape_id += 1;
+
+        // Insert textbox XML before closing </p:spTree> tag
+        let textbox_bytes = textbox_xml.into_bytes();
+        let mut new_xml = Vec::with_capacity(slide_xml.len() + textbox_bytes.len());
+
+        // Find position of closing spTree tag
+        let closing_tag = b"</p:spTree>";
+        if let Some(pos) = slide_xml.windows(closing_tag.len()).position(|w| w == closing_tag) {
+            new_xml.extend_from_slice(&slide_xml[..pos]);
+            new_xml.extend_from_slice(&textbox_bytes);
+            new_xml.extend_from_slice(&slide_xml[pos..]);
+        } else {
+            // Fallback: append at end (may produce invalid XML)
+            new_xml.extend_from_slice(slide_xml);
+            new_xml.extend_from_slice(&textbox_bytes);
+        }
+
+        // Write back to slide
+        let slide_xml_mut = self.presentation.slide_xml_mut(slide)
+            .map_err(|e| RendererError::PptxError(e.to_string()))?;
+        *slide_xml_mut = new_xml;
+
+        Ok(())
+    }
+
+    /// 获取第一个可用的布局
+    fn get_first_layout(&self) -> Result<SlideLayoutRef, RendererError> {
+        let layouts = self.presentation.slide_layouts()
+            .map_err(|e| RendererError::PptxError(e.to_string()))?;
+
+        layouts.into_iter()
+            .next()
+            .ok_or_else(|| RendererError::PptxError("No slide layouts available".to_string()))
     }
 }
 
 impl Default for PptxRenderer {
     fn default() -> Self {
-        Self {
-            template: Arc::new(PptTemplate {
-                id: "default".to_string(),
-                name: "Default Template".to_string(),
-                description: "Default template".to_string(),
-                tags: crate::ppt::TemplateTags {
-                    occasion: vec![],
-                    style: vec![],
-                    audience: vec![],
-                },
-                color_scheme: crate::ppt::ColorScheme {
-                    primary: "#000000".to_string(),
-                    secondary: "#666666".to_string(),
-                    accent: "#333333".to_string(),
-                    background: "#FFFFFF".to_string(),
-                    text_primary: "#000000".to_string(),
-                    text_secondary: "#666666".to_string(),
-                },
-                typography: crate::ppt::Typography {
-                    title_font: "Arial".to_string(),
-                    body_font: "Arial".to_string(),
-                },
-                layouts: vec![],
-            }),
-            slides: Vec::new(),
+        // Use a default template
+        let default_template = Arc::new(PptTemplate {
+            id: "default".to_string(),
+            name: "Default Template".to_string(),
+            description: "Default PPT template".to_string(),
+            tags: crate::ppt::template::TemplateTags {
+                occasion: vec![],
+                style: vec![],
+                audience: vec![],
+            },
+            color_scheme: crate::ppt::template::ColorScheme {
+                primary: "#0066CC".to_string(),
+                secondary: "#6699CC".to_string(),
+                accent: "#FF9900".to_string(),
+                background: "#FFFFFF".to_string(),
+                text_primary: "#333333".to_string(),
+                text_secondary: "#666666".to_string(),
+            },
+            typography: crate::ppt::template::Typography {
+                title_font: "Arial".to_string(),
+                body_font: "Arial".to_string(),
+            },
+        });
+        Self::new(default_template)
+    }
+}
+
+/// Convert hex color string to ColorFormat
+fn hex_to_color(hex: &str) -> ColorFormat {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() == 6 {
+        if let (Ok(r), Ok(g), Ok(b)) = (
+            u8::from_str_radix(&hex[0..2], 16),
+            u8::from_str_radix(&hex[2..4], 16),
+            u8::from_str_radix(&hex[4..6], 16),
+        ) {
+            return ColorFormat::rgb(r, g, b);
         }
+    }
+    ColorFormat::rgb(0, 0, 0)
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum RendererError {
+    #[error("PPTX rendering failed: {0}")]
+    PptxError(String),
+    #[error("IO error: {0}")]
+    IoError(String),
+}
+
+impl From<PptxError> for RendererError {
+    fn from(err: PptxError) -> Self {
+        RendererError::PptxError(err.to_string())
     }
 }

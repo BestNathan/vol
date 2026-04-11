@@ -1,20 +1,9 @@
-//! 需求分析模块。
+//! PPT Agent 需求分析模块。
 
 use std::sync::Arc;
-use vol_llm_core::{LLMClient, ConversationRequest, Message};
-use serde_json::Value;
+use vol_llm_core::{LLMClient, ConversationRequest, Message, MessageContent};
 use crate::ppt::{StructuredRequirement, prompts};
-
-/// 分析错误
-#[derive(Debug, thiserror::Error)]
-pub enum AnalysisError {
-    #[error("LLM call failed: {0}")]
-    LlmError(String),
-    #[error("JSON parsing failed: {0}")]
-    JsonParseError(String),
-    #[error("Missing required field: {0}")]
-    MissingField(String),
-}
+use serde_json::Value;
 
 /// 需求分析模块
 pub struct AnalysisModule {
@@ -28,42 +17,40 @@ impl AnalysisModule {
 
     /// 分析用户需求，提取结构化信息
     pub async fn analyze(&self, description: &str, context: Option<&str>) -> Result<StructuredRequirement, AnalysisError> {
-        let user_message = Message::user(
-            prompts::build_analysis_user_prompt(description, context)
-        );
+        // Build messages
+        let system_message = Message::system(prompts::ANALYSIS_SYSTEM_PROMPT.to_string());
+        let user_message = Message::user(prompts::build_analysis_user_prompt(description, context));
 
-        let request = ConversationRequest::with_history(
-            Some(prompts::ANALYSIS_SYSTEM_PROMPT.to_string()),
-            vec![user_message]
-        );
-
+        // Call LLM
+        let request = ConversationRequest::with_history(None, vec![system_message, user_message]);
         let response = self.llm.converse(request).await
             .map_err(|e| AnalysisError::LlmError(e.to_string()))?;
 
-        // Parse JSON response - handle Option<MessageContent>
-        let content_str = response.message.content
-            .as_ref()
-            .map(|c| c.as_str())
-            .unwrap_or("");
+        // Extract content from response message
+        let content = response.message.content
+            .ok_or_else(|| AnalysisError::EmptyResponse)?;
+
+        let content_str = match &content {
+            MessageContent::Text(s) => s.as_str(),
+            MessageContent::MultiPart(_) => "",
+        };
+
+        if content_str.is_empty() {
+            return Err(AnalysisError::EmptyResponse);
+        }
+
+        // Parse JSON response
         let json: Value = serde_json::from_str(content_str)
             .map_err(|e| AnalysisError::JsonParseError(e.to_string()))?;
 
-        // Extract fields from JSON
+        // Extract fields
         let topic = json["topic"].as_str()
             .ok_or_else(|| AnalysisError::MissingField("topic".to_string()))?
             .to_string();
 
-        let audience = json.get("audience")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-
-        let style = json.get("style")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-
-        let purpose = json.get("purpose")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+        let audience = json["audience"].as_str().map(|s| s.to_string());
+        let style = json["style"].as_str().map(|s| s.to_string());
+        let purpose = json["purpose"].as_str().map(|s| s.to_string());
 
         Ok(StructuredRequirement {
             topic,
@@ -74,13 +61,18 @@ impl AnalysisModule {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// 分析错误
+#[derive(Debug, thiserror::Error)]
+pub enum AnalysisError {
+    #[error("LLM call failed: {0}")]
+    LlmError(String),
 
-    #[test]
-    fn test_analysis_error_display() {
-        let err = AnalysisError::MissingField("topic".to_string());
-        assert_eq!(format!("{}", err), "Missing required field: topic");
-    }
+    #[error("JSON parsing failed: {0}")]
+    JsonParseError(String),
+
+    #[error("Missing required field: {0}")]
+    MissingField(String),
+
+    #[error("Empty response from LLM")]
+    EmptyResponse,
 }

@@ -77,6 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Create config
             let mut config = PptAgentConfig::default()
+                .with_llm_provider("anthropic-main")
                 .with_verbose(verbose);
 
             // Set template dir to bundled templates

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::path::PathBuf;
 use vol_llm_core::LLMClient;
-use vol_llm_provider::LLMProviderRegistry;
+use vol_llm_provider::{LLMProviderRegistry, LLMProviderConfig};
 use crate::ppt::{PptAgentConfig, PptInput, PptOutput, StructuredRequirement, PptTemplate};
 use crate::ppt::template::TemplateRegistry;
 use crate::ppt::renderer::{PptxRenderer, RendererError};
@@ -22,8 +22,25 @@ pub struct PptAgent {
 impl PptAgent {
     /// 创建新的 PPT Agent
     pub async fn new(config: PptAgentConfig) -> Result<Self, PptAgentError> {
-        // Initialize LLM
-        let registry = LLMProviderRegistry::new();
+        eprintln!("DEBUG: config.llm_provider_id = '{}'", config.llm_provider_id);
+
+        // Initialize LLM from config
+        let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
+            .map_err(|_| PptAgentError::ConfigError("ANTHROPIC_AUTH_TOKEN not set".to_string()))?;
+
+        let llm_config = LLMProviderConfig {
+            id: config.llm_provider_id.clone(),
+            config: vol_llm_provider::LLMConfig {
+                provider: vol_llm_core::LLMProvider::Anthropic,
+                model: "qwen3.5-plus".to_string(),
+                api_key: vol_llm_provider::Secret::literal(api_key),
+                base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
+            },
+        };
+
+        let registry = LLMProviderRegistry::from_configs(&[llm_config])
+            .map_err(|e| PptAgentError::ConfigError(format!("Failed to initialize LLM: {}", e)))?;
+
         let llm = registry.get(&config.llm_provider_id)
             .ok_or_else(|| PptAgentError::ConfigError(format!("LLM provider '{}' not found", config.llm_provider_id)))?;
 
