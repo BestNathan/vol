@@ -18,11 +18,15 @@
 
 use vol_llm_provider::{LLMProviderRegistry, LLMConfig};
 use vol_llm_tool::ToolRegistry;
-use vol_tdengine::TdengineConfig;
+use vol_tdengine::{TdengineConfig, TdengineClient};
 use vol_notification::FeishuNotification;
 use std::sync::Arc;
 use vol_llm_tdengine::{IndexPriceTool, VolatilityIndexTool, OptionsTool, RvTool};
 use vol_llm_core::LLMProvider;
+use vol_llm_agents::{AdviceAgent, AdviceAgentConfig};
+use vol_core::{Alert, AlertType, Tenor, OptionType};
+use vol_tracing::TracedEvent;
+use tokio::sync::broadcast;
 
 #[tokio::test]
 async fn test_advice_agent_end_to_end() {
@@ -63,4 +67,50 @@ async fn test_advice_agent_end_to_end() {
         .expect("FEISHU_APP_ID, FEISHU_APP_SECRET, FEISHU_RECEIVE_ID must be set");
 
     println!("✓ Feishu notification configured");
+
+    // Setup AdviceAgent
+    let config = AdviceAgentConfig {
+        enabled: true,
+        cooldown_secs: 0,      // Disable cooldown for testing
+        max_analyses_per_hour: 100, // High limit for testing
+        llm_provider_id: "anthropic-main".to_string(),
+    };
+
+    let tdengine_client = Arc::new(TdengineClient::new(&tdengine_config)
+        .expect("Failed to create TDengine client"));
+
+    let advice_agent = AdviceAgent::new(
+        config,
+        registry,
+        tool_registry,
+        tdengine_client,
+        feishu,
+    );
+
+    println!("✓ AdviceAgent created");
+
+    // Setup Alert channel
+    let (alert_tx, alert_rx): (broadcast::Sender<TracedEvent<Alert>>, _) =
+        broadcast::channel(100);
+
+    println!("✓ Alert channel created");
+
+    // Create test alert
+    let test_alert = Alert {
+        alert_type: AlertType::AbsoluteIv { threshold: 0.5 },
+        tenor: Tenor::Short,
+        symbol: "BTC".to_string(),
+        iv: 0.55,  // Above threshold
+        message: "IV exceeded threshold".to_string(),
+        timestamp: 0,
+        source: "test".to_string(),
+        index_price: 50000.0,
+        dte: 30,
+        option_type: OptionType::Call,
+        moneyness: 1.0,
+        mark_price_coin: 0.05,
+        trace_id: "test-integration-001".to_string(),
+    };
+
+    println!("✓ Test alert created: BTC AbsoluteIv (IV=0.55, threshold=0.5)");
 }
