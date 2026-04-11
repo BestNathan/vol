@@ -409,13 +409,6 @@ impl RunContext {
         let final_content = block_on(self.final_content.read());
         let error = block_on(self.error.read());
 
-        // Build reasoning string from all reasoning steps
-        let reasoning = reasoning_chain
-            .iter()
-            .map(|step| format!("[Iteration {}] {}", step.iteration, step.thinking))
-            .collect::<Vec<_>>()
-            .join("\n\n");
-
         // Convert state::ToolCallRecord to response::ToolCallRecord
         let response_tool_calls = tool_call_records
             .iter()
@@ -430,7 +423,7 @@ impl RunContext {
 
         AgentResponse {
             content: final_content.clone().unwrap_or_default(),
-            reasoning,
+            reasoning: reasoning_chain.clone(),
             run_id: self.run_id.clone(),
             session_id: self.session_id.clone(),
             iterations: self.iteration.load(std::sync::atomic::Ordering::SeqCst),

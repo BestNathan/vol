@@ -161,9 +161,12 @@ pub async fn create_skip_stream(
         let _ = tx.send(Ok(AgentStreamEvent::AgentComplete {
             response: AgentResponse {
                 content: String::new(),
-                reasoning: String::new(),
+                reasoning: Vec::new(),
+                run_id: String::new(),
+                session_id: String::new(),
                 iterations: 0,
                 tool_calls: Vec::new(),
+                error: None,
             },
         })).await;
     });

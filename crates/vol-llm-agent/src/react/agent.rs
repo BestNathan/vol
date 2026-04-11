@@ -3,7 +3,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 use vol_llm_core::{LLMClient, Message, ConversationRequest, ToolChoice, StreamEventData, StreamReceiver};
-use vol_llm_tool::ToolContext;
 use tracing::{info, debug};
 use super::{
     AgentResponse, AgentStreamEvent, PluginRegistry, RunContext, PluginContext,
@@ -11,6 +10,7 @@ use super::{
 };
 use crate::session::Session;
 use crate::prompt_context::PromptContext;
+use vol_llm_tool::ToolContext;
 
 /// Agent configuration
 #[derive(Clone)]
@@ -90,12 +90,18 @@ impl ReActAgent {
         }
     }
 
-    /// Run ReAct loop. All events are emitted via RunContext event bus.
+    /// Run ReAct loop and return the final response.
+    ///
+    /// All events are emitted via RunContext event bus.
+    /// The returned AgentResponse contains the complete execution context including:
+    /// - Final answer content and complete reasoning chain
+    /// - run_id and session_id for correlation
+    /// - All tool calls made during execution
+    /// - Error information if any tool call failed
     pub async fn run(
         &self,
         user_input: &str,
-        context: ToolContext,
-    ) -> Result<(), crate::AgentError> {
+    ) -> Result<AgentResponse, crate::AgentError> {
         // === Phase 1: Generate run_id and create RunContext ===
         let run_id = uuid::Uuid::new_v4().simple().to_string();
 
@@ -153,11 +159,15 @@ impl ReActAgent {
         let llm = self.llm.clone();
         let tools = self.tools.clone();
         let config = self.config.clone();
+        let session_id = self.session.id.clone();
         let _session = self.session.clone();
         let user_input = user_input.to_string();
-        let _run_id_for_tracing = run_id.clone();
+        let run_id_clone = run_id.clone();
 
         let agent_task = tokio::spawn(async move {
+            // Collect tool call records
+            let mut tool_call_records = Vec::new();
+
             // === Emit and intercept AgentStart ===
             let start_event = AgentStreamEvent::AgentStart {
                 input: user_input.clone()
@@ -251,6 +261,12 @@ impl ReActAgent {
                     }
                 };
 
+                // Collect reasoning chain
+                if !thinking.is_empty() {
+                    // Record reasoning step in RunContext
+                    run_ctx.record_reasoning_step(thinking.clone(), None).await;
+                }
+
                 // Emit ThinkingComplete unconditionally (even if empty)
                 let thinking_event = AgentStreamEvent::ThinkingComplete { thinking };
                 run_ctx.emit(thinking_event).await;
@@ -306,9 +322,18 @@ impl ReActAgent {
                         }
 
                         // Execute tool
-                        let result = match tools.execute(call, &context).await {
+                        let result = match tools.execute(call, &ToolContext::default()).await {
                             Ok(r) => r,
                             Err(e) => {
+                                // Record failed tool call
+                                tool_call_records.push(crate::react::response::ToolCallRecord {
+                                    tool_name: call.name.clone(),
+                                    arguments: call.arguments.clone(),
+                                    result: format!("Error: {}", e),
+                                    iteration,
+                                    success: false,
+                                });
+
                                 return Err(crate::AgentError::ToolExecution {
                                     tool: call.name.clone(),
                                     error: e.to_string(),
@@ -317,6 +342,15 @@ impl ReActAgent {
                         };
 
                         info!("Tool {} returned: {}", call.name, result.content);
+
+                        // Record successful tool call
+                        tool_call_records.push(crate::react::response::ToolCallRecord {
+                            tool_name: call.name.clone(),
+                            arguments: call.arguments.clone(),
+                            result: result.content.clone(),
+                            iteration,
+                            success: true,
+                        });
 
                         // Emit ToolCallComplete
                         run_ctx.emit(AgentStreamEvent::ToolCallComplete {
@@ -357,18 +391,28 @@ impl ReActAgent {
                     return Err(crate::AgentError::from(e));
                 }
 
+                // Store final response data
+                let final_content = content.clone();
+                let final_iterations = iteration;
+
+                // Get reasoning chain from RunContext
+                let reasoning_chain = run_ctx.get_reasoning_chain().await;
+
                 // === Emit AgentComplete ===
                 let response = AgentResponse {
-                    content,
-                    reasoning: String::new(),
-                    iterations: iteration,
-                    tool_calls,
+                    content: final_content.clone(),
+                    reasoning: reasoning_chain,
+                    run_id: run_id_clone.clone(),
+                    session_id: session_id.clone(),
+                    iterations: final_iterations,
+                    tool_calls: tool_call_records.clone(),
+                    error: None,
                 };
 
                 let complete_event = AgentStreamEvent::AgentComplete { response: response.clone() };
                 run_ctx.emit(complete_event).await;
 
-                return Ok(());
+                return Ok(response);
             }
         });
 

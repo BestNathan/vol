@@ -2,16 +2,38 @@
 
 use thiserror::Error;
 use vol_llm_core::LLMError;
-use vol_llm_core::ToolCall;
 use serde::Serialize;
+use crate::react::state::ReasoningStep;
 
-/// Agent response
+/// Record of a single tool call during agent execution
+#[derive(Debug, Clone, Serialize)]
+pub struct ToolCallRecord {
+    pub tool_name: String,
+    pub arguments: String,
+    pub result: String,
+    pub iteration: u32,
+    pub success: bool,
+}
+
+/// Agent response with full execution context
 #[derive(Debug, Clone, Serialize)]
 pub struct AgentResponse {
+    /// Final answer content
     pub content: String,
-    pub reasoning: String,
+
+    /// Complete reasoning chain (all thinking steps)
+    pub reasoning: Vec<ReasoningStep>,
+
+    /// Execution metadata
+    pub run_id: String,
+    pub session_id: String,
     pub iterations: u32,
-    pub tool_calls: Vec<ToolCall>,
+
+    /// All tool calls made during execution
+    pub tool_calls: Vec<ToolCallRecord>,
+
+    /// Error information if any tool call failed
+    pub error: Option<String>,
 }
 
 /// Agent error
