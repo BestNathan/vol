@@ -13,6 +13,7 @@ use crate::session::SessionMessage;
 use vol_llm_tool::ToolRegistry;
 use super::AgentConfig;
 use super::plugin::PluginDecision;
+use super::state::{ReasoningStep, ToolCallRecord};
 use super::stream::AgentStreamEvent;
 
 /// PluginContext - Read-only context for plugin hooks.
@@ -48,6 +49,10 @@ pub struct PluginContext {
     pub all_tool_calls: Arc<RwLock<Vec<ToolCall>>>,
     pub current_tool_calls: Arc<RwLock<Vec<ToolCall>>>,
     pub data: Arc<RwLock<HashMap<String, serde_json::Value>>>,
+    pub reasoning_chain: Arc<RwLock<Vec<ReasoningStep>>>,
+    pub tool_call_records: Arc<RwLock<Vec<ToolCallRecord>>>,
+    pub final_content: Arc<RwLock<Option<String>>>,
+    pub error: Arc<RwLock<Option<String>>>,
 }
 
 impl PluginContext {
@@ -64,6 +69,10 @@ impl PluginContext {
             all_tool_calls: ctx.all_tool_calls.clone(),
             current_tool_calls: ctx.current_tool_calls.clone(),
             data: ctx.data.clone(),
+            reasoning_chain: ctx.reasoning_chain.clone(),
+            tool_call_records: ctx.tool_call_records.clone(),
+            final_content: ctx.final_content.clone(),
+            error: ctx.error.clone(),
         }
     }
 
@@ -174,6 +183,12 @@ pub struct RunContext {
     /// This ensures listener tasks have time to complete their `plugin.listen()` calls
     /// before the agent run is considered complete.
     pub plugin_event_tx: mpsc::Sender<PluginRequest>,
+
+    // Internal state collection
+    pub(crate) reasoning_chain: Arc<RwLock<Vec<ReasoningStep>>>,
+    pub(crate) tool_call_records: Arc<RwLock<Vec<ToolCallRecord>>>,
+    pub(crate) final_content: Arc<RwLock<Option<String>>>,
+    pub(crate) error: Arc<RwLock<Option<String>>>,
 }
 
 impl RunContext {
@@ -208,6 +223,10 @@ impl RunContext {
             config,
             event_tx,
             plugin_event_tx,
+            reasoning_chain: Arc::new(RwLock::new(Vec::new())),
+            tool_call_records: Arc::new(RwLock::new(Vec::new())),
+            final_content: Arc::new(RwLock::new(None)),
+            error: Arc::new(RwLock::new(None)),
         };
 
         (ctx, plugin_event_rx)
@@ -365,6 +384,10 @@ impl Clone for RunContext {
             config: self.config.clone(),
             event_tx: self.event_tx.clone(),
             plugin_event_tx: self.plugin_event_tx.clone(),
+            reasoning_chain: self.reasoning_chain.clone(),
+            tool_call_records: self.tool_call_records.clone(),
+            final_content: self.final_content.clone(),
+            error: self.error.clone(),
         }
     }
 }
