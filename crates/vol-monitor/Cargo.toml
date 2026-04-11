@@ -11,6 +11,10 @@ path = "src/main.rs"
 name = "upload-doc"
 path = "src/bin/upload-doc.rs"
 
+[[bin]]
+name = "upload-ppt"
+path = "src/bin/upload-ppt.rs"
+
 [dependencies]
 tokio = { workspace = true }
 serde = { workspace = true }
