@@ -97,7 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let form = Form::new()
         .part("file", file_part)
-        .text("file_type", "stream");
+        .text("file_type", "pptx");
 
     let upload_resp = client.post(upload_url)
         .header("Authorization", format!("Bearer {}", tenant_token))
@@ -137,7 +137,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Build file message content
     let file_content = json!({
         "file_key": file_key,
-        "file_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        "file_type": "pptx"
     });
 
     // Send message with receive_id_type as query parameter
