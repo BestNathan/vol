@@ -23,3 +23,4 @@ vol-llm-tool = { path = "../vol-llm-tool" }
 vol-llm-tdengine = { path = "../vol-llm-tdengine" }
 vol-tdengine = { path = "../vol-tdengine" }
 vol-llm-provider = { path = "../vol-llm-provider" }
+chrono = "0.4"
