@@ -14,6 +14,7 @@ pub struct PptTemplate {
     pub tags: TemplateTags,
     pub color_scheme: ColorScheme,
     pub typography: Typography,
+    pub layouts: Vec<TemplateLayout>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -37,6 +38,84 @@ pub struct ColorScheme {
 pub struct Typography {
     pub title_font: String,
     pub body_font: String,
+}
+
+/// 模板布局定义
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TemplateLayout {
+    pub layout_type: LayoutType,
+    pub elements: Vec<LayoutElement>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LayoutType {
+    Title,
+    Content,
+    TableOfContents,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LayoutElement {
+    pub element_type: String,       // "textbox", "image", "chart"
+    pub placeholder: String,        // "title", "subtitle", "bullets"
+    pub position: Position,
+    pub style: ElementStyle,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Position {
+    pub x: i32,       // EMU units (1 inch = 914400 EMU)
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ElementStyle {
+    pub font_size: i32,
+    pub color: Option<String>,     // HEX, or "{{primary}}" for template reference
+    pub bullet_style: Option<String>,
+}
+
+impl Default for TemplateLayout {
+    fn default() -> Self {
+        Self {
+            layout_type: LayoutType::Content,
+            elements: vec![
+                LayoutElement {
+                    element_type: "textbox".to_string(),
+                    placeholder: "title".to_string(),
+                    position: Position {
+                        x: 457200,  // 0.5 inch
+                        y: 228600,  // 0.25 inch
+                        width: 8229600,  // 9 inches
+                        height: 914400,  // 1 inch
+                    },
+                    style: ElementStyle {
+                        font_size: 24,
+                        color: Some("{{primary}}".to_string()),
+                        bullet_style: None,
+                    },
+                },
+                LayoutElement {
+                    element_type: "textbox".to_string(),
+                    placeholder: "content".to_string(),
+                    position: Position {
+                        x: 457200,
+                        y: 1371600,  // 1.5 inches
+                        width: 8229600,
+                        height: 4572000,  // 5 inches
+                    },
+                    style: ElementStyle {
+                        font_size: 16,
+                        color: Some("{{text_primary}}".to_string()),
+                        bullet_style: Some("bullet".to_string()),
+                    },
+                },
+            ],
+        }
+    }
 }
 
 /// 模板注册表

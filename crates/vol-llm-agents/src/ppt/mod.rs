@@ -9,5 +9,5 @@ pub mod tools;
 
 pub use agent::PptAgent;
 pub use config::PptAgentConfig;
-pub use types::{PptInput, PptOutput, Slide, SlideLayout};
-pub use template::{TemplateRegistry, PptTemplate};
+pub use types::{PptInput, PptOutput, Slide, SlideLayout, SlideType, StructuredRequirement, Outline, SlideDef};
+pub use template::{TemplateRegistry, PptTemplate, TemplateLayout, LayoutElement, Position, ElementStyle, LayoutType};
