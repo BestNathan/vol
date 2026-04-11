@@ -18,7 +18,7 @@ enum Commands {
     /// Generate a PowerPoint presentation
     Generate {
         /// Text description of the presentation
-        #[arg(short, long)]
+        #[arg(short = 't', long)]
         text: String,
 
         /// Optional context (audience, purpose, etc.)
@@ -26,7 +26,7 @@ enum Commands {
         context: Option<String>,
 
         /// Template ID to use
-        #[arg(short, long)]
+        #[arg(short = 'T', long)]
         template: Option<String>,
 
         /// Output file path
