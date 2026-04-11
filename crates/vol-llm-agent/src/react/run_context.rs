@@ -728,4 +728,107 @@ mod tests {
         // Verify we have: system + history + user = 3 messages
         assert_eq!(messages_after_second, 3);
     }
+
+    #[tokio::test]
+    async fn test_record_reasoning_step() {
+        let (ctx, _rx) = RunContext::new(
+            "test-run".to_string(),
+            "test input".to_string(),
+            "session-1".to_string(),
+            Arc::new(Session::new(
+                "session-1".to_string(),
+                Arc::new(InMemorySessionStore::new()),
+                Arc::new(InMemoryMessageStore::new()),
+            )),
+            Arc::new(vol_llm_tool::ToolRegistry::new()),
+            AgentConfig::default(),
+        );
+
+        ctx.record_reasoning_step("First thought".to_string(), Some(100)).await;
+        ctx.record_reasoning_step("Second thought".to_string(), None).await;
+
+        let chain = ctx.get_reasoning_chain().await;
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain[0].thinking, "First thought");
+        assert_eq!(chain[0].duration_ms, Some(100));
+        assert_eq!(chain[1].thinking, "Second thought");
+    }
+
+    #[tokio::test]
+    async fn test_record_tool_call() {
+        let (ctx, _rx) = RunContext::new(
+            "test-run".to_string(),
+            "test".to_string(),
+            "session-1".to_string(),
+            Arc::new(Session::new(
+                "session-1".to_string(),
+                Arc::new(InMemorySessionStore::new()),
+                Arc::new(InMemoryMessageStore::new()),
+            )),
+            Arc::new(vol_llm_tool::ToolRegistry::new()),
+            AgentConfig::default(),
+        );
+
+        let record = ToolCallRecord {
+            tool_name: "test_tool".to_string(),
+            arguments: "{}".to_string(),
+            result: "result".to_string(),
+            iteration: 1,
+            success: true,
+        };
+        ctx.record_tool_call(record).await;
+
+        let records = ctx.get_tool_call_records().await;
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].tool_name, "test_tool");
+    }
+
+    #[tokio::test]
+    async fn test_set_final_content() {
+        let (ctx, _rx) = RunContext::new(
+            "test-run".to_string(),
+            "test".to_string(),
+            "session-1".to_string(),
+            Arc::new(Session::new(
+                "session-1".to_string(),
+                Arc::new(InMemorySessionStore::new()),
+                Arc::new(InMemoryMessageStore::new()),
+            )),
+            Arc::new(vol_llm_tool::ToolRegistry::new()),
+            AgentConfig::default(),
+        );
+
+        ctx.set_final_content("Final answer".to_string()).await;
+
+        // Use finalize to verify
+        let response = ctx.finalize();
+        assert_eq!(response.content, "Final answer");
+    }
+
+    #[tokio::test]
+    async fn test_finalize() {
+        let (ctx, _rx) = RunContext::new(
+            "test-run".to_string(),
+            "test".to_string(),
+            "session-1".to_string(),
+            Arc::new(Session::new(
+                "session-1".to_string(),
+                Arc::new(InMemorySessionStore::new()),
+                Arc::new(InMemoryMessageStore::new()),
+            )),
+            Arc::new(vol_llm_tool::ToolRegistry::new()),
+            AgentConfig::default(),
+        );
+
+        ctx.record_reasoning_step("thought".to_string(), None).await;
+        ctx.set_final_content("answer".to_string()).await;
+
+        let response = ctx.finalize();
+
+        assert_eq!(response.content, "answer");
+        assert_eq!(response.reasoning.len(), 1);
+        assert_eq!(response.reasoning[0].thinking, "thought");
+        assert_eq!(response.run_id, "test-run");
+        assert_eq!(response.session_id, "session-1");
+    }
 }

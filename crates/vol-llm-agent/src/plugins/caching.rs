@@ -184,9 +184,12 @@ mod tests {
         // Store response
         let response = AgentResponse {
             content: "cached response".to_string(),
-            reasoning: String::new(),
+            reasoning: vec![],
+            run_id: "test-run".to_string(),
+            session_id: "test-session".to_string(),
             iterations: 1,
             tool_calls: Vec::new(),
+            error: None,
         };
         plugin.store("test input", response.clone()).await;
 
