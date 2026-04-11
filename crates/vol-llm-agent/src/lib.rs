@@ -9,6 +9,7 @@ pub mod plugins;
 pub mod observability;
 
 pub use react::{ReActAgent, AgentConfig, AgentBuilder, AgentResponse, AgentError, AgentStreamEvent, AgentStreamReceiver};
+pub use react::state::{ReasoningStep, ToolCallRecord};
 pub use embedding::{Embedder, DashScopeEmbedder, DashScopeConfig, DashScopeModel};
 pub use prompt_context::{PromptTemplate, PromptFragment, FragmentType, PromptContext, MessageAssembler};
 pub use rag::{RagAgent, RagResponse, RagConfig, Document, EmbeddingStore};
