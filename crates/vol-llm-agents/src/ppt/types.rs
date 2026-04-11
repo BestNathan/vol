@@ -64,6 +64,7 @@ pub struct Slide {
     pub slide_type: SlideType,
     pub layout: SlideLayout,
     pub title: String,
+    pub subtitle: Option<String>,
     pub content: SlideContent,
 }
 
@@ -110,8 +111,13 @@ impl SlideDef {
             slide_type: self.slide_type.clone(),
             layout,
             title: self.title.clone(),
+            subtitle: self.subtitle.clone(),
             content: SlideContent {
-                bullets: self.bullets.clone(),
+                bullets: if !self.bullets.is_empty() {
+                    self.bullets.clone()
+                } else {
+                    self.sections.clone()
+                },
                 speaker_notes: None,
             },
         }
