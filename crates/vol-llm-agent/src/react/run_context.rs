@@ -49,14 +49,15 @@ pub struct PluginContext {
     pub all_tool_calls: Arc<RwLock<Vec<ToolCall>>>,
     pub current_tool_calls: Arc<RwLock<Vec<ToolCall>>>,
     pub data: Arc<RwLock<HashMap<String, serde_json::Value>>>,
-    pub reasoning_chain: Arc<RwLock<Vec<ReasoningStep>>>,
-    pub tool_call_records: Arc<RwLock<Vec<ToolCallRecord>>>,
-    pub final_content: Arc<RwLock<Option<String>>>,
-    pub error: Arc<RwLock<Option<String>>>,
+    // Note: Internal state fields (reasoning_chain, tool_call_records, final_content, error)
+    // are NOT exposed to plugins. Plugins access state via events, not direct field access.
 }
 
 impl PluginContext {
     /// Create a PluginContext from a RunContext (without cloning senders)
+    ///
+    /// Note: Internal state fields (reasoning_chain, tool_call_records, final_content, error)
+    /// are NOT copied to PluginContext. Plugins access state via events, not direct field access.
     pub fn from_run_ctx(ctx: &RunContext) -> Self {
         Self {
             run_id: ctx.run_id.clone(),
@@ -69,10 +70,6 @@ impl PluginContext {
             all_tool_calls: ctx.all_tool_calls.clone(),
             current_tool_calls: ctx.current_tool_calls.clone(),
             data: ctx.data.clone(),
-            reasoning_chain: ctx.reasoning_chain.clone(),
-            tool_call_records: ctx.tool_call_records.clone(),
-            final_content: ctx.final_content.clone(),
-            error: ctx.error.clone(),
         }
     }
 
