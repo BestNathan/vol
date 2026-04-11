@@ -57,7 +57,7 @@ Generate title slide, table of contents, 5-10 content slides, and summary. Retur
         let response = self.llm.converse(request).await
             .map_err(|e| OutlineError::LlmError(e.to_string()))?;
 
-        // Parse JSON response
+        // Parse JSON response - handle Option<MessageContent>
         let content_str = response.message.content
             .as_ref()
             .map(|c| c.as_str())

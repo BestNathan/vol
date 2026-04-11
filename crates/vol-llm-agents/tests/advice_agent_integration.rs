@@ -16,17 +16,23 @@
 //! cargo test -p vol-llm-agents --test advice_agent_integration -- --nocapture
 //! ```
 
-use vol_llm_provider::{LLMProviderRegistry, LLMConfig};
+use vol_llm_provider::{LLMProviderRegistry, LLMConfig, LLMProviderConfig};
 use vol_llm_tool::ToolRegistry;
 use vol_tdengine::{TdengineConfig, TdengineClient};
 use vol_notification::FeishuNotification;
+use vol_config::FeishuConfig;
 use std::sync::Arc;
 use vol_llm_tdengine::{IndexPriceTool, VolatilityIndexTool, OptionsTool, RvTool};
-use vol_llm_core::LLMProvider;
 use vol_llm_agents::{AdviceAgent, AdviceAgentConfig};
 use vol_core::{Alert, AlertType, Tenor, OptionType};
 use vol_tracing::TracedEvent;
 use tokio::sync::broadcast;
+use tracing::Span;
+use std::env;
+
+fn default_message_template() -> String {
+    "🚨 {tenor} {alert_type}: {symbol} | IV={value} | 指数={index_price} | DTE={dte}天 | {option_type} | 价格={mark_price_coin} ({mark_price_usd} USD)".to_string()
+}
 
 #[tokio::test]
 async fn test_advice_agent_end_to_end() {
@@ -47,33 +53,40 @@ async fn test_advice_agent_end_to_end() {
         "https://coding.dashscope.aliyuncs.com/apps/anthropic",
     );
 
-    let registry = LLMProviderRegistry::from_configs(&[llm_config.clone()]);
+    let provider_config = LLMProviderConfig {
+        id: "anthropic-main".to_string(),
+        config: llm_config,
+    };
+
+    let registry = LLMProviderRegistry::from_configs(&[provider_config])
+        .expect("Failed to create LLM provider registry");
 
     println!("✓ LLM Provider configured");
 
     // Setup TDengine and Tools
     let tdengine_config = TdengineConfig::default();
 
-    let tdengine_client = match TdengineClient::new(&tdengine_config) {
-        Ok(client) => Arc::new(client),
-        Err(e) => {
-            eprintln!("Skipping test: Failed to connect to TDengine: {}", e);
-            return;
-        }
-    };
+    let tdengine_client = TdengineClient::new(tdengine_config.clone());
 
-    let tool_registry = Arc::new(ToolRegistry::new());
+    let mut tool_registry = ToolRegistry::new();
 
-    tool_registry.register(Arc::new(IndexPriceTool::new(Some(tdengine_config.clone()))));
-    tool_registry.register(Arc::new(VolatilityIndexTool::new(Some(tdengine_config.clone()))));
-    tool_registry.register(Arc::new(OptionsTool::new(Some(tdengine_config.clone()))));
-    tool_registry.register(Arc::new(RvTool::new(Some(tdengine_config.clone()))));
+    tool_registry.register(IndexPriceTool::new(Some(tdengine_config.clone())));
+    tool_registry.register(VolatilityIndexTool::new(Some(tdengine_config.clone())));
+    tool_registry.register(OptionsTool::new(Some(tdengine_config.clone())));
+    tool_registry.register(RvTool::new(Some(tdengine_config.clone())));
 
     println!("✓ TDengine tools registered");
 
     // Setup Feishu Notification
-    let feishu = FeishuNotification::from_env()
-        .expect("FEISHU_APP_ID, FEISHU_APP_SECRET, FEISHU_RECEIVE_ID must be set");
+    let feishu_config = FeishuConfig {
+        app_id: Some(env::var("FEISHU_APP_ID").expect("FEISHU_APP_ID must be set")),
+        app_secret: Some(env::var("FEISHU_APP_SECRET").expect("FEISHU_APP_SECRET must be set")),
+        receive_id: Some(env::var("FEISHU_RECEIVE_ID").expect("FEISHU_RECEIVE_ID must be set")),
+        message_template: default_message_template(),
+    };
+
+    let feishu = FeishuNotification::new(feishu_config)
+        .expect("Failed to create Feishu notification");
 
     println!("✓ Feishu notification configured");
 
@@ -88,8 +101,8 @@ async fn test_advice_agent_end_to_end() {
     let advice_agent = AdviceAgent::new(
         config,
         registry,
-        tool_registry,
-        tdengine_client,
+        Arc::new(tool_registry),
+        Arc::new(tdengine_client),
         feishu,
     );
 
@@ -131,8 +144,12 @@ async fn test_advice_agent_end_to_end() {
     println!("✓ AdviceAgent started in background");
 
     // Send test alert
-    let traced_alert = TracedEvent::new(test_alert.clone());
-    alert_tx.send(traced_alert).expect("Failed to send alert");
+    let traced_alert = TracedEvent::with_trace_id(
+        test_alert.clone(),
+        Some(Span::current()),
+        test_alert.trace_id.clone(),
+    );
+    let _ = alert_tx.send(traced_alert);
 
     println!("✓ Test alert sent");
 
