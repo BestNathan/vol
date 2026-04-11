@@ -398,6 +398,46 @@ impl RunContext {
     pub async fn get_tool_call_records(&self) -> Vec<ToolCallRecord> {
         self.tool_call_records.read().await.clone()
     }
+
+    /// Build AgentResponse from collected state
+    pub fn finalize(&self) -> super::response::AgentResponse {
+        use futures::executor::block_on;
+        use super::response::{AgentResponse, ToolCallRecord as ResponseToolCallRecord};
+
+        let reasoning_chain = block_on(self.reasoning_chain.read());
+        let tool_call_records = block_on(self.tool_call_records.read());
+        let final_content = block_on(self.final_content.read());
+        let error = block_on(self.error.read());
+
+        // Build reasoning string from all reasoning steps
+        let reasoning = reasoning_chain
+            .iter()
+            .map(|step| format!("[Iteration {}] {}", step.iteration, step.thinking))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        // Convert state::ToolCallRecord to response::ToolCallRecord
+        let response_tool_calls = tool_call_records
+            .iter()
+            .map(|record| ResponseToolCallRecord {
+                tool_name: record.tool_name.clone(),
+                arguments: record.arguments.clone(),
+                result: record.result.clone(),
+                iteration: record.iteration,
+                success: record.success,
+            })
+            .collect();
+
+        AgentResponse {
+            content: final_content.clone().unwrap_or_default(),
+            reasoning,
+            run_id: self.run_id.clone(),
+            session_id: self.session_id.clone(),
+            iterations: self.iteration.load(std::sync::atomic::Ordering::SeqCst),
+            tool_calls: response_tool_calls,
+            error: error.clone(),
+        }
+    }
 }
 
 impl Clone for RunContext {
