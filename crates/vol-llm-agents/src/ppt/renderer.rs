@@ -219,7 +219,7 @@ impl PptxRenderer {
     ) -> String {
         let escaped_text = Self::xml_escape(text);
         let color_hex = match color {
-            ColorFormat::Rgb { r, g, b } => format!("{:02X}{:02X}{:02X}", r, g, b),
+            ColorFormat::Rgb(rgb) => format!("{:02X}{:02X}{:02X}", rgb.r, rgb.g, rgb.b),
             _ => "000000".to_string(),
         };
 
@@ -357,6 +357,7 @@ impl Default for PptxRenderer {
                 title_font: "Arial".to_string(),
                 body_font: "Arial".to_string(),
             },
+            layouts: vec![],
         });
         Self::new(default_template)
     }
