@@ -18,3 +18,74 @@ color_scheme:
 typography:
   title_font: "Times New Roman"
   body_font: "Arial"
+
+layouts:
+  - layout_type: title
+    elements:
+      - element_type: textbox
+        placeholder: title
+        position:
+          x: 457200
+          y: 1828800
+          width: 8229600
+          height: 914400
+        style:
+          font_size: 44
+          color: "{{primary}}"
+      - element_type: textbox
+        placeholder: subtitle
+        position:
+          x: 457200
+          y: 3200400
+          width: 8229600
+          height: 685800
+        style:
+          font_size: 24
+          color: "{{text_secondary}}"
+
+  - layout_type: content
+    elements:
+      - element_type: textbox
+        placeholder: title
+        position:
+          x: 457200
+          y: 228600
+          width: 8229600
+          height: 914400
+        style:
+          font_size: 28
+          color: "{{primary}}"
+      - element_type: textbox
+        placeholder: content
+        position:
+          x: 457200
+          y: 1371600
+          width: 8229600
+          height: 4572000
+        style:
+          font_size: 16
+          color: "{{text_primary}}"
+          bullet_style: "bullet"
+
+  - layout_type: table_of_contents
+    elements:
+      - element_type: textbox
+        placeholder: title
+        position:
+          x: 457200
+          y: 228600
+          width: 8229600
+          height: 914400
+        style:
+          font_size: 32
+          color: "{{primary}}"
+      - element_type: textbox
+        placeholder: sections
+        position:
+          x: 685800
+          y: 1371600
+          width: 7772400
+          height: 4572000
+        style:
+          font_size: 18
+          color: "{{text_primary}}"
