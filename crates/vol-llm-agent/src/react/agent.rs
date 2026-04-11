@@ -8,6 +8,7 @@ use super::{
     AgentResponse, AgentStreamEvent, PluginRegistry, RunContext, PluginContext,
     PluginDecision,
 };
+use crate::react::state::ToolCallRecord;
 use crate::session::Session;
 use crate::prompt_context::PromptContext;
 use vol_llm_tool::ToolContext;
@@ -159,15 +160,12 @@ impl ReActAgent {
         let llm = self.llm.clone();
         let tools = self.tools.clone();
         let config = self.config.clone();
-        let session_id = self.session.id.clone();
+        let _session_id = self.session.id.clone();
         let _session = self.session.clone();
         let user_input = user_input.to_string();
-        let run_id_clone = run_id.clone();
+        let _run_id_clone = run_id.clone();
 
         let agent_task = tokio::spawn(async move {
-            // Collect tool call records
-            let mut tool_call_records = Vec::new();
-
             // === Emit and intercept AgentStart ===
             let start_event = AgentStreamEvent::AgentStart {
                 input: user_input.clone()
@@ -326,13 +324,16 @@ impl ReActAgent {
                             Ok(r) => r,
                             Err(e) => {
                                 // Record failed tool call
-                                tool_call_records.push(crate::react::response::ToolCallRecord {
+                                run_ctx.record_tool_call(ToolCallRecord {
                                     tool_name: call.name.clone(),
                                     arguments: call.arguments.clone(),
                                     result: format!("Error: {}", e),
                                     iteration,
                                     success: false,
-                                });
+                                }).await;
+
+                                // Set error in RunContext
+                                run_ctx.set_error(format!("Tool execution failed: {}", e)).await;
 
                                 return Err(crate::AgentError::ToolExecution {
                                     tool: call.name.clone(),
@@ -343,14 +344,14 @@ impl ReActAgent {
 
                         info!("Tool {} returned: {}", call.name, result.content);
 
-                        // Record successful tool call
-                        tool_call_records.push(crate::react::response::ToolCallRecord {
+                        // Record tool call
+                        run_ctx.record_tool_call(ToolCallRecord {
                             tool_name: call.name.clone(),
                             arguments: call.arguments.clone(),
                             result: result.content.clone(),
                             iteration,
                             success: true,
-                        });
+                        }).await;
 
                         // Emit ToolCallComplete
                         run_ctx.emit(AgentStreamEvent::ToolCallComplete {
@@ -392,22 +393,10 @@ impl ReActAgent {
                 }
 
                 // Store final response data
-                let final_content = content.clone();
-                let final_iterations = iteration;
-
-                // Get reasoning chain from RunContext
-                let reasoning_chain = run_ctx.get_reasoning_chain().await;
+                run_ctx.set_final_content(content.clone()).await;
 
                 // === Emit AgentComplete ===
-                let response = AgentResponse {
-                    content: final_content.clone(),
-                    reasoning: reasoning_chain,
-                    run_id: run_id_clone.clone(),
-                    session_id: session_id.clone(),
-                    iterations: final_iterations,
-                    tool_calls: tool_call_records.clone(),
-                    error: None,
-                };
+                let response = run_ctx.finalize();
 
                 let complete_event = AgentStreamEvent::AgentComplete { response: response.clone() };
                 run_ctx.emit(complete_event).await;
