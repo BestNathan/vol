@@ -1,6 +1,7 @@
 //! vol-llm-agents: Business Agents for LLM-powered analysis.
 
 pub mod advice;
+pub mod ppt;
 pub mod qa;
 
 pub use advice::{AdviceAgent, AdviceAgentConfig};

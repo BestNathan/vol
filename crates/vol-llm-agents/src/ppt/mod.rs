@@ -1,0 +1,13 @@
+//! PPT Agent: AI-powered PowerPoint generation.
+
+pub mod agent;
+pub mod config;
+pub mod types;
+pub mod template;
+pub mod renderer;
+pub mod tools;
+
+pub use agent::PptAgent;
+pub use config::PptAgentConfig;
+pub use types::{PptInput, PptOutput, Slide, SlideLayout};
+pub use template::{TemplateRegistry, PptTemplate};
