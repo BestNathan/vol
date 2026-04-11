@@ -19,6 +19,7 @@ members = [
     "crates/vol-llm-agents",
     "crates/vol-tdengine",
     "crates/vol-llm-tdengine",
+    "crates/ppt-agent",
 ]
 
 [workspace.package]

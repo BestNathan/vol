@@ -1,0 +1,13 @@
+[package]
+name = "ppt-agent"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+vol-llm-agents = { path = "../vol-llm-agents" }
+vol-llm-provider = { path = "../vol-llm-provider" }
+tokio = { workspace = true }
+clap = { version = "4.4", features = ["derive"] }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
