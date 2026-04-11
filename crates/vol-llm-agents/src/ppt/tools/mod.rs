@@ -5,7 +5,7 @@ pub mod content;
 pub mod template;
 pub mod renderer;
 
-pub use outline::OutlineGeneratorTool;
-pub use content::ContentGeneratorTool;
+pub use outline::{OutlineGeneratorTool, OutlineError};
+pub use content::{ContentGeneratorTool, ContentError};
 pub use template::TemplateMatcherTool;
 pub use renderer::PptxRendererTool;

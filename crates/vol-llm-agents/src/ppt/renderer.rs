@@ -8,17 +8,18 @@ use pptx::{
     Emu, PptxError,
 };
 use std::path::PathBuf;
+use std::sync::Arc;
 use crate::ppt::{PptTemplate, Outline, SlideType};
 
 /// PPTX 渲染器
 pub struct PptxRenderer {
     presentation: Presentation,
-    template: PptTemplate,
+    template: Arc<PptTemplate>,
 }
 
 impl PptxRenderer {
     /// 创建新的渲染器
-    pub fn new(template: PptTemplate) -> Self {
+    pub fn new(template: Arc<PptTemplate>) -> Self {
         Self {
             presentation: Presentation::new().expect("Failed to create presentation"),
             template,
@@ -240,7 +241,7 @@ impl PptxRenderer {
 impl Default for PptxRenderer {
     fn default() -> Self {
         // Use a default template
-        let default_template = PptTemplate {
+        let default_template = Arc::new(PptTemplate {
             id: "default".to_string(),
             name: "Default Template".to_string(),
             description: "Default PPT template".to_string(),
@@ -261,7 +262,7 @@ impl Default for PptxRenderer {
                 title_font: "Arial".to_string(),
                 body_font: "Arial".to_string(),
             },
-        };
+        });
         Self::new(default_template)
     }
 }

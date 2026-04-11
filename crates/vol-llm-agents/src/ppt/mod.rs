@@ -9,8 +9,7 @@ pub mod renderer;
 pub mod tools;
 pub mod prompts;
 
-pub use agent::PptAgent;
-pub use analysis::{AnalysisModule, AnalysisError};
+pub use agent::{PptAgent, PptAgentError};
 pub use config::PptAgentConfig;
 pub use types::{PptInput, PptOutput, Slide, SlideLayout, SlideType, StructuredRequirement, Outline, SlideDef};
 pub use template::{TemplateRegistry, PptTemplate};
