@@ -1,0 +1,20 @@
+id: academic_report
+name: 学术报告
+description: 适合学术论文、研究报告
+
+tags:
+  occasion: ["academic", "research", "thesis"]
+  style: ["formal", "structured", "detailed"]
+  audience: ["academic", "researcher", "professor"]
+
+color_scheme:
+  primary: "#1e3a5f"
+  secondary: "#3d5a7a"
+  accent: "#8b4513"
+  background: "#ffffff"
+  text_primary: "#000000"
+  text_secondary: "#333333"
+
+typography:
+  title_font: "Times New Roman"
+  body_font: "Arial"

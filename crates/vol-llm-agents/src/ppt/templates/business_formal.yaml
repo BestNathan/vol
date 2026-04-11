@@ -1,0 +1,20 @@
+id: business_formal
+name: 商务正式
+description: 适合商务汇报、融资路演等正式场合
+
+tags:
+  occasion: ["pitch_deck", "report", "presentation"]
+  style: ["minimal", "professional", "clean"]
+  audience: ["executive", "investor", "client"]
+
+color_scheme:
+  primary: "#1a365d"
+  secondary: "#2d5a8a"
+  accent: "#c9a227"
+  background: "#ffffff"
+  text_primary: "#1a1a1a"
+  text_secondary: "#666666"
+
+typography:
+  title_font: "Microsoft YaHei"
+  body_font: "Arial"

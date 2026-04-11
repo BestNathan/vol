@@ -1,0 +1,20 @@
+id: tech_minimal
+name: 简洁科技
+description: 适合技术分享、产品发布
+
+tags:
+  occasion: ["product_launch", "tech_talk", "demo"]
+  style: ["minimal", "modern", "clean"]
+  audience: ["technical", "developer", "product"]
+
+color_scheme:
+  primary: "#2563eb"
+  secondary: "#3b82f6"
+  accent: "#10b981"
+  background: "#f8fafc"
+  text_primary: "#1e293b"
+  text_secondary: "#64748b"
+
+typography:
+  title_font: "Microsoft YaHei"
+  body_font: "Consolas"

@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::fs;
+use std::path::Path;
 
 /// PPT 模板定义
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -50,8 +52,20 @@ impl TemplateRegistry {
         }
     }
 
-    pub fn load_from_dir(&mut self, _dir: &std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-        // TODO: Implement YAML loading
+    pub fn load_from_dir(&mut self, dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        let mut templates = Vec::new();
+
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+                let content = fs::read_to_string(&path)?;
+                let template: PptTemplate = serde_yaml::from_str(&content)?;
+                templates.push(Arc::new(template));
+            }
+        }
+
+        self.templates = templates;
         Ok(())
     }
 
@@ -63,8 +77,26 @@ impl TemplateRegistry {
         self.templates.iter().find(|t| t.id == id)
     }
 
-    pub fn match_template(&self, _keywords: &[String]) -> Option<&Arc<PptTemplate>> {
-        // TODO: Implement template matching
+    pub fn match_template(&self, keywords: &[String]) -> Option<&Arc<PptTemplate>> {
+        // Simple keyword matching for MVP
+        // Future iteration: LLM analysis + vector similarity
+        for template in &self.templates {
+            for keyword in keywords {
+                let keyword_lower = keyword.to_lowercase();
+
+                // Check occasion tags
+                if template.tags.occasion.iter().any(|t| t.to_lowercase().contains(&keyword_lower)) {
+                    return Some(template);
+                }
+
+                // Check style tags
+                if template.tags.style.iter().any(|t| t.to_lowercase().contains(&keyword_lower)) {
+                    return Some(template);
+                }
+            }
+        }
+
+        // Default to first template if no match
         self.templates.first()
     }
 }
