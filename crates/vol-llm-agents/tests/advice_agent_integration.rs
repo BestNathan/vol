@@ -113,4 +113,29 @@ async fn test_advice_agent_end_to_end() {
     };
 
     println!("✓ Test alert created: BTC AbsoluteIv (IV=0.55, threshold=0.5)");
+
+    // Start AdviceAgent in background
+    let agent_clone = advice_agent.clone();
+    let handle = tokio::spawn(async move {
+        if let Err(e) = agent_clone.run(alert_rx).await {
+            eprintln!("AdviceAgent error: {}", e);
+        }
+    });
+
+    println!("✓ AdviceAgent started in background");
+
+    // Send test alert
+    let traced_alert = TracedEvent::new(test_alert.clone());
+    alert_tx.send(traced_alert).expect("Failed to send alert");
+
+    println!("✓ Test alert sent");
+
+    // Wait for processing (LLM response may take time)
+    println!("⏳ Waiting for AdviceAgent to process alert...");
+    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+
+    // Abort the agent task
+    handle.abort();
+
+    println!("✓ Test completed");
 }
