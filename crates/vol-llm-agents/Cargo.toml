@@ -9,6 +9,7 @@ tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
+thiserror = { workspace = true }
 pptx = "=0.1.0"
 serde_yaml = "0.9"
 clap = { version = "4.4", features = ["derive"] }
