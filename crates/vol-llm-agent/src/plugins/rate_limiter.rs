@@ -8,6 +8,7 @@ use tokio::sync::Semaphore;
 
 /// Rate limiter plugin
 pub struct RateLimiterPlugin {
+    #[allow(dead_code)]
     semaphore: Arc<Semaphore>,
 }
 

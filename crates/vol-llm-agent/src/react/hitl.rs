@@ -147,13 +147,6 @@ impl<C: ApprovalChannel> HitlPlugin<C> {
             .any(|t| matches!(t, ApprovalTrigger::AfterIteration))
     }
 
-    fn needs_final_answer_approval(&self) -> bool {
-        self.config
-            .triggers
-            .iter()
-            .any(|t| matches!(t, ApprovalTrigger::BeforeFinalAnswer))
-    }
-
     async fn request_approval(
         &self,
         request: ApprovalRequest,

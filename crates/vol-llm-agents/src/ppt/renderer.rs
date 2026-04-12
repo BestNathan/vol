@@ -3,9 +3,8 @@
 use crate::ppt::{Outline, PptTemplate, SlideType};
 use pptx::{
     dml::ColorFormat,
-    shapes::ShapeTree,
     slide::{SlideLayoutRef, SlideRef},
-    Emu, PptxError, Presentation,
+    PptxError, Presentation,
 };
 use std::path::PathBuf;
 use std::sync::Arc;

@@ -44,6 +44,7 @@ pub struct AdviceAgent {
     limiter: FrequencyLimiter,
     config: AdviceAgentConfig,
     registry: LLMProviderRegistry,
+    #[allow(dead_code)]
     tools: Arc<ToolRegistry>,
     /// TDengine client - reserved for future TDengine integration
     #[allow(dead_code)]
