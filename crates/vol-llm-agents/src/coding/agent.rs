@@ -20,10 +20,17 @@ pub struct CodingAgentResponse {
     pub tool_calls: u32,
 }
 
+/// Internal state for CodingAgent
+struct CodingAgentState {
+    llm: Arc<dyn vol_llm_core::LLMClient>,
+    tool_registry: Arc<ToolRegistry>,
+    agent_config: AgentConfig,
+}
+
 /// Coding Agent
 pub struct CodingAgent {
     config: CodingAgentConfig,
-    react_agent: ReActAgent,
+    state: Option<CodingAgentState>,
     observer: Option<Arc<dyn EventObserver>>,
     observer_plugin: Option<Arc<ObserverPlugin>>,
 }
@@ -69,25 +76,13 @@ impl CodingAgent {
             log_base_path: PathBuf::from("logs/coding"),
         };
 
-        // Create session
-        use vol_llm_agent::session::{InMemorySessionStore, InMemoryMessageStore};
-        let session = Arc::new(Session::new(
-            format!("coding_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S")),
-            Arc::new(InMemorySessionStore::new()),
-            Arc::new(InMemoryMessageStore::new()),
-        ));
-
-        // Create ReActAgent
-        let react_agent = ReActAgent::new(
-            llm,
-            Arc::new(tool_registry),
-            agent_config,
-            session,
-        );
-
         Ok(Self {
             config,
-            react_agent,
+            state: Some(CodingAgentState {
+                llm,
+                tool_registry: Arc::new(tool_registry),
+                agent_config,
+            }),
             observer: None,
             observer_plugin: None,
         })
@@ -120,6 +115,32 @@ impl CodingAgent {
 
     /// Run a coding task
     pub async fn run(&self, task: &str) -> Result<CodingAgentResponse, CodingAgentError> {
+        // Get state - take ownership of components
+        let state = self.state.as_ref()
+            .ok_or_else(|| CodingAgentError::Config("CodingAgent already consumed".to_string()))?;
+
+        // Create session for this run
+        use vol_llm_agent::session::{InMemorySessionStore, InMemoryMessageStore};
+        let session = Arc::new(Session::new(
+            format!("coding_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S")),
+            Arc::new(InMemorySessionStore::new()),
+            Arc::new(InMemoryMessageStore::new()),
+        ));
+
+        // Create ReActAgent with the plugin_registry that may have been modified by with_observer()
+        // Note: We need to use the config's plugin_registry, not the agent_config's
+        let agent_config = AgentConfig {
+            plugin_registry: self.config.plugin_registry.clone(),
+            ..state.agent_config.clone()
+        };
+
+        let react_agent = ReActAgent::new(
+            state.llm.clone(),
+            state.tool_registry.clone(),
+            agent_config,
+            session,
+        );
+
         // Notify observer of start
         if let Some(ref observer) = self.observer {
             observer.on_event(&vol_llm_core::AgentStreamEvent::AgentStart {
@@ -129,7 +150,7 @@ impl CodingAgent {
         }
 
         // Run the ReActAgent
-        let response = self.react_agent.run(task).await
+        let response = react_agent.run(task).await
             .map_err(|e| CodingAgentError::Agent(e))?;
 
         // Notify observer of completion
