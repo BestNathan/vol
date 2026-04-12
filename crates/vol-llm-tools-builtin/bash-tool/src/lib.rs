@@ -1,10 +1,11 @@
 //! vol-llm-tools-builtin-bash: Bash tool implementation.
 
 use async_trait::async_trait;
-use vol_llm_tool::{Tool, ToolCall, ToolResult};
+use serde::{Deserialize, Serialize};
+use vol_llm_tool::{Tool, ToolContext, ToolResult};
 
 /// Parameters for the Bash tool
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct BashParams {
     /// Command to execute
     pub command: String,
@@ -29,7 +30,24 @@ impl Tool for BashTool {
         "Execute a bash command."
     }
 
-    async fn call(&self, _params: ToolCall) -> Result<ToolResult, Box<dyn std::error::Error + Send + Sync>> {
+    fn parameters(&self) -> Option<serde_json::Value> {
+        Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "Command to execute"
+                }
+            },
+            "required": ["command"]
+        }))
+    }
+
+    async fn execute(
+        &self,
+        _args: &str,
+        _context: &ToolContext,
+    ) -> std::result::Result<ToolResult, Box<dyn std::error::Error + Send>> {
         todo!("Bash tool implementation")
     }
 }

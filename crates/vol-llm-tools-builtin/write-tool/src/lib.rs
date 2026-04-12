@@ -1,10 +1,11 @@
 //! vol-llm-tools-builtin-write: Write tool implementation.
 
 use async_trait::async_trait;
-use vol_llm_tool::{Tool, ToolCall, ToolResult};
+use serde::{Deserialize, Serialize};
+use vol_llm_tool::{Tool, ToolContext, ToolResult};
 
 /// Parameters for the Write tool
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct WriteParams {
     /// Path to the file to write
     pub path: String,
@@ -31,7 +32,28 @@ impl Tool for WriteTool {
         "Write content to a file at the specified path."
     }
 
-    async fn call(&self, _params: ToolCall) -> Result<ToolResult, Box<dyn std::error::Error + Send + Sync>> {
+    fn parameters(&self) -> Option<serde_json::Value> {
+        Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file to write"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Content to write to the file"
+                }
+            },
+            "required": ["path", "content"]
+        }))
+    }
+
+    async fn execute(
+        &self,
+        _args: &str,
+        _context: &ToolContext,
+    ) -> std::result::Result<ToolResult, Box<dyn std::error::Error + Send>> {
         todo!("Write tool implementation")
     }
 }

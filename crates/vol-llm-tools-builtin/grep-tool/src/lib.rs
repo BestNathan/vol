@@ -1,10 +1,11 @@
 //! vol-llm-tools-builtin-grep: Grep tool implementation.
 
 use async_trait::async_trait;
-use vol_llm_tool::{Tool, ToolCall, ToolResult};
+use serde::{Deserialize, Serialize};
+use vol_llm_tool::{Tool, ToolContext, ToolResult};
 
 /// Parameters for the Grep tool
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct GrepParams {
     /// Pattern to search for
     pub pattern: String,
@@ -31,7 +32,28 @@ impl Tool for GrepTool {
         "Search for a pattern in files."
     }
 
-    async fn call(&self, _params: ToolCall) -> Result<ToolResult, Box<dyn std::error::Error + Send + Sync>> {
+    fn parameters(&self) -> Option<serde_json::Value> {
+        Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Pattern to search for"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Optional path to search in"
+                }
+            },
+            "required": ["pattern"]
+        }))
+    }
+
+    async fn execute(
+        &self,
+        _args: &str,
+        _context: &ToolContext,
+    ) -> std::result::Result<ToolResult, Box<dyn std::error::Error + Send>> {
         todo!("Grep tool implementation")
     }
 }

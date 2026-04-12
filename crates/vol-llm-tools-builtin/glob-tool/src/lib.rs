@@ -1,10 +1,11 @@
 //! vol-llm-tools-builtin-glob: Glob tool implementation.
 
 use async_trait::async_trait;
-use vol_llm_tool::{Tool, ToolCall, ToolResult};
+use serde::{Deserialize, Serialize};
+use vol_llm_tool::{Tool, ToolContext, ToolResult};
 
 /// Parameters for the Glob tool
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct GlobParams {
     /// Glob pattern to match
     pub pattern: String,
@@ -29,7 +30,24 @@ impl Tool for GlobTool {
         "Find files matching a glob pattern."
     }
 
-    async fn call(&self, _params: ToolCall) -> Result<ToolResult, Box<dyn std::error::Error + Send + Sync>> {
+    fn parameters(&self) -> Option<serde_json::Value> {
+        Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Glob pattern to match"
+                }
+            },
+            "required": ["pattern"]
+        }))
+    }
+
+    async fn execute(
+        &self,
+        _args: &str,
+        _context: &ToolContext,
+    ) -> std::result::Result<ToolResult, Box<dyn std::error::Error + Send>> {
         todo!("Glob tool implementation")
     }
 }

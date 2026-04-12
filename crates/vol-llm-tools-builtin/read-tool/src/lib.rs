@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use vol_llm_tool::{Tool, ToolCall, ToolResult};
+use vol_llm_tool::{Tool, ToolContext, ToolResult};
 
 /// Error type for builtin tools
 #[derive(Debug, thiserror::Error)]
@@ -40,7 +40,24 @@ impl Tool for ReadTool {
         "Read the contents of a file at the specified path."
     }
 
-    async fn call(&self, _params: ToolCall) -> Result<ToolResult, Box<dyn std::error::Error + Send + Sync>> {
+    fn parameters(&self) -> Option<serde_json::Value> {
+        Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file to read"
+                }
+            },
+            "required": ["path"]
+        }))
+    }
+
+    async fn execute(
+        &self,
+        _args: &str,
+        _context: &ToolContext,
+    ) -> std::result::Result<ToolResult, Box<dyn std::error::Error + Send>> {
         todo!("Read tool implementation")
     }
 }
