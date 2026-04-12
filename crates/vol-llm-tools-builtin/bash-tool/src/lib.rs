@@ -142,7 +142,7 @@ impl ExecutableTool for BashTool {
     async fn execute(
         &self,
         args: &serde_json::Value,
-        _context: &ToolContext,
+        context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         // Parse arguments
         let params: BashParams = serde_json::from_value(args.clone()).map_err(|e| {
@@ -158,9 +158,11 @@ impl ExecutableTool for BashTool {
         let mut cmd = Command::new("sh");
         cmd.arg("-c").arg(&params.command);
 
-        // Set working directory if provided
+        // Set working directory: explicit param > sandbox root > process cwd
         if let Some(ref working_dir) = params.working_dir {
             cmd.current_dir(working_dir);
+        } else if let Some(ref sandbox) = context.sandbox {
+            cmd.current_dir(sandbox.root_path());
         }
 
         // Determine timeout

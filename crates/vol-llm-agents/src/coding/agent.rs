@@ -33,6 +33,7 @@ pub struct CodingAgent {
     state: Option<CodingAgentState>,
     observer: Option<Arc<dyn EventObserver>>,
     observer_plugin: Option<Arc<ObserverPlugin>>,
+    sandbox: Option<vol_llm_core::SandboxRef>,
 }
 
 impl CodingAgent {
@@ -85,6 +86,7 @@ impl CodingAgent {
             }),
             observer: None,
             observer_plugin: None,
+            sandbox: None,
         })
     }
 
@@ -113,6 +115,12 @@ impl CodingAgent {
         self
     }
 
+    /// Set the sandbox for tool execution
+    pub fn with_sandbox(mut self, sandbox: vol_llm_core::SandboxRef) -> Self {
+        self.sandbox = Some(sandbox);
+        self
+    }
+
     /// Run a coding task
     pub async fn run(&self, task: &str) -> Result<CodingAgentResponse, CodingAgentError> {
         // Get state - take ownership of components
@@ -134,31 +142,25 @@ impl CodingAgent {
             ..state.agent_config.clone()
         };
 
-        let react_agent = ReActAgent::new(
+        let mut react_agent = ReActAgent::new(
             state.llm.clone(),
             state.tool_registry.clone(),
             agent_config,
             session,
         );
 
-        // Notify observer of start
-        if let Some(ref observer) = self.observer {
-            observer.on_event(&vol_llm_core::AgentStreamEvent::AgentStart {
-                input: task.to_string(),
-            }).await
-            .map_err(|e| CodingAgentError::Observer(e))?;
+        if let Some(ref sandbox) = self.sandbox {
+            react_agent = react_agent.with_sandbox(sandbox.clone());
         }
 
         // Run the ReActAgent
+        // Note: ObserverPlugin receives all events via PluginRegistry,
+        // including AgentStart and AgentComplete emitted by ReActAgent itself.
         let response = react_agent.run(task).await
             .map_err(|e| CodingAgentError::Agent(e))?;
 
-        // Notify observer of completion
+        // Signal completion to observer (for report generation)
         if let Some(ref observer) = self.observer {
-            observer.on_event(&vol_llm_core::AgentStreamEvent::AgentComplete)
-                .await
-                .map_err(|e| CodingAgentError::Observer(e))?;
-
             observer.on_complete().await
                 .map_err(|e| CodingAgentError::Observer(e))?;
         }
