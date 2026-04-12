@@ -2,20 +2,30 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use vol_llm_tool::{Tool, ToolContext, ToolResult};
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType};
+
+/// Error type for builtin tools
+/// Re-exported from vol_llm_tool for convenience
+pub use vol_llm_tool::ToolError as BuiltinToolError;
 
 /// Parameters for the Edit tool
 #[derive(Debug, Deserialize, Serialize)]
 pub struct EditParams {
     /// Path to the file to edit
-    pub path: String,
-    /// Search pattern to find
-    pub search: String,
-    /// Replacement text
-    pub replace: String,
+    pub file_path: String,
+    /// String to find and replace
+    pub old_string: String,
+    /// String to replace with
+    pub new_string: String,
+    /// If true, replace all occurrences; if false, error if multiple occurrences found
+    #[serde(default)]
+    pub replace_all: bool,
 }
 
-/// The Edit tool for editing files
+/// The Edit tool for replacing exact strings in files
+///
+/// IMPORTANT: You must read the file first to know the exact string to replace.
+/// This tool performs exact string matching, not fuzzy matching.
 pub struct EditTool;
 
 impl EditTool {
@@ -24,48 +34,113 @@ impl EditTool {
     }
 }
 
+impl Default for EditTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
-impl Tool for EditTool {
-    fn name(&self) -> &str {
-        "edit"
+impl ExecutableTool for EditTool {
+    fn name(&self) -> &'static str {
+        "edit_file"
     }
 
-    fn description(&self) -> &str {
-        "Edit a file by replacing search pattern with replacement text."
+    fn description(&self) -> &'static str {
+        "Replace exact string occurrences in a file. IMPORTANT: You must read the file first to know the exact string to replace. This tool performs exact string matching, not fuzzy matching."
     }
 
-    fn parameters(&self) -> Option<serde_json::Value> {
-        Some(serde_json::json!({
+    fn parameters(&self) -> serde_json::Value {
+        serde_json::json!({
             "type": "object",
             "properties": {
-                "path": {
+                "file_path": {
                     "type": "string",
                     "description": "Path to the file to edit"
                 },
-                "search": {
+                "old_string": {
                     "type": "string",
-                    "description": "Search pattern to find"
+                    "description": "Exact string to find and replace"
                 },
-                "replace": {
+                "new_string": {
                     "type": "string",
-                    "description": "Replacement text"
+                    "description": "String to replace with"
+                },
+                "replace_all": {
+                    "type": "boolean",
+                    "description": "If true, replace all occurrences; if false (default), error if multiple occurrences found",
+                    "default": false
                 }
             },
-            "required": ["path", "search", "replace"]
-        }))
+            "required": ["file_path", "old_string", "new_string"]
+        })
     }
 
     async fn execute(
         &self,
-        _args: &str,
+        args: &serde_json::Value,
         _context: &ToolContext,
-    ) -> std::result::Result<ToolResult, Box<dyn std::error::Error + Send>> {
-        todo!("Edit tool implementation")
-    }
-}
+    ) -> ToolResultType<ToolResult> {
+        // Parse arguments
+        let params: EditParams = serde_json::from_value(args.clone()).map_err(|e| {
+            ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
+        })?;
 
-impl Default for EditTool {
-    fn default() -> Self {
-        Self::new()
+        // Read file contents
+        let content = tokio::fs::read_to_string(&params.file_path)
+            .await
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    ToolError::NotFound(params.file_path.clone())
+                } else {
+                    ToolError::ExecutionFailed(format!("Failed to read file: {}", e))
+                }
+            })?;
+
+        // Count occurrences of old_string
+        let count = content.matches(&params.old_string).count();
+
+        // Validate occurrences
+        if count == 0 {
+            return Err(ToolError::ExecutionFailed(format!(
+                "String '{}' not found in file",
+                params.old_string
+            )));
+        }
+
+        if count > 1 && !params.replace_all {
+            return Err(ToolError::ExecutionFailed(format!(
+                "Found {} occurrences of '{}', but replace_all is false. Set replace_all=true to replace all occurrences.",
+                count, params.old_string
+            )));
+        }
+
+        // Perform replacement
+        let new_content = if params.replace_all {
+            content.replace(&params.old_string, &params.new_string)
+        } else {
+            // Single replacement - only replace first occurrence
+            let mut replaced = String::new();
+            let mut parts = content.splitn(2, &params.old_string);
+            if let Some(before) = parts.next() {
+                replaced.push_str(before);
+                replaced.push_str(&params.new_string);
+                if let Some(after) = parts.next() {
+                    replaced.push_str(after);
+                }
+            }
+            replaced
+        };
+
+        // Write back to file
+        tokio::fs::write(&params.file_path, &new_content)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write file: {}", e)))?;
+
+        let output = format!(
+            "Successfully replaced {} occurrence(s) of '{}' with '{}' in {}",
+            count, params.old_string, params.new_string, params.file_path
+        );
+        Ok(ToolResult::success(output))
     }
 }
