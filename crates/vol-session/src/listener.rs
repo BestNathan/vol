@@ -68,6 +68,12 @@ impl SessionListener {
     /// `Some(SessionMessage)` if the event should be recorded, `None` otherwise
     fn event_to_message(&self, event: &AgentStreamEvent) -> Option<SessionMessage> {
         match event {
+            // AgentStart -> User message (NEW)
+            AgentStreamEvent::AgentStart { input } => Some(SessionMessage::new(
+                self.session_id.clone(),
+                vol_llm_core::Message::user(input.clone()),
+            )),
+
             // ThinkingComplete -> Assistant message (thinking content)
             AgentStreamEvent::ThinkingComplete { thinking } => Some(SessionMessage::new(
                 self.session_id.clone(),
