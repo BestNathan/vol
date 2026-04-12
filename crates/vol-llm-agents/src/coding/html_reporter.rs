@@ -60,10 +60,10 @@ impl HTMLReporter {
                 AgentStreamEvent::ThinkingComplete { thinking } => {
                     ("thinking", format!("Thinking:\n{}", thinking))
                 }
-                AgentStreamEvent::ToolCallBegin { tool_name, arguments } => {
+                AgentStreamEvent::ToolCallBegin { tool_name, arguments, .. } => {
                     ("tool", format!("→ {}({})\n", tool_name, arguments))
                 }
-                AgentStreamEvent::ToolCallComplete { tool_name, result } => {
+                AgentStreamEvent::ToolCallComplete { tool_name, result, tool_call_id: _ } => {
                     ("tool", format!("← {} result:\n{}", tool_name, result))
                 }
                 AgentStreamEvent::IterationComplete { iteration, tool_calls, final_answer } => {

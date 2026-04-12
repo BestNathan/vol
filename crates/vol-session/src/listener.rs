@@ -51,7 +51,8 @@ impl SessionListener {
     fn should_record(event: &AgentStreamEvent) -> bool {
         matches!(
             event,
-            AgentStreamEvent::ThinkingComplete { .. }
+            AgentStreamEvent::AgentStart { .. }
+                | AgentStreamEvent::ThinkingComplete { .. }
                 | AgentStreamEvent::ToolCallBegin { .. }
                 | AgentStreamEvent::ToolCallComplete { .. }
                 | AgentStreamEvent::IterationComplete { .. }
@@ -67,30 +68,48 @@ impl SessionListener {
     /// `Some(SessionMessage)` if the event should be recorded, `None` otherwise
     fn event_to_message(&self, event: &AgentStreamEvent) -> Option<SessionMessage> {
         match event {
+            // AgentStart -> User message (NEW)
+            AgentStreamEvent::AgentStart { input } => Some(SessionMessage::new(
+                self.session_id.clone(),
+                vol_llm_core::Message::user(input.clone()),
+            )),
+
             // ThinkingComplete -> Assistant message (thinking content)
             AgentStreamEvent::ThinkingComplete { thinking } => Some(SessionMessage::new(
                 self.session_id.clone(),
                 vol_llm_core::Message::assistant(thinking.clone()),
             )),
 
-            // ToolCallBegin -> Assistant message (tool call intent)
+            // ToolCallBegin -> Assistant message with tool_calls
+            // This preserves the original structure for LLM request restoration
             AgentStreamEvent::ToolCallBegin {
+                tool_call_id,
                 tool_name,
                 arguments,
             } => {
-                let content = format!("Calling tool: {} with arguments: {}", tool_name, arguments);
+                let tool_call = vol_llm_core::ToolCall {
+                    id: tool_call_id.clone(),
+                    name: tool_name.clone(),
+                    arguments: arguments.clone(),
+                    r#type: "function".to_string(),
+                };
                 Some(SessionMessage::new(
                     self.session_id.clone(),
-                    vol_llm_core::Message::assistant(content),
+                    vol_llm_core::Message::assistant_with_tools("", vec![tool_call]),
                 ))
             }
 
-            // ToolCallComplete -> System message (tool result)
-            AgentStreamEvent::ToolCallComplete { tool_name, result } => {
+            // ToolCallComplete -> Tool message with tool_call_id and result
+            // This preserves the original structure for LLM request restoration
+            AgentStreamEvent::ToolCallComplete {
+                tool_call_id,
+                tool_name,
+                result,
+            } => {
                 let content = format!("Tool '{}' returned: {}", tool_name, result);
                 Some(SessionMessage::new(
                     self.session_id.clone(),
-                    vol_llm_core::Message::system(content),
+                    vol_llm_core::Message::tool(content, tool_call_id.clone()),
                 ))
             }
 
@@ -164,6 +183,7 @@ mod tests {
     #[tokio::test]
     async fn test_should_record_tool_call_begin() {
         let event = AgentStreamEvent::ToolCallBegin {
+            tool_call_id: "call_123".to_string(),
             tool_name: "get_weather".to_string(),
             arguments: r#"{"city": "Beijing"}"#.to_string(),
         };
@@ -173,6 +193,7 @@ mod tests {
     #[tokio::test]
     async fn test_should_record_tool_call_complete() {
         let event = AgentStreamEvent::ToolCallComplete {
+            tool_call_id: "call_123".to_string(),
             tool_name: "get_weather".to_string(),
             result: "25°C".to_string(),
         };
@@ -190,27 +211,51 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_should_not_record_agent_start() {
+    async fn test_should_record_agent_start() {
         let event = AgentStreamEvent::AgentStart {
             input: "test".to_string(),
         };
-        assert!(!SessionListener::should_record(&event));
+        assert!(SessionListener::should_record(&event));
     }
 
     #[tokio::test]
-    async fn test_event_to_message_thinking_complete() {
+    async fn test_event_to_message_agent_start() {
         let store = Arc::new(InMemoryMessageStore::new());
         let (_tx, rx) = broadcast::channel(100);
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
-        let event = AgentStreamEvent::ThinkingComplete {
-            thinking: "Let me think...".to_string(),
+        let event = AgentStreamEvent::AgentStart {
+            input: "User's question".to_string(),
+        };
+
+        let msg = listener.event_to_message(&event).unwrap();
+        assert_eq!(msg.session_id, "session-1");
+        assert_eq!(msg.message.role, vol_llm_core::MessageRole::User);
+        assert!(msg.message.content.is_some());
+        assert_eq!(msg.message.content.unwrap().as_str(), "User's question");
+    }
+
+    #[tokio::test]
+    async fn test_event_to_message_tool_call_begin() {
+        let store = Arc::new(InMemoryMessageStore::new());
+        let (_tx, rx) = broadcast::channel(100);
+        let listener = SessionListener::new(rx, store, "session-1".to_string());
+
+        let event = AgentStreamEvent::ToolCallBegin {
+            tool_call_id: "call_123".to_string(),
+            tool_name: "get_weather".to_string(),
+            arguments: r#"{"city": "Beijing"}"#.to_string(),
         };
 
         let msg = listener.event_to_message(&event).unwrap();
         assert_eq!(msg.session_id, "session-1");
         assert_eq!(msg.message.role, vol_llm_core::MessageRole::Assistant);
-        assert!(msg.message.content.is_some());
+        // Verify tool_calls field is populated
+        assert!(msg.message.tool_calls.is_some());
+        let tool_calls = msg.message.tool_calls.as_ref().unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "call_123");
+        assert_eq!(tool_calls[0].name, "get_weather");
     }
 
     #[tokio::test]
@@ -220,13 +265,16 @@ mod tests {
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
         let event = AgentStreamEvent::ToolCallComplete {
+            tool_call_id: "call_123".to_string(),
             tool_name: "get_weather".to_string(),
             result: "25°C".to_string(),
         };
 
         let msg = listener.event_to_message(&event).unwrap();
         assert_eq!(msg.session_id, "session-1");
-        assert_eq!(msg.message.role, vol_llm_core::MessageRole::System);
+        assert_eq!(msg.message.role, vol_llm_core::MessageRole::Tool);
+        // Verify tool_call_id field is populated
+        assert_eq!(msg.message.tool_call_id, Some("call_123".to_string()));
     }
 
     #[tokio::test]
@@ -302,6 +350,7 @@ mod tests {
                 thinking: "Thinking...".to_string(),
             },
             AgentStreamEvent::ToolCallComplete {
+                tool_call_id: "call_1".to_string(),
                 tool_name: "get_weather".to_string(),
                 result: "25°C".to_string(),
             },
@@ -332,8 +381,10 @@ mod tests {
             messages[0].message.role,
             vol_llm_core::MessageRole::Assistant
         );
-        // Second: tool result (System)
-        assert_eq!(messages[1].message.role, vol_llm_core::MessageRole::System);
+        // Second: tool result (Tool)
+        assert_eq!(messages[1].message.role, vol_llm_core::MessageRole::Tool);
+        // Verify tool_call_id is set
+        assert_eq!(messages[1].message.tool_call_id, Some("call_1".to_string()));
         // Third: final answer (Assistant)
         assert_eq!(
             messages[2].message.role,

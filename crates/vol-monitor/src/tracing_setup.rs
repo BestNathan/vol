@@ -17,10 +17,9 @@ use opentelemetry_sdk::{
     trace::{self, Sampler},
     Resource,
 };
-use tracing::subscriber::set_global_default;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
-    fmt, fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
+    fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
     Registry,
 };
 

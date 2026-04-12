@@ -261,7 +261,7 @@ async fn get_access_token(client: &Client) -> Result<String, Box<dyn std::error:
 }
 
 /// Create a cloud document in Feishu Drive
-async fn upload_to_feishu(content: &str) -> Result<(String, String), Box<dyn std::error::Error>> {
+async fn upload_to_feishu(_content: &str) -> Result<(String, String), Box<dyn std::error::Error>> {
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()?;

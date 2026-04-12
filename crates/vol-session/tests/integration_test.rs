@@ -40,6 +40,7 @@ async fn test_session_listener_full_workflow() {
     // ToolCallBegin
     event_tx
         .send(TracedEvent::without_span(AgentStreamEvent::ToolCallBegin {
+            tool_call_id: "call_1".to_string(),
             tool_name: "volatility_index".to_string(),
             arguments: r#"{"symbol": "BTC"}"#.to_string(),
         }))
@@ -50,6 +51,7 @@ async fn test_session_listener_full_workflow() {
     event_tx
         .send(TracedEvent::without_span(
             AgentStreamEvent::ToolCallComplete {
+                tool_call_id: "call_1".to_string(),
                 tool_name: "volatility_index".to_string(),
                 result: "Index: btc_usd | Volatility: 42.98%".to_string(),
             },
@@ -120,15 +122,19 @@ async fn test_session_listener_filters_events() {
         .map_err(|_| "send error")
         .unwrap();
 
-    // Send events that should NOT be recorded
-    let _ = event_tx.send(TracedEvent::without_span(AgentStreamEvent::AgentStart {
-        input: "test input".to_string(),
-    }));
+    // Send AgentStart event (should NOW be recorded)
+    event_tx
+        .send(TracedEvent::without_span(AgentStreamEvent::AgentStart {
+            input: "test input".to_string(),
+        }))
+        .map_err(|_| "send error")
+        .unwrap();
 
     // Another recordable event
     event_tx
         .send(TracedEvent::without_span(
             AgentStreamEvent::ToolCallComplete {
+                tool_call_id: "call_2".to_string(),
                 tool_name: "test_tool".to_string(),
                 result: "result".to_string(),
             },
@@ -143,16 +149,23 @@ async fn test_session_listener_filters_events() {
     drop(event_tx);
     handle.await.unwrap();
 
-    // Verify only 2 lines (filtering worked)
+    // Verify 3 lines (Thinking + AgentStart + ToolCallComplete)
     let file_path = tmp_dir.path().join("sessions").join("session-filter.jsonl");
     let content = tokio::fs::read_to_string(&file_path).await.unwrap();
     let lines: Vec<&str> = content.lines().collect();
 
     assert_eq!(
         lines.len(),
-        2,
-        "Expected 2 lines (filtered), got {}",
+        3,
+        "Expected 3 lines (AgentStart now recorded), got {}",
         lines.len()
+    );
+
+    // Verify AgentStart is recorded as user message
+    let contains_user_input = content.lines().any(|l| l.contains("test input"));
+    assert!(
+        contains_user_input,
+        "Session log should contain user input 'test input'"
     );
 
     let line_count = lines.len();

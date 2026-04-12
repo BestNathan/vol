@@ -131,7 +131,7 @@ impl Default for AgentConfigSnapshot {
 
 /// Create a stream that immediately returns a response (short-circuit)
 pub async fn create_shortcircuit_stream(
-    response: AgentResponse,
+    _response: AgentResponse,
     ctx: RunContext,
     _run_id: String,
 ) -> Result<AgentStreamReceiver, AgentError> {

@@ -1,7 +1,6 @@
 //! vol-monitor: Main binary using channel-based engine.
 
 mod registry;
-mod state;
 mod tracing_setup;
 
 use anyhow::Result;

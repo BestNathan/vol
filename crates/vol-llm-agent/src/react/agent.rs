@@ -151,7 +151,7 @@ impl ReActAgent {
             )),
             session.id.clone(),
         );
-        tokio::spawn(async move {
+        let session_listener_handle = tokio::spawn(async move {
             let _ = session_listener.run().await;
         });
 
@@ -345,6 +345,7 @@ impl ReActAgent {
 
                         // === Emit and intercept ToolCallBegin ===
                         let tool_event = AgentStreamEvent::ToolCallBegin {
+                            tool_call_id: call.id.clone(),
                             tool_name: call.name.clone(),
                             arguments: call.arguments.clone(),
                         };
@@ -420,6 +421,7 @@ impl ReActAgent {
                         // Emit ToolCallComplete
                         run_ctx
                             .emit(AgentStreamEvent::ToolCallComplete {
+                                tool_call_id: call.id.clone(),
                                 tool_name: call.name.clone(),
                                 result: result.content.clone(),
                             })
@@ -531,6 +533,27 @@ impl ReActAgent {
             Err(_timeout) => {
                 tracing::warn!(
                     "Listener task timeout after 5s - task may be hanging, proceeding anyway"
+                );
+            }
+        }
+
+        // Wait for SessionListener to finish with timeout
+        // SessionListener exits when event_tx broadcast channel is closed
+        let session_listener_result =
+            tokio::time::timeout(std::time::Duration::from_secs(5), session_listener_handle).await;
+
+        match session_listener_result {
+            Ok(Ok(())) => {
+                if config.verbose {
+                    tracing::info!("SessionListener task completed gracefully");
+                }
+            }
+            Ok(Err(join_err)) => {
+                tracing::warn!(%join_err, "SessionListener task panicked");
+            }
+            Err(_timeout) => {
+                tracing::warn!(
+                    "SessionListener task timeout after 5s - task may be hanging, proceeding anyway"
                 );
             }
         }

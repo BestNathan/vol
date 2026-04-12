@@ -26,6 +26,7 @@ impl Default for RetryConfig {
 
 /// Retry plugin
 pub struct RetryPlugin {
+    #[allow(dead_code)]
     config: RetryConfig,
 }
 
