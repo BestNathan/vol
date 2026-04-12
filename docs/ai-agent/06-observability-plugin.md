@@ -31,7 +31,7 @@
 │                          │                                   │
 │          ┌───────────────┴───────────────┐                  │
 │          ▼                               ▼                   │
-│   ObservabilityLogger            Cleanup Functions           │
+│   RunLogLogger            Cleanup Functions           │
 │   (日志写入器)                    (日志清理)                  │
 │          │                                                       │
 │   ┌──────┴──────┐                                           │
@@ -190,17 +190,17 @@ impl AgentBuilder {
 
 ## 6. 组件详解
 
-### 6.1 ObservabilityLogger
+### 6.1 RunLogLogger
 
 **职责**: 异步日志写入器，同时输出到文件和标准输出
 
 ```rust
-pub struct ObservabilityLogger {
+pub struct RunLogLogger {
     agent_id: String,
     agent_path: PathBuf,
 }
 
-impl ObservabilityLogger {
+impl RunLogLogger {
     pub fn new(agent_id: String, log_base_path: PathBuf) -> Self;
     pub fn agent_id(&self) -> &str;
     pub async fn log(&self, entry: LogEntry, log_type: LogType);
@@ -248,7 +248,7 @@ pub enum LogType {
 
 ```rust
 pub struct ObservabilityPlugin {
-    logger: Arc<ObservabilityLogger>,
+    logger: Arc<RunLogLogger>,
 }
 
 #[async_trait]
