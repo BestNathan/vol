@@ -9,6 +9,10 @@ use tokio::time::timeout;
 
 use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType};
 
+/// Error type for builtin tools
+/// Re-exported from vol_llm_tool for convenience
+pub use vol_llm_tool::ToolError as BuiltinToolError;
+
 /// Maximum output size (1MB)
 const MAX_OUTPUT_SIZE: usize = 1024 * 1024;
 
