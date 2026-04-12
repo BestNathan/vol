@@ -47,10 +47,8 @@ impl ObservabilityPlugin {
                     "final_answer": final_answer,
                 }))
             }
-            AgentStreamEvent::AgentComplete { response } => {
-                ("AgentComplete", json!({
-                    "response": response
-                }))
+            AgentStreamEvent::AgentComplete => {
+                ("AgentComplete", json!({}))
             }
             AgentStreamEvent::AgentAborted { reason } => {
                 ("AgentAborted", json!({ "reason": reason }))

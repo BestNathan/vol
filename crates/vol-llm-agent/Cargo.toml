@@ -20,6 +20,7 @@ futures = "0.3"
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-tool = { path = "../vol-llm-tool" }
 vol-llm-provider = { path = "../vol-llm-provider" }
+vol-session = { path = "../vol-session" }
 
 # Optional HTTP channel support
 axum = { version = "0.7", optional = true }

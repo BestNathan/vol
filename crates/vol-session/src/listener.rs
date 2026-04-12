@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{error, warn};
 
-use vol_llm_agent::react::stream::AgentStreamEvent;
+use vol_llm_core::AgentStreamEvent;
 use vol_tracing::TracedEvent;
 
 use crate::{SessionMessage, MessageStore, SessionError};

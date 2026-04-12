@@ -123,7 +123,7 @@ impl AgentPlugin for CachingPlugin {
         PluginDecision::Continue
     }
 
-    /// Listener hook - logs caching events and stores final responses
+    /// Listener hook - logs caching events
     async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
         match event {
             AgentStreamEvent::AgentStart { input } => {
@@ -133,14 +133,11 @@ impl AgentPlugin for CachingPlugin {
                     "Caching: checking cache"
                 );
             }
-            AgentStreamEvent::AgentComplete { response } => {
+            AgentStreamEvent::AgentComplete => {
                 tracing::info!(
                     run_id = %ctx.run_id,
-                    iterations = response.iterations,
-                    "Caching: storing response"
+                    "Caching: agent complete"
                 );
-                // Store the final response in cache
-                self.store(&ctx.user_input, response.clone()).await;
             }
             _ => {}
         }

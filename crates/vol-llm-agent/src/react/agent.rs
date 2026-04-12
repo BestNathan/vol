@@ -396,11 +396,10 @@ impl ReActAgent {
                 run_ctx.set_final_content(content.clone()).await;
 
                 // === Emit AgentComplete ===
-                let response = run_ctx.finalize();
-
-                let complete_event = AgentStreamEvent::AgentComplete { response: response.clone() };
+                let complete_event = AgentStreamEvent::AgentComplete;
                 run_ctx.emit(complete_event).await;
 
+                let response = run_ctx.finalize();
                 return Ok(response);
             }
         });

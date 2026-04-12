@@ -140,7 +140,7 @@ pub async fn create_shortcircuit_stream(
             input: ctx.user_input,
         })).await;
 
-        let _ = tx.send(Ok(AgentStreamEvent::AgentComplete { response })).await;
+        let _ = tx.send(Ok(AgentStreamEvent::AgentComplete)).await;
     });
 
     Ok(AgentStreamReceiver::new(rx))
@@ -158,17 +158,7 @@ pub async fn create_skip_stream(
             input: ctx.user_input.clone(),
         })).await;
 
-        let _ = tx.send(Ok(AgentStreamEvent::AgentComplete {
-            response: AgentResponse {
-                content: String::new(),
-                reasoning: Vec::new(),
-                run_id: String::new(),
-                session_id: String::new(),
-                iterations: 0,
-                tool_calls: Vec::new(),
-                error: None,
-            },
-        })).await;
+        let _ = tx.send(Ok(AgentStreamEvent::AgentComplete)).await;
     });
 
     Ok(AgentStreamReceiver::new(rx))

@@ -1,42 +1,8 @@
-//! Agent streaming events and receiver.
+//! Agent streaming receiver.
+//!
+//! Re-exports AgentStreamEvent from vol-llm-core.
 
-use vol_llm_core::ToolCall;
-use super::response::AgentResponse;
-
-/// Agent streaming event
-#[derive(Debug, Clone)]
-pub enum AgentStreamEvent {
-    /// Agent started execution
-    AgentStart { input: String },
-
-    /// LLM thinking completed
-    ThinkingComplete { thinking: String },
-
-    /// About to call tool
-    ToolCallBegin { tool_name: String, arguments: String },
-
-    /// Tool call completed
-    ToolCallComplete { tool_name: String, result: String },
-
-    /// One iteration completed (Reason-Act-Observation)
-    IterationComplete {
-        iteration: u32,
-        tool_calls: Vec<ToolCall>,
-        final_answer: Option<String>,
-    },
-
-    /// Agent execution completed
-    AgentComplete { response: AgentResponse },
-
-    /// Agent was aborted with reason
-    AgentAborted { reason: String },
-
-    /// Custom event from plugin
-    PluginEvent {
-        name: String,
-        data: serde_json::Map<String, serde_json::Value>,
-    },
-}
+pub use vol_llm_core::AgentStreamEvent;
 
 /// Agent stream receiver
 pub struct AgentStreamReceiver {
@@ -58,75 +24,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_agent_stream_event_creation() {
-        let event = AgentStreamEvent::AgentStart { input: "test".to_string() };
-        match event {
-            AgentStreamEvent::AgentStart { input } => {
-                assert_eq!(input, "test");
-            }
-            _ => panic!("Expected AgentStart"),
-        }
-    }
-
-    #[test]
-    fn test_agent_stream_event_tool_call() {
-        let event = AgentStreamEvent::ToolCallBegin {
-            tool_name: "get_weather".to_string(),
-            arguments: r#"{"city": "Beijing"}"#.to_string(),
-        };
-        match event {
-            AgentStreamEvent::ToolCallBegin { tool_name, arguments } => {
-                assert_eq!(tool_name, "get_weather");
-                assert_eq!(arguments, r#"{"city": "Beijing"}"#);
-            }
-            _ => panic!("Expected ToolCallBegin"),
-        }
-    }
-
-    #[test]
-    fn test_agent_stream_event_iteration_complete() {
-        let event = AgentStreamEvent::IterationComplete {
-            iteration: 1,
-            tool_calls: Vec::new(),
-            final_answer: Some("The answer".to_string()),
-        };
-        match event {
-            AgentStreamEvent::IterationComplete { iteration, final_answer, .. } => {
-                assert_eq!(iteration, 1);
-                assert_eq!(final_answer, Some("The answer".to_string()));
-            }
-            _ => panic!("Expected IterationComplete"),
-        }
-    }
-
-    #[test]
-    fn test_agent_stream_event_aborted() {
-        let event = AgentStreamEvent::AgentAborted {
-            reason: "max iterations".to_string(),
-        };
-        match event {
-            AgentStreamEvent::AgentAborted { reason } => {
-                assert_eq!(reason, "max iterations");
-            }
-            _ => panic!("Expected AgentAborted"),
-        }
-    }
-
-    #[test]
-    fn test_agent_stream_event_plugin_event() {
-        use serde_json::Map;
-        let mut data = Map::new();
-        data.insert("key".to_string(), serde_json::Value::String("value".to_string()));
-
-        let event = AgentStreamEvent::PluginEvent {
-            name: "custom".to_string(),
-            data,
-        };
-        match event {
-            AgentStreamEvent::PluginEvent { name, .. } => {
-                assert_eq!(name, "custom");
-            }
-            _ => panic!("Expected PluginEvent"),
-        }
+    fn test_agent_stream_receiver_creation() {
+        // Just verify the type can be constructed
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let _receiver = AgentStreamReceiver::new(rx);
     }
 }

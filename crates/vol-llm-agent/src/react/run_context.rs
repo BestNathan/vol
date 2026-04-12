@@ -285,8 +285,8 @@ impl RunContext {
 
         // 2. Persist to session
         let session_msg = SessionMessage::new(self.session_id.clone(), message);
-        self.session.add_message(session_msg).await.map_err(|e| crate::AgentError::SessionError {
-            source: e,
+        self.session.add_message(session_msg).await.map_err(|e| {
+            crate::AgentError::SessionError(format!("Failed to save message: {}", e))
         })?;
 
         Ok(())
