@@ -204,11 +204,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_should_not_record_agent_start() {
+    async fn test_should_record_agent_start() {
         let event = AgentStreamEvent::AgentStart {
             input: "test".to_string(),
         };
-        assert!(!SessionListener::should_record(&event));
+        assert!(SessionListener::should_record(&event));
     }
 
     #[tokio::test]
