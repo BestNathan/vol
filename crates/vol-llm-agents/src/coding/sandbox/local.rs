@@ -1,34 +1,29 @@
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use vol_llm_core::{Sandbox, SandboxError, SandboxResult};
 
 /// A sandbox using a local directory as its root.
 ///
-/// If created with `Some(path)` and the directory already exists, it is caller-owned
-/// and NOT deleted on cleanup. If the directory is created by `start()`, it WILL be
-/// deleted on cleanup. If created with `None`, a temp directory is created and IS
-/// deleted on cleanup.
+/// If created with `Some(path)`, the directory is caller-owned and NOT deleted on cleanup.
+/// If created with `None`, a temp directory is created and IS deleted on cleanup.
 pub struct LocalSandbox {
     root_path: PathBuf,
-    created_by_start: AtomicBool,
+    is_temp: bool,
 }
 
 impl LocalSandbox {
     pub fn new(path: Option<PathBuf>) -> Self {
-        let root_path = match path {
-            Some(p) => p,
+        let (root_path, is_temp) = match path {
+            Some(p) => (p, false),
             None => {
                 let timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
                     .as_millis();
-                std::env::temp_dir().join(format!("sandbox_{:x}", timestamp % 0xFFFFFF))
+                let temp = std::env::temp_dir().join(format!("sandbox_{:x}", timestamp % 0xFFFFFF));
+                (temp, true)
             }
         };
-        Self {
-            root_path,
-            created_by_start: AtomicBool::new(false),
-        }
+        Self { root_path, is_temp }
     }
 }
 
@@ -38,16 +33,11 @@ impl Sandbox for LocalSandbox {
     }
 
     fn start(&self) -> SandboxResult<()> {
-        let existed = self.root_path.exists();
-        std::fs::create_dir_all(&self.root_path).map_err(SandboxError::Io)?;
-        if !existed {
-            self.created_by_start.store(true, Ordering::Relaxed);
-        }
-        Ok(())
+        std::fs::create_dir_all(&self.root_path).map_err(SandboxError::Io)
     }
 
     fn cleanup(&self) -> SandboxResult<()> {
-        if self.created_by_start.load(Ordering::Relaxed) {
+        if self.is_temp {
             std::fs::remove_dir_all(&self.root_path).map_err(SandboxError::Io)?;
         }
         Ok(())

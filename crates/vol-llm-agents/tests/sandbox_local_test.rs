@@ -28,8 +28,9 @@ fn test_local_sandbox_start_creates_dir() {
     sandbox.start().unwrap();
     assert!(new_path.exists());
 
+    // caller-owned dirs are NOT deleted on cleanup (even if start created them)
     sandbox.cleanup().unwrap();
-    assert!(!new_path.exists());
+    assert!(new_path.exists());
 }
 
 #[test]
