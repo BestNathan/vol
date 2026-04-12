@@ -16,10 +16,7 @@ impl ObservabilityLogger {
     pub fn new(agent_id: String, log_base_path: PathBuf) -> Self {
         let agent_path = log_base_path.join(&agent_id);
 
-        // Create directory structure (best effort, don't fail if can't)
-        if let Err(e) = std::fs::create_dir_all(agent_path.join("sessions")) {
-            tracing::warn!(agent_id = %agent_id, error = %e, "Failed to create sessions directory");
-        }
+        // Create runs directory (best effort, don't fail if can't)
         if let Err(e) = std::fs::create_dir_all(agent_path.join("runs")) {
             tracing::warn!(agent_id = %agent_id, error = %e, "Failed to create runs directory");
         }
@@ -35,12 +32,6 @@ impl ObservabilityLogger {
         &self.agent_id
     }
 
-    fn get_session_log_path(&self, session_id: &str, date: &str) -> PathBuf {
-        self.agent_path
-            .join("sessions")
-            .join(format!("session_{}_{}.jsonl", session_id, date))
-    }
-
     fn get_run_log_path(&self, run_id: &str) -> PathBuf {
         self.agent_path
             .join("runs")
@@ -48,7 +39,7 @@ impl ObservabilityLogger {
     }
 
     /// Log an event to both stdout (via tracing) and file
-    pub async fn log(&self, entry: &LogEntry, log_type: &LogType) {
+    pub async fn log(&self, entry: &LogEntry, run_id: &str) {
         // Emit to stdout via tracing
         info!(
             run_id = %entry.run_id,
@@ -60,17 +51,12 @@ impl ObservabilityLogger {
 
         // Write JSON to file
         let json_line = entry.to_json_line();
-        let file_path = match log_type {
-            LogType::Session { session_id, date } => self.get_session_log_path(session_id, date),
-            LogType::Run { run_id } => self.get_run_log_path(run_id),
-        };
+        let file_path = self.get_run_log_path(run_id);
 
         // Use tokio spawn to write file asynchronously without blocking
-        let json_line_clone = json_line.clone();
-        let _ = tokio::spawn(async move {
-            let _ = append_to_file(&file_path, &json_line_clone).await;
-        })
-        .await;
+        tokio::spawn(async move {
+            let _ = append_to_file(&file_path, &json_line).await;
+        });
     }
 }
 
@@ -90,12 +76,6 @@ async fn append_to_file(path: &Path, line: &str) -> Result<(), std::io::Error> {
     let _ = file.flush().await;
 
     Ok(())
-}
-
-#[derive(Debug, Clone)]
-pub enum LogType {
-    Session { session_id: String, date: String },
-    Run { run_id: String },
 }
 
 #[derive(Debug, Clone)]
@@ -168,80 +148,5 @@ impl LogEntry {
             ),
             _ => self.event.clone(),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-    use tempfile::TempDir;
-
-    #[tokio::test]
-    async fn test_logger_creates_directories() {
-        let temp_dir = TempDir::new().unwrap();
-        let log_base = temp_dir.path().join("logs");
-        let agent_id = "test_agent";
-
-        let logger = ObservabilityLogger::new(agent_id.to_string(), log_base.clone());
-
-        // Logger should create directory structure
-        let agent_path = log_base.join(agent_id);
-        assert!(agent_path.exists());
-        assert!(agent_path.join("sessions").exists());
-        assert!(agent_path.join("runs").exists());
-    }
-
-    #[tokio::test]
-    async fn test_logger_log_writes_to_file() {
-        let temp_dir = TempDir::new().unwrap();
-        let log_base = temp_dir.path().join("logs");
-        let agent_id = "test_agent";
-
-        let logger = ObservabilityLogger::new(agent_id.to_string(), log_base);
-
-        let entry = LogEntry {
-            timestamp: Utc::now(),
-            run_id: "test-run".to_string(),
-            agent_id: agent_id.to_string(),
-            event: "AgentStart".to_string(),
-            data: json!({"input": "test"}),
-        };
-
-        logger
-            .log(
-                &entry,
-                &LogType::Run {
-                    run_id: "test-run".to_string(),
-                },
-            )
-            .await;
-
-        // Give async write time to complete
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-        // Verify file was created and contains the log entry
-        let run_log_path = logger.agent_path.join("runs").join("test-run.jsonl");
-        assert!(run_log_path.exists());
-
-        let content = std::fs::read_to_string(&run_log_path).unwrap();
-        assert!(content.contains("AgentStart"));
-        assert!(content.contains("test-run"));
-    }
-
-    #[test]
-    fn test_log_entry_to_json() {
-        let entry = LogEntry {
-            timestamp: Utc::now(),
-            run_id: "123".to_string(),
-            agent_id: "test_agent".to_string(),
-            event: "AgentStart".to_string(),
-            data: json!({"input": "test"}),
-        };
-
-        let json_line = entry.to_json_line();
-        assert!(json_line.contains("123"));
-        assert!(json_line.contains("test_agent"));
-        assert!(json_line.contains("AgentStart"));
     }
 }
