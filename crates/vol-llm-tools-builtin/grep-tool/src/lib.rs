@@ -16,6 +16,11 @@ use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResul
 /// Re-exported from vol_llm_tool for convenience
 pub use vol_llm_tool::ToolError as BuiltinToolError;
 
+/// Output mode constants
+const MODE_FILES: &str = "files_with_matches";
+const MODE_COUNT: &str = "count";
+const MODE_CONTENT: &str = "content";
+
 /// Parameters for the Grep tool
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GrepParams {
@@ -36,7 +41,7 @@ pub struct GrepParams {
 }
 
 fn default_output_mode() -> String {
-    "files_with_matches".to_string()
+    MODE_FILES.to_string()
 }
 
 /// The Grep tool for searching file content using regex patterns
@@ -113,7 +118,7 @@ impl ExecutableTool for GrepTool {
         })?;
 
         // Validate output_mode
-        let valid_modes = ["files_with_matches", "count", "content"];
+        let valid_modes = [MODE_FILES, MODE_COUNT, MODE_CONTENT];
         if !valid_modes.contains(&params.output_mode.as_str()) {
             return Err(ToolError::InvalidArguments(format!(
                 "Invalid output_mode: {}. Valid modes are: {:?}",
@@ -133,16 +138,27 @@ impl ExecutableTool for GrepTool {
             ToolError::InvalidArguments(format!("Invalid regex pattern: {}", e))
         })?;
 
-        // Collect files to search
+        // Collect files to search with recursion depth limit
         let mut files: Vec<PathBuf> = Vec::new();
-        for entry in WalkDir::new(&search_path).into_iter().filter_map(|e| e.ok()) {
+        const MAX_DEPTH: usize = 50;
+        for entry in WalkDir::new(&search_path)
+            .max_depth(MAX_DEPTH)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
             let path = entry.path();
             if path.is_file() {
+                // Skip files larger than 10MB
+                if let Ok(metadata) = std::fs::metadata(path) {
+                    const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
+                    if metadata.len() > MAX_FILE_SIZE {
+                        continue;
+                    }
+                }
+
                 if let Some(glob_pattern) = &params.glob {
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        if glob_match(glob_pattern, name) {
-                            files.push(path.to_path_buf());
-                        }
+                    if glob_match(glob_pattern, path) {
+                        files.push(path.to_path_buf());
                     }
                 } else {
                     files.push(path.to_path_buf());
@@ -182,21 +198,21 @@ impl ExecutableTool for GrepTool {
 
         // Format output based on mode
         let content = match params.output_mode.as_str() {
-            "files_with_matches" => {
+            MODE_FILES => {
                 let paths: Vec<String> = results
                     .iter()
                     .map(|r| r.path.to_string_lossy().to_string())
                     .collect();
                 paths.join("\n")
             }
-            "count" => {
+            MODE_COUNT => {
                 let counts: Vec<String> = results
                     .iter()
                     .map(|r| format!("{}: {}", r.path.display(), r.match_count))
                     .collect();
                 counts.join("\n")
             }
-            "content" => {
+            MODE_CONTENT => {
                 let lines: Vec<String> = results
                     .iter()
                     .flat_map(|r| {
@@ -207,12 +223,8 @@ impl ExecutableTool for GrepTool {
                     .collect();
                 lines.join("\n")
             }
-            _ => {
-                return Err(ToolError::InvalidArguments(format!(
-                    "Invalid output_mode: {}",
-                    params.output_mode
-                )));
-            }
+            // Already validated above, this is just for exhaustiveness
+            _ => unreachable!(),
         };
 
         if content.is_empty() {
@@ -223,8 +235,11 @@ impl ExecutableTool for GrepTool {
     }
 }
 
-/// Simple glob match helper
-fn glob_match(pattern: &str, name: &str) -> bool {
+/// Simple glob match helper using pattern matching
+fn glob_match(pattern: &str, path: &std::path::Path) -> bool {
+    // Get the file name for matching
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
     // Support basic glob patterns like *.rs, *.txt, etc.
     if pattern == "*" {
         return true;

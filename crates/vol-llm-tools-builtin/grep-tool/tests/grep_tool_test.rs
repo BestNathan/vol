@@ -68,3 +68,77 @@ async fn test_grep_with_glob() {
     assert!(result.content.contains("test.rs"));
     assert!(!result.content.contains("test.txt"));
 }
+
+#[tokio::test]
+async fn test_grep_case_sensitive() {
+    let dir = tempdir().unwrap();
+    let mut f1 = fs::File::create(dir.path().join("test.txt")).unwrap();
+    writeln!(f1, "Hello World").unwrap();
+    writeln!(f1, "hello world").unwrap();
+
+    let tool = GrepTool::new();
+
+    // Case-insensitive (default) - should find both
+    let args = json!({
+        "pattern": "hello",
+        "path": dir.path().to_str().unwrap(),
+        "output_mode": "count",
+        "case_sensitive": false
+    });
+    let result = tool.execute(&args, &ToolContext::default()).await.unwrap();
+    assert!(result.success);
+    assert!(result.content.contains("2")); // Both lines match
+
+    // Case-sensitive - should only find lowercase
+    let args = json!({
+        "pattern": "hello",
+        "path": dir.path().to_str().unwrap(),
+        "output_mode": "count",
+        "case_sensitive": true
+    });
+    let result = tool.execute(&args, &ToolContext::default()).await.unwrap();
+    assert!(result.success);
+    assert!(result.content.contains("1")); // Only one line matches
+}
+
+#[tokio::test]
+async fn test_grep_count_mode() {
+    let dir = tempdir().unwrap();
+    let mut f1 = fs::File::create(dir.path().join("test.txt")).unwrap();
+    writeln!(f1, "hello").unwrap();
+    writeln!(f1, "hello").unwrap();
+    writeln!(f1, "world").unwrap();
+
+    let tool = GrepTool::new();
+    let args = json!({
+        "pattern": "hello",
+        "path": dir.path().to_str().unwrap(),
+        "output_mode": "count"
+    });
+
+    let result = tool.execute(&args, &ToolContext::default()).await.unwrap();
+    assert!(result.success);
+    assert!(result.content.contains("test.txt"));
+    assert!(result.content.contains("2")); // 2 matches
+}
+
+#[tokio::test]
+async fn test_grep_content_mode() {
+    let dir = tempdir().unwrap();
+    let mut f1 = fs::File::create(dir.path().join("test.txt")).unwrap();
+    writeln!(f1, "line 1").unwrap();
+    writeln!(f1, "hello world").unwrap();
+    writeln!(f1, "line 3").unwrap();
+
+    let tool = GrepTool::new();
+    let args = json!({
+        "pattern": "hello",
+        "path": dir.path().to_str().unwrap(),
+        "output_mode": "content"
+    });
+
+    let result = tool.execute(&args, &ToolContext::default()).await.unwrap();
+    assert!(result.success);
+    assert!(result.content.contains("test.txt"));
+    assert!(result.content.contains(":2")); // Line 2
+}
