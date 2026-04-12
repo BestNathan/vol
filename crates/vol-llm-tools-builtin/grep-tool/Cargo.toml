@@ -1,0 +1,16 @@
+[package]
+name = "vol-llm-tools-builtin-grep"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+vol-llm-tool = { workspace = true }
+vol-llm-core = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+regex = "1.10"
+walkdir = "2.4"
