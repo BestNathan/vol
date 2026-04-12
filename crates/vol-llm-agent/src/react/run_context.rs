@@ -15,6 +15,7 @@ use super::AgentConfig;
 use super::plugin::PluginDecision;
 use super::state::{ReasoningStep, ToolCallRecord};
 use super::stream::AgentStreamEvent;
+use vol_tracing::TracedEvent;
 
 /// PluginContext - Read-only context for plugin hooks.
 ///
@@ -104,11 +105,11 @@ impl PluginContext {
 /// Request type for plugin event bus communication
 pub enum PluginRequest {
     Intercept {
-        event: AgentStreamEvent,
+        event: TracedEvent<AgentStreamEvent>,
         tx: oneshot::Sender<PluginDecision>,
     },
     Emit {
-        event: AgentStreamEvent,
+        event: TracedEvent<AgentStreamEvent>,
     },
 }
 
@@ -137,7 +138,7 @@ pub struct RunContext {
     pub config: AgentConfig,
 
     // Event bus
-    pub event_tx: broadcast::Sender<AgentStreamEvent>,
+    pub event_tx: broadcast::Sender<TracedEvent<AgentStreamEvent>>,
     /// Plugin event channel sender.
     ///
     /// # Important: Receiver is intentionally Dropped in `new()`
@@ -335,7 +336,8 @@ impl RunContext {
     /// This sends the event to all subscribers via the broadcast channel.
     /// Used by plugins to emit custom events.
     pub async fn emit(&self, event: AgentStreamEvent) {
-        let _ = self.event_tx.send(event);
+        let traced_event = TracedEvent::without_span(event);
+        let _ = self.event_tx.send(traced_event);
     }
 
     /// Intercept an event for plugin processing (blocking, returns decision).
@@ -352,8 +354,9 @@ impl RunContext {
     /// for the full usage pattern.
     pub async fn intercept(&self, event: &AgentStreamEvent) -> Result<PluginDecision, crate::AgentError> {
         let (tx, rx) = oneshot::channel();
+        let traced_event = TracedEvent::without_span(event.clone());
         self.plugin_event_tx.send(PluginRequest::Intercept {
-            event: event.clone(),
+            event: traced_event,
             tx,
         }).await.map_err(|e| {
             crate::AgentError::Context(format!("Plugin channel error: {}", e))

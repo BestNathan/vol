@@ -114,9 +114,9 @@ impl ReActAgent {
             run_id.clone(),
             user_input.to_string(),
             self.session.id.clone(),
-            session,
+            session.clone(),
             tools,
-            config,
+            config.clone(),
         );
 
         // === Phase 1.5: Run log cleanup (best effort, non-blocking) ===
@@ -132,7 +132,22 @@ impl ReActAgent {
         // === Phase 2: Initialize messages (call once before loop) ===
         run_ctx.init_messages().await?;
 
-        // === Phase 2.5: Spawn listener and interceptor tasks ===
+        // === Phase 2.5: Spawn SessionListener for session recording ===
+        use crate::session::{SessionListener, FileMessageStore};
+
+        let mut session_listener = SessionListener::new(
+            run_ctx.event_tx.subscribe(),
+            Arc::new(FileMessageStore::new(
+                config.log_base_path.join(&config.agent_id),
+                &session.id,
+            )),
+            session.id.clone(),
+        );
+        tokio::spawn(async move {
+            let _ = session_listener.run().await;
+        });
+
+        // === Phase 2.6: Spawn listener and interceptor tasks ===
         use super::plugin_stream::{spawn_listener_task, run_interceptor_loop};
 
         // Spawn listener task - subscribes to event broadcast channel

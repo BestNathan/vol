@@ -161,7 +161,7 @@ mod tests {
             AgentStreamEvent::ToolCallBegin { tool_name: "test_tool".to_string(), arguments: "{\"key\": \"value\"}".to_string() },
             AgentStreamEvent::ToolCallComplete { tool_name: "test_tool".to_string(), result: "tool result".to_string() },
             AgentStreamEvent::IterationComplete { iteration: 1, tool_calls: vec![], final_answer: Some("answer".to_string()) },
-            AgentStreamEvent::AgentComplete { response: AgentResponse { content: "done".to_string(), reasoning: vec![], run_id: "test-run".to_string(), session_id: "test-session".to_string(), iterations: 1, tool_calls: vec![], error: None } },
+            AgentStreamEvent::AgentComplete,
             AgentStreamEvent::AgentAborted { reason: "test abort reason".to_string() },
             AgentStreamEvent::PluginEvent { name: "test_plugin_event".to_string(), data: serde_json::Map::new() },
         ];

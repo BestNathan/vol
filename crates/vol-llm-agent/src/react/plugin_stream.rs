@@ -5,6 +5,7 @@ use super::run_context::{PluginRequest, RunContext, PluginContext};
 use super::{AgentStreamEvent, AgentResponse, AgentStreamReceiver, AgentError};
 use tokio::sync::{mpsc, broadcast};
 use std::sync::Arc;
+use vol_tracing::TracedEvent;
 
 /// Spawn a listener task that subscribes to the event bus and calls
 /// `plugin.listen()` on all events (fire-and-forget, parallel execution).
@@ -29,10 +30,11 @@ use std::sync::Arc;
 pub fn spawn_listener_task(
     plugins: Vec<Arc<dyn AgentPlugin>>,
     plugin_ctx: PluginContext,
-    mut event_rx: broadcast::Receiver<AgentStreamEvent>,
+    mut event_rx: broadcast::Receiver<TracedEvent<AgentStreamEvent>>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        while let Ok(event) = event_rx.recv().await {
+        while let Ok(traced_event) = event_rx.recv().await {
+            let event = traced_event.value();
             // Fire all listeners in parallel
             for plugin in &plugins {
                 let plugin = plugin.clone();
@@ -65,7 +67,7 @@ pub fn spawn_listener_task(
 pub async fn run_interceptor_loop(
     mut plugin_rx: mpsc::Receiver<PluginRequest>,
     plugins: Vec<Arc<dyn AgentPlugin>>,
-    event_tx: broadcast::Sender<AgentStreamEvent>,
+    event_tx: broadcast::Sender<TracedEvent<AgentStreamEvent>>,
     plugin_ctx: PluginContext,
 ) {
     while let Some(msg) = plugin_rx.recv().await {
@@ -74,7 +76,7 @@ pub async fn run_interceptor_loop(
                 // Run plugins sequentially - first non-Continue decision wins
                 let mut decision = PluginDecision::Continue;
                 for plugin in &plugins {
-                    match plugin.intercept(&event, &plugin_ctx).await {
+                    match plugin.intercept(event.value(), &plugin_ctx).await {
                         PluginDecision::Continue => continue,
                         PluginDecision::Skip => {
                             decision = PluginDecision::Skip;
