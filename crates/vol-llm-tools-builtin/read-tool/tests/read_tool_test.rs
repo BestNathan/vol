@@ -54,6 +54,37 @@ async fn test_read_file_with_limit() {
 }
 
 #[tokio::test]
+async fn test_read_file_with_offset() {
+    // Create a temp file with 5 lines
+    let temp_file = tempfile::NamedTempFile::new().unwrap();
+    let content = (1..=5)
+        .map(|i| format!("line {}", i))
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(temp_file.path(), content).unwrap();
+
+    let tool = ReadTool::new();
+    let args = serde_json::json!({
+        "file_path": temp_file.path().to_str().unwrap(),
+        "offset": 2
+    });
+    let context = ToolContext::default();
+
+    let result = tool.execute(&args, &context).await.unwrap();
+    assert!(result.success);
+
+    // Verify lines 3-5 are present (offset 2 means skip first 2 lines)
+    for i in 3..=5 {
+        assert!(result.content.contains(&format!("{}  |  line {}", i, i)));
+    }
+
+    // Verify lines 1-2 are NOT present
+    for i in 1..=2 {
+        assert!(!result.content.contains(&format!("{}  |  line {}", i, i)));
+    }
+}
+
+#[tokio::test]
 async fn test_read_file_not_found() {
     let tool = ReadTool::new();
     let args = serde_json::json!({
