@@ -213,6 +213,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_event_to_message_agent_start() {
+        let store = Arc::new(InMemoryMessageStore::new());
+        let (_tx, rx) = broadcast::channel(100);
+        let listener = SessionListener::new(rx, store, "session-1".to_string());
+
+        let event = AgentStreamEvent::AgentStart {
+            input: "User's question".to_string(),
+        };
+
+        let msg = listener.event_to_message(&event).unwrap();
+        assert_eq!(msg.session_id, "session-1");
+        assert_eq!(msg.message.role, vol_llm_core::MessageRole::User);
+        assert!(msg.message.content.is_some());
+        assert_eq!(msg.message.content.unwrap().as_str(), "User's question");
+    }
+
+    #[tokio::test]
     async fn test_event_to_message_tool_call_begin() {
         let store = Arc::new(InMemoryMessageStore::new());
         let (_tx, rx) = broadcast::channel(100);
