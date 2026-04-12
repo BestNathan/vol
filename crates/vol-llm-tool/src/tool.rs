@@ -64,9 +64,7 @@ impl ToolContext {
     /// Resolve a path through the sandbox, or return unchanged if no sandbox.
     pub fn resolve_path(&self, rel: &str) -> std::result::Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
         match &self.sandbox {
-            Some(sandbox) => sandbox.resolve_path(rel).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-                Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
-            }),
+            Some(sandbox) => sandbox.resolve_path(rel).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>),
             None => Ok(std::path::PathBuf::from(rel)),
         }
     }
