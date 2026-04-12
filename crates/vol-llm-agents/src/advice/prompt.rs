@@ -29,7 +29,13 @@ pub fn system_prompt() -> &'static str {
 }
 
 /// Build a user prompt for alert analysis
-pub fn build_user_prompt(alert_type: &str, symbol: &str, iv: f64, threshold: f64, history_summary: &str) -> String {
+pub fn build_user_prompt(
+    alert_type: &str,
+    symbol: &str,
+    iv: f64,
+    threshold: f64,
+    history_summary: &str,
+) -> String {
     format!(
         r#"请分析以下预警：
 
@@ -72,13 +78,7 @@ mod tests {
 
     #[test]
     fn test_user_prompt_builder() {
-        let prompt = build_user_prompt(
-            "absolute_iv",
-            "BTC",
-            0.55,
-            0.50,
-            "过去 1 小时 IV 上涨 5%",
-        );
+        let prompt = build_user_prompt("absolute_iv", "BTC", 0.55, 0.50, "过去 1 小时 IV 上涨 5%");
         assert!(prompt.contains("BTC"));
         assert!(prompt.contains("absolute_iv"));
     }

@@ -43,7 +43,8 @@ impl DeribitClientConfig {
     /// Environment variables take precedence over config file values.
     pub fn client_id(&self) -> Option<String> {
         // Try environment first (higher priority)
-        std::env::var("DERIBIT_CLIENT_ID").ok()
+        std::env::var("DERIBIT_CLIENT_ID")
+            .ok()
             // Fallback to config
             .or_else(|| self.auth.as_ref().and_then(|auth| auth.client_id.clone()))
     }
@@ -52,9 +53,14 @@ impl DeribitClientConfig {
     /// Environment variables take precedence over config file values.
     pub fn client_secret(&self) -> Option<String> {
         // Try environment first (higher priority)
-        std::env::var("DERIBIT_CLIENT_SECRET").ok()
+        std::env::var("DERIBIT_CLIENT_SECRET")
+            .ok()
             // Fallback to config
-            .or_else(|| self.auth.as_ref().and_then(|auth| auth.client_secret.clone()))
+            .or_else(|| {
+                self.auth
+                    .as_ref()
+                    .and_then(|auth| auth.client_secret.clone())
+            })
     }
 
     /// Check if both client ID and secret are available (from config or env).

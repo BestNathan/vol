@@ -10,7 +10,9 @@ pub struct AgentStreamReceiver {
 }
 
 impl AgentStreamReceiver {
-    pub fn new(rx: tokio::sync::mpsc::Receiver<Result<AgentStreamEvent, super::response::AgentError>>) -> Self {
+    pub fn new(
+        rx: tokio::sync::mpsc::Receiver<Result<AgentStreamEvent, super::response::AgentError>>,
+    ) -> Self {
         Self { rx }
     }
 

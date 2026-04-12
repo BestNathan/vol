@@ -1,8 +1,8 @@
 //! Embedding store trait for vector search.
 
+use super::document::Document;
 use async_trait::async_trait;
 use vol_llm_core::Result;
-use super::document::Document;
 
 /// Vector storage and search trait
 ///

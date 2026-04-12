@@ -1,10 +1,10 @@
 //! Rule and notification registry with hot reload support.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use std::collections::HashMap;
-use vol_core::{RuleProcessor, NotificationHandler};
 use tracing::info;
+use vol_core::{NotificationHandler, RuleProcessor};
 
 /// Runtime registry for rules and notifications
 pub struct RuleRegistry {
@@ -60,7 +60,8 @@ impl RuleRegistry {
     pub async fn reload_rules(&self, new_rules: Vec<Box<dyn RuleProcessor>>) {
         let mut rules = self.rules.write().await;
         let count = new_rules.len();
-        *rules = new_rules.into_iter()
+        *rules = new_rules
+            .into_iter()
             .map(|r| (r.id().to_string(), r))
             .collect();
         info!("Hot reloaded {} rules", count);
@@ -70,7 +71,8 @@ impl RuleRegistry {
     pub async fn reload_notifications(&self, new_notifs: Vec<Arc<dyn NotificationHandler>>) {
         let mut map = self.notification_map.write().await;
         let count = new_notifs.len();
-        *map = new_notifs.into_iter()
+        *map = new_notifs
+            .into_iter()
             .map(|n| (n.name().to_string(), n))
             .collect();
         info!("Hot reloaded {} notifications", count);

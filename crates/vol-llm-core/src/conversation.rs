@@ -1,7 +1,7 @@
 //! Conversation request and response types.
 
+use crate::{Message, ModelConfig, ToolChoice, ToolDefinition};
 use serde::{Deserialize, Serialize};
-use crate::{Message, ModelConfig, ToolDefinition, ToolChoice};
 
 /// Conversation request
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]

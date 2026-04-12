@@ -4,19 +4,19 @@
 //! generates analysis advice using ReAct Agent, and sends to Feishu.
 
 use tokio::sync::broadcast;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use vol_core::{Alert, NotificationHandler, Result as VolResult};
-use vol_tracing::TracedEvent;
 use vol_llm_agent::AgentBuilder;
-use vol_llm_tool::ToolRegistry;
-use vol_tdengine::TdengineClient;
 use vol_llm_provider::LLMProviderRegistry;
+use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
+use vol_llm_tool::ToolRegistry;
 use vol_notification::FeishuNotification;
-use vol_llm_tdengine::{IndexPriceTool, VolatilityIndexTool, OptionsTool, RvTool};
+use vol_tdengine::TdengineClient;
+use vol_tracing::TracedEvent;
 
-use std::sync::Arc;
 use super::limiter::FrequencyLimiter;
-use super::prompt::{system_prompt, build_user_prompt, get_threshold_from_alert};
+use super::prompt::{build_user_prompt, get_threshold_from_alert, system_prompt};
+use std::sync::Arc;
 
 /// Agent advice configuration
 #[derive(Clone)]
@@ -113,7 +113,9 @@ impl AdviceAgent {
         );
 
         // Generate advice using ReAct Agent
-        let advice = self.generate_advice(alert).await
+        let advice = self
+            .generate_advice(alert)
+            .await
             .unwrap_or_else(|e| format!("Failed to generate advice: {}", e));
 
         // Send advice to Feishu
@@ -138,7 +140,9 @@ impl AdviceAgent {
         alert: &Alert,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // Get provider from registry by ID
-        let llm = self.registry.get(&self.config.llm_provider_id)
+        let llm = self
+            .registry
+            .get(&self.config.llm_provider_id)
             .ok_or_else(|| format!("Unknown provider: {}", self.config.llm_provider_id))?;
 
         // Create agent with tools using builder
@@ -167,7 +171,9 @@ impl AdviceAgent {
         );
 
         // Run agent and get response directly (no ToolContext needed)
-        let response = agent.run(&user_prompt).await
+        let response = agent
+            .run(&user_prompt)
+            .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
         Ok(response.content)
@@ -226,7 +232,7 @@ impl NotificationHandler for AdviceAgent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_core::{AlertType, Tenor, OptionType};
+    use vol_core::{AlertType, OptionType, Tenor};
 
     #[test]
     fn test_advice_agent_creation() {

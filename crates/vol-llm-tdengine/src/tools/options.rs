@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use serde_json::json;
 use tracing::info;
-use vol_llm_tool::{ExecutableTool, ToolResult, ToolContext, ToolError};
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult};
 use vol_tdengine::{TdengineClient, TdengineConfig, TdengineResponse};
 
 /// Options tool for querying deribit_options table
@@ -21,7 +21,10 @@ impl OptionsTool {
     /// Process TDengine response and format result
     fn format_response(&self, response: TdengineResponse, instrument: &str) -> String {
         if response.code != 0 {
-            return format!("Error: {}", response.desc.unwrap_or_else(|| "Unknown error".to_string()));
+            return format!(
+                "Error: {}",
+                response.desc.unwrap_or_else(|| "Unknown error".to_string())
+            );
         }
 
         let data = response.data.unwrap_or(json!([]));
@@ -82,7 +85,11 @@ impl ExecutableTool for OptionsTool {
         })
     }
 
-    async fn execute(&self, args: &serde_json::Value, _context: &ToolContext) -> Result<ToolResult, ToolError> {
+    async fn execute(
+        &self,
+        args: &serde_json::Value,
+        _context: &ToolContext,
+    ) -> Result<ToolResult, ToolError> {
         let instrument = args["instrument"]
             .as_str()
             .ok_or_else(|| ToolError::InvalidArguments("instrument required".to_string()))?;

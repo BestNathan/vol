@@ -1,10 +1,10 @@
 //! Session management.
 
+use crate::message::SessionMessage;
+use crate::store::Result;
+use crate::store::{MessageStore, SessionStore};
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::store::Result;
-use crate::message::SessionMessage;
-use crate::store::{SessionStore, MessageStore};
 
 /// Session management
 ///
@@ -83,8 +83,8 @@ impl Clone for Session {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory_store::{InMemoryMessageStore, InMemorySessionStore};
     use vol_llm_core::Message;
-    use crate::memory_store::{InMemorySessionStore, InMemoryMessageStore};
 
     #[tokio::test]
     async fn test_session_get_messages() {
@@ -97,10 +97,7 @@ mod tests {
             message_store.clone(),
         );
 
-        let msg = SessionMessage::new(
-            "session-1".to_string(),
-            Message::user("Hello"),
-        );
+        let msg = SessionMessage::new("session-1".to_string(), Message::user("Hello"));
         session.add_message(msg).await.unwrap();
 
         let messages = session.get_messages(10).await.unwrap();
@@ -116,8 +113,12 @@ mod tests {
             "session-1".to_string(),
             session_store.clone(),
             message_store.clone(),
-        ).with_metadata("user_id", "user-123");
+        )
+        .with_metadata("user_id", "user-123");
 
-        assert_eq!(session.metadata.get("user_id"), Some(&"user-123".to_string()));
+        assert_eq!(
+            session.metadata.get("user_id"),
+            Some(&"user-123".to_string())
+        );
     }
 }

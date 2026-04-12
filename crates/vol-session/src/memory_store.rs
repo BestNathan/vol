@@ -1,11 +1,11 @@
 //! In-memory session and message store implementations.
 
+use crate::message::SessionMessage;
+use crate::session::Session;
+use crate::store::MessageStore;
+use crate::store::Result;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
-use crate::store::Result;
-use crate::session::Session;
-use crate::message::SessionMessage;
-use crate::store::MessageStore;
 
 /// In-memory session storage
 pub struct InMemorySessionStore {
@@ -96,7 +96,12 @@ impl MessageStore for InMemoryMessageStore {
             .unwrap_or_default())
     }
 
-    async fn get_before(&self, session_id: &str, before: i64, limit: usize) -> Result<Vec<SessionMessage>> {
+    async fn get_before(
+        &self,
+        session_id: &str,
+        before: i64,
+        limit: usize,
+    ) -> Result<Vec<SessionMessage>> {
         let messages = self.messages.read().await;
         Ok(messages
             .get(session_id)
@@ -145,17 +150,14 @@ impl MessageStore for InMemoryMessageStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_llm_core::Message;
-    use std::sync::Arc;
     use crate::store::SessionStore;
+    use std::sync::Arc;
+    use vol_llm_core::Message;
 
     #[tokio::test]
     async fn test_memory_message_store_save_and_get() {
         let store = InMemoryMessageStore::new();
-        let msg = SessionMessage::new(
-            "session-1".to_string(),
-            Message::user("Hello"),
-        );
+        let msg = SessionMessage::new("session-1".to_string(), Message::user("Hello"));
 
         store.save(msg.clone()).await.unwrap();
 
@@ -167,16 +169,10 @@ mod tests {
     #[tokio::test]
     async fn test_memory_message_store_get_before() {
         let store = InMemoryMessageStore::new();
-        let mut msg1 = SessionMessage::new(
-            "session-1".to_string(),
-            Message::user("First"),
-        );
+        let mut msg1 = SessionMessage::new("session-1".to_string(), Message::user("First"));
         msg1.created_at = 100;
 
-        let mut msg2 = SessionMessage::new(
-            "session-1".to_string(),
-            Message::user("Second"),
-        );
+        let mut msg2 = SessionMessage::new("session-1".to_string(), Message::user("Second"));
         msg2.created_at = 200;
 
         store.save(msg1).await.unwrap();
@@ -206,11 +202,7 @@ mod tests {
     async fn test_memory_session_store_crud() {
         let store = Arc::new(InMemorySessionStore::new());
         let message_store = Arc::new(InMemoryMessageStore::new());
-        let session = Session::new(
-            "session-1".to_string(),
-            store.clone(),
-            message_store,
-        );
+        let session = Session::new("session-1".to_string(), store.clone(), message_store);
 
         store.create(session.clone()).await.unwrap();
 

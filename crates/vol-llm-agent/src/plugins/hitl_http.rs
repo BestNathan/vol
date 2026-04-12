@@ -1,8 +1,8 @@
 //! HTTP-based approval channel with axum router.
 
 use crate::react::hitl::*;
-use tokio::sync::{mpsc, oneshot};
 use std::sync::Arc;
+use tokio::sync::{mpsc, oneshot};
 
 struct ApprovalRequestWithCallback {
     request: ApprovalRequest,
@@ -26,16 +26,16 @@ impl HttpApprovalChannel {
     pub fn new() -> (Self, mpsc::Sender<ApprovalRequestWithCallback>) {
         let (tx, rx) = mpsc::channel(100);
         (
-            Self { rx: Arc::new(tokio::sync::Mutex::new(rx)) },
+            Self {
+                rx: Arc::new(tokio::sync::Mutex::new(rx)),
+            },
             tx,
         )
     }
 
     /// Create an HTTP router for handling approval requests
     #[cfg(feature = "http")]
-    pub fn create_router(
-        _sender: mpsc::Sender<ApprovalRequestWithCallback>,
-    ) -> axum::Router {
+    pub fn create_router(_sender: mpsc::Sender<ApprovalRequestWithCallback>) -> axum::Router {
         use axum::{extract::State, http::StatusCode, routing::post, Json};
         use serde::{Deserialize, Serialize};
 
@@ -60,8 +60,7 @@ impl HttpApprovalChannel {
             Ok(Json(SuccessResponse { success: true }))
         }
 
-        axum::Router::new()
-            .route("/api/approval", post(handle_approval))
+        axum::Router::new().route("/api/approval", post(handle_approval))
     }
 }
 
@@ -86,7 +85,7 @@ impl ApprovalChannel for HttpApprovalChannel {
         // Since this is a framework-level implementation, we'll return
         // a placeholder that indicates the channel is not yet configured.
         Err(ApprovalError::Transport(
-            "HTTP channel requires HTTP handler to be configured".to_string()
+            "HTTP channel requires HTTP handler to be configured".to_string(),
         ))
     }
 }
@@ -109,14 +108,21 @@ impl SimpleHttpApprovalChannel {
     }
 
     /// Get the sender handle for submitting approval responses
-    pub fn pending_requests(&self) -> Arc<tokio::sync::Mutex<HashMap<String, oneshot::Sender<ApprovalResponse>>>> {
+    pub fn pending_requests(
+        &self,
+    ) -> Arc<tokio::sync::Mutex<HashMap<String, oneshot::Sender<ApprovalResponse>>>> {
         self.pending_requests.clone()
     }
 
     /// Create an HTTP router for handling approval responses
     #[cfg(feature = "http")]
     pub fn create_router(&self) -> axum::Router {
-        use axum::{extract::{State, Path}, http::StatusCode, routing::post, Json};
+        use axum::{
+            extract::{Path, State},
+            http::StatusCode,
+            routing::post,
+            Json,
+        };
         use serde::{Deserialize, Serialize};
 
         #[derive(Debug, Deserialize)]
@@ -131,7 +137,9 @@ impl SimpleHttpApprovalChannel {
         }
 
         async fn handle_approval(
-            State(pending): State<Arc<tokio::sync::Mutex<HashMap<String, oneshot::Sender<ApprovalResponse>>>>>,
+            State(pending): State<
+                Arc<tokio::sync::Mutex<HashMap<String, oneshot::Sender<ApprovalResponse>>>>,
+            >,
             Path(run_id): Path<String>,
             Json(payload): Json<ApprovalPayload>,
         ) -> Result<Json<SuccessResponse>, StatusCode> {
@@ -139,7 +147,9 @@ impl SimpleHttpApprovalChannel {
                 ApprovalResponse::Approved
             } else {
                 ApprovalResponse::Rejected {
-                    reason: payload.reason.unwrap_or_else(|| "User rejected".to_string()),
+                    reason: payload
+                        .reason
+                        .unwrap_or_else(|| "User rejected".to_string()),
                 }
             };
 
@@ -171,7 +181,10 @@ impl ApprovalChannel for SimpleHttpApprovalChannel {
         request: ApprovalRequest,
         timeout: Option<std::time::Duration>,
     ) -> Result<Option<ApprovalResponse>, ApprovalError> {
-        let (callback_tx, callback_rx): (oneshot::Sender<ApprovalResponse>, oneshot::Receiver<ApprovalResponse>) = oneshot::channel();
+        let (callback_tx, callback_rx): (
+            oneshot::Sender<ApprovalResponse>,
+            oneshot::Receiver<ApprovalResponse>,
+        ) = oneshot::channel();
 
         // Register pending request
         {
@@ -198,8 +211,6 @@ impl ApprovalChannel for SimpleHttpApprovalChannel {
             pending.remove(&request.run_id);
         }
 
-        result
-            .map(Some)
-            .map_err(|_| ApprovalError::ChannelClosed)
+        result.map(Some).map_err(|_| ApprovalError::ChannelClosed)
     }
 }

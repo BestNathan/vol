@@ -5,12 +5,12 @@
 //! - Global hourly limit (default 20/hour)
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 use vol_core::Alert;
 
 #[cfg(test)]
-use vol_core::{AlertType, Tenor, OptionType};
+use vol_core::{AlertType, OptionType, Tenor};
 
 /// Creates a unique key for rate limiting
 pub fn limiter_key(alert: &Alert) -> String {

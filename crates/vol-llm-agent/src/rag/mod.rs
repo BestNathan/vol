@@ -45,4 +45,4 @@ pub use memory_store::InMemoryStore;
 pub use store::EmbeddingStore;
 
 // Re-export embedding types from embedding module for backward compatibility
-pub use crate::embedding::{Embedder, DashScopeEmbedder, DashScopeConfig, DashScopeModel};
+pub use crate::embedding::{DashScopeConfig, DashScopeEmbedder, DashScopeModel, Embedder};

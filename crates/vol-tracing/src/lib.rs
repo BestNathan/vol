@@ -1,9 +1,9 @@
 mod macros;
-mod with_span;
 mod traced_event;
+mod with_span;
 
-pub use with_span::WithSpan;
 pub use traced_event::TracedEvent;
+pub use with_span::WithSpan;
 // Re-export tracing core types for downstream crates
 pub use tracing::instrument;
 pub use tracing::Instrument;

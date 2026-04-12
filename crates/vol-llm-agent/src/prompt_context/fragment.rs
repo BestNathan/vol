@@ -119,11 +119,7 @@ mod tests {
 
     #[test]
     fn test_prompt_fragment_new() {
-        let fragment = PromptFragment::new(
-            "test_id",
-            "test content",
-            FragmentType::Role,
-        );
+        let fragment = PromptFragment::new("test_id", "test content", FragmentType::Role);
 
         assert_eq!(fragment.id, "test_id");
         assert_eq!(fragment.content, "test content");
@@ -190,11 +186,7 @@ mod tests {
 
     #[test]
     fn test_prompt_fragment_clone() {
-        let fragment = PromptFragment::new(
-            "test",
-            "content",
-            FragmentType::Rules,
-        );
+        let fragment = PromptFragment::new("test", "content", FragmentType::Rules);
 
         let cloned = fragment.clone();
 

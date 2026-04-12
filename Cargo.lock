@@ -3160,7 +3160,9 @@ dependencies = [
  "vol-llm-provider",
  "vol-llm-tdengine",
  "vol-llm-tool",
+ "vol-session",
  "vol-tdengine",
+ "vol-tracing",
 ]
 
 [[package]]
@@ -3311,6 +3313,24 @@ dependencies = [
  "tracing",
  "vol-config",
  "vol-core",
+]
+
+[[package]]
+name = "vol-session"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "uuid",
+ "vol-core",
+ "vol-llm-core",
+ "vol-tracing",
 ]
 
 [[package]]

@@ -5,11 +5,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
-use tracing::{info, error, warn, info_span};
+use tracing::{error, info, info_span, warn};
 use vol_config::DeribitClientConfig;
-use vol_core::{DataSource, HealthStatus, Result, VolatilityData, MonitoringEvent, EventType};
-use vol_deribit::{ChannelType, ChannelData, DeribitClient};
-use vol_tracing::{TracedEvent, new_trace_id, Instrument};
+use vol_core::{DataSource, EventType, HealthStatus, MonitoringEvent, Result, VolatilityData};
+use vol_deribit::{ChannelData, ChannelType, DeribitClient};
+use vol_tracing::{new_trace_id, Instrument, TracedEvent};
 
 /// Index price state - thread-safe shared state
 #[derive(Debug, Clone, Default)]
@@ -46,7 +46,11 @@ pub struct VolatilityDataSource {
 
 impl VolatilityDataSource {
     /// Create a new VolatilityDataSource from client configuration
-    pub fn from_config(client_config: DeribitClientConfig, symbols: Vec<String>, id: String) -> Self {
+    pub fn from_config(
+        client_config: DeribitClientConfig,
+        symbols: Vec<String>,
+        id: String,
+    ) -> Self {
         let mut client = DeribitClient::new(&client_config.ws_url);
 
         // Configure proxy if available via environment
@@ -57,8 +61,12 @@ impl VolatilityDataSource {
 
         // Configure auth from config or environment variables
         let client = if client_config.has_auth() {
-            let client_id = client_config.client_id().expect("client_id should exist after has_auth check");
-            let client_secret = client_config.client_secret().expect("client_secret should exist after has_auth check");
+            let client_id = client_config
+                .client_id()
+                .expect("client_id should exist after has_auth check");
+            let client_secret = client_config
+                .client_secret()
+                .expect("client_secret should exist after has_auth check");
             info!("Using Deribit credentials from config or environment variables");
             client.with_auth(client_id, client_secret)
         } else {
@@ -234,7 +242,8 @@ impl VolatilityDataSource {
             }
 
             // Wrap with TracedEvent for propagation to engine
-            let traced_monitoring = TracedEvent::new(monitoring_event, forward_span.clone(), trace_id);
+            let traced_monitoring =
+                TracedEvent::new(monitoring_event, forward_span.clone(), trace_id);
 
             if let Err(e) = tx.send(traced_monitoring).instrument(forward_span).await {
                 error!("Failed to send event: {}", e);

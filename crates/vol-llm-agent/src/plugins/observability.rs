@@ -19,12 +19,8 @@ pub struct ObservabilityPlugin {
 }
 
 impl ObservabilityPlugin {
-    pub fn new(
-        audit_tx: Option<tokio::sync::mpsc::Sender<AuditEvent>>,
-    ) -> Self {
-        Self {
-            audit_tx,
-        }
+    pub fn new(audit_tx: Option<tokio::sync::mpsc::Sender<AuditEvent>>) -> Self {
+        Self { audit_tx }
     }
 
     fn get_event_type(event: &AgentStreamEvent) -> &'static str {
@@ -84,9 +80,9 @@ impl AgentPlugin for ObservabilityPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::react::{AgentConfig, PluginContext, RunContext};
+    use crate::session::{InMemoryMessageStore, InMemorySessionStore, Session};
     use std::sync::Arc;
-    use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-    use crate::react::{AgentConfig, RunContext, PluginContext};
 
     fn create_test_plugin_context() -> PluginContext {
         let (ctx, _rx) = RunContext::new(
@@ -119,13 +115,11 @@ mod tests {
         plugin.listen(&event, &ctx).await;
 
         // Should have received audit event
-        let audit_event = tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            audit_rx.recv(),
-        )
-        .await
-        .expect("Timeout waiting for audit event")
-        .expect("Channel closed");
+        let audit_event =
+            tokio::time::timeout(std::time::Duration::from_millis(100), audit_rx.recv())
+                .await
+                .expect("Timeout waiting for audit event")
+                .expect("Channel closed");
 
         assert_eq!(audit_event.run_id, "test-run");
         assert_eq!(audit_event.event_type, "AgentStart");

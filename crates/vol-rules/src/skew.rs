@@ -1,7 +1,7 @@
 //! Skew rule.
 
-use vol_core::{RuleProcessor, MonitoringEvent, Alert, EventType, RuleAction, Result};
 use vol_config::SkewConfig;
+use vol_core::{Alert, EventType, MonitoringEvent, Result, RuleAction, RuleProcessor};
 
 /// Skew rule for put/call IV divergence
 #[derive(Clone)]
@@ -13,10 +13,7 @@ pub struct SkewRule {
 
 impl SkewRule {
     pub fn new(config: SkewConfig, id: String) -> Self {
-        Self {
-            config,
-            id,
-        }
+        Self { config, id }
     }
 }
 

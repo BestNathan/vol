@@ -1,7 +1,10 @@
 //! Absolute IV threshold rule.
 
-use vol_core::{RuleProcessor, MonitoringEvent, Alert, AlertType, EventType, RuleAction, Result, Tenor, VolatilityData};
 use vol_config::AbsoluteIvRuleConfig;
+use vol_core::{
+    Alert, AlertType, EventType, MonitoringEvent, Result, RuleAction, RuleProcessor, Tenor,
+    VolatilityData,
+};
 
 /// Extract underlying symbol from instrument name
 /// e.g., "BTC-29MAR24-70000-C" -> "BTC"
@@ -45,7 +48,10 @@ impl AbsoluteIvRule {
 
         // Get ATM threshold: per-DTE config takes precedence, fallback to tenor-based
         let dte_key = data.dte.to_string();
-        let atm_threshold = self.config.dte_atm_thresholds.get(&dte_key)
+        let atm_threshold = self
+            .config
+            .dte_atm_thresholds
+            .get(&dte_key)
             .copied()
             .unwrap_or_else(|| match tenor {
                 Tenor::Short => self.config.short_atm_threshold,
@@ -61,18 +67,26 @@ impl AbsoluteIvRule {
 
         // IV threshold check
         if data.iv >= iv_threshold {
-            let mark_price = data.extra.get("mark_price_coin")
+            let mark_price = data
+                .extra
+                .get("mark_price_coin")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0);
             Some(Alert::new(
-                AlertType::AbsoluteIv { threshold: iv_threshold },
+                AlertType::AbsoluteIv {
+                    threshold: iv_threshold,
+                },
                 tenor,
                 data.symbol.clone(),
                 data.iv,
                 format!(
                     "{} {} IV {:.1}% (symbol: {}, moneyness: {:.2}%) >= threshold {:.1}%",
-                    data.symbol, tenor,
-                    data.iv * 100.0, symbol_name, moneyness * 100.0, iv_threshold * 100.0
+                    data.symbol,
+                    tenor,
+                    data.iv * 100.0,
+                    symbol_name,
+                    moneyness * 100.0,
+                    iv_threshold * 100.0
                 ),
                 data.timestamp,
                 data.source.clone(),

@@ -5,16 +5,18 @@
 //! This test simulates a real-world IV threshold alert scenario where the Agent
 //! analyzes the alert and provides recommendations.
 
-use vol_llm_agent::ReActAgent;
-use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool};
-use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
-use vol_llm_core::{LLMProvider, LLMClient, Message, ConversationResponse, TokenUsage, FinishReason, ToolDefinition};
 use async_trait::async_trait;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::io::Write;
 use chrono::Local;
 use serde_json::{json, Value};
+use std::io::Write;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use vol_llm_agent::ReActAgent;
+use vol_llm_core::{
+    ConversationResponse, FinishReason, LLMClient, LLMProvider, Message, TokenUsage, ToolDefinition,
+};
+use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
+use vol_llm_tdengine::{IndexPriceTool, VolatilityIndexTool};
 
 /// Write JSON to file (pretty formatted)
 fn write_json_to_file(path: &str, data: &Value, section: &str) {
@@ -24,14 +26,16 @@ fn write_json_to_file(path: &str, data: &Value, section: &str) {
         .open(path)
         .expect("Failed to open log file");
 
-    let formatted = serde_json::to_string_pretty(data)
-        .expect("Failed to format JSON");
+    let formatted = serde_json::to_string_pretty(data).expect("Failed to format JSON");
 
-    writeln!(file, "\n{}\n{}\n{}\n",
+    writeln!(
+        file,
+        "\n{}\n{}\n{}\n",
         "=".repeat(80),
         section,
         "=".repeat(80)
-    ).expect("Failed to write to log file");
+    )
+    .expect("Failed to write to log file");
 
     writeln!(file, "{}", formatted).expect("Failed to write to log file");
 }
@@ -44,11 +48,14 @@ fn write_text_to_file(path: &str, content: &str, section: &str) {
         .open(path)
         .expect("Failed to open log file");
 
-    writeln!(file, "\n{}\n{}\n{}\n",
+    writeln!(
+        file,
+        "\n{}\n{}\n{}\n",
         "=".repeat(80),
         section,
         "=".repeat(80)
-    ).expect("Failed to write to log file");
+    )
+    .expect("Failed to write to log file");
 
     writeln!(file, "{}", content).expect("Failed to write to log file");
 }
@@ -123,8 +130,8 @@ impl AlertScenarioMock {
             "https://coding.dashscope.aliyuncs.com/apps/anthropic",
         );
 
-        let provider = AnthropicProvider::new(&config)
-            .expect("Failed to create Anthropic provider");
+        let provider =
+            AnthropicProvider::new(&config).expect("Failed to create Anthropic provider");
 
         Self {
             provider,
@@ -154,7 +161,10 @@ impl LLMClient for AlertScenarioMock {
         ]
     }
 
-    async fn converse(&self, request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
+    async fn converse(
+        &self,
+        request: vol_llm_core::ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
         let count = self.call_count.fetch_add(1, Ordering::SeqCst);
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
 
@@ -187,8 +197,11 @@ impl LLMClient for AlertScenarioMock {
             })
         });
 
-        write_json_to_file(&self.log_path, &request_json,
-            &format!("CALL #{} - REQUEST PARAMETERS", count + 1));
+        write_json_to_file(
+            &self.log_path,
+            &request_json,
+            &format!("CALL #{} - REQUEST PARAMETERS", count + 1),
+        );
 
         if count == 0 {
             // First call: use real LLM to analyze alert
@@ -265,8 +278,11 @@ impl LLMClient for AlertScenarioMock {
                 "tool_choice": "auto"
             });
 
-            write_json_to_file(&self.log_path, &request_json_with_tools,
-                &format!("CALL #{} - REQUEST (with tools)", count + 1));
+            write_json_to_file(
+                &self.log_path,
+                &request_json_with_tools,
+                &format!("CALL #{} - REQUEST (with tools)", count + 1),
+            );
 
             let response = self.provider.converse(request).await;
 
@@ -297,8 +313,11 @@ impl LLMClient for AlertScenarioMock {
                         "raw_response": resp.raw
                     });
 
-                    write_json_to_file(&self.log_path, &response_json,
-                        &format!("CALL #{} - RESPONSE", count + 1));
+                    write_json_to_file(
+                        &self.log_path,
+                        &response_json,
+                        &format!("CALL #{} - RESPONSE", count + 1),
+                    );
                 }
                 Err(e) => {
                     let error_json = json!({
@@ -306,8 +325,11 @@ impl LLMClient for AlertScenarioMock {
                         "timestamp": Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
                         "error": format!("{:?}", e)
                     });
-                    write_json_to_file(&self.log_path, &error_json,
-                        &format!("CALL #{} - ERROR", count + 1));
+                    write_json_to_file(
+                        &self.log_path,
+                        &error_json,
+                        &format!("CALL #{} - ERROR", count + 1),
+                    );
                 }
             }
 
@@ -380,15 +402,21 @@ impl LLMClient for AlertScenarioMock {
                     }
                 });
 
-                write_json_to_file(&self.log_path, &response_json,
-                    &format!("CALL #{} - RESPONSE (Final Analysis)", count + 1));
+                write_json_to_file(
+                    &self.log_path,
+                    &response_json,
+                    &format!("CALL #{} - RESPONSE (Final Analysis)", count + 1),
+                );
             }
 
             response
         }
     }
 
-    async fn converse_stream(&self, _request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
+    async fn converse_stream(
+        &self,
+        _request: vol_llm_core::ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
         unimplemented!()
     }
 }
@@ -422,7 +450,11 @@ async fn test_agent_alert_scenario() {
     println!("   Type: {}", scenario.alert_type);
     println!("   Contract: {}", scenario.contract);
     println!("   Tenor: {}", scenario.tenor);
-    println!("   IV: {:.2}% (Threshold: {:.2}%)", scenario.iv * 100.0, scenario.threshold * 100.0);
+    println!(
+        "   IV: {:.2}% (Threshold: {:.2}%)",
+        scenario.iv * 100.0,
+        scenario.threshold * 100.0
+    );
     println!("   Index Price: ${:.2}", scenario.index_price);
     println!("   DTE: {} days", scenario.dte);
     println!("   Trace ID: {}", scenario.trace_id);
@@ -439,7 +471,11 @@ async fn test_agent_alert_scenario() {
         "threshold": scenario.threshold,
         "trace_id": scenario.trace_id
     });
-    write_json_to_file(scenario_log_path, &scenario_json, "ALERT SCENARIO CONFIGURATION");
+    write_json_to_file(
+        scenario_log_path,
+        &scenario_json,
+        "ALERT SCENARIO CONFIGURATION",
+    );
 
     // Check for API key
     let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
@@ -466,8 +502,6 @@ async fn test_agent_alert_scenario() {
         .with_verbose(true)
         .build()
         .unwrap();
-
-    
 
     // Build user input from alert
     let user_input = format!(
@@ -534,8 +568,7 @@ async fn test_agent_alert_scenario() {
 
     // Write summary
     let summary_path = "/tmp/agent_alert_summary.txt";
-    std::fs::write(summary_path, &output_log)
-        .expect("Failed to write summary file");
+    std::fs::write(summary_path, &output_log).expect("Failed to write summary file");
 
     println!("\nOutput Files:");
     println!("   Scenario Log (JSON): {}", scenario_log_path);

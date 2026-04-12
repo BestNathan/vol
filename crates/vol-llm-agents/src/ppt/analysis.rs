@@ -1,9 +1,9 @@
 //! PPT Agent 需求分析模块。
 
-use std::sync::Arc;
-use vol_llm_core::{LLMClient, ConversationRequest, Message, MessageContent};
-use crate::ppt::{StructuredRequirement, prompts};
+use crate::ppt::{prompts, StructuredRequirement};
 use serde_json::Value;
+use std::sync::Arc;
+use vol_llm_core::{ConversationRequest, LLMClient, Message, MessageContent};
 
 /// 需求分析模块
 pub struct AnalysisModule {
@@ -16,18 +16,27 @@ impl AnalysisModule {
     }
 
     /// 分析用户需求，提取结构化信息
-    pub async fn analyze(&self, description: &str, context: Option<&str>) -> Result<StructuredRequirement, AnalysisError> {
+    pub async fn analyze(
+        &self,
+        description: &str,
+        context: Option<&str>,
+    ) -> Result<StructuredRequirement, AnalysisError> {
         // Build messages
         let system_message = Message::system(prompts::ANALYSIS_SYSTEM_PROMPT.to_string());
         let user_message = Message::user(prompts::build_analysis_user_prompt(description, context));
 
         // Call LLM
         let request = ConversationRequest::with_history(None, vec![system_message, user_message]);
-        let response = self.llm.converse(request).await
+        let response = self
+            .llm
+            .converse(request)
+            .await
             .map_err(|e| AnalysisError::LlmError(e.to_string()))?;
 
         // Extract content from response message
-        let content = response.message.content
+        let content = response
+            .message
+            .content
             .ok_or_else(|| AnalysisError::EmptyResponse)?;
 
         let content_str = match &content {
@@ -44,7 +53,8 @@ impl AnalysisModule {
             .map_err(|e| AnalysisError::JsonParseError(e.to_string()))?;
 
         // Extract fields
-        let topic = json["topic"].as_str()
+        let topic = json["topic"]
+            .as_str()
             .ok_or_else(|| AnalysisError::MissingField("topic".to_string()))?
             .to_string();
 

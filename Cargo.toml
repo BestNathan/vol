@@ -20,6 +20,7 @@ members = [
     "crates/vol-tdengine",
     "crates/vol-llm-tdengine",
     "crates/ppt-agent",
+    "crates/vol-session",
 ]
 
 [workspace.package]
@@ -83,6 +84,7 @@ hex = "0.4"
 
 # Data structures
 indexmap = "2.1"
+uuid = "1.6"
 
 # Internal crates
 vol-core = { path = "crates/vol-core" }
@@ -95,3 +97,4 @@ vol-notification = { path = "crates/vol-notification" }
 vol-engine = { path = "crates/vol-engine" }
 vol-rules = { path = "crates/vol-rules" }
 vol-tracing = { path = "crates/vol-tracing" }
+vol-session = { path = "crates/vol-session" }

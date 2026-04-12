@@ -39,8 +39,8 @@ pub mod client;
 pub mod instrument;
 pub mod market_data;
 pub mod message;
-pub mod positions;
 pub mod portfolio;
+pub mod positions;
 pub mod subscription;
 pub mod subscription_manager;
 
@@ -49,6 +49,6 @@ pub use client::{ClientState, DeribitClient};
 pub use instrument::*;
 pub use market_data::*;
 pub use message::*;
-pub use positions::{Position, PortfolioSummary};
 pub use portfolio::PortfolioData;
+pub use positions::{PortfolioSummary, Position};
 pub use subscription::*;

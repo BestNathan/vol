@@ -32,25 +32,32 @@
 
 pub mod agent;
 pub mod builder;
-pub mod response;
-pub mod stream;
-pub mod prompt;
+pub mod hitl;
 pub mod plugin;
 pub mod plugin_stream;
-pub mod hitl;
+pub mod prompt;
+pub mod response;
 pub mod run_context;
 pub mod state;
+pub mod stream;
 
-pub use agent::{ReActAgent, AgentConfig};
+pub use agent::{AgentConfig, ReActAgent};
 pub use builder::AgentBuilder;
-pub use response::{AgentResponse, AgentError};
-pub use stream::{AgentStreamEvent, AgentStreamReceiver};
-pub use prompt::{default_system_prompt, SystemPromptBuilder};
+pub use hitl::{
+    ApprovalChannel, ApprovalRequest, ApprovalResponse, ApprovalTrigger, ApprovalType, HitlConfig,
+    TimeoutBehavior,
+};
 pub use plugin::{AgentPlugin, PluginDecision, PluginRegistry};
-pub use plugin_stream::{create_shortcircuit_stream, create_skip_stream, run_interceptor_loop, spawn_listener_task};
-pub use run_context::{RunContext, PluginContext, PluginRequest};
-pub use hitl::{ApprovalChannel, ApprovalRequest, ApprovalResponse, ApprovalType, HitlConfig, ApprovalTrigger, TimeoutBehavior};
+pub use plugin_stream::{
+    create_shortcircuit_stream, create_skip_stream, run_interceptor_loop, spawn_listener_task,
+};
+pub use prompt::{default_system_prompt, SystemPromptBuilder};
+pub use response::{AgentError, AgentResponse};
+pub use run_context::{PluginContext, PluginRequest, RunContext};
 pub use state::{ReasoningStep, ToolCallRecord};
+pub use stream::{AgentStreamEvent, AgentStreamReceiver};
 
 // Re-export prompt_context types for convenience
-pub use crate::prompt_context::{PromptContext, PromptTemplate, PromptFragment, FragmentType, MessageAssembler};
+pub use crate::prompt_context::{
+    FragmentType, MessageAssembler, PromptContext, PromptFragment, PromptTemplate,
+};

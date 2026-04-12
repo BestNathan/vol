@@ -1,7 +1,7 @@
 //! Session error types.
 
-use thiserror::Error;
 use crate::store::StoreError;
+use thiserror::Error;
 
 /// Session operation error
 #[derive(Debug, Error)]

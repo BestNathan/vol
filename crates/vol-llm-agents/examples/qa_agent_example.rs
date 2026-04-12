@@ -7,8 +7,8 @@
 //!
 //! Run with: `cargo run --example qa_agent_example`
 
-use std::sync::Arc;
 use async_trait::async_trait;
+use std::sync::Arc;
 use vol_llm_agent::{
     rag::{Document, Embedder, EmbeddingStore, InMemoryStore},
     RagConfig,
@@ -45,9 +45,14 @@ impl vol_llm_core::LLMClient for MockLlm {
         &[]
     }
 
-    async fn converse(&self, _request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
+    async fn converse(
+        &self,
+        _request: vol_llm_core::ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
         Ok(vol_llm_core::ConversationResponse {
-            message: vol_llm_core::Message::assistant("这是一个模拟回答。在实际使用中，LLM 会基于检索到的文档生成真实回答。".to_string()),
+            message: vol_llm_core::Message::assistant(
+                "这是一个模拟回答。在实际使用中，LLM 会基于检索到的文档生成真实回答。".to_string(),
+            ),
             model: "mock".to_string(),
             usage: vol_llm_core::TokenUsage::default(),
             finish_reason: vol_llm_core::FinishReason::Stop,
@@ -55,7 +60,10 @@ impl vol_llm_core::LLMClient for MockLlm {
         })
     }
 
-    async fn converse_stream(&self, _request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::StreamReceiver> {
+    async fn converse_stream(
+        &self,
+        _request: vol_llm_core::ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::StreamReceiver> {
         unimplemented!()
     }
 }
@@ -104,10 +112,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // 4. Ask questions
     println!("\n5. Asking questions:");
 
-    let questions = vec![
-        "如何进行 Delta 对冲？",
-        "Gamma 风险如何管理？",
-    ];
+    let questions = vec!["如何进行 Delta 对冲？", "Gamma 风险如何管理？"];
 
     for question in questions {
         println!("\n   Q: {}", question);

@@ -131,17 +131,14 @@ impl MessageAssembler {
 
         let user_msg = ctx.build_user(user_input, Some(&rag_context));
 
-        vec![
-            Message::system(ctx.build_system()),
-            Message::user(user_msg),
-        ]
+        vec![Message::system(ctx.build_system()), Message::user(user_msg)]
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prompt_context::{PromptTemplate, PromptFragment, FragmentType};
+    use crate::prompt_context::{FragmentType, PromptFragment, PromptTemplate};
 
     #[test]
     fn test_assemble_basic() {
@@ -153,20 +150,38 @@ mod tests {
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[0].role, vol_llm_core::MessageRole::System);
         assert_eq!(messages[1].role, vol_llm_core::MessageRole::User);
-        assert!(messages[0].content.as_ref().unwrap().as_str().contains("helpful assistant"));
-        assert!(messages[1].content.as_ref().unwrap().as_str().contains("Hello, how are you?"));
+        assert!(messages[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("helpful assistant"));
+        assert!(messages[1]
+            .content
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("Hello, how are you?"));
     }
 
     #[test]
     fn test_assemble_with_custom_context() {
         let template = PromptTemplate::new("test", "Role: {role}");
-        let ctx = PromptContext::new(template)
-            .with_fragment(PromptFragment::new("role", "You are a financial analyst.", FragmentType::Role));
+        let ctx = PromptContext::new(template).with_fragment(PromptFragment::new(
+            "role",
+            "You are a financial analyst.",
+            FragmentType::Role,
+        ));
 
         let messages = MessageAssembler::assemble(&ctx, "What is the market outlook?");
 
         assert_eq!(messages.len(), 2);
-        assert!(messages[0].content.as_ref().unwrap().as_str().contains("financial analyst"));
+        assert!(messages[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("financial analyst"));
     }
 
     #[test]
@@ -179,11 +194,7 @@ mod tests {
             Message::assistant("AI stands for Artificial Intelligence."),
         ];
 
-        let messages = MessageAssembler::assemble_with_history(
-            &ctx,
-            "How does it work?",
-            &history,
-        );
+        let messages = MessageAssembler::assemble_with_history(&ctx, "How does it work?", &history);
 
         assert_eq!(messages.len(), 4); // System + 2 history + current user
         assert_eq!(messages[0].role, vol_llm_core::MessageRole::System);
@@ -199,11 +210,7 @@ mod tests {
 
         let history: Vec<Message> = vec![];
 
-        let messages = MessageAssembler::assemble_with_history(
-            &ctx,
-            "Hello",
-            &history,
-        );
+        let messages = MessageAssembler::assemble_with_history(&ctx, "Hello", &history);
 
         assert_eq!(messages.len(), 2); // System + user only
     }

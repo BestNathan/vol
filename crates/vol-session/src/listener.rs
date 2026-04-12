@@ -10,7 +10,7 @@ use tracing::{error, warn};
 use vol_llm_core::AgentStreamEvent;
 use vol_tracing::TracedEvent;
 
-use crate::{SessionMessage, MessageStore, SessionError};
+use crate::{MessageStore, SessionError, SessionMessage};
 
 /// Event-driven session listener for message recording.
 ///
@@ -68,15 +68,16 @@ impl SessionListener {
     fn event_to_message(&self, event: &AgentStreamEvent) -> Option<SessionMessage> {
         match event {
             // ThinkingComplete -> Assistant message (thinking content)
-            AgentStreamEvent::ThinkingComplete { thinking } => {
-                Some(SessionMessage::new(
-                    self.session_id.clone(),
-                    vol_llm_core::Message::assistant(thinking.clone()),
-                ))
-            }
+            AgentStreamEvent::ThinkingComplete { thinking } => Some(SessionMessage::new(
+                self.session_id.clone(),
+                vol_llm_core::Message::assistant(thinking.clone()),
+            )),
 
             // ToolCallBegin -> Assistant message (tool call intent)
-            AgentStreamEvent::ToolCallBegin { tool_name, arguments } => {
+            AgentStreamEvent::ToolCallBegin {
+                tool_name,
+                arguments,
+            } => {
                 let content = format!("Calling tool: {} with arguments: {}", tool_name, arguments);
                 Some(SessionMessage::new(
                     self.session_id.clone(),
@@ -283,7 +284,10 @@ mod tests {
         // Verify the message was saved
         let messages = store.get_by_session("session-1", 10).await.unwrap();
         assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].message.role, vol_llm_core::MessageRole::Assistant);
+        assert_eq!(
+            messages[0].message.role,
+            vol_llm_core::MessageRole::Assistant
+        );
     }
 
     #[tokio::test]
@@ -324,10 +328,16 @@ mod tests {
         assert_eq!(messages.len(), 3);
 
         // First: thinking (Assistant)
-        assert_eq!(messages[0].message.role, vol_llm_core::MessageRole::Assistant);
+        assert_eq!(
+            messages[0].message.role,
+            vol_llm_core::MessageRole::Assistant
+        );
         // Second: tool result (System)
         assert_eq!(messages[1].message.role, vol_llm_core::MessageRole::System);
         // Third: final answer (Assistant)
-        assert_eq!(messages[2].message.role, vol_llm_core::MessageRole::Assistant);
+        assert_eq!(
+            messages[2].message.role,
+            vol_llm_core::MessageRole::Assistant
+        );
     }
 }

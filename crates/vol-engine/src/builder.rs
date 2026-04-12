@@ -1,7 +1,7 @@
 //! Chain builder for MonitoringEngine.
 
-use crate::{MonitoringEngine, EngineConfig};
-use vol_core::{DataSource, RuleProcessor, NotificationHandler};
+use crate::{EngineConfig, MonitoringEngine};
+use vol_core::{DataSource, NotificationHandler, RuleProcessor};
 
 /// Builder for constructing MonitoringEngine with fluent API
 pub struct MonitoringEngineBuilder {
@@ -74,8 +74,7 @@ mod tests {
 
     #[test]
     fn test_builder_fluent_api() {
-        let builder = MonitoringEngineBuilder::new()
-            .with_config(EngineConfig::default());
+        let builder = MonitoringEngineBuilder::new().with_config(EngineConfig::default());
 
         // Verify builder compiles and returns engine
         let _engine = builder.build();

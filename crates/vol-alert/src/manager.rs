@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use vol_core::Alert;
 use vol_config::EngineConfigFile;
+use vol_core::Alert;
 
 /// Manages alert cooldowns to prevent alert spam
 pub struct AlertManager {
@@ -55,8 +55,8 @@ impl AlertManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_core::{Alert, AlertType, OptionType, Tenor};
     use vol_config::{EngineConfigFile, TenorCooldownsConfig};
+    use vol_core::{Alert, AlertType, OptionType, Tenor};
 
     fn create_test_alert(tenor: Tenor, timestamp: u64) -> Alert {
         Alert::new(
@@ -81,9 +81,9 @@ mod tests {
         let config = EngineConfigFile {
             alert_cooldown_secs: 300,
             tenor_cooldowns: TenorCooldownsConfig {
-                short_secs: Some(600),    // 10 min
-                medium_secs: Some(3600),  // 1 hour
-                long_secs: Some(14400),   // 4 hours
+                short_secs: Some(600),   // 10 min
+                medium_secs: Some(3600), // 1 hour
+                long_secs: Some(14400),  // 4 hours
             },
             ..Default::default()
         };

@@ -2,13 +2,15 @@
 //!
 //! Reference: https://github.com/foxzool/openlark
 
-use vol_core::{NotificationHandler, Alert, Result, VolError, Tenor, OptionType};
-use vol_config::FeishuConfig;
-use open_lark::Client;
-use open_lark::communication::im::im::v1::message::create::{CreateMessageRequest, CreateMessageBody};
+use open_lark::communication::im::im::v1::message::create::{
+    CreateMessageBody, CreateMessageRequest,
+};
 use open_lark::communication::im::im::v1::message::models::ReceiveIdType;
+use open_lark::Client;
 use serde_json::json;
-use tracing::{info, warn, info_span, Instrument};
+use tracing::{info, info_span, warn, Instrument};
+use vol_config::FeishuConfig;
+use vol_core::{Alert, NotificationHandler, OptionType, Result, Tenor, VolError};
 
 /// Feishu/Lark notification handler
 #[derive(Clone)]
@@ -21,17 +23,17 @@ pub struct FeishuNotification {
 
 impl FeishuNotification {
     pub fn new(config: FeishuConfig) -> Result<Self> {
-        let app_id = config.app_id.ok_or_else(|| {
-            VolError::Notification("Feishu app_id is required".to_string())
-        })?;
+        let app_id = config
+            .app_id
+            .ok_or_else(|| VolError::Notification("Feishu app_id is required".to_string()))?;
 
-        let app_secret = config.app_secret.ok_or_else(|| {
-            VolError::Notification("Feishu app_secret is required".to_string())
-        })?;
+        let app_secret = config
+            .app_secret
+            .ok_or_else(|| VolError::Notification("Feishu app_secret is required".to_string()))?;
 
-        let receive_id = config.receive_id.ok_or_else(|| {
-            VolError::Notification("Feishu receive_id is required".to_string())
-        })?;
+        let receive_id = config
+            .receive_id
+            .ok_or_else(|| VolError::Notification("Feishu receive_id is required".to_string()))?;
 
         // Determine receive_id_type based on prefix
         // oc_ -> chat_id, ou_ -> open_id, og_ -> chat_id (group chat)
@@ -51,7 +53,9 @@ impl FeishuNotification {
             .app_id(&app_id)
             .app_secret(&app_secret)
             .build()
-            .map_err(|e| VolError::Notification(format!("Failed to create openlark client: {}", e)))?;
+            .map_err(|e| {
+                VolError::Notification(format!("Failed to create openlark client: {}", e))
+            })?;
 
         Ok(Self {
             client,
@@ -63,7 +67,8 @@ impl FeishuNotification {
 
     /// Format message using template
     fn format_message(&self, alert: &Alert, trace_id_prefix: &str) -> String {
-        let formatted = self.message_template
+        let formatted = self
+            .message_template
             .replace("{tenor}", &alert.tenor.to_string())
             .replace("{alert_type}", &alert.alert_type.to_string())
             .replace("{symbol}", &alert.symbol)
@@ -71,13 +76,26 @@ impl FeishuNotification {
             .replace("{index_price}", &format!("{:.2}", alert.index_price))
             .replace("{dte}", &alert.dte.to_string())
             .replace("{option_type}", &alert.option_type.to_string())
-            .replace("{moneyness}", &format!(
-                "{}{:.1}%",
-                if alert.moneyness > 0.0 { "ITM +" } else { "OTM " },
-                alert.moneyness.abs() * 100.0
-            ))
-            .replace("{mark_price_coin}", &format!("{:.4}", alert.mark_price_coin))
-            .replace("{mark_price_usd}", &format!("{:.2}", alert.mark_price_usd()))
+            .replace(
+                "{moneyness}",
+                &format!(
+                    "{}{:.1}%",
+                    if alert.moneyness > 0.0 {
+                        "ITM +"
+                    } else {
+                        "OTM "
+                    },
+                    alert.moneyness.abs() * 100.0
+                ),
+            )
+            .replace(
+                "{mark_price_coin}",
+                &format!("{:.4}", alert.mark_price_coin),
+            )
+            .replace(
+                "{mark_price_usd}",
+                &format!("{:.2}", alert.mark_price_usd()),
+            )
             .replace("{strike}", &alert.message);
 
         // Prepend trace_id prefix
@@ -173,7 +191,8 @@ impl FeishuNotification {
                     ]
                 }
             ]
-        })).unwrap_or_default()
+        }))
+        .unwrap_or_default()
     }
 
     /// Helper function for tenor Chinese name
@@ -217,8 +236,10 @@ impl FeishuNotification {
             .receive_id_type(self.receive_id_type);
 
         // Log request details for debugging
-        info!("Sending Feishu message: receive_id={}, receive_id_type={:?}, msg_type={}",
-              self.receive_id, self.receive_id_type, msg_type);
+        info!(
+            "Sending Feishu message: receive_id={}, receive_id_type={:?}, msg_type={}",
+            self.receive_id, self.receive_id_type, msg_type
+        );
 
         // Send the message
         let result: open_lark::SDKResult<serde_json::Value> = request.execute(body).await;
@@ -232,9 +253,7 @@ impl FeishuNotification {
                 let response: &serde_json::Value = &response;
 
                 // Try to find message_id at root level (openlark SDK format)
-                let message_id = response
-                    .get("message_id")
-                    .and_then(|v| v.as_str());
+                let message_id = response.get("message_id").and_then(|v| v.as_str());
 
                 if let Some(message_id) = message_id {
                     info!("Feishu message sent successfully: {}", message_id);
@@ -255,25 +274,29 @@ impl FeishuNotification {
                     info!("Feishu message sent successfully");
                     Ok(())
                 } else {
-                    let msg = response.get("msg").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+                    let msg = response
+                        .get("msg")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Unknown error");
                     warn!("Feishu API error: code={}, msg={}", code, msg);
-                    Err(VolError::Notification(format!("Feishu API error: {} - {}", code, msg)))
+                    Err(VolError::Notification(format!(
+                        "Feishu API error: {} - {}",
+                        code, msg
+                    )))
                 }
             }
             Err(e) => {
                 warn!("Failed to send Feishu message: {:?}", e);
-                Err(VolError::Notification(format!("Failed to send message: {}", e)))
+                Err(VolError::Notification(format!(
+                    "Failed to send message: {}",
+                    e
+                )))
             }
         }
     }
 
     /// Send AI analysis advice to Feishu
-    pub async fn send_advice(
-        &self,
-        advice: &str,
-        alert: &Alert,
-        trace_id: &str,
-    ) -> Result<()> {
+    pub async fn send_advice(&self, advice: &str, alert: &Alert, trace_id: &str) -> Result<()> {
         let span = info_span!(
             "agent_advice_send",
             channel = "agent_advice",
@@ -304,7 +327,8 @@ impl FeishuNotification {
             );
 
             // Send as text message
-            self.send_message("text", &json!({ "text": content }).to_string()).await
+            self.send_message("text", &json!({ "text": content }).to_string())
+                .await
         }
         .instrument(span)
         .await
@@ -339,7 +363,8 @@ impl NotificationHandler for FeishuNotification {
 
             if let Err(e) = self.send_message("interactive", &card_content).await {
                 warn!("Interactive card failed, falling back to text: {:?}", e);
-                self.send_message("text", &json!({ "text": text_content }).to_string()).await?;
+                self.send_message("text", &json!({ "text": text_content }).to_string())
+                    .await?;
             }
 
             tracing::info!(recipient = %self.receive_id, "notification sent to feishu");
@@ -392,18 +417,39 @@ mod tests {
         let formatted = handler.format_message(&alert, "[tr_test]");
 
         // Verify all new fields are replaced correctly
-        assert!(formatted.contains("85.0%"), "IV value should be formatted as percentage");
-        assert!(formatted.contains("68500.50"), "index_price should be formatted with 2 decimals");
+        assert!(
+            formatted.contains("85.0%"),
+            "IV value should be formatted as percentage"
+        );
+        assert!(
+            formatted.contains("68500.50"),
+            "index_price should be formatted with 2 decimals"
+        );
         assert!(formatted.contains("28"), "dte should be present");
         assert!(formatted.contains("C"), "option_type should be present");
-        assert!(formatted.contains("ITM +2.0%"), "moneyness should be formatted as ITM/OTM with percentage");
-        assert!(formatted.contains("0.0183"), "mark_price_coin should be present");
-        assert!(formatted.contains("1253.56"), "mark_price_usd should be calculated (0.0183 * 68500.50)");
+        assert!(
+            formatted.contains("ITM +2.0%"),
+            "moneyness should be formatted as ITM/OTM with percentage"
+        );
+        assert!(
+            formatted.contains("0.0183"),
+            "mark_price_coin should be present"
+        );
+        assert!(
+            formatted.contains("1253.56"),
+            "mark_price_usd should be calculated (0.0183 * 68500.50)"
+        );
 
         // Verify original fields are also replaced
         assert!(formatted.contains("short"), "tenor should be present");
-        assert!(formatted.contains("absolute_iv"), "alert_type should be present");
-        assert!(formatted.contains("BTC-29MAR24-70000-C"), "symbol should be present");
+        assert!(
+            formatted.contains("absolute_iv"),
+            "alert_type should be present"
+        );
+        assert!(
+            formatted.contains("BTC-29MAR24-70000-C"),
+            "symbol should be present"
+        );
     }
 
     #[test]

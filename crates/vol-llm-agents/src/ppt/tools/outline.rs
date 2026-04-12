@@ -1,11 +1,11 @@
 //! 大纲生成工具。
 
-use std::sync::Arc;
-use vol_llm_tool::{ExecutableTool, ToolContext, ToolResult, ToolError};
-use vol_llm_core::{LLMClient, ConversationRequest, Message};
-use serde_json::{json, Value};
+use crate::ppt::{prompts, Outline, SlideDef, SlideType};
 use async_trait::async_trait;
-use crate::ppt::{Outline, SlideDef, SlideType, prompts};
+use serde_json::{json, Value};
+use std::sync::Arc;
+use vol_llm_core::{ConversationRequest, LLMClient, Message};
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult};
 
 /// 大纲生成工具错误类型
 #[derive(Debug, thiserror::Error)]
@@ -52,13 +52,18 @@ Generate title slide, table of contents, 5-10 content slides, and summary. Retur
 
         let request = ConversationRequest::with_history(
             Some(prompts::OUTLINE_SYSTEM_PROMPT.to_string()),
-            vec![user_message]
+            vec![user_message],
         );
-        let response = self.llm.converse(request).await
+        let response = self
+            .llm
+            .converse(request)
+            .await
             .map_err(|e| OutlineError::LlmError(e.to_string()))?;
 
         // Parse JSON response - handle Option<MessageContent>
-        let content_str = response.message.content
+        let content_str = response
+            .message
+            .content
             .as_ref()
             .map(|c| c.as_str())
             .unwrap_or("");
@@ -66,16 +71,19 @@ Generate title slide, table of contents, 5-10 content slides, and summary. Retur
             .map_err(|e| OutlineError::JsonParseError(e.to_string()))?;
 
         // Parse into Outline struct
-        let title = json["title"].as_str()
+        let title = json["title"]
+            .as_str()
             .ok_or_else(|| OutlineError::MissingField("title".to_string()))?
             .to_string();
 
-        let slides_array = json["slides"].as_array()
+        let slides_array = json["slides"]
+            .as_array()
             .ok_or_else(|| OutlineError::MissingField("slides".to_string()))?;
 
         let mut slides = Vec::new();
         for slide_json in slides_array {
-            let slide_type_str = slide_json["type"].as_str()
+            let slide_type_str = slide_json["type"]
+                .as_str()
                 .ok_or_else(|| OutlineError::MissingField("slide type".to_string()))?;
 
             let slide_type = match slide_type_str.to_lowercase().as_str() {
@@ -87,15 +95,33 @@ Generate title slide, table of contents, 5-10 content slides, and summary. Retur
 
             let slide_def = SlideDef {
                 slide_type,
-                title: slide_json["title"].as_str().unwrap_or("Untitled").to_string(),
-                subtitle: slide_json.get("subtitle").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                bullets: slide_json.get("bullets")
+                title: slide_json["title"]
+                    .as_str()
+                    .unwrap_or("Untitled")
+                    .to_string(),
+                subtitle: slide_json
+                    .get("subtitle")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                bullets: slide_json
+                    .get("bullets")
                     .and_then(|v| v.as_array())
-                    .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_string()).collect())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .collect()
+                    })
                     .unwrap_or_default(),
-                sections: slide_json.get("sections")
+                sections: slide_json
+                    .get("sections")
                     .and_then(|v| v.as_array())
-                    .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_string()).collect())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .collect()
+                    })
                     .unwrap_or_default(),
             };
 
@@ -155,7 +181,7 @@ impl ExecutableTool for OutlineGeneratorTool {
                 content: format!("Error: {}", e),
                 error: Some(e.to_string()),
                 data: None,
-            })
+            }),
         }
     }
 }

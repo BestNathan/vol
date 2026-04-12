@@ -1,7 +1,7 @@
 //! vol-llm-tool: Tool framework for LLM Agent.
 
-pub mod tool;
 pub mod registry;
+pub mod tool;
 
-pub use tool::{Tool, ExecutableTool, ToolContext, ToolResult, ToolError, ToolResultType, Result};
 pub use registry::ToolRegistry;
+pub use tool::{ExecutableTool, Result, Tool, ToolContext, ToolError, ToolResult, ToolResultType};

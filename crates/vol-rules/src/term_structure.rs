@@ -1,7 +1,7 @@
 //! Term structure rule.
 
-use vol_core::{RuleProcessor, MonitoringEvent, Alert, EventType, RuleAction, Result};
 use vol_config::TermStructureConfig;
+use vol_core::{Alert, EventType, MonitoringEvent, Result, RuleAction, RuleProcessor};
 
 /// Term structure rule for spread between short and long tenors
 #[derive(Clone)]
@@ -13,10 +13,7 @@ pub struct TermStructureRule {
 
 impl TermStructureRule {
     pub fn new(config: TermStructureConfig, id: String) -> Self {
-        Self {
-            config,
-            id,
-        }
+        Self { config, id }
     }
 }
 

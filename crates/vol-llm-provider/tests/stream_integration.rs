@@ -1,8 +1,8 @@
 //! Integration tests for streaming with mock HTTP server.
 
-use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
-use vol_llm_core::{ConversationRequest, StreamEventData, LLMClient, LLMProvider};
 use tokio::net::TcpListener;
+use vol_llm_core::{ConversationRequest, LLMClient, LLMProvider, StreamEventData};
+use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
 
 /// Simple mock HTTP server that returns SSE stream
 async fn spawn_mock_sse_server(response: &'static str) -> String {
@@ -74,10 +74,18 @@ data: {"type": "message_stop", "stop_reason": "end_turn"}
     }
 
     // Verify we got the expected events
-    assert!(events.iter().any(|e| matches!(e.data, StreamEventData::ResponseStart { .. })));
-    assert!(events.iter().any(|e| matches!(e.data, StreamEventData::ContentDelta { .. })));
-    assert!(events.iter().any(|e| matches!(e.data, StreamEventData::ContentComplete { .. })));
-    assert!(events.iter().any(|e| matches!(e.data, StreamEventData::ResponseComplete { .. })));
+    assert!(events
+        .iter()
+        .any(|e| matches!(e.data, StreamEventData::ResponseStart { .. })));
+    assert!(events
+        .iter()
+        .any(|e| matches!(e.data, StreamEventData::ContentDelta { .. })));
+    assert!(events
+        .iter()
+        .any(|e| matches!(e.data, StreamEventData::ContentComplete { .. })));
+    assert!(events
+        .iter()
+        .any(|e| matches!(e.data, StreamEventData::ResponseComplete { .. })));
 }
 
 #[tokio::test]
@@ -117,10 +125,13 @@ data: {"type": "message_stop", "stop_reason": "tool_use"}
     }
 
     // Verify we got ToolCallComplete event
-    let tool_call_event = events.iter().find(|e| matches!(e.data, StreamEventData::ToolCallComplete { .. }));
+    let tool_call_event = events
+        .iter()
+        .find(|e| matches!(e.data, StreamEventData::ToolCallComplete { .. }));
     assert!(tool_call_event.is_some(), "Expected ToolCallComplete event");
 
-    if let Some(StreamEventData::ToolCallComplete { tool_call }) = tool_call_event.map(|e| &e.data) {
+    if let Some(StreamEventData::ToolCallComplete { tool_call }) = tool_call_event.map(|e| &e.data)
+    {
         assert_eq!(tool_call.id, "tool_1");
         assert_eq!(tool_call.name, "get_weather");
         assert_eq!(tool_call.arguments, r#"{"city": "Beijing"}"#);
@@ -133,7 +144,7 @@ async fn test_anthropic_stream_error_handling() {
     let config = LLMConfig {
         provider: LLMProvider::Anthropic,
         model: "qwen3.5-plus".to_string(),
-        base_url: "http://127.0.0.1:1".to_string(),  // Invalid port
+        base_url: "http://127.0.0.1:1".to_string(), // Invalid port
         api_key: Secret::literal("test-key"),
     };
 

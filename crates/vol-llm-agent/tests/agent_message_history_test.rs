@@ -4,12 +4,19 @@
 //!
 //! This test verifies that tool results are properly passed to subsequent LLM iterations.
 
-use vol_llm_agent::{ReActAgent, AgentStreamEvent, react::plugin::{AgentPlugin, PluginDecision}, react::PluginContext};
-use vol_llm_core::{LLMClient, ConversationRequest, ConversationResponse, LLMProvider, ToolCall, StreamEvent, StreamEventData, MessageRole};
 use async_trait::async_trait;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use tokio::sync::Mutex;
+use vol_llm_agent::{
+    react::plugin::{AgentPlugin, PluginDecision},
+    react::PluginContext,
+    AgentStreamEvent, ReActAgent,
+};
+use vol_llm_core::{
+    ConversationRequest, ConversationResponse, LLMClient, LLMProvider, MessageRole, StreamEvent,
+    StreamEventData, ToolCall,
+};
 
 /// Tracks all messages sent to the LLM across iterations
 struct MessageTracker {
@@ -53,15 +60,24 @@ impl LLMClient for TrackingMock {
         &[]
     }
 
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
         unimplemented!("Use converse_stream instead")
     }
 
-    async fn converse_stream(&self, request: ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
+    async fn converse_stream(
+        &self,
+        request: ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
         use tokio::sync::mpsc;
 
         // Track messages for this iteration
-        self.message_tracker.lock().await.push(request.messages.clone());
+        self.message_tracker
+            .lock()
+            .await
+            .push(request.messages.clone());
 
         let count = self.call_count.fetch_add(1, Ordering::SeqCst);
         let (tx, rx) = mpsc::channel(10);
@@ -69,31 +85,37 @@ impl LLMClient for TrackingMock {
         tokio::spawn(async move {
             if count == 0 {
                 // First call: return tool call
-                let _ = tx.send(Ok(StreamEvent {
-                    id: "event_1".to_string(),
-                    data: StreamEventData::ToolCallComplete {
-                        tool_call: ToolCall {
-                            id: "call_1".to_string(),
-                            name: "index_price".to_string(),
-                            arguments: r#"{"instrument": "btc_usd", "limit": 1}"#.to_string(),
-                            r#type: "function".to_string(),
+                let _ = tx
+                    .send(Ok(StreamEvent {
+                        id: "event_1".to_string(),
+                        data: StreamEventData::ToolCallComplete {
+                            tool_call: ToolCall {
+                                id: "call_1".to_string(),
+                                name: "index_price".to_string(),
+                                arguments: r#"{"instrument": "btc_usd", "limit": 1}"#.to_string(),
+                                r#type: "function".to_string(),
+                            },
                         },
-                    },
-                })).await;
-                let _ = tx.send(Ok(StreamEvent {
-                    id: "event_2".to_string(),
-                    data: StreamEventData::ContentComplete {
-                        content: "Let me check the market data.".to_string(),
-                    },
-                })).await;
+                    }))
+                    .await;
+                let _ = tx
+                    .send(Ok(StreamEvent {
+                        id: "event_2".to_string(),
+                        data: StreamEventData::ContentComplete {
+                            content: "Let me check the market data.".to_string(),
+                        },
+                    }))
+                    .await;
             } else {
                 // Second call: should have tool result in messages, return final answer
-                let _ = tx.send(Ok(StreamEvent {
-                    id: "event_3".to_string(),
-                    data: StreamEventData::ContentComplete {
-                        content: "Based on the tool result, BTC price is $69,000.".to_string(),
-                    },
-                })).await;
+                let _ = tx
+                    .send(Ok(StreamEvent {
+                        id: "event_3".to_string(),
+                        data: StreamEventData::ContentComplete {
+                            content: "Based on the tool result, BTC price is $69,000.".to_string(),
+                        },
+                    }))
+                    .await;
             }
         });
 
@@ -156,22 +178,31 @@ async fn test_tool_results_passed_to_next_iteration() {
     // Check tracked messages (from LLM perspective)
     let tracked = message_tracker.lock().await;
     println!("LLM was called {} times", tracked.len());
-    assert!(tracked.len() >= 2, "LLM should be called at least twice (tool call + final answer)");
+    assert!(
+        tracked.len() >= 2,
+        "LLM should be called at least twice (tool call + final answer)"
+    );
 
     // Check first iteration (should NOT have tool messages yet)
     let iteration_0 = &tracked[0];
     println!("\n=== Iteration 1 ({} messages) ===", iteration_0.len());
     let mut has_tool_message_iter_0 = false;
     for (idx, msg) in iteration_0.iter().enumerate() {
-        println!("  [{}] {:?}: content={:.50}, tool_call_id={:?}", 
-            idx, msg.role, 
+        println!(
+            "  [{}] {:?}: content={:.50}, tool_call_id={:?}",
+            idx,
+            msg.role,
             msg.content.as_ref().map(|c| c.as_str()).unwrap_or("<none>"),
-            msg.tool_call_id);
+            msg.tool_call_id
+        );
         if msg.role == MessageRole::Tool {
             has_tool_message_iter_0 = true;
         }
     }
-    assert!(!has_tool_message_iter_0, "First iteration should NOT have tool messages");
+    assert!(
+        !has_tool_message_iter_0,
+        "First iteration should NOT have tool messages"
+    );
 
     // Check second iteration (SHOULD have tool message with correct format)
     let iteration_1 = &tracked[1];
@@ -181,11 +212,14 @@ async fn test_tool_results_passed_to_next_iteration() {
     let mut found_assistant_with_tool_calls = false;
 
     for (idx, msg) in iteration_1.iter().enumerate() {
-        println!("  [{}] {:?}: content={:.80}, tool_call_id={:?}, tool_calls={}",
-            idx, msg.role,
+        println!(
+            "  [{}] {:?}: content={:.80}, tool_call_id={:?}, tool_calls={}",
+            idx,
+            msg.role,
             msg.content.as_ref().map(|c| c.as_str()).unwrap_or("<none>"),
             msg.tool_call_id,
-            msg.tool_calls.as_ref().map(|v| v.len()).unwrap_or(0));
+            msg.tool_calls.as_ref().map(|v| v.len()).unwrap_or(0)
+        );
 
         if msg.role == MessageRole::Tool {
             found_tool_message = true;
@@ -197,17 +231,31 @@ async fn test_tool_results_passed_to_next_iteration() {
         }
 
         // Verify assistant message has tool_calls
-        if msg.role == MessageRole::Assistant && msg.tool_calls.as_ref().map(|v| v.len()).unwrap_or(0) > 0 {
+        if msg.role == MessageRole::Assistant
+            && msg.tool_calls.as_ref().map(|v| v.len()).unwrap_or(0) > 0
+        {
             found_assistant_with_tool_calls = true;
             let tool_calls = msg.tool_calls.as_ref().unwrap();
-            println!("      ^^^ CORRECT: Assistant message has {} tool call(s): {}",
-                tool_calls.len(), tool_calls[0].name);
+            println!(
+                "      ^^^ CORRECT: Assistant message has {} tool call(s): {}",
+                tool_calls.len(),
+                tool_calls[0].name
+            );
         }
     }
 
-    assert!(found_tool_message, "Second iteration SHOULD have tool message");
-    assert!(tool_message_correct_format, "Tool message MUST have correct tool_call_id='call_1'");
-    assert!(found_assistant_with_tool_calls, "Second iteration MUST have Assistant message with tool_calls");
+    assert!(
+        found_tool_message,
+        "Second iteration SHOULD have tool message"
+    );
+    assert!(
+        tool_message_correct_format,
+        "Tool message MUST have correct tool_call_id='call_1'"
+    );
+    assert!(
+        found_assistant_with_tool_calls,
+        "Second iteration MUST have Assistant message with tool_calls"
+    );
 
     println!("\n=== Test PASSED: Tool results correctly passed to next iteration ===\n");
 }
@@ -231,28 +279,41 @@ async fn test_message_history_grows_correctly() {
     agent.run("What is the BTC price?").await.unwrap();
 
     let tracked = message_tracker.lock().await;
-    
+
     // Each iteration should have more messages (history accumulates)
     println!("Iteration 1: {} messages", tracked[0].len());
     println!("Iteration 2: {} messages", tracked[1].len());
-    
+
     assert!(tracked.len() >= 2, "Should have at least 2 iterations");
-    assert!(tracked[1].len() > tracked[0].len(), 
-        "Second iteration should have more messages (tool result added)");
-    
+    assert!(
+        tracked[1].len() > tracked[0].len(),
+        "Second iteration should have more messages (tool result added)"
+    );
+
     // Should have: system + user + assistant(tool calls) + tool(result) = 4
-    assert!(tracked[1].len() >= 4,
-        "Second iteration should have at least 4 messages (system, user, assistant, tool)");
+    assert!(
+        tracked[1].len() >= 4,
+        "Second iteration should have at least 4 messages (system, user, assistant, tool)"
+    );
 
     // Verify assistant message with tool_calls exists
-    let has_assistant_with_tool_calls = tracked[1].iter()
-        .any(|msg| msg.role == MessageRole::Assistant && msg.tool_calls.as_ref().map(|v| v.len()).unwrap_or(0) > 0);
-    assert!(has_assistant_with_tool_calls, "Second iteration should have Assistant message with tool_calls");
+    let has_assistant_with_tool_calls = tracked[1].iter().any(|msg| {
+        msg.role == MessageRole::Assistant
+            && msg.tool_calls.as_ref().map(|v| v.len()).unwrap_or(0) > 0
+    });
+    assert!(
+        has_assistant_with_tool_calls,
+        "Second iteration should have Assistant message with tool_calls"
+    );
 
     // Verify tool message exists with correct format
-    let has_tool_message = tracked[1].iter()
+    let has_tool_message = tracked[1]
+        .iter()
         .any(|msg| msg.role == MessageRole::Tool && msg.tool_call_id.is_some());
-    assert!(has_tool_message, "Second iteration should have tool message with tool_call_id");
+    assert!(
+        has_tool_message,
+        "Second iteration should have tool message with tool_call_id"
+    );
 
     println!("=== Test PASSED: Message history grows correctly ===\n");
 }

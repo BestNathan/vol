@@ -1,10 +1,10 @@
 //! Plugin interceptor and listener utilities.
 
 use super::plugin::{AgentPlugin, PluginDecision};
-use super::run_context::{PluginRequest, RunContext, PluginContext};
-use super::{AgentStreamEvent, AgentResponse, AgentStreamReceiver, AgentError};
-use tokio::sync::{mpsc, broadcast};
+use super::run_context::{PluginContext, PluginRequest, RunContext};
+use super::{AgentError, AgentResponse, AgentStreamEvent, AgentStreamReceiver};
 use std::sync::Arc;
+use tokio::sync::{broadcast, mpsc};
 use vol_tracing::TracedEvent;
 
 /// Spawn a listener task that subscribes to the event bus and calls
@@ -138,9 +138,11 @@ pub async fn create_shortcircuit_stream(
     let (tx, rx) = mpsc::channel(10);
 
     tokio::spawn(async move {
-        let _ = tx.send(Ok(AgentStreamEvent::AgentStart {
-            input: ctx.user_input,
-        })).await;
+        let _ = tx
+            .send(Ok(AgentStreamEvent::AgentStart {
+                input: ctx.user_input,
+            }))
+            .await;
 
         let _ = tx.send(Ok(AgentStreamEvent::AgentComplete)).await;
     });
@@ -156,9 +158,11 @@ pub async fn create_skip_stream(
     let (tx, rx) = mpsc::channel(10);
 
     tokio::spawn(async move {
-        let _ = tx.send(Ok(AgentStreamEvent::AgentStart {
-            input: ctx.user_input.clone(),
-        })).await;
+        let _ = tx
+            .send(Ok(AgentStreamEvent::AgentStart {
+                input: ctx.user_input.clone(),
+            }))
+            .await;
 
         let _ = tx.send(Ok(AgentStreamEvent::AgentComplete)).await;
     });

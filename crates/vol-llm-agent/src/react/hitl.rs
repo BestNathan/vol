@@ -112,8 +112,8 @@ impl Default for HitlConfig {
 }
 
 use super::plugin::*;
-use super::AgentStreamEvent;
 use super::run_context::PluginContext;
+use super::AgentStreamEvent;
 use std::sync::Arc;
 
 /// Human-in-the-Loop plugin
@@ -141,18 +141,23 @@ impl<C: ApprovalChannel> HitlPlugin<C> {
     }
 
     fn needs_iteration_pause(&self) -> bool {
-        self.config.triggers.iter().any(|t| {
-            matches!(t, ApprovalTrigger::AfterIteration)
-        })
+        self.config
+            .triggers
+            .iter()
+            .any(|t| matches!(t, ApprovalTrigger::AfterIteration))
     }
 
     fn needs_final_answer_approval(&self) -> bool {
-        self.config.triggers.iter().any(|t| {
-            matches!(t, ApprovalTrigger::BeforeFinalAnswer)
-        })
+        self.config
+            .triggers
+            .iter()
+            .any(|t| matches!(t, ApprovalTrigger::BeforeFinalAnswer))
     }
 
-    async fn request_approval(&self, request: ApprovalRequest) -> Result<ApprovalResponse, ApprovalError> {
+    async fn request_approval(
+        &self,
+        request: ApprovalRequest,
+    ) -> Result<ApprovalResponse, ApprovalError> {
         let timeout = if self.config.timeout_secs > 0 {
             Some(Duration::from_secs(self.config.timeout_secs))
         } else {
@@ -161,13 +166,13 @@ impl<C: ApprovalChannel> HitlPlugin<C> {
 
         match self.channel.request_approval(request, timeout).await {
             Ok(Some(response)) => Ok(response),
-            Ok(None) => {
-                match &self.config.on_timeout {
-                    TimeoutBehavior::Approve => Ok(ApprovalResponse::Approved),
-                    TimeoutBehavior::Reject { reason } => Ok(ApprovalResponse::Rejected { reason: reason.clone() }),
-                    TimeoutBehavior::Stop => Err(ApprovalError::Timeout),
-                }
-            }
+            Ok(None) => match &self.config.on_timeout {
+                TimeoutBehavior::Approve => Ok(ApprovalResponse::Approved),
+                TimeoutBehavior::Reject { reason } => Ok(ApprovalResponse::Rejected {
+                    reason: reason.clone(),
+                }),
+                TimeoutBehavior::Stop => Err(ApprovalError::Timeout),
+            },
             Err(e) => Err(e),
         }
     }
@@ -186,11 +191,16 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
     /// Interceptor hook - checks for approval requirements
     async fn intercept(&self, event: &AgentStreamEvent, ctx: &PluginContext) -> PluginDecision {
         match event {
-            AgentStreamEvent::ToolCallBegin { tool_name, arguments } => {
+            AgentStreamEvent::ToolCallBegin {
+                tool_name,
+                arguments,
+            } => {
                 if self.needs_tool_approval(tool_name) {
                     let request = ApprovalRequest {
                         run_id: ctx.run_id.clone(),
-                        request_type: ApprovalType::ToolExecution { tool_name: tool_name.clone() },
+                        request_type: ApprovalType::ToolExecution {
+                            tool_name: tool_name.clone(),
+                        },
                         message: format!("Execute tool: {} with args: {}", tool_name, arguments),
                         metadata: serde_json::json!({ "tool_name": tool_name, "arguments": arguments }),
                     };
@@ -201,7 +211,9 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
                             // Return skip with rejection reason - caller should handle
                             PluginDecision::Abort(format!("Rejected: {}", reason))
                         }
-                        Err(ApprovalError::Timeout) => PluginDecision::Abort("Approval timeout".to_string()),
+                        Err(ApprovalError::Timeout) => {
+                            PluginDecision::Abort("Approval timeout".to_string())
+                        }
                         Err(e) => PluginDecision::Abort(format!("Approval error: {}", e)),
                     }
                 } else {
@@ -209,21 +221,29 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
                 }
             }
 
-            AgentStreamEvent::IterationComplete { iteration, final_answer, .. } => {
+            AgentStreamEvent::IterationComplete {
+                iteration,
+                final_answer,
+                ..
+            } => {
                 if self.needs_iteration_pause() && final_answer.is_none() {
                     let request = ApprovalRequest {
                         run_id: ctx.run_id.clone(),
-                        request_type: ApprovalType::ContinueIteration { iteration: *iteration },
+                        request_type: ApprovalType::ContinueIteration {
+                            iteration: *iteration,
+                        },
                         message: format!("Iteration {} complete. Continue?", iteration),
                         metadata: serde_json::json!({ "iteration": iteration }),
                     };
 
                     match self.request_approval(request).await {
                         Ok(ApprovalResponse::Approved) => PluginDecision::Continue,
-                        Ok(ApprovalResponse::Rejected { reason }) => {
-                            PluginDecision::Abort(format!("Stopped after iteration {}: {}", iteration, reason))
+                        Ok(ApprovalResponse::Rejected { reason }) => PluginDecision::Abort(
+                            format!("Stopped after iteration {}: {}", iteration, reason),
+                        ),
+                        Err(ApprovalError::Timeout) => {
+                            PluginDecision::Abort("Approval timeout".to_string())
                         }
-                        Err(ApprovalError::Timeout) => PluginDecision::Abort("Approval timeout".to_string()),
                         Err(e) => PluginDecision::Abort(format!("Approval error: {}", e)),
                     }
                 } else {
@@ -269,7 +289,11 @@ mod tests {
 
     #[async_trait]
     impl ApprovalChannel for MockChannel {
-        async fn request_approval(&self, _request: ApprovalRequest, _timeout: Option<Duration>) -> Result<Option<ApprovalResponse>, ApprovalError> {
+        async fn request_approval(
+            &self,
+            _request: ApprovalRequest,
+            _timeout: Option<Duration>,
+        ) -> Result<Option<ApprovalResponse>, ApprovalError> {
             Ok(Some(ApprovalResponse::Approved))
         }
     }

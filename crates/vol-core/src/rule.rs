@@ -1,7 +1,7 @@
 //! Rule processor trait - evaluates events and produces alerts.
 
-use crate::event::{MonitoringEvent, Alert, EventType};
 use crate::error::Result;
+use crate::event::{Alert, EventType, MonitoringEvent};
 use async_trait::async_trait;
 
 /// Rule action after processing an alert

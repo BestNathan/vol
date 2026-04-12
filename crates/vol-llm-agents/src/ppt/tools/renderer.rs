@@ -1,8 +1,8 @@
 //! PPTX 渲染工具。
 
-use vol_llm_tool::{ExecutableTool, ToolContext, ToolResult, ToolError};
-use serde_json::Value;
 use async_trait::async_trait;
+use serde_json::Value;
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult};
 
 /// PPTX 渲染工具
 pub struct PptxRendererTool;
@@ -51,7 +51,11 @@ impl ExecutableTool for PptxRendererTool {
         })
     }
 
-    async fn execute(&self, _args: &Value, _context: &ToolContext) -> Result<ToolResult, ToolError> {
+    async fn execute(
+        &self,
+        _args: &Value,
+        _context: &ToolContext,
+    ) -> Result<ToolResult, ToolError> {
         // TODO: Implement PPTX rendering with ppt-rs
         Ok(ToolResult {
             call_id: String::new(),

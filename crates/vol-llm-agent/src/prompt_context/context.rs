@@ -2,13 +2,13 @@
 //!
 //! Manages fixed fragments and dynamic injections to build cache-friendly prompts.
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 
 use vol_llm_core::ToolDefinition;
 
-use super::{PromptTemplate, PromptFragment};
+use super::{PromptFragment, PromptTemplate};
 
 /// Prompt context manager.
 ///
@@ -136,7 +136,8 @@ impl PromptContext {
     ///     .with_dynamic("role", "You are a financial analyst.");
     /// ```
     pub fn with_dynamic(mut self, name: &str, value: &str) -> Self {
-        self.dynamic_vars.insert(name.to_string(), value.to_string());
+        self.dynamic_vars
+            .insert(name.to_string(), value.to_string());
         self
     }
 
@@ -176,7 +177,11 @@ impl PromptContext {
             if !self.fragments.contains_key(injection) {
                 let placeholder = format!("{{{}}}", injection);
                 if content.contains(&placeholder) {
-                    let dynamic_value = self.dynamic_vars.get(injection).cloned().unwrap_or_default();
+                    let dynamic_value = self
+                        .dynamic_vars
+                        .get(injection)
+                        .cloned()
+                        .unwrap_or_default();
                     content = content.replace(&placeholder, &dynamic_value);
                 }
             }
@@ -289,8 +294,7 @@ mod tests {
         let template = PromptTemplate::new("test", "Role: {role}");
         let fragment = PromptFragment::new("role", "You are an assistant.", FragmentType::Role);
 
-        let context = PromptContext::new(template)
-            .with_fragment(fragment);
+        let context = PromptContext::new(template).with_fragment(fragment);
 
         assert!(context.cache_key().starts_with("prompt_"));
     }
@@ -298,16 +302,13 @@ mod tests {
     #[test]
     fn test_prompt_context_with_tools() {
         let template = PromptTemplate::new("test", "Tools: {tools}");
-        let tools = vec![
-            ToolDefinition {
-                name: "get_weather".to_string(),
-                description: Some("Get weather info".to_string()),
-                parameters: None,
-            },
-        ];
+        let tools = vec![ToolDefinition {
+            name: "get_weather".to_string(),
+            description: Some("Get weather info".to_string()),
+            parameters: None,
+        }];
 
-        let context = PromptContext::new(template)
-            .with_tools(&tools);
+        let context = PromptContext::new(template).with_tools(&tools);
 
         assert!(context.cache_key().starts_with("prompt_"));
     }
@@ -316,8 +317,8 @@ mod tests {
     fn test_prompt_context_with_dynamic() {
         let template = PromptTemplate::new("test", "Role: {role}");
 
-        let context = PromptContext::new(template)
-            .with_dynamic("role", "You are a financial analyst.");
+        let context =
+            PromptContext::new(template).with_dynamic("role", "You are a financial analyst.");
 
         // Dynamic vars don't affect cache key
         assert!(context.cache_key().starts_with("prompt_"));
@@ -325,14 +326,19 @@ mod tests {
 
     #[test]
     fn test_build_system_with_fragments() {
-        let template = PromptTemplate::new(
-            "test",
-            "Role: {role}\n\nRules: {rules}"
-        );
+        let template = PromptTemplate::new("test", "Role: {role}\n\nRules: {rules}");
 
         let context = PromptContext::new(template)
-            .with_fragment(PromptFragment::new("role", "You are a helpful assistant.", FragmentType::Role))
-            .with_fragment(PromptFragment::new("rules", "Be concise and accurate.", FragmentType::Rules));
+            .with_fragment(PromptFragment::new(
+                "role",
+                "You are a helpful assistant.",
+                FragmentType::Role,
+            ))
+            .with_fragment(PromptFragment::new(
+                "rules",
+                "Be concise and accurate.",
+                FragmentType::Rules,
+            ));
 
         let system = context.build_system();
 
@@ -344,8 +350,8 @@ mod tests {
     fn test_build_system_with_dynamic_vars() {
         let template = PromptTemplate::new("test", "Role: {role}");
 
-        let context = PromptContext::new(template)
-            .with_dynamic("role", "You are a financial analyst.");
+        let context =
+            PromptContext::new(template).with_dynamic("role", "You are a financial analyst.");
 
         let system = context.build_system();
 
@@ -359,7 +365,11 @@ mod tests {
         // Add both fragment and dynamic var with same name
         // Fragment should take precedence
         let context = PromptContext::new(template)
-            .with_fragment(PromptFragment::new("role", "Fragment role.", FragmentType::Role))
+            .with_fragment(PromptFragment::new(
+                "role",
+                "Fragment role.",
+                FragmentType::Role,
+            ))
             .with_dynamic("role", "Dynamic role.");
 
         let system = context.build_system();
@@ -384,10 +394,7 @@ mod tests {
         let template = PromptTemplate::new("test", "System");
         let context = PromptContext::new(template);
 
-        let user = context.build_user(
-            "What is the weather?",
-            Some("Weather data: sunny, 25C"),
-        );
+        let user = context.build_user("What is the weather?", Some("Weather data: sunny, 25C"));
 
         assert!(user.contains("参考资料:"));
         assert!(user.contains("Weather data: sunny, 25C"));
@@ -399,11 +406,17 @@ mod tests {
         let template = PromptTemplate::new("test", "Role: {role}");
 
         // Same template and fragments should produce same cache key
-        let context1 = PromptContext::new(template.clone())
-            .with_fragment(PromptFragment::new("role", "Assistant", FragmentType::Role));
+        let context1 = PromptContext::new(template.clone()).with_fragment(PromptFragment::new(
+            "role",
+            "Assistant",
+            FragmentType::Role,
+        ));
 
-        let context2 = PromptContext::new(template)
-            .with_fragment(PromptFragment::new("role", "Assistant", FragmentType::Role));
+        let context2 = PromptContext::new(template).with_fragment(PromptFragment::new(
+            "role",
+            "Assistant",
+            FragmentType::Role,
+        ));
 
         assert_eq!(context1.cache_key(), context2.cache_key());
     }
@@ -412,11 +425,17 @@ mod tests {
     fn test_cache_key_changes_with_different_fragments() {
         let template = PromptTemplate::new("test", "Role: {role}");
 
-        let context1 = PromptContext::new(template.clone())
-            .with_fragment(PromptFragment::new("role", "Assistant", FragmentType::Role));
+        let context1 = PromptContext::new(template.clone()).with_fragment(PromptFragment::new(
+            "role",
+            "Assistant",
+            FragmentType::Role,
+        ));
 
-        let context2 = PromptContext::new(template)
-            .with_fragment(PromptFragment::new("role", "Analyst", FragmentType::Role));
+        let context2 = PromptContext::new(template).with_fragment(PromptFragment::new(
+            "role",
+            "Analyst",
+            FragmentType::Role,
+        ));
 
         // Different fragment content should produce different cache key
         assert_ne!(context1.cache_key(), context2.cache_key());
@@ -427,8 +446,7 @@ mod tests {
         let template = PromptTemplate::new("test", "Role: {role}");
         let fragment = PromptFragment::new("role", "Assistant", FragmentType::Role);
 
-        let context1 = PromptContext::new(template.clone())
-            .with_fragment(fragment.clone());
+        let context1 = PromptContext::new(template.clone()).with_fragment(fragment.clone());
 
         let context2 = PromptContext::new(template)
             .with_fragment(fragment)
@@ -456,8 +474,11 @@ mod tests {
         let template = PromptTemplate::new("test", "Role: {role}\nTools: {tools}");
 
         // Only add role fragment, not tools
-        let context = PromptContext::new(template)
-            .with_fragment(PromptFragment::new("role", "Assistant", FragmentType::Role));
+        let context = PromptContext::new(template).with_fragment(PromptFragment::new(
+            "role",
+            "Assistant",
+            FragmentType::Role,
+        ));
 
         let system = context.build_system();
 
@@ -469,19 +490,21 @@ mod tests {
     #[test]
     fn test_prompt_context_chaining() {
         let template = PromptTemplate::new("test", "Role: {role}\nTools: {tools}\nRules: {rules}");
-        let tools = vec![
-            ToolDefinition {
-                name: "test_tool".to_string(),
-                description: Some("A test tool".to_string()),
-                parameters: None,
-            },
-        ];
+        let tools = vec![ToolDefinition {
+            name: "test_tool".to_string(),
+            description: Some("A test tool".to_string()),
+            parameters: None,
+        }];
 
         // Test method chaining works
         let context = PromptContext::new(template)
             .with_fragment(PromptFragment::new("role", "Assistant", FragmentType::Role))
             .with_tools(&tools)
-            .with_fragment(PromptFragment::new("rules", "Be helpful", FragmentType::Rules))
+            .with_fragment(PromptFragment::new(
+                "rules",
+                "Be helpful",
+                FragmentType::Rules,
+            ))
             .with_dynamic("extra", "unused");
 
         let system = context.build_system();

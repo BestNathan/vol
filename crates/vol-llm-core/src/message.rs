@@ -1,7 +1,7 @@
 //! Message types for LLM conversation.
 
-use serde::{Deserialize, Serialize};
 use crate::tool::ToolCall;
+use serde::{Deserialize, Serialize};
 
 /// Message role
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]

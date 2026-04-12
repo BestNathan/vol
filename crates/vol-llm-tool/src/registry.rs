@@ -1,8 +1,8 @@
 //! Tool registry.
 
+use crate::tool::{Tool, ToolContext, ToolResult};
 use std::collections::HashMap;
-use vol_llm_core::{ToolDefinition, ToolCall};
-use crate::tool::{Tool, ToolResult, ToolContext};
+use vol_llm_core::{ToolCall, ToolDefinition};
 
 /// Tool registry
 pub struct ToolRegistry {
@@ -11,7 +11,9 @@ pub struct ToolRegistry {
 
 impl ToolRegistry {
     pub fn new() -> Self {
-        Self { tools: HashMap::new() }
+        Self {
+            tools: HashMap::new(),
+        }
     }
 
     pub fn register<T: Tool + 'static>(&mut self, tool: T) {
@@ -32,10 +34,14 @@ impl ToolRegistry {
         call: &ToolCall,
         context: &ToolContext,
     ) -> Result<ToolResult, String> {
-        let tool = self.tools.get(&call.name)
+        let tool = self
+            .tools
+            .get(&call.name)
             .ok_or_else(|| format!("Unknown tool: {}", call.name))?;
 
-        let result = tool.execute(&call.arguments, context).await
+        let result = tool
+            .execute(&call.arguments, context)
+            .await
             .map_err(|e| e.to_string())?;
 
         Ok(ToolResult {

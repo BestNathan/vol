@@ -16,19 +16,19 @@
 //! cargo test -p vol-llm-agents --test advice_agent_integration -- --nocapture
 //! ```
 
-use vol_llm_provider::{LLMProviderRegistry, LLMConfig, LLMProviderConfig};
-use vol_llm_tool::ToolRegistry;
-use vol_tdengine::{TdengineConfig, TdengineClient};
-use vol_notification::FeishuNotification;
-use vol_config::FeishuConfig;
+use std::env;
 use std::sync::Arc;
-use vol_llm_tdengine::{IndexPriceTool, VolatilityIndexTool, OptionsTool, RvTool};
-use vol_llm_agents::{AdviceAgent, AdviceAgentConfig};
-use vol_core::{Alert, AlertType, Tenor, OptionType};
-use vol_tracing::TracedEvent;
 use tokio::sync::broadcast;
 use tracing::Span;
-use std::env;
+use vol_config::FeishuConfig;
+use vol_core::{Alert, AlertType, OptionType, Tenor};
+use vol_llm_agents::{AdviceAgent, AdviceAgentConfig};
+use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry};
+use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
+use vol_llm_tool::ToolRegistry;
+use vol_notification::FeishuNotification;
+use vol_tdengine::{TdengineClient, TdengineConfig};
+use vol_tracing::TracedEvent;
 
 fn default_message_template() -> String {
     "🚨 {tenor} {alert_type}: {symbol} | IV={value} | 指数={index_price} | DTE={dte}天 | {option_type} | 价格={mark_price_coin} ({mark_price_usd} USD)".to_string()
@@ -43,8 +43,7 @@ async fn test_advice_agent_end_to_end() {
     }
 
     // Setup LLM Provider
-    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
-        .expect("ANTHROPIC_AUTH_TOKEN must be set");
+    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").expect("ANTHROPIC_AUTH_TOKEN must be set");
 
     let llm_config = LLMConfig::with_literal_key(
         vol_llm_core::LLMProvider::Anthropic,
@@ -83,14 +82,12 @@ async fn test_advice_agent_end_to_end() {
         env::var("FEISHU_APP_SECRET").ok(),
         env::var("FEISHU_RECEIVE_ID").ok(),
     ) {
-        (Some(app_id), Some(app_secret), Some(receive_id)) => {
-            FeishuConfig {
-                app_id: Some(app_id),
-                app_secret: Some(app_secret),
-                receive_id: Some(receive_id),
-                message_template: default_message_template(),
-            }
-        }
+        (Some(app_id), Some(app_secret), Some(receive_id)) => FeishuConfig {
+            app_id: Some(app_id),
+            app_secret: Some(app_secret),
+            receive_id: Some(receive_id),
+            message_template: default_message_template(),
+        },
         _ => {
             eprintln!("Skipping test: FEISHU_* environment variables not set");
             eprintln!("Set FEISHU_APP_ID, FEISHU_APP_SECRET, FEISHU_RECEIVE_ID to run this test");
@@ -119,7 +116,7 @@ async fn test_advice_agent_end_to_end() {
     // Setup AdviceAgent
     let config = AdviceAgentConfig {
         enabled: true,
-        cooldown_secs: 0,      // Disable cooldown for testing
+        cooldown_secs: 0,           // Disable cooldown for testing
         max_analyses_per_hour: 100, // High limit for testing
         llm_provider_id: "anthropic-main".to_string(),
     };
@@ -135,8 +132,7 @@ async fn test_advice_agent_end_to_end() {
     println!("✓ AdviceAgent created");
 
     // Setup Alert channel
-    let (alert_tx, alert_rx): (broadcast::Sender<TracedEvent<Alert>>, _) =
-        broadcast::channel(100);
+    let (alert_tx, alert_rx): (broadcast::Sender<TracedEvent<Alert>>, _) = broadcast::channel(100);
 
     println!("✓ Alert channel created");
 
@@ -145,7 +141,7 @@ async fn test_advice_agent_end_to_end() {
         alert_type: AlertType::AbsoluteIv { threshold: 0.5 },
         tenor: Tenor::Short,
         symbol: "BTC".to_string(),
-        iv: 0.55,  // Above threshold
+        iv: 0.55, // Above threshold
         message: "IV exceeded threshold".to_string(),
         timestamp: 0,
         source: "test".to_string(),

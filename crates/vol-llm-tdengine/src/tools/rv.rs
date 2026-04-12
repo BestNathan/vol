@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use serde_json::json;
 use tracing::info;
-use vol_llm_tool::{ExecutableTool, ToolResult, ToolContext, ToolError};
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult};
 use vol_tdengine::{TdengineClient, TdengineConfig, TdengineResponse};
 
 /// RV tool for querying deribit_rv table
@@ -21,7 +21,10 @@ impl RvTool {
     /// Process TDengine response and format result
     fn format_response(&self, response: TdengineResponse, index_name: &str) -> String {
         if response.code != 0 {
-            return format!("Error: {}", response.desc.unwrap_or_else(|| "Unknown error".to_string()));
+            return format!(
+                "Error: {}",
+                response.desc.unwrap_or_else(|| "Unknown error".to_string())
+            );
         }
 
         let data = response.data.unwrap_or(json!([]));
@@ -40,7 +43,10 @@ impl RvTool {
                 let name = row[2].as_str().unwrap_or(index_name);
                 return format!(
                     "Index: {} | RV: {:.2}% | Timestamp: {} | Rows: {}",
-                    name, rv * 100.0, timestamp, rows
+                    name,
+                    rv * 100.0,
+                    timestamp,
+                    rows
                 );
             }
         }
@@ -77,7 +83,11 @@ impl ExecutableTool for RvTool {
         })
     }
 
-    async fn execute(&self, args: &serde_json::Value, _context: &ToolContext) -> Result<ToolResult, ToolError> {
+    async fn execute(
+        &self,
+        args: &serde_json::Value,
+        _context: &ToolContext,
+    ) -> Result<ToolResult, ToolError> {
         let index = args["index"]
             .as_str()
             .ok_or_else(|| ToolError::InvalidArguments("index required".to_string()))?;

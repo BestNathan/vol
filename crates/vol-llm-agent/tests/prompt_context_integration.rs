@@ -8,7 +8,7 @@
 //! Run with: cargo test --test prompt_context_integration
 
 use vol_llm_agent::prompt_context::{
-    PromptContext, PromptTemplate, PromptFragment, FragmentType, MessageAssembler,
+    FragmentType, MessageAssembler, PromptContext, PromptFragment, PromptTemplate,
 };
 use vol_llm_agent::rag::Document;
 use vol_llm_core::Message;
@@ -31,15 +31,39 @@ fn test_cache_key_stability_same_config() {
 
     // First call
     let context1 = PromptContext::new(template.clone())
-        .with_fragment(PromptFragment::new("role", "Financial analyst", FragmentType::Role))
-        .with_fragment(PromptFragment::new("tools", tools_json, FragmentType::Tools))
-        .with_fragment(PromptFragment::new("rules", "Be accurate", FragmentType::Rules));
+        .with_fragment(PromptFragment::new(
+            "role",
+            "Financial analyst",
+            FragmentType::Role,
+        ))
+        .with_fragment(PromptFragment::new(
+            "tools",
+            tools_json,
+            FragmentType::Tools,
+        ))
+        .with_fragment(PromptFragment::new(
+            "rules",
+            "Be accurate",
+            FragmentType::Rules,
+        ));
 
     // Second call with identical configuration
     let context2 = PromptContext::new(template.clone())
-        .with_fragment(PromptFragment::new("role", "Financial analyst", FragmentType::Role))
-        .with_fragment(PromptFragment::new("tools", tools_json, FragmentType::Tools))
-        .with_fragment(PromptFragment::new("rules", "Be accurate", FragmentType::Rules));
+        .with_fragment(PromptFragment::new(
+            "role",
+            "Financial analyst",
+            FragmentType::Role,
+        ))
+        .with_fragment(PromptFragment::new(
+            "tools",
+            tools_json,
+            FragmentType::Tools,
+        ))
+        .with_fragment(PromptFragment::new(
+            "rules",
+            "Be accurate",
+            FragmentType::Rules,
+        ));
 
     // Cache keys must be identical
     assert_eq!(
@@ -54,11 +78,17 @@ fn test_cache_key_changes_with_different_fragments() {
     // Test that different fragment content produces different cache keys
     let template = PromptTemplate::new("test", "Role: {role}");
 
-    let context1 = PromptContext::new(template.clone())
-        .with_fragment(PromptFragment::new("role", "Analyst", FragmentType::Role));
+    let context1 = PromptContext::new(template.clone()).with_fragment(PromptFragment::new(
+        "role",
+        "Analyst",
+        FragmentType::Role,
+    ));
 
-    let context2 = PromptContext::new(template)
-        .with_fragment(PromptFragment::new("role", "Assistant", FragmentType::Role));
+    let context2 = PromptContext::new(template).with_fragment(PromptFragment::new(
+        "role",
+        "Assistant",
+        FragmentType::Role,
+    ));
 
     // Different fragment content should produce different cache keys
     assert_ne!(
@@ -74,8 +104,7 @@ fn test_cache_key_unchanged_by_dynamic_variables() {
     let template = PromptTemplate::new("test", "Query: {query}");
     let fragment = PromptFragment::new("query", "Fixed query", FragmentType::Custom);
 
-    let context1 = PromptContext::new(template.clone())
-        .with_fragment(fragment.clone());
+    let context1 = PromptContext::new(template.clone()).with_fragment(fragment.clone());
 
     let context2 = PromptContext::new(template)
         .with_fragment(fragment)
@@ -97,27 +126,25 @@ fn test_rag_scenario_system_user_separation() {
         "You are a knowledge base assistant.\n\n## Tools\n{tools}",
     );
 
-    let prompt_ctx = PromptContext::new(template)
-        .with_fragment(PromptFragment::new(
-            "tools",
-            "- search_knowledge_base: Search for information",
-            FragmentType::Tools,
-        ));
+    let prompt_ctx = PromptContext::new(template).with_fragment(PromptFragment::new(
+        "tools",
+        "- search_knowledge_base: Search for information",
+        FragmentType::Tools,
+    ));
 
     let rag_docs = vec![
-        Document::new("IV (Implied Volatility) is the market's forecast of future volatility.".to_string())
-            .with_metadata("source", "options_glossary")
-            .with_score(0.92),
+        Document::new(
+            "IV (Implied Volatility) is the market's forecast of future volatility.".to_string(),
+        )
+        .with_metadata("source", "options_glossary")
+        .with_score(0.92),
         Document::new("Higher IV indicates greater expected price movement.".to_string())
             .with_metadata("source", "trading_basics")
             .with_score(0.85),
     ];
 
-    let messages = MessageAssembler::assemble_with_rag(
-        &prompt_ctx,
-        "Explain implied volatility",
-        &rag_docs,
-    );
+    let messages =
+        MessageAssembler::assemble_with_rag(&prompt_ctx, "Explain implied volatility", &rag_docs);
 
     // Verify message structure
     assert_eq!(messages.len(), 2, "Should have System + User messages");
@@ -169,11 +196,7 @@ fn test_rag_scenario_empty_documents() {
     let template = PromptTemplate::new("test", "System prompt");
     let prompt_ctx = PromptContext::new(template);
 
-    let messages = MessageAssembler::assemble_with_rag(
-        &prompt_ctx,
-        "What is AI?",
-        &[],
-    );
+    let messages = MessageAssembler::assemble_with_rag(&prompt_ctx, "What is AI?", &[]);
 
     assert_eq!(messages.len(), 2);
     let user_content = messages[1].content.as_ref().unwrap().as_str();
@@ -187,10 +210,7 @@ fn test_multi_turn_conversation_system_once() {
     // Test multi-turn conversation: System appears only once, history accumulates
     // Note: assemble_with_history always adds a fresh System message
     // So history should only contain User/Assistant messages, not System
-    let template = PromptTemplate::new(
-        "assistant",
-        "You are a helpful AI assistant.",
-    );
+    let template = PromptTemplate::new("assistant", "You are a helpful AI assistant.");
 
     let prompt_ctx = PromptContext::new(template);
 
@@ -208,11 +228,8 @@ fn test_multi_turn_conversation_system_once() {
         turn1_response.clone(),    // Assistant turn 1
     ];
 
-    let turn2_messages = MessageAssembler::assemble_with_history(
-        &prompt_ctx,
-        "What about CV?",
-        &history,
-    );
+    let turn2_messages =
+        MessageAssembler::assemble_with_history(&prompt_ctx, "What about CV?", &history);
 
     // Turn 2 should include: System (1) + history (2) + current user (1) = 4
     assert_eq!(turn2_messages.len(), 4);
@@ -228,17 +245,20 @@ fn test_multi_turn_conversation_system_once() {
     assert_eq!(system_count, 1, "System message should appear exactly once");
 
     // Verify history is preserved
-    assert!(turn2_messages[1].content
+    assert!(turn2_messages[1]
+        .content
         .as_ref()
         .unwrap()
         .as_str()
         .contains("What is IV?"));
-    assert!(turn2_messages[2].content
+    assert!(turn2_messages[2]
+        .content
         .as_ref()
         .unwrap()
         .as_str()
         .contains("Implied Volatility"));
-    assert!(turn2_messages[3].content
+    assert!(turn2_messages[3]
+        .content
         .as_ref()
         .unwrap()
         .as_str()
@@ -253,12 +273,11 @@ fn test_multi_turn_conversation_with_rag_history() {
         "You are a RAG-powered assistant.\n\n## Tools\n{tools}",
     );
 
-    let prompt_ctx = PromptContext::new(template)
-        .with_fragment(PromptFragment::new(
-            "tools",
-            "- search: Search knowledge base",
-            FragmentType::Tools,
-        ));
+    let prompt_ctx = PromptContext::new(template).with_fragment(PromptFragment::new(
+        "tools",
+        "- search: Search knowledge base",
+        FragmentType::Tools,
+    ));
 
     // Turn 1: RAG query
     let turn1_docs = vec![Document::new(
@@ -269,8 +288,9 @@ fn test_multi_turn_conversation_with_rag_history() {
         MessageAssembler::assemble_with_rag(&prompt_ctx, "What is gamma?", &turn1_docs);
 
     // Simulate assistant response
-    let turn1_response =
-        Message::assistant("Gamma measures how quickly delta changes as the underlying price moves.");
+    let turn1_response = Message::assistant(
+        "Gamma measures how quickly delta changes as the underlying price moves.",
+    );
 
     // Turn 2: Build history (exclude System, as assemble_with_history adds fresh System)
     // Note: RAG context from turn 1 is in turn1_messages[1] (User message)
@@ -361,10 +381,7 @@ fn test_build_user_with_and_without_rag_context() {
     assert_eq!(user_without, "问题：What is the weather?");
 
     // With RAG
-    let user_with = prompt_ctx.build_user(
-        "What is the weather?",
-        Some("Forecast: Sunny, 25C"),
-    );
+    let user_with = prompt_ctx.build_user("What is the weather?", Some("Forecast: Sunny, 25C"));
     assert!(user_with.contains("参考资料:"));
     assert!(user_with.contains("Forecast: Sunny, 25C"));
     assert!(user_with.contains("问题：What is the weather?"));
@@ -378,26 +395,23 @@ fn test_integration_full_rag_workflow() {
         "You are a knowledge base assistant.\n\n## Guidelines\n{guidelines}",
     );
 
-    let prompt_ctx = PromptContext::new(template)
-        .with_fragment(PromptFragment::new(
-            "guidelines",
-            "- Always cite sources\n- Be concise",
-            FragmentType::Rules,
-        ));
+    let prompt_ctx = PromptContext::new(template).with_fragment(PromptFragment::new(
+        "guidelines",
+        "- Always cite sources\n- Be concise",
+        FragmentType::Rules,
+    ));
 
     // Simulate RAG retrieval
-    let rag_docs = vec![
-        Document::new("Option delta measures sensitivity to underlying price.".to_string())
-            .with_metadata("source", "options_101")
-            .with_score(0.89),
-    ];
+    let rag_docs =
+        vec![
+            Document::new("Option delta measures sensitivity to underlying price.".to_string())
+                .with_metadata("source", "options_101")
+                .with_score(0.89),
+        ];
 
     // Assemble messages
-    let messages = MessageAssembler::assemble_with_rag(
-        &prompt_ctx,
-        "Explain option delta",
-        &rag_docs,
-    );
+    let messages =
+        MessageAssembler::assemble_with_rag(&prompt_ctx, "Explain option delta", &rag_docs);
 
     // Verify complete structure
     assert_eq!(messages.len(), 2);

@@ -14,7 +14,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
 use tracing::{debug, error, info, warn};
 use webpki_roots::TLS_SERVER_ROOTS;
 
-use crate::positions::{Position, PortfolioSummary};
+use crate::positions::{PortfolioSummary, Position};
 use crate::subscription_manager::SubscriptionManager;
 use crate::{
     ChannelData, ChannelType, DeribitNotification, OptionMarkPrice, SubscriptionNotification,
@@ -81,7 +81,11 @@ impl DeribitClient {
     }
 
     /// Configure OAuth authentication
-    pub fn with_auth(mut self, client_id: impl Into<String>, client_secret: impl Into<String>) -> Self {
+    pub fn with_auth(
+        mut self,
+        client_id: impl Into<String>,
+        client_secret: impl Into<String>,
+    ) -> Self {
         self.client_id = Some(client_id.into());
         self.client_secret = Some(client_secret.into());
         self
@@ -430,7 +434,10 @@ impl DeribitClient {
     }
 
     /// Get OAuth access token via HTTP POST (static helper for use in spawned tasks)
-    async fn get_access_token_inner(client_id: &str, client_secret: &str) -> Result<String, vol_core::VolError> {
+    async fn get_access_token_inner(
+        client_id: &str,
+        client_secret: &str,
+    ) -> Result<String, vol_core::VolError> {
         let client = reqwest::Client::new();
         let response = client
             .post("https://www.deribit.com/api/v2/public/auth")
@@ -448,10 +455,13 @@ impl DeribitClient {
             .await
             .map_err(|e| vol_core::VolError::Auth(format!("Token request failed: {}", e)))?;
 
-        let result: serde_json::Value = response.json().await
+        let result: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| vol_core::VolError::Auth(format!("Token parse failed: {}", e)))?;
 
-        result.get("result")
+        result
+            .get("result")
             .and_then(|r| r.get("access_token"))
             .and_then(|t| t.as_str())
             .map(|s| s.to_string())
@@ -460,15 +470,23 @@ impl DeribitClient {
 
     /// Get OAuth access token (public method for use in REST API calls)
     pub async fn get_access_token(&self) -> Result<String, vol_core::VolError> {
-        let client_id = self.client_id.as_ref()
+        let client_id = self
+            .client_id
+            .as_ref()
             .ok_or_else(|| vol_core::VolError::Auth("No client_id configured".into()))?;
-        let client_secret = self.client_secret.as_ref()
+        let client_secret = self
+            .client_secret
+            .as_ref()
             .ok_or_else(|| vol_core::VolError::Auth("No client_secret configured".into()))?;
         Self::get_access_token_inner(client_id, client_secret).await
     }
 
     /// Make a REST API request to Deribit
-    async fn request(&self, method: &str, params: Option<serde_json::Map<String, serde_json::Value>>) -> Result<serde_json::Value, vol_core::VolError> {
+    async fn request(
+        &self,
+        method: &str,
+        params: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<serde_json::Value, vol_core::VolError> {
         // Get access token
         let access_token = self.get_access_token().await?;
 
@@ -491,24 +509,36 @@ impl DeribitClient {
             .await
             .map_err(|e| vol_core::VolError::Connection(format!("REST request failed: {}", e)))?;
 
-        let result: serde_json::Value = response.json().await
+        let result: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| vol_core::VolError::Parse(format!("REST response parse failed: {}", e)))?;
 
         // Check for error response
         if let Some(error) = result.get("error") {
-            return Err(vol_core::VolError::Internal(format!("Deribit API error: {}", error)));
+            return Err(vol_core::VolError::Internal(format!(
+                "Deribit API error: {}",
+                error
+            )));
         }
 
-        result.get("result")
+        result
+            .get("result")
             .cloned()
             .ok_or_else(|| vol_core::VolError::Parse("No result in response".into()))
     }
 
     /// Get account positions via REST API
-    pub async fn get_positions(&self, currency: Option<&str>) -> Result<Vec<Position>, vol_core::VolError> {
+    pub async fn get_positions(
+        &self,
+        currency: Option<&str>,
+    ) -> Result<Vec<Position>, vol_core::VolError> {
         let mut params = serde_json::Map::new();
         if let Some(curr) = currency {
-            params.insert("currency".to_string(), serde_json::Value::String(curr.to_string()));
+            params.insert(
+                "currency".to_string(),
+                serde_json::Value::String(curr.to_string()),
+            );
         }
 
         let response = self.request("private/get_positions", Some(params)).await?;
@@ -518,13 +548,22 @@ impl DeribitClient {
     }
 
     /// Get account summary via REST API (get_account_summary)
-    pub async fn get_account_summary(&self, currency: &str) -> Result<PortfolioSummary, vol_core::VolError> {
+    pub async fn get_account_summary(
+        &self,
+        currency: &str,
+    ) -> Result<PortfolioSummary, vol_core::VolError> {
         let mut params = serde_json::Map::new();
-        params.insert("currency".to_string(), serde_json::Value::String(currency.to_string()));
+        params.insert(
+            "currency".to_string(),
+            serde_json::Value::String(currency.to_string()),
+        );
 
-        let response = self.request("private/get_account_summary", Some(params)).await?;
-        let summary: PortfolioSummary = serde_json::from_value(response)
-            .map_err(|e| vol_core::VolError::Parse(format!("AccountSummary parse failed: {}", e)))?;
+        let response = self
+            .request("private/get_account_summary", Some(params))
+            .await?;
+        let summary: PortfolioSummary = serde_json::from_value(response).map_err(|e| {
+            vol_core::VolError::Parse(format!("AccountSummary parse failed: {}", e))
+        })?;
         Ok(summary)
     }
 
@@ -581,20 +620,21 @@ impl DeribitClient {
                             channel_types.iter().map(|c| c.channel_name()).collect();
 
                         // Authenticate if credentials are present
-                        let access_token = if let (Some(cid), Some(csecret)) = (&client_id, &client_secret) {
-                            match Self::get_access_token_inner(cid, csecret).await {
-                                Ok(token) => {
-                                    info!("OAuth authentication successful");
-                                    Some(token)
+                        let access_token =
+                            if let (Some(cid), Some(csecret)) = (&client_id, &client_secret) {
+                                match Self::get_access_token_inner(cid, csecret).await {
+                                    Ok(token) => {
+                                        info!("OAuth authentication successful");
+                                        Some(token)
+                                    }
+                                    Err(e) => {
+                                        error!("OAuth authentication failed: {}", e);
+                                        None
+                                    }
                                 }
-                                Err(e) => {
-                                    error!("OAuth authentication failed: {}", e);
-                                    None
-                                }
-                            }
-                        } else {
-                            None
-                        };
+                            } else {
+                                None
+                            };
 
                         // Send initial subscription using the wrapped writer
                         {
@@ -611,14 +651,18 @@ impl DeribitClient {
                                     }
                                 });
 
-                                if let Err(e) = writer.send(Message::Text(auth_msg.to_string())).await {
+                                if let Err(e) =
+                                    writer.send(Message::Text(auth_msg.to_string())).await
+                                {
                                     error!("Failed to send auth message: {}", e);
                                 }
 
                                 // Wait for auth response
                                 if let Some(Ok(msg)) = read.next().await {
                                     if let Message::Text(text) = msg {
-                                        if let Ok(resp) = serde_json::from_str::<serde_json::Value>(&text) {
+                                        if let Ok(resp) =
+                                            serde_json::from_str::<serde_json::Value>(&text)
+                                        {
                                             if let Some(error) = resp.get("error") {
                                                 error!("Auth failed: {}", error);
                                             } else {

@@ -11,13 +11,13 @@
 //!
 //! See `MonitoringEngineBuilder` for construction.
 
-mod engine;
 mod builder;
 mod config;
+mod engine;
 mod registry;
 
-pub use engine::MonitoringEngine;
 pub use builder::MonitoringEngineBuilder;
 pub use config::EngineConfig;
+pub use engine::MonitoringEngine;
 pub use registry::RuleRegistry;
 pub use vol_alert::AlertManager;

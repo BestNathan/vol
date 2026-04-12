@@ -23,7 +23,10 @@ impl Default for RagConfig {
     fn default() -> Self {
         use crate::prompt_context::PromptTemplate;
 
-        let template = PromptTemplate::new("rag-default", "你是一名知识助手。请根据提供的参考资料回答问题。");
+        let template = PromptTemplate::new(
+            "rag-default",
+            "你是一名知识助手。请根据提供的参考资料回答问题。",
+        );
         let prompt_context = PromptContext::new(template);
 
         Self {

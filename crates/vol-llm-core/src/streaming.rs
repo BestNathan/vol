@@ -3,8 +3,8 @@
 //! Provides shared infrastructure for parsing SSE responses and accumulating
 //! streaming chunks into complete events.
 
+use crate::{FinishReason, LLMError, StreamEvent, StreamEventData, TokenUsage, ToolCall};
 use serde_json::Value;
-use crate::{StreamEvent, StreamEventData, TokenUsage, ToolCall, FinishReason, LLMError};
 
 /// Manages state for a streaming session
 pub struct StreamingSession {
@@ -93,7 +93,10 @@ impl StreamingSession {
         })
     }
 
-    fn handle_content_block_start(&mut self, data: &Value) -> Option<Result<StreamEvent, LLMError>> {
+    fn handle_content_block_start(
+        &mut self,
+        data: &Value,
+    ) -> Option<Result<StreamEvent, LLMError>> {
         let block_type = data["content_block"]["type"].as_str()?;
 
         match block_type {
@@ -104,7 +107,9 @@ impl StreamingSession {
             "tool_use" => {
                 // Start building a new tool call
                 let id = data["content_block"]["id"].as_str().map(|s| s.to_string());
-                let name = data["content_block"]["name"].as_str().map(|s| s.to_string());
+                let name = data["content_block"]["name"]
+                    .as_str()
+                    .map(|s| s.to_string());
 
                 self.current_tool_call = Some(ToolCallBuilder {
                     index: self.tool_call_index,
@@ -119,13 +124,18 @@ impl StreamingSession {
         }
     }
 
-    fn handle_content_block_delta(&mut self, data: &Value) -> Option<Result<StreamEvent, LLMError>> {
+    fn handle_content_block_delta(
+        &mut self,
+        data: &Value,
+    ) -> Option<Result<StreamEvent, LLMError>> {
         // Check for thinking delta
         if let Some(thinking) = data["delta"]["thinking"].as_str() {
             self.thinking_buffer.push_str(thinking);
             return Some(Ok(StreamEvent {
                 id: self.next_id(),
-                data: StreamEventData::ThinkingDelta { thinking: thinking.to_string() },
+                data: StreamEventData::ThinkingDelta {
+                    thinking: thinking.to_string(),
+                },
             }));
         }
 
@@ -134,7 +144,9 @@ impl StreamingSession {
             self.content_buffer.push_str(text);
             return Some(Ok(StreamEvent {
                 id: self.next_id(),
-                data: StreamEventData::ContentDelta { delta: text.to_string() },
+                data: StreamEventData::ContentDelta {
+                    delta: text.to_string(),
+                },
             }));
         }
 
@@ -179,10 +191,9 @@ impl StreamingSession {
             TokenUsage {
                 prompt_tokens: usage_data["input_tokens"].as_u64().unwrap_or(0) as u32,
                 completion_tokens: usage_data["output_tokens"].as_u64().unwrap_or(0) as u32,
-                total_tokens: (
-                    usage_data["input_tokens"].as_u64().unwrap_or(0) +
-                    usage_data["output_tokens"].as_u64().unwrap_or(0)
-                ) as u32,
+                total_tokens: (usage_data["input_tokens"].as_u64().unwrap_or(0)
+                    + usage_data["output_tokens"].as_u64().unwrap_or(0))
+                    as u32,
                 cached_tokens: None,
             }
         } else {
@@ -298,7 +309,11 @@ mod tests {
         let events = session.process_anthropic_sse(stop);
 
         assert!(!events.is_empty());
-        if let Ok(StreamEvent { data: StreamEventData::ToolCallComplete { tool_call }, .. }) = &events[0] {
+        if let Ok(StreamEvent {
+            data: StreamEventData::ToolCallComplete { tool_call },
+            ..
+        }) = &events[0]
+        {
             assert_eq!(tool_call.id, "tool_1");
             assert_eq!(tool_call.name, "get_weather");
             assert_eq!(tool_call.arguments, r#"{"city": "Beijing"}"#);
@@ -315,7 +330,11 @@ mod tests {
         let events = session.process_anthropic_sse(start);
 
         assert!(!events.is_empty());
-        if let Ok(StreamEvent { data: StreamEventData::ResponseStart { model }, .. }) = &events[0] {
+        if let Ok(StreamEvent {
+            data: StreamEventData::ResponseStart { model },
+            ..
+        }) = &events[0]
+        {
             assert_eq!(model, "qwen3.5-plus");
         } else {
             panic!("Expected ResponseStart event");
@@ -329,6 +348,8 @@ mod tests {
         assert!(session.process_anthropic_sse("").is_empty());
         assert!(session.process_anthropic_sse("   ").is_empty());
         assert!(session.process_anthropic_sse(": ping").is_empty());
-        assert!(session.process_anthropic_sse("data: {invalid json}").is_empty());
+        assert!(session
+            .process_anthropic_sse("data: {invalid json}")
+            .is_empty());
     }
 }

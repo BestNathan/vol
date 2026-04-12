@@ -11,20 +11,18 @@
 
 use std::sync::OnceLock;
 
-use opentelemetry::{global, KeyValue, trace::TracerProvider as _};
+use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{trace::{self, Sampler}, Resource};
-use tracing_appender::rolling::{RollingFileAppender, Rotation};
-use tracing_subscriber::{
-    fmt,
-    fmt::format::FmtSpan,
-    layer::SubscriberExt,
-    util::SubscriberInitExt,
-    EnvFilter,
-    Layer,
-    Registry,
+use opentelemetry_sdk::{
+    trace::{self, Sampler},
+    Resource,
 };
 use tracing::subscriber::set_global_default;
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::{
+    fmt, fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
+    Registry,
+};
 
 use vol_config::{LoggingConfig, TracingConfig};
 
@@ -69,8 +67,8 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
         .with_writer(file_appender);
 
     // 3. OpenTelemetry layer (OTLP gRPC to Jaeger)
-    let endpoint = std::env::var("OTEL_ENDPOINT")
-        .unwrap_or_else(|_| config.opentelemetry.endpoint.clone());
+    let endpoint =
+        std::env::var("OTEL_ENDPOINT").unwrap_or_else(|_| config.opentelemetry.endpoint.clone());
 
     let service_name = std::env::var("OTEL_SERVICE_NAME")
         .unwrap_or_else(|_| config.opentelemetry.service_name.clone());
@@ -83,20 +81,29 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
     if config.opentelemetry.enabled && sample_rate > 0.0 {
         let resource = Resource::new(vec![
             KeyValue::new("service.name", service_name.clone()),
-            KeyValue::new("service.namespace", config.opentelemetry.service_namespace.clone()),
-            KeyValue::new("deployment.environment", config.opentelemetry.deployment_environment.clone()),
+            KeyValue::new(
+                "service.namespace",
+                config.opentelemetry.service_namespace.clone(),
+            ),
+            KeyValue::new(
+                "deployment.environment",
+                config.opentelemetry.deployment_environment.clone(),
+            ),
         ]);
 
         let exporter = opentelemetry_otlp::new_exporter()
             .tonic()
             .with_endpoint(&endpoint)
-            .with_timeout(std::time::Duration::from_millis(config.opentelemetry.batch.max_export_timeout_millis))
+            .with_timeout(std::time::Duration::from_millis(
+                config.opentelemetry.batch.max_export_timeout_millis,
+            ))
             .build_span_exporter()?;
 
         let tracer_provider = trace::TracerProvider::builder()
-            .with_config(trace::Config::default()
-                .with_sampler(Sampler::AlwaysOn)
-                .with_resource(resource)
+            .with_config(
+                trace::Config::default()
+                    .with_sampler(Sampler::AlwaysOn)
+                    .with_resource(resource),
             )
             .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
             .build();
@@ -180,9 +187,11 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
     // Mark as initialized
     TRACING_INITIALIZED.get_or_init(|| ());
 
-    tracing::info!("Tracing initialized: logging={} opentelemetry={}",
+    tracing::info!(
+        "Tracing initialized: logging={} opentelemetry={}",
         config.logging.log_dir,
-        config.opentelemetry.enabled);
+        config.opentelemetry.enabled
+    );
 
     Ok(())
 }
@@ -192,7 +201,7 @@ fn create_file_appender(config: &LoggingConfig) -> RollingFileAppender {
         .rotation(Rotation::HOURLY)
         .filename_prefix(config.log_prefix.clone())
         .filename_suffix("log")
-        .max_log_files((config.retention_days * 24).try_into().unwrap())  // Keep retention_days worth of hourly logs
+        .max_log_files((config.retention_days * 24).try_into().unwrap()) // Keep retention_days worth of hourly logs
         .build(&config.log_dir)
         .expect("Failed to create file appender")
 }
@@ -202,7 +211,7 @@ fn create_error_appender(config: &LoggingConfig) -> RollingFileAppender {
         .rotation(Rotation::HOURLY)
         .filename_prefix(config.log_prefix.clone())
         .filename_suffix("error.log")
-        .max_log_files((config.retention_days * 24).try_into().unwrap())  // Keep retention_days worth of hourly logs
+        .max_log_files((config.retention_days * 24).try_into().unwrap()) // Keep retention_days worth of hourly logs
         .build(&config.log_dir)
         .expect("Failed to create error appender")
 }

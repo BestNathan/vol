@@ -267,7 +267,10 @@ mod tests {
         let config: TracingConfig = toml::from_str(toml_str).unwrap();
         assert_eq!(config.logging.log_dir, "/var/log/vol-monitor");
         assert_eq!(config.logging.retention_days, 14);
-        assert_eq!(config.opentelemetry.endpoint, "http://jaeger-collector:4317");
+        assert_eq!(
+            config.opentelemetry.endpoint,
+            "http://jaeger-collector:4317"
+        );
         assert_eq!(config.opentelemetry.service_name, "vol-monitor-prod");
         assert_eq!(config.opentelemetry.sample_rate, 0.5);
     }

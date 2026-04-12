@@ -3,8 +3,10 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use vol_core::{RuleProcessor, MonitoringEvent, Alert, AlertType, EventType, RuleAction, Result, VolatilityData};
 use vol_config::RateChangeRuleConfig;
+use vol_core::{
+    Alert, AlertType, EventType, MonitoringEvent, Result, RuleAction, RuleProcessor, VolatilityData,
+};
 
 /// Rate of change rule for IV changes over time
 pub struct RateChangeRule {
@@ -49,7 +51,9 @@ impl RateChangeRule {
     async fn evaluate_volatility_async(&self, data: &VolatilityData) -> Vec<Alert> {
         let mut alerts = Vec::new();
         let mut buffers = self.buffers.lock().await;
-        let buffer = buffers.entry(data.symbol.clone()).or_insert_with(VecDeque::new);
+        let buffer = buffers
+            .entry(data.symbol.clone())
+            .or_insert_with(VecDeque::new);
 
         // Add new data point
         buffer.push_back((data.timestamp, data.iv));
@@ -64,14 +68,19 @@ impl RateChangeRule {
             if let Some(change) = self.calculate_rate_change(buffer, 3_600_000) {
                 if change.abs() >= self.config.window_1h_threshold {
                     alerts.push(Alert::new(
-                        AlertType::RateChange { window_hours: 1, change_pct: change },
+                        AlertType::RateChange {
+                            window_hours: 1,
+                            change_pct: change,
+                        },
                         tenor,
                         data.symbol.clone(),
                         data.iv,
                         format!(
                             "{} {} IV changed {:.1}% in 1h (threshold: {:.1}%)",
-                            data.symbol, tenor,
-                            change * 100.0, self.config.window_1h_threshold * 100.0
+                            data.symbol,
+                            tenor,
+                            change * 100.0,
+                            self.config.window_1h_threshold * 100.0
                         ),
                         data.timestamp,
                         data.source.clone(),
@@ -79,7 +88,10 @@ impl RateChangeRule {
                         data.dte,
                         data.option_type,
                         data.moneyness(),
-                        data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                        data.extra
+                            .get("mark_price_coin")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0),
                         String::new(), // trace_id - set by engine layer
                     ));
                 }
@@ -91,14 +103,19 @@ impl RateChangeRule {
             if let Some(change) = self.calculate_rate_change(buffer, 14_400_000) {
                 if change.abs() >= self.config.window_4h_threshold {
                     alerts.push(Alert::new(
-                        AlertType::RateChange { window_hours: 4, change_pct: change },
+                        AlertType::RateChange {
+                            window_hours: 4,
+                            change_pct: change,
+                        },
                         tenor,
                         data.symbol.clone(),
                         data.iv,
                         format!(
                             "{} {} IV changed {:.1}% in 4h (threshold: {:.1}%)",
-                            data.symbol, tenor,
-                            change * 100.0, self.config.window_4h_threshold * 100.0
+                            data.symbol,
+                            tenor,
+                            change * 100.0,
+                            self.config.window_4h_threshold * 100.0
                         ),
                         data.timestamp,
                         data.source.clone(),
@@ -106,7 +123,10 @@ impl RateChangeRule {
                         data.dte,
                         data.option_type,
                         data.moneyness(),
-                        data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                        data.extra
+                            .get("mark_price_coin")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0),
                         String::new(), // trace_id - set by engine layer
                     ));
                 }
@@ -118,14 +138,19 @@ impl RateChangeRule {
             if let Some(change) = self.calculate_rate_change(buffer, 86_400_000) {
                 if change.abs() >= self.config.window_24h_threshold {
                     alerts.push(Alert::new(
-                        AlertType::RateChange { window_hours: 24, change_pct: change },
+                        AlertType::RateChange {
+                            window_hours: 24,
+                            change_pct: change,
+                        },
                         tenor,
                         data.symbol.clone(),
                         data.iv,
                         format!(
                             "{} {} IV changed {:.1}% in 24h (threshold: {:.1}%)",
-                            data.symbol, tenor,
-                            change * 100.0, self.config.window_24h_threshold * 100.0
+                            data.symbol,
+                            tenor,
+                            change * 100.0,
+                            self.config.window_24h_threshold * 100.0
                         ),
                         data.timestamp,
                         data.source.clone(),
@@ -133,7 +158,10 @@ impl RateChangeRule {
                         data.dte,
                         data.option_type,
                         data.moneyness(),
-                        data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                        data.extra
+                            .get("mark_price_coin")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0),
                         String::new(), // trace_id - set by engine layer
                     ));
                 }
@@ -149,7 +177,12 @@ impl Clone for RateChangeRule {
         Self {
             id: self.id.clone(),
             config: self.config.clone(),
-            buffers: Arc::new(Mutex::new(self.buffers.try_lock().map(|b| b.clone()).unwrap_or_default())),
+            buffers: Arc::new(Mutex::new(
+                self.buffers
+                    .try_lock()
+                    .map(|b| b.clone())
+                    .unwrap_or_default(),
+            )),
         }
     }
 }

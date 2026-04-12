@@ -3,10 +3,10 @@
 //! Plugins can intercept and modify the agent event stream,
 //! implement cross-cutting concerns like observability, caching, etc.
 
-use async_trait::async_trait;
-use std::sync::Arc;
 use super::run_context::PluginContext;
 use super::AgentStreamEvent;
+use async_trait::async_trait;
+use std::sync::Arc;
 
 /// Plugin unique identifier
 pub type PluginId = String;
@@ -27,29 +27,23 @@ pub enum PluginDecision {
 pub trait AgentPlugin: Send + Sync {
     fn id(&self) -> PluginId;
 
-    fn priority(&self) -> u32 { 100 }
+    fn priority(&self) -> u32 {
+        100
+    }
 
     /// Interceptor hook - sync, serial, can block flow
     ///
     /// Called before event execution. Can modify or block the event.
     /// Returns PluginDecision to continue, skip, or abort.
-    async fn intercept(
-        &self,
-        _event: &AgentStreamEvent,
-        _ctx: &PluginContext
-    ) -> PluginDecision {
-        PluginDecision::Continue  // Default: no-op
+    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
+        PluginDecision::Continue // Default: no-op
     }
 
     /// Listener hook - async, parallel, fire-and-forget
     ///
     /// Called after event execution. Used for observability, logging, etc.
     /// Does not affect event flow.
-    async fn listen(
-        &self,
-        _event: &AgentStreamEvent,
-        _ctx: &PluginContext
-    );
+    async fn listen(&self, _event: &AgentStreamEvent, _ctx: &PluginContext);
 }
 
 /// Plugin registry - manages plugin lifecycle and execution order
@@ -60,13 +54,17 @@ pub struct PluginRegistry {
 
 impl PluginRegistry {
     pub fn new() -> Self {
-        Self { plugins: Vec::new() }
+        Self {
+            plugins: Vec::new(),
+        }
     }
 
     pub fn register<P: AgentPlugin + 'static>(&mut self, plugin: P) {
         let plugin = Arc::new(plugin);
         // Insert by priority (lower number = higher priority = executed first)
-        let pos = self.plugins.iter()
+        let pos = self
+            .plugins
+            .iter()
             .position(|p| p.priority() > plugin.priority())
             .unwrap_or(self.plugins.len());
         self.plugins.insert(pos, plugin);
@@ -89,13 +87,13 @@ impl Default for PluginRegistry {
 
 #[cfg(test)]
 mod tests {
+    use super::super::AgentConfig;
     use super::*;
+    use crate::react::run_context::{PluginContext, RunContext};
+    use crate::session::{InMemoryMessageStore, InMemorySessionStore, Session};
     use std::sync::Arc;
     use tokio::sync::Mutex;
-    use crate::react::run_context::{RunContext, PluginContext};
-    use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
     use vol_llm_tool::ToolRegistry;
-    use super::super::AgentConfig;
 
     fn create_test_plugin_context() -> PluginContext {
         let (ctx, _rx) = RunContext::new(
@@ -113,14 +111,25 @@ mod tests {
         PluginContext::from_run_ctx(&ctx)
     }
 
-    struct TestPlugin { id: String, priority: u32 }
+    struct TestPlugin {
+        id: String,
+        priority: u32,
+    }
 
     #[async_trait]
     impl AgentPlugin for TestPlugin {
-        fn id(&self) -> PluginId { self.id.clone() }
-        fn priority(&self) -> u32 { self.priority }
+        fn id(&self) -> PluginId {
+            self.id.clone()
+        }
+        fn priority(&self) -> u32 {
+            self.priority
+        }
 
-        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
+        async fn intercept(
+            &self,
+            _event: &AgentStreamEvent,
+            _ctx: &PluginContext,
+        ) -> PluginDecision {
             PluginDecision::Continue
         }
 
@@ -132,9 +141,18 @@ mod tests {
     #[test]
     fn test_plugin_registry_orders_by_priority() {
         let mut registry = PluginRegistry::new();
-        registry.register(TestPlugin { id: "low".to_string(), priority: 100 });
-        registry.register(TestPlugin { id: "high".to_string(), priority: 10 });
-        registry.register(TestPlugin { id: "mid".to_string(), priority: 50 });
+        registry.register(TestPlugin {
+            id: "low".to_string(),
+            priority: 100,
+        });
+        registry.register(TestPlugin {
+            id: "high".to_string(),
+            priority: 10,
+        });
+        registry.register(TestPlugin {
+            id: "mid".to_string(),
+            priority: 50,
+        });
 
         // Should be ordered: high (10), mid (50), low (100)
         let ids: Vec<String> = registry.plugins().iter().map(|p| p.id()).collect();
@@ -159,15 +177,23 @@ mod tests {
         struct OrderPlugin {
             id: String,
             priority: u32,
-            order: Arc<Mutex<Vec<String>>>
+            order: Arc<Mutex<Vec<String>>>,
         }
 
         #[async_trait]
         impl AgentPlugin for OrderPlugin {
-            fn id(&self) -> PluginId { self.id.clone() }
-            fn priority(&self) -> u32 { self.priority }
+            fn id(&self) -> PluginId {
+                self.id.clone()
+            }
+            fn priority(&self) -> u32 {
+                self.priority
+            }
 
-            async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
+            async fn intercept(
+                &self,
+                _event: &AgentStreamEvent,
+                _ctx: &PluginContext,
+            ) -> PluginDecision {
                 let mut order = self.order.lock().await;
                 order.push(self.id.clone());
                 PluginDecision::Continue
@@ -178,12 +204,22 @@ mod tests {
 
         let order = Arc::new(Mutex::new(Vec::new()));
         let mut plugins = vec![
-            Arc::new(OrderPlugin { id: "second".to_string(), priority: 20, order: order.clone() }),
-            Arc::new(OrderPlugin { id: "first".to_string(), priority: 10, order: order.clone() }),
+            Arc::new(OrderPlugin {
+                id: "second".to_string(),
+                priority: 20,
+                order: order.clone(),
+            }),
+            Arc::new(OrderPlugin {
+                id: "first".to_string(),
+                priority: 10,
+                order: order.clone(),
+            }),
         ];
         plugins.sort_by_key(|p| p.priority());
 
-        let event = AgentStreamEvent::AgentStart { input: "test".to_string() };
+        let event = AgentStreamEvent::AgentStart {
+            input: "test".to_string(),
+        };
         let ctx = create_test_plugin_context();
 
         for plugin in &plugins {
@@ -205,10 +241,18 @@ mod tests {
 
         #[async_trait]
         impl AgentPlugin for AbortPlugin {
-            fn id(&self) -> PluginId { self.id.clone() }
-            fn priority(&self) -> u32 { 100 }
+            fn id(&self) -> PluginId {
+                self.id.clone()
+            }
+            fn priority(&self) -> u32 {
+                100
+            }
 
-            async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
+            async fn intercept(
+                &self,
+                _event: &AgentStreamEvent,
+                _ctx: &PluginContext,
+            ) -> PluginDecision {
                 let mut count = self.call_count.lock().await;
                 *count += 1;
 
@@ -236,7 +280,9 @@ mod tests {
             }),
         ];
 
-        let event = AgentStreamEvent::AgentStart { input: "test".to_string() };
+        let event = AgentStreamEvent::AgentStart {
+            input: "test".to_string(),
+        };
         let ctx = create_test_plugin_context();
 
         // Simulate interceptor chain - should stop at first plugin (abort_at: 1)
@@ -263,10 +309,18 @@ mod tests {
 
         #[async_trait]
         impl AgentPlugin for SkipPlugin {
-            fn id(&self) -> PluginId { self.id.clone() }
-            fn priority(&self) -> u32 { 100 }
+            fn id(&self) -> PluginId {
+                self.id.clone()
+            }
+            fn priority(&self) -> u32 {
+                100
+            }
 
-            async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
+            async fn intercept(
+                &self,
+                _event: &AgentStreamEvent,
+                _ctx: &PluginContext,
+            ) -> PluginDecision {
                 let mut count = self.call_count.lock().await;
                 *count += 1;
 
@@ -294,7 +348,9 @@ mod tests {
             }),
         ];
 
-        let event = AgentStreamEvent::AgentStart { input: "test".to_string() };
+        let event = AgentStreamEvent::AgentStart {
+            input: "test".to_string(),
+        };
         let ctx = create_test_plugin_context();
 
         let mut final_decision = PluginDecision::Continue;

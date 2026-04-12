@@ -4,26 +4,50 @@ use serde::{Deserialize, Serialize};
 /// Alert types supported by the system
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AlertType {
-    AbsoluteIv { threshold: f64 },
-    RateChange { window_hours: u32, change_pct: f64 },
-    TermStructure { spread_pct: f64 },
-    Skew { skew_pct: f64 },
+    AbsoluteIv {
+        threshold: f64,
+    },
+    RateChange {
+        window_hours: u32,
+        change_pct: f64,
+    },
+    TermStructure {
+        spread_pct: f64,
+    },
+    Skew {
+        skew_pct: f64,
+    },
 
     /// Portfolio margin ratio alert
     #[serde(rename = "portfolio_margin")]
-    PortfolioMargin { current: f64, threshold: f64 },
+    PortfolioMargin {
+        current: f64,
+        threshold: f64,
+    },
     /// Portfolio free balance alert
     #[serde(rename = "portfolio_balance")]
-    PortfolioBalance { current: f64, threshold: f64 },
+    PortfolioBalance {
+        current: f64,
+        threshold: f64,
+    },
     /// Portfolio delta exposure alert
     #[serde(rename = "portfolio_delta")]
-    PortfolioDelta { current: f64 },
+    PortfolioDelta {
+        current: f64,
+    },
     /// Portfolio PnL alert
     #[serde(rename = "portfolio_pnl")]
-    PortfolioPnL { current: f64, threshold: f64 },
+    PortfolioPnL {
+        current: f64,
+        threshold: f64,
+    },
     /// Portfolio Greeks alert
     #[serde(rename = "portfolio_greek")]
-    PortfolioGreek { greek: String, current: f64, threshold: f64 },
+    PortfolioGreek {
+        greek: String,
+        current: f64,
+        threshold: f64,
+    },
 }
 
 impl std::fmt::Display for AlertType {

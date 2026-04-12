@@ -1,13 +1,13 @@
 //! ObservabilityPlugin implementation.
 
+use super::logger::{LogEntry, LogType, ObservabilityLogger};
 use crate::react::plugin::{AgentPlugin, PluginDecision, PluginId};
 use crate::react::run_context::PluginContext;
 use crate::AgentStreamEvent;
-use super::logger::{ObservabilityLogger, LogEntry, LogType};
-use std::sync::Arc;
-use std::path::PathBuf;
 use chrono::Utc;
 use serde_json::json;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 pub struct ObservabilityPlugin {
     logger: Arc<ObservabilityLogger>,
@@ -22,34 +22,40 @@ impl ObservabilityPlugin {
     fn create_log_entry(&self, event: &AgentStreamEvent, ctx: &PluginContext) -> LogEntry {
         // Extract event type name and data separately for structured logging
         let (event_name, data) = match event {
-            AgentStreamEvent::AgentStart { input } => {
-                ("AgentStart", json!({ "input": input }))
-            }
+            AgentStreamEvent::AgentStart { input } => ("AgentStart", json!({ "input": input })),
             AgentStreamEvent::ThinkingComplete { thinking } => {
                 ("ThinkingComplete", json!({ "thinking": thinking }))
             }
-            AgentStreamEvent::ToolCallBegin { tool_name, arguments } => {
-                ("ToolCallBegin", json!({
+            AgentStreamEvent::ToolCallBegin {
+                tool_name,
+                arguments,
+            } => (
+                "ToolCallBegin",
+                json!({
                     "tool_name": tool_name,
                     "arguments": arguments
-                }))
-            }
-            AgentStreamEvent::ToolCallComplete { tool_name, result } => {
-                ("ToolCallComplete", json!({
+                }),
+            ),
+            AgentStreamEvent::ToolCallComplete { tool_name, result } => (
+                "ToolCallComplete",
+                json!({
                     "tool_name": tool_name,
                     "result": result
-                }))
-            }
-            AgentStreamEvent::IterationComplete { iteration, tool_calls, final_answer } => {
-                ("IterationComplete", json!({
+                }),
+            ),
+            AgentStreamEvent::IterationComplete {
+                iteration,
+                tool_calls,
+                final_answer,
+            } => (
+                "IterationComplete",
+                json!({
                     "iteration": iteration,
                     "tool_calls": tool_calls,
                     "final_answer": final_answer,
-                }))
-            }
-            AgentStreamEvent::AgentComplete => {
-                ("AgentComplete", json!({}))
-            }
+                }),
+            ),
+            AgentStreamEvent::AgentComplete => ("AgentComplete", json!({})),
             AgentStreamEvent::AgentAborted { reason } => {
                 ("AgentAborted", json!({ "reason": reason }))
             }
@@ -86,7 +92,9 @@ impl AgentPlugin for ObservabilityPlugin {
         let entry = self.create_log_entry(event, ctx);
 
         // Log to run log (by run_id) - this also emits to stdout via tracing
-        let run_log_type = LogType::Run { run_id: ctx.run_id.clone() };
+        let run_log_type = LogType::Run {
+            run_id: ctx.run_id.clone(),
+        };
         self.logger.log(&entry, &run_log_type).await;
 
         // Log to session log (by session_id + date) - same entry, different file
@@ -102,12 +110,12 @@ impl AgentPlugin for ObservabilityPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::react::run_context::{RunContext, PluginContext};
-    use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
+    use crate::react::run_context::{PluginContext, RunContext};
     use crate::react::AgentConfig;
+    use crate::session::{InMemoryMessageStore, InMemorySessionStore, Session};
+    use crate::AgentResponse;
     use std::sync::Arc;
     use tempfile::TempDir;
-    use crate::AgentResponse;
 
     fn create_test_plugin_context() -> PluginContext {
         let (ctx, _rx) = RunContext::new(
@@ -128,7 +136,8 @@ mod tests {
     #[tokio::test]
     async fn test_observability_plugin_logs_event() {
         let temp_dir = TempDir::new().unwrap();
-        let plugin = ObservabilityPlugin::new("test_agent".to_string(), temp_dir.path().to_path_buf());
+        let plugin =
+            ObservabilityPlugin::new("test_agent".to_string(), temp_dir.path().to_path_buf());
         let ctx = create_test_plugin_context();
 
         let event = AgentStreamEvent::AgentStart {
@@ -151,19 +160,39 @@ mod tests {
     #[tokio::test]
     async fn test_observability_plugin_logs_all_event_types() {
         let temp_dir = TempDir::new().unwrap();
-        let plugin = ObservabilityPlugin::new("test_agent".to_string(), temp_dir.path().to_path_buf());
+        let plugin =
+            ObservabilityPlugin::new("test_agent".to_string(), temp_dir.path().to_path_buf());
         let ctx = create_test_plugin_context();
 
         // Test all event types
         let events = vec![
-            AgentStreamEvent::AgentStart { input: "test input".to_string() },
-            AgentStreamEvent::ThinkingComplete { thinking: "thought".to_string() },
-            AgentStreamEvent::ToolCallBegin { tool_name: "test_tool".to_string(), arguments: "{\"key\": \"value\"}".to_string() },
-            AgentStreamEvent::ToolCallComplete { tool_name: "test_tool".to_string(), result: "tool result".to_string() },
-            AgentStreamEvent::IterationComplete { iteration: 1, tool_calls: vec![], final_answer: Some("answer".to_string()) },
+            AgentStreamEvent::AgentStart {
+                input: "test input".to_string(),
+            },
+            AgentStreamEvent::ThinkingComplete {
+                thinking: "thought".to_string(),
+            },
+            AgentStreamEvent::ToolCallBegin {
+                tool_name: "test_tool".to_string(),
+                arguments: "{\"key\": \"value\"}".to_string(),
+            },
+            AgentStreamEvent::ToolCallComplete {
+                tool_name: "test_tool".to_string(),
+                result: "tool result".to_string(),
+            },
+            AgentStreamEvent::IterationComplete {
+                iteration: 1,
+                tool_calls: vec![],
+                final_answer: Some("answer".to_string()),
+            },
             AgentStreamEvent::AgentComplete,
-            AgentStreamEvent::AgentAborted { reason: "test abort reason".to_string() },
-            AgentStreamEvent::PluginEvent { name: "test_plugin_event".to_string(), data: serde_json::Map::new() },
+            AgentStreamEvent::AgentAborted {
+                reason: "test abort reason".to_string(),
+            },
+            AgentStreamEvent::PluginEvent {
+                name: "test_plugin_event".to_string(),
+                data: serde_json::Map::new(),
+            },
         ];
 
         for event in events {
@@ -194,7 +223,11 @@ mod tests {
         let session_files: Vec<_> = std::fs::read_dir(agent_path.join("sessions"))
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().starts_with("session_session-1_"))
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("session_session-1_")
+            })
             .collect();
         assert!(!session_files.is_empty(), "Expected session log file");
 

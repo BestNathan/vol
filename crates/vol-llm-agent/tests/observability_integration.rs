@@ -2,12 +2,12 @@
 //!
 //! Run with: cargo test -p vol-llm-agent --test observability_integration
 
-use vol_llm_agent::{ReActAgent, AgentStreamEvent};
-use vol_llm_agent::react::{PluginContext, PluginDecision};
-use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-use vol_llm_core::{LLMClient, ConversationRequest, LLMProvider, StreamEvent, StreamEventData};
 use async_trait::async_trait;
 use std::sync::Arc;
+use vol_llm_agent::react::{PluginContext, PluginDecision};
+use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore, Session};
+use vol_llm_agent::{AgentStreamEvent, ReActAgent};
+use vol_llm_core::{ConversationRequest, LLMClient, LLMProvider, StreamEvent, StreamEventData};
 
 /// Mock LLM for testing
 struct MockLlm;
@@ -26,21 +26,29 @@ impl LLMClient for MockLlm {
         &[]
     }
 
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
         unimplemented!("Use converse_stream instead")
     }
 
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
+    async fn converse_stream(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
         use tokio::sync::mpsc;
 
         let (tx, rx) = mpsc::channel(10);
         tokio::spawn(async move {
-            let _ = tx.send(Ok(StreamEvent {
-                id: "event_1".to_string(),
-                data: StreamEventData::ContentComplete {
-                    content: "Mock response".to_string(),
-                },
-            })).await;
+            let _ = tx
+                .send(Ok(StreamEvent {
+                    id: "event_1".to_string(),
+                    data: StreamEventData::ContentComplete {
+                        content: "Mock response".to_string(),
+                    },
+                }))
+                .await;
         });
 
         Ok(vol_llm_core::StreamReceiver::new(rx))
@@ -100,14 +108,19 @@ async fn test_full_agent_run_with_observability() {
         .build()
         .unwrap();
 
-    
     agent.run("Test query").await.unwrap();
 
     // Verify agent completed successfully (if we get here without error, it completed)
 
     // Verify observability plugin received events
     let count = *event_count.lock().await;
-    assert!(count > 0, "Observability plugin should have received events");
+    assert!(
+        count > 0,
+        "Observability plugin should have received events"
+    );
 
-    println!("Agent completed successfully, observability captured {} events", count);
+    println!(
+        "Agent completed successfully, observability captured {} events",
+        count
+    );
 }

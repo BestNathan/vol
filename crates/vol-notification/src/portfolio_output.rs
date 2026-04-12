@@ -1,11 +1,11 @@
 //! Portfolio data JSONL output handler.
 
+use std::path::PathBuf;
+use tokio::io::{AsyncWriteExt, BufWriter};
+use tokio::sync::mpsc;
+use tracing::info;
 use vol_core::{Result, VolError};
 use vol_deribit::portfolio::PortfolioData;
-use tokio::sync::mpsc;
-use tokio::io::{AsyncWriteExt, BufWriter};
-use std::path::PathBuf;
-use tracing::info;
 
 /// Portfolio data JSONL output handler
 pub struct PortfolioOutput {
@@ -34,7 +34,7 @@ impl PortfolioOutput {
         let mut writer = BufWriter::new(
             tokio::fs::File::create(&current_file)
                 .await
-                .map_err(|e| VolError::Internal(format!("Failed to create output file: {}", e)))?
+                .map_err(|e| VolError::Internal(format!("Failed to create output file: {}", e)))?,
         );
 
         while let Some(data) = rx.recv().await {
@@ -46,20 +46,19 @@ impl PortfolioOutput {
                     .await
                     .map_err(|e| VolError::Internal(format!("Failed to flush writer: {}", e)))?;
                 current_file = new_file;
-                writer = BufWriter::new(
-                    tokio::fs::File::create(&current_file)
-                        .await
-                        .map_err(|e| VolError::Internal(format!("Failed to create output file: {}", e)))?
-                );
+                writer =
+                    BufWriter::new(tokio::fs::File::create(&current_file).await.map_err(|e| {
+                        VolError::Internal(format!("Failed to create output file: {}", e))
+                    })?);
             }
 
             // Write as JSONL
-            let json = serde_json::to_string(&data)
-                .map_err(|e| VolError::Internal(format!("Failed to serialize portfolio data: {}", e)))?;
-            writer
-                .write_all(json.as_bytes())
-                .await
-                .map_err(|e| VolError::Internal(format!("Failed to write portfolio data: {}", e)))?;
+            let json = serde_json::to_string(&data).map_err(|e| {
+                VolError::Internal(format!("Failed to serialize portfolio data: {}", e))
+            })?;
+            writer.write_all(json.as_bytes()).await.map_err(|e| {
+                VolError::Internal(format!("Failed to write portfolio data: {}", e))
+            })?;
             writer
                 .write_all(b"\n")
                 .await

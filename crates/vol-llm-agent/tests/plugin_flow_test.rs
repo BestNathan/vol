@@ -4,13 +4,15 @@
 //!
 //! This file tests the plugin flow integration with a mock LLM.
 
-use vol_llm_agent::{ReActAgent, AgentStreamEvent};
-use vol_llm_agent::react::{AgentPlugin, PluginDecision, PluginContext};
-use vol_llm_tool::{ToolContext, ToolRegistry};
-use vol_llm_core::{LLMClient, ConversationRequest, ConversationResponse, LLMProvider, StreamEvent, StreamEventData};
 use async_trait::async_trait;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use vol_llm_agent::react::{AgentPlugin, PluginContext, PluginDecision};
+use vol_llm_agent::{AgentStreamEvent, ReActAgent};
+use vol_llm_core::{
+    ConversationRequest, ConversationResponse, LLMClient, LLMProvider, StreamEvent, StreamEventData,
+};
+use vol_llm_tool::{ToolContext, ToolRegistry};
 
 /// Mock LLM that returns a simple text response
 struct MockLlm {
@@ -41,11 +43,17 @@ impl LLMClient for MockLlm {
         &[]
     }
 
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
         unimplemented!("Use converse_stream instead")
     }
 
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
+    async fn converse_stream(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
         use tokio::sync::mpsc;
 
         self.call_count.fetch_add(1, Ordering::SeqCst);
@@ -54,12 +62,14 @@ impl LLMClient for MockLlm {
         let response_text = self.response_text.clone();
 
         tokio::spawn(async move {
-            let _ = tx.send(Ok(StreamEvent {
-                id: "event_1".to_string(),
-                data: StreamEventData::ContentComplete {
-                    content: response_text,
-                },
-            })).await;
+            let _ = tx
+                .send(Ok(StreamEvent {
+                    id: "event_1".to_string(),
+                    data: StreamEventData::ContentComplete {
+                        content: response_text,
+                    },
+                }))
+                .await;
         });
 
         Ok(vol_llm_core::StreamReceiver::new(rx))
@@ -75,7 +85,12 @@ struct TrackingPlugin {
 }
 
 impl TrackingPlugin {
-    fn new(id: String, priority: u32, intercept_count: Arc<AtomicUsize>, listen_count: Arc<AtomicUsize>) -> Self {
+    fn new(
+        id: String,
+        priority: u32,
+        intercept_count: Arc<AtomicUsize>,
+        listen_count: Arc<AtomicUsize>,
+    ) -> Self {
         Self {
             id,
             priority,
@@ -132,7 +147,6 @@ async fn test_plugin_interceptor_chain_executes() {
         .build()
         .unwrap();
 
-    
     agent.run("Say hello").await.unwrap();
 
     // Verify agent completed successfully (if we get here without error, it completed)
@@ -145,7 +159,10 @@ async fn test_plugin_interceptor_chain_executes() {
 
     // Verify plugins were called - each event triggers both intercept and listen
     // Agent run produces multiple events: AgentStart, ContentComplete, AgentComplete
-    assert!(intercepts > 0, "Intercept should have been called at least once");
+    assert!(
+        intercepts > 0,
+        "Intercept should have been called at least once"
+    );
     assert!(listens > 0, "Listen should have been called at least once");
 }
 
@@ -168,7 +185,11 @@ async fn test_plugin_skip_stops_current_event() {
             10
         }
 
-        async fn intercept(&self, event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
+        async fn intercept(
+            &self,
+            event: &AgentStreamEvent,
+            _ctx: &PluginContext,
+        ) -> PluginDecision {
             let count = self.call_count.fetch_add(1, Ordering::SeqCst);
 
             // Skip the first event (AgentStart)
@@ -196,12 +217,14 @@ async fn test_plugin_skip_stops_current_event() {
         .build()
         .unwrap();
 
-    
     agent.run("Say hello").await.unwrap();
 
     // Agent should complete successfully (Skip just skips the event, doesn't abort)
     // Verify plugin was called
-    assert!(call_count.load(Ordering::SeqCst) > 0, "Plugin should have been called");
+    assert!(
+        call_count.load(Ordering::SeqCst) > 0,
+        "Plugin should have been called"
+    );
 }
 
 /// Test that listener plugins execute in parallel (fire-and-forget)
@@ -224,7 +247,11 @@ async fn test_listener_parallel_execution() {
             100
         }
 
-        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
+        async fn intercept(
+            &self,
+            _event: &AgentStreamEvent,
+            _ctx: &PluginContext,
+        ) -> PluginDecision {
             PluginDecision::Continue
         }
 
@@ -236,12 +263,23 @@ async fn test_listener_parallel_execution() {
 
     // Create plugins with different delays
     let plugins: Vec<Arc<dyn AgentPlugin>> = vec![
-        Arc::new(SlowListener { id: "slow1".to_string(), delay_ms: 50 }),
-        Arc::new(SlowListener { id: "slow2".to_string(), delay_ms: 50 }),
-        Arc::new(SlowListener { id: "slow3".to_string(), delay_ms: 50 }),
+        Arc::new(SlowListener {
+            id: "slow1".to_string(),
+            delay_ms: 50,
+        }),
+        Arc::new(SlowListener {
+            id: "slow2".to_string(),
+            delay_ms: 50,
+        }),
+        Arc::new(SlowListener {
+            id: "slow3".to_string(),
+            delay_ms: 50,
+        }),
     ];
 
-    let event = AgentStreamEvent::AgentStart { input: "test".to_string() };
+    let event = AgentStreamEvent::AgentStart {
+        input: "test".to_string(),
+    };
     let ctx = create_test_plugin_context();
 
     // Execute listeners in parallel (spawn each one)
@@ -266,12 +304,16 @@ async fn test_listener_parallel_execution() {
 
     // If parallel: ~50ms, if sequential: ~150ms
     // Allow some margin for task scheduling overhead
-    assert!(elapsed < Duration::from_millis(100), "Listeners should execute in parallel, but took {:?}", elapsed);
+    assert!(
+        elapsed < Duration::from_millis(100),
+        "Listeners should execute in parallel, but took {:?}",
+        elapsed
+    );
 }
 
 fn create_test_plugin_context() -> PluginContext {
-    use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore};
     use vol_llm_agent::react::{AgentConfig, RunContext};
+    use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore, Session};
 
     let (ctx, _rx) = RunContext::new(
         "test-run".to_string(),

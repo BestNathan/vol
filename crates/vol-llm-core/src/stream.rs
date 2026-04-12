@@ -1,7 +1,7 @@
 //! Streaming response types.
 
+use crate::{FinishReason, TokenUsage, ToolCall};
 use serde::{Deserialize, Serialize};
-use crate::{TokenUsage, FinishReason, ToolCall};
 
 /// Stream event
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -64,7 +64,10 @@ pub enum AgentStreamEvent {
     ThinkingComplete { thinking: String },
 
     /// About to call tool
-    ToolCallBegin { tool_name: String, arguments: String },
+    ToolCallBegin {
+        tool_name: String,
+        arguments: String,
+    },
 
     /// Tool call completed
     ToolCallComplete { tool_name: String, result: String },
@@ -95,7 +98,9 @@ mod tests {
 
     #[test]
     fn test_agent_stream_event_creation() {
-        let event = AgentStreamEvent::AgentStart { input: "test".to_string() };
+        let event = AgentStreamEvent::AgentStart {
+            input: "test".to_string(),
+        };
         match event {
             AgentStreamEvent::AgentStart { input } => {
                 assert_eq!(input, "test");
@@ -111,7 +116,10 @@ mod tests {
             arguments: r#"{"city": "Beijing"}"#.to_string(),
         };
         match event {
-            AgentStreamEvent::ToolCallBegin { tool_name, arguments } => {
+            AgentStreamEvent::ToolCallBegin {
+                tool_name,
+                arguments,
+            } => {
                 assert_eq!(tool_name, "get_weather");
                 assert_eq!(arguments, r#"{"city": "Beijing"}"#);
             }
@@ -127,7 +135,11 @@ mod tests {
             final_answer: Some("The answer".to_string()),
         };
         match event {
-            AgentStreamEvent::IterationComplete { iteration, final_answer, .. } => {
+            AgentStreamEvent::IterationComplete {
+                iteration,
+                final_answer,
+                ..
+            } => {
                 assert_eq!(iteration, 1);
                 assert_eq!(final_answer, Some("The answer".to_string()));
             }
@@ -152,7 +164,10 @@ mod tests {
     fn test_agent_stream_event_plugin_event() {
         use serde_json::Map;
         let mut data = Map::new();
-        data.insert("key".to_string(), serde_json::Value::String("value".to_string()));
+        data.insert(
+            "key".to_string(),
+            serde_json::Value::String("value".to_string()),
+        );
 
         let event = AgentStreamEvent::PluginEvent {
             name: "custom".to_string(),

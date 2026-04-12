@@ -31,9 +31,15 @@ pub struct AbsoluteIvRuleConfig {
     pub notifications: Vec<String>,
 }
 
-fn default_short_atm() -> f64 { 0.10 }   // 10% for short-term options
-fn default_medium_atm() -> f64 { 0.08 }  // 8% for medium-term options
-fn default_long_atm() -> f64 { 0.05 }    // 5% for long-term options
+fn default_short_atm() -> f64 {
+    0.10
+} // 10% for short-term options
+fn default_medium_atm() -> f64 {
+    0.08
+} // 8% for medium-term options
+fn default_long_atm() -> f64 {
+    0.05
+} // 5% for long-term options
 
 /// Rate of change rule configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -152,4 +158,6 @@ impl RuleConfig {
     }
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}

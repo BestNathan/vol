@@ -128,12 +128,9 @@ impl Embedder for DashScopeEmbedder {
             });
         }
 
-        let result: EmbeddingResponse = response
-            .json()
-            .await
-            .map_err(|e| {
-                vol_llm_core::LLMError::Parse(format!("Failed to parse response: {}", e))
-            })?;
+        let result: EmbeddingResponse = response.json().await.map_err(|e| {
+            vol_llm_core::LLMError::Parse(format!("Failed to parse response: {}", e))
+        })?;
 
         Ok(result.output.embeddings)
     }
@@ -146,8 +143,14 @@ mod tests {
 
     #[test]
     fn test_model_as_str() {
-        assert_eq!(DashScopeModel::TextEmbeddingV2.as_str(), "text-embedding-v2");
-        assert_eq!(DashScopeModel::TextEmbeddingV3.as_str(), "text-embedding-v3");
+        assert_eq!(
+            DashScopeModel::TextEmbeddingV2.as_str(),
+            "text-embedding-v2"
+        );
+        assert_eq!(
+            DashScopeModel::TextEmbeddingV3.as_str(),
+            "text-embedding-v3"
+        );
     }
 
     #[test]

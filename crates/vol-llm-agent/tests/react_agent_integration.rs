@@ -4,11 +4,11 @@
 //!
 //! These tests verify the ReAct Agent workflow with real LLM provider and TDengine tools.
 
-use vol_llm_agent::ReActAgent;
-use vol_llm_provider::{create_provider, LLMConfig, Secret};
-use vol_llm_core::LLMProvider;
-use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
 use std::sync::Arc;
+use vol_llm_agent::ReActAgent;
+use vol_llm_core::LLMProvider;
+use vol_llm_provider::{create_provider, LLMConfig, Secret};
+use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
 
 /// Create a test agent with TDengine tools
 fn create_test_agent() -> Option<ReActAgent> {
@@ -50,7 +50,6 @@ async fn test_agent_with_market_data_query() {
         }
     };
 
-    
     agent.run("What is the current BTC price?").await.unwrap();
 }
 
@@ -65,8 +64,10 @@ async fn test_agent_with_volatility_query() {
         }
     };
 
-    
-    agent.run("Show me the recent volatility data for ETH").await.unwrap();
+    agent
+        .run("Show me the recent volatility data for ETH")
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -81,6 +82,9 @@ async fn test_agent_max_iterations() {
     };
 
     // This query should trigger multiple iterations
-    
-    agent.run("Compare BTC and ETH volatility and explain the difference").await.unwrap();
+
+    agent
+        .run("Compare BTC and ETH volatility and explain the difference")
+        .await
+        .unwrap();
 }

@@ -1,9 +1,9 @@
 //! Plugin system integration tests.
 
-use vol_llm_agent::*;
-use vol_llm_agent::react::*;
 use vol_llm_agent::react::plugin::PluginId;
 use vol_llm_agent::react::PluginContext;
+use vol_llm_agent::react::*;
+use vol_llm_agent::*;
 
 #[tokio::test]
 async fn test_plugin_priority_ordering() {
@@ -37,9 +37,18 @@ async fn test_plugin_priority_ordering() {
     }
 
     let mut registry = PluginRegistry::new();
-    registry.register(TestPlugin { id: "low".to_string(), priority: 100 });
-    registry.register(TestPlugin { id: "high".to_string(), priority: 10 });
-    registry.register(TestPlugin { id: "mid".to_string(), priority: 50 });
+    registry.register(TestPlugin {
+        id: "low".to_string(),
+        priority: 100,
+    });
+    registry.register(TestPlugin {
+        id: "high".to_string(),
+        priority: 10,
+    });
+    registry.register(TestPlugin {
+        id: "mid".to_string(),
+        priority: 50,
+    });
 
     // Should be ordered by priority: high (10), mid (50), low (100)
     let ids: Vec<String> = registry.plugins().iter().map(|p| p.id()).collect();
@@ -49,7 +58,7 @@ async fn test_plugin_priority_ordering() {
 #[tokio::test]
 async fn test_run_context_data_storage() {
     use std::sync::Arc;
-    use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore};
+    use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore, Session};
     use vol_llm_tool::ToolRegistry;
 
     let (ctx, _rx) = RunContext::new(

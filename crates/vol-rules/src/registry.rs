@@ -1,9 +1,9 @@
 //! Rule registry for dynamic rule management.
 
-use vol_core::{RuleProcessor, MonitoringEvent, Alert, EventType};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use vol_core::{Alert, EventType, MonitoringEvent, RuleProcessor};
 
 /// Registry for managing rules dynamically
 pub struct RuleRegistry {
@@ -31,9 +31,13 @@ impl RuleRegistry {
     }
 
     /// Get all rules interested in a specific event type
-    pub async fn get_interested_rules(&self, event_type: &EventType) -> Vec<Box<dyn RuleProcessor>> {
+    pub async fn get_interested_rules(
+        &self,
+        event_type: &EventType,
+    ) -> Vec<Box<dyn RuleProcessor>> {
         let rules = self.rules.read().await;
-        rules.values()
+        rules
+            .values()
             .filter(|r| r.interests().contains(event_type))
             .map(|r| r.clone_box_rule())
             .collect()

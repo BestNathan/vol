@@ -1,23 +1,23 @@
 //! vol-monitor: Main binary using channel-based engine.
 
-mod state;
 mod registry;
+mod state;
 mod tracing_setup;
 
 use anyhow::Result;
 use tracing::{info, warn};
 
 use vol_config::{Config, DataSourceConfig, NotificationConfig, RuleConfig};
-use vol_engine::{MonitoringEngineBuilder, EngineConfig};
-use vol_datasource::{VolatilityDataSource, PortfolioDataSource};
-use vol_notification::{StdoutNotification, FeishuNotification};
-use vol_rules::{AbsoluteIvRule, RateChangeRule, TermStructureRule, SkewRule, PortfolioRule};
-use vol_config::{TermStructureConfig, SkewConfig, FeishuConfig};
-use vol_llm_provider::LLMProviderRegistry;
+use vol_config::{FeishuConfig, SkewConfig, TermStructureConfig};
+use vol_datasource::{PortfolioDataSource, VolatilityDataSource};
+use vol_engine::{EngineConfig, MonitoringEngineBuilder};
 use vol_llm_agents::{AdviceAgent, AdviceAgentConfig};
-use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
-use vol_tdengine::{TdengineClient, TdengineConfig};
+use vol_llm_provider::LLMProviderRegistry;
+use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
 use vol_llm_tool::ToolRegistry;
+use vol_notification::{FeishuNotification, StdoutNotification};
+use vol_rules::{AbsoluteIvRule, PortfolioRule, RateChangeRule, SkewRule, TermStructureRule};
+use vol_tdengine::{TdengineClient, TdengineConfig};
 
 /// Parse command line arguments
 fn parse_args() -> Option<String> {
@@ -88,7 +88,10 @@ async fn main() -> Result<()> {
 
     // Initialize LLM provider registry if providers are configured
     let llm_registry: Option<LLMProviderRegistry> = if !config.llm_providers.is_empty() {
-        info!("Initializing LLM providers: {} configured", config.llm_providers.len());
+        info!(
+            "Initializing LLM providers: {} configured",
+            config.llm_providers.len()
+        );
         match LLMProviderRegistry::from_configs(&config.llm_providers) {
             Ok(registry) => {
                 info!("Available LLM providers: {:?}", registry.ids());
@@ -96,10 +99,15 @@ async fn main() -> Result<()> {
                 // Verify agent_advice provider if configured
                 if config.agent_advice.enabled {
                     if registry.contains(&config.agent_advice.llm_provider_id) {
-                        info!("AgentAdvice will use provider: {}", config.agent_advice.llm_provider_id);
+                        info!(
+                            "AgentAdvice will use provider: {}",
+                            config.agent_advice.llm_provider_id
+                        );
                     } else {
-                        warn!("AgentAdvice provider '{}' not found in configured providers",
-                              config.agent_advice.llm_provider_id);
+                        warn!(
+                            "AgentAdvice provider '{}' not found in configured providers",
+                            config.agent_advice.llm_provider_id
+                        );
                     }
                 }
 
@@ -126,7 +134,10 @@ async fn main() -> Result<()> {
     tools.register(IndexPriceTool::new(Some(tdengine_config.clone())));
     tools.register(OptionsTool::new(Some(tdengine_config.clone())));
     tools.register(RvTool::new(Some(tdengine_config.clone())));
-    info!("Tool registry initialized with {} tools", tools.tool_names().len());
+    info!(
+        "Tool registry initialized with {} tools",
+        tools.tool_names().len()
+    );
 
     // Initialize Feishu notification for AI advice using environment variables
     let feishu_config = FeishuConfig {
@@ -135,17 +146,17 @@ async fn main() -> Result<()> {
         receive_id: std::env::var("FEISHU_RECEIVE_ID").ok(),
         message_template: "{tenor} {alert_type} {symbol} | IV={value}".to_string(),
     };
-    let feishu = FeishuNotification::new(feishu_config)
-        .unwrap_or_else(|e| {
-            warn!("Failed to initialize Feishu: {}", e);
-            // Create dummy config for fallback
-            FeishuNotification::new(FeishuConfig {
-                app_id: Some("dummy".to_string()),
-                app_secret: Some("dummy".to_string()),
-                receive_id: Some("oc_dummy".to_string()),
-                message_template: "dummy".to_string(),
-            }).unwrap()
-        });
+    let feishu = FeishuNotification::new(feishu_config).unwrap_or_else(|e| {
+        warn!("Failed to initialize Feishu: {}", e);
+        // Create dummy config for fallback
+        FeishuNotification::new(FeishuConfig {
+            app_id: Some("dummy".to_string()),
+            app_secret: Some("dummy".to_string()),
+            receive_id: Some("oc_dummy".to_string()),
+            message_template: "dummy".to_string(),
+        })
+        .unwrap()
+    });
     info!("Feishu notification initialized");
 
     // Create AdviceAgent (only if LLM providers are configured)
@@ -175,15 +186,17 @@ async fn main() -> Result<()> {
     };
 
     // Build engine
-    let mut builder = MonitoringEngineBuilder::new()
-        .with_config(engine_config);
+    let mut builder = MonitoringEngineBuilder::new().with_config(engine_config);
 
     // Add datasources
     for ds_config in &config.datasources {
         match ds_config {
             DataSourceConfig::Volatility(vol_cfg) => {
                 // Get Deribit client config
-                let deribit_config = config.clients.deribit.clone()
+                let deribit_config = config
+                    .clients
+                    .deribit
+                    .clone()
                     .expect("VolatilityDataSource requires [clients.deribit] configuration");
 
                 let ds = VolatilityDataSource::from_config(
@@ -193,20 +206,26 @@ async fn main() -> Result<()> {
                 );
 
                 builder = builder.with_datasource(Box::new(ds));
-                info!("Added datasource: {} (type: volatility, symbols: {:?})", vol_cfg.id, vol_cfg.symbols);
+                info!(
+                    "Added datasource: {} (type: volatility, symbols: {:?})",
+                    vol_cfg.id, vol_cfg.symbols
+                );
             }
             DataSourceConfig::Portfolio(portfolio_cfg) => {
                 // Get Deribit client config
-                let deribit_config = config.clients.deribit.clone()
+                let deribit_config = config
+                    .clients
+                    .deribit
+                    .clone()
                     .expect("PortfolioDataSource requires [clients.deribit] configuration");
 
-                let ds = PortfolioDataSource::from_config(
-                    deribit_config,
-                    portfolio_cfg.clone(),
-                );
+                let ds = PortfolioDataSource::from_config(deribit_config, portfolio_cfg.clone());
 
                 builder = builder.with_datasource(Box::new(ds));
-                info!("Added datasource: {} (type: portfolio, currencies: {:?})", portfolio_cfg.id, portfolio_cfg.currencies);
+                info!(
+                    "Added datasource: {} (type: portfolio, currencies: {:?})",
+                    portfolio_cfg.id, portfolio_cfg.currencies
+                );
             }
         }
     }
@@ -264,12 +283,18 @@ async fn main() -> Result<()> {
             RuleConfig::AbsoluteIv(abs_cfg) => {
                 let rule = AbsoluteIvRule::new(abs_cfg.clone());
                 builder = builder.with_rule(Box::new(rule));
-                info!("Added rule: {} (type: absolute-iv, symbol: {})", abs_cfg.id, abs_cfg.symbol);
+                info!(
+                    "Added rule: {} (type: absolute-iv, symbol: {})",
+                    abs_cfg.id, abs_cfg.symbol
+                );
             }
             RuleConfig::RateChange(rate_cfg) => {
                 let rule = RateChangeRule::new(rate_cfg.clone());
                 builder = builder.with_rule(Box::new(rule));
-                info!("Added rule: {} (type: rate-change, symbol: {})", rate_cfg.id, rate_cfg.symbol);
+                info!(
+                    "Added rule: {} (type: rate-change, symbol: {})",
+                    rate_cfg.id, rate_cfg.symbol
+                );
             }
             RuleConfig::TermStructure(term_cfg) => {
                 let config = TermStructureConfig {
@@ -300,9 +325,11 @@ async fn main() -> Result<()> {
                 );
 
                 builder = builder.with_rule(Box::new(rule));
-                info!("Added portfolio rule: {} (metrics: {})",
+                info!(
+                    "Added portfolio rule: {} (metrics: {})",
                     portfolio_cfg.id,
-                    portfolio_cfg.metrics.iter().filter(|m| m.enabled()).count());
+                    portfolio_cfg.metrics.iter().filter(|m| m.enabled()).count()
+                );
             }
             RuleConfig::MarginRatio(_) => {
                 warn!("MarginRatio rule not yet implemented");
@@ -319,7 +346,10 @@ async fn main() -> Result<()> {
     info!("Configuration loaded:");
     info!("  Datasources: {}", config.datasources.len());
     info!("  Notifications: {}", config.notifications.len());
-    info!("  Rules: {}", config.rules.iter().filter(|r| r.enabled()).count());
+    info!(
+        "  Rules: {}",
+        config.rules.iter().filter(|r| r.enabled()).count()
+    );
     info!("");
 
     // Run engine (runs until shutdown)
@@ -340,9 +370,9 @@ fn create_default_config() -> Config {
             channel_buffer_size: 1000,
             alert_cooldown_secs: 300,
             tenor_cooldowns: vol_config::TenorCooldownsConfig {
-                short_secs: Some(600),    // 10 minutes
-                medium_secs: Some(3600),  // 1 hour
-                long_secs: Some(14400),   // 4 hours
+                short_secs: Some(600),   // 10 minutes
+                medium_secs: Some(3600), // 1 hour
+                long_secs: Some(14400),  // 4 hours
             },
         },
         clients: vol_config::ClientConfigs::default(),

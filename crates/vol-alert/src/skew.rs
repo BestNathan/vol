@@ -1,7 +1,7 @@
 //! Skew alert handler.
 
-use vol_core::{AlertHandler, Alert, AlertAction, VolatilityData, Result};
 use vol_config::SkewConfig;
+use vol_core::{Alert, AlertAction, AlertHandler, Result, VolatilityData};
 
 /// Alert handler for skew divergence (put IV vs call IV)
 pub struct SkewHandler {

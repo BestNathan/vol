@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use crate::models::VolatilityData;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Market data event types
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

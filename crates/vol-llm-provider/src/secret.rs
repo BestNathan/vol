@@ -95,13 +95,11 @@ impl Secret {
     pub fn resolve(&self) -> Result<String, LLMError> {
         match self {
             Secret::Literal(s) => Ok(s.clone()),
-            Secret::Env { env, default } => {
-                std::env::var(env).or_else(|_| {
-                    default.clone().ok_or_else(|| {
-                        LLMError::Auth(format!("Environment variable '{}' not set", env))
-                    })
+            Secret::Env { env, default } => std::env::var(env).or_else(|_| {
+                default.clone().ok_or_else(|| {
+                    LLMError::Auth(format!("Environment variable '{}' not set", env))
                 })
-            }
+            }),
         }
     }
 }
@@ -150,7 +148,9 @@ mod tests {
     fn test_deserialize_env_var_reference() {
         // Test ${VAR_NAME} pattern - need to parse as part of a TOML struct
         #[derive(Deserialize)]
-        struct Wrapper { key: Secret }
+        struct Wrapper {
+            key: Secret,
+        }
 
         let wrapper: Wrapper = toml::from_str(r#"key = "${TEST_VAR}""#).unwrap();
         match wrapper.key {
@@ -166,7 +166,9 @@ mod tests {
     fn test_deserialize_env_var_with_default() {
         // Test ${VAR_NAME:default} pattern
         #[derive(Deserialize)]
-        struct Wrapper { key: Secret }
+        struct Wrapper {
+            key: Secret,
+        }
 
         let wrapper: Wrapper = toml::from_str(r#"key = "${TEST_VAR:default_value}""#).unwrap();
         match wrapper.key {
@@ -182,7 +184,9 @@ mod tests {
     fn test_deserialize_literal_value() {
         // Test plain literal value
         #[derive(Deserialize)]
-        struct Wrapper { key: Secret }
+        struct Wrapper {
+            key: Secret,
+        }
 
         let wrapper: Wrapper = toml::from_str(r#"key = "my-literal-key""#).unwrap();
         match wrapper.key {
@@ -198,7 +202,9 @@ mod tests {
         std::env::set_var("DESER_TEST", "resolved-value");
 
         #[derive(Deserialize)]
-        struct Wrapper { key: Secret }
+        struct Wrapper {
+            key: Secret,
+        }
 
         let wrapper: Wrapper = toml::from_str(r#"key = "${DESER_TEST}""#).unwrap();
         assert_eq!(wrapper.key.resolve().unwrap(), "resolved-value");

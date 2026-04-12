@@ -22,12 +22,12 @@ impl ApprovalChannel for CliApprovalChannel {
         println!("════════════════════════════════════════");
         println!("[A]pprove / [R]eject / [S]top");
         print!("Your choice: ");
-        io::stdout().flush().map_err(|e| ApprovalError::Transport(e.to_string()))?;
+        io::stdout()
+            .flush()
+            .map_err(|e| ApprovalError::Transport(e.to_string()))?;
 
         if let Some(timeout_dur) = timeout {
-            let result = tokio::time::timeout(timeout_dur, async {
-                read_line_async().await
-            }).await;
+            let result = tokio::time::timeout(timeout_dur, async { read_line_async().await }).await;
 
             match result {
                 Ok(Ok(input)) => Ok(parse_approval_input(&input)),
@@ -35,7 +35,8 @@ impl ApprovalChannel for CliApprovalChannel {
                 Err(_) => Ok(None), // Timeout
             }
         } else {
-            let input = read_line_async().await
+            let input = read_line_async()
+                .await
                 .map_err(|e| ApprovalError::Transport(e.to_string()))?;
             Ok(parse_approval_input(&input))
         }

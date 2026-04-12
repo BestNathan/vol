@@ -54,7 +54,10 @@ mod tests {
             .with_metadata("source", "knowledge_base")
             .with_metadata("category", "finance");
 
-        assert_eq!(doc.metadata.get("source"), Some(&"knowledge_base".to_string()));
+        assert_eq!(
+            doc.metadata.get("source"),
+            Some(&"knowledge_base".to_string())
+        );
         assert_eq!(doc.metadata.get("category"), Some(&"finance".to_string()));
     }
 

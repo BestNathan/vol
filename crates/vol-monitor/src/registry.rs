@@ -1,6 +1,6 @@
 //! Plugin registry for managing handlers.
 
-use vol_core::{RuleProcessor, NotificationHandler};
+use vol_core::{NotificationHandler, RuleProcessor};
 
 /// Registry for rule processors
 #[allow(dead_code)]
@@ -11,9 +11,7 @@ pub struct RuleRegistry {
 #[allow(dead_code)]
 impl RuleRegistry {
     pub fn new() -> Self {
-        Self {
-            rules: Vec::new(),
-        }
+        Self { rules: Vec::new() }
     }
 
     pub fn register(&mut self, rule: Box<dyn RuleProcessor>) {

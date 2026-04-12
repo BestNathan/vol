@@ -1,7 +1,7 @@
 //! LLM Client trait.
 
+use crate::{ConversationRequest, ConversationResponse, LLMProvider, Result, StreamReceiver};
 use async_trait::async_trait;
-use crate::{LLMProvider, ConversationRequest, ConversationResponse, StreamReceiver, Result};
 
 /// Supported parameter
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

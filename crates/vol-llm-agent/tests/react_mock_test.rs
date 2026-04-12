@@ -4,14 +4,14 @@
 //!
 //! This test verifies the ReAct Agent streaming workflow using a simple mock.
 
-use vol_llm_agent::{ReActAgent, AgentStreamEvent};
-use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision};
-use vol_llm_agent::react::PluginContext;
-use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
-use vol_llm_core::{LLMClient, ConversationRequest, ConversationResponse, LLMProvider};
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision};
+use vol_llm_agent::react::PluginContext;
+use vol_llm_agent::{AgentStreamEvent, ReActAgent};
+use vol_llm_core::{ConversationRequest, ConversationResponse, LLMClient, LLMProvider};
+use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
 
 /// Simple mock that returns tool call then final answer
 struct SimpleMock {
@@ -40,11 +40,17 @@ impl LLMClient for SimpleMock {
         &[]
     }
 
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
         unimplemented!("Use converse_stream instead")
     }
 
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
+    async fn converse_stream(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
         use tokio::sync::mpsc;
         use vol_llm_core::{StreamEvent, StreamEventData};
 
@@ -54,31 +60,37 @@ impl LLMClient for SimpleMock {
         tokio::spawn(async move {
             if count == 0 {
                 // First call: return tool call
-                let _ = tx.send(Ok(StreamEvent {
-                    id: "event_1".to_string(),
-                    data: StreamEventData::ToolCallComplete {
-                        tool_call: vol_llm_core::ToolCall {
-                            id: "call_1".to_string(),
-                            name: "index_price".to_string(),
-                            arguments: r#"{"instrument": "btc_usd", "limit": 1}"#.to_string(),
-                            r#type: "function".to_string(),
+                let _ = tx
+                    .send(Ok(StreamEvent {
+                        id: "event_1".to_string(),
+                        data: StreamEventData::ToolCallComplete {
+                            tool_call: vol_llm_core::ToolCall {
+                                id: "call_1".to_string(),
+                                name: "index_price".to_string(),
+                                arguments: r#"{"instrument": "btc_usd", "limit": 1}"#.to_string(),
+                                r#type: "function".to_string(),
+                            },
                         },
-                    },
-                })).await;
-                let _ = tx.send(Ok(StreamEvent {
-                    id: "event_2".to_string(),
-                    data: StreamEventData::ContentComplete {
-                        content: "Let me check the market data.".to_string(),
-                    },
-                })).await;
+                    }))
+                    .await;
+                let _ = tx
+                    .send(Ok(StreamEvent {
+                        id: "event_2".to_string(),
+                        data: StreamEventData::ContentComplete {
+                            content: "Let me check the market data.".to_string(),
+                        },
+                    }))
+                    .await;
             } else {
                 // Second call: return final answer
-                let _ = tx.send(Ok(StreamEvent {
-                    id: "event_3".to_string(),
-                    data: StreamEventData::ContentComplete {
-                        content: "The BTC price is $69,000.".to_string(),
-                    },
-                })).await;
+                let _ = tx
+                    .send(Ok(StreamEvent {
+                        id: "event_3".to_string(),
+                        data: StreamEventData::ContentComplete {
+                            content: "The BTC price is $69,000.".to_string(),
+                        },
+                    }))
+                    .await;
             }
         });
 
@@ -113,7 +125,11 @@ async fn test_agent_executes_full_react_cycle() {
             100
         }
 
-        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
+        async fn intercept(
+            &self,
+            _event: &AgentStreamEvent,
+            _ctx: &PluginContext,
+        ) -> PluginDecision {
             PluginDecision::Continue
         }
 
@@ -124,7 +140,9 @@ async fn test_agent_executes_full_react_cycle() {
         }
     }
 
-    let tool_counter = ToolCallCounter { count: Arc::new(AtomicUsize::new(0)) };
+    let tool_counter = ToolCallCounter {
+        count: Arc::new(AtomicUsize::new(0)),
+    };
 
     let mock_llm = SimpleMock::new();
 
@@ -141,7 +159,6 @@ async fn test_agent_executes_full_react_cycle() {
         .build()
         .unwrap();
 
-    
     agent.run("What is the BTC price?").await.unwrap();
 
     // Verify tool was called via plugin counter
@@ -178,11 +195,17 @@ async fn test_agent_max_iterations() {
             &[]
         }
 
-        async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+        async fn converse(
+            &self,
+            _request: ConversationRequest,
+        ) -> vol_llm_core::Result<ConversationResponse> {
             unimplemented!("Use converse_stream instead")
         }
 
-        async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
+        async fn converse_stream(
+            &self,
+            _request: ConversationRequest,
+        ) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
             use tokio::sync::mpsc;
             use vol_llm_core::{StreamEvent, StreamEventData};
 
@@ -192,17 +215,19 @@ async fn test_agent_max_iterations() {
 
             tokio::spawn(async move {
                 // Always return tool call
-                let _ = tx.send(Ok(StreamEvent {
-                    id: "event_1".to_string(),
-                    data: StreamEventData::ToolCallComplete {
-                        tool_call: vol_llm_core::ToolCall {
-                            id: "call_loop".to_string(),
-                            name: "index_price".to_string(),
-                            arguments: r#"{"instrument": "btc_usd", "limit": 1}"#.to_string(),
-                            r#type: "function".to_string(),
+                let _ = tx
+                    .send(Ok(StreamEvent {
+                        id: "event_1".to_string(),
+                        data: StreamEventData::ToolCallComplete {
+                            tool_call: vol_llm_core::ToolCall {
+                                id: "call_loop".to_string(),
+                                name: "index_price".to_string(),
+                                arguments: r#"{"instrument": "btc_usd", "limit": 1}"#.to_string(),
+                                r#type: "function".to_string(),
+                            },
                         },
-                    },
-                })).await;
+                    }))
+                    .await;
             });
 
             Ok(vol_llm_core::StreamReceiver::new(rx))
@@ -222,8 +247,6 @@ async fn test_agent_max_iterations() {
         .with_verbose(false)
         .build()
         .unwrap();
-
-    
 
     // Agent should return MaxIterationsReached error when max_iterations is exceeded
     let result = agent.run("Keep querying...").await;

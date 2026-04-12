@@ -1,7 +1,7 @@
 //! Stdout notification handler for testing.
 
-use vol_core::{NotificationHandler, Alert, Result};
 use tracing::{info, info_span};
+use vol_core::{Alert, NotificationHandler, Result};
 
 /// Stdout notification handler - prints alerts to console
 #[derive(Clone)]
@@ -52,7 +52,12 @@ impl NotificationHandler for StdoutNotification {
             "notification sent to stdout"
         );
 
-        let underlying = alert.symbol.split('-').next().unwrap_or("BTC").to_uppercase();
+        let underlying = alert
+            .symbol
+            .split('-')
+            .next()
+            .unwrap_or("BTC")
+            .to_uppercase();
         let message = format!(
             "[ALERT] {} | {} | {} | IV: {:.1}% | 指数：{:.2} | DTE: {}天 | {} | 价格：{:.4} {} ({:.2} USD)",
             alert.tenor,

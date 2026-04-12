@@ -1,10 +1,10 @@
 //! RAG Agent implementation.
 
-use std::sync::Arc;
-use vol_llm_core::{LLMClient, Message, ConversationRequest};
-use vol_llm_core::Result;
 use super::{Document, Embedder, EmbeddingStore, RagConfig};
 use crate::prompt_context::PromptContext;
+use std::sync::Arc;
+use vol_llm_core::Result;
+use vol_llm_core::{ConversationRequest, LLMClient, Message};
 
 /// RAG response containing answer and source documents
 pub struct RagResponse {
@@ -84,7 +84,9 @@ impl RagAgent {
         let request = ConversationRequest::with_history(None, messages);
         let response = self.llm.converse(request).await?;
 
-        Ok(response.message.content
+        Ok(response
+            .message
+            .content
             .map(|c| c.as_str().to_string())
             .unwrap_or_default())
     }
@@ -110,7 +112,8 @@ impl RagAgent {
     /// Uses PromptContext to properly separate System and User messages.
     fn build_rag_prompt(&self, query: &str, docs: &[Document]) -> Vec<Message> {
         // Format RAG context from documents
-        let rag_context = docs.iter()
+        let rag_context = docs
+            .iter()
             .map(|d| d.content.as_str())
             .collect::<Vec<_>>()
             .join("\n\n---\n\n");
@@ -119,10 +122,7 @@ impl RagAgent {
         let system_prompt = self.prompt_context.build_system();
         let user_msg = self.prompt_context.build_user(query, Some(&rag_context));
 
-        vec![
-            Message::system(system_prompt),
-            Message::user(user_msg),
-        ]
+        vec![Message::system(system_prompt), Message::user(user_msg)]
     }
 }
 
@@ -150,7 +150,10 @@ mod tests {
             Ok(vec![
                 Document::new("Reference document 1".to_string()).with_score(0.9),
                 Document::new("Reference document 2".to_string()).with_score(0.8),
-            ].into_iter().take(k).collect())
+            ]
+            .into_iter()
+            .take(k)
+            .collect())
         }
 
         async fn insert(&self, _document: Document, _embedding: Vec<f32>) -> Result<()> {
@@ -175,9 +178,14 @@ mod tests {
             &[]
         }
 
-        async fn converse(&self, _request: ConversationRequest) -> Result<vol_llm_core::ConversationResponse> {
+        async fn converse(
+            &self,
+            _request: ConversationRequest,
+        ) -> Result<vol_llm_core::ConversationResponse> {
             Ok(vol_llm_core::ConversationResponse {
-                message: Message::assistant("Based on the references, the answer is...".to_string()),
+                message: Message::assistant(
+                    "Based on the references, the answer is...".to_string(),
+                ),
                 model: "test".to_string(),
                 usage: vol_llm_core::TokenUsage::default(),
                 finish_reason: vol_llm_core::FinishReason::Stop,
@@ -185,7 +193,10 @@ mod tests {
             })
         }
 
-        async fn converse_stream(&self, _request: ConversationRequest) -> Result<vol_llm_core::StreamReceiver> {
+        async fn converse_stream(
+            &self,
+            _request: ConversationRequest,
+        ) -> Result<vol_llm_core::StreamReceiver> {
             unimplemented!()
         }
     }
@@ -210,13 +221,16 @@ mod tests {
 
     #[test]
     fn test_build_rag_prompt_system_user_separation() {
-        use crate::prompt_context::{PromptTemplate, PromptContext, PromptFragment, FragmentType};
-        use vol_llm_core::{MessageRole, MessageContent};
+        use crate::prompt_context::{FragmentType, PromptContext, PromptFragment, PromptTemplate};
+        use vol_llm_core::{MessageContent, MessageRole};
 
         // Create a custom prompt context for RAG
         let template = PromptTemplate::new("rag-test", "你是一名知识助手。");
-        let prompt_context = PromptContext::new(template)
-            .with_fragment(PromptFragment::new("instructions", "请根据参考资料回答问题。", FragmentType::Rules));
+        let prompt_context = PromptContext::new(template).with_fragment(PromptFragment::new(
+            "instructions",
+            "请根据参考资料回答问题。",
+            FragmentType::Rules,
+        ));
 
         let config = RagConfig {
             prompt_context,
@@ -262,8 +276,8 @@ mod tests {
 
     #[test]
     fn test_build_rag_prompt_empty_docs() {
-        use crate::prompt_context::{PromptTemplate, PromptContext};
-        use vol_llm_core::{MessageRole, MessageContent};
+        use crate::prompt_context::{PromptContext, PromptTemplate};
+        use vol_llm_core::{MessageContent, MessageRole};
 
         let template = PromptTemplate::new("rag-test", "You are a helper.");
         let prompt_context = PromptContext::new(template);

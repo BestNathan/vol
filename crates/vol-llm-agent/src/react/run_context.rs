@@ -2,19 +2,19 @@
 //!
 //! Encapsulates all state and resources for a single `run()` invocation.
 
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
-use tokio::sync::{RwLock, broadcast, mpsc, oneshot};
-use std::collections::HashMap;
-use vol_llm_core::Message;
-use vol_llm_core::ToolCall;
-use crate::session::Session;
-use crate::session::SessionMessage;
-use vol_llm_tool::ToolRegistry;
-use super::AgentConfig;
 use super::plugin::PluginDecision;
 use super::state::{ReasoningStep, ToolCallRecord};
 use super::stream::AgentStreamEvent;
+use super::AgentConfig;
+use crate::session::Session;
+use crate::session::SessionMessage;
+use std::collections::HashMap;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
+use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
+use vol_llm_core::Message;
+use vol_llm_core::ToolCall;
+use vol_llm_tool::ToolRegistry;
 use vol_tracing::TracedEvent;
 
 /// PluginContext - Read-only context for plugin hooks.
@@ -91,13 +91,23 @@ impl PluginContext {
 
     /// Get a value from the data store
     pub async fn get<T: for<'de> serde::Deserialize<'de>>(&self, key: &str) -> Option<T> {
-        self.data.read().await.get(key)
+        self.data
+            .read()
+            .await
+            .get(key)
             .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
 
     /// Set a value in the data store
-    pub async fn set<T: serde::Serialize>(&self, key: &str, value: T) -> Result<(), serde_json::Error> {
-        self.data.write().await.insert(key.to_string(), serde_json::to_value(value)?);
+    pub async fn set<T: serde::Serialize>(
+        &self,
+        key: &str,
+        value: T,
+    ) -> Result<(), serde_json::Error> {
+        self.data
+            .write()
+            .await
+            .insert(key.to_string(), serde_json::to_value(value)?);
         Ok(())
     }
 }
@@ -251,7 +261,8 @@ impl RunContext {
         messages.push(Message::system(system_content));
 
         // 2. Historical messages from session (only once)
-        let history = self.session
+        let history = self
+            .session
             .get_messages(self.config.max_history_messages)
             .await
             .unwrap_or_default();
@@ -276,7 +287,8 @@ impl RunContext {
 
     /// Increment the iteration counter
     pub fn next_iteration(&self) {
-        self.iteration.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.iteration
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Add a message to the messages list and sync to session
@@ -300,7 +312,10 @@ impl RunContext {
 
     /// Add a tool call to both current and all_tool_calls lists
     pub async fn add_tool_call(&self, tool_call: ToolCall) {
-        self.current_tool_calls.write().await.push(tool_call.clone());
+        self.current_tool_calls
+            .write()
+            .await
+            .push(tool_call.clone());
         self.all_tool_calls.write().await.push(tool_call);
     }
 
@@ -321,13 +336,23 @@ impl RunContext {
 
     /// Get a value from the data store
     pub async fn get<T: for<'de> serde::Deserialize<'de>>(&self, key: &str) -> Option<T> {
-        self.data.read().await.get(key)
+        self.data
+            .read()
+            .await
+            .get(key)
             .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
 
     /// Set a value in the data store
-    pub async fn set<T: serde::Serialize>(&self, key: &str, value: T) -> Result<(), serde_json::Error> {
-        self.data.write().await.insert(key.to_string(), serde_json::to_value(value)?);
+    pub async fn set<T: serde::Serialize>(
+        &self,
+        key: &str,
+        value: T,
+    ) -> Result<(), serde_json::Error> {
+        self.data
+            .write()
+            .await
+            .insert(key.to_string(), serde_json::to_value(value)?);
         Ok(())
     }
 
@@ -352,19 +377,22 @@ impl RunContext {
     /// If no listener has set up a receiver, this will return an error indicating
     /// the channel is closed. See [`plugin_event_tx`](RunContext::plugin_event_tx)
     /// for the full usage pattern.
-    pub async fn intercept(&self, event: &AgentStreamEvent) -> Result<PluginDecision, crate::AgentError> {
+    pub async fn intercept(
+        &self,
+        event: &AgentStreamEvent,
+    ) -> Result<PluginDecision, crate::AgentError> {
         let (tx, rx) = oneshot::channel();
         let traced_event = TracedEvent::without_span(event.clone());
-        self.plugin_event_tx.send(PluginRequest::Intercept {
-            event: traced_event,
-            tx,
-        }).await.map_err(|e| {
-            crate::AgentError::Context(format!("Plugin channel error: {}", e))
-        })?;
+        self.plugin_event_tx
+            .send(PluginRequest::Intercept {
+                event: traced_event,
+                tx,
+            })
+            .await
+            .map_err(|e| crate::AgentError::Context(format!("Plugin channel error: {}", e)))?;
 
-        rx.await.map_err(|e| {
-            crate::AgentError::Context(format!("Plugin response error: {}", e))
-        })
+        rx.await
+            .map_err(|e| crate::AgentError::Context(format!("Plugin response error: {}", e)))
     }
 
     /// Record a reasoning step
@@ -401,8 +429,8 @@ impl RunContext {
 
     /// Build AgentResponse from collected state
     pub fn finalize(&self) -> super::response::AgentResponse {
-        use futures::executor::block_on;
         use super::response::{AgentResponse, ToolCallRecord as ResponseToolCallRecord};
+        use futures::executor::block_on;
 
         let reasoning_chain = block_on(self.reasoning_chain.read());
         let tool_call_records = block_on(self.tool_call_records.read());
@@ -460,8 +488,8 @@ impl Clone for RunContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session::{InMemorySessionStore, InMemoryMessageStore, SessionMessage};
-    use vol_llm_core::{MessageRole, MessageContent};
+    use crate::session::{InMemoryMessageStore, InMemorySessionStore, SessionMessage};
+    use vol_llm_core::{MessageContent, MessageRole};
 
     fn create_test_context() -> RunContext {
         let (ctx, _rx) = RunContext::new(
@@ -501,7 +529,9 @@ mod tests {
     #[tokio::test]
     async fn test_run_context_messages() {
         let ctx = create_test_context();
-        ctx.add_message(Message::system("test".to_string())).await.unwrap();
+        ctx.add_message(Message::system("test".to_string()))
+            .await
+            .unwrap();
         let msgs = ctx.get_messages().await;
         assert_eq!(msgs.len(), 1);
     }
@@ -565,7 +595,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_init_messages_system_message() {
-        use crate::prompt_context::{PromptTemplate, PromptContext};
+        use crate::prompt_context::{PromptContext, PromptTemplate};
 
         let template = PromptTemplate::new("test", "You are a helpful assistant.");
         let prompt_context = PromptContext::new(template);
@@ -594,12 +624,17 @@ mod tests {
         // First message should be system message
         assert!(messages.len() >= 1);
         assert_eq!(messages[0].role, MessageRole::System);
-        assert!(messages[0].content.as_ref().unwrap().as_str().contains("You are a helpful assistant."));
+        assert!(messages[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("You are a helpful assistant."));
     }
 
     #[tokio::test]
     async fn test_init_messages_history() {
-        use crate::prompt_context::{PromptTemplate, PromptContext};
+        use crate::prompt_context::{PromptContext, PromptTemplate};
 
         let template = PromptTemplate::new("test", "System");
         let prompt_context = PromptContext::new(template);
@@ -640,12 +675,17 @@ mod tests {
         // Should have: system + history + user input = 3 messages
         assert_eq!(messages.len(), 3);
         assert_eq!(messages[1].role, MessageRole::User);
-        assert!(messages[1].content.as_ref().unwrap().as_str().contains("Previous conversation"));
+        assert!(messages[1]
+            .content
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("Previous conversation"));
     }
 
     #[tokio::test]
     async fn test_init_messages_user_input() {
-        use crate::prompt_context::{PromptTemplate, PromptContext};
+        use crate::prompt_context::{PromptContext, PromptTemplate};
 
         let template = PromptTemplate::new("test", "System");
         let prompt_context = PromptContext::new(template);
@@ -675,12 +715,17 @@ mod tests {
         assert!(messages.len() >= 1);
         let last_msg = messages.last().unwrap();
         assert_eq!(last_msg.role, MessageRole::User);
-        assert!(last_msg.content.as_ref().unwrap().as_str().contains("analyze market volatility"));
+        assert!(last_msg
+            .content
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("analyze market volatility"));
     }
 
     #[tokio::test]
     async fn test_init_messages_only_once() {
-        use crate::prompt_context::{PromptTemplate, PromptContext};
+        use crate::prompt_context::{PromptContext, PromptTemplate};
 
         let template = PromptTemplate::new("test", "System");
         let prompt_context = PromptContext::new(template);
@@ -699,10 +744,7 @@ mod tests {
         ));
 
         // Add a historical message
-        let history_msg = SessionMessage::new(
-            "session-1".to_string(),
-            Message::user("History"),
-        );
+        let history_msg = SessionMessage::new("session-1".to_string(), Message::user("History"));
         session.add_message(history_msg).await.unwrap();
 
         let (ctx, _rx) = RunContext::new(
@@ -744,8 +786,10 @@ mod tests {
             AgentConfig::default(),
         );
 
-        ctx.record_reasoning_step("First thought".to_string(), Some(100)).await;
-        ctx.record_reasoning_step("Second thought".to_string(), None).await;
+        ctx.record_reasoning_step("First thought".to_string(), Some(100))
+            .await;
+        ctx.record_reasoning_step("Second thought".to_string(), None)
+            .await;
 
         let chain = ctx.get_reasoning_chain().await;
         assert_eq!(chain.len(), 2);

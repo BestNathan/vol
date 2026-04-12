@@ -1,6 +1,6 @@
 //! PPT 模板单元测试。
 
-use vol_llm_agents::ppt::template::{PptTemplate, TemplateLayout, LayoutType, Position};
+use vol_llm_agents::ppt::template::{LayoutType, Position, PptTemplate, TemplateLayout};
 
 #[test]
 fn test_template_layout_loading() {
@@ -189,8 +189,14 @@ layouts:
     assert_eq!(template.id, "multi_layout");
     assert_eq!(template.layouts.len(), 3);
     assert!(matches!(template.layouts[0].layout_type, LayoutType::Title));
-    assert!(matches!(template.layouts[1].layout_type, LayoutType::Content));
-    assert!(matches!(template.layouts[2].layout_type, LayoutType::TableOfContents));
+    assert!(matches!(
+        template.layouts[1].layout_type,
+        LayoutType::Content
+    ));
+    assert!(matches!(
+        template.layouts[2].layout_type,
+        LayoutType::TableOfContents
+    ));
 }
 
 #[test]
@@ -207,5 +213,8 @@ fn test_template_default_layout() {
     // Check content element
     assert_eq!(default_layout.elements[1].placeholder, "content");
     assert_eq!(default_layout.elements[1].style.font_size, 16);
-    assert_eq!(default_layout.elements[1].style.bullet_style, Some("bullet".to_string()));
+    assert_eq!(
+        default_layout.elements[1].style.bullet_style,
+        Some("bullet".to_string())
+    );
 }

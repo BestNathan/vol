@@ -55,7 +55,9 @@ Return ONLY valid JSON with expanded bullets for each slide."#;
 
 /// 构建需求分析 User Prompt
 pub fn build_analysis_user_prompt(description: &str, context: Option<&str>) -> String {
-    let context_part = context.map(|c| format!("\n\nAdditional context: {}", c)).unwrap_or_default();
+    let context_part = context
+        .map(|c| format!("\n\nAdditional context: {}", c))
+        .unwrap_or_default();
     format!(
         r#"Analyze the following presentation request:
 
@@ -68,9 +70,21 @@ Extract topic, audience, style, and purpose. Return ONLY valid JSON."#,
 
 /// 构建大纲生成 User Prompt
 pub fn build_outline_user_prompt(requirements: &StructuredRequirement) -> String {
-    let audience_part = requirements.audience.as_ref().map(|a| format!("\n- Audience: {}", a)).unwrap_or_default();
-    let style_part = requirements.style.as_ref().map(|s| format!("\n- Style: {}", s)).unwrap_or_default();
-    let purpose_part = requirements.purpose.as_ref().map(|p| format!("\n- Purpose: {}", p)).unwrap_or_default();
+    let audience_part = requirements
+        .audience
+        .as_ref()
+        .map(|a| format!("\n- Audience: {}", a))
+        .unwrap_or_default();
+    let style_part = requirements
+        .style
+        .as_ref()
+        .map(|s| format!("\n- Style: {}", s))
+        .unwrap_or_default();
+    let purpose_part = requirements
+        .purpose
+        .as_ref()
+        .map(|p| format!("\n- Purpose: {}", p))
+        .unwrap_or_default();
 
     format!(
         r#"Create a presentation outline for:

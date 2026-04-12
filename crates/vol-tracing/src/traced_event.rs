@@ -145,7 +145,8 @@ mod tests {
     #[test]
     fn test_with_trace_id_without_span() {
         let custom_trace_id = "custom-trace-def".to_string();
-        let event: TracedEvent<&str> = TracedEvent::with_trace_id("data", None, custom_trace_id.clone());
+        let event: TracedEvent<&str> =
+            TracedEvent::with_trace_id("data", None, custom_trace_id.clone());
 
         assert_eq!(event.trace_id(), &custom_trace_id);
     }

@@ -18,7 +18,7 @@ pub use rule::*;
 pub use tracing::*;
 
 // Re-export legacy types for backwards compatibility
-pub use client::{DeribitClientConfig as DeribitConfig, DeribitAuthConfig};
+pub use client::{DeribitAuthConfig, DeribitClientConfig as DeribitConfig};
 
 /// Agent advice configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -44,10 +44,18 @@ impl Default for AgentAdviceConfig {
     }
 }
 
-fn default_true() -> bool { true }
-fn default_cooldown_secs() -> u64 { 300 }
-fn default_max_per_hour() -> u32 { 20 }
-fn default_provider_id() -> String { "anthropic-main".to_string() }
+fn default_true() -> bool {
+    true
+}
+fn default_cooldown_secs() -> u64 {
+    300
+}
+fn default_max_per_hour() -> u32 {
+    20
+}
+fn default_provider_id() -> String {
+    "anthropic-main".to_string()
+}
 
 /// Tenor-specific cooldown configuration
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -75,9 +83,15 @@ pub struct EngineConfigFile {
     pub tenor_cooldowns: TenorCooldownsConfig,
 }
 
-fn default_30() -> u64 { 30 }
-fn default_1000() -> usize { 1000 }
-fn default_300() -> u64 { 300 }
+fn default_30() -> u64 {
+    30
+}
+fn default_1000() -> usize {
+    1000
+}
+fn default_300() -> u64 {
+    300
+}
 
 impl EngineConfigFile {
     /// Get cooldown period for a specific tenor.
@@ -244,8 +258,9 @@ pub struct StateConfig {
 impl Config {
     /// Load configuration from a TOML file
     pub fn load(path: &str) -> Result<Self, vol_core::VolError> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| vol_core::VolError::Config(format!("Failed to read config file: {}", e)))?;
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            vol_core::VolError::Config(format!("Failed to read config file: {}", e))
+        })?;
 
         toml::from_str(&content)
             .map_err(|e| vol_core::VolError::Config(format!("Failed to parse config: {}", e)))
@@ -276,14 +291,17 @@ mod tests {
     #[test]
     fn test_case_insensitive_symbol_lookup() {
         let mut symbols = std::collections::HashMap::new();
-        symbols.insert("btc".to_string(), SymbolIvConfig {
-            short_threshold: 0.80,
-            medium_threshold: 0.70,
-            long_threshold: 0.60,
-            short_atm_threshold: 0.05,
-            medium_atm_threshold: 0.10,
-            long_atm_threshold: 0.15,
-        });
+        symbols.insert(
+            "btc".to_string(),
+            SymbolIvConfig {
+                short_threshold: 0.80,
+                medium_threshold: 0.70,
+                long_threshold: 0.60,
+                short_atm_threshold: 0.05,
+                medium_atm_threshold: 0.10,
+                long_atm_threshold: 0.15,
+            },
+        );
 
         let config = AbsoluteIvConfig { symbols };
 
@@ -318,7 +336,10 @@ mod tests {
 
         // Env vars should take precedence
         assert_eq!(config.client_id(), Some("env_client_id".to_string()));
-        assert_eq!(config.client_secret(), Some("env_client_secret".to_string()));
+        assert_eq!(
+            config.client_secret(),
+            Some("env_client_secret".to_string())
+        );
 
         // Clean up
         std::env::remove_var("DERIBIT_CLIENT_ID");
@@ -338,7 +359,10 @@ mod tests {
 
         // Should fallback to file values
         assert_eq!(config.client_id(), Some("file_client_id".to_string()));
-        assert_eq!(config.client_secret(), Some("file_client_secret".to_string()));
+        assert_eq!(
+            config.client_secret(),
+            Some("file_client_secret".to_string())
+        );
     }
 
     #[test]
@@ -357,7 +381,10 @@ mod tests {
 
         // Env vars should take precedence over config file
         assert_eq!(config.client_id(), Some("env_client_id".to_string()));
-        assert_eq!(config.client_secret(), Some("env_client_secret".to_string()));
+        assert_eq!(
+            config.client_secret(),
+            Some("env_client_secret".to_string())
+        );
         assert!(config.has_auth());
 
         // Clean up
@@ -381,7 +408,10 @@ mod tests {
 
         // Should fallback to config file values
         assert_eq!(config.client_id(), Some("file_client_id".to_string()));
-        assert_eq!(config.client_secret(), Some("file_client_secret".to_string()));
+        assert_eq!(
+            config.client_secret(),
+            Some("file_client_secret".to_string())
+        );
         assert!(config.has_auth());
     }
 
@@ -415,7 +445,10 @@ mod tests {
 
         // Should get credentials from environment
         assert_eq!(config.client_id(), Some("env_client_id".to_string()));
-        assert_eq!(config.client_secret(), Some("env_client_secret".to_string()));
+        assert_eq!(
+            config.client_secret(),
+            Some("env_client_secret".to_string())
+        );
         assert!(config.has_auth());
 
         // Clean up

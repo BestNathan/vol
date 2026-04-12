@@ -2,8 +2,8 @@
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
-use vol_core::{AlertHandler, Alert, AlertType, AlertAction, VolatilityData, Result};
 use vol_config::RateOfChangeConfig;
+use vol_core::{Alert, AlertAction, AlertHandler, AlertType, Result, VolatilityData};
 
 /// Alert handler for IV rate of change
 pub struct RateChangeHandler {
@@ -52,7 +52,9 @@ impl AlertHandler for RateChangeHandler {
 
     fn evaluate(&self, data: &VolatilityData) -> Option<Alert> {
         let mut buffers = self.buffers.lock().ok()?;
-        let buffer = buffers.entry(data.symbol.clone()).or_insert_with(VecDeque::new);
+        let buffer = buffers
+            .entry(data.symbol.clone())
+            .or_insert_with(VecDeque::new);
 
         // Add new data point
         buffer.push_back((data.timestamp, data.iv));
@@ -69,14 +71,19 @@ impl AlertHandler for RateChangeHandler {
         if let Some(change) = self.calculate_rate_change(buffer, 3_600_000) {
             if change.abs() >= self.config.window_1h_threshold {
                 return Some(Alert::new(
-                    AlertType::RateChange { window_hours: 1, change_pct: change },
+                    AlertType::RateChange {
+                        window_hours: 1,
+                        change_pct: change,
+                    },
                     tenor,
                     data.symbol.clone(),
                     data.iv,
                     format!(
                         "{} {} IV changed {:.1}% in 1h (threshold: {:.1}%)",
-                        data.symbol, tenor,
-                        change * 100.0, self.config.window_1h_threshold * 100.0
+                        data.symbol,
+                        tenor,
+                        change * 100.0,
+                        self.config.window_1h_threshold * 100.0
                     ),
                     data.timestamp,
                     data.source.clone(),
@@ -84,7 +91,10 @@ impl AlertHandler for RateChangeHandler {
                     data.dte,
                     data.option_type,
                     data.moneyness(),
-                    data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    data.extra
+                        .get("mark_price_coin")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0),
                     String::new(), // trace_id - set by engine layer
                 ));
             }
@@ -94,14 +104,19 @@ impl AlertHandler for RateChangeHandler {
         if let Some(change) = self.calculate_rate_change(buffer, 14_400_000) {
             if change.abs() >= self.config.window_4h_threshold {
                 return Some(Alert::new(
-                    AlertType::RateChange { window_hours: 4, change_pct: change },
+                    AlertType::RateChange {
+                        window_hours: 4,
+                        change_pct: change,
+                    },
                     tenor,
                     data.symbol.clone(),
                     data.iv,
                     format!(
                         "{} {} IV changed {:.1}% in 4h (threshold: {:.1}%)",
-                        data.symbol, tenor,
-                        change * 100.0, self.config.window_4h_threshold * 100.0
+                        data.symbol,
+                        tenor,
+                        change * 100.0,
+                        self.config.window_4h_threshold * 100.0
                     ),
                     data.timestamp,
                     data.source.clone(),
@@ -109,7 +124,10 @@ impl AlertHandler for RateChangeHandler {
                     data.dte,
                     data.option_type,
                     data.moneyness(),
-                    data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    data.extra
+                        .get("mark_price_coin")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0),
                     String::new(), // trace_id - set by engine layer
                 ));
             }
@@ -119,14 +137,19 @@ impl AlertHandler for RateChangeHandler {
         if let Some(change) = self.calculate_rate_change(buffer, 86_400_000) {
             if change.abs() >= self.config.window_24h_threshold {
                 return Some(Alert::new(
-                    AlertType::RateChange { window_hours: 24, change_pct: change },
+                    AlertType::RateChange {
+                        window_hours: 24,
+                        change_pct: change,
+                    },
                     tenor,
                     data.symbol.clone(),
                     data.iv,
                     format!(
                         "{} {} IV changed {:.1}% in 24h (threshold: {:.1}%)",
-                        data.symbol, tenor,
-                        change * 100.0, self.config.window_24h_threshold * 100.0
+                        data.symbol,
+                        tenor,
+                        change * 100.0,
+                        self.config.window_24h_threshold * 100.0
                     ),
                     data.timestamp,
                     data.source.clone(),
@@ -134,7 +157,10 @@ impl AlertHandler for RateChangeHandler {
                     data.dte,
                     data.option_type,
                     data.moneyness(),
-                    data.extra.get("mark_price_coin").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    data.extra
+                        .get("mark_price_coin")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0),
                     String::new(), // trace_id - set by engine layer
                 ));
             }

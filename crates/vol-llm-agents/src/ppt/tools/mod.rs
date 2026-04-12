@@ -1,11 +1,11 @@
 //! PPT Agent 工具集。
 
-pub mod outline;
 pub mod content;
-pub mod template;
+pub mod outline;
 pub mod renderer;
+pub mod template;
 
-pub use outline::{OutlineGeneratorTool, OutlineError};
-pub use content::{ContentGeneratorTool, ContentError};
-pub use template::TemplateMatcherTool;
+pub use content::{ContentError, ContentGeneratorTool};
+pub use outline::{OutlineError, OutlineGeneratorTool};
 pub use renderer::PptxRendererTool;
+pub use template::TemplateMatcherTool;

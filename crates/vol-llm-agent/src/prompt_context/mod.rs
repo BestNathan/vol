@@ -15,12 +15,12 @@
 //! - [`PromptContext`] - Context manager for building prompts
 //! - [`MessageAssembler`] - Message builder from prompt context
 
+pub mod assembler;
 pub mod context;
 pub mod fragment;
 pub mod template;
-pub mod assembler;
 
+pub use assembler::MessageAssembler;
 pub use context::PromptContext;
 pub use fragment::{FragmentType, PromptFragment};
 pub use template::PromptTemplate;
-pub use assembler::MessageAssembler;

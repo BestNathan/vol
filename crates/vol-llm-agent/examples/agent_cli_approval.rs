@@ -9,14 +9,17 @@
 //! The agent will request approval before executing tool calls.
 //! User can approve or reject each tool execution via CLI prompt.
 
-use vol_llm_agent::react::*;
-use vol_llm_agent::react::hitl::*;
-use vol_llm_agent::plugins::CliApprovalChannel;
-use vol_llm_tool::{ToolContext, ExecutableTool, ToolResult, ToolError};
-use vol_llm_core::{LLMClient, ConversationRequest, ConversationResponse, LLMProvider, StreamEvent, StreamEventData, ToolCall};
 use async_trait::async_trait;
-use std::sync::Arc;
 use serde_json::json;
+use std::sync::Arc;
+use vol_llm_agent::plugins::CliApprovalChannel;
+use vol_llm_agent::react::hitl::*;
+use vol_llm_agent::react::*;
+use vol_llm_core::{
+    ConversationRequest, ConversationResponse, LLMClient, LLMProvider, StreamEvent,
+    StreamEventData, ToolCall,
+};
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult};
 
 // ============================================================================
 // Mock Tools for Demo
@@ -43,7 +46,11 @@ impl ExecutableTool for MockBtcPriceTool {
         })
     }
 
-    async fn execute(&self, _args: &serde_json::Value, _context: &ToolContext) -> Result<ToolResult, ToolError> {
+    async fn execute(
+        &self,
+        _args: &serde_json::Value,
+        _context: &ToolContext,
+    ) -> Result<ToolResult, ToolError> {
         // Simulate API call delay
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
@@ -91,7 +98,11 @@ impl ExecutableTool for MockEthVolatilityTool {
         })
     }
 
-    async fn execute(&self, args: &serde_json::Value, _context: &ToolContext) -> Result<ToolResult, ToolError> {
+    async fn execute(
+        &self,
+        args: &serde_json::Value,
+        _context: &ToolContext,
+    ) -> Result<ToolResult, ToolError> {
         let period = args["period"].as_str().unwrap_or("1d");
 
         // Simulate API call delay
@@ -146,53 +157,67 @@ impl LLMClient for MockLlmWithTools {
         &[]
     }
 
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
         unimplemented!("Use converse_stream instead")
     }
 
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
+    async fn converse_stream(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
         use tokio::sync::mpsc;
 
-        let call_count = self.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let call_count = self
+            .call_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let (tx, rx) = mpsc::channel(10);
 
         tokio::spawn(async move {
             if call_count == 0 {
                 // First call - return tool call for BTC price
-                let _ = tx.send(Ok(StreamEvent {
-                    id: "event_1".to_string(),
-                    data: StreamEventData::ToolCallComplete {
-                        tool_call: ToolCall {
-                            id: "call_btc_1".to_string(),
-                            name: "get_btc_price".to_string(),
-                            arguments: "{}".to_string(),
-                            r#type: "function".to_string(),
+                let _ = tx
+                    .send(Ok(StreamEvent {
+                        id: "event_1".to_string(),
+                        data: StreamEventData::ToolCallComplete {
+                            tool_call: ToolCall {
+                                id: "call_btc_1".to_string(),
+                                name: "get_btc_price".to_string(),
+                                arguments: "{}".to_string(),
+                                r#type: "function".to_string(),
+                            },
                         },
-                    },
-                })).await;
+                    }))
+                    .await;
             } else if call_count == 1 {
                 // Second call - return tool call for ETH volatility
-                let _ = tx.send(Ok(StreamEvent {
-                    id: "event_2".to_string(),
-                    data: StreamEventData::ToolCallComplete {
-                        tool_call: ToolCall {
-                            id: "call_eth_1".to_string(),
-                            name: "get_eth_volatility".to_string(),
-                            arguments: r#"{"period":"1d"}"#.to_string(),
-                            r#type: "function".to_string(),
+                let _ = tx
+                    .send(Ok(StreamEvent {
+                        id: "event_2".to_string(),
+                        data: StreamEventData::ToolCallComplete {
+                            tool_call: ToolCall {
+                                id: "call_eth_1".to_string(),
+                                name: "get_eth_volatility".to_string(),
+                                arguments: r#"{"period":"1d"}"#.to_string(),
+                                r#type: "function".to_string(),
+                            },
                         },
-                    },
-                })).await;
+                    }))
+                    .await;
             } else {
                 // Final call - return analysis summary
                 let response = "根据查询结果：\n\n1. **BTC 价格**: $69,420.50 USD，24 小时上涨 +2.5%\n2. **ETH 波动率**: 100.8% (1 天期)，处于历史高位\n\n**分析建议**:\n- ETH IV 超过 100% 表明市场预期波动剧烈\n- 可考虑卖出期权策略获取时间价值\n- 注意风险管理，设置止损位";
 
-                let _ = tx.send(Ok(StreamEvent {
-                    id: "event_3".to_string(),
-                    data: StreamEventData::ContentComplete {
-                        content: response.to_string(),
-                    },
-                })).await;
+                let _ = tx
+                    .send(Ok(StreamEvent {
+                        id: "event_3".to_string(),
+                        data: StreamEventData::ContentComplete {
+                            content: response.to_string(),
+                        },
+                    }))
+                    .await;
             }
         });
 
@@ -259,7 +284,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_system_prompt(
             "你是一个专业的加密货币市场分析师。你有访问市场数据的工具。
             当用户询问价格或波动率时，请使用工具查询数据并提供分析建议。
-            请使用中文回复。".to_string()
+            请使用中文回复。"
+                .to_string(),
         )
         .with_observability_plugin()
         .with_verbose(true)

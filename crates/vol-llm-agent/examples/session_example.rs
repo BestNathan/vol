@@ -3,7 +3,7 @@
 //! Demonstrates how to use Session with ReActAgent.
 
 use std::sync::Arc;
-use vol_llm_agent::session::{Session, InMemorySessionStore, InMemoryMessageStore, SessionMessage};
+use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore, Session, SessionMessage};
 use vol_llm_core::Message;
 
 #[tokio::main]
@@ -16,19 +16,19 @@ async fn main() {
     println!("1. Created InMemorySessionStore and InMemoryMessageStore");
 
     // 2. Create session
-    let session = Arc::new(Session::new(
-        "session-123".to_string(),
-        session_store.clone(),
-        message_store.clone(),
-    ).with_metadata("user_id", "user-456"));
+    let session = Arc::new(
+        Session::new(
+            "session-123".to_string(),
+            session_store.clone(),
+            message_store.clone(),
+        )
+        .with_metadata("user_id", "user-456"),
+    );
     println!("2. Created Session: {}", session.id);
     println!("   Metadata: {:?}", session.metadata);
 
     // 3. Add messages to session
-    let user_msg = SessionMessage::new(
-        session.id.clone(),
-        Message::user("What is the BTC price?"),
-    );
+    let user_msg = SessionMessage::new(session.id.clone(), Message::user("What is the BTC price?"));
     session.add_message(user_msg).await.unwrap();
     println!("3. Added user message to session");
 
@@ -48,10 +48,12 @@ async fn main() {
             Some(vol_llm_core::MessageContent::Text(s)) => s.as_str(),
             _ => "",
         };
-        println!("   Message {}: role={:?}, content={:?}",
+        println!(
+            "   Message {}: role={:?}, content={:?}",
             i + 1,
             msg.message.role,
-            content_str);
+            content_str
+        );
     }
 
     // 6. Clone session for branching

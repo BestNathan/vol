@@ -1,7 +1,7 @@
 //! Term structure alert handler.
 
-use vol_core::{AlertHandler, Alert, AlertAction, VolatilityData, Result};
 use vol_config::TermStructureConfig;
+use vol_core::{Alert, AlertAction, AlertHandler, Result, VolatilityData};
 
 /// Alert handler for term structure anomalies (spread between short and long tenors)
 pub struct TermStructureHandler {

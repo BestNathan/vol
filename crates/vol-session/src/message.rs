@@ -66,10 +66,7 @@ mod tests {
 
     #[test]
     fn test_session_message_creation() {
-        let msg = SessionMessage::new(
-            "session-123".to_string(),
-            Message::user("Hello"),
-        );
+        let msg = SessionMessage::new("session-123".to_string(), Message::user("Hello"));
 
         assert_eq!(msg.session_id, "session-123");
         assert!(msg.parent_id.is_none());
@@ -78,20 +75,16 @@ mod tests {
 
     #[test]
     fn test_session_message_with_parent() {
-        let msg = SessionMessage::new(
-            "session-123".to_string(),
-            Message::user("Reply"),
-        ).with_parent_id("msg-456".to_string());
+        let msg = SessionMessage::new("session-123".to_string(), Message::user("Reply"))
+            .with_parent_id("msg-456".to_string());
 
         assert_eq!(msg.parent_id, Some("msg-456".to_string()));
     }
 
     #[test]
     fn test_session_message_metadata() {
-        let msg = SessionMessage::new(
-            "session-123".to_string(),
-            Message::user("Test"),
-        ).with_metadata("user_id", "user-1");
+        let msg = SessionMessage::new("session-123".to_string(), Message::user("Test"))
+            .with_metadata("user_id", "user-1");
 
         assert_eq!(msg.metadata.get("user_id"), Some(&"user-1".to_string()));
     }

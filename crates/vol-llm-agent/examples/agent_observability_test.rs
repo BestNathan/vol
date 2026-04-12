@@ -13,13 +13,13 @@
 //!
 //! Log files will be written to: logs/agents/market_analyst_agent/
 
-use vol_llm_agent::react::*;
-use vol_llm_provider::LLMConfig;
-use vol_llm_core::LLMProvider;
-use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
-use vol_tdengine::TdengineConfig;
-use std::sync::Arc;
 use std::path::PathBuf;
+use std::sync::Arc;
+use vol_llm_agent::react::*;
+use vol_llm_core::LLMProvider;
+use vol_llm_provider::LLMConfig;
+use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
+use vol_tdengine::TdengineConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -34,12 +34,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Check for required environment variables
-    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
-        .map_err(|_| {
-            eprintln!("Error: ANTHROPIC_AUTH_TOKEN environment variable not set");
-            eprintln!("Please set it: export ANTHROPIC_AUTH_TOKEN=your_token_here");
-            "Missing API token"
-        })?;
+    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").map_err(|_| {
+        eprintln!("Error: ANTHROPIC_AUTH_TOKEN environment variable not set");
+        eprintln!("Please set it: export ANTHROPIC_AUTH_TOKEN=your_token_here");
+        "Missing API token"
+    })?;
 
     println!("Configuration:");
     println!("  ✓ ANTHROPIC_AUTH_TOKEN is set");
@@ -97,7 +96,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             - rv: 查询已实现波动率
 
             当用户询问市场状况时，请使用工具查询相关数据并提供分析建议。
-            请使用中文回复。".to_string()
+            请使用中文回复。"
+                .to_string(),
         )
         .with_observability_plugin()
         .build()?;
@@ -114,7 +114,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Query: {}", query);
     println!();
 
-    
     let result = agent.run(query).await;
 
     println!();
@@ -157,7 +156,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if sessions_path.exists() {
             if let Ok(entries) = std::fs::read_dir(&sessions_path) {
                 let count = entries.count();
-                println!("  ✓ Sessions: {} files in {}", count, sessions_path.display());
+                println!(
+                    "  ✓ Sessions: {} files in {}",
+                    count,
+                    sessions_path.display()
+                );
             }
         }
 

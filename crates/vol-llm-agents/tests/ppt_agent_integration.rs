@@ -15,8 +15,8 @@
 //! cargo test -p vol-llm-agents --test ppt_agent_integration -- --nocapture --ignored
 //! ```
 
-use vol_llm_agents::ppt::{PptAgent, PptAgentConfig, PptInput};
 use std::path::PathBuf;
+use vol_llm_agents::ppt::{PptAgent, PptAgentConfig, PptInput};
 
 /// 获取项目根目录的 ppt/templates 路径
 fn get_template_dir() -> PathBuf {
@@ -57,7 +57,9 @@ async fn test_full_ppt_generation() {
         .with_default_output_dir(PathBuf::from("test_output"));
 
     println!("Creating PPT Agent...");
-    let agent = PptAgent::new(config).await.expect("Failed to create PPT Agent");
+    let agent = PptAgent::new(config)
+        .await
+        .expect("Failed to create PPT Agent");
 
     println!("Generating PPT for: 做一个期权周报，包含 IV 分析、RV 分析、交易建议");
     let input = PptInput::text("做一个期权周报，包含 IV 分析、RV 分析、交易建议");
@@ -73,20 +75,27 @@ async fn test_full_ppt_generation() {
     println!("✓ Output file exists");
 
     // Verify minimum slide count (title + TOC + at least 1 content slide)
-    assert!(result.slide_count >= 3,
+    assert!(
+        result.slide_count >= 3,
         "Should have at least 3 slides (title, TOC, 1 content), got {}",
-        result.slide_count);
+        result.slide_count
+    );
     println!("✓ Slide count is valid: {}", result.slide_count);
 
     // Verify template was matched (business_formal is the default fallback)
-    assert!(!result.template_id.is_empty(), "Template ID should not be empty");
+    assert!(
+        !result.template_id.is_empty(),
+        "Template ID should not be empty"
+    );
     println!("✓ Template matched: {}", result.template_id);
 
     // Verify file size is reasonable (> 1KB for a valid PPTX)
     if let Ok(metadata) = std::fs::metadata(&result.output_path) {
-        assert!(metadata.len() > 1024,
+        assert!(
+            metadata.len() > 1024,
             "PPTX file should be larger than 1KB, got {} bytes",
-            metadata.len());
+            metadata.len()
+        );
         println!("✓ File size is valid: {} bytes", metadata.len());
     }
 

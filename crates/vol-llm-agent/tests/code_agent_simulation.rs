@@ -4,20 +4,19 @@
 //!
 //! This test simulates a real Code Agent calling the LLM API with proper request/response format.
 
-use vol_llm_agent::{ReActAgent, AgentStreamEvent};
-use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision};
-use vol_llm_agent::react::PluginContext;
-use vol_llm_tool::{ToolContext, ToolRegistry};
-use vol_llm_tdengine::{VolatilityIndexTool, IndexPriceTool, OptionsTool, RvTool};
-use vol_llm_core::{
-    LLMClient, Message, ConversationRequest, ConversationResponse,
-    TokenUsage, FinishReason, LLMProvider, StreamEvent, StreamEventData,
-    MessageRole, SupportedParam,
-};
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision};
+use vol_llm_agent::react::PluginContext;
+use vol_llm_agent::{AgentStreamEvent, ReActAgent};
+use vol_llm_core::{
+    ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMProvider, Message,
+    MessageRole, StreamEvent, StreamEventData, SupportedParam, TokenUsage,
+};
+use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
+use vol_llm_tool::{ToolContext, ToolRegistry};
 
 /// Simulates a real Code Agent LLM client that properly handles tool calls
 struct CodeAgentSimulator {
@@ -40,7 +39,8 @@ impl CodeAgentSimulator {
         // First call: analyze user query and decide to use tools
         if count == 0 {
             // Check if user is asking about market data
-            let user_query = request.messages
+            let user_query = request
+                .messages
                 .iter()
                 .find(|m| m.role == MessageRole::User)
                 .and_then(|m| m.content.as_ref())
@@ -77,9 +77,11 @@ impl CodeAgentSimulator {
             }
 
             // Check for price/market/btc/eth queries
-            if query_lower.contains("price") || query_lower.contains("market") ||
-               query_lower.contains("btc") || query_lower.contains("eth") {
-
+            if query_lower.contains("price")
+                || query_lower.contains("market")
+                || query_lower.contains("btc")
+                || query_lower.contains("eth")
+            {
                 // Return tool call for index_price
                 let tool_call = vol_llm_core::ToolCall {
                     id: "toolu_01234567890abcdef".to_string(),
@@ -109,7 +111,8 @@ impl CodeAgentSimulator {
         // Second call: user has tool results, provide final answer
         if count == 1 {
             // Check for tool results in messages
-            let tool_results: Vec<&Message> = request.messages
+            let tool_results: Vec<&Message> = request
+                .messages
                 .iter()
                 .filter(|m| m.role == MessageRole::Tool)
                 .collect();
@@ -124,10 +127,15 @@ impl CodeAgentSimulator {
                 // Check which tool was called based on content
                 let first_content = tool_content.first().map(|s| *s).unwrap_or("");
 
-                let response_text = if first_content.contains("index_price") || first_content.contains("price") || first_content.contains("Index") {
+                let response_text = if first_content.contains("index_price")
+                    || first_content.contains("price")
+                    || first_content.contains("Index")
+                {
                     "Based on the latest market data, BTC is currently trading at approximately $69,000.
                     This price reflects the most recent index price from our data source."
-                } else if first_content.contains("volatility") || first_content.contains("Volatility") {
+                } else if first_content.contains("volatility")
+                    || first_content.contains("Volatility")
+                {
                     "The volatility data shows recent price movements. Based on the historical data,
                     we can observe the volatility trends over the specified time period."
                 } else if first_content.contains("Retrieved") {
@@ -181,13 +189,19 @@ impl LLMClient for CodeAgentSimulator {
         ]
     }
 
-    async fn converse(&self, request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+    async fn converse(
+        &self,
+        request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
         // Simulate API call with realistic response
         // Note: converse_stream is used by the agent, this is just for completeness
         Ok(self.generate_tool_response(&request))
     }
 
-    async fn converse_stream(&self, request: ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
+    async fn converse_stream(
+        &self,
+        request: ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
         // Use the same logic as converse but emit streaming events
         let response = self.generate_tool_response(&request);
         let (tx, rx) = mpsc::channel(10);
@@ -195,21 +209,25 @@ impl LLMClient for CodeAgentSimulator {
         tokio::spawn(async move {
             // Emit content from the response
             if let Some(content) = response.message.content {
-                let _ = tx.send(Ok(StreamEvent {
-                    id: "event_1".to_string(),
-                    data: StreamEventData::ContentComplete {
-                        content: content.as_str().to_string(),
-                    },
-                })).await;
+                let _ = tx
+                    .send(Ok(StreamEvent {
+                        id: "event_1".to_string(),
+                        data: StreamEventData::ContentComplete {
+                            content: content.as_str().to_string(),
+                        },
+                    }))
+                    .await;
             }
 
             // Emit tool calls if present
             if let Some(tool_calls) = response.message.tool_calls {
                 for tool_call in tool_calls {
-                    let _ = tx.send(Ok(StreamEvent {
-                        id: "event_tool".to_string(),
-                        data: StreamEventData::ToolCallComplete { tool_call },
-                    })).await;
+                    let _ = tx
+                        .send(Ok(StreamEvent {
+                            id: "event_tool".to_string(),
+                            data: StreamEventData::ToolCallComplete { tool_call },
+                        }))
+                        .await;
                 }
             }
         });
@@ -246,7 +264,11 @@ async fn test_code_agent_market_data_query() {
             100
         }
 
-        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
+        async fn intercept(
+            &self,
+            _event: &AgentStreamEvent,
+            _ctx: &PluginContext,
+        ) -> PluginDecision {
             PluginDecision::Continue
         }
 
@@ -259,7 +281,9 @@ async fn test_code_agent_market_data_query() {
     }
 
     let tool_calls = Arc::new(tokio::sync::Mutex::new(Vec::new()));
-    let tracker = ToolCallTracker { calls: tool_calls.clone() };
+    let tracker = ToolCallTracker {
+        calls: tool_calls.clone(),
+    };
 
     let agent = ReActAgent::builder()
         .with_llm(Arc::new(mock_llm))
@@ -275,14 +299,17 @@ async fn test_code_agent_market_data_query() {
         .unwrap();
 
     // Test: Query BTC price
-    
+
     agent.run("What is the current BTC price?").await.unwrap();
 
     // Verify tool was called
     let calls = tool_calls.lock().await;
     println!("Tools called: {:?}", *calls);
     assert!(!calls.is_empty(), "Should call at least one tool");
-    assert!(calls.contains(&"index_price".to_string()), "Should call index_price tool");
+    assert!(
+        calls.contains(&"index_price".to_string()),
+        "Should call index_price tool"
+    );
 }
 
 #[tokio::test]
@@ -305,7 +332,7 @@ async fn test_code_agent_volatility_query() {
         .unwrap();
 
     // Test: Query volatility
-    
+
     agent.run("Show me ETH volatility").await.unwrap();
 
     println!("Agent completed successfully");
@@ -331,8 +358,11 @@ async fn test_code_agent_multi_turn_conversation() {
         .unwrap();
 
     // Test: Multi-turn with follow-up
-    
-    agent.run("What is the BTC price and how does it compare to ETH?").await.unwrap();
+
+    agent
+        .run("What is the BTC price and how does it compare to ETH?")
+        .await
+        .unwrap();
 
     println!("Agent completed multi-turn conversation");
 }
@@ -357,7 +387,7 @@ async fn test_code_agent_tool_choice_auto() {
         .unwrap();
 
     // Test: Simple greeting (may not need tools)
-    
+
     agent.run("Hello, can you help me?").await.unwrap();
 
     println!("Agent responded to greeting");
@@ -378,7 +408,11 @@ async fn test_code_agent_tool_definitions() {
 
     println!("Registered tools:");
     for tool in &tools {
-        println!("  - {}: {}", tool.name, tool.description.as_deref().unwrap_or("No description"));
+        println!(
+            "  - {}: {}",
+            tool.name,
+            tool.description.as_deref().unwrap_or("No description")
+        );
         if let Some(params) = &tool.parameters {
             println!("    Parameters: {}", params);
         }

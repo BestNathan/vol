@@ -2,7 +2,7 @@
 
 use std::path::Path;
 use tokio::sync::mpsc;
-use vol_core::{DataSource, HealthStatus, VolError, Result, MonitoringEvent, EventType};
+use vol_core::{DataSource, EventType, HealthStatus, MonitoringEvent, Result, VolError};
 use vol_tracing::TracedEvent;
 
 /// CSV file data source - reads volatility data from a CSV file

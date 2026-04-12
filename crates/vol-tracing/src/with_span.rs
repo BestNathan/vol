@@ -1,5 +1,5 @@
-use tracing::Span;
 use std::clone::Clone;
+use tracing::Span;
 
 /// Wrapper for sending events across channel boundaries with span context.
 ///

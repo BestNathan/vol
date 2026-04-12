@@ -4,15 +4,15 @@
 //!
 //! This test verifies the agent can work with real Anthropic-compatible LLM API.
 
-use vol_llm_agent::ReActAgent;
-use vol_llm_tdengine::{IndexPriceTool};
-use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
-use vol_llm_core::{LLMProvider, LLMClient, ToolDefinition, StreamEvent, StreamEventData};
 use async_trait::async_trait;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::io::Write;
 use chrono::Local;
+use std::io::Write;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use vol_llm_agent::ReActAgent;
+use vol_llm_core::{LLMClient, LLMProvider, StreamEvent, StreamEventData, ToolDefinition};
+use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
+use vol_llm_tdengine::IndexPriceTool;
 
 /// 写入日志到文件
 fn log_to_file(path: &str, content: &str) {
@@ -43,8 +43,8 @@ impl IntegrationMock {
             "https://coding.dashscope.aliyuncs.com/apps/anthropic",
         );
 
-        let provider = AnthropicProvider::new(&config)
-            .expect("Failed to create Anthropic provider");
+        let provider =
+            AnthropicProvider::new(&config).expect("Failed to create Anthropic provider");
 
         Self {
             provider: Arc::new(provider),
@@ -73,11 +73,17 @@ impl LLMClient for IntegrationMock {
         ]
     }
 
-    async fn converse(&self, _request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
+    async fn converse(
+        &self,
+        _request: vol_llm_core::ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
         unimplemented!("Use converse_stream instead")
     }
 
-    async fn converse_stream(&self, request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
+    async fn converse_stream(
+        &self,
+        request: vol_llm_core::ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
         use tokio::sync::mpsc;
 
         let count = self.call_count.fetch_add(1, Ordering::SeqCst);
@@ -205,13 +211,12 @@ async fn test_agent_with_real_anthropic_api() {
         .with_system_prompt(
             "You are a helpful cryptocurrency market assistant. \
             Use the market_data tool to get current prices before answering questions. \
-            Always provide clear, concise responses.".to_string()
+            Always provide clear, concise responses."
+                .to_string(),
         )
         .with_verbose(true)
         .build()
         .unwrap();
-
-    
 
     println!("\n--- Running agent with user input: 'What is the BTC price?' ---\n");
 
@@ -244,8 +249,7 @@ async fn test_agent_with_real_anthropic_api() {
 
     // Write summary output to temp file
     let output_path = "/tmp/agent_execution_output.txt";
-    std::fs::write(output_path, &output_log)
-        .expect("Failed to write to output file");
+    std::fs::write(output_path, &output_log).expect("Failed to write to output file");
 
     println!("\n✓ Summary output written to: {}", output_path);
     println!("✓ Agent logs written to: {}", log_file_path);
@@ -265,8 +269,7 @@ async fn test_anthropic_provider_direct() {
     println!("\n========== ANTHROPIC PROVIDER DIRECT TEST ==========\n");
 
     // Check for API key
-    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
-        .expect("ANTHROPIC_AUTH_TOKEN must be set");
+    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").expect("ANTHROPIC_AUTH_TOKEN must be set");
 
     println!("Creating Anthropic provider with Qwen3.5-plus model...");
 
@@ -277,8 +280,7 @@ async fn test_anthropic_provider_direct() {
         "https://coding.dashscope.aliyuncs.com/apps/anthropic",
     );
 
-    let provider = AnthropicProvider::new(&config)
-        .expect("Failed to create provider");
+    let provider = AnthropicProvider::new(&config).expect("Failed to create provider");
 
     println!("Provider created successfully");
     println!("  Provider: {:?}", provider.provider());
@@ -293,7 +295,8 @@ async fn test_anthropic_provider_direct() {
         Ok(response) => {
             println!("\n✓ LLM API call successful!");
             println!("Model: {}", response.model);
-            println!("Usage: {} prompt + {} completion = {} total",
+            println!(
+                "Usage: {} prompt + {} completion = {} total",
                 response.usage.prompt_tokens,
                 response.usage.completion_tokens,
                 response.usage.total_tokens
@@ -330,8 +333,7 @@ Finish Reason: {:?}
                 response.raw
             );
 
-            std::fs::write(output_path, &full_output)
-                .expect("Failed to write to output file");
+            std::fs::write(output_path, &full_output).expect("Failed to write to output file");
 
             println!("\n✓ Full response written to: {}", output_path);
             println!("\n========== DIRECT TEST PASSED ==========\n");

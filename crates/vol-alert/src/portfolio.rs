@@ -1,9 +1,9 @@
 //! Portfolio alert handler with configurable metrics.
 
-use vol_core::{Alert, Tenor, OptionType, AlertType};
-use vol_config::metrics::MetricConfig;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use vol_config::metrics::MetricConfig;
+use vol_core::{Alert, AlertType, OptionType, Tenor};
 
 /// Portfolio data snapshot for alert evaluation
 #[derive(Debug, Clone)]
@@ -84,12 +84,15 @@ impl PortfolioAlertHandler {
                                     alerts.push(Alert {
                                         alert_type: AlertType::PortfolioMargin {
                                             current: ratio,
-                                            threshold: min
+                                            threshold: min,
                                         },
                                         tenor: Tenor::Medium,
                                         symbol: format!("PORTFOLIO_{}", snapshot.currency),
                                         iv: 0.0,
-                                        message: format!("Margin ratio {:.2} below threshold {:.2}", ratio, min),
+                                        message: format!(
+                                            "Margin ratio {:.2} below threshold {:.2}",
+                                            ratio, min
+                                        ),
                                         timestamp: snapshot.timestamp,
                                         source: "deribit".to_string(),
                                         index_price: 0.0,
@@ -113,12 +116,15 @@ impl PortfolioAlertHandler {
                                 alerts.push(Alert {
                                     alert_type: AlertType::PortfolioBalance {
                                         current: snapshot.free_balance,
-                                        threshold: min
+                                        threshold: min,
                                     },
                                     tenor: Tenor::Medium,
                                     symbol: format!("PORTFOLIO_{}", snapshot.currency),
                                     iv: 0.0,
-                                    message: format!("Free balance {:.2} below threshold {:.2}", snapshot.free_balance, min),
+                                    message: format!(
+                                        "Free balance {:.2} below threshold {:.2}",
+                                        snapshot.free_balance, min
+                                    ),
                                     timestamp: snapshot.timestamp,
                                     source: "deribit".to_string(),
                                     index_price: 0.0,
@@ -142,9 +148,7 @@ impl PortfolioAlertHandler {
                         let key = format!("delta_exposure_{}", snapshot.currency);
                         if !self.in_cooldown(&key).await {
                             alerts.push(Alert {
-                                alert_type: AlertType::PortfolioDelta {
-                                    current: delta
-                                },
+                                alert_type: AlertType::PortfolioDelta { current: delta },
                                 tenor: Tenor::Medium,
                                 symbol: format!("PORTFOLIO_{}", snapshot.currency),
                                 iv: 0.0,
@@ -170,12 +174,15 @@ impl PortfolioAlertHandler {
                                 alerts.push(Alert {
                                     alert_type: AlertType::PortfolioPnL {
                                         current: snapshot.session_pnl,
-                                        threshold: max
+                                        threshold: max,
                                     },
                                     tenor: Tenor::Medium,
                                     symbol: format!("PORTFOLIO_{}", snapshot.currency),
                                     iv: 0.0,
-                                    message: format!("Session PnL {:.2} below threshold {:.2}", snapshot.session_pnl, max),
+                                    message: format!(
+                                        "Session PnL {:.2} below threshold {:.2}",
+                                        snapshot.session_pnl, max
+                                    ),
                                     timestamp: snapshot.timestamp,
                                     source: "deribit".to_string(),
                                     index_price: 0.0,
@@ -200,12 +207,15 @@ impl PortfolioAlertHandler {
                                     alert_type: AlertType::PortfolioGreek {
                                         greek: "gamma".to_string(),
                                         current: snapshot.options_gamma,
-                                        threshold
+                                        threshold,
                                     },
                                     tenor: Tenor::Medium,
                                     symbol: format!("PORTFOLIO_{}", snapshot.currency),
                                     iv: 0.0,
-                                    message: format!("Gamma {:.6} exceeds threshold {:.6}", snapshot.options_gamma, threshold),
+                                    message: format!(
+                                        "Gamma {:.6} exceeds threshold {:.6}",
+                                        snapshot.options_gamma, threshold
+                                    ),
                                     timestamp: snapshot.timestamp,
                                     source: "deribit".to_string(),
                                     index_price: 0.0,
@@ -228,12 +238,15 @@ impl PortfolioAlertHandler {
                                     alert_type: AlertType::PortfolioGreek {
                                         greek: "vega".to_string(),
                                         current: snapshot.options_vega,
-                                        threshold
+                                        threshold,
                                     },
                                     tenor: Tenor::Medium,
                                     symbol: format!("PORTFOLIO_{}", snapshot.currency),
                                     iv: 0.0,
-                                    message: format!("Vega {:.6} exceeds threshold {:.6}", snapshot.options_vega, threshold),
+                                    message: format!(
+                                        "Vega {:.6} exceeds threshold {:.6}",
+                                        snapshot.options_vega, threshold
+                                    ),
                                     timestamp: snapshot.timestamp,
                                     source: "deribit".to_string(),
                                     index_price: 0.0,
@@ -256,12 +269,15 @@ impl PortfolioAlertHandler {
                                     alert_type: AlertType::PortfolioGreek {
                                         greek: "theta".to_string(),
                                         current: snapshot.options_theta,
-                                        threshold
+                                        threshold,
                                     },
                                     tenor: Tenor::Medium,
                                     symbol: format!("PORTFOLIO_{}", snapshot.currency),
                                     iv: 0.0,
-                                    message: format!("Theta {:.6} below threshold {:.6}", snapshot.options_theta, threshold),
+                                    message: format!(
+                                        "Theta {:.6} below threshold {:.6}",
+                                        snapshot.options_theta, threshold
+                                    ),
                                     timestamp: snapshot.timestamp,
                                     source: "deribit".to_string(),
                                     index_price: 0.0,

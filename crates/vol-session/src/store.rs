@@ -1,9 +1,9 @@
 //! Session and Message store traits.
 
-use async_trait::async_trait;
-use thiserror::Error;
 use crate::message::SessionMessage;
 use crate::session::Session;
+use async_trait::async_trait;
+use thiserror::Error;
 
 /// Store operation error
 #[derive(Debug, Error)]
@@ -49,7 +49,12 @@ pub trait MessageStore: Send + Sync {
     async fn get_by_session(&self, session_id: &str, limit: usize) -> Result<Vec<SessionMessage>>;
 
     /// Get messages before a timestamp (pagination)
-    async fn get_before(&self, session_id: &str, before: i64, limit: usize) -> Result<Vec<SessionMessage>>;
+    async fn get_before(
+        &self,
+        session_id: &str,
+        before: i64,
+        limit: usize,
+    ) -> Result<Vec<SessionMessage>>;
 
     /// Delete all messages for a session
     async fn delete_session(&self, session_id: &str) -> Result<()>;

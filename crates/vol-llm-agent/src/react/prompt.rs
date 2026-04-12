@@ -48,8 +48,15 @@ impl SystemPromptBuilder {
     }
 
     pub fn with_tools(mut self, tools: &[vol_llm_core::ToolDefinition]) -> Self {
-        let tools_desc = tools.iter()
-            .map(|t| format!("- `{}`: {}", t.name, t.description.as_deref().unwrap_or("无描述")))
+        let tools_desc = tools
+            .iter()
+            .map(|t| {
+                format!(
+                    "- `{}`: {}",
+                    t.name,
+                    t.description.as_deref().unwrap_or("无描述")
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n");
 

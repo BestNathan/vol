@@ -17,8 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== RAG Example ===\n");
 
     // 1. Create embedder (uses DASHSCOPE_API_KEY from environment)
-    let api_key = std::env::var("DASHSCOPE_API_KEY")
-        .unwrap_or_else(|_| "your-api-key".to_string());
+    let api_key = std::env::var("DASHSCOPE_API_KEY").unwrap_or_else(|_| "your-api-key".to_string());
     let embedder = Arc::new(DashScopeEmbedder::new(&api_key));
     println!("1. Created DashScopeEmbedder");
 
@@ -65,10 +64,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("   Found {} documents", results.len());
     for (i, doc) in results.iter().enumerate() {
-        println!("   [{}] Score: {:.4}, Content: {}...",
-                 i + 1,
-                 doc.score.unwrap_or(0.0),
-                 doc.content.chars().take(30).collect::<String>());
+        println!(
+            "   [{}] Score: {:.4}, Content: {}...",
+            i + 1,
+            doc.score.unwrap_or(0.0),
+            doc.content.chars().take(30).collect::<String>()
+        );
     }
 
     println!("\n=== Example Complete ===");

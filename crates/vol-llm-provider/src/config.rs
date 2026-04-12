@@ -1,8 +1,8 @@
 //! LLM configuration.
 
+use crate::secret::Secret;
 use serde::{Deserialize, Serialize};
 use vol_llm_core::LLMProvider;
-use crate::secret::Secret;
 
 /// LLM configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]

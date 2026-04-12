@@ -1,12 +1,12 @@
 //! Agent builder.
 
+use super::agent::{AgentConfig, ReActAgent};
+use super::plugin::AgentPlugin;
+use crate::prompt_context::PromptContext;
+use crate::session::{InMemoryMessageStore, InMemorySessionStore, Session};
 use std::sync::Arc;
 use vol_llm_core::LLMClient;
 use vol_llm_tool::{Tool, ToolRegistry};
-use super::agent::{AgentConfig, ReActAgent};
-use super::plugin::AgentPlugin;
-use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-use crate::prompt_context::PromptContext;
 
 /// Agent builder
 pub struct AgentBuilder {
@@ -42,7 +42,7 @@ impl AgentBuilder {
     }
 
     pub fn with_system_prompt(mut self, prompt: String) -> Self {
-        use crate::prompt_context::{PromptTemplate, PromptContext};
+        use crate::prompt_context::{PromptContext, PromptTemplate};
 
         let template = PromptTemplate::new("custom_system_prompt", &prompt);
         self.config.prompt_context = PromptContext::new(template);
@@ -115,7 +115,12 @@ impl AgentBuilder {
             ))
         });
 
-        Ok(ReActAgent::new(llm, Arc::new(registry), self.config, session))
+        Ok(ReActAgent::new(
+            llm,
+            Arc::new(registry),
+            self.config,
+            session,
+        ))
     }
 }
 

@@ -1,16 +1,17 @@
 //! ReAct Agent implementation.
 
-use std::path::PathBuf;
-use std::sync::Arc;
-use vol_llm_core::{LLMClient, Message, ConversationRequest, ToolChoice, StreamEventData, StreamReceiver};
-use tracing::{info, debug};
 use super::{
-    AgentResponse, AgentStreamEvent, PluginRegistry, RunContext, PluginContext,
-    PluginDecision,
+    AgentResponse, AgentStreamEvent, PluginContext, PluginDecision, PluginRegistry, RunContext,
 };
+use crate::prompt_context::PromptContext;
 use crate::react::state::ToolCallRecord;
 use crate::session::Session;
-use crate::prompt_context::PromptContext;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tracing::{debug, info};
+use vol_llm_core::{
+    ConversationRequest, LLMClient, Message, StreamEventData, StreamReceiver, ToolChoice,
+};
 use vol_llm_tool::ToolContext;
 
 /// Agent configuration
@@ -70,13 +71,23 @@ impl ReActAgent {
         super::AgentBuilder::new()
     }
 
-    pub fn new(llm: Arc<dyn LLMClient>, tools: Arc<vol_llm_tool::ToolRegistry>, config: AgentConfig, session: Arc<Session>) -> Self {
-        Self { llm, tools, config, session }
+    pub fn new(
+        llm: Arc<dyn LLMClient>,
+        tools: Arc<vol_llm_tool::ToolRegistry>,
+        config: AgentConfig,
+        session: Arc<Session>,
+    ) -> Self {
+        Self {
+            llm,
+            tools,
+            config,
+            session,
+        }
     }
 
     /// Create agent with new session
     pub fn with_new_session(&self, session_id: String) -> Self {
-        use crate::session::{InMemorySessionStore, InMemoryMessageStore};
+        use crate::session::{InMemoryMessageStore, InMemorySessionStore};
 
         let new_session = Arc::new(Session::new(
             session_id,
@@ -99,10 +110,7 @@ impl ReActAgent {
     /// - run_id and session_id for correlation
     /// - All tool calls made during execution
     /// - Error information if any tool call failed
-    pub async fn run(
-        &self,
-        user_input: &str,
-    ) -> Result<AgentResponse, crate::AgentError> {
+    pub async fn run(&self, user_input: &str) -> Result<AgentResponse, crate::AgentError> {
         // === Phase 1: Generate run_id and create RunContext ===
         let run_id = uuid::Uuid::new_v4().simple().to_string();
 
@@ -133,7 +141,7 @@ impl ReActAgent {
         run_ctx.init_messages().await?;
 
         // === Phase 2.5: Spawn SessionListener for session recording ===
-        use crate::session::{SessionListener, FileMessageStore};
+        use crate::session::{FileMessageStore, SessionListener};
 
         let mut session_listener = SessionListener::new(
             run_ctx.event_tx.subscribe(),
@@ -148,7 +156,7 @@ impl ReActAgent {
         });
 
         // === Phase 2.6: Spawn listener and interceptor tasks ===
-        use super::plugin_stream::{spawn_listener_task, run_interceptor_loop};
+        use super::plugin_stream::{run_interceptor_loop, spawn_listener_task};
 
         // Spawn listener task - subscribes to event broadcast channel
         // Handle stored for graceful shutdown wait
@@ -168,7 +176,13 @@ impl ReActAgent {
         let interceptor_plugins = self.config.plugin_registry.plugins().to_vec();
         let interceptor_plugin_ctx = PluginContext::from_run_ctx(&run_ctx);
         let interceptor_handle = tokio::spawn(async move {
-            run_interceptor_loop(plugin_rx, interceptor_plugins, interceptor_event_tx, interceptor_plugin_ctx).await;
+            run_interceptor_loop(
+                plugin_rx,
+                interceptor_plugins,
+                interceptor_event_tx,
+                interceptor_plugin_ctx,
+            )
+            .await;
         });
 
         // === Phase 3: Spawn agent loop task and await it ===
@@ -183,7 +197,7 @@ impl ReActAgent {
         let agent_task = tokio::spawn(async move {
             // === Emit and intercept AgentStart ===
             let start_event = AgentStreamEvent::AgentStart {
-                input: user_input.clone()
+                input: user_input.clone(),
             };
             run_ctx.emit(start_event.clone()).await;
 
@@ -196,12 +210,19 @@ impl ReActAgent {
                     // Skip only affects the current event, not the entire run
                 }
                 Ok(PluginDecision::Abort(reason)) => {
-                    run_ctx.emit(AgentStreamEvent::AgentAborted { reason: reason.clone() }).await;
+                    run_ctx
+                        .emit(AgentStreamEvent::AgentAborted {
+                            reason: reason.clone(),
+                        })
+                        .await;
                     return Err(crate::AgentError::Context(reason));
                 }
                 Err(e) => {
                     // Plugin channel error - log and continue (plugins are optional)
-                    debug!("Plugin intercept error (plugins may not be wired up yet): {}", e);
+                    debug!(
+                        "Plugin intercept error (plugins may not be wired up yet): {}",
+                        e
+                    );
                 }
             }
 
@@ -213,10 +234,14 @@ impl ReActAgent {
                 if iteration > config.max_iterations {
                     // Emit max iterations reached event
                     let reason = format!("Max iterations ({}) reached", config.max_iterations);
-                    run_ctx.emit(AgentStreamEvent::AgentAborted { reason: reason.clone() }).await;
+                    run_ctx
+                        .emit(AgentStreamEvent::AgentAborted {
+                            reason: reason.clone(),
+                        })
+                        .await;
 
                     return Err(crate::AgentError::MaxIterationsReached {
-                        max: config.max_iterations
+                        max: config.max_iterations,
                     });
                 }
 
@@ -240,14 +265,22 @@ impl ReActAgent {
                             vol_llm_core::MessageRole::Assistant => "assistant",
                             vol_llm_core::MessageRole::Tool => "tool",
                         };
-                        let content_str = msg.content.as_ref().map(|c| c.as_str()).unwrap_or("<none>");
+                        let content_str =
+                            msg.content.as_ref().map(|c| c.as_str()).unwrap_or("<none>");
                         let tool_call_id = msg.tool_call_id.as_deref().unwrap_or("");
-                        let tool_calls_count = msg.tool_calls.as_ref().map(|v| v.len()).unwrap_or(0);
+                        let tool_calls_count =
+                            msg.tool_calls.as_ref().map(|v| v.len()).unwrap_or(0);
 
                         if msg.role == vol_llm_core::MessageRole::Tool {
-                            debug!("  [{}] {}: tool_call_id={} content={:.100}", idx, role_str, tool_call_id, content_str);
+                            debug!(
+                                "  [{}] {}: tool_call_id={} content={:.100}",
+                                idx, role_str, tool_call_id, content_str
+                            );
                         } else if tool_calls_count > 0 {
-                            debug!("  [{}] {}: tool_calls={} content={:.100}", idx, role_str, tool_calls_count, content_str);
+                            debug!(
+                                "  [{}] {}: tool_calls={} content={:.100}",
+                                idx, role_str, tool_calls_count, content_str
+                            );
                         } else {
                             debug!("  [{}] {}: content={:.100}", idx, role_str, content_str);
                         }
@@ -294,7 +327,10 @@ impl ReActAgent {
                         Message::assistant_with_tools(content.clone(), tool_calls.clone())
                     } else {
                         // If no content, still need to record the tool call decision
-                        Message::assistant_with_tools("Calling tools to get information.".to_string(), tool_calls.clone())
+                        Message::assistant_with_tools(
+                            "Calling tools to get information.".to_string(),
+                            tool_calls.clone(),
+                        )
                     };
                     if let Err(e) = run_ctx.add_message(assistant_message).await {
                         return Err(crate::AgentError::from(e));
@@ -302,7 +338,10 @@ impl ReActAgent {
 
                     // Act phase - execute tools
                     for call in &tool_calls {
-                        info!("Executing tool: {} with args: {}", call.name, call.arguments);
+                        info!(
+                            "Executing tool: {} with args: {}",
+                            call.name, call.arguments
+                        );
 
                         // === Emit and intercept ToolCallBegin ===
                         let tool_event = AgentStreamEvent::ToolCallBegin {
@@ -329,7 +368,11 @@ impl ReActAgent {
                                 continue;
                             }
                             PluginDecision::Abort(reason) => {
-                                run_ctx.emit(AgentStreamEvent::AgentAborted { reason: reason.clone() }).await;
+                                run_ctx
+                                    .emit(AgentStreamEvent::AgentAborted {
+                                        reason: reason.clone(),
+                                    })
+                                    .await;
                                 return Err(crate::AgentError::Context(reason));
                             }
                         }
@@ -339,16 +382,20 @@ impl ReActAgent {
                             Ok(r) => r,
                             Err(e) => {
                                 // Record failed tool call
-                                run_ctx.record_tool_call(ToolCallRecord {
-                                    tool_name: call.name.clone(),
-                                    arguments: call.arguments.clone(),
-                                    result: format!("Error: {}", e),
-                                    iteration,
-                                    success: false,
-                                }).await;
+                                run_ctx
+                                    .record_tool_call(ToolCallRecord {
+                                        tool_name: call.name.clone(),
+                                        arguments: call.arguments.clone(),
+                                        result: format!("Error: {}", e),
+                                        iteration,
+                                        success: false,
+                                    })
+                                    .await;
 
                                 // Set error in RunContext
-                                run_ctx.set_error(format!("Tool execution failed: {}", e)).await;
+                                run_ctx
+                                    .set_error(format!("Tool execution failed: {}", e))
+                                    .await;
 
                                 return Err(crate::AgentError::ToolExecution {
                                     tool: call.name.clone(),
@@ -360,22 +407,29 @@ impl ReActAgent {
                         info!("Tool {} returned: {}", call.name, result.content);
 
                         // Record tool call
-                        run_ctx.record_tool_call(ToolCallRecord {
-                            tool_name: call.name.clone(),
-                            arguments: call.arguments.clone(),
-                            result: result.content.clone(),
-                            iteration,
-                            success: true,
-                        }).await;
+                        run_ctx
+                            .record_tool_call(ToolCallRecord {
+                                tool_name: call.name.clone(),
+                                arguments: call.arguments.clone(),
+                                result: result.content.clone(),
+                                iteration,
+                                success: true,
+                            })
+                            .await;
 
                         // Emit ToolCallComplete
-                        run_ctx.emit(AgentStreamEvent::ToolCallComplete {
-                            tool_name: call.name.clone(),
-                            result: result.content.clone(),
-                        }).await;
+                        run_ctx
+                            .emit(AgentStreamEvent::ToolCallComplete {
+                                tool_name: call.name.clone(),
+                                result: result.content.clone(),
+                            })
+                            .await;
 
                         // Add tool result to ctx (syncs to session automatically)
-                        if let Err(e) = run_ctx.add_message(Message::tool(result.content.clone(), call.id.clone())).await {
+                        if let Err(e) = run_ctx
+                            .add_message(Message::tool(result.content.clone(), call.id.clone()))
+                            .await
+                        {
                             return Err(crate::AgentError::from(e));
                         }
 
@@ -384,11 +438,13 @@ impl ReActAgent {
                     }
 
                     // Emit IterationComplete
-                    run_ctx.emit(AgentStreamEvent::IterationComplete {
-                        iteration,
-                        tool_calls: tool_calls.clone(),
-                        final_answer: None,
-                    }).await;
+                    run_ctx
+                        .emit(AgentStreamEvent::IterationComplete {
+                            iteration,
+                            tool_calls: tool_calls.clone(),
+                            final_answer: None,
+                        })
+                        .await;
 
                     // Continue to next iteration
                     continue;
@@ -396,14 +452,19 @@ impl ReActAgent {
 
                 // No tool calls - we have final answer
                 // Emit IterationComplete with final answer
-                run_ctx.emit(AgentStreamEvent::IterationComplete {
-                    iteration,
-                    tool_calls: Vec::new(),
-                    final_answer: Some(content.clone()),
-                }).await;
+                run_ctx
+                    .emit(AgentStreamEvent::IterationComplete {
+                        iteration,
+                        tool_calls: Vec::new(),
+                        final_answer: Some(content.clone()),
+                    })
+                    .await;
 
                 // Save assistant response to session via ctx (user input already saved in init_messages)
-                if let Err(e) = run_ctx.add_message(Message::assistant(content.clone())).await {
+                if let Err(e) = run_ctx
+                    .add_message(Message::assistant(content.clone()))
+                    .await
+                {
                     return Err(crate::AgentError::from(e));
                 }
 
@@ -423,23 +484,22 @@ impl ReActAgent {
         let agent_result = match agent_task.await {
             Ok(result) => result,
             Err(join_err) => {
-                return Err(crate::AgentError::Context(format!("Agent task panicked: {}", join_err)));
+                return Err(crate::AgentError::Context(format!(
+                    "Agent task panicked: {}",
+                    join_err
+                )));
             }
         };
 
         // Wait for interceptor to finish with timeout
         // Interceptor exits when plugin_rx is closed (happens when agent_task drops run_ctx)
-        let interceptor_result = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            interceptor_handle
-        ).await;
+        let interceptor_result =
+            tokio::time::timeout(std::time::Duration::from_secs(5), interceptor_handle).await;
 
         // Wait for listener to finish with timeout
         // Listener exits when event_tx broadcast channel is closed (all senders dropped)
-        let listener_result = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            listener_handle
-        ).await;
+        let listener_result =
+            tokio::time::timeout(std::time::Duration::from_secs(5), listener_handle).await;
 
         // Handle interceptor result (log but don't fail - plugins are optional)
         match interceptor_result {
@@ -452,7 +512,9 @@ impl ReActAgent {
                 tracing::warn!(%join_err, "Interceptor task panicked");
             }
             Err(_timeout) => {
-                tracing::warn!("Interceptor task timeout after 5s - task may be hanging, proceeding anyway");
+                tracing::warn!(
+                    "Interceptor task timeout after 5s - task may be hanging, proceeding anyway"
+                );
             }
         }
 
@@ -467,7 +529,9 @@ impl ReActAgent {
                 tracing::warn!(%join_err, "Listener task panicked");
             }
             Err(_timeout) => {
-                tracing::warn!("Listener task timeout after 5s - task may be hanging, proceeding anyway");
+                tracing::warn!(
+                    "Listener task timeout after 5s - task may be hanging, proceeding anyway"
+                );
             }
         }
 
@@ -516,7 +580,7 @@ mod tests {
 
     #[test]
     fn test_agent_config_custom() {
-        use crate::prompt_context::{PromptTemplate, PromptContext};
+        use crate::prompt_context::{PromptContext, PromptTemplate};
 
         let template = PromptTemplate::new("test", "test prompt");
         let prompt_context = PromptContext::new(template);

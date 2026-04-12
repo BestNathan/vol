@@ -1,9 +1,9 @@
 //! Agent response and error types.
 
+use crate::react::state::ReasoningStep;
+use serde::Serialize;
 use thiserror::Error;
 use vol_llm_core::LLMError;
-use serde::Serialize;
-use crate::react::state::ReasoningStep;
 
 /// Record of a single tool call during agent execution
 #[derive(Debug, Clone, Serialize)]

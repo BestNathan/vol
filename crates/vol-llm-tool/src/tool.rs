@@ -1,7 +1,7 @@
 //! Tool trait and types.
 
 use async_trait::async_trait;
-use vol_llm_core::{ToolDefinition, Message};
+use vol_llm_core::{Message, ToolDefinition};
 
 use std::error::Error;
 
@@ -73,7 +73,11 @@ pub trait ExecutableTool: Send + Sync {
         })
     }
 
-    async fn execute(&self, args: &serde_json::Value, context: &ToolContext) -> ToolResultType<ToolResult>;
+    async fn execute(
+        &self,
+        args: &serde_json::Value,
+        context: &ToolContext,
+    ) -> ToolResultType<ToolResult>;
 }
 
 /// Tool trait
@@ -91,8 +95,11 @@ pub trait Tool: Send + Sync {
         }
     }
 
-    async fn execute(&self, args: &str, context: &ToolContext)
-        -> std::result::Result<ToolResult, Box<dyn Error + Send>>;
+    async fn execute(
+        &self,
+        args: &str,
+        context: &ToolContext,
+    ) -> std::result::Result<ToolResult, Box<dyn Error + Send>>;
 }
 
 /// Blanket implementation of Tool for any type that implements ExecutableTool
@@ -116,11 +123,21 @@ impl<T: ExecutableTool + Send + Sync> Tool for T {
         context: &ToolContext,
     ) -> std::result::Result<ToolResult, Box<dyn Error + Send>> {
         // Parse JSON arguments
-        let json_args: serde_json::Value = serde_json::from_str(args)
-            .map_err(|e| -> Box<dyn Error + Send> { Box::new(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Invalid JSON: {}", e))) })?;
+        let json_args: serde_json::Value =
+            serde_json::from_str(args).map_err(|e| -> Box<dyn Error + Send> {
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("Invalid JSON: {}", e),
+                ))
+            })?;
 
         self.execute(&json_args, context)
             .await
-            .map_err(|e| -> Box<dyn Error + Send> { Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Tool execution failed: {}", e))) })
+            .map_err(|e| -> Box<dyn Error + Send> {
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Tool execution failed: {}", e),
+                ))
+            })
     }
 }

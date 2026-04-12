@@ -61,9 +61,7 @@ impl ObservabilityLogger {
         // Write JSON to file
         let json_line = entry.to_json_line();
         let file_path = match log_type {
-            LogType::Session { session_id, date } => {
-                self.get_session_log_path(session_id, date)
-            }
+            LogType::Session { session_id, date } => self.get_session_log_path(session_id, date),
             LogType::Run { run_id } => self.get_run_log_path(run_id),
         };
 
@@ -71,7 +69,8 @@ impl ObservabilityLogger {
         let json_line_clone = json_line.clone();
         let _ = tokio::spawn(async move {
             let _ = append_to_file(&file_path, &json_line_clone).await;
-        }).await;
+        })
+        .await;
     }
 }
 
@@ -117,25 +116,56 @@ impl LogEntry {
             "agent_id": self.agent_id,
             "event": self.event,
             "data": self.data,
-        }).to_string()
+        })
+        .to_string()
     }
 
     fn format_event_summary(&self) -> String {
         match self.event.as_str() {
-            "AgentStart" => format!("Agent started - input: {:?}",
-                self.data.get("input").and_then(|v| v.as_str()).unwrap_or("")),
+            "AgentStart" => format!(
+                "Agent started - input: {:?}",
+                self.data
+                    .get("input")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+            ),
             "ThinkingComplete" => "Thinking complete".to_string(),
-            "ToolCallBegin" => format!("Tool call: {}",
-                self.data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("unknown")),
-            "ToolCallComplete" => format!("Tool result: {}",
-                self.data.get("result").and_then(|v| v.as_str()).unwrap_or("")),
-            "IterationComplete" => format!("Iteration {} complete",
-                self.data.get("iteration").and_then(|v| v.as_u64()).unwrap_or(0)),
+            "ToolCallBegin" => format!(
+                "Tool call: {}",
+                self.data
+                    .get("tool_name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+            ),
+            "ToolCallComplete" => format!(
+                "Tool result: {}",
+                self.data
+                    .get("result")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+            ),
+            "IterationComplete" => format!(
+                "Iteration {} complete",
+                self.data
+                    .get("iteration")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
+            ),
             "AgentComplete" => "Agent completed".to_string(),
-            "AgentAborted" => format!("Agent aborted: {}",
-                self.data.get("reason").and_then(|v| v.as_str()).unwrap_or("unknown")),
-            "PluginEvent" => format!("Plugin event: {}",
-                self.data.get("name").and_then(|v| v.as_str()).unwrap_or("unknown")),
+            "AgentAborted" => format!(
+                "Agent aborted: {}",
+                self.data
+                    .get("reason")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+            ),
+            "PluginEvent" => format!(
+                "Plugin event: {}",
+                self.data
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+            ),
             _ => self.event.clone(),
         }
     }
@@ -144,8 +174,8 @@ impl LogEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use serde_json::json;
+    use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_logger_creates_directories() {
@@ -178,7 +208,14 @@ mod tests {
             data: json!({"input": "test"}),
         };
 
-        logger.log(&entry, &LogType::Run { run_id: "test-run".to_string() }).await;
+        logger
+            .log(
+                &entry,
+                &LogType::Run {
+                    run_id: "test-run".to_string(),
+                },
+            )
+            .await;
 
         // Give async write time to complete
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;

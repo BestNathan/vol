@@ -1,7 +1,7 @@
 //! Absolute IV threshold alert handler.
 
-use vol_core::{AlertHandler, Alert, AlertType, AlertAction, VolatilityData, Tenor, Result};
 use vol_config::{AbsoluteIvConfig, SymbolIvConfig};
+use vol_core::{Alert, AlertAction, AlertHandler, AlertType, Result, Tenor, VolatilityData};
 
 /// Alert handler for absolute IV threshold breaches
 pub struct AbsoluteIvHandler {
@@ -42,9 +42,18 @@ impl AlertHandler for AbsoluteIvHandler {
         // Get IV and ATM thresholds for this symbol and tenor
         // Skip if in gap region (no tenor classification)
         let (iv_threshold, atm_threshold) = match tenor {
-            Some(Tenor::Short) => (symbol_config.short_threshold, symbol_config.short_atm_threshold),
-            Some(Tenor::Medium) => (symbol_config.medium_threshold, symbol_config.medium_atm_threshold),
-            Some(Tenor::Long) => (symbol_config.long_threshold, symbol_config.long_atm_threshold),
+            Some(Tenor::Short) => (
+                symbol_config.short_threshold,
+                symbol_config.short_atm_threshold,
+            ),
+            Some(Tenor::Medium) => (
+                symbol_config.medium_threshold,
+                symbol_config.medium_atm_threshold,
+            ),
+            Some(Tenor::Long) => (
+                symbol_config.long_threshold,
+                symbol_config.long_atm_threshold,
+            ),
             None => return None, // Gap region - no alert
         };
 
@@ -56,7 +65,9 @@ impl AlertHandler for AbsoluteIvHandler {
         // IV threshold check
         if data.iv >= iv_threshold {
             let moneyness = data.moneyness();
-            let mark_price = data.extra.get("mark_price_coin")
+            let mark_price = data
+                .extra
+                .get("mark_price_coin")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0);
             let tenor = tenor.unwrap(); // Safe - we know it's Some at this point
@@ -107,24 +118,30 @@ mod tests {
         let mut symbols = HashMap::new();
 
         // BTC config - lower thresholds
-        symbols.insert("btc".to_string(), SymbolIvConfig {
-            short_threshold: 0.80,
-            medium_threshold: 0.70,
-            long_threshold: 0.60,
-            short_atm_threshold: 0.05,
-            medium_atm_threshold: 0.10,
-            long_atm_threshold: 0.15,
-        });
+        symbols.insert(
+            "btc".to_string(),
+            SymbolIvConfig {
+                short_threshold: 0.80,
+                medium_threshold: 0.70,
+                long_threshold: 0.60,
+                short_atm_threshold: 0.05,
+                medium_atm_threshold: 0.10,
+                long_atm_threshold: 0.15,
+            },
+        );
 
         // ETH config - higher thresholds
-        symbols.insert("eth".to_string(), SymbolIvConfig {
-            short_threshold: 0.90,
-            medium_threshold: 0.80,
-            long_threshold: 0.70,
-            short_atm_threshold: 0.08,
-            medium_atm_threshold: 0.12,
-            long_atm_threshold: 0.18,
-        });
+        symbols.insert(
+            "eth".to_string(),
+            SymbolIvConfig {
+                short_threshold: 0.90,
+                medium_threshold: 0.80,
+                long_threshold: 0.70,
+                short_atm_threshold: 0.08,
+                medium_atm_threshold: 0.12,
+                long_atm_threshold: 0.18,
+            },
+        );
 
         let handler = AbsoluteIvHandler::new(AbsoluteIvConfig { symbols });
 
@@ -168,14 +185,17 @@ mod tests {
     #[test]
     fn test_evaluate_missing_symbol_config() {
         let mut symbols = HashMap::new();
-        symbols.insert("btc".to_string(), SymbolIvConfig {
-            short_threshold: 0.80,
-            medium_threshold: 0.70,
-            long_threshold: 0.60,
-            short_atm_threshold: 0.05,
-            medium_atm_threshold: 0.10,
-            long_atm_threshold: 0.15,
-        });
+        symbols.insert(
+            "btc".to_string(),
+            SymbolIvConfig {
+                short_threshold: 0.80,
+                medium_threshold: 0.70,
+                long_threshold: 0.60,
+                short_atm_threshold: 0.05,
+                medium_atm_threshold: 0.10,
+                long_atm_threshold: 0.15,
+            },
+        );
 
         let handler = AbsoluteIvHandler::new(AbsoluteIvConfig { symbols });
 
@@ -201,14 +221,17 @@ mod tests {
     #[test]
     fn test_alert_has_new_fields() {
         let mut symbols = HashMap::new();
-        symbols.insert("btc".to_string(), SymbolIvConfig {
-            short_threshold: 0.80,
-            medium_threshold: 0.70,
-            long_threshold: 0.60,
-            short_atm_threshold: 0.05,
-            medium_atm_threshold: 0.10,
-            long_atm_threshold: 0.15,
-        });
+        symbols.insert(
+            "btc".to_string(),
+            SymbolIvConfig {
+                short_threshold: 0.80,
+                medium_threshold: 0.70,
+                long_threshold: 0.60,
+                short_atm_threshold: 0.05,
+                medium_atm_threshold: 0.10,
+                long_atm_threshold: 0.15,
+            },
+        );
 
         let handler = AbsoluteIvHandler::new(AbsoluteIvConfig { symbols });
 

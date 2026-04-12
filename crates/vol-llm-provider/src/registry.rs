@@ -1,10 +1,10 @@
 //! Multi-provider registry for managing multiple LLM configurations.
 
+use crate::config::LLMConfig;
+use crate::factory::create_provider;
 use std::collections::HashMap;
 use std::sync::Arc;
 use vol_llm_core::{LLMClient, LLMError};
-use crate::config::LLMConfig;
-use crate::factory::create_provider;
 
 /// Named LLM provider configuration
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -35,7 +35,9 @@ impl LLMProviderRegistry {
         let mut registry = Self::new();
         for config in configs {
             let provider = create_provider(&config.config)?;
-            registry.providers.insert(config.id.clone(), Arc::from(provider));
+            registry
+                .providers
+                .insert(config.id.clone(), Arc::from(provider));
         }
         Ok(registry)
     }
@@ -81,17 +83,15 @@ mod tests {
     fn test_registry_from_configs() {
         std::env::set_var("TEST_API_KEY", "test-key");
 
-        let configs = vec![
-            LLMProviderConfig {
-                id: "test-provider".to_string(),
-                config: LLMConfig::with_env_key(
-                    LLMProvider::Anthropic,
-                    "claude-test",
-                    "TEST_API_KEY",
-                    "https://api.test.com",
-                ),
-            },
-        ];
+        let configs = vec![LLMProviderConfig {
+            id: "test-provider".to_string(),
+            config: LLMConfig::with_env_key(
+                LLMProvider::Anthropic,
+                "claude-test",
+                "TEST_API_KEY",
+                "https://api.test.com",
+            ),
+        }];
 
         let registry = LLMProviderRegistry::from_configs(&configs).unwrap();
         assert!(registry.contains("test-provider"));
@@ -102,17 +102,15 @@ mod tests {
     fn test_registry_get() {
         std::env::set_var("TEST_API_KEY_2", "test-key-2");
 
-        let configs = vec![
-            LLMProviderConfig {
-                id: "provider-a".to_string(),
-                config: LLMConfig::with_env_key(
-                    LLMProvider::Anthropic,
-                    "claude-test",
-                    "TEST_API_KEY_2",
-                    "https://api.test.com",
-                ),
-            },
-        ];
+        let configs = vec![LLMProviderConfig {
+            id: "provider-a".to_string(),
+            config: LLMConfig::with_env_key(
+                LLMProvider::Anthropic,
+                "claude-test",
+                "TEST_API_KEY_2",
+                "https://api.test.com",
+            ),
+        }];
 
         let registry = LLMProviderRegistry::from_configs(&configs).unwrap();
         assert!(registry.get("provider-a").is_some());

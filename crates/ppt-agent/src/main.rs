@@ -2,8 +2,8 @@
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
-use vol_llm_agents::ppt::{PptAgent, PptAgentConfig, PptInput};
 use vol_llm_agents::ppt::template::TemplateRegistry;
+use vol_llm_agents::ppt::{PptAgent, PptAgentConfig, PptInput};
 
 #[derive(Parser)]
 #[command(name = "ppt-agent")]
@@ -62,7 +62,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Generate { text, context, template, output, verbose } => {
+        Commands::Generate {
+            text,
+            context,
+            template,
+            output,
+            verbose,
+        } => {
             // Initialize tracing
             if verbose {
                 tracing_subscriber::fmt()
@@ -106,7 +112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("Topic: {}", text);
                     println!("Context: {}", ctx);
                     PptInput::text_with_context(&text, ctx)
-                },
+                }
                 None => {
                     println!("Topic: {}", text);
                     PptInput::text(&text)
@@ -115,14 +121,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Override template in input if specified via CLI
             let input_with_template = match (&template, input) {
-                (Some(tpl_id), PptInput::Text { description, context }) => {
+                (
+                    Some(tpl_id),
                     PptInput::Text {
                         description,
-                        context: Some(match context {
-                            Some(ctx) => format!("{}. Use template: {}", ctx, tpl_id),
-                            None => format!("Use template: {}", tpl_id),
-                        }),
-                    }
+                        context,
+                    },
+                ) => PptInput::Text {
+                    description,
+                    context: Some(match context {
+                        Some(ctx) => format!("{}. Use template: {}", ctx, tpl_id),
+                        None => format!("Use template: {}", tpl_id),
+                    }),
                 },
                 (None, input) => input,
             };
@@ -178,7 +188,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         for t in templates {
                             println!("  {} - {}", t.id, t.name);
                             println!("    {}", t.description);
-                            println!("    Tags: occasion={:?}, style={:?}", t.tags.occasion, t.tags.style);
+                            println!(
+                                "    Tags: occasion={:?}, style={:?}",
+                                t.tags.occasion, t.tags.style
+                            );
                             println!();
                         }
                     }

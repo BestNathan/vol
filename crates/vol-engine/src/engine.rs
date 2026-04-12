@@ -1,13 +1,15 @@
 //! Core monitoring engine - orchestrates datasources, rules, and notifications.
 
-use vol_core::{DataSource, RuleProcessor, NotificationHandler, MonitoringEvent, Alert, error::Result};
-use vol_alert::AlertManager;
-use tokio::sync::{mpsc, broadcast};
-use tokio::task::JoinHandle;
-use tracing::{info, error, warn, debug, info_span};
-use std::sync::Arc;
-use vol_tracing::{TracedEvent, Instrument};
 use crate::config::EngineConfig;
+use std::sync::Arc;
+use tokio::sync::{broadcast, mpsc};
+use tokio::task::JoinHandle;
+use tracing::{debug, error, info, info_span, warn};
+use vol_alert::AlertManager;
+use vol_core::{
+    error::Result, Alert, DataSource, MonitoringEvent, NotificationHandler, RuleProcessor,
+};
+use vol_tracing::{Instrument, TracedEvent};
 
 /// Monitoring engine - the main event loop coordinator
 pub struct MonitoringEngine {
@@ -36,7 +38,11 @@ impl MonitoringEngine {
 
     /// Register a rule processor
     pub fn add_rule(&mut self, rule: Box<dyn RuleProcessor>) {
-        info!("Registered rule: {} (interests: {:?})", rule.id(), rule.interests());
+        info!(
+            "Registered rule: {} (interests: {:?})",
+            rule.id(),
+            rule.interests()
+        );
         self.rules.push(rule);
     }
 
@@ -55,7 +61,8 @@ impl MonitoringEngine {
 
         // Create channels
         // Use broadcast for events (multiple rules can subscribe)
-        let (event_tx, _) = broadcast::channel::<TracedEvent<MonitoringEvent>>(self.config.event_buffer_size);
+        let (event_tx, _) =
+            broadcast::channel::<TracedEvent<MonitoringEvent>>(self.config.event_buffer_size);
         // Use broadcast for alerts (multiple subscribers: notifications + AgentAdviceService)
         let (alert_tx, _) = broadcast::channel::<TracedEvent<Alert>>(self.config.alert_buffer_size);
 
@@ -74,7 +81,8 @@ impl MonitoringEngine {
         let notif_handles = self.spawn_notifications(alert_tx.subscribe(), alert_manager);
 
         // Collect all handles
-        let all_handles = ds_handles.into_iter()
+        let all_handles = ds_handles
+            .into_iter()
             .chain(rule_handles)
             .chain(notif_handles);
 
@@ -105,9 +113,7 @@ impl MonitoringEngine {
                     let (ds_tx, mut ds_rx) = mpsc::channel::<TracedEvent<MonitoringEvent>>(100);
 
                     // Run datasource in a separate task
-                    let ds_task = tokio::spawn(async move {
-                        ds_clone.run(ds_tx).await
-                    });
+                    let ds_task = tokio::spawn(async move { ds_clone.run(ds_tx).await });
 
                     // Forward events to broadcast channel
                     while let Some(traced_event) = ds_rx.recv().await {
@@ -185,7 +191,8 @@ impl MonitoringEngine {
                             alert_span.follows_from(span.id());
 
                             // Wrap alert with span and trace_id for notification layer
-                            let traced_alert = TracedEvent::new(alert, alert_span.clone(), trace_id.clone());
+                            let traced_alert =
+                                TracedEvent::new(alert, alert_span.clone(), trace_id.clone());
 
                             // Send alert within span context
                             // broadcast::send is synchronous (returns Result<usize, SendError>)
@@ -211,7 +218,8 @@ impl MonitoringEngine {
     ) -> Vec<JoinHandle<Result<()>>> {
         // For notifications, we use a fan-out pattern where each notification channel
         // runs in the same task to avoid needing mpsc resubscribe
-        let notifications: Vec<Box<dyn NotificationHandler>> = self.notifications
+        let notifications: Vec<Box<dyn NotificationHandler>> = self
+            .notifications
             .iter()
             .filter(|n| n.is_enabled())
             .map(|n| n.clone_box())

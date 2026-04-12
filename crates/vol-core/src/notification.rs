@@ -1,5 +1,5 @@
-use crate::event::Alert;
 use crate::error::Result;
+use crate::event::Alert;
 use async_trait::async_trait;
 
 /// NotificationHandler trait - delivers alerts to users.

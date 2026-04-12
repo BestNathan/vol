@@ -1,15 +1,14 @@
 //! PPT Agent 渲染器。
 
+use crate::ppt::{Outline, PptTemplate, SlideType};
 use pptx::{
-    Presentation,
     dml::ColorFormat,
-    slide::{SlideRef, SlideLayoutRef},
     shapes::ShapeTree,
-    Emu, PptxError,
+    slide::{SlideLayoutRef, SlideRef},
+    Emu, PptxError, Presentation,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
-use crate::ppt::{PptTemplate, Outline, SlideType};
 
 /// PPTX 渲染器
 pub struct PptxRenderer {
@@ -33,16 +32,32 @@ impl PptxRenderer {
         let layout = self.get_first_layout()?;
         let slide = self.presentation.add_slide(&layout)?;
 
+        // Add background
+        let bg_color = self.resolve_color("{{background}}");
+        let bg_color_hex = match bg_color {
+            ColorFormat::Rgb(rgb) => format!("{:02X}{:02X}{:02X}", rgb.r, rgb.g, rgb.b),
+            _ => "FFFFFF".to_string(),
+        };
+        self.add_background_to_slide(&slide, &bg_color_hex)?;
+
+        // Add accent bar at top
+        let accent_color = self.resolve_color("{{primary}}");
+        let accent_hex = match accent_color {
+            ColorFormat::Rgb(rgb) => format!("{:02X}{:02X}{:02X}", rgb.r, rgb.g, rgb.b),
+            _ => "0066CC".to_string(),
+        };
+        self.add_accent_bar_to_slide(&slide, &accent_hex)?;
+
         // Add title textbox
         let title_color = self.resolve_color("{{primary}}");
         self.add_textbox_to_slide(
             &slide,
             title,
-            457_200,    // 0.5 inch (left)
-            914_400,    // 1.0 inch (top)
-            8_229_600,  // 9 inches (width)
-            1_371_600,  // 1.5 inches (height)
-            44.0,       // font size
+            457_200,   // 0.5 inch (left)
+            1_371_600, // 1.5 inch (top, below accent bar)
+            8_229_600, // 9 inches (width)
+            1_371_600, // 1.5 inches (height)
+            44.0,      // font size
             &title_color,
         )?;
 
@@ -52,9 +67,9 @@ impl PptxRenderer {
             &slide,
             subtitle,
             457_200,
-            2_743_200,  // 3.0 inches (top)
+            3_200_400, // 3.5 inches (top)
             8_229_600,
-            914_400,    // 1.0 inch (height)
+            914_400, // 1.0 inch (height)
             24.0,
             &subtitle_color,
         )?;
@@ -67,13 +82,29 @@ impl PptxRenderer {
         let layout = self.get_first_layout()?;
         let slide = self.presentation.add_slide(&layout)?;
 
+        // Add background
+        let bg_color = self.resolve_color("{{background}}");
+        let bg_color_hex = match bg_color {
+            ColorFormat::Rgb(rgb) => format!("{:02X}{:02X}{:02X}", rgb.r, rgb.g, rgb.b),
+            _ => "FFFFFF".to_string(),
+        };
+        self.add_background_to_slide(&slide, &bg_color_hex)?;
+
+        // Add accent bar at top
+        let accent_color = self.resolve_color("{{primary}}");
+        let accent_hex = match accent_color {
+            ColorFormat::Rgb(rgb) => format!("{:02X}{:02X}{:02X}", rgb.r, rgb.g, rgb.b),
+            _ => "0066CC".to_string(),
+        };
+        self.add_accent_bar_to_slide(&slide, &accent_hex)?;
+
         // Add title
         let title_color = self.resolve_color("{{primary}}");
         self.add_textbox_to_slide(
             &slide,
             title,
             457_200,
-            457_200,    // 0.5 inch (top)
+            685_800, // 0.75 inch (top, below accent bar)
             8_229_600,
             914_400,
             32.0,
@@ -81,17 +112,17 @@ impl PptxRenderer {
         )?;
 
         // Add sections
-        let mut y_offset = 1_371_600; // 1.5 inches
+        let mut y_offset = 1_600_200; // 1.75 inches
         for (i, section) in sections.iter().enumerate() {
             let text_color = self.resolve_color("{{text_primary}}");
             let bullet_text = format!("{}. {}", i + 1, section);
             self.add_textbox_to_slide(
                 &slide,
                 &bullet_text,
-                685_800,    // 0.75 inch (left)
+                685_800, // 0.75 inch (left)
                 y_offset,
-                7_772_400,  // 8.5 inches (width)
-                457_200,    // 0.5 inch (height)
+                7_772_400, // 8.5 inches (width)
+                457_200,   // 0.5 inch (height)
                 18.0,
                 &text_color,
             )?;
@@ -102,9 +133,29 @@ impl PptxRenderer {
     }
 
     /// 添加内容页
-    pub fn add_content_slide(&mut self, title: &str, bullets: &[String]) -> Result<(), RendererError> {
+    pub fn add_content_slide(
+        &mut self,
+        title: &str,
+        bullets: &[String],
+    ) -> Result<(), RendererError> {
         let layout = self.get_first_layout()?;
         let slide = self.presentation.add_slide(&layout)?;
+
+        // Add background
+        let bg_color = self.resolve_color("{{background}}");
+        let bg_color_hex = match bg_color {
+            ColorFormat::Rgb(rgb) => format!("{:02X}{:02X}{:02X}", rgb.r, rgb.g, rgb.b),
+            _ => "FFFFFF".to_string(),
+        };
+        self.add_background_to_slide(&slide, &bg_color_hex)?;
+
+        // Add accent bar at top
+        let accent_color = self.resolve_color("{{primary}}");
+        let accent_hex = match accent_color {
+            ColorFormat::Rgb(rgb) => format!("{:02X}{:02X}{:02X}", rgb.r, rgb.g, rgb.b),
+            _ => "0066CC".to_string(),
+        };
+        self.add_accent_bar_to_slide(&slide, &accent_hex)?;
 
         // Add title
         let title_color = self.resolve_color("{{primary}}");
@@ -112,7 +163,7 @@ impl PptxRenderer {
             &slide,
             title,
             457_200,
-            457_200,
+            685_800, // 0.75 inch (top, below accent bar)
             8_229_600,
             914_400,
             28.0,
@@ -127,7 +178,7 @@ impl PptxRenderer {
             self.add_textbox_to_slide(
                 &slide,
                 &bullet_text,
-                685_800,    // 0.75 inch (left)
+                685_800, // 0.75 inch (left)
                 y_offset,
                 7_772_400,
                 457_200,
@@ -147,7 +198,9 @@ impl PptxRenderer {
         self.add_title_slide(&outline.title, subtitle)?;
 
         // Collect sections for TOC
-        let sections: Vec<String> = outline.slides.iter()
+        let sections: Vec<String> = outline
+            .slides
+            .iter()
             .filter(|s| matches!(s.slide_type, SlideType::Content))
             .map(|s| s.title.clone())
             .collect();
@@ -171,11 +224,11 @@ impl PptxRenderer {
     pub fn save(&self, path: &PathBuf) -> Result<(), RendererError> {
         // Create parent directories if needed
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| RendererError::IoError(e.to_string()))?;
+            std::fs::create_dir_all(parent).map_err(|e| RendererError::IoError(e.to_string()))?;
         }
 
-        self.presentation.save(path)
+        self.presentation
+            .save(path)
             .map_err(|e| RendererError::PptxError(e.to_string()))?;
         Ok(())
     }
@@ -204,6 +257,40 @@ impl PptxRenderer {
             .replace('>', "&gt;")
             .replace('"', "&quot;")
             .replace('\'', "&apos;")
+    }
+
+    /// Generate colored rectangle XML for background or decorative elements
+    fn create_rect_xml(
+        shape_id: u32,
+        left: i64,
+        top: i64,
+        width: i64,
+        height: i64,
+        fill_color_hex: &str,
+    ) -> String {
+        format!(
+            r#"<p:sp xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:nvSpPr>
+    <p:cNvPr id="{}" name="Rect {}"/>
+    <p:cNvSpPr/>
+    <p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="{}" y="{}"/>
+      <a:ext cx="{}" cy="{}"/>
+    </a:xfrm>
+    <a:prstGeom prst="rect">
+      <a:avLst/>
+    </a:prstGeom>
+    <a:solidFill>
+      <a:srgbClr val="{}"/>
+    </a:solidFill>
+  </p:spPr>
+  <p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="en-US" sz="0"/></a:p></p:txBody>
+</p:sp>"#,
+            shape_id, shape_id, left, top, width, height, fill_color_hex,
+        )
     }
 
     /// Generate textbox XML with text content
@@ -282,7 +369,9 @@ impl PptxRenderer {
         color: &ColorFormat,
     ) -> Result<(), RendererError> {
         // Get current slide XML
-        let slide_xml = self.presentation.slide_xml(slide)
+        let slide_xml = self
+            .presentation
+            .slide_xml(slide)
             .map_err(|e| RendererError::PptxError(e.to_string()))?;
 
         // Create textbox XML with text content
@@ -304,7 +393,10 @@ impl PptxRenderer {
 
         // Find position of closing spTree tag
         let closing_tag = b"</p:spTree>";
-        if let Some(pos) = slide_xml.windows(closing_tag.len()).position(|w| w == closing_tag) {
+        if let Some(pos) = slide_xml
+            .windows(closing_tag.len())
+            .position(|w| w == closing_tag)
+        {
             new_xml.extend_from_slice(&slide_xml[..pos]);
             new_xml.extend_from_slice(&textbox_bytes);
             new_xml.extend_from_slice(&slide_xml[pos..]);
@@ -315,7 +407,104 @@ impl PptxRenderer {
         }
 
         // Write back to slide
-        let slide_xml_mut = self.presentation.slide_xml_mut(slide)
+        let slide_xml_mut = self
+            .presentation
+            .slide_xml_mut(slide)
+            .map_err(|e| RendererError::PptxError(e.to_string()))?;
+        *slide_xml_mut = new_xml;
+
+        Ok(())
+    }
+
+    /// 添加背景到幻灯片
+    fn add_background_to_slide(
+        &mut self,
+        slide: &SlideRef,
+        color_hex: &str,
+    ) -> Result<(), RendererError> {
+        let slide_xml = self
+            .presentation
+            .slide_xml(slide)
+            .map_err(|e| RendererError::PptxError(e.to_string()))?;
+
+        // Full slide background (9144000 EMU = 10 inches, standard slide width)
+        let rect_xml = Self::create_rect_xml(
+            self.next_shape_id,
+            0,
+            0,
+            9144000, // 10 inches (slide width)
+            5143500, // 5.67 inches (slide height)
+            color_hex,
+        );
+        self.next_shape_id += 1;
+
+        // Insert at the beginning (before other shapes)
+        let rect_bytes = rect_xml.into_bytes();
+        let mut new_xml = Vec::with_capacity(slide_xml.len() + rect_bytes.len());
+
+        // Find opening <p:spTree> tag and insert after it
+        let opening_tag = b"<p:spTree>";
+        if let Some(pos) = slide_xml
+            .windows(opening_tag.len())
+            .position(|w| w == opening_tag)
+        {
+            new_xml.extend_from_slice(&slide_xml[..pos + opening_tag.len()]);
+            new_xml.extend_from_slice(&rect_bytes);
+            new_xml.extend_from_slice(&slide_xml[pos + opening_tag.len()..]);
+        } else {
+            new_xml.extend_from_slice(slide_xml);
+        }
+
+        let slide_xml_mut = self
+            .presentation
+            .slide_xml_mut(slide)
+            .map_err(|e| RendererError::PptxError(e.to_string()))?;
+        *slide_xml_mut = new_xml;
+
+        Ok(())
+    }
+
+    /// 添加装饰条到幻灯片顶部
+    fn add_accent_bar_to_slide(
+        &mut self,
+        slide: &SlideRef,
+        color_hex: &str,
+    ) -> Result<(), RendererError> {
+        let slide_xml = self
+            .presentation
+            .slide_xml(slide)
+            .map_err(|e| RendererError::PptxError(e.to_string()))?;
+
+        // Top accent bar (full width, 0.25 inch height)
+        let rect_xml = Self::create_rect_xml(
+            self.next_shape_id,
+            0,
+            0,
+            9144000, // 10 inches (full width)
+            228600,  // 0.25 inches (bar height)
+            color_hex,
+        );
+        self.next_shape_id += 1;
+
+        let rect_bytes = rect_xml.into_bytes();
+        let mut new_xml = Vec::with_capacity(slide_xml.len() + rect_bytes.len());
+
+        // Find opening <p:spTree> tag and insert after it
+        let opening_tag = b"<p:spTree>";
+        if let Some(pos) = slide_xml
+            .windows(opening_tag.len())
+            .position(|w| w == opening_tag)
+        {
+            new_xml.extend_from_slice(&slide_xml[..pos + opening_tag.len()]);
+            new_xml.extend_from_slice(&rect_bytes);
+            new_xml.extend_from_slice(&slide_xml[pos + opening_tag.len()..]);
+        } else {
+            new_xml.extend_from_slice(slide_xml);
+        }
+
+        let slide_xml_mut = self
+            .presentation
+            .slide_xml_mut(slide)
             .map_err(|e| RendererError::PptxError(e.to_string()))?;
         *slide_xml_mut = new_xml;
 
@@ -324,10 +513,13 @@ impl PptxRenderer {
 
     /// 获取第一个可用的布局
     fn get_first_layout(&self) -> Result<SlideLayoutRef, RendererError> {
-        let layouts = self.presentation.slide_layouts()
+        let layouts = self
+            .presentation
+            .slide_layouts()
             .map_err(|e| RendererError::PptxError(e.to_string()))?;
 
-        layouts.into_iter()
+        layouts
+            .into_iter()
             .next()
             .ok_or_else(|| RendererError::PptxError("No slide layouts available".to_string()))
     }

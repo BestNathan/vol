@@ -1,13 +1,13 @@
 //! Anthropic Provider implementation.
 
+use crate::LLMConfig;
 use async_trait::async_trait;
+use futures_util::StreamExt;
 use reqwest::Client;
 use serde_json::json;
+use tokio::sync::mpsc;
 use tracing::info;
 use vol_llm_core::*;
-use crate::LLMConfig;
-use tokio::sync::mpsc;
-use futures_util::StreamExt;
 
 /// Anthropic Provider
 pub struct AnthropicProvider {
@@ -38,9 +38,7 @@ impl AnthropicProvider {
                     // Anthropic: system must be sent separately, not in messages
                 }
                 MessageRole::User => {
-                    let content = msg.content.as_ref()
-                        .map(|c| c.as_str())
-                        .unwrap_or("");
+                    let content = msg.content.as_ref().map(|c| c.as_str()).unwrap_or("");
                     result.push(json!({
                         "role": "user",
                         "content": content,
@@ -96,16 +94,19 @@ impl AnthropicProvider {
 
     /// Convert tools to Anthropic format
     fn convert_tools(&self, tools: &[ToolDefinition]) -> serde_json::Value {
-        json!(tools.iter().map(|t| {
-            json!({
-                "name": t.name,
-                "description": t.description,
-                "input_schema": t.parameters.as_ref().unwrap_or(&json!({
-                    "type": "object",
-                    "properties": {}
-                })),
+        json!(tools
+            .iter()
+            .map(|t| {
+                json!({
+                    "name": t.name,
+                    "description": t.description,
+                    "input_schema": t.parameters.as_ref().unwrap_or(&json!({
+                        "type": "object",
+                        "properties": {}
+                    })),
+                })
             })
-        }).collect::<Vec<_>>())
+            .collect::<Vec<_>>())
     }
 }
 
@@ -161,7 +162,8 @@ impl LLMClient for AnthropicProvider {
         // Send request
         let url = format!("{}/v1/messages", self.base_url);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -185,7 +187,10 @@ impl LLMClient for AnthropicProvider {
                 return Err(LLMError::Api { status, message });
             }
 
-            return Err(LLMError::Api { status, message: error_text });
+            return Err(LLMError::Api {
+                status,
+                message: error_text,
+            });
         }
 
         // Parse response
@@ -229,10 +234,9 @@ impl LLMClient for AnthropicProvider {
         let usage = TokenUsage {
             prompt_tokens: result["usage"]["input_tokens"].as_u64().unwrap_or(0) as u32,
             completion_tokens: result["usage"]["output_tokens"].as_u64().unwrap_or(0) as u32,
-            total_tokens: (
-                result["usage"]["input_tokens"].as_u64().unwrap_or(0) +
-                result["usage"]["output_tokens"].as_u64().unwrap_or(0)
-            ) as u32,
+            total_tokens: (result["usage"]["input_tokens"].as_u64().unwrap_or(0)
+                + result["usage"]["output_tokens"].as_u64().unwrap_or(0))
+                as u32,
             cached_tokens: None,
         };
 
@@ -301,7 +305,8 @@ impl LLMClient for AnthropicProvider {
         // Send request
         let url = format!("{}/v1/messages", self.base_url);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -325,7 +330,10 @@ impl LLMClient for AnthropicProvider {
                 return Err(LLMError::Api { status, message });
             }
 
-            return Err(LLMError::Api { status, message: error_text });
+            return Err(LLMError::Api {
+                status,
+                message: error_text,
+            });
         }
 
         // Create channel for streaming events
@@ -408,7 +416,9 @@ mod tests {
 
         // The User-Agent is hardcoded in the converse method
         // This test ensures it matches the expected format
-        assert!(EXPECTED_USER_AGENT.starts_with("claude-code/"),
-            "User-Agent must start with 'claude-code/' to access DashScope coding endpoint");
+        assert!(
+            EXPECTED_USER_AGENT.starts_with("claude-code/"),
+            "User-Agent must start with 'claude-code/' to access DashScope coding endpoint"
+        );
     }
 }

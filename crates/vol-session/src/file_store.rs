@@ -1,14 +1,14 @@
 //! File-based message store using JSONL format.
 
+use crate::message::SessionMessage;
+use crate::store::MessageStore;
+use crate::store::{Result, StoreError};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use vol_llm_core::Message;
-use crate::store::{Result, StoreError};
-use crate::message::SessionMessage;
-use crate::store::MessageStore;
 
 /// File-based message store using JSONL format.
 pub struct FileMessageStore {
@@ -122,21 +122,21 @@ impl FileMessageStore {
 impl MessageStore for FileMessageStore {
     async fn save(&self, message: SessionMessage) -> Result<()> {
         let line = Self::to_line(&message);
-        let json = serde_json::to_string(&line)
-            .map_err(|e| StoreError::Serialization(format!("Failed to serialize message: {}", e)))?;
-        self.append_line(&json)
-            .map_err(|e| StoreError::Io(e))?;
+        let json = serde_json::to_string(&line).map_err(|e| {
+            StoreError::Serialization(format!("Failed to serialize message: {}", e))
+        })?;
+        self.append_line(&json).map_err(|e| StoreError::Io(e))?;
         Ok(())
     }
 
     async fn get_by_session(&self, _session_id: &str, limit: usize) -> Result<Vec<SessionMessage>> {
-        let lines = self.read_all_lines()
-            .map_err(|e| StoreError::Io(e))?;
+        let lines = self.read_all_lines().map_err(|e| StoreError::Io(e))?;
 
         let mut messages = Vec::new();
         for line in lines {
-            let msg_line: SessionMessageLine = serde_json::from_str(&line)
-                .map_err(|e| StoreError::Serialization(format!("Failed to parse JSONL line: {}", e)))?;
+            let msg_line: SessionMessageLine = serde_json::from_str(&line).map_err(|e| {
+                StoreError::Serialization(format!("Failed to parse JSONL line: {}", e))
+            })?;
             messages.push(Self::from_line(&msg_line)?);
             if messages.len() >= limit {
                 break;
@@ -145,15 +145,19 @@ impl MessageStore for FileMessageStore {
         Ok(messages)
     }
 
-    async fn get_before(&self, _session_id: &str, _before: i64, _limit: usize) -> Result<Vec<SessionMessage>> {
+    async fn get_before(
+        &self,
+        _session_id: &str,
+        _before: i64,
+        _limit: usize,
+    ) -> Result<Vec<SessionMessage>> {
         // TODO: Implement timestamp-based pagination
         unimplemented!("get_before is not yet implemented")
     }
 
     async fn delete_session(&self, _session_id: &str) -> Result<()> {
         if self.file_path.exists() {
-            fs::remove_file(&self.file_path)
-                .map_err(|e| StoreError::Io(e))?;
+            fs::remove_file(&self.file_path).map_err(|e| StoreError::Io(e))?;
         }
         Ok(())
     }
@@ -164,8 +168,7 @@ impl MessageStore for FileMessageStore {
     }
 
     async fn get_count(&self, _session_id: &str) -> Result<usize> {
-        let lines = self.read_all_lines()
-            .map_err(|e| StoreError::Io(e))?;
+        let lines = self.read_all_lines().map_err(|e| StoreError::Io(e))?;
         Ok(lines.len())
     }
 
@@ -178,18 +181,16 @@ impl MessageStore for FileMessageStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_llm_core::Message;
     use tempfile::tempdir;
+    use vol_llm_core::Message;
 
     #[tokio::test]
     async fn test_file_message_store_save() {
         let temp_dir = tempdir().unwrap();
         let store = FileMessageStore::new(temp_dir.path(), "test-session");
 
-        let message = SessionMessage::new(
-            "test-session".to_string(),
-            Message::user("Hello, World!"),
-        );
+        let message =
+            SessionMessage::new("test-session".to_string(), Message::user("Hello, World!"));
 
         store.save(message).await.unwrap();
 
@@ -198,7 +199,13 @@ mod tests {
 
         let content = fs::read_to_string(&store.file_path).unwrap();
         assert!(!content.is_empty(), "JSONL file should have content");
-        assert!(content.contains("SessionMessage"), "Should contain event type");
-        assert!(content.contains("Hello, World!"), "Should contain message content");
+        assert!(
+            content.contains("SessionMessage"),
+            "Should contain event type"
+        );
+        assert!(
+            content.contains("Hello, World!"),
+            "Should contain message content"
+        );
     }
 }

@@ -3,8 +3,8 @@
 use crate::react::plugin::*;
 use crate::react::run_context::PluginContext;
 use crate::{AgentResponse, AgentStreamEvent};
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Cache entry with TTL
@@ -49,8 +49,8 @@ impl SemanticCache {
     }
 
     pub fn cache_key(&self, input: &str) -> String {
-        use std::hash::{Hash, Hasher};
         use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
         let mut hasher = DefaultHasher::new();
         input.hash(&mut hasher);
         format!("cache_{}", hasher.finish())
@@ -147,9 +147,9 @@ impl AgentPlugin for CachingPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::react::{AgentConfig, PluginContext, RunContext};
+    use crate::session::{InMemoryMessageStore, InMemorySessionStore, Session};
     use std::sync::Arc;
-    use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-    use crate::react::{AgentConfig, RunContext, PluginContext};
 
     fn create_test_plugin_context() -> PluginContext {
         let (ctx, _rx) = RunContext::new(
@@ -166,8 +166,6 @@ mod tests {
         );
         PluginContext::from_run_ctx(&ctx)
     }
-
-
 
     #[tokio::test]
     async fn test_caching_plugin_cache_operations() {

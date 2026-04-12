@@ -1,9 +1,9 @@
 //! Log cleanup utilities for retention policy enforcement.
 
-use std::path::Path;
-use std::fs;
-use chrono::{Utc, Duration, NaiveDate};
+use chrono::{Duration, NaiveDate, Utc};
 use regex::Regex;
+use std::fs;
+use std::path::Path;
 use tracing;
 
 pub async fn cleanup_old_logs(agent_path: &Path) -> Result<(), LogError> {
@@ -12,20 +12,31 @@ pub async fn cleanup_old_logs(agent_path: &Path) -> Result<(), LogError> {
 
     // Clean session logs older than 7 days
     match cleanup_session_logs(&sessions_path, 7).await {
-        Ok(count) => tracing::debug!(path = %sessions_path.display(), count, "Cleaned up old session logs"),
-        Err(e) => tracing::warn!(path = %sessions_path.display(), error = %e, "Failed to cleanup session logs"),
+        Ok(count) => {
+            tracing::debug!(path = %sessions_path.display(), count, "Cleaned up old session logs")
+        }
+        Err(e) => {
+            tracing::warn!(path = %sessions_path.display(), error = %e, "Failed to cleanup session logs")
+        }
     }
 
     // Keep only last 10 run logs
     match cleanup_run_logs(&runs_path, 10).await {
-        Ok(count) => tracing::debug!(path = %runs_path.display(), count, "Cleaned up excess run logs"),
-        Err(e) => tracing::warn!(path = %runs_path.display(), error = %e, "Failed to cleanup run logs"),
+        Ok(count) => {
+            tracing::debug!(path = %runs_path.display(), count, "Cleaned up excess run logs")
+        }
+        Err(e) => {
+            tracing::warn!(path = %runs_path.display(), error = %e, "Failed to cleanup run logs")
+        }
     }
 
     Ok(())
 }
 
-pub async fn cleanup_session_logs(sessions_path: &Path, retention_days: u32) -> Result<usize, LogError> {
+pub async fn cleanup_session_logs(
+    sessions_path: &Path,
+    retention_days: u32,
+) -> Result<usize, LogError> {
     if !sessions_path.exists() {
         return Ok(0);
     }

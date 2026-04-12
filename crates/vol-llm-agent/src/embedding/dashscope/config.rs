@@ -43,8 +43,7 @@ pub struct DashScopeConfig {
 impl Default for DashScopeConfig {
     fn default() -> Self {
         Self {
-            api_key: std::env::var("DASHSCOPE_API_KEY")
-                .unwrap_or_else(|_| String::new()),
+            api_key: std::env::var("DASHSCOPE_API_KEY").unwrap_or_else(|_| String::new()),
             model: DashScopeModel::default(),
             base_url: "https://dashscope.aliyuncs.com/api/v1".to_string(),
             timeout_secs: 30,

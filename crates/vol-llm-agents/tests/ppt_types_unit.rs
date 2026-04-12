@@ -1,7 +1,7 @@
 //! PPT 类型单元测试。
 
-use vol_llm_agents::ppt::{Outline, SlideDef, SlideType};
 use serde_json::json;
+use vol_llm_agents::ppt::{Outline, SlideDef, SlideType};
 
 #[test]
 fn test_outline_json_parsing() {
@@ -25,7 +25,10 @@ fn test_outline_json_parsing() {
     assert_eq!(outline.slides[0].subtitle, Some("Subtitle".to_string()));
 
     // Check TOC slide
-    assert!(matches!(outline.slides[1].slide_type, SlideType::TableOfContents));
+    assert!(matches!(
+        outline.slides[1].slide_type,
+        SlideType::TableOfContents
+    ));
     assert_eq!(outline.slides[1].sections.len(), 2);
 
     // Check content slide
@@ -84,5 +87,8 @@ fn test_outline_with_section_header() {
     assert_eq!(outline.title, "Quarterly Review");
     assert_eq!(outline.slides.len(), 3);
 
-    assert!(matches!(outline.slides[1].slide_type, SlideType::SectionHeader));
+    assert!(matches!(
+        outline.slides[1].slide_type,
+        SlideType::SectionHeader
+    ));
 }

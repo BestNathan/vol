@@ -1,8 +1,8 @@
 //! TDengine client for querying historical data.
 
-use reqwest::Client;
 use crate::config::TdengineConfig;
 use crate::types::TdengineResponse;
+use reqwest::Client;
 
 /// TDengine client
 #[derive(Clone)]
@@ -127,19 +127,29 @@ impl TdengineClient {
     }
 
     /// Query rule info - maps to deribit_rv (realized volatility)
-    pub async fn query_rules(&self, rule_name: Option<&str>) -> Result<TdengineResponse, reqwest::Error> {
+    pub async fn query_rules(
+        &self,
+        rule_name: Option<&str>,
+    ) -> Result<TdengineResponse, reqwest::Error> {
         let sql = match rule_name {
             Some(name) => {
                 // Convert to uppercase and extract base (e.g., "btc_usd" -> "BTC")
-                let index_name = name.to_uppercase().split('_').next().unwrap_or(name).to_string();
+                let index_name = name
+                    .to_uppercase()
+                    .split('_')
+                    .next()
+                    .unwrap_or(name)
+                    .to_string();
                 format!(
                     "SELECT _ts, rv, index_name \
                      FROM deribit_rv \
                      WHERE index_name = '{}'",
                     index_name
                 )
-            },
-            None => "SELECT _ts, rv, index_name FROM deribit_rv ORDER BY _ts DESC LIMIT 100".to_string(),
+            }
+            None => {
+                "SELECT _ts, rv, index_name FROM deribit_rv ORDER BY _ts DESC LIMIT 100".to_string()
+            }
         };
 
         self.query_with_db(&sql).await

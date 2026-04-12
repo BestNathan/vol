@@ -2,12 +2,11 @@
 
 use async_trait::async_trait;
 use tokio::sync::mpsc;
-use tracing::{info, warn, error, info_span};
+use tracing::{error, info, info_span, warn};
 use vol_config::{DeribitClientConfig, PortfolioConfig};
-use vol_core::{DataSource, MonitoringEvent, PortfolioSnapshot, Result, HealthStatus, EventType};
+use vol_core::{DataSource, EventType, HealthStatus, MonitoringEvent, PortfolioSnapshot, Result};
 use vol_deribit::DeribitClient;
 use vol_tracing::{new_trace_id, Instrument, TracedEvent};
-
 
 pub struct PortfolioDataSource {
     id: String,
@@ -18,13 +17,20 @@ pub struct PortfolioDataSource {
 
 impl PortfolioDataSource {
     /// Create a new PortfolioDataSource from client configuration
-    pub fn from_config(client_config: DeribitClientConfig, portfolio_config: PortfolioConfig) -> Self {
+    pub fn from_config(
+        client_config: DeribitClientConfig,
+        portfolio_config: PortfolioConfig,
+    ) -> Self {
         let client = DeribitClient::new(&client_config.ws_url);
 
         // Configure auth from config or environment variables
         let client = if client_config.has_auth() {
-            let client_id = client_config.client_id().expect("client_id should exist after has_auth check");
-            let client_secret = client_config.client_secret().expect("client_secret should exist after has_auth check");
+            let client_id = client_config
+                .client_id()
+                .expect("client_id should exist after has_auth check");
+            let client_secret = client_config
+                .client_secret()
+                .expect("client_secret should exist after has_auth check");
             info!("Using Deribit credentials from config or environment variables");
             client.with_auth(client_id, client_secret)
         } else {
@@ -61,8 +67,10 @@ impl PortfolioDataSource {
             theta_total += pos.theta;
         }
 
-        info!("Fetched portfolio {}: equity={:.4}, balance={:.4}, delta={:.2}, vega={:.2}",
-              currency, summary.equity, summary.balance, delta_total, vega_total);
+        info!(
+            "Fetched portfolio {}: equity={:.4}, balance={:.4}, delta={:.2}, vega={:.2}",
+            currency, summary.equity, summary.balance, delta_total, vega_total
+        );
 
         Ok(PortfolioSnapshot {
             currency: summary.currency,
@@ -104,7 +112,7 @@ impl DataSource for PortfolioDataSource {
         // Verify client has authentication configured
         if !self.client.has_auth() {
             return Err(vol_core::VolError::Connection(
-                "PortfolioDataSource requires authenticated client".to_string()
+                "PortfolioDataSource requires authenticated client".to_string(),
             ));
         }
         info!("PortfolioDataSource connected and authenticated");
@@ -112,7 +120,10 @@ impl DataSource for PortfolioDataSource {
     }
 
     async fn run(&self, tx: mpsc::Sender<TracedEvent<MonitoringEvent>>) -> Result<()> {
-        info!("Starting portfolio data source with {} currencies", self.currencies.len());
+        info!(
+            "Starting portfolio data source with {} currencies",
+            self.currencies.len()
+        );
 
         let base_interval = self.poll_interval_secs;
         let mut error_count = 0;
@@ -140,7 +151,11 @@ impl DataSource for PortfolioDataSource {
                         );
 
                         // Wrap event with TracedEvent for span propagation
-                        let traced_event = TracedEvent::new(MonitoringEvent::Portfolio(snapshot), span.clone(), trace_id);
+                        let traced_event = TracedEvent::new(
+                            MonitoringEvent::Portfolio(snapshot),
+                            span.clone(),
+                            trace_id,
+                        );
 
                         if let Err(e) = tx.send(traced_event).instrument(span).await {
                             error!("Failed to send portfolio event: {}", e);
@@ -162,7 +177,8 @@ impl DataSource for PortfolioDataSource {
             } else {
                 error_count += 1;
                 // Exponential backoff: double interval, max 5x base
-                current_interval = std::cmp::min(base_interval * 2_u64.pow(error_count), base_interval * 5);
+                current_interval =
+                    std::cmp::min(base_interval * 2_u64.pow(error_count), base_interval * 5);
             }
         }
     }

@@ -28,7 +28,11 @@ impl Default for EngineConfig {
 
 impl EngineConfig {
     /// Create a new config with custom buffer sizes
-    pub fn new(event_buffer_size: usize, alert_buffer_size: usize, config_file: EngineConfigFile) -> Self {
+    pub fn new(
+        event_buffer_size: usize,
+        alert_buffer_size: usize,
+        config_file: EngineConfigFile,
+    ) -> Self {
         Self {
             event_buffer_size,
             alert_buffer_size,

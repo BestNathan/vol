@@ -1,9 +1,9 @@
 //! PPT Agent 模板系统。
 
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 
 /// PPT 模板定义
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -57,15 +57,15 @@ pub enum LayoutType {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LayoutElement {
-    pub element_type: String,       // "textbox", "image", "chart"
-    pub placeholder: String,        // "title", "subtitle", "bullets"
+    pub element_type: String, // "textbox", "image", "chart"
+    pub placeholder: String,  // "title", "subtitle", "bullets"
     pub position: Position,
     pub style: ElementStyle,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Position {
-    pub x: i32,       // EMU units (1 inch = 914400 EMU)
+    pub x: i32, // EMU units (1 inch = 914400 EMU)
     pub y: i32,
     pub width: i32,
     pub height: i32,
@@ -74,7 +74,7 @@ pub struct Position {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ElementStyle {
     pub font_size: i32,
-    pub color: Option<String>,     // HEX, or "{{primary}}" for template reference
+    pub color: Option<String>, // HEX, or "{{primary}}" for template reference
     pub bullet_style: Option<String>,
 }
 
@@ -87,10 +87,10 @@ impl Default for TemplateLayout {
                     element_type: "textbox".to_string(),
                     placeholder: "title".to_string(),
                     position: Position {
-                        x: 457200,  // 0.5 inch
-                        y: 228600,  // 0.25 inch
-                        width: 8229600,  // 9 inches
-                        height: 914400,  // 1 inch
+                        x: 457200,      // 0.5 inch
+                        y: 228600,      // 0.25 inch
+                        width: 8229600, // 9 inches
+                        height: 914400, // 1 inch
                     },
                     style: ElementStyle {
                         font_size: 24,
@@ -103,9 +103,9 @@ impl Default for TemplateLayout {
                     placeholder: "content".to_string(),
                     position: Position {
                         x: 457200,
-                        y: 1371600,  // 1.5 inches
+                        y: 1371600, // 1.5 inches
                         width: 8229600,
-                        height: 4572000,  // 5 inches
+                        height: 4572000, // 5 inches
                     },
                     style: ElementStyle {
                         font_size: 16,
@@ -164,12 +164,22 @@ impl TemplateRegistry {
                 let keyword_lower = keyword.to_lowercase();
 
                 // Check occasion tags
-                if template.tags.occasion.iter().any(|t| t.to_lowercase().contains(&keyword_lower)) {
+                if template
+                    .tags
+                    .occasion
+                    .iter()
+                    .any(|t| t.to_lowercase().contains(&keyword_lower))
+                {
                     return Some(template);
                 }
 
                 // Check style tags
-                if template.tags.style.iter().any(|t| t.to_lowercase().contains(&keyword_lower)) {
+                if template
+                    .tags
+                    .style
+                    .iter()
+                    .any(|t| t.to_lowercase().contains(&keyword_lower))
+                {
                     return Some(template);
                 }
             }

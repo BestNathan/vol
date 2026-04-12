@@ -3,8 +3,8 @@
 use crate::react::plugin::*;
 use crate::react::run_context::PluginContext;
 use crate::AgentStreamEvent;
-use tokio::sync::Semaphore;
 use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 /// Rate limiter plugin
 pub struct RateLimiterPlugin {
@@ -51,9 +51,9 @@ impl AgentPlugin for RateLimiterPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::react::{AgentConfig, PluginContext, RunContext};
+    use crate::session::{InMemoryMessageStore, InMemorySessionStore, Session};
     use std::sync::Arc;
-    use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-    use crate::react::{AgentConfig, RunContext, PluginContext};
 
     fn create_test_plugin_context() -> PluginContext {
         let (ctx, _rx) = RunContext::new(

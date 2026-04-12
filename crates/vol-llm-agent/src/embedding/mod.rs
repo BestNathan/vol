@@ -16,8 +16,8 @@
 //! }
 //! ```
 
-pub mod embedder;
 pub mod dashscope;
+pub mod embedder;
 
+pub use dashscope::{DashScopeConfig, DashScopeEmbedder, DashScopeModel};
 pub use embedder::Embedder;
-pub use dashscope::{DashScopeEmbedder, DashScopeConfig, DashScopeModel};

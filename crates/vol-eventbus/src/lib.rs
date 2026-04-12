@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use vol_core::{VolatilityData, Alert, VolError};
+use vol_core::{Alert, VolError, VolatilityData};
 
 /// Event types that flow through the event bus
 #[derive(Debug, Clone)]

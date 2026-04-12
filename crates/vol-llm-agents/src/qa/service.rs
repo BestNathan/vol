@@ -4,7 +4,7 @@
 //! Business logic layer that wraps `RagAgent` for domain-specific use cases.
 
 use std::sync::Arc;
-use vol_llm_agent::{RagAgent, RagConfig, Document, Embedder, EmbeddingStore};
+use vol_llm_agent::{Document, Embedder, EmbeddingStore, RagAgent, RagConfig};
 use vol_llm_core::Result;
 
 /// QA Agent configuration
@@ -31,7 +31,8 @@ impl Default for QaAgentConfig {
 3. 回答清晰、准确、简洁
 4. 必要时注明信息来源
 
-请基于以下检索结果回答问题。"#.to_string(),
+请基于以下检索结果回答问题。"#
+                .to_string(),
         }
     }
 }
@@ -133,8 +134,17 @@ impl QaResponse {
         if !self.sources.is_empty() {
             result.push_str("\n\n--- 参考资料 ---\n");
             for (i, doc) in self.sources.iter().enumerate() {
-                let source = doc.metadata.get("source").map(|s| s.as_str()).unwrap_or("unknown");
-                result.push_str(&format!("{}. [{}] {}\n", i + 1, source, doc.content.chars().take(100).collect::<String>()));
+                let source = doc
+                    .metadata
+                    .get("source")
+                    .map(|s| s.as_str())
+                    .unwrap_or("unknown");
+                result.push_str(&format!(
+                    "{}. [{}] {}\n",
+                    i + 1,
+                    source,
+                    doc.content.chars().take(100).collect::<String>()
+                ));
             }
         }
 
@@ -147,7 +157,10 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use vol_llm_agent::rag::{InMemoryStore, RagConfig};
-    use vol_llm_core::{LLMClient, LLMProvider, Message, ConversationRequest, ConversationResponse, TokenUsage, FinishReason, SupportedParam};
+    use vol_llm_core::{
+        ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMProvider, Message,
+        SupportedParam, TokenUsage,
+    };
 
     // Mock Embedder for testing
     struct MockEmbedder;
@@ -179,7 +192,9 @@ mod tests {
 
         async fn converse(&self, _request: ConversationRequest) -> Result<ConversationResponse> {
             Ok(ConversationResponse {
-                message: Message::assistant("Based on the knowledge base, the answer is...".to_string()),
+                message: Message::assistant(
+                    "Based on the knowledge base, the answer is...".to_string(),
+                ),
                 model: "test".to_string(),
                 usage: TokenUsage::default(),
                 finish_reason: FinishReason::Stop,
@@ -187,7 +202,10 @@ mod tests {
             })
         }
 
-        async fn converse_stream(&self, _request: ConversationRequest) -> Result<vol_llm_core::StreamReceiver> {
+        async fn converse_stream(
+            &self,
+            _request: ConversationRequest,
+        ) -> Result<vol_llm_core::StreamReceiver> {
             unimplemented!()
         }
     }

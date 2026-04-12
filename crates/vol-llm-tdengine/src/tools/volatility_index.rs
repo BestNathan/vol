@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use serde_json::json;
 use tracing::info;
-use vol_llm_tool::{ExecutableTool, ToolResult, ToolContext, ToolError};
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult};
 use vol_tdengine::{TdengineClient, TdengineConfig, TdengineResponse};
 
 /// Volatility index tool for querying deribit_volatility_index table
@@ -21,7 +21,10 @@ impl VolatilityIndexTool {
     /// Process TDengine response and format result
     fn format_response(&self, response: TdengineResponse, index_name: &str) -> String {
         if response.code != 0 {
-            return format!("Error: {}", response.desc.unwrap_or_else(|| "Unknown error".to_string()));
+            return format!(
+                "Error: {}",
+                response.desc.unwrap_or_else(|| "Unknown error".to_string())
+            );
         }
 
         let data = response.data.unwrap_or(json!([]));
@@ -45,7 +48,10 @@ impl VolatilityIndexTool {
             }
         }
 
-        format!("Retrieved {} rows for {} (volatility index)", rows, index_name)
+        format!(
+            "Retrieved {} rows for {} (volatility index)",
+            rows, index_name
+        )
     }
 }
 
@@ -81,7 +87,11 @@ impl ExecutableTool for VolatilityIndexTool {
         })
     }
 
-    async fn execute(&self, args: &serde_json::Value, _context: &ToolContext) -> Result<ToolResult, ToolError> {
+    async fn execute(
+        &self,
+        args: &serde_json::Value,
+        _context: &ToolContext,
+    ) -> Result<ToolResult, ToolError> {
         let symbol = args["symbol"]
             .as_str()
             .ok_or_else(|| ToolError::InvalidArguments("symbol required".to_string()))?;
@@ -89,7 +99,10 @@ impl ExecutableTool for VolatilityIndexTool {
         let limit = args["limit"].as_u64().unwrap_or(10) as u32;
         let hours = args["hours"].as_u64().map(|h| h as u32);
 
-        info!("Querying volatility index for {} (limit={}, hours={:?})", symbol, limit, hours);
+        info!(
+            "Querying volatility index for {} (limit={}, hours={:?})",
+            symbol, limit, hours
+        );
 
         let time_filter = match hours {
             Some(h) => format!("AND _ts >= NOW - {}h", h),

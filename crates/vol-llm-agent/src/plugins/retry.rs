@@ -68,9 +68,9 @@ impl AgentPlugin for RetryPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::react::{AgentConfig, PluginContext, RunContext};
+    use crate::session::{InMemoryMessageStore, InMemorySessionStore, Session};
     use std::sync::Arc;
-    use crate::session::{Session, InMemorySessionStore, InMemoryMessageStore};
-    use crate::react::{AgentConfig, RunContext, PluginContext};
 
     fn create_test_plugin_context() -> PluginContext {
         let (ctx, _rx) = RunContext::new(

@@ -1,8 +1,8 @@
 //! 模板匹配工具。
 
-use vol_llm_tool::{ExecutableTool, ToolContext, ToolResult, ToolError};
-use serde_json::Value;
 use async_trait::async_trait;
+use serde_json::Value;
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult};
 
 /// 模板匹配工具
 pub struct TemplateMatcherTool;
@@ -46,7 +46,11 @@ impl ExecutableTool for TemplateMatcherTool {
         })
     }
 
-    async fn execute(&self, _args: &Value, _context: &ToolContext) -> Result<ToolResult, ToolError> {
+    async fn execute(
+        &self,
+        _args: &Value,
+        _context: &ToolContext,
+    ) -> Result<ToolResult, ToolError> {
         // TODO: Implement template matching
         Ok(ToolResult {
             call_id: String::new(),

@@ -5,11 +5,11 @@
 //! This script creates a document summarizing the vol-feishu to openlark migration
 //! and uploads it to Feishu Cloud Drive.
 
-use tracing_subscriber::{self, EnvFilter};
-use tracing::{info, error, warn};
-use std::fs;
 use reqwest::Client;
 use serde_json::json;
+use std::fs;
+use tracing::{error, info, warn};
+use tracing_subscriber::{self, EnvFilter};
 
 // Feishu credentials from config
 const APP_ID: &str = "cli_a936b13197385bde";
@@ -226,7 +226,8 @@ cargo build --release
 ---
 
 *此文档由 upload-doc 脚本自动生成*
-"#.to_string()
+"#
+    .to_string()
 }
 
 /// Get access token from Feishu
@@ -298,11 +299,19 @@ async fn upload_to_feishu(content: &str) -> Result<(String, String), Box<dyn std
     let create_text = create_response.text().await?;
 
     info!("Create file response status: {}", create_status);
-    info!("Create file response: {}", &create_text[..500.min(create_text.len())]);
+    info!(
+        "Create file response: {}",
+        &create_text[..500.min(create_text.len())]
+    );
 
     if !create_status.is_success() {
         warn!("Create file failed with status {}", create_status);
-        return Err(format!("Create file failed: {} - {}", create_status, &create_text[..200.min(create_text.len())]).into());
+        return Err(format!(
+            "Create file failed: {} - {}",
+            create_status,
+            &create_text[..200.min(create_text.len())]
+        )
+        .into());
     }
 
     let create_json: serde_json::Value = serde_json::from_str(&create_text)?;
@@ -311,7 +320,10 @@ async fn upload_to_feishu(content: &str) -> Result<(String, String), Box<dyn std
     // Check for API error code
     if let Some(code) = create_json.get("code").and_then(|v| v.as_i64()) {
         if code != 0 {
-            let msg = create_json.get("msg").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+            let msg = create_json
+                .get("msg")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown error");
             return Err(format!("Feishu API error {}: {}", code, msg).into());
         }
     }

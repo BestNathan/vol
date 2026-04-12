@@ -3,8 +3,7 @@
 use once_cell::sync::Lazy;
 
 /// Compiled regex pattern for parsing injection points (static, initialized once).
-static INJECTION_RE: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r"\{(\w+)\}").unwrap());
+static INJECTION_RE: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"\{(\w+)\}").unwrap());
 
 /// A prompt template - a user-defined template with named injection points.
 ///
@@ -76,10 +75,7 @@ mod tests {
 
     #[test]
     fn test_prompt_template_new_single_injection() {
-        let template = PromptTemplate::new(
-            "test-template",
-            "You are a {role}.",
-        );
+        let template = PromptTemplate::new("test-template", "You are a {role}.");
 
         assert_eq!(template.id, "test-template");
         assert_eq!(template.content, "You are a {role}.");
@@ -111,10 +107,7 @@ mod tests {
 
     #[test]
     fn test_prompt_template_new_no_injections() {
-        let template = PromptTemplate::new(
-            "simple",
-            "You are a helpful assistant.",
-        );
+        let template = PromptTemplate::new("simple", "You are a helpful assistant.");
 
         assert_eq!(template.id, "simple");
         assert_eq!(template.content, "You are a helpful assistant.");
