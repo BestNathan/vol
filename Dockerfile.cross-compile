@@ -1,0 +1,93 @@
+# Multi-architecture single-image with dual binaries
+# =============================================================================
+# This Dockerfile creates a SINGLE image containing BOTH amd64 and arm64 binaries
+# At runtime, an entrypoint script selects the correct binary based on architecture
+#
+# Build command (single arch build, single image):
+#   docker build -f Dockerfile.cross-compile -t vol-monitor:beta .
+#
+# =============================================================================
+
+# =============================================================================
+# Stage 1: Builder - Cross-compile for both amd64 and arm64
+# =============================================================================
+# Use rust:latest for modern Cargo support (Cargo lock file v4)
+FROM library/rust:latest AS builder
+
+WORKDIR /app
+
+# Install cross-compilation toolchain for arm64
+# Configure apt sources to use Aliyun mirror for China network environment
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y \
+    gcc-aarch64-linux-gnu \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add arm64 target to Rust
+RUN rustup target add aarch64-unknown-linux-gnu
+
+# Configure arm64 linker
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+
+# Copy cargo config for crates.io mirror (China)
+COPY .cargo ./.cargo
+
+# Copy dependency definitions first for better caching
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ ./crates/
+
+# Build amd64 binary (native)
+RUN echo "=== Building amd64 binary (native) ===" && \
+    cargo build --release
+
+# Build arm64 binary (cross-compile)
+RUN echo "=== Building arm64 binary (cross-compile) ===" && \
+    cargo build --release --target aarch64-unknown-linux-gnu
+
+# =============================================================================
+# Stage 2: Runtime - Single image with both binaries
+# =============================================================================
+FROM library/debian:bookworm-slim
+
+# Install CA certificates for HTTPS using Aliyun mirror
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Install dumb-init for proper signal handling
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y dumb-init && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy both binaries with architecture-specific names
+COPY --from=builder /app/target/release/vol-monitor /usr/local/bin/vol-monitor-amd64
+COPY --from=builder /app/target/aarch64-unknown-linux-gnu/release/vol-monitor /usr/local/bin/vol-monitor-arm64
+
+# Create entrypoint script that selects the correct binary
+COPY <<'EOF' /entrypoint.sh
+#!/bin/sh
+# Entrypoint script to select correct binary based on architecture
+
+ARCH=$(uname -m)
+
+case "$ARCH" in
+    x86_64)
+        echo "Detected architecture: amd64 (x86_64)"
+        exec /usr/local/bin/vol-monitor-amd64 "$@"
+        ;;
+    aarch64)
+        echo "Detected architecture: arm64 (aarch64)"
+        exec /usr/local/bin/vol-monitor-arm64 "$@"
+        ;;
+    *)
+        echo "ERROR: Unsupported architecture: $ARCH"
+        echo "Supported architectures: x86_64, aarch64"
+        exit 1
+        ;;
+esac
+EOF
+
+RUN chmod +x /entrypoint.sh
+
+# Use dumb-init as PID 1 for proper signal handling
+ENTRYPOINT ["/usr/bin/dumb-init", "/entrypoint.sh"]
