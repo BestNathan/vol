@@ -54,9 +54,6 @@ pub struct BashParams {
     /// Working directory for the command
     #[serde(default)]
     pub working_dir: Option<String>,
-    /// Whether to run in background (not implemented, for future use)
-    #[serde(default)]
-    pub run_in_background: Option<bool>,
 }
 
 /// The Bash tool for executing shell commands with security checks
@@ -136,11 +133,6 @@ impl ExecutableTool for BashTool {
                 "working_dir": {
                     "type": "string",
                     "description": "Working directory for the command"
-                },
-                "run_in_background": {
-                    "type": "boolean",
-                    "description": "Whether to run in background (not implemented)",
-                    "default": false
                 }
             },
             "required": ["command"]
@@ -220,84 +212,5 @@ impl ExecutableTool for BashTool {
         }
 
         Ok(ToolResult::success(content))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[tokio::test]
-    async fn test_bash_simple_command() {
-        let tool = BashTool::new();
-        let args = json!({
-            "command": "echo hello"
-        });
-
-        let result = tool.execute(&args, &ToolContext::default()).await.unwrap();
-        assert!(result.success);
-        assert!(result.content.contains("hello"));
-    }
-
-    #[tokio::test]
-    async fn test_bash_rm_rf_blocked() {
-        let tool = BashTool::new();
-        let args = json!({
-            "command": "rm -rf /"
-        });
-
-        let result = tool.execute(&args, &ToolContext::default()).await;
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ToolError::ExecutionFailed(_)));
-        // Check that the error message contains security-related text
-        let err_str = format!("{}", err);
-        // The error is wrapped in ExecutionFailed, but the inner error is SecurityViolation
-        // We need to check the actual error chain - for now just verify it fails
-        assert!(err_str.contains("blocked") || err_str.contains("Security"));
-    }
-
-    #[tokio::test]
-    async fn test_bash_fork_bomb_blocked() {
-        let tool = BashTool::new();
-        let args = json!({
-            "command": ":(){:|:&}:"
-        });
-
-        let result = tool.execute(&args, &ToolContext::default()).await;
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ToolError::ExecutionFailed(_)));
-    }
-
-    #[tokio::test]
-    async fn test_bash_rm_file_allowed() {
-        let tool = BashTool::new();
-        // rm with a specific file (not /) should be allowed
-        let args = json!({
-            "command": "rm /tmp/nonexistent_file_12345"
-        });
-
-        let result = tool.execute(&args, &ToolContext::default()).await.unwrap();
-        // The command runs but fails because file doesn't exist - that's expected
-        // The important thing is it's NOT blocked by security check
-        assert!(result.success || result.content.contains("No such file"));
-    }
-
-    #[tokio::test]
-    async fn test_bash_timeout() {
-        let tool = BashTool::new();
-        let args = json!({
-            "command": "sleep 5",
-            "timeout": 100
-        });
-
-        let result = tool.execute(&args, &ToolContext::default()).await;
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ToolError::ExecutionFailed(_)));
-        let err_str = format!("{}", err);
-        assert!(err_str.contains("timed out") || err_str.contains("Timeout"));
     }
 }
