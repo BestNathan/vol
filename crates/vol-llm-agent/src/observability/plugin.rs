@@ -1,6 +1,6 @@
 //! ObservabilityPlugin implementation.
 
-use super::logger::{LogEntry, LogType, ObservabilityLogger};
+use super::run_log::{LogEntry, RunLogLogger};
 use crate::react::plugin::{AgentPlugin, PluginDecision, PluginId};
 use crate::react::run_context::PluginContext;
 use crate::AgentStreamEvent;
@@ -10,12 +10,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub struct ObservabilityPlugin {
-    logger: Arc<ObservabilityLogger>,
+    logger: Arc<RunLogLogger>,
 }
 
 impl ObservabilityPlugin {
     pub fn new(agent_id: String, log_base_path: PathBuf) -> Self {
-        let logger = Arc::new(ObservabilityLogger::new(agent_id, log_base_path));
+        let logger = Arc::new(RunLogLogger::new(agent_id, log_base_path));
         Self { logger }
     }
 
@@ -74,7 +74,7 @@ impl ObservabilityPlugin {
         LogEntry {
             timestamp: Utc::now(),
             run_id: ctx.run_id.clone(),
-            agent_id: self.logger.agent_id().to_string(),
+            agent_id: ctx.config.agent_id.clone(),
             event: event_name.to_string(),
             data,
         }
@@ -97,20 +97,8 @@ impl AgentPlugin for ObservabilityPlugin {
 
     async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
         let entry = self.create_log_entry(event, ctx);
-
-        // Log to run log (by run_id) - this also emits to stdout via tracing
-        let run_log_type = LogType::Run {
-            run_id: ctx.run_id.clone(),
-        };
-        self.logger.log(&entry, &run_log_type).await;
-
-        // Log to session log (by session_id + date) - same entry, different file
-        let date = Utc::now().format("%Y%m%d").to_string();
-        let session_log_type = LogType::Session {
-            session_id: ctx.session_id.clone(),
-            date,
-        };
-        self.logger.log(&entry, &session_log_type).await;
+        // 只写入 run log
+        self.logger.log(&entry, &ctx.run_id).await;
     }
 }
 
@@ -120,7 +108,6 @@ mod tests {
     use crate::react::run_context::{PluginContext, RunContext};
     use crate::react::AgentConfig;
     use crate::session::{InMemoryMessageStore, InMemorySessionStore, Session};
-    use crate::AgentResponse;
     use std::sync::Arc;
     use tempfile::TempDir;
 
@@ -152,6 +139,9 @@ mod tests {
         };
 
         plugin.listen(&event, &ctx).await;
+
+        // Wait for async file write to complete
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Verify log file was created
         let agent_path = temp_dir.path().join("test_agent");
@@ -208,10 +198,12 @@ mod tests {
             plugin.listen(&event, &ctx).await;
         }
 
+        // Wait for async file writes to complete
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
         // Verify logs were created
         let agent_path = temp_dir.path().join("test_agent");
         assert!(agent_path.exists());
-        assert!(agent_path.join("sessions").exists());
         assert!(agent_path.join("runs").exists());
 
         // Verify run logs contain ALL event types
@@ -227,30 +219,5 @@ mod tests {
         assert!(run_content.contains(r#""event":"AgentComplete""#));
         assert!(run_content.contains(r#""event":"AgentAborted""#));
         assert!(run_content.contains(r#""event":"PluginEvent""#));
-
-        // Verify session logs contain ALL event types
-        let session_files: Vec<_> = std::fs::read_dir(agent_path.join("sessions"))
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.file_name()
-                    .to_string_lossy()
-                    .starts_with("session_session-1_")
-            })
-            .collect();
-        assert!(!session_files.is_empty(), "Expected session log file");
-
-        let session_log_path = session_files.first().unwrap().path();
-        let session_content = std::fs::read_to_string(&session_log_path).unwrap();
-
-        // All 8 events should be in session logs too
-        assert!(session_content.contains(r#""event":"AgentStart""#));
-        assert!(session_content.contains(r#""event":"ThinkingComplete""#));
-        assert!(session_content.contains(r#""event":"ToolCallBegin""#));
-        assert!(session_content.contains(r#""event":"ToolCallComplete""#));
-        assert!(session_content.contains(r#""event":"IterationComplete""#));
-        assert!(session_content.contains(r#""event":"AgentComplete""#));
-        assert!(session_content.contains(r#""event":"AgentAborted""#));
-        assert!(session_content.contains(r#""event":"PluginEvent""#));
     }
 }
