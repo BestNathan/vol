@@ -192,6 +192,7 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
     async fn intercept(&self, event: &AgentStreamEvent, ctx: &PluginContext) -> PluginDecision {
         match event {
             AgentStreamEvent::ToolCallBegin {
+                tool_call_id,
                 tool_name,
                 arguments,
             } => {
@@ -202,7 +203,7 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
                             tool_name: tool_name.clone(),
                         },
                         message: format!("Execute tool: {} with args: {}", tool_name, arguments),
-                        metadata: serde_json::json!({ "tool_name": tool_name, "arguments": arguments }),
+                        metadata: serde_json::json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "arguments": arguments }),
                     };
 
                     match self.request_approval(request).await {
@@ -258,10 +259,11 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
     /// Listener hook - logs HITL events for audit
     async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
         match event {
-            AgentStreamEvent::ToolCallBegin { tool_name, .. } => {
+            AgentStreamEvent::ToolCallBegin { tool_call_id, tool_name, .. } => {
                 if self.needs_tool_approval(tool_name) {
                     tracing::info!(
                         run_id = %ctx.run_id,
+                        tool_call_id = %tool_call_id,
                         tool_name = %tool_name,
                         "HITL: Tool execution requires approval"
                     );

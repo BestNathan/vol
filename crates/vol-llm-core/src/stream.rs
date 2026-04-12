@@ -65,12 +65,17 @@ pub enum AgentStreamEvent {
 
     /// About to call tool
     ToolCallBegin {
+        tool_call_id: String,
         tool_name: String,
         arguments: String,
     },
 
     /// Tool call completed
-    ToolCallComplete { tool_name: String, result: String },
+    ToolCallComplete {
+        tool_call_id: String,
+        tool_name: String,
+        result: String,
+    },
 
     /// One iteration completed (Reason-Act-Observation)
     IterationComplete {
@@ -112,14 +117,17 @@ mod tests {
     #[test]
     fn test_agent_stream_event_tool_call() {
         let event = AgentStreamEvent::ToolCallBegin {
+            tool_call_id: "call_123".to_string(),
             tool_name: "get_weather".to_string(),
             arguments: r#"{"city": "Beijing"}"#.to_string(),
         };
         match event {
             AgentStreamEvent::ToolCallBegin {
+                tool_call_id,
                 tool_name,
                 arguments,
             } => {
+                assert_eq!(tool_call_id, "call_123");
                 assert_eq!(tool_name, "get_weather");
                 assert_eq!(arguments, r#"{"city": "Beijing"}"#);
             }

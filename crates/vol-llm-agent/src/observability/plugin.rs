@@ -27,18 +27,25 @@ impl ObservabilityPlugin {
                 ("ThinkingComplete", json!({ "thinking": thinking }))
             }
             AgentStreamEvent::ToolCallBegin {
+                tool_call_id,
                 tool_name,
                 arguments,
             } => (
                 "ToolCallBegin",
                 json!({
+                    "tool_call_id": tool_call_id,
                     "tool_name": tool_name,
                     "arguments": arguments
                 }),
             ),
-            AgentStreamEvent::ToolCallComplete { tool_name, result } => (
+            AgentStreamEvent::ToolCallComplete {
+                tool_call_id,
+                tool_name,
+                result,
+            } => (
                 "ToolCallComplete",
                 json!({
+                    "tool_call_id": tool_call_id,
                     "tool_name": tool_name,
                     "result": result
                 }),
@@ -173,10 +180,12 @@ mod tests {
                 thinking: "thought".to_string(),
             },
             AgentStreamEvent::ToolCallBegin {
+                tool_call_id: "call_123".to_string(),
                 tool_name: "test_tool".to_string(),
                 arguments: "{\"key\": \"value\"}".to_string(),
             },
             AgentStreamEvent::ToolCallComplete {
+                tool_call_id: "call_123".to_string(),
                 tool_name: "test_tool".to_string(),
                 result: "tool result".to_string(),
             },

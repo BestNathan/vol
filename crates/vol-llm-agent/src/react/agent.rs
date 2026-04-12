@@ -345,6 +345,7 @@ impl ReActAgent {
 
                         // === Emit and intercept ToolCallBegin ===
                         let tool_event = AgentStreamEvent::ToolCallBegin {
+                            tool_call_id: call.id.clone(),
                             tool_name: call.name.clone(),
                             arguments: call.arguments.clone(),
                         };
@@ -420,6 +421,7 @@ impl ReActAgent {
                         // Emit ToolCallComplete
                         run_ctx
                             .emit(AgentStreamEvent::ToolCallComplete {
+                                tool_call_id: call.id.clone(),
                                 tool_name: call.name.clone(),
                                 result: result.content.clone(),
                             })

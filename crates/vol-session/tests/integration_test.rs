@@ -40,6 +40,7 @@ async fn test_session_listener_full_workflow() {
     // ToolCallBegin
     event_tx
         .send(TracedEvent::without_span(AgentStreamEvent::ToolCallBegin {
+            tool_call_id: "call_1".to_string(),
             tool_name: "volatility_index".to_string(),
             arguments: r#"{"symbol": "BTC"}"#.to_string(),
         }))
@@ -50,6 +51,7 @@ async fn test_session_listener_full_workflow() {
     event_tx
         .send(TracedEvent::without_span(
             AgentStreamEvent::ToolCallComplete {
+                tool_call_id: "call_1".to_string(),
                 tool_name: "volatility_index".to_string(),
                 result: "Index: btc_usd | Volatility: 42.98%".to_string(),
             },
@@ -129,6 +131,7 @@ async fn test_session_listener_filters_events() {
     event_tx
         .send(TracedEvent::without_span(
             AgentStreamEvent::ToolCallComplete {
+                tool_call_id: "call_2".to_string(),
                 tool_name: "test_tool".to_string(),
                 result: "result".to_string(),
             },
