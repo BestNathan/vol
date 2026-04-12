@@ -86,6 +86,11 @@ impl ExecutableTool for EditTool {
             ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
         })?;
 
+        // Validate old_string is not empty
+        if params.old_string.is_empty() {
+            return Err(ToolError::InvalidArguments("old_string cannot be empty".into()));
+        }
+
         // Read file contents
         let content = tokio::fs::read_to_string(&params.file_path)
             .await
@@ -120,16 +125,7 @@ impl ExecutableTool for EditTool {
             content.replace(&params.old_string, &params.new_string)
         } else {
             // Single replacement - only replace first occurrence
-            let mut replaced = String::new();
-            let mut parts = content.splitn(2, &params.old_string);
-            if let Some(before) = parts.next() {
-                replaced.push_str(before);
-                replaced.push_str(&params.new_string);
-                if let Some(after) = parts.next() {
-                    replaced.push_str(after);
-                }
-            }
-            replaced
+            content.replacen(&params.old_string, &params.new_string, 1)
         };
 
         // Write back to file
