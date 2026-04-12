@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use vol_llm_core::Result;
+use crate::store::Result;
 use crate::message::SessionMessage;
 use crate::store::{SessionStore, MessageStore};
 

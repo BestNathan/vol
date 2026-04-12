@@ -1,9 +1,27 @@
 //! Session and Message store traits.
 
 use async_trait::async_trait;
-use vol_llm_core::Result;
+use thiserror::Error;
 use crate::message::SessionMessage;
 use crate::session::Session;
+
+/// Store operation error
+#[derive(Debug, Error)]
+pub enum StoreError {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Serialization error: {0}")]
+    Serialization(String),
+
+    #[error("Not found: {0}")]
+    NotFound(String),
+
+    #[error("Internal error: {0}")]
+    Internal(String),
+}
+
+pub type Result<T> = std::result::Result<T, StoreError>;
 
 /// Session storage interface
 #[async_trait]

@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use vol_llm_core::{LLMError, Message, Result};
+use vol_llm_core::Message;
+use crate::store::{Result, StoreError};
 use crate::message::SessionMessage;
 use crate::store::MessageStore;
 
@@ -104,7 +105,7 @@ impl FileMessageStore {
     /// Convert SessionMessageLine back to SessionMessage.
     fn from_line(line: &SessionMessageLine) -> Result<SessionMessage> {
         let message: Message = serde_json::from_value(line.data.message.clone())
-            .map_err(|e| LLMError::Parse(format!("Failed to parse message: {}", e)))?;
+            .map_err(|e| StoreError::Serialization(format!("Failed to parse message: {}", e)))?;
 
         Ok(SessionMessage {
             id: line.data.id.clone(),
@@ -122,20 +123,20 @@ impl MessageStore for FileMessageStore {
     async fn save(&self, message: SessionMessage) -> Result<()> {
         let line = Self::to_line(&message);
         let json = serde_json::to_string(&line)
-            .map_err(|e| LLMError::Parse(format!("Failed to serialize message: {}", e)))?;
+            .map_err(|e| StoreError::Serialization(format!("Failed to serialize message: {}", e)))?;
         self.append_line(&json)
-            .map_err(|e| LLMError::Parse(format!("Failed to write to file: {}", e)))?;
+            .map_err(|e| StoreError::Io(e))?;
         Ok(())
     }
 
     async fn get_by_session(&self, _session_id: &str, limit: usize) -> Result<Vec<SessionMessage>> {
         let lines = self.read_all_lines()
-            .map_err(|e| LLMError::Parse(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| StoreError::Io(e))?;
 
         let mut messages = Vec::new();
         for line in lines {
             let msg_line: SessionMessageLine = serde_json::from_str(&line)
-                .map_err(|e| LLMError::Parse(format!("Failed to parse JSONL line: {}", e)))?;
+                .map_err(|e| StoreError::Serialization(format!("Failed to parse JSONL line: {}", e)))?;
             messages.push(Self::from_line(&msg_line)?);
             if messages.len() >= limit {
                 break;
@@ -152,7 +153,7 @@ impl MessageStore for FileMessageStore {
     async fn delete_session(&self, _session_id: &str) -> Result<()> {
         if self.file_path.exists() {
             fs::remove_file(&self.file_path)
-                .map_err(|e| LLMError::Parse(format!("Failed to delete file: {}", e)))?;
+                .map_err(|e| StoreError::Io(e))?;
         }
         Ok(())
     }
@@ -164,7 +165,7 @@ impl MessageStore for FileMessageStore {
 
     async fn get_count(&self, _session_id: &str) -> Result<usize> {
         let lines = self.read_all_lines()
-            .map_err(|e| LLMError::Parse(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| StoreError::Io(e))?;
         Ok(lines.len())
     }
 

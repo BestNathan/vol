@@ -13,6 +13,8 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 vol-llm-core = { workspace = true }
 vol-core = { workspace = true }
+vol-llm-agent = { path = "../vol-llm-agent" }
+vol-tracing = { workspace = true }
 chrono = "0.4"
 
 [dev-dependencies]

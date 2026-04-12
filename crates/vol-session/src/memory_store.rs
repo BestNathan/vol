@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use tokio::sync::RwLock;
-use vol_llm_core::Result;
+use crate::store::Result;
 use crate::session::Session;
 use crate::message::SessionMessage;
 use crate::store::MessageStore;
