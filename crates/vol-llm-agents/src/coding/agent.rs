@@ -110,13 +110,38 @@ impl CodingAgent {
 
     /// Run a coding task
     pub async fn run(&self, task: &str) -> Result<CodingAgentResponse, CodingAgentError> {
-        // TODO: Implement full run logic with observer integration
-        // For MVP, just return a placeholder response
+        // Notify observer of start
+        if let Some(ref observer) = self.observer {
+            observer.on_event(&vol_llm_core::AgentStreamEvent::AgentStart {
+                input: task.to_string(),
+            }).await
+            .map_err(|e| CodingAgentError::Observer(e))?;
+        }
+
+        // Run the ReActAgent
+        let response = self.react_agent.run(task).await
+            .map_err(|e| CodingAgentError::Agent(e))?;
+
+        // Notify observer of completion
+        if let Some(ref observer) = self.observer {
+            observer.on_event(&vol_llm_core::AgentStreamEvent::AgentComplete)
+                .await
+                .map_err(|e| CodingAgentError::Observer(e))?;
+
+            observer.on_complete().await
+                .map_err(|e| CodingAgentError::Observer(e))?;
+        }
+
+        // Extract summary from response
+        let summary = response.content.clone();
+        let iterations = response.iterations;
+        let tool_calls = response.tool_calls.len() as u32;
+
         Ok(CodingAgentResponse {
             success: true,
-            summary: format!("Task completed: {}", task),
-            iterations: 0,
-            tool_calls: 0,
+            summary,
+            iterations,
+            tool_calls,
         })
     }
 }
