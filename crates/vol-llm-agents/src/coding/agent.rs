@@ -91,10 +91,12 @@ impl CodingAgent {
     /// Register coding tools to the tool registry
     fn register_coding_tools(registry: &mut ToolRegistry) {
         use vol_llm_tools_builtin::read_tool::ReadTool;
+        use vol_llm_tools_builtin::write_tool::WriteTool;
         use vol_llm_tools_builtin::edit_tool::EditTool;
         use vol_llm_tools_builtin::bash_tool::BashTool;
 
         registry.register(ReadTool::new());
+        registry.register(WriteTool::new());
         registry.register(EditTool::new());
         registry.register(BashTool::new());
     }
