@@ -23,6 +23,7 @@ async fn test_coding_agent_e2e_read_file() {
         verbose: false,
         html_report_path: Some(report_path.clone()),
         llm_provider_id: "anthropic-main".to_string(),
+        plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
     };
 
     let agent = CodingAgent::new(config).await.unwrap();
@@ -60,6 +61,7 @@ async fn test_coding_agent_e2e_edit_file() {
         verbose: false,
         html_report_path: Some(report_path.clone()),
         llm_provider_id: "anthropic-main".to_string(),
+        plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
     };
 
     let agent = CodingAgent::new(config).await.unwrap();

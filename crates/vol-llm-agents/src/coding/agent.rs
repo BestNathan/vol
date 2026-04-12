@@ -4,12 +4,12 @@ use std::sync::Arc;
 use std::path::PathBuf;
 use vol_llm_tool::ToolRegistry;
 use vol_llm_agent::{ReActAgent, AgentConfig, Session};
-use vol_llm_agent::react::PluginRegistry;
 use vol_llm_provider::{LLMProviderConfig, LLMProviderRegistry};
 
 use crate::coding::config::CodingAgentConfig;
 use crate::coding::error::CodingAgentError;
 use crate::coding::observer::EventObserver;
+use crate::coding::observer_plugin::ObserverPlugin;
 
 /// Coding Agent response
 #[derive(Debug, Clone)]
@@ -25,6 +25,7 @@ pub struct CodingAgent {
     config: CodingAgentConfig,
     react_agent: ReActAgent,
     observer: Option<Arc<dyn EventObserver>>,
+    observer_plugin: Option<Arc<ObserverPlugin>>,
 }
 
 impl CodingAgent {
@@ -55,7 +56,7 @@ impl CodingAgent {
         let mut tool_registry = ToolRegistry::new();
         Self::register_coding_tools(&mut tool_registry);
 
-        // Create agent config
+        // Create agent config - use plugin_registry from config
         let agent_config = AgentConfig {
             max_iterations: config.max_iterations,
             max_history_messages: 20,
@@ -63,7 +64,7 @@ impl CodingAgent {
                 vol_llm_agent::PromptTemplate::new("coding", "You are an expert coding assistant. Help users understand, modify, and improve their codebase.")
             ),
             verbose: config.verbose,
-            plugin_registry: PluginRegistry::new(),
+            plugin_registry: config.plugin_registry.clone(),
             agent_id: generate_agent_id(),
             log_base_path: PathBuf::from("logs/coding"),
         };
@@ -88,6 +89,7 @@ impl CodingAgent {
             config,
             react_agent,
             observer: None,
+            observer_plugin: None,
         })
     }
 
@@ -102,9 +104,17 @@ impl CodingAgent {
         registry.register(BashTool::new());
     }
 
-    /// Set the event observer
+    /// Set the event observer and register plugin
     pub fn with_observer(mut self, observer: Arc<dyn EventObserver>) -> Self {
+        let plugin = Arc::new(ObserverPlugin::new(observer.clone()));
+
+        // Register plugin with config's plugin_registry
+        let mut new_config = self.config.clone();
+        new_config.plugin_registry.register(ObserverPlugin::new(observer.clone()));
+        self.config = new_config;
+
         self.observer = Some(observer);
+        self.observer_plugin = Some(plugin);
         self
     }
 

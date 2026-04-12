@@ -12,12 +12,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let report_path = PathBuf::from("coding-report.html");
 
     let config = CodingAgentConfig {
-        max_iterations: 10,
+        max_iterations: 20,
         working_dir: PathBuf::from("."),
         hitl_enabled: false, // Disable HITL for demo
         verbose: true,
         html_report_path: Some(report_path.clone()),
         llm_provider_id: "anthropic-main".to_string(),
+        plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
     };
 
     let agent = CodingAgent::new(config).await?;
@@ -31,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let agent = agent.with_observer(observer);
 
     // Run task
-    let result = agent.run("Analyze the project structure and explain how it works")
+    let result = agent.run("List the files in the current directory and explain the project structure briefly")
         .await?;
 
     println!("Task completed: {}", result.summary);
