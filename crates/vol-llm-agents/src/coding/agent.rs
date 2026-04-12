@@ -32,7 +32,7 @@ pub struct CodingAgent {
     config: CodingAgentConfig,
     state: Option<CodingAgentState>,
     observer: Option<Arc<dyn EventObserver>>,
-    observer_plugin: Option<Arc<ObserverPlugin>>,
+    sandbox: Option<vol_llm_core::SandboxRef>,
 }
 
 impl CodingAgent {
@@ -84,32 +84,37 @@ impl CodingAgent {
                 agent_config,
             }),
             observer: None,
-            observer_plugin: None,
+            sandbox: None,
         })
     }
 
     /// Register coding tools to the tool registry
     fn register_coding_tools(registry: &mut ToolRegistry) {
         use vol_llm_tools_builtin::read_tool::ReadTool;
+        use vol_llm_tools_builtin::write_tool::WriteTool;
         use vol_llm_tools_builtin::edit_tool::EditTool;
         use vol_llm_tools_builtin::bash_tool::BashTool;
 
         registry.register(ReadTool::new());
+        registry.register(WriteTool::new());
         registry.register(EditTool::new());
         registry.register(BashTool::new());
     }
 
     /// Set the event observer and register plugin
     pub fn with_observer(mut self, observer: Arc<dyn EventObserver>) -> Self {
-        let plugin = Arc::new(ObserverPlugin::new(observer.clone()));
-
         // Register plugin with config's plugin_registry
         let mut new_config = self.config.clone();
         new_config.plugin_registry.register(ObserverPlugin::new(observer.clone()));
         self.config = new_config;
 
         self.observer = Some(observer);
-        self.observer_plugin = Some(plugin);
+        self
+    }
+
+    /// Set the sandbox for tool execution
+    pub fn with_sandbox(mut self, sandbox: vol_llm_core::SandboxRef) -> Self {
+        self.sandbox = Some(sandbox);
         self
     }
 
@@ -134,31 +139,25 @@ impl CodingAgent {
             ..state.agent_config.clone()
         };
 
-        let react_agent = ReActAgent::new(
+        let mut react_agent = ReActAgent::new(
             state.llm.clone(),
             state.tool_registry.clone(),
             agent_config,
             session,
         );
 
-        // Notify observer of start
-        if let Some(ref observer) = self.observer {
-            observer.on_event(&vol_llm_core::AgentStreamEvent::AgentStart {
-                input: task.to_string(),
-            }).await
-            .map_err(|e| CodingAgentError::Observer(e))?;
+        if let Some(ref sandbox) = self.sandbox {
+            react_agent = react_agent.with_sandbox(sandbox.clone());
         }
 
         // Run the ReActAgent
+        // Note: ObserverPlugin receives all events via PluginRegistry,
+        // including AgentStart and AgentComplete emitted by ReActAgent itself.
         let response = react_agent.run(task).await
             .map_err(|e| CodingAgentError::Agent(e))?;
 
-        // Notify observer of completion
+        // Signal completion to observer (for report generation)
         if let Some(ref observer) = self.observer {
-            observer.on_event(&vol_llm_core::AgentStreamEvent::AgentComplete)
-                .await
-                .map_err(|e| CodingAgentError::Observer(e))?;
-
             observer.on_complete().await
                 .map_err(|e| CodingAgentError::Observer(e))?;
         }
@@ -180,12 +179,14 @@ impl CodingAgent {
 /// Builder pattern for CodingAgent
 pub struct CodingAgentBuilder {
     config: CodingAgentConfig,
+    sandbox: Option<vol_llm_core::SandboxRef>,
 }
 
 impl CodingAgentBuilder {
     pub fn new() -> Self {
         Self {
             config: CodingAgentConfig::default(),
+            sandbox: None,
         }
     }
 
@@ -214,8 +215,15 @@ impl CodingAgentBuilder {
         self
     }
 
+    pub fn sandbox(mut self, sandbox: vol_llm_core::SandboxRef) -> Self {
+        self.sandbox = Some(sandbox);
+        self
+    }
+
     pub async fn build(self) -> Result<CodingAgent, CodingAgentError> {
-        CodingAgent::new(self.config).await
+        let mut agent = CodingAgent::new(self.config).await?;
+        agent.sandbox = self.sandbox;
+        Ok(agent)
     }
 }
 

@@ -10,7 +10,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{debug, info};
 use vol_llm_core::{
-    ConversationRequest, LLMClient, Message, StreamEventData, StreamReceiver, ToolChoice,
+    ConversationRequest, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
+    ToolChoice,
 };
 use vol_llm_tool::ToolContext;
 
@@ -63,6 +64,7 @@ pub struct ReActAgent {
     tools: Arc<vol_llm_tool::ToolRegistry>,
     config: AgentConfig,
     session: Arc<Session>,
+    sandbox: Option<SandboxRef>,
 }
 
 impl ReActAgent {
@@ -82,7 +84,14 @@ impl ReActAgent {
             tools,
             config,
             session,
+            sandbox: None,
         }
+    }
+
+    /// Set the sandbox for tool execution
+    pub fn with_sandbox(mut self, sandbox: SandboxRef) -> Self {
+        self.sandbox = Some(sandbox);
+        self
     }
 
     /// Create agent with new session
@@ -99,6 +108,7 @@ impl ReActAgent {
             llm: self.llm.clone(),
             tools: self.tools.clone(),
             config: self.config.clone(),
+            sandbox: self.sandbox.clone(),
         }
     }
 
@@ -193,6 +203,7 @@ impl ReActAgent {
         let _session = self.session.clone();
         let user_input = user_input.to_string();
         let _run_id_clone = run_id.clone();
+        let sandbox = self.sandbox.clone();
 
         let agent_task = tokio::spawn(async move {
             // === Emit and intercept AgentStart ===
@@ -379,7 +390,11 @@ impl ReActAgent {
                         }
 
                         // Execute tool
-                        let result = match tools.execute(call, &ToolContext::default()).await {
+                        let tool_ctx = match &sandbox {
+                            Some(sandbox) => ToolContext::default().with_sandbox(sandbox.clone()),
+                            None => ToolContext::default(),
+                        };
+                        let result = match tools.execute(call, &tool_ctx).await {
                             Ok(r) => r,
                             Err(e) => {
                                 // Record failed tool call

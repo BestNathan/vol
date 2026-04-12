@@ -1,7 +1,7 @@
 //! Tool trait and types.
 
 use async_trait::async_trait;
-use vol_llm_core::{Message, ToolDefinition};
+use vol_llm_core::{Message, SandboxRef, ToolDefinition};
 
 use std::error::Error;
 
@@ -39,9 +39,35 @@ impl ToolResult {
 }
 
 /// Tool execution context
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct ToolContext {
     pub messages: Vec<Message>,
+    pub sandbox: Option<SandboxRef>,
+}
+
+impl std::fmt::Debug for ToolContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ToolContext")
+            .field("messages", &self.messages)
+            .field("sandbox", &self.sandbox.as_ref().map(|_| "<sandbox>"))
+            .finish()
+    }
+}
+
+impl ToolContext {
+    /// Set the sandbox for this tool context
+    pub fn with_sandbox(mut self, sandbox: SandboxRef) -> Self {
+        self.sandbox = Some(sandbox);
+        self
+    }
+
+    /// Resolve a path through the sandbox, or return unchanged if no sandbox.
+    pub fn resolve_path(&self, rel: &str) -> std::result::Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+        match &self.sandbox {
+            Some(sandbox) => sandbox.resolve_path(rel).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>),
+            None => Ok(std::path::PathBuf::from(rel)),
+        }
+    }
 }
 
 /// Tool error
