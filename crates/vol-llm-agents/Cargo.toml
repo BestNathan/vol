@@ -25,3 +25,7 @@ vol-tdengine = { path = "../vol-tdengine" }
 vol-llm-provider = { path = "../vol-llm-provider" }
 vol-llm-tools-builtin = { path = "../vol-llm-tools-builtin" }
 chrono = "0.4"
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
+tempfile = "3.10"
