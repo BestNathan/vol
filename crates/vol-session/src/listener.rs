@@ -51,7 +51,8 @@ impl SessionListener {
     fn should_record(event: &AgentStreamEvent) -> bool {
         matches!(
             event,
-            AgentStreamEvent::ThinkingComplete { .. }
+            AgentStreamEvent::AgentStart { .. }
+                | AgentStreamEvent::ThinkingComplete { .. }
                 | AgentStreamEvent::ToolCallBegin { .. }
                 | AgentStreamEvent::ToolCallComplete { .. }
                 | AgentStreamEvent::IterationComplete { .. }
