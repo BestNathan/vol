@@ -76,18 +76,23 @@ impl ExecutableTool for ReadTool {
     async fn execute(
         &self,
         args: &serde_json::Value,
-        _context: &ToolContext,
+        context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         // Parse arguments
         let params: ReadParams = serde_json::from_value(args.clone()).map_err(|e| {
             ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
         })?;
 
+        // Resolve path through sandbox
+        let file_path = context.resolve_path(&params.file_path).map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e))
+        })?;
+
         // Read file contents
-        let content = match tokio::fs::read_to_string(&params.file_path).await {
+        let content = match tokio::fs::read_to_string(&file_path).await {
             Ok(content) => content,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Err(ToolError::NotFound(params.file_path));
+                return Err(ToolError::NotFound(file_path.display().to_string()));
             }
             Err(e) => {
                 return Err(ToolError::ExecutionFailed(e.to_string()));

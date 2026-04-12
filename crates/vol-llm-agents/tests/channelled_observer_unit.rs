@@ -35,7 +35,7 @@ async fn test_channelled_observer_preserves_order() {
     let events_in: Vec<AgentStreamEvent> = vec![
         AgentStreamEvent::AgentStart { input: "start".to_string() },
         AgentStreamEvent::ThinkingComplete { thinking: "thinking".to_string() },
-        AgentStreamEvent::ToolCallBegin { tool_name: "test".to_string(), arguments: "{}".to_string() },
+        AgentStreamEvent::ToolCallBegin { tool_call_id: "1".to_string(), tool_name: "test".to_string(), arguments: "{}".to_string() },
         AgentStreamEvent::ToolCallComplete { tool_name: "test".to_string(), result: "ok".to_string() },
         AgentStreamEvent::AgentComplete,
     ];
@@ -80,6 +80,7 @@ async fn test_channelled_observer_handles_many_events() {
     // Send 50 events rapidly
     for i in 0..50 {
         let event = AgentStreamEvent::ToolCallBegin {
+            tool_call_id: i.to_string(),
             tool_name: format!("tool_{}", i),
             arguments: format!("arg_{}", i),
         };
@@ -94,7 +95,7 @@ async fn test_channelled_observer_handles_many_events() {
 
     // Verify order is preserved
     for (i, event) in events.iter().enumerate() {
-        if let AgentStreamEvent::ToolCallBegin { tool_name, arguments } = event {
+        if let AgentStreamEvent::ToolCallBegin { tool_name, arguments, .. } = event {
             assert_eq!(tool_name, &format!("tool_{}", i));
             assert_eq!(arguments, &format!("arg_{}", i));
         } else {

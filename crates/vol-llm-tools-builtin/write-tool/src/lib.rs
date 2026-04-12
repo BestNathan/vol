@@ -62,15 +62,20 @@ impl ExecutableTool for WriteTool {
     async fn execute(
         &self,
         args: &serde_json::Value,
-        _context: &ToolContext,
+        context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         // Parse arguments
         let params: WriteParams = serde_json::from_value(args.clone()).map_err(|e| {
             ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
         })?;
 
+        // Resolve path through sandbox
+        let file_path = context.resolve_path(&params.file_path).map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e))
+        })?;
+
         // Check if parent directory exists
-        let parent = std::path::Path::new(&params.file_path)
+        let parent = file_path
             .parent()
             .ok_or_else(|| ToolError::ExecutionFailed("Invalid file path".to_string()))?;
 
@@ -82,7 +87,7 @@ impl ExecutableTool for WriteTool {
         }
 
         // Write file content
-        tokio::fs::write(&params.file_path, &params.content)
+        tokio::fs::write(&file_path, &params.content)
             .await
             .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write file: {}", e)))?;
 

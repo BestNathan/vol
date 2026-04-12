@@ -218,7 +218,7 @@ impl CodingAgentBuilder {
         self
     }
 
-    pub async fn build(mut self) -> Result<CodingAgent, CodingAgentError> {
+    pub async fn build(self) -> Result<CodingAgent, CodingAgentError> {
         let mut agent = CodingAgent::new(self.config).await?;
         agent.sandbox = self.sandbox;
         Ok(agent)

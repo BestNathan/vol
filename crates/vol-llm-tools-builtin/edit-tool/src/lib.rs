@@ -79,7 +79,7 @@ impl ExecutableTool for EditTool {
     async fn execute(
         &self,
         args: &serde_json::Value,
-        _context: &ToolContext,
+        context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         // Parse arguments
         let params: EditParams = serde_json::from_value(args.clone()).map_err(|e| {
@@ -91,8 +91,13 @@ impl ExecutableTool for EditTool {
             return Err(ToolError::InvalidArguments("old_string cannot be empty".into()));
         }
 
+        // Resolve path through sandbox
+        let file_path = context.resolve_path(&params.file_path).map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e))
+        })?;
+
         // Read file contents
-        let content = tokio::fs::read_to_string(&params.file_path)
+        let content = tokio::fs::read_to_string(&file_path)
             .await
             .map_err(|e| {
                 if e.kind() == std::io::ErrorKind::NotFound {
@@ -129,7 +134,7 @@ impl ExecutableTool for EditTool {
         };
 
         // Write back to file
-        tokio::fs::write(&params.file_path, &new_content)
+        tokio::fs::write(&file_path, &new_content)
             .await
             .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write file: {}", e)))?;
 
