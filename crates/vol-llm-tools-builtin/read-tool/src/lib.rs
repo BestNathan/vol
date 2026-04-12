@@ -2,26 +2,30 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use vol_llm_tool::{Tool, ToolContext, ToolResult};
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType};
 
 /// Error type for builtin tools
-#[derive(Debug, thiserror::Error)]
-pub enum BuiltinToolError {
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("Tool execution error: {0}")]
-    Execution(String),
-}
+/// Re-exported from vol_llm_tool for convenience
+pub use vol_llm_tool::ToolError as BuiltinToolError;
 
 /// Parameters for the Read tool
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ReadParams {
     /// Path to the file to read
-    pub path: String,
+    pub file_path: String,
+    /// Line offset to start reading from (0-indexed, default: 0)
+    #[serde(default)]
+    pub offset: usize,
+    /// Maximum number of lines to read (default: 2000)
+    #[serde(default = "default_limit")]
+    pub limit: usize,
 }
 
-/// The Read tool for reading files
+fn default_limit() -> usize {
+    2000
+}
+
+/// The Read tool for reading files with line numbers
 pub struct ReadTool;
 
 impl ReadTool {
@@ -30,40 +34,84 @@ impl ReadTool {
     }
 }
 
+impl Default for ReadTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
-impl Tool for ReadTool {
-    fn name(&self) -> &str {
-        "read"
+impl ExecutableTool for ReadTool {
+    fn name(&self) -> &'static str {
+        "read_file"
     }
 
-    fn description(&self) -> &str {
-        "Read the contents of a file at the specified path."
+    fn description(&self) -> &'static str {
+        "Read file contents with line numbers. Supports offset to skip initial lines and limit to restrict output length."
     }
 
-    fn parameters(&self) -> Option<serde_json::Value> {
-        Some(serde_json::json!({
+    fn parameters(&self) -> serde_json::Value {
+        serde_json::json!({
             "type": "object",
             "properties": {
-                "path": {
+                "file_path": {
                     "type": "string",
                     "description": "Path to the file to read"
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Line offset to start reading from (0-indexed)",
+                    "default": 0
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of lines to read",
+                    "default": 2000
                 }
             },
-            "required": ["path"]
-        }))
+            "required": ["file_path"]
+        })
     }
 
     async fn execute(
         &self,
-        _args: &str,
+        args: &serde_json::Value,
         _context: &ToolContext,
-    ) -> std::result::Result<ToolResult, Box<dyn std::error::Error + Send>> {
-        todo!("Read tool implementation")
-    }
-}
+    ) -> ToolResultType<ToolResult> {
+        // Parse arguments
+        let params: ReadParams = serde_json::from_value(args.clone()).map_err(|e| {
+            ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
+        })?;
 
-impl Default for ReadTool {
-    fn default() -> Self {
-        Self::new()
+        // Read file contents
+        let content = match tokio::fs::read_to_string(&params.file_path).await {
+            Ok(content) => content,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(ToolError::NotFound(params.file_path));
+            }
+            Err(e) => {
+                return Err(ToolError::ExecutionFailed(e.to_string()));
+            }
+        };
+
+        // Apply offset and limit
+        let lines: Vec<&str> = content.lines().collect();
+        let start = params.offset.min(lines.len());
+        let end = (start + params.limit).min(lines.len());
+        let selected_lines = &lines[start..end];
+
+        // Format with line numbers (cat -n style: "   1  | content")
+        let formatted: Vec<String> = selected_lines
+            .iter()
+            .enumerate()
+            .map(|(i, line)| {
+                let line_num = start + i + 1; // 1-indexed line numbers
+                format!("{:5}  |  {}", line_num, line)
+            })
+            .collect();
+
+        let output = formatted.join("\n");
+
+        Ok(ToolResult::success(output))
     }
 }
