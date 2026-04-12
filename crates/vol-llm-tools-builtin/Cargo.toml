@@ -1,0 +1,13 @@
+[package]
+name = "vol-llm-tools-builtin"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+vol-llm-tool = { path = "../vol-llm-tool" }
+vol-llm-tools-builtin-read = { path = "read-tool" }
+vol-llm-tools-builtin-write = { path = "write-tool" }
+vol-llm-tools-builtin-edit = { path = "edit-tool" }
+vol-llm-tools-builtin-glob = { path = "glob-tool" }
+vol-llm-tools-builtin-grep = { path = "grep-tool" }
+vol-llm-tools-builtin-bash = { path = "bash-tool" }

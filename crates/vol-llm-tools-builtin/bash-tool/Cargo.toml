@@ -1,0 +1,16 @@
+[package]
+name = "vol-llm-tools-builtin-bash"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+vol-llm-tool = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["process", "time", "sync"] }
+regex = "1.10"
+
+[dev-dependencies]
+tempfile = "3.10"
