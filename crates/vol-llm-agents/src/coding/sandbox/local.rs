@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use vol_llm_core::{Sandbox, SandboxError, SandboxResult};
 
 /// A sandbox using a local directory as its root.
@@ -43,13 +43,14 @@ impl Sandbox for LocalSandbox {
         Ok(())
     }
 
-    fn root_path(&self) -> &Path {
+    fn root_path(&self) -> &std::path::Path {
         &self.root_path
     }
 
     fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf> {
+        // Reject absolute paths — they escape the sandbox
         if rel.starts_with('/') {
-            return Ok(PathBuf::from(rel));
+            return Err(SandboxError::PathTraversal(rel.to_string()));
         }
 
         let resolved = self.root_path.join(rel);
@@ -64,12 +65,12 @@ impl Sandbox for LocalSandbox {
             return Err(SandboxError::PathTraversal(rel.to_string()));
         }
 
-        Ok(resolved)
+        Ok(normalized)
     }
 }
 
 /// Normalize a path by resolving `.` and `..` components without touching the filesystem.
-fn normalize_path(path: &Path) -> PathBuf {
+fn normalize_path(path: &std::path::Path) -> PathBuf {
     let mut result = PathBuf::new();
     for component in path.components() {
         match component {

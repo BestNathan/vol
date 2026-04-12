@@ -1,6 +1,5 @@
 use vol_llm_agents::coding::LocalSandbox;
 use vol_llm_core::Sandbox;
-use std::path::PathBuf;
 use tempfile::tempdir;
 
 #[test]
@@ -56,9 +55,8 @@ fn test_local_sandbox_resolve_path() {
     let resolved = sandbox.resolve_path("src/main.rs").unwrap();
     assert_eq!(resolved, dir.path().join("src/main.rs"));
 
-    // Absolute paths returned as-is
-    let resolved = sandbox.resolve_path("/etc/passwd").unwrap();
-    assert_eq!(resolved, PathBuf::from("/etc/passwd"));
+    // Absolute paths are rejected (sandbox escape prevention)
+    assert!(sandbox.resolve_path("/etc/passwd").is_err());
 }
 
 #[test]
