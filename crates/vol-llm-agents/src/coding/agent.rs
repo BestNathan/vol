@@ -32,7 +32,6 @@ pub struct CodingAgent {
     config: CodingAgentConfig,
     state: Option<CodingAgentState>,
     observer: Option<Arc<dyn EventObserver>>,
-    observer_plugin: Option<Arc<ObserverPlugin>>,
     sandbox: Option<vol_llm_core::SandboxRef>,
 }
 
@@ -85,7 +84,6 @@ impl CodingAgent {
                 agent_config,
             }),
             observer: None,
-            observer_plugin: None,
             sandbox: None,
         })
     }
@@ -103,15 +101,12 @@ impl CodingAgent {
 
     /// Set the event observer and register plugin
     pub fn with_observer(mut self, observer: Arc<dyn EventObserver>) -> Self {
-        let plugin = Arc::new(ObserverPlugin::new(observer.clone()));
-
         // Register plugin with config's plugin_registry
         let mut new_config = self.config.clone();
         new_config.plugin_registry.register(ObserverPlugin::new(observer.clone()));
         self.config = new_config;
 
         self.observer = Some(observer);
-        self.observer_plugin = Some(plugin);
         self
     }
 
@@ -182,12 +177,14 @@ impl CodingAgent {
 /// Builder pattern for CodingAgent
 pub struct CodingAgentBuilder {
     config: CodingAgentConfig,
+    sandbox: Option<vol_llm_core::SandboxRef>,
 }
 
 impl CodingAgentBuilder {
     pub fn new() -> Self {
         Self {
             config: CodingAgentConfig::default(),
+            sandbox: None,
         }
     }
 
@@ -216,8 +213,15 @@ impl CodingAgentBuilder {
         self
     }
 
-    pub async fn build(self) -> Result<CodingAgent, CodingAgentError> {
-        CodingAgent::new(self.config).await
+    pub fn sandbox(mut self, sandbox: vol_llm_core::SandboxRef) -> Self {
+        self.sandbox = Some(sandbox);
+        self
+    }
+
+    pub async fn build(mut self) -> Result<CodingAgent, CodingAgentError> {
+        let mut agent = CodingAgent::new(self.config).await?;
+        agent.sandbox = self.sandbox;
+        Ok(agent)
     }
 }
 

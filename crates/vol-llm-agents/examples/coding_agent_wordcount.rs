@@ -62,9 +62,11 @@ Use only standard library (no external crates except clap). Create the files usi
     println!("Report path: {}", report_path.display());
     println!("---");
 
-    let result = agent.run(task).await?;
+    let result = agent.run(task).await;
 
     sandbox.cleanup()?;
+
+    let result = result?;
 
     println!("\n=== Task Complete ===");
     println!("Iterations: {}, Tool calls: {}", result.iterations, result.tool_calls);

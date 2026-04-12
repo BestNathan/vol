@@ -1,6 +1,6 @@
 //! Unit tests for ChannelledEventObserver
 
-use vol_llm_agents::coding::{ChannelledEventObserver, EventObserver, ObserverError};
+use vol_llm_agents::coding::{ChannelledEventObserver, EventObserver};
 use vol_llm_core::AgentStreamEvent;
 
 #[tokio::test]
