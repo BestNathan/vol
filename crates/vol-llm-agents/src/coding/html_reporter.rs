@@ -1,38 +1,32 @@
-//! HTMLReporter - generates HTML timeline reports.
+//! HTMLReporter - generates HTML timeline reports with ordered events.
 
 use async_trait::async_trait;
 use std::path::PathBuf;
-use std::sync::Mutex;
 use vol_llm_core::AgentStreamEvent;
 
 use crate::coding::observer::EventObserver;
 use crate::coding::error::ObserverError;
+use crate::coding::channelled_observer::ChannelledEventObserver;
 
-/// HTML Reporter - records events and generates HTML report on complete
+/// HTML Reporter - records events via ordered channel and generates HTML report on complete
 pub struct HTMLReporter {
+    inner: ChannelledEventObserver,
     output_path: PathBuf,
     task_description: String,
-    events: Mutex<Vec<AgentStreamEvent>>,
-    start_time: Mutex<Option<std::time::Instant>>,
 }
 
 impl HTMLReporter {
     /// Create a new HTMLReporter
     pub fn new(output_path: PathBuf, task_description: String) -> Self {
         Self {
+            inner: ChannelledEventObserver::new(),
             output_path,
             task_description,
-            events: Mutex::new(Vec::new()),
-            start_time: Mutex::new(None),
         }
     }
 
     /// Generate HTML report from recorded events
     async fn generate_html_report(&self, events: Vec<AgentStreamEvent>) -> Result<(), ObserverError> {
-        let start_time = self.start_time.lock().unwrap()
-            .map(|t| t.elapsed().as_secs())
-            .unwrap_or(0);
-
         let iteration_count = events.iter().filter(|e| matches!(e, AgentStreamEvent::IterationComplete { .. })).count();
         let tool_call_count = events.iter().filter(|e| matches!(e, AgentStreamEvent::ToolCallBegin { .. } | AgentStreamEvent::ToolCallComplete { .. })).count() / 2;
 
@@ -54,7 +48,7 @@ impl HTMLReporter {
         html.push_str("<h1>Coding Agent Report</h1>\n");
         html.push_str("<div class=\"summary\">\n");
         html.push_str(&format!("<p><strong>Task:</strong> {}</p>\n", self.task_description));
-        html.push_str(&format!("<p><strong>Duration:</strong> {}s | <strong>Iterations:</strong> {} | <strong>Tool Calls:</strong> {}</p>\n", start_time, iteration_count, tool_call_count));
+        html.push_str(&format!("<p><strong>Iterations:</strong> {} | <strong>Tool Calls:</strong> {}</p>\n", iteration_count, tool_call_count));
         html.push_str("</div>\n");
         html.push_str("<h2>Timeline</h2>\n<ul class=\"timeline\">\n");
 
@@ -130,21 +124,12 @@ impl EventObserver for HTMLReporter {
     async fn on_event(&self, event: &AgentStreamEvent) -> Result<(), ObserverError> {
         let event_type = Self::event_name(event);
         tracing::debug!(event_type = %event_type, "Observer received event");
-
-        // Record start time on first event
-        {
-            let mut start_time = self.start_time.lock().unwrap();
-            if start_time.is_none() {
-                *start_time = Some(std::time::Instant::now());
-            }
-        }
-
-        self.events.lock().unwrap().push(event.clone());
-        Ok(())
+        self.inner.on_event(event).await
     }
 
     async fn on_complete(&self) -> Result<(), ObserverError> {
-        let events: Vec<AgentStreamEvent> = self.events.lock().unwrap().drain(..).collect();
+        self.inner.on_complete().await?;
+        let events = self.inner.events().await;
         tracing::info!("Generating HTML report with {} events", events.len());
         self.generate_html_report(events).await
     }
