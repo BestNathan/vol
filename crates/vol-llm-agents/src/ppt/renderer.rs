@@ -4,8 +4,7 @@ use pptx::{
     Presentation,
     dml::ColorFormat,
     slide::{SlideRef, SlideLayoutRef},
-    shapes::ShapeTree,
-    Emu, PptxError,
+    PptxError,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -219,7 +218,7 @@ impl PptxRenderer {
     ) -> String {
         let escaped_text = Self::xml_escape(text);
         let color_hex = match color {
-            ColorFormat::Rgb { r, g, b } => format!("{:02X}{:02X}{:02X}", r, g, b),
+            ColorFormat::Rgb(rgb) => format!("{:02X}{:02X}{:02X}", rgb.r, rgb.g, rgb.b),
             _ => "000000".to_string(),
         };
 
