@@ -10,8 +10,7 @@ pub mod session;
 
 // Re-export vol-session types
 pub use embedding::{DashScopeConfig, DashScopeEmbedder, DashScopeModel, Embedder};
-pub use observability::{cleanup_old_logs, cleanup_run_logs, cleanup_session_logs};
-pub use observability::{LogEntry, LogType, ObservabilityLogger, ObservabilityPlugin};
+pub use observability::{cleanup_old_logs, cleanup_run_logs, cleanup_session_logs, LogEntry, ObservabilityPlugin, RunLogLogger};
 pub use plugins::{CliApprovalChannel, SimpleHttpApprovalChannel};
 pub use prompt_context::{
     FragmentType, MessageAssembler, PromptContext, PromptFragment, PromptTemplate,

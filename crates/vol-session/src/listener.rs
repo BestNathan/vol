@@ -51,7 +51,8 @@ impl SessionListener {
     fn should_record(event: &AgentStreamEvent) -> bool {
         matches!(
             event,
-            AgentStreamEvent::ThinkingComplete { .. }
+            AgentStreamEvent::AgentStart { .. }
+                | AgentStreamEvent::ThinkingComplete { .. }
                 | AgentStreamEvent::ToolCallBegin { .. }
                 | AgentStreamEvent::ToolCallComplete { .. }
                 | AgentStreamEvent::IterationComplete { .. }
@@ -67,6 +68,12 @@ impl SessionListener {
     /// `Some(SessionMessage)` if the event should be recorded, `None` otherwise
     fn event_to_message(&self, event: &AgentStreamEvent) -> Option<SessionMessage> {
         match event {
+            // AgentStart -> User message (NEW)
+            AgentStreamEvent::AgentStart { input } => Some(SessionMessage::new(
+                self.session_id.clone(),
+                vol_llm_core::Message::user(input.clone()),
+            )),
+
             // ThinkingComplete -> Assistant message (thinking content)
             AgentStreamEvent::ThinkingComplete { thinking } => Some(SessionMessage::new(
                 self.session_id.clone(),
@@ -204,11 +211,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_should_not_record_agent_start() {
+    async fn test_should_record_agent_start() {
         let event = AgentStreamEvent::AgentStart {
             input: "test".to_string(),
         };
-        assert!(!SessionListener::should_record(&event));
+        assert!(SessionListener::should_record(&event));
+    }
+
+    #[tokio::test]
+    async fn test_event_to_message_agent_start() {
+        let store = Arc::new(InMemoryMessageStore::new());
+        let (_tx, rx) = broadcast::channel(100);
+        let listener = SessionListener::new(rx, store, "session-1".to_string());
+
+        let event = AgentStreamEvent::AgentStart {
+            input: "User's question".to_string(),
+        };
+
+        let msg = listener.event_to_message(&event).unwrap();
+        assert_eq!(msg.session_id, "session-1");
+        assert_eq!(msg.message.role, vol_llm_core::MessageRole::User);
+        assert!(msg.message.content.is_some());
+        assert_eq!(msg.message.content.unwrap().as_str(), "User's question");
     }
 
     #[tokio::test]
