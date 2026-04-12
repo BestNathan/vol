@@ -2,18 +2,22 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use vol_llm_tool::{Tool, ToolContext, ToolResult};
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType};
+
+/// Error type for builtin tools
+/// Re-exported from vol_llm_tool for convenience
+pub use vol_llm_tool::ToolError as BuiltinToolError;
 
 /// Parameters for the Write tool
 #[derive(Debug, Deserialize, Serialize)]
 pub struct WriteParams {
     /// Path to the file to write
-    pub path: String,
+    pub file_path: String,
     /// Content to write to the file
     pub content: String,
 }
 
-/// The Write tool for writing files
+/// The Write tool for creating or overwriting files
 pub struct WriteTool;
 
 impl WriteTool {
@@ -22,21 +26,27 @@ impl WriteTool {
     }
 }
 
+impl Default for WriteTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
-impl Tool for WriteTool {
-    fn name(&self) -> &str {
-        "write"
+impl ExecutableTool for WriteTool {
+    fn name(&self) -> &'static str {
+        "write_file"
     }
 
-    fn description(&self) -> &str {
-        "Write content to a file at the specified path."
+    fn description(&self) -> &'static str {
+        "Create or overwrite a file with the specified content. The parent directory must exist."
     }
 
-    fn parameters(&self) -> Option<serde_json::Value> {
-        Some(serde_json::json!({
+    fn parameters(&self) -> serde_json::Value {
+        serde_json::json!({
             "type": "object",
             "properties": {
-                "path": {
+                "file_path": {
                     "type": "string",
                     "description": "Path to the file to write"
                 },
@@ -45,21 +55,38 @@ impl Tool for WriteTool {
                     "description": "Content to write to the file"
                 }
             },
-            "required": ["path", "content"]
-        }))
+            "required": ["file_path", "content"]
+        })
     }
 
     async fn execute(
         &self,
-        _args: &str,
+        args: &serde_json::Value,
         _context: &ToolContext,
-    ) -> std::result::Result<ToolResult, Box<dyn std::error::Error + Send>> {
-        todo!("Write tool implementation")
-    }
-}
+    ) -> ToolResultType<ToolResult> {
+        // Parse arguments
+        let params: WriteParams = serde_json::from_value(args.clone()).map_err(|e| {
+            ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
+        })?;
 
-impl Default for WriteTool {
-    fn default() -> Self {
-        Self::new()
+        // Check if parent directory exists
+        let parent = std::path::Path::new(&params.file_path)
+            .parent()
+            .ok_or_else(|| ToolError::ExecutionFailed("Invalid file path".to_string()))?;
+
+        if !parent.as_os_str().is_empty() && !tokio::fs::try_exists(parent).await.unwrap_or(false) {
+            return Err(ToolError::ExecutionFailed(format!(
+                "Parent directory does not exist: {}",
+                parent.display()
+            )));
+        }
+
+        // Write file content
+        tokio::fs::write(&params.file_path, &params.content)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write file: {}", e)))?;
+
+        let output = format!("Successfully wrote {} bytes to {}", params.content.len(), params.file_path);
+        Ok(ToolResult::success(output))
     }
 }
