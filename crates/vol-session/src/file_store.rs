@@ -1,8 +1,9 @@
 //! File-based message store using JSONL format.
 
 use async_trait::async_trait;
-use crate::{SessionMessage};
-use crate::store::{MessageStore, MessageStoreError};
+use vol_llm_core::Result;
+use crate::message::SessionMessage;
+use crate::store::MessageStore;
 
 /// File-based message store using JSONL format.
 pub struct FileMessageStore {
@@ -20,13 +21,33 @@ impl FileMessageStore {
 
 #[async_trait]
 impl MessageStore for FileMessageStore {
-    async fn store(&self, _message: SessionMessage) -> Result<(), MessageStoreError> {
+    async fn save(&self, _message: SessionMessage) -> Result<()> {
         // TODO: Implement JSONL file writing
         Ok(())
     }
 
-    async fn get_messages(&self, _session_id: &str) -> Result<Vec<SessionMessage>, MessageStoreError> {
+    async fn get_by_session(&self, _session_id: &str, _limit: usize) -> Result<Vec<SessionMessage>> {
         // TODO: Implement JSONL file reading
         Ok(Vec::new())
+    }
+
+    async fn get_before(&self, _session_id: &str, _before: i64, _limit: usize) -> Result<Vec<SessionMessage>> {
+        Ok(Vec::new())
+    }
+
+    async fn delete_session(&self, _session_id: &str) -> Result<()> {
+        Ok(())
+    }
+
+    async fn update(&self, _id: &str, _message: SessionMessage) -> Result<()> {
+        Ok(())
+    }
+
+    async fn get_count(&self, _session_id: &str) -> Result<usize> {
+        Ok(0)
+    }
+
+    async fn cleanup_expired(&self, _before: i64) -> Result<()> {
+        Ok(())
     }
 }
