@@ -128,6 +128,9 @@ impl HTMLReporter {
 #[async_trait]
 impl EventObserver for HTMLReporter {
     async fn on_event(&self, event: &AgentStreamEvent) -> Result<(), ObserverError> {
+        let event_type = Self::event_name(event);
+        tracing::debug!(event_type = %event_type, "Observer received event");
+
         // Record start time on first event
         {
             let mut start_time = self.start_time.lock().unwrap();
@@ -142,6 +145,7 @@ impl EventObserver for HTMLReporter {
 
     async fn on_complete(&self) -> Result<(), ObserverError> {
         let events: Vec<AgentStreamEvent> = self.events.lock().unwrap().drain(..).collect();
+        tracing::info!("Generating HTML report with {} events", events.len());
         self.generate_html_report(events).await
     }
 }
