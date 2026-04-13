@@ -2,6 +2,7 @@
 
 pub mod registry;
 pub mod tool;
+pub mod web;
 
 pub use registry::ToolRegistry;
 pub use tool::{ExecutableTool, Result, Tool, ToolContext, ToolError, ToolResult, ToolResultType};

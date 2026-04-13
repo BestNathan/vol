@@ -1,14 +1,14 @@
 [package]
-name = "vol-llm-tool"
+name = "vol-llm-tools-builtin-web-search"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
+vol-llm-tool = { workspace = true }
+vol-llm-core = { workspace = true }
+async-trait = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-async-trait = { workspace = true }
-tracing = { workspace = true }
 reqwest = { workspace = true }
-vol-llm-core = { path = "../vol-llm-core" }

@@ -1,0 +1,13 @@
+[package]
+name = "vol-llm-tools-builtin-web-fetch"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+vol-llm-tool = { workspace = true }
+vol-llm-core = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { workspace = true }
+thiserror = { workspace = true }
+readability = "0.3"
+url = "2.5"

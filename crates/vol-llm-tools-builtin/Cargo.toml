@@ -11,3 +11,5 @@ vol-llm-tools-builtin-edit = { path = "edit-tool" }
 vol-llm-tools-builtin-glob = { path = "glob-tool" }
 vol-llm-tools-builtin-grep = { path = "grep-tool" }
 vol-llm-tools-builtin-bash = { path = "bash-tool" }
+vol-llm-tools-builtin-web-search = { path = "web-search-tool" }
+vol-llm-tools-builtin-web-fetch = { path = "web-fetch" }
