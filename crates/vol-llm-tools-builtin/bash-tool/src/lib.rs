@@ -7,7 +7,7 @@ use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
 
-use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType};
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity};
 
 /// Error type for builtin tools
 /// Re-exported from vol_llm_tool for convenience
@@ -137,6 +137,18 @@ impl ExecutableTool for BashTool {
             },
             "required": ["command"]
         })
+    }
+
+    fn sensitivity(&self, args: &serde_json::Value) -> ToolSensitivity {
+        if let Some(cmd) = args.get("command").and_then(|v| v.as_str()) {
+            // All bash commands require human approval since they execute arbitrary shell code.
+            // check_security() in execute() provides defense-in-depth for truly dangerous patterns.
+            ToolSensitivity::RequiresApproval {
+                reason: format!("Running shell command: {}", cmd),
+            }
+        } else {
+            ToolSensitivity::Safe
+        }
     }
 
     async fn execute(

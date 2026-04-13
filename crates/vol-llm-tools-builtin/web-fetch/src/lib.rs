@@ -3,15 +3,28 @@
 use async_trait::async_trait;
 use readability::extractor;
 use reqwest::Client;
+use serde::Deserialize;
 use std::io::Cursor;
 use vol_llm_tool::web::fetch::{FetchError, FetchFn, FetchOptions, FetchResult};
+use vol_llm_tool::ProxyConfig;
 
-const MAX_CONTENT_LENGTH: usize = 2 * 1024 * 1024; // 2MB
+const DEFAULT_MAX_CONTENT_LENGTH: usize = 2 * 1024 * 1024; // 2MB
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
+
+/// Configuration for the default fetch provider.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct FetchProviderConfig {
+    /// Maximum content length in bytes (default: 2MB)
+    pub max_content_length: Option<usize>,
+    /// Proxy configuration (optional)
+    #[serde(default)]
+    pub proxy: ProxyConfig,
+}
 
 /// Default fetch provider that fetches URLs and extracts readable content
 pub struct DefaultFetchProvider {
     client: Client,
+    max_content_length: usize,
 }
 
 impl DefaultFetchProvider {
@@ -19,18 +32,36 @@ impl DefaultFetchProvider {
     pub fn new(
         proxy_url: Option<String>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let mut builder = Client::builder()
-            .timeout(std::time::Duration::from_secs(DEFAULT_TIMEOUT_SECS))
-            .user_agent("Mozilla/5.0 (compatible; Agent/1.0)");
-
-        if let Some(url) = proxy_url {
-            let proxy = reqwest::Proxy::all(url)?;
-            builder = builder.proxy(proxy);
-        }
-
-        let client = builder.build()?;
-        Ok(Self { client })
+        let client = build_client(&proxy_url)?;
+        Ok(Self {
+            client,
+            max_content_length: DEFAULT_MAX_CONTENT_LENGTH,
+        })
     }
+
+    /// Create a new fetch provider from configuration.
+    pub fn from_config(config: &FetchProviderConfig) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let client = build_client(&config.proxy.proxy_url)?;
+        Ok(Self {
+            client,
+            max_content_length: config.max_content_length.unwrap_or(DEFAULT_MAX_CONTENT_LENGTH),
+        })
+    }
+}
+
+fn build_client(
+    proxy_url: &Option<String>,
+) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
+    let mut builder = Client::builder()
+        .timeout(std::time::Duration::from_secs(DEFAULT_TIMEOUT_SECS))
+        .user_agent("Mozilla/5.0 (compatible; Agent/1.0)");
+
+    if let Some(url) = proxy_url {
+        let proxy = reqwest::Proxy::all(url)?;
+        builder = builder.proxy(proxy);
+    }
+
+    Ok(builder.build()?)
 }
 
 #[async_trait]
@@ -57,9 +88,9 @@ impl FetchFn for DefaultFetchProvider {
 
         // Check content length
         if let Some(len) = response.content_length() {
-            if len > MAX_CONTENT_LENGTH as u64 {
+            if len > self.max_content_length as u64 {
                 return Err(FetchError::TooLarge {
-                    max: MAX_CONTENT_LENGTH,
+                    max: self.max_content_length,
                     actual: len as usize,
                 });
             }
@@ -70,9 +101,9 @@ impl FetchFn for DefaultFetchProvider {
             .await
             .map_err(|e| FetchError::RequestFailed(e.to_string()))?;
 
-        if bytes.len() > MAX_CONTENT_LENGTH {
+        if bytes.len() > self.max_content_length {
             return Err(FetchError::TooLarge {
-                max: MAX_CONTENT_LENGTH,
+                max: self.max_content_length,
                 actual: bytes.len(),
             });
         }
@@ -92,7 +123,7 @@ impl FetchFn for DefaultFetchProvider {
         };
 
         // Truncate if needed
-        let max_length = opts.max_length.unwrap_or(MAX_CONTENT_LENGTH / 2);
+        let max_length = opts.max_length.unwrap_or(self.max_content_length / 2);
         let content = if content.len() > max_length {
             format!(
                 "{}\n\n[Content truncated at {} characters]",

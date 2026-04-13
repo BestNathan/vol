@@ -3741,6 +3741,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "toml",
  "tracing",
  "vol-llm-core",
 ]
@@ -3749,6 +3750,8 @@ dependencies = [
 name = "vol-llm-tools-builtin"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "tracing",
  "vol-llm-tool",
  "vol-llm-tools-builtin-bash",
  "vol-llm-tools-builtin-edit",
@@ -3840,6 +3843,7 @@ dependencies = [
  "async-trait",
  "readability",
  "reqwest 0.11.27",
+ "serde",
  "thiserror 1.0.69",
  "url",
  "vol-llm-core",

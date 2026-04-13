@@ -1,12 +1,12 @@
 //! Tool registry.
 
-use crate::tool::{Tool, ToolContext, ToolResult};
+use crate::tool::{ExecutableTool, Tool, ToolContext, ToolResult, ToolSensitivity};
 use std::collections::HashMap;
 use vol_llm_core::{ToolCall, ToolDefinition};
 
 /// Tool registry
 pub struct ToolRegistry {
-    tools: HashMap<String, Box<dyn Tool>>,
+    tools: HashMap<String, Box<dyn ExecutableTool>>,
 }
 
 impl ToolRegistry {
@@ -16,12 +16,12 @@ impl ToolRegistry {
         }
     }
 
-    pub fn register<T: Tool + 'static>(&mut self, tool: T) {
+    pub fn register<T: ExecutableTool + 'static>(&mut self, tool: T) {
         self.tools.insert(tool.name().to_string(), Box::new(tool));
     }
 
     /// Register a boxed tool
-    pub fn register_boxed(&mut self, tool: Box<dyn Tool>) {
+    pub fn register_boxed(&mut self, tool: Box<dyn ExecutableTool>) {
         self.tools.insert(tool.name().to_string(), tool);
     }
 
@@ -39,8 +39,13 @@ impl ToolRegistry {
             .get(&call.name)
             .ok_or_else(|| format!("Unknown tool: {}", call.name))?;
 
+        let args: serde_json::Value =
+            serde_json::from_str(&call.arguments).map_err(|e| {
+                format!("Invalid JSON arguments for {}: {}", call.name, e)
+            })?;
+
         let result = tool
-            .execute(&call.arguments, context)
+            .execute(&args, context)
             .await
             .map_err(|e| e.to_string())?;
 
@@ -52,6 +57,15 @@ impl ToolRegistry {
 
     pub fn tool_names(&self) -> Vec<&str> {
         self.tools.keys().map(|s| s.as_str()).collect()
+    }
+
+    /// Get the sensitivity level of a tool for the given arguments.
+    /// Returns Safe if the tool is not found (fails open for registry lookup).
+    pub fn tool_sensitivity(&self, name: &str, args: &serde_json::Value) -> ToolSensitivity {
+        self.tools
+            .get(name)
+            .map(|t| t.sensitivity(args))
+            .unwrap_or(ToolSensitivity::Safe)
     }
 }
 

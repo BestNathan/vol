@@ -87,6 +87,16 @@ pub type ToolResultType<T> = std::result::Result<T, ToolError>;
 /// Result type alias for backward compatibility
 pub type Result<T> = ToolResultType<T>;
 
+/// Tool execution sensitivity level.
+/// Tools declare whether they require human approval before execution.
+#[derive(Debug, Clone)]
+pub enum ToolSensitivity {
+    /// Safe operation, no approval needed
+    Safe,
+    /// Requires human approval with the given reason
+    RequiresApproval { reason: String },
+}
+
 /// Executable tool trait for legacy compatibility
 #[async_trait]
 pub trait ExecutableTool: Send + Sync {
@@ -97,6 +107,12 @@ pub trait ExecutableTool: Send + Sync {
             "type": "object",
             "properties": {}
         })
+    }
+
+    /// Declare sensitivity level for the given arguments.
+    /// Override to return RequiresApproval for dangerous operations.
+    fn sensitivity(&self, _args: &serde_json::Value) -> ToolSensitivity {
+        ToolSensitivity::Safe
     }
 
     async fn execute(
@@ -130,7 +146,7 @@ pub trait Tool: Send + Sync {
 
 /// Blanket implementation of Tool for any type that implements ExecutableTool
 #[async_trait]
-impl<T: ExecutableTool + Send + Sync> Tool for T {
+impl<T: ?Sized + ExecutableTool + Send + Sync> Tool for T {
     fn name(&self) -> &str {
         self.name()
     }

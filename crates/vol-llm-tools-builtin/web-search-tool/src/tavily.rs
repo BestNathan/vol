@@ -4,6 +4,15 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
 use vol_llm_tool::web::search::{SearchError, SearchFn, SearchItem, SearchOptions, SearchResult};
+use vol_llm_tool::ProxyConfig;
+
+/// Configuration for Tavily search provider.
+#[derive(Debug, Clone, Deserialize)]
+pub struct TavilyConfig {
+    pub api_key: String,
+    #[serde(default)]
+    pub proxy: ProxyConfig,
+}
 
 #[derive(Debug, Deserialize)]
 struct TavilyResponse {
@@ -17,7 +26,7 @@ struct TavilyResult {
     content: Option<String>,
 }
 
-/// Provider that searches using the Tavily API
+/// Tavily API search provider.
 pub struct TavilySearchProvider {
     api_key: String,
     client: Client,
@@ -31,6 +40,15 @@ impl TavilySearchProvider {
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = build_client(&proxy_url)?;
         Ok(Self { api_key, client })
+    }
+
+    /// Create a new Tavily provider from configuration.
+    pub fn from_config(config: &TavilyConfig) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let client = build_client(&config.proxy.proxy_url)?;
+        Ok(Self {
+            api_key: config.api_key.clone(),
+            client,
+        })
     }
 }
 

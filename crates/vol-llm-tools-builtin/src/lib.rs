@@ -2,7 +2,29 @@
 //!
 //! Each tool is a separate sub-crate for optional dependencies.
 //! Use `register_all()` to register all tools at once.
+//!
+//! # Configuration
+//!
+//! Tools read their configuration from a dynamic `ToolConfig` container.
+//! Each tool defines its own config struct and reads from a named section.
+//!
+//! Example TOML:
+//! ```toml
+//! [tools.web_search]
+//! provider = "tavily"
+//! api_key = "${TAVILY_API_KEY}"
+//!
+//! [tools.web_search.proxy]
+//! proxy_url = "http://proxy:8080"
+//!
+//! [tools.web_fetch]
+//! max_content_length = 1048576
+//!
+//! [tools.web_fetch.proxy]
+//! proxy_url = "http://proxy:8080"
+//! ```
 
+pub mod config;
 pub mod read_tool {
     pub use vol_llm_tools_builtin_read::*;
 }
@@ -45,9 +67,13 @@ pub use bash_tool::BashTool;
 pub use web_search_tool::{WebFetchTool, WebSearchTool};
 pub use web_search_tool::tavily::TavilySearchProvider;
 pub use web_fetch_provider::DefaultFetchProvider;
+pub use config::{WebFetchConfig, WebSearchConfig};
 
 // Re-export error type
 pub use read_tool::BuiltinToolError;
+
+// Re-export config types from vol-llm-tool
+pub use vol_llm_tool::{ProxyConfig, ToolConfig};
 
 /// Register all built-in tools to a ToolRegistry
 pub fn register_all(registry: &mut vol_llm_tool::ToolRegistry) {
@@ -59,21 +85,42 @@ pub fn register_all(registry: &mut vol_llm_tool::ToolRegistry) {
     registry.register(BashTool::new());
 }
 
-/// Register web tools to a ToolRegistry.
-/// Caller provides the Tavily API key and optional proxy URL.
+/// Register web tools to a ToolRegistry using dynamic configuration.
+///
+/// Reads tool configurations from the `ToolConfig` container.
+/// Tools that are not configured are silently skipped.
 pub fn register_web_all(
     registry: &mut vol_llm_tool::ToolRegistry,
-    tavily_api_key: &str,
-    proxy_url: Option<String>,
-) -> Result<(), String> {
-    let tavily =
-        TavilySearchProvider::new(tavily_api_key.to_string(), proxy_url.clone())
-            .map_err(|e| format!("Failed to create Tavily provider: {}", e))?;
-    registry.register(WebSearchTool::new(tavily));
+    tool_config: &ToolConfig,
+) {
+    // Register web search if configured
+    if let Some(search_cfg) = tool_config.get::<WebSearchConfig>("web_search") {
+        match TavilySearchProvider::from_config(&vol_llm_tools_builtin_web_search::tavily::TavilyConfig {
+            api_key: search_cfg.api_key,
+            proxy: search_cfg.proxy,
+        }) {
+            Ok(provider) => {
+                registry.register(WebSearchTool::new(provider));
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to create web search provider, skipping");
+            }
+        }
+    }
 
-    let fetcher = DefaultFetchProvider::new(proxy_url)
-        .map_err(|e| format!("Failed to create fetch provider: {}", e))?;
-    registry.register(WebFetchTool::new(fetcher));
-
-    Ok(())
+    // Register web fetch if configured
+    if let Some(fetch_cfg) = tool_config.get::<WebFetchConfig>("web_fetch") {
+        let fetch_provider_cfg = vol_llm_tools_builtin_web_fetch::FetchProviderConfig {
+            max_content_length: fetch_cfg.max_content_length,
+            proxy: fetch_cfg.proxy,
+        };
+        match DefaultFetchProvider::from_config(&fetch_provider_cfg) {
+            Ok(provider) => {
+                registry.register(WebFetchTool::new(provider));
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to create web fetch provider, skipping");
+            }
+        }
+    }
 }
