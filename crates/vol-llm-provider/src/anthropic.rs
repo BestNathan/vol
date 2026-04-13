@@ -20,12 +20,40 @@ pub struct AnthropicProvider {
 impl AnthropicProvider {
     /// Create new Anthropic provider
     pub fn new(config: &LLMConfig) -> Result<Self> {
+        let client = Self::build_client()?;
         Ok(Self {
-            client: Client::new(),
+            client,
             api_key: config.resolve_api_key()?,
             model: config.model.clone(),
             base_url: config.base_url.clone(),
         })
+    }
+
+    /// Build an HTTP client with optional proxy support.
+    /// Reads HTTPS_PROXY or https_proxy from environment if set.
+    /// DashScope is accessible directly (no proxy needed in China),
+    /// so it's excluded from proxy routing.
+    fn build_client() -> Result<Client> {
+        let proxy_url = std::env::var("HTTPS_PROXY")
+            .or_else(|_| std::env::var("https_proxy"))
+            .ok();
+
+        let mut builder = Client::builder()
+            .danger_accept_invalid_certs(true);
+
+        if let Some(url) = &proxy_url {
+            // DashScope coding endpoint is accessible directly from China,
+            // so we bypass the proxy for it to avoid CONNECT tunnel failures.
+            let no_proxy = reqwest::NoProxy::from_string("dashscope.aliyuncs.com");
+            let proxy = reqwest::Proxy::all(url)
+                .map_err(|e| LLMError::Network(reqwest::Error::from(e).into()))?
+                .no_proxy(no_proxy);
+            builder = builder.proxy(proxy);
+        }
+
+        builder
+            .build()
+            .map_err(|e| LLMError::Network(e.into()))
     }
 
     /// Convert messages to Anthropic format
@@ -131,7 +159,7 @@ impl LLMClient for AnthropicProvider {
 
     async fn converse(&self, request: ConversationRequest) -> Result<ConversationResponse> {
         // max_tokens is required for Anthropic
-        let max_tokens = request.model_config.max_tokens.unwrap_or(1024);
+        let max_tokens = request.model_config.max_tokens.unwrap_or(8192);
 
         // Convert messages
         let anthropic_messages = self.convert_messages(&request.messages)?;
@@ -273,7 +301,7 @@ impl LLMClient for AnthropicProvider {
 
     async fn converse_stream(&self, request: ConversationRequest) -> Result<StreamReceiver> {
         // max_tokens is required for Anthropic
-        let max_tokens = request.model_config.max_tokens.unwrap_or(1024);
+        let max_tokens = request.model_config.max_tokens.unwrap_or(8192);
 
         // Convert messages
         let anthropic_messages = self.convert_messages(&request.messages)?;
