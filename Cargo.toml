@@ -22,6 +22,7 @@ members = [
     "crates/ppt-agent",
     "crates/vol-session",
     "crates/vol-llm-tools-builtin",
+    "crates/vol-llm-tui",
 ]
 
 [workspace.package]
