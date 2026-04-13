@@ -13,7 +13,7 @@ use vol_llm_core::{
     ConversationRequest, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
     ToolChoice,
 };
-use vol_llm_tool::ToolContext;
+use vol_llm_tool::{ToolContext, ToolSensitivity};
 
 /// Agent configuration
 #[derive(Clone)]
@@ -128,7 +128,7 @@ impl ReActAgent {
         let config = self.config.clone();
         let session = self.session.clone();
 
-        let (run_ctx, plugin_rx) = RunContext::new(
+        let (run_ctx, plugin_rx, approval_rx) = RunContext::new(
             run_id.clone(),
             user_input.to_string(),
             self.session.id.clone(),
@@ -146,6 +146,9 @@ impl ReActAgent {
                 tracing::warn!(agent_id = %agent_id, error = %e, "Log cleanup failed");
             }
         });
+
+        // === Phase 1.6: Spawn CLI approval handler for HITL ===
+        super::run_cli_approval_loop(approval_rx);
 
         // === Phase 2: Initialize messages (call once before loop) ===
         run_ctx.init_messages().await?;
@@ -372,7 +375,47 @@ impl ReActAgent {
 
                         match tool_decision {
                             PluginDecision::Continue => {
-                                // Execute tool
+                                // Check tool sensitivity before execution
+                                let args: serde_json::Value = serde_json::from_str(&call.arguments)
+                                    .unwrap_or(serde_json::json!({}));
+                                let sensitivity = tools.tool_sensitivity(&call.name, &args);
+
+                                match sensitivity {
+                                    ToolSensitivity::RequiresApproval { reason } => {
+                                        let metadata = serde_json::json!({
+                                            "tool_call_id": call.id,
+                                            "arguments": call.arguments
+                                        });
+                                        match run_ctx.request_tool_approval(&call.name, &reason, metadata).await {
+                                            Ok(approval) if !approval.approved => {
+                                                info!(
+                                                    tool = %call.name,
+                                                    reason = %reason,
+                                                    "Tool execution rejected by HITL"
+                                                );
+                                                // Add rejection message to history
+                                                if let Err(e) = run_ctx.add_message(Message::tool(
+                                                    "Execution rejected: permission denied".to_string(),
+                                                    call.id.clone(),
+                                                )).await {
+                                                    return Err(crate::AgentError::from(e));
+                                                }
+                                                run_ctx.clear_current_tool_calls().await;
+                                                continue;
+                                            }
+                                            Ok(_) => {
+                                                // Approved, proceed
+                                            }
+                                            Err(e) => {
+                                                debug!("HITL approval error: {}", e);
+                                                // Fail open — proceed without approval
+                                            }
+                                        }
+                                    }
+                                    ToolSensitivity::Safe => {
+                                        // Safe tool, proceed directly
+                                    }
+                                }
                             }
                             PluginDecision::Skip => {
                                 // Skip this tool, continue to next

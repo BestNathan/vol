@@ -307,3 +307,58 @@ mod tests {
         let _final_trigger = ApprovalTrigger::BeforeFinalAnswer;
     }
 }
+
+/// CLI approval handler — runs as a background task.
+///
+/// Receives approval requests from RunContext's approval channel,
+/// prompts the user on stdin, and sends back responses.
+///
+/// # Usage
+///
+/// Spawn this on a background thread after creating RunContext:
+///
+/// ```ignore
+/// let (ctx, _plugin_rx, approval_rx) = RunContext::new(...);
+/// run_cli_approval_loop(approval_rx);
+/// ```
+pub fn run_cli_approval_loop(
+    rx: tokio::sync::mpsc::Receiver<(
+        super::run_context::ApprovalRequest,
+        tokio::sync::oneshot::Sender<super::run_context::ApprovalResponse>,
+    )>,
+) {
+    use std::io::{self, BufRead, Write};
+
+    std::thread::spawn(move || {
+        let stdin = io::stdin();
+        let mut rx = rx; // Make mutable
+
+        while let Some((request, tx)) = rx.blocking_recv() {
+            // Display request
+            println!();
+            println!("⚠ Approval required:");
+            println!("  Tool: {}", request.tool_name);
+            println!("  Reason: {}", request.reason);
+            print!("  Approve? [y/n] > ");
+            let _ = io::stdout().flush();
+
+            // Read response
+            let mut line = String::new();
+            let approved = match stdin.lock().read_line(&mut line) {
+                Ok(_) => {
+                    let trimmed = line.trim().to_lowercase();
+                    trimmed == "y" || trimmed == "yes" || trimmed.is_empty()
+                }
+                Err(_) => false,
+            };
+
+            let response = if approved {
+                super::run_context::ApprovalResponse::approved()
+            } else {
+                super::run_context::ApprovalResponse::rejected("User rejected".into())
+            };
+
+            let _ = tx.send(response);
+        }
+    });
+}

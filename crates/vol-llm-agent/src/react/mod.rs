@@ -44,7 +44,7 @@ pub mod stream;
 pub use agent::{AgentConfig, ReActAgent};
 pub use builder::AgentBuilder;
 pub use hitl::{
-    ApprovalChannel, ApprovalRequest, ApprovalResponse, ApprovalTrigger, ApprovalType, HitlConfig,
+    run_cli_approval_loop, ApprovalChannel, ApprovalTrigger, ApprovalType, HitlConfig,
     TimeoutBehavior,
 };
 pub use plugin::{AgentPlugin, PluginDecision, PluginRegistry};
@@ -53,7 +53,7 @@ pub use plugin_stream::{
 };
 pub use prompt::{default_system_prompt, SystemPromptBuilder};
 pub use response::{AgentError, AgentResponse};
-pub use run_context::{PluginContext, PluginRequest, RunContext};
+pub use run_context::{ApprovalRequest, ApprovalResponse, PluginContext, PluginRequest, RunContext};
 pub use state::{ReasoningStep, ToolCallRecord};
 pub use stream::{AgentStreamEvent, AgentStreamReceiver};
 

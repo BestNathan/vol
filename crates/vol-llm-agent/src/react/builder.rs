@@ -6,12 +6,12 @@ use crate::prompt_context::PromptContext;
 use crate::session::{InMemoryMessageStore, InMemorySessionStore, Session};
 use std::sync::Arc;
 use vol_llm_core::LLMClient;
-use vol_llm_tool::{Tool, ToolRegistry};
+use vol_llm_tool::{ExecutableTool, ToolRegistry};
 
 /// Agent builder
 pub struct AgentBuilder {
     llm: Option<Arc<dyn LLMClient>>,
-    tools: Vec<Box<dyn Tool>>,
+    tools: Vec<Box<dyn ExecutableTool>>,
     config: AgentConfig,
     session: Option<Arc<Session>>,
 }
@@ -31,7 +31,7 @@ impl AgentBuilder {
         self
     }
 
-    pub fn with_tool<T: Tool + 'static>(mut self, tool: T) -> Self {
+    pub fn with_tool<T: ExecutableTool + 'static>(mut self, tool: T) -> Self {
         self.tools.push(Box::new(tool));
         self
     }
