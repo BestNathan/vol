@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use std::path::PathBuf;
-use vol_llm_tool::ToolRegistry;
+use vol_llm_tool::{ToolRegistry, ToolConfig};
 use vol_llm_agent::{ReActAgent, AgentConfig, Session};
 use vol_llm_provider::{LLMProviderConfig, LLMProviderRegistry};
 
@@ -59,9 +59,9 @@ impl CodingAgent {
             .ok_or_else(|| CodingAgentError::Config(format!("LLM provider '{}' not found", config.llm_provider_id)))?
             .clone();
 
-        // Create tool registry with coding tools
+        // Create tool registry with coding tools and web tools
         let mut tool_registry = ToolRegistry::new();
-        Self::register_coding_tools(&mut tool_registry);
+        Self::register_coding_tools(&mut tool_registry, &config.tool_config);
 
         // Create agent config - use plugin_registry from config
         let agent_config = AgentConfig {
@@ -88,8 +88,8 @@ impl CodingAgent {
         })
     }
 
-    /// Register coding tools to the tool registry
-    fn register_coding_tools(registry: &mut ToolRegistry) {
+    /// Register coding tools and web tools to the tool registry
+    fn register_coding_tools(registry: &mut ToolRegistry, tool_config: &ToolConfig) {
         use vol_llm_tools_builtin::read_tool::ReadTool;
         use vol_llm_tools_builtin::write_tool::WriteTool;
         use vol_llm_tools_builtin::edit_tool::EditTool;
@@ -99,6 +99,9 @@ impl CodingAgent {
         registry.register(WriteTool::new());
         registry.register(EditTool::new());
         registry.register(BashTool::new());
+
+        // Register web tools if configured
+        vol_llm_tools_builtin::register_web_all(registry, tool_config);
     }
 
     /// Set the event observer and register plugin
@@ -217,6 +220,11 @@ impl CodingAgentBuilder {
 
     pub fn sandbox(mut self, sandbox: vol_llm_core::SandboxRef) -> Self {
         self.sandbox = Some(sandbox);
+        self
+    }
+
+    pub fn tool_config(mut self, tool_config: ToolConfig) -> Self {
+        self.config.tool_config = tool_config;
         self
     }
 

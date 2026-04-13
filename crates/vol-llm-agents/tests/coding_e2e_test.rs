@@ -3,6 +3,7 @@
 //! Requires real LLM API key to run. Skip by default.
 
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, HTMLReporter};
+use vol_llm_tool::ToolConfig;
 use std::sync::Arc;
 use tempfile::tempdir;
 
@@ -24,6 +25,7 @@ async fn test_coding_agent_e2e_read_file() {
         html_report_path: Some(report_path.clone()),
         llm_provider_id: "anthropic-main".to_string(),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
+        tool_config: ToolConfig::new(),
     };
 
     let agent = CodingAgent::new(config).await.unwrap();
@@ -62,6 +64,7 @@ async fn test_coding_agent_e2e_edit_file() {
         html_report_path: Some(report_path.clone()),
         llm_provider_id: "anthropic-main".to_string(),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
+        tool_config: ToolConfig::new(),
     };
 
     let agent = CodingAgent::new(config).await.unwrap();
@@ -100,6 +103,7 @@ async fn test_coding_agent_html_report_contains_timeline() {
         html_report_path: Some(report_path.clone()),
         llm_provider_id: "anthropic-main".to_string(),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
+        tool_config: ToolConfig::new(),
     };
 
     let agent = CodingAgent::new(config).await.unwrap();

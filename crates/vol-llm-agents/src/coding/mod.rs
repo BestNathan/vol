@@ -19,3 +19,6 @@ pub use html_reporter::HTMLReporter;
 pub use observer::EventObserver;
 pub use observer_plugin::ObserverPlugin;
 pub use sandbox::LocalSandbox;
+
+// Re-export ToolConfig so users can configure web tools
+pub use vol_llm_tool::ToolConfig;

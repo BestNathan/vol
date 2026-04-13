@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 use vol_llm_agent::react::PluginRegistry;
+use vol_llm_tool::ToolConfig;
 
 /// Coding Agent configuration
 #[derive(Clone)]
@@ -26,6 +27,9 @@ pub struct CodingAgentConfig {
 
     /// Plugin registry for extending agent functionality
     pub plugin_registry: PluginRegistry,
+
+    /// Tool configuration container (for web tools, etc.)
+    pub tool_config: ToolConfig,
 }
 
 impl std::fmt::Debug for CodingAgentConfig {
@@ -38,6 +42,7 @@ impl std::fmt::Debug for CodingAgentConfig {
             .field("html_report_path", &self.html_report_path)
             .field("llm_provider_id", &self.llm_provider_id)
             .field("plugin_registry", &"<PluginRegistry>")
+            .field("tool_config", &self.tool_config)
             .finish()
     }
 }
@@ -52,6 +57,7 @@ impl Default for CodingAgentConfig {
             html_report_path: None,
             llm_provider_id: "anthropic-main".to_string(),
             plugin_registry: PluginRegistry::new(),
+            tool_config: ToolConfig::new(),
         }
     }
 }
