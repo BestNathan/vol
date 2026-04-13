@@ -62,12 +62,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tools = ToolRegistry::new();
     vol_llm_tools_builtin::register_all(&mut tools);
 
+    // Register web tools if configured
+    let mut tool_config = vol_llm_tool::ToolConfig::new();
+    if let Ok(api_key) = std::env::var("TAVILY_API_KEY") {
+        let search_cfg = vol_llm_tools_builtin::WebSearchConfig {
+            provider: "tavily".to_string(),
+            api_key,
+            proxy: vol_llm_tool::ProxyConfig::default(),
+        };
+        tool_config.set("web_search", search_cfg);
+    }
+    if let Ok(max_len) = std::env::var("WEB_FETCH_MAX_LENGTH") {
+        let fetch_cfg = vol_llm_tools_builtin::WebFetchConfig {
+            max_content_length: max_len.parse().ok(),
+            proxy: vol_llm_tool::ProxyConfig::default(),
+        };
+        tool_config.set("web_fetch", fetch_cfg);
+    }
+    vol_llm_tools_builtin::register_web_all(&mut tools, &tool_config);
+    let web_tools = tool_config.get::<vol_llm_tools_builtin::WebSearchConfig>("web_search")
+        .map(|_| 1).unwrap_or(0)
+        + tool_config.get::<vol_llm_tools_builtin::WebFetchConfig>("web_fetch")
+        .map(|_| 1).unwrap_or(0);
+
     // Print startup banner
     println!();
     print_colored(Color::Cyan, "=== Coding Agent TUI ===\n");
     println!();
-    print_colored(Color::White, "Tools registered: ");
-    print_colored(Color::Green, &format!("{}\n", tools.definitions().len()));
+    print_colored(Color::White, &format!("Core tools: {}\n", tools.definitions().len() - web_tools));
+    if web_tools > 0 {
+        print_colored(Color::Green, &format!("Web tools: {}\n", web_tools));
+    } else {
+        print_colored(Color::Yellow, "Web tools: not configured (set TAVILY_API_KEY to enable)\n");
+    }
     println!();
     print_help();
 

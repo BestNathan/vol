@@ -18,7 +18,7 @@ use vol_llm_tool::ProxyConfig;
 /// [tools.web_search.proxy]
 /// proxy_url = "http://proxy:8080"
 /// ```
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct WebSearchConfig {
     /// Search provider name (e.g., "tavily")
     pub provider: String,
@@ -39,7 +39,7 @@ pub struct WebSearchConfig {
 /// [tools.web_fetch.proxy]
 /// proxy_url = "http://proxy:8080"
 /// ```
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, serde::Serialize)]
 pub struct WebFetchConfig {
     /// Maximum content length in bytes (default: 2MB)
     pub max_content_length: Option<usize>,

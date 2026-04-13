@@ -40,4 +40,17 @@ impl ToolConfig {
             .get(name)
             .and_then(|v| v.clone().try_into().ok())
     }
+
+    /// Set a configuration for the tool with the given name.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// tool_config.set("web_search", WebSearchConfig { ... });
+    /// ```
+    pub fn set<T: serde::Serialize>(&mut self, name: &str, config: T) {
+        if let Ok(value) = toml::Value::try_from(config) {
+            self.tools.insert(name.to_string(), value);
+        }
+    }
 }
