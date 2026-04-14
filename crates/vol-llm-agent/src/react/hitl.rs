@@ -112,7 +112,7 @@ impl Default for HitlConfig {
 }
 
 use super::plugin::*;
-use super::run_context::PluginContext;
+use super::plugin::PluginContext;
 use super::AgentStreamEvent;
 use std::sync::Arc;
 

@@ -1,7 +1,7 @@
 //! Plugin interceptor and listener utilities.
 
-use super::plugin::{AgentPlugin, PluginDecision};
-use super::run_context::{PluginContext, PluginRequest, RunContext};
+use super::plugin::{AgentPlugin, PluginContext, PluginDecision};
+use super::run_context::{PluginRequest, RunContext};
 use super::{AgentError, AgentResponse, AgentStreamEvent, AgentStreamReceiver};
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};

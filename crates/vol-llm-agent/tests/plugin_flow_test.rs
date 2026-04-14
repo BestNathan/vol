@@ -4,6 +4,8 @@
 //!
 //! This file tests the plugin flow integration with a mock LLM.
 
+use vol_llm_agent::react::plugin_context_from_run_ctx;
+
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -328,5 +330,5 @@ fn create_test_plugin_context() -> PluginContext {
         AgentConfig::default(),
     );
 
-    PluginContext::from_run_ctx(&ctx)
+    plugin_context_from_run_ctx(&ctx)
 }

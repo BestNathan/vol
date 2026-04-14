@@ -1,7 +1,7 @@
 //! Observability plugin for tracing, metrics, and audit logging.
 
 use crate::react::plugin::*;
-use crate::react::run_context::PluginContext;
+use crate::react::plugin::PluginContext;
 use crate::AgentStreamEvent;
 
 /// Audit event for logging
@@ -108,7 +108,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
         );
-        PluginContext::from_run_ctx(&ctx)
+        crate::react::plugin_context_from_run_ctx(&ctx)
     }
 
     #[tokio::test]

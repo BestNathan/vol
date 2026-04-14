@@ -1,7 +1,7 @@
 //! Retry plugin with exponential backoff.
 
 use crate::react::plugin::*;
-use crate::react::run_context::PluginContext;
+use crate::react::plugin::PluginContext;
 use crate::AgentStreamEvent;
 
 /// Retry configuration
@@ -86,7 +86,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
         );
-        PluginContext::from_run_ctx(&ctx)
+        crate::react::plugin_context_from_run_ctx(&ctx)
     }
 
     #[test]

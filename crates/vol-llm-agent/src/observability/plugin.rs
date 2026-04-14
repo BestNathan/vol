@@ -2,7 +2,7 @@
 
 use super::run_log::{LogEntry, RunLogLogger};
 use crate::react::plugin::{AgentPlugin, PluginDecision, PluginId};
-use crate::react::run_context::PluginContext;
+use crate::react::plugin::PluginContext;
 use crate::AgentStreamEvent;
 use chrono::Utc;
 use serde_json::json;
@@ -85,7 +85,7 @@ impl ObservabilityPlugin {
         LogEntry {
             timestamp: Utc::now(),
             run_id: ctx.run_id.clone(),
-            agent_id: ctx.config.agent_id.clone(),
+            agent_id: self.logger.agent_id().to_string(),
             event: event_name.to_string(),
             data,
         }
@@ -116,8 +116,9 @@ impl AgentPlugin for ObservabilityPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::react::run_context::{PluginContext, RunContext};
-    use crate::react::AgentConfig;
+    use crate::react::plugin::PluginContext;
+    use crate::react::run_context::RunContext;
+    use crate::react::{plugin_context_from_run_ctx, AgentConfig};
     use crate::session::{InMemoryMessageStore, InMemorySessionStore, Session};
     use std::sync::Arc;
     use tempfile::TempDir;
@@ -135,7 +136,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
         );
-        PluginContext::from_run_ctx(&ctx)
+        plugin_context_from_run_ctx(&ctx)
     }
 
     #[tokio::test]

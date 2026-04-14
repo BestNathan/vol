@@ -3764,6 +3764,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
  "vol-core",
 ]
 
@@ -3780,6 +3781,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "vol-llm-core",
 ]
 
 [[package]]

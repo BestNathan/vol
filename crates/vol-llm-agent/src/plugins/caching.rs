@@ -1,7 +1,7 @@
 //! Caching plugin with semantic cache support.
 
 use crate::react::plugin::*;
-use crate::react::run_context::PluginContext;
+use crate::react::plugin::PluginContext;
 use crate::{AgentResponse, AgentStreamEvent};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -164,7 +164,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
         );
-        PluginContext::from_run_ctx(&ctx)
+        crate::react::plugin_context_from_run_ctx(&ctx)
     }
 
     #[tokio::test]
