@@ -21,12 +21,32 @@ use vol_llm_tool::ProxyConfig;
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct WebSearchConfig {
     /// Search provider name (e.g., "tavily")
+    #[serde(default = "default_provider")]
     pub provider: String,
     /// API key for the search provider (supports `${ENV_VAR}` expansion)
+    #[serde(default = "default_api_key")]
     pub api_key: String,
     /// Proxy configuration (optional)
     #[serde(default)]
     pub proxy: ProxyConfig,
+}
+
+impl Default for WebSearchConfig {
+    fn default() -> Self {
+        Self {
+            provider: default_provider(),
+            api_key: default_api_key(),
+            proxy: ProxyConfig::default(),
+        }
+    }
+}
+
+fn default_provider() -> String {
+    "tavily".to_string()
+}
+
+fn default_api_key() -> String {
+    std::env::var("TAVILY_API_KEY").unwrap_or_default()
 }
 
 /// Configuration for the web fetch tool.

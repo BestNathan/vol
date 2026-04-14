@@ -87,40 +87,43 @@ pub fn register_all(registry: &mut vol_llm_tool::ToolRegistry) {
 
 /// Register web tools to a ToolRegistry using dynamic configuration.
 ///
-/// Reads tool configurations from the `ToolConfig` container.
-/// Tools that are not configured are silently skipped.
+/// Always registers web tools with default configuration.
+/// Tools can be reconfigured at runtime via `ToolConfig::set()`.
+/// If a tool fails to initialize (e.g., missing API key), a warning is logged.
 pub fn register_web_all(
     registry: &mut vol_llm_tool::ToolRegistry,
     tool_config: &ToolConfig,
 ) {
-    // Register web search if configured
-    if let Some(search_cfg) = tool_config.get::<WebSearchConfig>("web_search") {
-        match TavilySearchProvider::from_config(&vol_llm_tools_builtin_web_search::tavily::TavilyConfig {
-            api_key: search_cfg.api_key,
-            proxy: search_cfg.proxy,
-        }) {
-            Ok(provider) => {
-                registry.register(WebSearchTool::new(provider));
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, "Failed to create web search provider, skipping");
-            }
+    // Register web search — use configured values or defaults (reads TAVILY_API_KEY env)
+    let search_cfg = tool_config
+        .get::<WebSearchConfig>("web_search")
+        .unwrap_or_default();
+    match TavilySearchProvider::from_config(&vol_llm_tools_builtin_web_search::tavily::TavilyConfig {
+        api_key: search_cfg.api_key,
+        proxy: search_cfg.proxy,
+    }) {
+        Ok(provider) => {
+            registry.register(WebSearchTool::new(provider));
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "Failed to create web search provider (check TAVILY_API_KEY), skipping");
         }
     }
 
-    // Register web fetch if configured
-    if let Some(fetch_cfg) = tool_config.get::<WebFetchConfig>("web_fetch") {
-        let fetch_provider_cfg = vol_llm_tools_builtin_web_fetch::FetchProviderConfig {
-            max_content_length: fetch_cfg.max_content_length,
-            proxy: fetch_cfg.proxy,
-        };
-        match DefaultFetchProvider::from_config(&fetch_provider_cfg) {
-            Ok(provider) => {
-                registry.register(WebFetchTool::new(provider));
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, "Failed to create web fetch provider, skipping");
-            }
+    // Register web fetch — works with defaults (no API key needed)
+    let fetch_cfg = tool_config
+        .get::<WebFetchConfig>("web_fetch")
+        .unwrap_or_default();
+    let fetch_provider_cfg = vol_llm_tools_builtin_web_fetch::FetchProviderConfig {
+        max_content_length: fetch_cfg.max_content_length,
+        proxy: fetch_cfg.proxy,
+    };
+    match DefaultFetchProvider::from_config(&fetch_provider_cfg) {
+        Ok(provider) => {
+            registry.register(WebFetchTool::new(provider));
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "Failed to create web fetch provider, skipping");
         }
     }
 }
