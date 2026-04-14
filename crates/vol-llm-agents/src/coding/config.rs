@@ -7,14 +7,23 @@ use vol_llm_tool::ToolConfig;
 /// Coding Agent configuration
 #[derive(Clone)]
 pub struct CodingAgentConfig {
+    /// Agent identifier
+    pub agent_id: String,
+
     /// Maximum reasoning iterations
     pub max_iterations: u32,
 
     /// Working directory for code operations
     pub working_dir: PathBuf,
 
+    /// Base path for logs
+    pub log_base_path: PathBuf,
+
     /// Enable HITL confirmation for dangerous operations
     pub hitl_enabled: bool,
+
+    /// Skip HITL approval (auto-approve all tool calls)
+    pub unsafe_mode: bool,
 
     /// Verbose output
     pub verbose: bool,
@@ -35,9 +44,12 @@ pub struct CodingAgentConfig {
 impl std::fmt::Debug for CodingAgentConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CodingAgentConfig")
+            .field("agent_id", &self.agent_id)
             .field("max_iterations", &self.max_iterations)
             .field("working_dir", &self.working_dir)
+            .field("log_base_path", &self.log_base_path)
             .field("hitl_enabled", &self.hitl_enabled)
+            .field("unsafe_mode", &self.unsafe_mode)
             .field("verbose", &self.verbose)
             .field("html_report_path", &self.html_report_path)
             .field("llm_provider_id", &self.llm_provider_id)
@@ -50,9 +62,12 @@ impl std::fmt::Debug for CodingAgentConfig {
 impl Default for CodingAgentConfig {
     fn default() -> Self {
         Self {
+            agent_id: "coding-agent".to_string(),
             max_iterations: 10,
             working_dir: PathBuf::from("."),
+            log_base_path: PathBuf::from("logs"),
             hitl_enabled: true,
+            unsafe_mode: false,
             verbose: false,
             html_report_path: None,
             llm_provider_id: "anthropic-main".to_string(),

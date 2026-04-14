@@ -26,6 +26,7 @@ async fn test_coding_agent_e2e_read_file() {
         llm_provider_id: "anthropic-main".to_string(),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
         tool_config: ToolConfig::new(),
+        ..Default::default()
     };
 
     let agent = CodingAgent::new(config).await.unwrap();
@@ -65,6 +66,7 @@ async fn test_coding_agent_e2e_edit_file() {
         llm_provider_id: "anthropic-main".to_string(),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
         tool_config: ToolConfig::new(),
+        ..Default::default()
     };
 
     let agent = CodingAgent::new(config).await.unwrap();
@@ -104,6 +106,7 @@ async fn test_coding_agent_html_report_contains_timeline() {
         llm_provider_id: "anthropic-main".to_string(),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
         tool_config: ToolConfig::new(),
+        ..Default::default()
     };
 
     let agent = CodingAgent::new(config).await.unwrap();

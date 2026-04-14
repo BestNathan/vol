@@ -19,6 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         html_report_path: Some(report_path.clone()),
         llm_provider_id: "anthropic-main".to_string(),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
+        ..Default::default()
     };
 
     let agent = CodingAgent::new(config).await?;

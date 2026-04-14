@@ -33,9 +33,19 @@ async fn test_observer_plugin_receives_all_events() {
         fn event_name(event: &AgentStreamEvent) -> &'static str {
             match event {
                 AgentStreamEvent::AgentStart { .. } => "AgentStart",
+                AgentStreamEvent::LLMCallStart { .. } => "LLMCallStart",
+                AgentStreamEvent::LLMCallComplete { .. } => "LLMCallComplete",
+                AgentStreamEvent::LLMCallError { .. } => "LLMCallError",
+                AgentStreamEvent::ThinkingStart => "ThinkingStart",
+                AgentStreamEvent::ThinkingDelta { .. } => "ThinkingDelta",
                 AgentStreamEvent::ThinkingComplete { .. } => "ThinkingComplete",
+                AgentStreamEvent::ContentStart => "ContentStart",
+                AgentStreamEvent::ContentDelta { .. } => "ContentDelta",
+                AgentStreamEvent::ContentComplete { .. } => "ContentComplete",
                 AgentStreamEvent::ToolCallBegin { .. } => "ToolCallBegin",
                 AgentStreamEvent::ToolCallComplete { .. } => "ToolCallComplete",
+                AgentStreamEvent::ToolCallError { .. } => "ToolCallError",
+                AgentStreamEvent::ToolCallSkipped { .. } => "ToolCallSkipped",
                 AgentStreamEvent::IterationComplete { .. } => "IterationComplete",
                 AgentStreamEvent::AgentComplete => "AgentComplete",
                 AgentStreamEvent::AgentAborted { .. } => "AgentAborted",
@@ -71,6 +81,7 @@ async fn test_coding_agent_generates_complete_html_report() {
         html_report_path: Some(report_path.clone()),
         llm_provider_id: "anthropic-main".to_string(),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
+        ..Default::default()
     };
 
     let agent = CodingAgent::new(config).await.unwrap();

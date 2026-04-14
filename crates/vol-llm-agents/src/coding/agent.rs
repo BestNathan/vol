@@ -74,7 +74,6 @@ impl CodingAgent {
             plugin_registry: config.plugin_registry.clone(),
             agent_id: if config.agent_id.is_empty() { generate_agent_id() } else { config.agent_id.clone() },
             log_base_path: config.log_base_path.clone(),
-            unsafe_mode: config.unsafe_mode,
         };
 
         Ok(Self {

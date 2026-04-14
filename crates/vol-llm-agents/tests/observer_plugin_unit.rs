@@ -110,7 +110,7 @@ fn create_test_plugin_context() -> vol_llm_agent::react::PluginContext {
     use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore, Session};
     use vol_llm_tool::ToolRegistry;
 
-    let (ctx, _rx) = RunContext::new(
+    let (ctx, _plugin_rx, _approval_rx) = RunContext::new(
         "test-run".to_string(),
         "test input".to_string(),
         "session-1".to_string(),
