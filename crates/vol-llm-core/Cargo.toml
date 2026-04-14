@@ -12,3 +12,4 @@ async-trait = { workspace = true }
 reqwest = { workspace = true }
 tracing = { workspace = true }
 vol-core = { workspace = true }
+chrono = { version = "0.4", features = ["serde"] }
