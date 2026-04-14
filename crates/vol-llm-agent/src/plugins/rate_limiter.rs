@@ -90,9 +90,7 @@ mod tests {
         let ctx = create_test_plugin_context();
 
         // Plugin should always return Continue from intercept
-        let event = AgentStreamEvent::AgentStart {
-            input: "test".to_string(),
-        };
+        let event = AgentStreamEvent::agent_start("test".to_string());
         match plugin.intercept(&event, &ctx).await {
             PluginDecision::Continue => {}
             _ => panic!("Expected Continue"),

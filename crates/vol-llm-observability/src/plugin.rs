@@ -52,55 +52,56 @@ impl ObservabilityPlugin {
     /// Create a LogEntry from an AgentStreamEvent.
     fn create_log_entry(event: &AgentStreamEvent, run_id: &str, agent_id: &str) -> LogEntry {
         let data = match event {
-            AgentStreamEvent::AgentStart { input } => {
+            AgentStreamEvent::AgentStart { input, .. } => {
                 json!({ "input": input })
             }
-            AgentStreamEvent::AgentComplete => {
-                json!({})
+            AgentStreamEvent::AgentComplete { response, .. } => {
+                json!({ "response": response })
             }
-            AgentStreamEvent::AgentAborted { reason } => {
+            AgentStreamEvent::AgentAborted { reason, .. } => {
                 json!({ "reason": reason })
             }
-            AgentStreamEvent::LLMCallStart { iteration } => {
-                json!({ "iteration": iteration })
+            AgentStreamEvent::LLMCallStart { iteration, messages, .. } => {
+                let msg_count = messages.len();
+                json!({ "iteration": iteration, "message_count": msg_count })
             }
-            AgentStreamEvent::LLMCallComplete { model, usage } => {
+            AgentStreamEvent::LLMCallComplete { model, usage, .. } => {
                 json!({ "model": model, "usage": usage })
             }
-            AgentStreamEvent::LLMCallError { error } => {
+            AgentStreamEvent::LLMCallError { error, .. } => {
                 json!({ "error": error })
             }
-            AgentStreamEvent::ThinkingStart => {
+            AgentStreamEvent::ThinkingStart { .. } => {
                 json!({})
             }
-            AgentStreamEvent::ThinkingDelta { delta } => {
+            AgentStreamEvent::ThinkingDelta { delta, .. } => {
                 json!({ "delta": delta })
             }
-            AgentStreamEvent::ThinkingComplete { thinking } => {
+            AgentStreamEvent::ThinkingComplete { thinking, .. } => {
                 json!({ "thinking": thinking })
             }
-            AgentStreamEvent::ContentStart => {
+            AgentStreamEvent::ContentStart { .. } => {
                 json!({})
             }
-            AgentStreamEvent::ContentDelta { delta } => {
+            AgentStreamEvent::ContentDelta { delta, .. } => {
                 json!({ "delta": delta })
             }
-            AgentStreamEvent::ContentComplete { content } => {
+            AgentStreamEvent::ContentComplete { content, .. } => {
                 json!({ "content": content })
             }
-            AgentStreamEvent::ToolCallBegin { tool_call_id, tool_name, arguments } => {
+            AgentStreamEvent::ToolCallBegin { tool_call_id, tool_name, arguments, .. } => {
                 json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "arguments": arguments })
             }
-            AgentStreamEvent::ToolCallComplete { tool_call_id, tool_name, result } => {
-                json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "result": result })
+            AgentStreamEvent::ToolCallComplete { tool_call_id, tool_name, result, duration_ms, .. } => {
+                json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "result": result, "duration_ms": duration_ms })
             }
-            AgentStreamEvent::ToolCallError { tool_call_id, tool_name, error } => {
-                json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "error": error })
+            AgentStreamEvent::ToolCallError { tool_call_id, tool_name, error, duration_ms, .. } => {
+                json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "error": error, "duration_ms": duration_ms })
             }
-            AgentStreamEvent::ToolCallSkipped { tool_call_id, tool_name, reason } => {
-                json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "reason": reason })
+            AgentStreamEvent::ToolCallSkipped { tool_call_id, tool_name, reason, duration_ms, .. } => {
+                json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "reason": reason, "duration_ms": duration_ms })
             }
-            AgentStreamEvent::IterationComplete { iteration, tool_calls, final_answer } => {
+            AgentStreamEvent::IterationComplete { iteration, tool_calls, final_answer, .. } => {
                 let tc: Vec<Value> = tool_calls.iter().map(|tc| {
                     json!({
                         "id": &tc.id,
@@ -111,7 +112,7 @@ impl ObservabilityPlugin {
                 }).collect();
                 json!({ "iteration": iteration, "tool_calls": tc, "final_answer": final_answer })
             }
-            AgentStreamEvent::PluginEvent { name, data } => {
+            AgentStreamEvent::PluginEvent { name, data, .. } => {
                 let mut map = Map::new();
                 map.insert("name".to_string(), Value::String(name.clone()));
                 for (k, v) in data {
@@ -143,15 +144,15 @@ impl ObservabilityPlugin {
 fn event_name(event: &AgentStreamEvent) -> String {
     match event {
         AgentStreamEvent::AgentStart { .. } => "AgentStart".to_string(),
-        AgentStreamEvent::AgentComplete => "AgentComplete".to_string(),
+        AgentStreamEvent::AgentComplete { .. } => "AgentComplete".to_string(),
         AgentStreamEvent::AgentAborted { .. } => "AgentAborted".to_string(),
         AgentStreamEvent::LLMCallStart { .. } => "LLMCallStart".to_string(),
         AgentStreamEvent::LLMCallComplete { .. } => "LLMCallComplete".to_string(),
         AgentStreamEvent::LLMCallError { .. } => "LLMCallError".to_string(),
-        AgentStreamEvent::ThinkingStart => "ThinkingStart".to_string(),
+        AgentStreamEvent::ThinkingStart { .. } => "ThinkingStart".to_string(),
         AgentStreamEvent::ThinkingDelta { .. } => "ThinkingDelta".to_string(),
         AgentStreamEvent::ThinkingComplete { .. } => "ThinkingComplete".to_string(),
-        AgentStreamEvent::ContentStart => "ContentStart".to_string(),
+        AgentStreamEvent::ContentStart { .. } => "ContentStart".to_string(),
         AgentStreamEvent::ContentDelta { .. } => "ContentDelta".to_string(),
         AgentStreamEvent::ContentComplete { .. } => "ContentComplete".to_string(),
         AgentStreamEvent::ToolCallBegin { .. } => "ToolCallBegin".to_string(),
@@ -186,10 +187,10 @@ impl AgentPlugin for ObservabilityPlugin {
                 AgentStreamEvent::LLMCallStart { .. } => {
                     metrics.record_llm_call_start();
                 }
-                AgentStreamEvent::ThinkingStart => {
+                AgentStreamEvent::ThinkingStart { .. } => {
                     metrics.record_thinking_start();
                 }
-                AgentStreamEvent::ContentStart => {
+                AgentStreamEvent::ContentStart { .. } => {
                     metrics.record_content_start();
                 }
                 AgentStreamEvent::LLMCallComplete { .. } => {
@@ -208,7 +209,7 @@ impl AgentPlugin for ObservabilityPlugin {
         // Create tracing spans if enabled
         if self.config.enable_tracing {
             match event {
-                AgentStreamEvent::LLMCallStart { iteration } => {
+                AgentStreamEvent::LLMCallStart { iteration, .. } => {
                     let _span =
                         crate::tracing::llm_call_span(&ctx.run_id, &self.logger.agent_id(), *iteration)
                             .entered();
@@ -260,7 +261,7 @@ impl AgentPlugin for ObservabilityPlugin {
         // On completion, output metrics summary
         if self.config.enable_metrics {
             match event {
-                AgentStreamEvent::AgentComplete | AgentStreamEvent::AgentAborted { .. } => {
+                AgentStreamEvent::AgentComplete { .. } | AgentStreamEvent::AgentAborted { .. } => {
                     let metrics = self.metrics.lock().await;
                     metrics.log_summary();
                 }
@@ -323,6 +324,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let plugin = create_test_plugin(&temp_dir);
         let event = AgentStreamEvent::AgentStart {
+            timestamp: chrono::Utc::now(),
             input: "hello".to_string(),
         };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
@@ -336,7 +338,10 @@ mod tests {
     fn test_log_entry_agent_complete() {
         let temp_dir = TempDir::new().unwrap();
         let plugin = create_test_plugin(&temp_dir);
-        let event = AgentStreamEvent::AgentComplete;
+        let event = AgentStreamEvent::AgentComplete {
+            timestamp: chrono::Utc::now(),
+            response: None,
+        };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
         assert_eq!(entry.event, "AgentComplete");
     }
@@ -346,6 +351,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let plugin = create_test_plugin(&temp_dir);
         let event = AgentStreamEvent::AgentAborted {
+            timestamp: chrono::Utc::now(),
             reason: "max iterations".to_string(),
         };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
@@ -357,7 +363,11 @@ mod tests {
     fn test_log_entry_llm_call_start() {
         let temp_dir = TempDir::new().unwrap();
         let plugin = create_test_plugin(&temp_dir);
-        let event = AgentStreamEvent::LLMCallStart { iteration: 2 };
+        let event = AgentStreamEvent::LLMCallStart {
+            timestamp: chrono::Utc::now(),
+            iteration: 2,
+            messages: vec![],
+        };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
         assert_eq!(entry.event, "LLMCallStart");
         assert_eq!(entry.data.get("iteration").unwrap().as_u64().unwrap(), 2);
@@ -368,6 +378,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let plugin = create_test_plugin(&temp_dir);
         let event = AgentStreamEvent::LLMCallComplete {
+            timestamp: chrono::Utc::now(),
             model: "qwen3.5-plus".to_string(),
             usage: None,
         };
@@ -381,6 +392,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let plugin = create_test_plugin(&temp_dir);
         let event = AgentStreamEvent::LLMCallError {
+            timestamp: chrono::Utc::now(),
             error: "timeout".to_string(),
         };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
@@ -393,11 +405,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let plugin = create_test_plugin(&temp_dir);
 
-        let event = AgentStreamEvent::ThinkingStart;
+        let event = AgentStreamEvent::ThinkingStart {
+            timestamp: chrono::Utc::now(),
+        };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
         assert_eq!(entry.event, "ThinkingStart");
 
         let event = AgentStreamEvent::ThinkingDelta {
+            timestamp: chrono::Utc::now(),
             delta: "thinking...".to_string(),
         };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
@@ -405,6 +420,7 @@ mod tests {
         assert_eq!(entry.data.get("delta").unwrap().as_str().unwrap(), "thinking...");
 
         let event = AgentStreamEvent::ThinkingComplete {
+            timestamp: chrono::Utc::now(),
             thinking: "done".to_string(),
         };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
@@ -417,17 +433,21 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let plugin = create_test_plugin(&temp_dir);
 
-        let event = AgentStreamEvent::ContentStart;
+        let event = AgentStreamEvent::ContentStart {
+            timestamp: chrono::Utc::now(),
+        };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
         assert_eq!(entry.event, "ContentStart");
 
         let event = AgentStreamEvent::ContentDelta {
+            timestamp: chrono::Utc::now(),
             delta: "partial".to_string(),
         };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
         assert_eq!(entry.event, "ContentDelta");
 
         let event = AgentStreamEvent::ContentComplete {
+            timestamp: chrono::Utc::now(),
             content: "final".to_string(),
         };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
@@ -441,6 +461,7 @@ mod tests {
         let plugin = create_test_plugin(&temp_dir);
 
         let event = AgentStreamEvent::ToolCallBegin {
+            timestamp: chrono::Utc::now(),
             tool_call_id: "call_1".to_string(),
             tool_name: "bash".to_string(),
             arguments: "{}".to_string(),
@@ -450,27 +471,33 @@ mod tests {
         assert_eq!(entry.data.get("tool_name").unwrap().as_str().unwrap(), "bash");
 
         let event = AgentStreamEvent::ToolCallComplete {
+            timestamp: chrono::Utc::now(),
             tool_call_id: "call_1".to_string(),
             tool_name: "bash".to_string(),
             result: "ok".to_string(),
+            duration_ms: Some(150),
         };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
         assert_eq!(entry.event, "ToolCallComplete");
         assert_eq!(entry.data.get("result").unwrap().as_str().unwrap(), "ok");
 
         let event = AgentStreamEvent::ToolCallError {
+            timestamp: chrono::Utc::now(),
             tool_call_id: "call_1".to_string(),
             tool_name: "bash".to_string(),
             error: "failed".to_string(),
+            duration_ms: Some(50),
         };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
         assert_eq!(entry.event, "ToolCallError");
         assert_eq!(entry.data.get("error").unwrap().as_str().unwrap(), "failed");
 
         let event = AgentStreamEvent::ToolCallSkipped {
+            timestamp: chrono::Utc::now(),
             tool_call_id: "call_1".to_string(),
             tool_name: "bash".to_string(),
             reason: "not allowed".to_string(),
+            duration_ms: Some(10),
         };
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
         assert_eq!(entry.event, "ToolCallSkipped");
@@ -482,6 +509,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let plugin = create_test_plugin(&temp_dir);
         let event = AgentStreamEvent::IterationComplete {
+            timestamp: chrono::Utc::now(),
             iteration: 1,
             tool_calls: vec![],
             final_answer: Some("done".to_string()),
@@ -497,10 +525,7 @@ mod tests {
         let plugin = create_test_plugin(&temp_dir);
         let mut data = Map::new();
         data.insert("key".to_string(), json!("value"));
-        let event = AgentStreamEvent::PluginEvent {
-            name: "custom".to_string(),
-            data,
-        };
+        let event = AgentStreamEvent::plugin_event("custom".to_string(), data);
         let entry = ObservabilityPlugin::create_log_entry(&event, "run-1", "agent-1");
         assert_eq!(entry.event, "PluginEvent");
         assert_eq!(entry.data.get("name").unwrap().as_str().unwrap(), "custom");
@@ -516,10 +541,16 @@ mod tests {
         let ctx = create_test_plugin_context();
 
         plugin
-            .intercept(&AgentStreamEvent::LLMCallStart { iteration: 0 }, &ctx)
+            .intercept(&AgentStreamEvent::LLMCallStart {
+                timestamp: chrono::Utc::now(),
+                iteration: 0,
+                messages: vec![],
+            }, &ctx)
             .await;
         plugin
-            .intercept(&AgentStreamEvent::ContentStart, &ctx)
+            .intercept(&AgentStreamEvent::ContentStart {
+                timestamp: chrono::Utc::now(),
+            }, &ctx)
             .await;
 
         let metrics = plugin.metrics.lock().await;
@@ -536,6 +567,7 @@ mod tests {
         plugin
             .intercept(
                 &AgentStreamEvent::ToolCallBegin {
+                    timestamp: chrono::Utc::now(),
                     tool_call_id: "c1".to_string(),
                     tool_name: "bash".to_string(),
                     arguments: "{}".to_string(),
@@ -549,9 +581,11 @@ mod tests {
         plugin
             .intercept(
                 &AgentStreamEvent::ToolCallComplete {
+                    timestamp: chrono::Utc::now(),
                     tool_call_id: "c1".to_string(),
                     tool_name: "bash".to_string(),
                     result: "ok".to_string(),
+                    duration_ms: Some(10),
                 },
                 &ctx,
             )
@@ -571,6 +605,7 @@ mod tests {
         let ctx = create_test_plugin_context();
 
         let event = AgentStreamEvent::AgentStart {
+            timestamp: chrono::Utc::now(),
             input: "hello".to_string(),
         };
         plugin.listen(&event, &ctx).await;
@@ -592,17 +627,25 @@ mod tests {
 
         // Record some metrics first
         plugin
-            .intercept(&AgentStreamEvent::LLMCallStart { iteration: 0 }, &ctx)
+            .intercept(&AgentStreamEvent::LLMCallStart {
+                timestamp: chrono::Utc::now(),
+                iteration: 0,
+                messages: vec![],
+            }, &ctx)
             .await;
         plugin
             .intercept(&AgentStreamEvent::LLMCallComplete {
+                timestamp: chrono::Utc::now(),
                 model: "test".to_string(),
                 usage: None,
             }, &ctx)
             .await;
 
         // Then complete
-        plugin.listen(&AgentStreamEvent::AgentComplete, &ctx).await;
+        plugin.listen(&AgentStreamEvent::AgentComplete {
+            timestamp: chrono::Utc::now(),
+            response: None,
+        }, &ctx).await;
 
         // The metrics should show 1 LLM call
         let metrics = plugin.metrics.lock().await;
@@ -626,6 +669,7 @@ mod tests {
         let ctx = create_test_plugin_context();
 
         let event = AgentStreamEvent::AgentStart {
+            timestamp: chrono::Utc::now(),
             input: "hello".to_string(),
         };
         plugin.listen(&event, &ctx).await;
@@ -653,10 +697,15 @@ mod tests {
         let ctx = create_test_plugin_context();
 
         plugin
-            .intercept(&AgentStreamEvent::LLMCallStart { iteration: 0 }, &ctx)
+            .intercept(&AgentStreamEvent::LLMCallStart {
+                timestamp: chrono::Utc::now(),
+                iteration: 0,
+                messages: vec![],
+            }, &ctx)
             .await;
         plugin
             .intercept(&AgentStreamEvent::LLMCallComplete {
+                timestamp: chrono::Utc::now(),
                 model: "test".to_string(),
                 usage: None,
             }, &ctx)
@@ -675,43 +724,64 @@ mod tests {
 
         let events = vec![
             AgentStreamEvent::AgentStart {
+                timestamp: chrono::Utc::now(),
                 input: "hello".to_string(),
             },
-            AgentStreamEvent::LLMCallStart { iteration: 0 },
-            AgentStreamEvent::ThinkingStart,
+            AgentStreamEvent::LLMCallStart {
+                timestamp: chrono::Utc::now(),
+                iteration: 0,
+                messages: vec![],
+            },
+            AgentStreamEvent::ThinkingStart {
+                timestamp: chrono::Utc::now(),
+            },
             AgentStreamEvent::ThinkingDelta {
+                timestamp: chrono::Utc::now(),
                 delta: "thinking...".to_string(),
             },
             AgentStreamEvent::ThinkingComplete {
+                timestamp: chrono::Utc::now(),
                 thinking: "done".to_string(),
             },
-            AgentStreamEvent::ContentStart,
+            AgentStreamEvent::ContentStart {
+                timestamp: chrono::Utc::now(),
+            },
             AgentStreamEvent::ContentDelta {
+                timestamp: chrono::Utc::now(),
                 delta: "hello world".to_string(),
             },
             AgentStreamEvent::ContentComplete {
+                timestamp: chrono::Utc::now(),
                 content: "hello world".to_string(),
             },
             AgentStreamEvent::LLMCallComplete {
+                timestamp: chrono::Utc::now(),
                 model: "test".to_string(),
                 usage: None,
             },
             AgentStreamEvent::ToolCallBegin {
+                timestamp: chrono::Utc::now(),
                 tool_call_id: "c1".to_string(),
                 tool_name: "bash".to_string(),
                 arguments: "{}".to_string(),
             },
             AgentStreamEvent::ToolCallComplete {
+                timestamp: chrono::Utc::now(),
                 tool_call_id: "c1".to_string(),
                 tool_name: "bash".to_string(),
                 result: "ok".to_string(),
+                duration_ms: None,
             },
             AgentStreamEvent::IterationComplete {
+                timestamp: chrono::Utc::now(),
                 iteration: 1,
                 tool_calls: vec![],
                 final_answer: Some("done".to_string()),
             },
-            AgentStreamEvent::AgentComplete,
+            AgentStreamEvent::AgentComplete {
+                timestamp: chrono::Utc::now(),
+                response: None,
+            },
         ];
 
         for event in events {

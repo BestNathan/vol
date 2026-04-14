@@ -54,7 +54,7 @@ impl AgentPlugin for RetryPlugin {
     /// Listener hook - logs retry events
     async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
         match event {
-            AgentStreamEvent::AgentAborted { reason } => {
+            AgentStreamEvent::AgentAborted { reason, .. } => {
                 tracing::warn!(
                     run_id = %ctx.run_id,
                     reason = %reason,
@@ -109,9 +109,7 @@ mod tests {
         let plugin = RetryPlugin::new(RetryConfig::default());
         let ctx = create_test_plugin_context();
 
-        let event = AgentStreamEvent::AgentStart {
-            input: "test".to_string(),
-        };
+        let event = AgentStreamEvent::agent_start("test".to_string());
         match plugin.intercept(&event, &ctx).await {
             PluginDecision::Continue => {}
             _ => panic!("Expected Continue"),

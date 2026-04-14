@@ -14,17 +14,17 @@ fn print_colored(color: Color, text: &str) {
 pub fn render_event(event: &AgentStreamEvent) {
     match event {
         // Lifecycle
-        AgentStreamEvent::AgentStart { input } => {
+        AgentStreamEvent::AgentStart { input, .. } => {
             println!();
             print_colored(Color::Cyan, &format!(">>> {}\n", input));
         }
 
-        AgentStreamEvent::AgentComplete => {
+        AgentStreamEvent::AgentComplete { .. } => {
             println!();
             print_colored(Color::Green, "Done.\n");
         }
 
-        AgentStreamEvent::AgentAborted { reason } => {
+        AgentStreamEvent::AgentAborted { reason, .. } => {
             println!();
             print_colored(Color::Red, &format!("Aborted: {}\n", reason));
         }
@@ -35,30 +35,30 @@ pub fn render_event(event: &AgentStreamEvent) {
         AgentStreamEvent::LLMCallError { .. } => {}
 
         // Thinking
-        AgentStreamEvent::ThinkingStart => {
+        AgentStreamEvent::ThinkingStart { .. } => {
             print_colored(Color::Yellow, "\nThinking...\n");
         }
 
-        AgentStreamEvent::ThinkingDelta { delta } => {
+        AgentStreamEvent::ThinkingDelta { delta, .. } => {
             print_colored(Color::DarkGrey, delta);
         }
 
-        AgentStreamEvent::ThinkingComplete { thinking } => {
+        AgentStreamEvent::ThinkingComplete { thinking, .. } => {
             if !thinking.is_empty() {
                 print_colored(Color::DarkGrey, &format!("  [thinking complete]\n"));
             }
         }
 
         // Content
-        AgentStreamEvent::ContentStart => {
+        AgentStreamEvent::ContentStart { .. } => {
             println!();
         }
 
-        AgentStreamEvent::ContentDelta { delta } => {
+        AgentStreamEvent::ContentDelta { delta, .. } => {
             print_colored(Color::White, delta);
         }
 
-        AgentStreamEvent::ContentComplete { content } => {
+        AgentStreamEvent::ContentComplete { content, .. } => {
             if content.is_empty() {
                 println!();
             }

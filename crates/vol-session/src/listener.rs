@@ -72,19 +72,19 @@ impl SessionListener {
     fn event_to_message(&self, event: &AgentStreamEvent) -> Option<SessionMessage> {
         match event {
             // AgentStart -> User message (NEW)
-            AgentStreamEvent::AgentStart { input } => Some(SessionMessage::new(
+            AgentStreamEvent::AgentStart { input, .. } => Some(SessionMessage::new(
                 self.session_id.clone(),
                 vol_llm_core::Message::user(input.clone()),
             )),
 
             // ThinkingComplete -> Assistant message (thinking content)
-            AgentStreamEvent::ThinkingComplete { thinking } => Some(SessionMessage::new(
+            AgentStreamEvent::ThinkingComplete { thinking, .. } => Some(SessionMessage::new(
                 self.session_id.clone(),
                 vol_llm_core::Message::assistant(thinking.clone()),
             )),
 
             // ContentComplete -> Assistant message (content)
-            AgentStreamEvent::ContentComplete { content } => Some(SessionMessage::new(
+            AgentStreamEvent::ContentComplete { content, .. } => Some(SessionMessage::new(
                 self.session_id.clone(),
                 vol_llm_core::Message::assistant(content.clone()),
             )),
@@ -95,6 +95,7 @@ impl SessionListener {
                 tool_call_id,
                 tool_name,
                 arguments,
+                ..
             } => {
                 let tool_call = vol_llm_core::ToolCall {
                     id: tool_call_id.clone(),
@@ -114,6 +115,7 @@ impl SessionListener {
                 tool_call_id,
                 tool_name,
                 result,
+                ..
             } => {
                 let content = format!("Tool '{}' returned: {}", tool_name, result);
                 Some(SessionMessage::new(
@@ -127,6 +129,7 @@ impl SessionListener {
                 tool_call_id,
                 tool_name,
                 error,
+                ..
             } => {
                 let content = format!("Tool '{}' error: {}", tool_name, error);
                 Some(SessionMessage::new(
@@ -140,6 +143,7 @@ impl SessionListener {
                 tool_call_id,
                 tool_name,
                 reason,
+                ..
             } => {
                 let content = format!("Tool '{}' skipped: {}", tool_name, reason);
                 Some(SessionMessage::new(
@@ -210,6 +214,7 @@ mod tests {
     #[tokio::test]
     async fn test_should_record_thinking_complete() {
         let event = AgentStreamEvent::ThinkingComplete {
+            timestamp: chrono::Utc::now(),
             thinking: "Let me think about this...".to_string(),
         };
         assert!(SessionListener::should_record(&event));
@@ -218,6 +223,7 @@ mod tests {
     #[tokio::test]
     async fn test_should_record_tool_call_begin() {
         let event = AgentStreamEvent::ToolCallBegin {
+            timestamp: chrono::Utc::now(),
             tool_call_id: "call_123".to_string(),
             tool_name: "get_weather".to_string(),
             arguments: r#"{"city": "Beijing"}"#.to_string(),
@@ -228,9 +234,11 @@ mod tests {
     #[tokio::test]
     async fn test_should_record_tool_call_complete() {
         let event = AgentStreamEvent::ToolCallComplete {
+            timestamp: chrono::Utc::now(),
             tool_call_id: "call_123".to_string(),
             tool_name: "get_weather".to_string(),
             result: "25°C".to_string(),
+            duration_ms: None,
         };
         assert!(SessionListener::should_record(&event));
     }
@@ -238,6 +246,7 @@ mod tests {
     #[tokio::test]
     async fn test_should_record_iteration_complete_with_final_answer() {
         let event = AgentStreamEvent::IterationComplete {
+            timestamp: chrono::Utc::now(),
             iteration: 1,
             tool_calls: Vec::new(),
             final_answer: Some("The weather is 25°C".to_string()),
@@ -248,6 +257,7 @@ mod tests {
     #[tokio::test]
     async fn test_should_record_agent_start() {
         let event = AgentStreamEvent::AgentStart {
+            timestamp: chrono::Utc::now(),
             input: "test".to_string(),
         };
         assert!(SessionListener::should_record(&event));
@@ -260,6 +270,7 @@ mod tests {
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
         let event = AgentStreamEvent::AgentStart {
+            timestamp: chrono::Utc::now(),
             input: "User's question".to_string(),
         };
 
@@ -277,6 +288,7 @@ mod tests {
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
         let event = AgentStreamEvent::ToolCallBegin {
+            timestamp: chrono::Utc::now(),
             tool_call_id: "call_123".to_string(),
             tool_name: "get_weather".to_string(),
             arguments: r#"{"city": "Beijing"}"#.to_string(),
@@ -300,9 +312,11 @@ mod tests {
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
         let event = AgentStreamEvent::ToolCallComplete {
+            timestamp: chrono::Utc::now(),
             tool_call_id: "call_123".to_string(),
             tool_name: "get_weather".to_string(),
             result: "25°C".to_string(),
+            duration_ms: None,
         };
 
         let msg = listener.event_to_message(&event).unwrap();
@@ -319,6 +333,7 @@ mod tests {
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
         let event = AgentStreamEvent::IterationComplete {
+            timestamp: chrono::Utc::now(),
             iteration: 1,
             tool_calls: Vec::new(),
             final_answer: Some("The answer is 42".to_string()),
@@ -337,6 +352,7 @@ mod tests {
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
         let event = AgentStreamEvent::IterationComplete {
+            timestamp: chrono::Utc::now(),
             iteration: 1,
             tool_calls: Vec::new(),
             final_answer: None,
@@ -354,6 +370,7 @@ mod tests {
 
         // Send a ThinkingComplete event
         let event = TracedEvent::without_span(AgentStreamEvent::ThinkingComplete {
+            timestamp: chrono::Utc::now(),
             thinking: "Test thinking".to_string(),
         });
         tx.send(event).map_err(|_| "send error").unwrap();
@@ -382,14 +399,18 @@ mod tests {
         // Send multiple events
         let events = vec![
             AgentStreamEvent::ThinkingComplete {
+                timestamp: chrono::Utc::now(),
                 thinking: "Thinking...".to_string(),
             },
             AgentStreamEvent::ToolCallComplete {
+                timestamp: chrono::Utc::now(),
                 tool_call_id: "call_1".to_string(),
                 tool_name: "get_weather".to_string(),
                 result: "25°C".to_string(),
+                duration_ms: None,
             },
             AgentStreamEvent::IterationComplete {
+                timestamp: chrono::Utc::now(),
                 iteration: 1,
                 tool_calls: Vec::new(),
                 final_answer: Some("Final answer".to_string()),
@@ -430,6 +451,7 @@ mod tests {
     #[tokio::test]
     async fn test_should_record_content_complete() {
         let event = AgentStreamEvent::ContentComplete {
+            timestamp: chrono::Utc::now(),
             content: "Test content".to_string(),
         };
         assert!(SessionListener::should_record(&event));
@@ -438,9 +460,11 @@ mod tests {
     #[tokio::test]
     async fn test_should_record_tool_call_error() {
         let event = AgentStreamEvent::ToolCallError {
+            timestamp: chrono::Utc::now(),
             tool_call_id: "call_123".to_string(),
             tool_name: "bash".to_string(),
             error: "command failed".to_string(),
+            duration_ms: None,
         };
         assert!(SessionListener::should_record(&event));
     }
@@ -448,58 +472,84 @@ mod tests {
     #[tokio::test]
     async fn test_should_record_tool_call_skipped() {
         let event = AgentStreamEvent::ToolCallSkipped {
+            timestamp: chrono::Utc::now(),
             tool_call_id: "call_123".to_string(),
             tool_name: "bash".to_string(),
             reason: "User rejected".to_string(),
+            duration_ms: None,
         };
         assert!(SessionListener::should_record(&event));
     }
 
     #[tokio::test]
     async fn test_should_not_record_thinking_start() {
-        let event = AgentStreamEvent::ThinkingStart;
+        let event = AgentStreamEvent::ThinkingStart {
+            timestamp: chrono::Utc::now(),
+        };
         assert!(!SessionListener::should_record(&event));
     }
 
     #[tokio::test]
     async fn test_should_not_record_thinking_delta() {
-        let event = AgentStreamEvent::ThinkingDelta { delta: "test".to_string() };
+        let event = AgentStreamEvent::ThinkingDelta {
+            timestamp: chrono::Utc::now(),
+            delta: "test".to_string(),
+        };
         assert!(!SessionListener::should_record(&event));
     }
 
     #[tokio::test]
     async fn test_should_not_record_content_start() {
-        let event = AgentStreamEvent::ContentStart;
+        let event = AgentStreamEvent::ContentStart {
+            timestamp: chrono::Utc::now(),
+        };
         assert!(!SessionListener::should_record(&event));
     }
 
     #[tokio::test]
     async fn test_should_not_record_content_delta() {
-        let event = AgentStreamEvent::ContentDelta { delta: "test".to_string() };
+        let event = AgentStreamEvent::ContentDelta {
+            timestamp: chrono::Utc::now(),
+            delta: "test".to_string(),
+        };
         assert!(!SessionListener::should_record(&event));
     }
 
     #[tokio::test]
     async fn test_should_not_record_llm_call_start() {
-        let event = AgentStreamEvent::LLMCallStart { iteration: 1 };
+        let event = AgentStreamEvent::LLMCallStart {
+            timestamp: chrono::Utc::now(),
+            iteration: 1,
+            messages: vec![],
+        };
         assert!(!SessionListener::should_record(&event));
     }
 
     #[tokio::test]
     async fn test_should_not_record_llm_call_complete() {
-        let event = AgentStreamEvent::LLMCallComplete { model: "test".to_string(), usage: None };
+        let event = AgentStreamEvent::LLMCallComplete {
+            timestamp: chrono::Utc::now(),
+            model: "test".to_string(),
+            usage: None,
+        };
         assert!(!SessionListener::should_record(&event));
     }
 
     #[tokio::test]
     async fn test_should_not_record_llm_call_error() {
-        let event = AgentStreamEvent::LLMCallError { error: "test".to_string() };
+        let event = AgentStreamEvent::LLMCallError {
+            timestamp: chrono::Utc::now(),
+            error: "test".to_string(),
+        };
         assert!(!SessionListener::should_record(&event));
     }
 
     #[tokio::test]
     async fn test_should_not_record_agent_complete() {
-        let event = AgentStreamEvent::AgentComplete;
+        let event = AgentStreamEvent::AgentComplete {
+            timestamp: chrono::Utc::now(),
+            response: None,
+        };
         assert!(!SessionListener::should_record(&event));
     }
 
@@ -510,6 +560,7 @@ mod tests {
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
         let event = AgentStreamEvent::ContentComplete {
+            timestamp: chrono::Utc::now(),
             content: "The answer is 42".to_string(),
         };
 
@@ -526,9 +577,11 @@ mod tests {
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
         let event = AgentStreamEvent::ToolCallError {
+            timestamp: chrono::Utc::now(),
             tool_call_id: "call_123".to_string(),
             tool_name: "bash".to_string(),
             error: "command failed".to_string(),
+            duration_ms: None,
         };
 
         let msg = listener.event_to_message(&event).unwrap();
@@ -544,9 +597,11 @@ mod tests {
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
         let event = AgentStreamEvent::ToolCallSkipped {
+            timestamp: chrono::Utc::now(),
             tool_call_id: "call_123".to_string(),
             tool_name: "bash".to_string(),
             reason: "User rejected".to_string(),
+            duration_ms: None,
         };
 
         let msg = listener.event_to_message(&event).unwrap();

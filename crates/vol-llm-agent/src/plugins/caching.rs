@@ -126,14 +126,14 @@ impl AgentPlugin for CachingPlugin {
     /// Listener hook - logs caching events
     async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
         match event {
-            AgentStreamEvent::AgentStart { input } => {
+            AgentStreamEvent::AgentStart { input, .. } => {
                 tracing::debug!(
                     run_id = %ctx.run_id,
                     input = %input,
                     "Caching: checking cache"
                 );
             }
-            AgentStreamEvent::AgentComplete => {
+            AgentStreamEvent::AgentComplete { .. } => {
                 tracing::info!(
                     run_id = %ctx.run_id,
                     "Caching: agent complete"
@@ -211,9 +211,7 @@ mod tests {
         let plugin = CachingPlugin::new(300);
         let ctx = create_test_plugin_context();
 
-        let event = AgentStreamEvent::AgentStart {
-            input: "test".to_string(),
-        };
+        let event = AgentStreamEvent::agent_start("test".to_string());
         match plugin.intercept(&event, &ctx).await {
             PluginDecision::Continue => {}
             _ => panic!("Expected Continue"),
