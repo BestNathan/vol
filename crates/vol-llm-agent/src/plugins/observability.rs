@@ -33,6 +33,17 @@ impl ObservabilityPlugin {
             AgentStreamEvent::AgentComplete { .. } => "AgentComplete",
             AgentStreamEvent::AgentAborted { .. } => "AgentAborted",
             AgentStreamEvent::PluginEvent { .. } => "PluginEvent",
+            // New lifecycle events
+            AgentStreamEvent::LLMCallStart { .. } => "LLMCallStart",
+            AgentStreamEvent::LLMCallComplete { .. } => "LLMCallComplete",
+            AgentStreamEvent::LLMCallError { .. } => "LLMCallError",
+            AgentStreamEvent::ThinkingStart => "ThinkingStart",
+            AgentStreamEvent::ThinkingDelta { .. } => "ThinkingDelta",
+            AgentStreamEvent::ContentStart => "ContentStart",
+            AgentStreamEvent::ContentDelta { .. } => "ContentDelta",
+            AgentStreamEvent::ContentComplete { .. } => "ContentComplete",
+            AgentStreamEvent::ToolCallError { .. } => "ToolCallError",
+            AgentStreamEvent::ToolCallSkipped { .. } => "ToolCallSkipped",
         }
     }
 }

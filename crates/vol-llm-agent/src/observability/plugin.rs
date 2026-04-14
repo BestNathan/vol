@@ -69,6 +69,17 @@ impl ObservabilityPlugin {
             AgentStreamEvent::PluginEvent { name, data } => {
                 ("PluginEvent", json!({ "name": name, "data": data }))
             }
+            // New lifecycle events (emit/observe only, no special data extraction needed)
+            AgentStreamEvent::LLMCallStart { .. } => ("LLMCallStart", json!({})),
+            AgentStreamEvent::LLMCallComplete { .. } => ("LLMCallComplete", json!({})),
+            AgentStreamEvent::LLMCallError { .. } => ("LLMCallError", json!({})),
+            AgentStreamEvent::ThinkingStart => ("ThinkingStart", json!({})),
+            AgentStreamEvent::ThinkingDelta { .. } => ("ThinkingDelta", json!({})),
+            AgentStreamEvent::ContentStart => ("ContentStart", json!({})),
+            AgentStreamEvent::ContentDelta { .. } => ("ContentDelta", json!({})),
+            AgentStreamEvent::ContentComplete { .. } => ("ContentComplete", json!({})),
+            AgentStreamEvent::ToolCallError { .. } => ("ToolCallError", json!({})),
+            AgentStreamEvent::ToolCallSkipped { .. } => ("ToolCallSkipped", json!({})),
         };
 
         LogEntry {
