@@ -83,13 +83,16 @@ pub fn render_event(event: &AgentStreamEvent) {
 
         AgentStreamEvent::ToolCallComplete { tool_name, result, .. } => {
             print_colored(Color::Green, &format!("  ✓ {} completed\n", tool_name));
-            let preview = if result.len() > 300 {
-                format!("{}...", &result[..300])
+            // Truncate safely at character boundary, not byte boundary
+            let chars: Vec<char> = result.chars().take(300).collect();
+            let preview = if chars.len() < result.chars().count() {
+                let truncated: String = chars.into_iter().collect();
+                format!("{}...\n", truncated)
             } else {
                 result.clone()
             };
             for line in preview.lines().take(10) {
-                println!("    {}", line);
+                print_colored(Color::DarkGrey, &format!("    {}\n", line));
             }
         }
 
@@ -110,7 +113,7 @@ pub fn render_event(event: &AgentStreamEvent) {
         }
 
         AgentStreamEvent::IterationComplete { iteration, .. } => {
-            print_colored(Color::White, &format!("\n[Iteration {} complete]\n", iteration));
+            print_colored(Color::DarkGrey, &format!("\n[Iteration {} complete]\n", iteration));
         }
 
         // Plugin
