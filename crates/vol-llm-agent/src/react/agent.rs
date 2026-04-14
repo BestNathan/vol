@@ -306,30 +306,46 @@ impl ReActAgent {
                     .with_tools(tools_defs)
                     .with_tool_choice(ToolChoice::Auto);
 
+                // Emit LLMCallStart
+                run_ctx.emit(AgentStreamEvent::LLMCallStart { iteration }).await;
+
                 let llm_stream = match llm.converse_stream(request).await {
                     Ok(stream) => stream,
                     Err(e) => {
+                        run_ctx.emit(AgentStreamEvent::LLMCallError {
+                            error: e.to_string(),
+                        }).await;
+                        run_ctx.emit(AgentStreamEvent::AgentAborted {
+                            reason: format!("LLM request failed: {}", e),
+                        }).await;
                         return Err(crate::AgentError::Llm(e));
                     }
                 };
 
-                // Consume LLM stream and accumulate events
-                let (thinking, tool_calls, content) = match consume_llm_stream(llm_stream).await {
+                // Consume LLM stream — emits Thinking/Content streaming events internally
+                let (thinking, tool_calls, content) = match consume_llm_stream(llm_stream, &run_ctx).await {
                     Ok(data) => data,
                     Err(e) => {
+                        run_ctx.emit(AgentStreamEvent::LLMCallError {
+                            error: e.to_string(),
+                        }).await;
+                        run_ctx.emit(AgentStreamEvent::AgentAborted {
+                            reason: format!("LLM stream failed: {}", e),
+                        }).await;
                         return Err(e);
                     }
                 };
 
-                // Collect reasoning chain
+                // Record reasoning step
                 if !thinking.is_empty() {
-                    // Record reasoning step in RunContext
                     run_ctx.record_reasoning_step(thinking.clone(), None).await;
                 }
 
-                // Emit ThinkingComplete unconditionally (even if empty)
-                let thinking_event = AgentStreamEvent::ThinkingComplete { thinking };
-                run_ctx.emit(thinking_event).await;
+                // Emit LLMCallComplete
+                run_ctx.emit(AgentStreamEvent::LLMCallComplete {
+                    model: String::new(),
+                    usage: None,
+                }).await;
 
                 // Check if tool calls
                 if !tool_calls.is_empty() {
@@ -393,6 +409,14 @@ impl ReActAgent {
                                                     reason = %reason,
                                                     "Tool execution rejected by HITL"
                                                 );
+
+                                                // Emit ToolCallSkipped
+                                                run_ctx.emit(AgentStreamEvent::ToolCallSkipped {
+                                                    tool_call_id: call.id.clone(),
+                                                    tool_name: call.name.clone(),
+                                                    reason: "User rejected".to_string(),
+                                                }).await;
+
                                                 // Add rejection message to history
                                                 if let Err(e) = run_ctx.add_message(Message::tool(
                                                     "Execution rejected: permission denied".to_string(),
@@ -418,8 +442,14 @@ impl ReActAgent {
                                 }
                             }
                             PluginDecision::Skip => {
-                                // Skip this tool, continue to next
                                 debug!("Plugin intercepted to skip tool: {}", call.name);
+
+                                run_ctx.emit(AgentStreamEvent::ToolCallSkipped {
+                                    tool_call_id: call.id.clone(),
+                                    tool_name: call.name.clone(),
+                                    reason: "Plugin skipped".to_string(),
+                                }).await;
+
                                 continue;
                             }
                             PluginDecision::Abort(reason) => {
@@ -440,21 +470,28 @@ impl ReActAgent {
                         let result = match tools.execute(call, &tool_ctx).await {
                             Ok(r) => r,
                             Err(e) => {
+                                // Emit ToolCallError
+                                run_ctx.emit(AgentStreamEvent::ToolCallError {
+                                    tool_call_id: call.id.clone(),
+                                    tool_name: call.name.clone(),
+                                    error: e.to_string(),
+                                }).await;
+
                                 // Record failed tool call
-                                run_ctx
-                                    .record_tool_call(ToolCallRecord {
-                                        tool_name: call.name.clone(),
-                                        arguments: call.arguments.clone(),
-                                        result: format!("Error: {}", e),
-                                        iteration,
-                                        success: false,
-                                    })
-                                    .await;
+                                run_ctx.record_tool_call(ToolCallRecord {
+                                    tool_name: call.name.clone(),
+                                    arguments: call.arguments.clone(),
+                                    result: format!("Error: {}", e),
+                                    iteration,
+                                    success: false,
+                                }).await;
+
+                                // Emit AgentAborted (terminal event)
+                                let reason = format!("Tool execution failed: {}", e);
+                                run_ctx.emit(AgentStreamEvent::AgentAborted { reason }).await;
 
                                 // Set error in RunContext
-                                run_ctx
-                                    .set_error(format!("Tool execution failed: {}", e))
-                                    .await;
+                                run_ctx.set_error(format!("Tool execution failed: {}", e)).await;
 
                                 return Err(crate::AgentError::ToolExecution {
                                     tool: call.name.clone(),
@@ -620,24 +657,59 @@ impl ReActAgent {
     }
 }
 
-/// Consume LLM stream response and accumulate into complete data
+/// Consume LLM stream response, emit streaming events, and accumulate into complete data.
+///
+/// Emits ThinkingStart/Delta/Complete and ContentStart/Delta/Complete events
+/// as tokens arrive from the LLM.
 async fn consume_llm_stream(
     mut stream: StreamReceiver,
+    run_ctx: &RunContext,
 ) -> Result<(String, Vec<vol_llm_core::ToolCall>, String), crate::AgentError> {
     let mut thinking = String::new();
     let mut tool_calls = Vec::new();
     let mut content = String::new();
 
+    let mut thinking_started = false;
+    let mut content_started = false;
+
     while let Some(result) = stream.recv().await {
-        match result?.data {
+        let event = result.map_err(|e| crate::AgentError::Llm(e))?;
+
+        match event.data {
+            StreamEventData::ThinkingDelta { thinking: delta } => {
+                if !thinking_started {
+                    run_ctx.emit(AgentStreamEvent::ThinkingStart).await;
+                    thinking_started = true;
+                }
+                thinking.push_str(&delta);
+                run_ctx.emit(AgentStreamEvent::ThinkingDelta { delta }).await;
+            }
             StreamEventData::ThinkingComplete { thinking: t } => {
+                if !thinking_started {
+                    run_ctx.emit(AgentStreamEvent::ThinkingStart).await;
+                    run_ctx.emit(AgentStreamEvent::ThinkingDelta { delta: t.clone() }).await;
+                }
                 thinking = t;
+                run_ctx.emit(AgentStreamEvent::ThinkingComplete { thinking: thinking.clone() }).await;
+            }
+            StreamEventData::ContentDelta { delta } => {
+                if !content_started {
+                    run_ctx.emit(AgentStreamEvent::ContentStart).await;
+                    content_started = true;
+                }
+                content.push_str(&delta);
+                run_ctx.emit(AgentStreamEvent::ContentDelta { delta }).await;
+            }
+            StreamEventData::ContentComplete { content: c } => {
+                if !content_started {
+                    run_ctx.emit(AgentStreamEvent::ContentStart).await;
+                    run_ctx.emit(AgentStreamEvent::ContentDelta { delta: c.clone() }).await;
+                }
+                content = c;
+                run_ctx.emit(AgentStreamEvent::ContentComplete { content: content.clone() }).await;
             }
             StreamEventData::ToolCallComplete { tool_call } => {
                 tool_calls.push(tool_call);
-            }
-            StreamEventData::ContentComplete { content: c } => {
-                content = c;
             }
             _ => {}
         }
