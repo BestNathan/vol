@@ -1,7 +1,6 @@
-//! Run log 子包 - 负责 agent 运行时日志
+//! Run log sub-package — re-exported from vol-llm-observability.
 
-mod logger;
-pub mod cleanup;
-
-pub use logger::{LogEntry, RunLogLogger};
-pub use cleanup::{cleanup_old_logs, cleanup_run_logs, cleanup_session_logs, LogError};
+pub use vol_llm_observability::run_log::{LogEntry, RunLogLogger};
+pub use vol_llm_observability::run_log::cleanup::{
+    cleanup_old_logs, cleanup_run_logs, cleanup_session_logs, LogError,
+};

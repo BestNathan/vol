@@ -15,3 +15,4 @@ pub mod tracing;
 pub use config::ObservabilityConfig;
 pub use metrics::MetricsCollector;
 pub use plugin::ObservabilityPlugin;
+pub use run_log::{LogEntry, RunLogLogger};
