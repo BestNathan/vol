@@ -72,8 +72,9 @@ impl CodingAgent {
             ),
             verbose: config.verbose,
             plugin_registry: config.plugin_registry.clone(),
-            agent_id: generate_agent_id(),
-            log_base_path: PathBuf::from("logs/coding"),
+            agent_id: if config.agent_id.is_empty() { generate_agent_id() } else { config.agent_id.clone() },
+            log_base_path: config.log_base_path.clone(),
+            unsafe_mode: config.unsafe_mode,
         };
 
         Ok(Self {
@@ -93,11 +94,15 @@ impl CodingAgent {
         use vol_llm_tools_builtin::read_tool::ReadTool;
         use vol_llm_tools_builtin::write_tool::WriteTool;
         use vol_llm_tools_builtin::edit_tool::EditTool;
+        use vol_llm_tools_builtin::glob_tool::GlobTool;
+        use vol_llm_tools_builtin::grep_tool::GrepTool;
         use vol_llm_tools_builtin::bash_tool::BashTool;
 
         registry.register(ReadTool::new());
         registry.register(WriteTool::new());
         registry.register(EditTool::new());
+        registry.register(GlobTool::new());
+        registry.register(GrepTool::new());
         registry.register(BashTool::new());
 
         // Register web tools if configured
@@ -118,6 +123,26 @@ impl CodingAgent {
     /// Set the sandbox for tool execution
     pub fn with_sandbox(mut self, sandbox: vol_llm_core::SandboxRef) -> Self {
         self.sandbox = Some(sandbox);
+        self
+    }
+
+    /// Set the agent identifier (for log paths, etc.)
+    pub fn with_agent_id(mut self, agent_id: String) -> Self {
+        self.config.agent_id = agent_id;
+        // Also update the state's agent_config
+        if let Some(ref mut state) = self.state {
+            state.agent_config.agent_id = self.config.agent_id.clone();
+        }
+        self
+    }
+
+    /// Set the log base path
+    pub fn with_log_base_path(mut self, log_base_path: PathBuf) -> Self {
+        self.config.log_base_path = log_base_path;
+        // Also update the state's agent_config
+        if let Some(ref mut state) = self.state {
+            state.agent_config.log_base_path = self.config.log_base_path.clone();
+        }
         self
     }
 
@@ -225,6 +250,11 @@ impl CodingAgentBuilder {
 
     pub fn tool_config(mut self, tool_config: ToolConfig) -> Self {
         self.config.tool_config = tool_config;
+        self
+    }
+
+    pub fn unsafe_mode(mut self, enabled: bool) -> Self {
+        self.config.unsafe_mode = enabled;
         self
     }
 
