@@ -55,42 +55,65 @@ impl StreamReceiver {
 ///
 /// These events are emitted during agent execution and can be used
 /// for session recording, observability, and plugin interception.
+///
+/// # Semantic Guarantees
+///
+/// 1. Every execution path ends with AgentComplete or AgentAborted
+/// 2. LLM calls are paired: LLMCallStart → LLMCallComplete or LLMCallError
+/// 3. Tool calls are paired: ToolCallBegin → ToolCallComplete or ToolCallError or ToolCallSkipped
+/// 4. Delta sequences are complete: Start → Delta×N → Complete
 #[derive(Debug, Clone)]
 pub enum AgentStreamEvent {
-    /// Agent started execution
+    // === Lifecycle (3) ===
     AgentStart { input: String },
+    AgentComplete,
+    AgentAborted { reason: String },
 
-    /// LLM thinking completed
+    // === LLM Call (3) ===
+    LLMCallStart { iteration: u32 },
+    LLMCallComplete { model: String, usage: Option<TokenUsage> },
+    LLMCallError { error: String },
+
+    // === Streaming: Thinking (3) ===
+    ThinkingStart,
+    ThinkingDelta { delta: String },
     ThinkingComplete { thinking: String },
 
-    /// About to call tool
+    // === Streaming: Content (3) ===
+    ContentStart,
+    ContentDelta { delta: String },
+    ContentComplete { content: String },
+
+    // === Tool Execution (4) ===
     ToolCallBegin {
         tool_call_id: String,
         tool_name: String,
         arguments: String,
     },
-
-    /// Tool call completed
     ToolCallComplete {
         tool_call_id: String,
         tool_name: String,
         result: String,
     },
+    ToolCallError {
+        tool_call_id: String,
+        tool_name: String,
+        error: String,
+    },
+    ToolCallSkipped {
+        tool_call_id: String,
+        tool_name: String,
+        reason: String,
+    },
 
-    /// One iteration completed (Reason-Act-Observation)
+    // === Iteration (1) ===
     IterationComplete {
         iteration: u32,
         tool_calls: Vec<ToolCall>,
         final_answer: Option<String>,
     },
 
-    /// Agent execution completed
-    AgentComplete,
-
-    /// Agent was aborted with reason
-    AgentAborted { reason: String },
-
-    /// Custom event from plugin
+    // === Plugin (1) ===
     PluginEvent {
         name: String,
         data: serde_json::Map<String, serde_json::Value>,
