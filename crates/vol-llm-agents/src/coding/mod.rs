@@ -10,7 +10,7 @@ mod observer;
 mod observer_plugin;
 mod sandbox;
 
-pub use agent::{CodingAgent, CodingAgentBuilder};
+pub use agent::{CodingAgent, CodingAgentBuilder, CodingAgentResponse};
 pub use channelled_observer::ChannelledEventObserver;
 pub use config::CodingAgentConfig;
 pub use error::{CodingAgentError, ObserverError, HITLError};

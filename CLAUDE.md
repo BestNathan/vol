@@ -19,23 +19,43 @@ source .env && ./target/release/vol-monitor --config config.dev.toml
 
 ```
 nq-deribit/
-├── crates/              # 10 workspace crates
-│   ├── vol-core/       # Shared traits & data models
-│   ├── vol-config/     # TOML configuration loading
-│   ├── vol-tracing/    # Tracing utilities & span helpers
-│   ├── vol-deribit/    # Deribit WebSocket client
-│   ├── vol-datasource/ # Data providers (Deribit, CSV)
-│   ├── vol-alert/      # Alert evaluation logic
-│   ├── vol-rules/      # Rule processors
-│   ├── vol-notification/# Alert delivery (stdout, Feishu)
-│   ├── vol-engine/     # Monitoring engine orchestration
-│   └── vol-monitor/    # Main binary
-├── k8s/                 # Kubernetes manifests
-├── docs/                # Documentation (see index below)
-└── .cargo/config.toml  # Registry mirror (rsproxy.cn)
+├── crates/                          # 22 workspace crates
+│   │
+│   ├── === Monitoring System ===
+│   ├── vol-core/                    # Shared traits & data models
+│   ├── vol-config/                  # TOML configuration loading
+│   ├── vol-tracing/                 # Tracing utilities & span helpers
+│   ├── vol-deribit/                 # Deribit WebSocket client
+│   ├── vol-datasource/              # Data providers (Deribit, CSV)
+│   ├── vol-alert/                   # Alert evaluation logic
+│   ├── vol-rules/                   # Rule processors
+│   ├── vol-notification/            # Alert delivery (stdout, Feishu)
+│   ├── vol-engine/                  # Monitoring engine orchestration
+│   ├── vol-monitor/                 # Main binary
+│   ├── vol-eventbus/                # Event bus for inter-component communication
+│   ├── vol-tdengine/                # TDengine time-series database client
+│   │
+│   ├── === LLM Agent System ===
+│   ├── vol-llm-core/                # LLM abstractions: client, message, conversation, tool, sandbox
+│   ├── vol-llm-provider/            # LLM provider implementations (Anthropic via DashScope)
+│   ├── vol-llm-tool/                # Tool system: registry, sensitivity, proxy config
+│   ├── vol-llm-agent/               # ReAct Agent core: plugin system, HITL, observability, RAG, embeddings
+│   ├── vol-llm-agents/              # Specialized agents: CodingAgent, AdviceAgent, QaAgent, PptAgent
+│   ├── vol-llm-tools-builtin/       # Built-in tools: read, write, edit, bash, glob, grep, web_fetch, web_search
+│   ├── vol-llm-tui/                 # Interactive CLI REPL for coding agent sessions
+│   ├── vol-llm-tdengine/            # TDengine tools for LLM agent queries
+│   ├── vol-session/                 # Session management & message persistence (JSONL)
+│   │
+│   └── ppt-agent/                   # PPT generation agent (uses lark-whiteboard)
+│
+├── k8s/                             # Kubernetes manifests
+├── docs/                            # Documentation (see index below)
+└── .cargo/config.toml               # Registry mirror (rsproxy.cn)
 ```
 
 ## Architecture Overview
+
+### Monitoring System
 
 | Crate | Purpose |
 |-------|---------|
@@ -55,13 +75,40 @@ nq-deribit/
 Deribit WebSocket → DataSource → mpsc → MonitoringEngine → Rules → Notifications
 ```
 
+### LLM Agent System
+
+| Crate | Purpose |
+|-------|---------|
+| `vol-llm-core` | Core abstractions: `LLMClient`, `Message`, `Conversation`, `Sandbox` |
+| `vol-llm-provider` | Provider implementations (Anthropic via DashScope Qwen) |
+| `vol-llm-tool` | Tool system: `ExecutableTool`, `ToolRegistry`, `ToolSensitivity`, proxy config |
+| `vol-llm-agent` | ReAct Agent loop, plugin system, HITL approval, observability, session management |
+| `vol-llm-agents` | Specialized agents: `CodingAgent`, `AdviceAgent`, `QaAgent`, `PptAgent` |
+| `vol-llm-tools-builtin` | Built-in tools: read, write, edit, bash, glob, grep, web_fetch, web_search |
+| `vol-llm-tui` | Interactive CLI REPL with colored streaming output |
+| `vol-session` | Session lifecycle, `SessionListener`, `FileMessageStore` (JSONL persistence) |
+
+**Agent Data Flow:**
+```
+User Input → ReActAgent.run() → LLM → Tool Call → Sandbox → Tool Execute → LLM → ... → Final Answer
+                                    │
+                              PluginRegistry (intercept/listen hooks)
+                                    │
+                              SessionListener → FileMessageStore (session JSONL)
+                              ObservabilityPlugin → RunLogLogger (run events)
+```
+
 **Key Patterns:**
 - Trait-based plugin architecture (vol-core traits)
 - Async-first (tokio, no blocking I/O)
 - Channel-based communication (mpsc, broadcast)
 - Trace context propagation (`TracedEvent<T>`)
+- ReAct loop with tool registry and sandbox isolation
+- Plugin flow intervention: `intercept()` before tool execution, `listen()` after events
+- HITL approval via dedicated approval channel in `RunContext`
+- Session persistence in JSONL format via `FileMessageStore`
 
-See [docs/architecture/](docs/architecture/) for full architecture documentation.
+See [docs/architecture/](docs/architecture/) for monitoring architecture and [docs/ai-agent/](docs/ai-agent/) for LLM agent documentation.
 
 ## Common Commands
 
@@ -89,6 +136,7 @@ kubectl -n deribit rollout undo deployment/vol-monitor
 
 ## Documentation Index
 
+### Monitoring System
 | Category | File | Description |
 |----------|------|-------------|
 | **Architecture** | [docs/architecture/overview.md](docs/architecture/overview.md) | System architecture, data flow diagrams |
@@ -96,9 +144,22 @@ kubectl -n deribit rollout undo deployment/vol-monitor
 | **Deployment** | [docs/deployment/docker-build.md](docs/deployment/docker-build.md) | Docker build, multi-arch, ACR registry |
 | | [docs/deployment/k8s-deployment.md](docs/deployment/k8s-deployment.md) | Kubernetes deployment, secrets, troubleshooting |
 | **Integration** | [docs/integration/deribit.md](docs/integration/deribit.md) | Deribit API, WebSocket, proxy support |
+| | [docs/integration/tdengine.md](docs/integration/tdengine.md) | TDengine integration guide |
 | **Development** | [docs/development/common-modifications.md](docs/development/common-modifications.md) | Adding alerts, datasources, notifications |
 | **Configuration** | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Config file structure, environment variables |
 | **Tracing** | [docs/tracing.md](docs/tracing.md) | Logging, Jaeger, trace context |
+
+### LLM Agent System
+| Category | File | Description |
+|----------|------|-------------|
+| **Architecture** | [docs/ai-agent/01-llm-client-architecture.md](docs/ai-agent/01-llm-client-architecture.md) | LLM client design, provider abstraction |
+| | [docs/ai-agent/02-protocol-design.md](docs/ai-agent/02-protocol-design.md) | Protocol details |
+| | [docs/ai-agent/03-agent-tool-design.md](docs/ai-agent/03-agent-tool-design.md) | Tool system design |
+| | [docs/ai-agent/04-memory-rag-design.md](docs/ai-agent/04-memory-rag-design.md) | Memory & RAG |
+| | [docs/ai-agent/05-implementation-plan.md](docs/ai-agent/05-implementation-plan.md) | Implementation roadmap |
+| **Specialized Agents** | [docs/ai-agent/rag-agent-design.md](docs/ai-agent/rag-agent-design.md) | RAG agent design |
+| | [docs/ai-agent/react-plugin-system.md](docs/ai-agent/react-plugin-system.md) | ReAct Agent plugin system |
+| | [docs/ai-agent/06-observability-plugin.md](docs/ai-agent/06-observability-plugin.md) | Observability logging |
 
 ## Configuration
 
@@ -167,6 +228,17 @@ When using HTTP proxy, add DashScope domains to NO_PROXY to avoid connection iss
 ```bash
 NO_PROXY="localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,kubernetes.default.svc,*.aliyuncs.com,dashscope.aliyuncs.com"
 ```
+
+**5. LLM Agent TUI**
+
+The `vol-llm-tui` crate provides an interactive CLI REPL for coding agent sessions:
+
+```bash
+cargo build -p vol-llm-tui
+source .env && ./target/debug/vol-llm-tui
+```
+
+Commands: `/quit`, `/exit`, `/help`, `/clear`. Requires `ANTHROPIC_AUTH_TOKEN`.
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for full configuration guide.
 

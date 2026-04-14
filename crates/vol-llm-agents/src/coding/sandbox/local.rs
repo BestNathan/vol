@@ -55,13 +55,11 @@ impl Sandbox for LocalSandbox {
 
         let resolved = self.root_path.join(rel);
         let normalized = normalize_path(&resolved);
-        let canonical_root = self
-            .root_path
-            .canonicalize()
-            .map(|p| normalize_path(&p))
-            .unwrap_or_else(|_| normalize_path(&self.root_path));
 
-        if !normalized.starts_with(&canonical_root) {
+        // For comparison, normalize root the same way and check prefix
+        let normalized_root = normalize_path(&self.root_path);
+
+        if !normalized.starts_with(&normalized_root) {
             return Err(SandboxError::PathTraversal(rel.to_string()));
         }
 

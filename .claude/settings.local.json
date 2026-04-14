@@ -6,7 +6,9 @@
       "WebFetch(domain:*)",
       "WebSearch",
       "WebFetch(domain:www.doubao.com)",
-      "WebFetch(domain:docs.rs)"
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:www.mintlify.com)",
+      "WebFetch(domain:blakecrosley.com)"
     ]
   }
 }

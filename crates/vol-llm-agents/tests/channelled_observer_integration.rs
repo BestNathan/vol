@@ -14,6 +14,7 @@ async fn test_concurrent_on_event_receives_all_events() {
         let obs = observer.clone();
         let handle = tokio::spawn(async move {
             let event = AgentStreamEvent::ToolCallBegin {
+                tool_call_id: format!("{}", i),
                 tool_name: format!("tool_{}", i),
                 arguments: format!("arg_{}", i),
             };
@@ -47,8 +48,8 @@ async fn test_sequential_on_event_preserves_exact_order() {
     let events_in: Vec<AgentStreamEvent> = vec![
         AgentStreamEvent::AgentStart { input: "1".to_string() },
         AgentStreamEvent::ThinkingComplete { thinking: "2".to_string() },
-        AgentStreamEvent::ToolCallBegin { tool_name: "3".to_string(), arguments: "".to_string() },
-        AgentStreamEvent::ToolCallComplete { tool_name: "4".to_string(), result: "".to_string() },
+        AgentStreamEvent::ToolCallBegin { tool_call_id: "3".to_string(), tool_name: "3".to_string(), arguments: "".to_string() },
+        AgentStreamEvent::ToolCallComplete { tool_call_id: "4".to_string(), tool_name: "4".to_string(), result: "".to_string() },
         AgentStreamEvent::IterationComplete { iteration: 5, tool_calls: vec![], final_answer: None },
         AgentStreamEvent::AgentComplete,
     ];
@@ -80,6 +81,7 @@ async fn test_rapid_sequential_events() {
     // Send 100 events with no delay between them
     for i in 0..100 {
         let event = AgentStreamEvent::ToolCallComplete {
+            tool_call_id: format!("{}", i),
             tool_name: format!("tool"),
             result: format!("result_{}", i),
         };

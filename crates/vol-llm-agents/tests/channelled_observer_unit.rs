@@ -36,7 +36,7 @@ async fn test_channelled_observer_preserves_order() {
         AgentStreamEvent::AgentStart { input: "start".to_string() },
         AgentStreamEvent::ThinkingComplete { thinking: "thinking".to_string() },
         AgentStreamEvent::ToolCallBegin { tool_call_id: "1".to_string(), tool_name: "test".to_string(), arguments: "{}".to_string() },
-        AgentStreamEvent::ToolCallComplete { tool_name: "test".to_string(), result: "ok".to_string() },
+        AgentStreamEvent::ToolCallComplete { tool_call_id: "1".to_string(), tool_name: "test".to_string(), result: "ok".to_string() },
         AgentStreamEvent::AgentComplete,
     ];
 
