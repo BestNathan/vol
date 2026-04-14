@@ -71,6 +71,7 @@ pub enum AgentStreamEvent {
     },
     AgentComplete {
         timestamp: chrono::DateTime<chrono::Utc>,
+        response: Option<serde_json::Value>,
     },
     AgentAborted {
         timestamp: chrono::DateTime<chrono::Utc>,
@@ -169,7 +170,10 @@ impl AgentStreamEvent {
         Self::AgentStart { timestamp: chrono::Utc::now(), input }
     }
     pub fn agent_complete() -> Self {
-        Self::AgentComplete { timestamp: chrono::Utc::now() }
+        Self::AgentComplete { timestamp: chrono::Utc::now(), response: None }
+    }
+    pub fn agent_complete_with_response(response: serde_json::Value) -> Self {
+        Self::AgentComplete { timestamp: chrono::Utc::now(), response: Some(response) }
     }
     pub fn agent_aborted(reason: String) -> Self {
         Self::AgentAborted { timestamp: chrono::Utc::now(), reason }

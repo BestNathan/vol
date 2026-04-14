@@ -9,7 +9,6 @@ use crate::react::state::ToolCallRecord;
 use crate::session::Session;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::{debug, info};
 use vol_llm_core::{
     ConversationRequest, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
     ToolChoice,
@@ -211,9 +210,7 @@ impl ReActAgent {
 
         let agent_task = tokio::spawn(async move {
             // === Emit and intercept AgentStart ===
-            let start_event = AgentStreamEvent::AgentStart {
-                input: user_input.clone(),
-            };
+            let start_event = AgentStreamEvent::agent_start(user_input.clone());
             run_ctx.emit(start_event.clone()).await;
 
             match run_ctx.intercept(&start_event).await {
@@ -226,15 +223,13 @@ impl ReActAgent {
                 }
                 Ok(PluginDecision::Abort(reason)) => {
                     run_ctx
-                        .emit(AgentStreamEvent::AgentAborted {
-                            reason: reason.clone(),
-                        })
+                        .emit(AgentStreamEvent::agent_aborted(reason.clone()))
                         .await;
                     return Err(crate::AgentError::Context(reason));
                 }
                 Err(e) => {
                     // Plugin channel error - log and continue (plugins are optional)
-                    debug!(
+                    tracing::warn!(
                         "Plugin intercept error (plugins may not be wired up yet): {}",
                         e
                     );
@@ -250,18 +245,12 @@ impl ReActAgent {
                     // Emit max iterations reached event
                     let reason = format!("Max iterations ({}) reached", config.max_iterations);
                     run_ctx
-                        .emit(AgentStreamEvent::AgentAborted {
-                            reason: reason.clone(),
-                        })
+                        .emit(AgentStreamEvent::agent_aborted(reason.clone()))
                         .await;
 
                     return Err(crate::AgentError::MaxIterationsReached {
                         max: config.max_iterations,
                     });
-                }
-
-                if config.verbose {
-                    info!("Iteration {}", iteration);
                 }
 
                 // Reason phase - call LLM with streaming
@@ -270,69 +259,29 @@ impl ReActAgent {
                 // Get messages from ctx (not local variable)
                 let messages = run_ctx.get_messages().await;
 
-                // DEBUG: Log conversation history before LLM call
-                if config.verbose {
-                    debug!("=== Conversation History ({} messages) ===", messages.len());
-                    for (idx, msg) in messages.iter().enumerate() {
-                        let role_str = match msg.role {
-                            vol_llm_core::MessageRole::System => "system",
-                            vol_llm_core::MessageRole::User => "user",
-                            vol_llm_core::MessageRole::Assistant => "assistant",
-                            vol_llm_core::MessageRole::Tool => "tool",
-                        };
-                        let content_str =
-                            msg.content.as_ref().map(|c| c.as_str()).unwrap_or("<none>");
-                        let tool_call_id = msg.tool_call_id.as_deref().unwrap_or("");
-                        let tool_calls_count =
-                            msg.tool_calls.as_ref().map(|v| v.len()).unwrap_or(0);
-
-                        if msg.role == vol_llm_core::MessageRole::Tool {
-                            debug!(
-                                "  [{}] {}: tool_call_id={} content={:.100}",
-                                idx, role_str, tool_call_id, content_str
-                            );
-                        } else if tool_calls_count > 0 {
-                            debug!(
-                                "  [{}] {}: tool_calls={} content={:.100}",
-                                idx, role_str, tool_calls_count, content_str
-                            );
-                        } else {
-                            debug!("  [{}] {}: content={:.100}", idx, role_str, content_str);
-                        }
-                    }
-                    debug!("=== End Conversation History ===");
-                }
-
                 let request = ConversationRequest::with_history(None, messages)
                     .with_tools(tools_defs)
                     .with_tool_choice(ToolChoice::Auto);
 
-                // Emit LLMCallStart
-                run_ctx.emit(AgentStreamEvent::LLMCallStart { iteration }).await;
+                // Emit LLMCallStart with full message history
+                let messages = run_ctx.get_messages().await;
+                run_ctx.emit(AgentStreamEvent::llm_call_start(iteration, messages)).await;
 
                 let llm_stream = match llm.converse_stream(request).await {
                     Ok(stream) => stream,
                     Err(e) => {
-                        run_ctx.emit(AgentStreamEvent::LLMCallError {
-                            error: e.to_string(),
-                        }).await;
-                        run_ctx.emit(AgentStreamEvent::AgentAborted {
-                            reason: format!("LLM request failed: {}", e),
-                        }).await;
+                        run_ctx.emit(AgentStreamEvent::llm_call_error(e.to_string())).await;
+                        run_ctx.emit(AgentStreamEvent::agent_aborted(format!("LLM request failed: {}", e))).await;
                         return Err(crate::AgentError::Llm(e));
                     }
                 };
 
                 // Consume LLM stream — emits Thinking/Content streaming events internally
-                let (thinking, tool_calls, content) = match consume_llm_stream(llm_stream, &run_ctx).await {
+                let (thinking, tool_calls, content, model, usage) = match consume_llm_stream(llm_stream, &run_ctx).await {
                     Ok(data) => data,
                     Err(e) => {
-                        run_ctx.emit(AgentStreamEvent::LLMCallError {
-                            error: e.to_string(),
-                        }).await;
-                        run_ctx.emit(AgentStreamEvent::AgentAborted {
-                            reason: format!("LLM stream failed: {}", e),
-                        }).await;
+                        run_ctx.emit(AgentStreamEvent::llm_call_error(e.to_string())).await;
+                        run_ctx.emit(AgentStreamEvent::agent_aborted(format!("LLM stream failed: {}", e))).await;
                         return Err(e);
                     }
                 };
@@ -342,15 +291,11 @@ impl ReActAgent {
                     run_ctx.record_reasoning_step(thinking.clone(), None).await;
                 }
 
-                // Emit LLMCallComplete
-                run_ctx.emit(AgentStreamEvent::LLMCallComplete {
-                    model: String::new(),
-                    usage: None,
-                }).await;
+                // Emit LLMCallComplete with real model and usage
+                run_ctx.emit(AgentStreamEvent::llm_call_complete(model.clone(), usage)).await;
 
                 // Check if tool calls
                 if !tool_calls.is_empty() {
-                    debug!("Tool calls: {:?}", tool_calls);
 
                     // IMPORTANT: Add assistant message with tool calls to history
                     // This tells the LLM what tools it decided to call in the next iteration
@@ -369,23 +314,18 @@ impl ReActAgent {
 
                     // Act phase - execute tools
                     for call in &tool_calls {
-                        info!(
-                            "Executing tool: {} with args: {}",
-                            call.name, call.arguments
-                        );
-
                         // === Emit and intercept ToolCallBegin ===
-                        let tool_event = AgentStreamEvent::ToolCallBegin {
-                            tool_call_id: call.id.clone(),
-                            tool_name: call.name.clone(),
-                            arguments: call.arguments.clone(),
-                        };
+                        let tool_event = AgentStreamEvent::tool_call_begin(
+                            call.id.clone(),
+                            call.name.clone(),
+                            call.arguments.clone(),
+                        );
                         run_ctx.emit(tool_event.clone()).await;
 
                         let tool_decision = match run_ctx.intercept(&tool_event).await {
                             Ok(decision) => decision,
                             Err(e) => {
-                                debug!("Plugin intercept error: {}", e);
+                                tracing::warn!("Plugin intercept error: {}", e);
                                 PluginDecision::Continue
                             }
                         };
@@ -405,18 +345,13 @@ impl ReActAgent {
                                         });
                                         match run_ctx.request_tool_approval(&call.name, &reason, metadata).await {
                                             Ok(approval) if !approval.approved => {
-                                                info!(
-                                                    tool = %call.name,
-                                                    reason = %reason,
-                                                    "Tool execution rejected by HITL"
-                                                );
-
                                                 // Emit ToolCallSkipped
-                                                run_ctx.emit(AgentStreamEvent::ToolCallSkipped {
-                                                    tool_call_id: call.id.clone(),
-                                                    tool_name: call.name.clone(),
-                                                    reason: "User rejected".to_string(),
-                                                }).await;
+                                                run_ctx.emit(AgentStreamEvent::tool_call_skipped(
+                                                    call.id.clone(),
+                                                    call.name.clone(),
+                                                    "User rejected".to_string(),
+                                                    None,
+                                                )).await;
 
                                                 // Add rejection message to history
                                                 if let Err(e) = run_ctx.add_message(Message::tool(
@@ -432,7 +367,7 @@ impl ReActAgent {
                                                 // Approved, proceed
                                             }
                                             Err(e) => {
-                                                debug!("HITL approval error: {}", e);
+                                                tracing::warn!("HITL approval error: {}", e);
                                                 // Fail open — proceed without approval
                                             }
                                         }
@@ -443,21 +378,20 @@ impl ReActAgent {
                                 }
                             }
                             PluginDecision::Skip => {
-                                debug!("Plugin intercepted to skip tool: {}", call.name);
+                                tracing::warn!("Plugin intercepted to skip tool: {}", call.name);
 
-                                run_ctx.emit(AgentStreamEvent::ToolCallSkipped {
-                                    tool_call_id: call.id.clone(),
-                                    tool_name: call.name.clone(),
-                                    reason: "Plugin skipped".to_string(),
-                                }).await;
+                                run_ctx.emit(AgentStreamEvent::tool_call_skipped(
+                                    call.id.clone(),
+                                    call.name.clone(),
+                                    "Plugin skipped".to_string(),
+                                    None,
+                                )).await;
 
                                 continue;
                             }
                             PluginDecision::Abort(reason) => {
                                 run_ctx
-                                    .emit(AgentStreamEvent::AgentAborted {
-                                        reason: reason.clone(),
-                                    })
+                                    .emit(AgentStreamEvent::agent_aborted(reason.clone()))
                                     .await;
                                 return Err(crate::AgentError::Context(reason));
                             }
@@ -472,11 +406,12 @@ impl ReActAgent {
                             Ok(r) => r,
                             Err(e) => {
                                 // Emit ToolCallError
-                                run_ctx.emit(AgentStreamEvent::ToolCallError {
-                                    tool_call_id: call.id.clone(),
-                                    tool_name: call.name.clone(),
-                                    error: e.to_string(),
-                                }).await;
+                                run_ctx.emit(AgentStreamEvent::tool_call_error(
+                                    call.id.clone(),
+                                    call.name.clone(),
+                                    e.to_string(),
+                                    None,
+                                )).await;
 
                                 // Record failed tool call
                                 run_ctx.record_tool_call(ToolCallRecord {
@@ -489,7 +424,7 @@ impl ReActAgent {
 
                                 // Emit AgentAborted (terminal event)
                                 let reason = format!("Tool execution failed: {}", e);
-                                run_ctx.emit(AgentStreamEvent::AgentAborted { reason }).await;
+                                run_ctx.emit(AgentStreamEvent::agent_aborted(reason)).await;
 
                                 // Set error in RunContext
                                 run_ctx.set_error(format!("Tool execution failed: {}", e)).await;
@@ -500,8 +435,6 @@ impl ReActAgent {
                                 });
                             }
                         };
-
-                        info!("Tool {} returned: {}", call.name, result.content);
 
                         // Record tool call
                         run_ctx
@@ -516,11 +449,12 @@ impl ReActAgent {
 
                         // Emit ToolCallComplete
                         run_ctx
-                            .emit(AgentStreamEvent::ToolCallComplete {
-                                tool_call_id: call.id.clone(),
-                                tool_name: call.name.clone(),
-                                result: result.content.clone(),
-                            })
+                            .emit(AgentStreamEvent::tool_call_complete(
+                                call.id.clone(),
+                                call.name.clone(),
+                                result.content.clone(),
+                                None,
+                            ))
                             .await;
 
                         // Add tool result to ctx (syncs to session automatically)
@@ -537,11 +471,11 @@ impl ReActAgent {
 
                     // Emit IterationComplete
                     run_ctx
-                        .emit(AgentStreamEvent::IterationComplete {
+                        .emit(AgentStreamEvent::iteration_complete(
                             iteration,
-                            tool_calls: tool_calls.clone(),
-                            final_answer: None,
-                        })
+                            tool_calls.clone(),
+                            None,
+                        ))
                         .await;
 
                     // Continue to next iteration
@@ -551,11 +485,11 @@ impl ReActAgent {
                 // No tool calls - we have final answer
                 // Emit IterationComplete with final answer
                 run_ctx
-                    .emit(AgentStreamEvent::IterationComplete {
+                    .emit(AgentStreamEvent::iteration_complete(
                         iteration,
-                        tool_calls: Vec::new(),
-                        final_answer: Some(content.clone()),
-                    })
+                        Vec::new(),
+                        Some(content.clone()),
+                    ))
                     .await;
 
                 // Save assistant response to session via ctx (user input already saved in init_messages)
@@ -569,11 +503,26 @@ impl ReActAgent {
                 // Store final response data
                 run_ctx.set_final_content(content.clone()).await;
 
-                // === Emit AgentComplete ===
-                let complete_event = AgentStreamEvent::AgentComplete;
-                run_ctx.emit(complete_event).await;
-
+                // === Emit AgentComplete with response data ===
                 let response = run_ctx.finalize();
+                let response_json = serde_json::json!({
+                    "content": response.content,
+                    "iterations": response.iterations,
+                    "tool_calls": response.tool_calls.iter().map(|t| serde_json::json!({
+                        "tool_name": t.tool_name,
+                        "arguments": t.arguments,
+                        "result": t.result,
+                        "iteration": t.iteration,
+                        "success": t.success,
+                    })).collect::<Vec<_>>(),
+                    "run_id": response.run_id,
+                    "session_id": response.session_id,
+                });
+                run_ctx.emit(AgentStreamEvent::AgentComplete {
+                    timestamp: chrono::Utc::now(),
+                    response: Some(response_json),
+                }).await;
+
                 return Ok(response);
             }
         });
@@ -662,13 +611,17 @@ impl ReActAgent {
 ///
 /// Emits ThinkingStart/Delta/Complete and ContentStart/Delta/Complete events
 /// as tokens arrive from the LLM.
+///
+/// Returns: (thinking, tool_calls, content, model, usage)
 async fn consume_llm_stream(
     mut stream: StreamReceiver,
     run_ctx: &RunContext,
-) -> Result<(String, Vec<vol_llm_core::ToolCall>, String), crate::AgentError> {
+) -> Result<(String, Vec<vol_llm_core::ToolCall>, String, String, Option<vol_llm_core::TokenUsage>), crate::AgentError> {
     let mut thinking = String::new();
     let mut tool_calls = Vec::new();
     let mut content = String::new();
+    let mut model = String::new();
+    let mut last_usage: Option<vol_llm_core::TokenUsage> = None;
 
     let mut thinking_started = false;
     let mut content_started = false;
@@ -677,46 +630,55 @@ async fn consume_llm_stream(
         let event = result.map_err(|e| crate::AgentError::Llm(e))?;
 
         match event.data {
+            StreamEventData::ResponseComplete { .. } => {
+                // Model info comes from ResponseStart
+            }
             StreamEventData::ThinkingDelta { thinking: delta } => {
                 if !thinking_started {
-                    run_ctx.emit(AgentStreamEvent::ThinkingStart).await;
+                    run_ctx.emit(AgentStreamEvent::thinking_start()).await;
                     thinking_started = true;
                 }
                 thinking.push_str(&delta);
-                run_ctx.emit(AgentStreamEvent::ThinkingDelta { delta }).await;
+                run_ctx.emit(AgentStreamEvent::thinking_delta(delta)).await;
             }
             StreamEventData::ThinkingComplete { thinking: t } => {
                 if !thinking_started {
-                    run_ctx.emit(AgentStreamEvent::ThinkingStart).await;
-                    run_ctx.emit(AgentStreamEvent::ThinkingDelta { delta: t.clone() }).await;
+                    run_ctx.emit(AgentStreamEvent::thinking_start()).await;
+                    run_ctx.emit(AgentStreamEvent::thinking_delta(t.clone())).await;
                 }
                 thinking = t;
-                run_ctx.emit(AgentStreamEvent::ThinkingComplete { thinking: thinking.clone() }).await;
+                run_ctx.emit(AgentStreamEvent::thinking_complete(thinking.clone())).await;
             }
             StreamEventData::ContentDelta { delta } => {
                 if !content_started {
-                    run_ctx.emit(AgentStreamEvent::ContentStart).await;
+                    run_ctx.emit(AgentStreamEvent::content_start()).await;
                     content_started = true;
                 }
                 content.push_str(&delta);
-                run_ctx.emit(AgentStreamEvent::ContentDelta { delta }).await;
+                run_ctx.emit(AgentStreamEvent::content_delta(delta)).await;
             }
             StreamEventData::ContentComplete { content: c } => {
                 if !content_started {
-                    run_ctx.emit(AgentStreamEvent::ContentStart).await;
-                    run_ctx.emit(AgentStreamEvent::ContentDelta { delta: c.clone() }).await;
+                    run_ctx.emit(AgentStreamEvent::content_start()).await;
+                    run_ctx.emit(AgentStreamEvent::content_delta(c.clone())).await;
                 }
                 content = c;
-                run_ctx.emit(AgentStreamEvent::ContentComplete { content: content.clone() }).await;
+                run_ctx.emit(AgentStreamEvent::content_complete(content.clone())).await;
             }
             StreamEventData::ToolCallComplete { tool_call } => {
                 tool_calls.push(tool_call);
+            }
+            StreamEventData::UsageUpdate { usage } => {
+                last_usage = Some(usage);
+            }
+            StreamEventData::ResponseStart { model: m } => {
+                model = m;
             }
             _ => {}
         }
     }
 
-    Ok((thinking, tool_calls, content))
+    Ok((thinking, tool_calls, content, model, last_usage))
 }
 
 #[cfg(test)]
