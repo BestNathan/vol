@@ -1,7 +1,7 @@
 //! Rate limiter plugin for concurrency control.
 
 use crate::react::plugin::*;
-use crate::react::run_context::PluginContext;
+use crate::react::plugin::PluginContext;
 use crate::AgentStreamEvent;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -69,7 +69,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
         );
-        PluginContext::from_run_ctx(&ctx)
+        crate::react::plugin_context_from_run_ctx(&ctx)
     }
 
     #[test]
@@ -90,9 +90,7 @@ mod tests {
         let ctx = create_test_plugin_context();
 
         // Plugin should always return Continue from intercept
-        let event = AgentStreamEvent::AgentStart {
-            input: "test".to_string(),
-        };
+        let event = AgentStreamEvent::agent_start("test".to_string());
         match plugin.intercept(&event, &ctx).await {
             PluginDecision::Continue => {}
             _ => panic!("Expected Continue"),

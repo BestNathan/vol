@@ -13,24 +13,61 @@ fn print_colored(color: Color, text: &str) {
 
 pub fn render_event(event: &AgentStreamEvent) {
     match event {
-        AgentStreamEvent::AgentStart { input } => {
+        // Lifecycle
+        AgentStreamEvent::AgentStart { input, .. } => {
             println!();
             print_colored(Color::Cyan, &format!(">>> {}\n", input));
         }
 
-        AgentStreamEvent::ThinkingComplete { thinking } => {
+        AgentStreamEvent::AgentComplete { .. } => {
+            println!();
+            print_colored(Color::Green, "Done.\n");
+        }
+
+        AgentStreamEvent::AgentAborted { reason, .. } => {
+            println!();
+            print_colored(Color::Red, &format!("Aborted: {}\n", reason));
+        }
+
+        // LLM Call — meta events, not displayed to user
+        AgentStreamEvent::LLMCallStart { .. } => {}
+        AgentStreamEvent::LLMCallComplete { .. } => {}
+        AgentStreamEvent::LLMCallError { .. } => {}
+
+        // Thinking
+        AgentStreamEvent::ThinkingStart { .. } => {
+            print_colored(Color::Yellow, "\nThinking...\n");
+        }
+
+        AgentStreamEvent::ThinkingDelta { delta, .. } => {
+            print_colored(Color::DarkGrey, delta);
+        }
+
+        AgentStreamEvent::ThinkingComplete { thinking, .. } => {
             if !thinking.is_empty() {
-                println!();
-                print_colored(Color::Yellow, "Thinking...\n");
-                print_colored(Color::DarkGrey, &format!("  {}\n", thinking));
+                print_colored(Color::DarkGrey, &format!("  [thinking complete]\n"));
             }
         }
 
+        // Content
+        AgentStreamEvent::ContentStart { .. } => {
+            println!();
+        }
+
+        AgentStreamEvent::ContentDelta { delta, .. } => {
+            print_colored(Color::White, delta);
+        }
+
+        AgentStreamEvent::ContentComplete { content, .. } => {
+            if content.is_empty() {
+                println!();
+            }
+        }
+
+        // Tools
         AgentStreamEvent::ToolCallBegin { tool_name, arguments, .. } => {
             println!();
             print_colored(Color::Blue, &format!("[{}] ", tool_name));
-
-            // Try to extract command for display
             if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(arguments) {
                 if let Some(cmd) = parsed.get("command").and_then(|v| v.as_str()) {
                     print_colored(Color::DarkGrey, &format!("Command: {}\n", cmd));
@@ -46,37 +83,40 @@ pub fn render_event(event: &AgentStreamEvent) {
 
         AgentStreamEvent::ToolCallComplete { tool_name, result, .. } => {
             print_colored(Color::Green, &format!("  ✓ {} completed\n", tool_name));
-            // Show truncated result
-            let preview = if result.len() > 300 {
-                format!("{}...", &result[..300])
+            // Truncate safely at character boundary, not byte boundary
+            let chars: Vec<char> = result.chars().take(300).collect();
+            let preview = if chars.len() < result.chars().count() {
+                let truncated: String = chars.into_iter().collect();
+                format!("{}...\n", truncated)
             } else {
                 result.clone()
             };
             for line in preview.lines().take(10) {
-                println!("    {}", line);
+                print_colored(Color::DarkGrey, &format!("    {}\n", line));
             }
         }
 
+        AgentStreamEvent::ToolCallError { tool_name, error, .. } => {
+            println!();
+            print_colored(Color::Red, &format!("  ✗ {} failed: {}\n", tool_name, error));
+        }
+
+        AgentStreamEvent::ToolCallSkipped { tool_name, reason, .. } => {
+            println!();
+            print_colored(Color::DarkGrey, &format!("  ⊘ {} skipped: {}\n", tool_name, reason));
+        }
+
+        // Iteration
         AgentStreamEvent::IterationComplete { final_answer: Some(answer), .. } => {
             println!();
             print_colored(Color::Green, &format!("✓ {}\n", answer));
         }
 
         AgentStreamEvent::IterationComplete { iteration, .. } => {
-            print_colored(Color::White, &format!("\n[Iteration {} complete]\n", iteration));
+            print_colored(Color::DarkGrey, &format!("\n[Iteration {} complete]\n", iteration));
         }
 
-        AgentStreamEvent::AgentComplete => {
-            println!();
-            print_colored(Color::Green, "Done.\n");
-        }
-
-        AgentStreamEvent::AgentAborted { reason } => {
-            println!();
-            print_colored(Color::Red, &format!("Aborted: {}\n", reason));
-        }
-
-        // Plugin events are internal — skip rendering
+        // Plugin
         AgentStreamEvent::PluginEvent { .. } => {}
     }
     let _ = stdout().flush();

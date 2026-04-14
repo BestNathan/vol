@@ -1,7 +1,7 @@
 //! Plugin interceptor and listener utilities.
 
-use super::plugin::{AgentPlugin, PluginDecision};
-use super::run_context::{PluginContext, PluginRequest, RunContext};
+use super::plugin::{AgentPlugin, PluginContext, PluginDecision};
+use super::run_context::{PluginRequest, RunContext};
 use super::{AgentError, AgentResponse, AgentStreamEvent, AgentStreamReceiver};
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};
@@ -139,12 +139,10 @@ pub async fn create_shortcircuit_stream(
 
     tokio::spawn(async move {
         let _ = tx
-            .send(Ok(AgentStreamEvent::AgentStart {
-                input: ctx.user_input,
-            }))
+            .send(Ok(AgentStreamEvent::agent_start(ctx.user_input)))
             .await;
 
-        let _ = tx.send(Ok(AgentStreamEvent::AgentComplete)).await;
+        let _ = tx.send(Ok(AgentStreamEvent::agent_complete())).await;
     });
 
     Ok(AgentStreamReceiver::new(rx))
@@ -159,12 +157,10 @@ pub async fn create_skip_stream(
 
     tokio::spawn(async move {
         let _ = tx
-            .send(Ok(AgentStreamEvent::AgentStart {
-                input: ctx.user_input.clone(),
-            }))
+            .send(Ok(AgentStreamEvent::agent_start(ctx.user_input.clone())))
             .await;
 
-        let _ = tx.send(Ok(AgentStreamEvent::AgentComplete)).await;
+        let _ = tx.send(Ok(AgentStreamEvent::agent_complete())).await;
     });
 
     Ok(AgentStreamReceiver::new(rx))

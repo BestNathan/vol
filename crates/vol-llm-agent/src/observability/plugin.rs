@@ -2,7 +2,7 @@
 
 use super::run_log::{LogEntry, RunLogLogger};
 use crate::react::plugin::{AgentPlugin, PluginDecision, PluginId};
-use crate::react::run_context::PluginContext;
+use crate::react::plugin::PluginContext;
 use crate::AgentStreamEvent;
 use chrono::Utc;
 use serde_json::json;
@@ -22,14 +22,15 @@ impl ObservabilityPlugin {
     fn create_log_entry(&self, event: &AgentStreamEvent, ctx: &PluginContext) -> LogEntry {
         // Extract event type name and data separately for structured logging
         let (event_name, data) = match event {
-            AgentStreamEvent::AgentStart { input } => ("AgentStart", json!({ "input": input })),
-            AgentStreamEvent::ThinkingComplete { thinking } => {
+            AgentStreamEvent::AgentStart { input, .. } => ("AgentStart", json!({ "input": input })),
+            AgentStreamEvent::ThinkingComplete { thinking, .. } => {
                 ("ThinkingComplete", json!({ "thinking": thinking }))
             }
             AgentStreamEvent::ToolCallBegin {
                 tool_call_id,
                 tool_name,
                 arguments,
+                ..
             } => (
                 "ToolCallBegin",
                 json!({
@@ -42,6 +43,7 @@ impl ObservabilityPlugin {
                 tool_call_id,
                 tool_name,
                 result,
+                ..
             } => (
                 "ToolCallComplete",
                 json!({
@@ -54,6 +56,7 @@ impl ObservabilityPlugin {
                 iteration,
                 tool_calls,
                 final_answer,
+                ..
             } => (
                 "IterationComplete",
                 json!({
@@ -62,19 +65,30 @@ impl ObservabilityPlugin {
                     "final_answer": final_answer,
                 }),
             ),
-            AgentStreamEvent::AgentComplete => ("AgentComplete", json!({})),
-            AgentStreamEvent::AgentAborted { reason } => {
+            AgentStreamEvent::AgentComplete { .. } => ("AgentComplete", json!({})),
+            AgentStreamEvent::AgentAborted { reason, .. } => {
                 ("AgentAborted", json!({ "reason": reason }))
             }
-            AgentStreamEvent::PluginEvent { name, data } => {
+            AgentStreamEvent::PluginEvent { name, data, .. } => {
                 ("PluginEvent", json!({ "name": name, "data": data }))
             }
+            // New lifecycle events (emit/observe only, no special data extraction needed)
+            AgentStreamEvent::LLMCallStart { .. } => ("LLMCallStart", json!({})),
+            AgentStreamEvent::LLMCallComplete { .. } => ("LLMCallComplete", json!({})),
+            AgentStreamEvent::LLMCallError { .. } => ("LLMCallError", json!({})),
+            AgentStreamEvent::ThinkingStart { .. } => ("ThinkingStart", json!({})),
+            AgentStreamEvent::ThinkingDelta { .. } => ("ThinkingDelta", json!({})),
+            AgentStreamEvent::ContentStart { .. } => ("ContentStart", json!({})),
+            AgentStreamEvent::ContentDelta { .. } => ("ContentDelta", json!({})),
+            AgentStreamEvent::ContentComplete { .. } => ("ContentComplete", json!({})),
+            AgentStreamEvent::ToolCallError { .. } => ("ToolCallError", json!({})),
+            AgentStreamEvent::ToolCallSkipped { .. } => ("ToolCallSkipped", json!({})),
         };
 
         LogEntry {
             timestamp: Utc::now(),
             run_id: ctx.run_id.clone(),
-            agent_id: ctx.config.agent_id.clone(),
+            agent_id: self.logger.agent_id().to_string(),
             event: event_name.to_string(),
             data,
         }
@@ -105,8 +119,9 @@ impl AgentPlugin for ObservabilityPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::react::run_context::{PluginContext, RunContext};
-    use crate::react::AgentConfig;
+    use crate::react::plugin::PluginContext;
+    use crate::react::run_context::RunContext;
+    use crate::react::{plugin_context_from_run_ctx, AgentConfig};
     use crate::session::{InMemoryMessageStore, InMemorySessionStore, Session};
     use std::sync::Arc;
     use tempfile::TempDir;
@@ -124,7 +139,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
         );
-        PluginContext::from_run_ctx(&ctx)
+        plugin_context_from_run_ctx(&ctx)
     }
 
     #[tokio::test]
@@ -134,9 +149,7 @@ mod tests {
             ObservabilityPlugin::new("test_agent".to_string(), temp_dir.path().to_path_buf());
         let ctx = create_test_plugin_context();
 
-        let event = AgentStreamEvent::AgentStart {
-            input: "test".to_string(),
-        };
+        let event = AgentStreamEvent::agent_start("test".to_string());
 
         plugin.listen(&event, &ctx).await;
 
@@ -163,35 +176,23 @@ mod tests {
 
         // Test all event types
         let events = vec![
-            AgentStreamEvent::AgentStart {
-                input: "test input".to_string(),
-            },
-            AgentStreamEvent::ThinkingComplete {
-                thinking: "thought".to_string(),
-            },
-            AgentStreamEvent::ToolCallBegin {
-                tool_call_id: "call_123".to_string(),
-                tool_name: "test_tool".to_string(),
-                arguments: "{\"key\": \"value\"}".to_string(),
-            },
-            AgentStreamEvent::ToolCallComplete {
-                tool_call_id: "call_123".to_string(),
-                tool_name: "test_tool".to_string(),
-                result: "tool result".to_string(),
-            },
-            AgentStreamEvent::IterationComplete {
-                iteration: 1,
-                tool_calls: vec![],
-                final_answer: Some("answer".to_string()),
-            },
-            AgentStreamEvent::AgentComplete,
-            AgentStreamEvent::AgentAborted {
-                reason: "test abort reason".to_string(),
-            },
-            AgentStreamEvent::PluginEvent {
-                name: "test_plugin_event".to_string(),
-                data: serde_json::Map::new(),
-            },
+            AgentStreamEvent::agent_start("test input".to_string()),
+            AgentStreamEvent::thinking_complete("thought".to_string()),
+            AgentStreamEvent::tool_call_begin(
+                "call_123".to_string(),
+                "test_tool".to_string(),
+                "{\"key\": \"value\"}".to_string(),
+            ),
+            AgentStreamEvent::tool_call_complete(
+                "call_123".to_string(),
+                "test_tool".to_string(),
+                "tool result".to_string(),
+                None,
+            ),
+            AgentStreamEvent::iteration_complete(1, vec![], Some("answer".to_string())),
+            AgentStreamEvent::agent_complete(),
+            AgentStreamEvent::agent_aborted("test abort reason".to_string()),
+            AgentStreamEvent::plugin_event("test_plugin_event".to_string(), serde_json::Map::new()),
         ];
 
         for event in events {

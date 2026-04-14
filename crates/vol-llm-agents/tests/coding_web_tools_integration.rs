@@ -45,6 +45,7 @@ async fn test_coding_agent_uses_web_fetch_for_deribit_docs() {
         llm_provider_id: "anthropic-main".to_string(),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
         tool_config,
+        ..Default::default()
     };
 
     // Create agent
@@ -120,7 +121,7 @@ async fn test_coding_agent_without_web_fetch_has_core_tools_only() {
         llm_provider_id: "anthropic-main".to_string(),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
         tool_config: ToolConfig::new(), // empty
-    };
+        ..Default::default()
 
     let agent = CodingAgent::new(config).await.unwrap();
 

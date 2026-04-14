@@ -26,6 +26,7 @@ async fn test_coding_agent_writes_log_counter_cli() {
         html_report_path: Some(report_path.clone()),
         llm_provider_id: "anthropic-main".to_string(),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
+        ..Default::default()
     };
 
     let agent = CodingAgent::new(config).await.unwrap();
@@ -103,6 +104,7 @@ async fn test_html_report_shows_ordered_timeline() {
         html_report_path: Some(report_path.clone()),
         llm_provider_id: "anthropic-main".to_string(),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
+        ..Default::default()
     };
 
     let agent = CodingAgent::new(config).await.unwrap();

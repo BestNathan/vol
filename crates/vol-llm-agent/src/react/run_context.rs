@@ -13,102 +13,21 @@ use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use vol_llm_core::Message;
+use vol_llm_core::PluginContext;
 use vol_llm_core::ToolCall;
 use vol_llm_tool::ToolRegistry;
 use vol_tracing::TracedEvent;
 
-/// PluginContext - Read-only context for plugin hooks.
-///
-/// This struct contains all the data plugins need for `intercept()` and `listen()`
-/// hooks, but EXCLUDES the broadcast channel senders (`event_tx`, `plugin_event_tx`).
-///
-/// # Why This Exists
-///
-/// The `RunContext::Clone` implementation clones sender references, which increments
-/// the broadcast channel sender count. This prevents the channel from ever closing
-/// (sender count never reaches 0), causing listener tasks to hang.
-///
-/// `PluginContext` provides a cloneable context without senders, allowing:
-/// 1. Plugins to access all necessary read-only data
-/// 2. Sender count to remain accurate (only agent + interceptor hold senders)
-/// 3. Graceful shutdown when agent drops its sender
-///
-/// # Usage
-///
-/// - `spawn_listener_task()` should create a `PluginContext` and clone it for each plugin
-/// - `run_interceptor_loop()` should use `PluginContext` for plugin.intercept() calls
-/// - Plugins receive `&PluginContext` instead of `&RunContext`
-#[derive(Clone)]
-pub struct PluginContext {
-    pub run_id: String,
-    pub user_input: String,
-    pub session_id: String,
-    pub session: Arc<Session>,
-    pub tools: Arc<ToolRegistry>,
-    pub config: AgentConfig,
-    pub messages: Arc<RwLock<Vec<Message>>>,
-    pub all_tool_calls: Arc<RwLock<Vec<ToolCall>>>,
-    pub current_tool_calls: Arc<RwLock<Vec<ToolCall>>>,
-    pub data: Arc<RwLock<HashMap<String, serde_json::Value>>>,
-    // Note: Internal state fields (reasoning_chain, tool_call_records, final_content, error)
-    // are NOT exposed to plugins. Plugins access state via events, not direct field access.
-}
-
-impl PluginContext {
-    /// Create a PluginContext from a RunContext (without cloning senders)
-    ///
-    /// Note: Internal state fields (reasoning_chain, tool_call_records, final_content, error)
-    /// are NOT copied to PluginContext. Plugins access state via events, not direct field access.
-    pub fn from_run_ctx(ctx: &RunContext) -> Self {
-        Self {
-            run_id: ctx.run_id.clone(),
-            user_input: ctx.user_input.clone(),
-            session_id: ctx.session_id.clone(),
-            session: ctx.session.clone(),
-            tools: ctx.tools.clone(),
-            config: ctx.config.clone(),
-            messages: ctx.messages.clone(),
-            all_tool_calls: ctx.all_tool_calls.clone(),
-            current_tool_calls: ctx.current_tool_calls.clone(),
-            data: ctx.data.clone(),
-        }
-    }
-
-    /// Get a clone of all messages
-    pub async fn get_messages(&self) -> Vec<Message> {
-        self.messages.read().await.clone()
-    }
-
-    /// Get a clone of current tool calls
-    pub async fn get_current_tool_calls(&self) -> Vec<ToolCall> {
-        self.current_tool_calls.read().await.clone()
-    }
-
-    /// Get a clone of all tool calls
-    pub async fn get_all_tool_calls(&self) -> Vec<ToolCall> {
-        self.all_tool_calls.read().await.clone()
-    }
-
-    /// Get a value from the data store
-    pub async fn get<T: for<'de> serde::Deserialize<'de>>(&self, key: &str) -> Option<T> {
-        self.data
-            .read()
-            .await
-            .get(key)
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
-    }
-
-    /// Set a value in the data store
-    pub async fn set<T: serde::Serialize>(
-        &self,
-        key: &str,
-        value: T,
-    ) -> Result<(), serde_json::Error> {
-        self.data
-            .write()
-            .await
-            .insert(key.to_string(), serde_json::to_value(value)?);
-        Ok(())
+/// Create a PluginContext from a RunContext
+pub fn plugin_context_from_run_ctx(ctx: &RunContext) -> PluginContext {
+    PluginContext {
+        run_id: ctx.run_id.clone(),
+        user_input: ctx.user_input.clone(),
+        session_id: ctx.session_id.clone(),
+        messages: ctx.messages.clone(),
+        all_tool_calls: ctx.all_tool_calls.clone(),
+        current_tool_calls: ctx.current_tool_calls.clone(),
+        data: ctx.data.clone(),
     }
 }
 
@@ -227,6 +146,8 @@ pub struct RunContext {
     pub(crate) tool_call_records: Arc<RwLock<Vec<ToolCallRecord>>>,
     pub(crate) final_content: Arc<RwLock<Option<String>>>,
     pub(crate) error: Arc<RwLock<Option<String>>>,
+    /// Tracks the ID of the last message added, for auto-setting parent_id.
+    pub last_message_id: Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl RunContext {
@@ -245,7 +166,7 @@ impl RunContext {
         tools: Arc<ToolRegistry>,
         config: AgentConfig,
     ) -> (Self, mpsc::Receiver<PluginRequest>, mpsc::Receiver<(ApprovalRequest, oneshot::Sender<ApprovalResponse>)>) {
-        let (event_tx, _) = broadcast::channel(100);
+        let (event_tx, _) = broadcast::channel(1024);
         let (plugin_event_tx, plugin_event_rx) = mpsc::channel(100);
         let (approval_tx, approval_rx) = mpsc::channel(100);
 
@@ -268,6 +189,7 @@ impl RunContext {
             tool_call_records: Arc::new(RwLock::new(Vec::new())),
             final_content: Arc::new(RwLock::new(None)),
             error: Arc::new(RwLock::new(None)),
+            last_message_id: Arc::new(std::sync::Mutex::new(None)),
         };
 
         (ctx, plugin_event_rx, approval_rx)
@@ -324,13 +246,25 @@ impl RunContext {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// Add a message to the messages list and sync to session
+    /// Add a message to the messages list and sync to session.
+    /// Automatically sets parent_id to the previous message's ID.
     pub async fn add_message(&self, message: Message) -> Result<(), crate::AgentError> {
         // 1. Add to runtime messages array
         self.messages.write().await.push(message.clone());
 
-        // 2. Persist to session
-        let session_msg = SessionMessage::new(self.session_id.clone(), message);
+        // 2. Create SessionMessage with auto-set parent_id
+        let session_msg = {
+            let mut last_id = self.last_message_id.lock().unwrap();
+            let mut msg = SessionMessage::new(self.session_id.clone(), message.clone());
+            if let Some(id) = last_id.as_ref() {
+                msg = msg.with_parent_id(id.clone());
+            }
+            let new_id = msg.id.clone();
+            *last_id = Some(new_id);
+            msg
+        };
+
+        // 3. Persist to session
         self.session.add_message(session_msg).await.map_err(|e| {
             crate::AgentError::SessionError(format!("Failed to save message: {}", e))
         })?;
@@ -540,6 +474,7 @@ impl Clone for RunContext {
             tool_call_records: self.tool_call_records.clone(),
             final_content: self.final_content.clone(),
             error: self.error.clone(),
+            last_message_id: self.last_message_id.clone(),
         }
     }
 }
@@ -933,5 +868,23 @@ mod tests {
         assert_eq!(response.reasoning[0].thinking, "thought");
         assert_eq!(response.run_id, "test-run");
         assert_eq!(response.session_id, "session-1");
+    }
+
+    #[tokio::test]
+    async fn test_add_message_auto_sets_parent_id() {
+        let ctx = create_test_context();
+
+        // Add first message
+        ctx.add_message(Message::user("first")).await.unwrap();
+
+        // Add second message
+        ctx.add_message(Message::assistant("second")).await.unwrap();
+
+        // Verify second message has parent_id set
+        let session_msgs = ctx.session.get_messages(10).await.unwrap();
+        assert_eq!(session_msgs.len(), 2);
+        assert!(session_msgs[0].parent_id.is_none()); // first message, no parent
+        assert!(session_msgs[1].parent_id.is_some()); // second message has parent
+        assert_eq!(session_msgs[1].parent_id.as_ref().unwrap(), &session_msgs[0].id);
     }
 }

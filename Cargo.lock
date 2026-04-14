@@ -3716,6 +3716,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "vol-llm-core",
+ "vol-llm-observability",
  "vol-llm-provider",
  "vol-llm-tdengine",
  "vol-llm-tool",
@@ -3758,12 +3759,30 @@ name = "vol-llm-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "reqwest 0.11.27",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
  "vol-core",
+]
+
+[[package]]
+name = "vol-llm-observability"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "vol-llm-core",
 ]
 
 [[package]]

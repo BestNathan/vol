@@ -112,7 +112,7 @@ impl Default for HitlConfig {
 }
 
 use super::plugin::*;
-use super::run_context::PluginContext;
+use super::plugin::PluginContext;
 use super::AgentStreamEvent;
 use std::sync::Arc;
 
@@ -188,6 +188,7 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
                 tool_call_id,
                 tool_name,
                 arguments,
+                ..
             } => {
                 if self.needs_tool_approval(tool_name) {
                     let request = ApprovalRequest {

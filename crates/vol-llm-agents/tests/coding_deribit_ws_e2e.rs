@@ -64,6 +64,7 @@ async fn test_coding_agent_develops_deribit_ws_client() {
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
         tool_config,
         unsafe_mode: true, // Skip HITL approval for automated testing
+        ..Default::default()
     };
 
     // Create agent

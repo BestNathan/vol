@@ -54,32 +54,62 @@ impl HTMLReporter {
 
         for event in &events {
             let (class, detail) = match event {
-                AgentStreamEvent::AgentStart { input } => {
+                AgentStreamEvent::AgentStart { input, .. } => {
                     ("", format!("Agent started: {}", input))
                 }
-                AgentStreamEvent::ThinkingComplete { thinking } => {
+                AgentStreamEvent::LLMCallStart { iteration, .. } => {
+                    ("", format!("LLM call start (iteration {})", iteration))
+                }
+                AgentStreamEvent::LLMCallComplete { model, usage, .. } => {
+                    ("", format!("LLM call complete: {} (usage: {:?})", model, usage))
+                }
+                AgentStreamEvent::LLMCallError { error, .. } => {
+                    ("error", format!("LLM call error: {}", error))
+                }
+                AgentStreamEvent::ThinkingStart { .. } => {
+                    ("thinking", "Thinking started".to_string())
+                }
+                AgentStreamEvent::ThinkingDelta { delta, .. } => {
+                    ("thinking", delta.clone())
+                }
+                AgentStreamEvent::ThinkingComplete { thinking, .. } => {
                     ("thinking", format!("Thinking:\n{}", thinking))
+                }
+                AgentStreamEvent::ContentStart { .. } => {
+                    ("", "Content started".to_string())
+                }
+                AgentStreamEvent::ContentDelta { delta, .. } => {
+                    ("", delta.clone())
+                }
+                AgentStreamEvent::ContentComplete { content, .. } => {
+                    ("", format!("Content complete: {}", content))
                 }
                 AgentStreamEvent::ToolCallBegin { tool_name, arguments, .. } => {
                     ("tool", format!("→ {}({})\n", tool_name, arguments))
                 }
-                AgentStreamEvent::ToolCallComplete { tool_name, result, tool_call_id: _ } => {
+                AgentStreamEvent::ToolCallComplete { tool_name, result, .. } => {
                     ("tool", format!("← {} result:\n{}", tool_name, result))
                 }
-                AgentStreamEvent::IterationComplete { iteration, tool_calls, final_answer } => {
+                AgentStreamEvent::ToolCallError { tool_name, error, .. } => {
+                    ("error", format!("Tool {} error: {}", tool_name, error))
+                }
+                AgentStreamEvent::ToolCallSkipped { tool_name, reason, .. } => {
+                    ("", format!("Tool {} skipped: {}", tool_name, reason))
+                }
+                AgentStreamEvent::IterationComplete { iteration, tool_calls, final_answer, .. } => {
                     ("", format!("Iteration {} complete{}{}",
                         iteration,
                         if !tool_calls.is_empty() { format!(" ({} tools)", tool_calls.len()) } else { "".to_string() },
                         if let Some(answer) = final_answer { format!("\nAnswer: {}", answer) } else { "".to_string() }
                     ))
                 }
-                AgentStreamEvent::AgentComplete => {
+                AgentStreamEvent::AgentComplete { .. } => {
                     ("complete", "Agent completed".to_string())
                 }
-                AgentStreamEvent::AgentAborted { reason } => {
+                AgentStreamEvent::AgentAborted { reason, .. } => {
                     ("complete", format!("Agent aborted: {}", reason))
                 }
-                AgentStreamEvent::PluginEvent { name, data } => {
+                AgentStreamEvent::PluginEvent { name, data, .. } => {
                     ("", format!("Plugin event: {} = {:?}", name, data))
                 }
             };
@@ -108,11 +138,21 @@ impl HTMLReporter {
     fn event_name(event: &AgentStreamEvent) -> &'static str {
         match event {
             AgentStreamEvent::AgentStart { .. } => "Start",
+            AgentStreamEvent::ThinkingStart { .. } => "Thinking Start",
+            AgentStreamEvent::ThinkingDelta { .. } => "Thinking Delta",
             AgentStreamEvent::ThinkingComplete { .. } => "Thinking",
+            AgentStreamEvent::ContentStart { .. } => "Content Start",
+            AgentStreamEvent::ContentDelta { .. } => "Content Delta",
+            AgentStreamEvent::ContentComplete { .. } => "Content",
+            AgentStreamEvent::LLMCallStart { .. } => "LLM Call Start",
+            AgentStreamEvent::LLMCallComplete { .. } => "LLM Call Complete",
+            AgentStreamEvent::LLMCallError { .. } => "LLM Call Error",
             AgentStreamEvent::ToolCallBegin { .. } => "Tool Call",
             AgentStreamEvent::ToolCallComplete { .. } => "Tool Result",
+            AgentStreamEvent::ToolCallError { .. } => "Tool Error",
+            AgentStreamEvent::ToolCallSkipped { .. } => "Tool Skipped",
             AgentStreamEvent::IterationComplete { .. } => "Iteration",
-            AgentStreamEvent::AgentComplete => "Complete",
+            AgentStreamEvent::AgentComplete { .. } => "Complete",
             AgentStreamEvent::AgentAborted { .. } => "Aborted",
             AgentStreamEvent::PluginEvent { .. } => "Plugin",
         }

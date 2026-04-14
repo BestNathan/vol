@@ -134,9 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ => {
                 // Display user input using render module
-                render::render_event(&vol_llm_agent::AgentStreamEvent::AgentStart {
-                    input: input.to_string(),
-                });
+                render::render_event(&vol_llm_agent::AgentStreamEvent::agent_start(input.to_string()));
 
                 // Create a new session for each run
                 let session = Arc::new(Session::new(
