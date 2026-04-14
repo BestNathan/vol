@@ -3767,6 +3767,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "vol-llm-observability"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "vol-llm-provider"
 version = "0.1.0"
 dependencies = [
