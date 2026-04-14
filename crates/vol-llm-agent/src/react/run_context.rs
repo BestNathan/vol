@@ -255,8 +255,10 @@ impl RunContext {
         // 2. Create SessionMessage with auto-set parent_id
         let session_msg = {
             let mut last_id = self.last_message_id.lock().unwrap();
-            let msg = SessionMessage::new(self.session_id.clone(), message.clone());
-            let msg = last_id.as_ref().map(|id| msg.with_parent_id(id.clone())).unwrap_or(msg);
+            let mut msg = SessionMessage::new(self.session_id.clone(), message.clone());
+            if let Some(id) = last_id.as_ref() {
+                msg = msg.with_parent_id(id.clone());
+            }
             let new_id = msg.id.clone();
             *last_id = Some(new_id);
             msg

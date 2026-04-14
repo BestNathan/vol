@@ -139,12 +139,10 @@ pub async fn create_shortcircuit_stream(
 
     tokio::spawn(async move {
         let _ = tx
-            .send(Ok(AgentStreamEvent::AgentStart {
-                input: ctx.user_input,
-            }))
+            .send(Ok(AgentStreamEvent::agent_start(ctx.user_input)))
             .await;
 
-        let _ = tx.send(Ok(AgentStreamEvent::AgentComplete)).await;
+        let _ = tx.send(Ok(AgentStreamEvent::agent_complete())).await;
     });
 
     Ok(AgentStreamReceiver::new(rx))
@@ -159,12 +157,10 @@ pub async fn create_skip_stream(
 
     tokio::spawn(async move {
         let _ = tx
-            .send(Ok(AgentStreamEvent::AgentStart {
-                input: ctx.user_input.clone(),
-            }))
+            .send(Ok(AgentStreamEvent::agent_start(ctx.user_input.clone())))
             .await;
 
-        let _ = tx.send(Ok(AgentStreamEvent::AgentComplete)).await;
+        let _ = tx.send(Ok(AgentStreamEvent::agent_complete())).await;
     });
 
     Ok(AgentStreamReceiver::new(rx))

@@ -188,6 +188,7 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
                 tool_call_id,
                 tool_name,
                 arguments,
+                ..
             } => {
                 if self.needs_tool_approval(tool_name) {
                     let request = ApprovalRequest {

@@ -321,6 +321,7 @@ impl ReActAgent {
                             call.arguments.clone(),
                         );
                         run_ctx.emit(tool_event.clone()).await;
+                        let tool_begin = std::time::Instant::now();
 
                         let tool_decision = match run_ctx.intercept(&tool_event).await {
                             Ok(decision) => decision,
@@ -345,12 +346,13 @@ impl ReActAgent {
                                         });
                                         match run_ctx.request_tool_approval(&call.name, &reason, metadata).await {
                                             Ok(approval) if !approval.approved => {
+                                                let duration_ms = tool_begin.elapsed().as_millis() as u64;
                                                 // Emit ToolCallSkipped
                                                 run_ctx.emit(AgentStreamEvent::tool_call_skipped(
                                                     call.id.clone(),
                                                     call.name.clone(),
                                                     "User rejected".to_string(),
-                                                    None,
+                                                    Some(duration_ms),
                                                 )).await;
 
                                                 // Add rejection message to history
@@ -379,12 +381,13 @@ impl ReActAgent {
                             }
                             PluginDecision::Skip => {
                                 tracing::warn!("Plugin intercepted to skip tool: {}", call.name);
+                                let duration_ms = tool_begin.elapsed().as_millis() as u64;
 
                                 run_ctx.emit(AgentStreamEvent::tool_call_skipped(
                                     call.id.clone(),
                                     call.name.clone(),
                                     "Plugin skipped".to_string(),
-                                    None,
+                                    Some(duration_ms),
                                 )).await;
 
                                 continue;
@@ -405,12 +408,13 @@ impl ReActAgent {
                         let result = match tools.execute(call, &tool_ctx).await {
                             Ok(r) => r,
                             Err(e) => {
+                                let duration_ms = tool_begin.elapsed().as_millis() as u64;
                                 // Emit ToolCallError
                                 run_ctx.emit(AgentStreamEvent::tool_call_error(
                                     call.id.clone(),
                                     call.name.clone(),
                                     e.to_string(),
-                                    None,
+                                    Some(duration_ms),
                                 )).await;
 
                                 // Record failed tool call
@@ -448,12 +452,13 @@ impl ReActAgent {
                             .await;
 
                         // Emit ToolCallComplete
+                        let duration_ms = tool_begin.elapsed().as_millis() as u64;
                         run_ctx
                             .emit(AgentStreamEvent::tool_call_complete(
                                 call.id.clone(),
                                 call.name.clone(),
                                 result.content.clone(),
-                                None,
+                                Some(duration_ms),
                             ))
                             .await;
 
@@ -518,10 +523,9 @@ impl ReActAgent {
                     "run_id": response.run_id,
                     "session_id": response.session_id,
                 });
-                run_ctx.emit(AgentStreamEvent::AgentComplete {
-                    timestamp: chrono::Utc::now(),
-                    response: Some(response_json),
-                }).await;
+                run_ctx
+                    .emit(AgentStreamEvent::agent_complete_with_response(response_json))
+                    .await;
 
                 return Ok(response);
             }
