@@ -53,8 +53,11 @@ impl SessionListener {
             event,
             AgentStreamEvent::AgentStart { .. }
                 | AgentStreamEvent::ThinkingComplete { .. }
+                | AgentStreamEvent::ContentComplete { .. }
                 | AgentStreamEvent::ToolCallBegin { .. }
                 | AgentStreamEvent::ToolCallComplete { .. }
+                | AgentStreamEvent::ToolCallError { .. }
+                | AgentStreamEvent::ToolCallSkipped { .. }
                 | AgentStreamEvent::IterationComplete { .. }
         )
     }
@@ -78,6 +81,12 @@ impl SessionListener {
             AgentStreamEvent::ThinkingComplete { thinking } => Some(SessionMessage::new(
                 self.session_id.clone(),
                 vol_llm_core::Message::assistant(thinking.clone()),
+            )),
+
+            // ContentComplete -> Assistant message (content)
+            AgentStreamEvent::ContentComplete { content } => Some(SessionMessage::new(
+                self.session_id.clone(),
+                vol_llm_core::Message::assistant(content.clone()),
             )),
 
             // ToolCallBegin -> Assistant message with tool_calls
@@ -107,6 +116,32 @@ impl SessionListener {
                 result,
             } => {
                 let content = format!("Tool '{}' returned: {}", tool_name, result);
+                Some(SessionMessage::new(
+                    self.session_id.clone(),
+                    vol_llm_core::Message::tool(content, tool_call_id.clone()),
+                ))
+            }
+
+            // ToolCallError -> Tool message with error
+            AgentStreamEvent::ToolCallError {
+                tool_call_id,
+                tool_name,
+                error,
+            } => {
+                let content = format!("Tool '{}' error: {}", tool_name, error);
+                Some(SessionMessage::new(
+                    self.session_id.clone(),
+                    vol_llm_core::Message::tool(content, tool_call_id.clone()),
+                ))
+            }
+
+            // ToolCallSkipped -> Tool message with skip reason
+            AgentStreamEvent::ToolCallSkipped {
+                tool_call_id,
+                tool_name,
+                reason,
+            } => {
+                let content = format!("Tool '{}' skipped: {}", tool_name, reason);
                 Some(SessionMessage::new(
                     self.session_id.clone(),
                     vol_llm_core::Message::tool(content, tool_call_id.clone()),
@@ -390,5 +425,133 @@ mod tests {
             messages[2].message.role,
             vol_llm_core::MessageRole::Assistant
         );
+    }
+
+    #[tokio::test]
+    async fn test_should_record_content_complete() {
+        let event = AgentStreamEvent::ContentComplete {
+            content: "Test content".to_string(),
+        };
+        assert!(SessionListener::should_record(&event));
+    }
+
+    #[tokio::test]
+    async fn test_should_record_tool_call_error() {
+        let event = AgentStreamEvent::ToolCallError {
+            tool_call_id: "call_123".to_string(),
+            tool_name: "bash".to_string(),
+            error: "command failed".to_string(),
+        };
+        assert!(SessionListener::should_record(&event));
+    }
+
+    #[tokio::test]
+    async fn test_should_record_tool_call_skipped() {
+        let event = AgentStreamEvent::ToolCallSkipped {
+            tool_call_id: "call_123".to_string(),
+            tool_name: "bash".to_string(),
+            reason: "User rejected".to_string(),
+        };
+        assert!(SessionListener::should_record(&event));
+    }
+
+    #[tokio::test]
+    async fn test_should_not_record_thinking_start() {
+        let event = AgentStreamEvent::ThinkingStart;
+        assert!(!SessionListener::should_record(&event));
+    }
+
+    #[tokio::test]
+    async fn test_should_not_record_thinking_delta() {
+        let event = AgentStreamEvent::ThinkingDelta { delta: "test".to_string() };
+        assert!(!SessionListener::should_record(&event));
+    }
+
+    #[tokio::test]
+    async fn test_should_not_record_content_start() {
+        let event = AgentStreamEvent::ContentStart;
+        assert!(!SessionListener::should_record(&event));
+    }
+
+    #[tokio::test]
+    async fn test_should_not_record_content_delta() {
+        let event = AgentStreamEvent::ContentDelta { delta: "test".to_string() };
+        assert!(!SessionListener::should_record(&event));
+    }
+
+    #[tokio::test]
+    async fn test_should_not_record_llm_call_start() {
+        let event = AgentStreamEvent::LLMCallStart { iteration: 1 };
+        assert!(!SessionListener::should_record(&event));
+    }
+
+    #[tokio::test]
+    async fn test_should_not_record_llm_call_complete() {
+        let event = AgentStreamEvent::LLMCallComplete { model: "test".to_string(), usage: None };
+        assert!(!SessionListener::should_record(&event));
+    }
+
+    #[tokio::test]
+    async fn test_should_not_record_llm_call_error() {
+        let event = AgentStreamEvent::LLMCallError { error: "test".to_string() };
+        assert!(!SessionListener::should_record(&event));
+    }
+
+    #[tokio::test]
+    async fn test_should_not_record_agent_complete() {
+        let event = AgentStreamEvent::AgentComplete;
+        assert!(!SessionListener::should_record(&event));
+    }
+
+    #[tokio::test]
+    async fn test_event_to_message_content_complete() {
+        let store = Arc::new(InMemoryMessageStore::new());
+        let (_tx, rx) = broadcast::channel(100);
+        let listener = SessionListener::new(rx, store, "session-1".to_string());
+
+        let event = AgentStreamEvent::ContentComplete {
+            content: "The answer is 42".to_string(),
+        };
+
+        let msg = listener.event_to_message(&event).unwrap();
+        assert_eq!(msg.session_id, "session-1");
+        assert_eq!(msg.message.role, vol_llm_core::MessageRole::Assistant);
+        assert!(msg.message.content.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_event_to_message_tool_call_error() {
+        let store = Arc::new(InMemoryMessageStore::new());
+        let (_tx, rx) = broadcast::channel(100);
+        let listener = SessionListener::new(rx, store, "session-1".to_string());
+
+        let event = AgentStreamEvent::ToolCallError {
+            tool_call_id: "call_123".to_string(),
+            tool_name: "bash".to_string(),
+            error: "command failed".to_string(),
+        };
+
+        let msg = listener.event_to_message(&event).unwrap();
+        assert_eq!(msg.session_id, "session-1");
+        assert_eq!(msg.message.role, vol_llm_core::MessageRole::Tool);
+        assert_eq!(msg.message.tool_call_id, Some("call_123".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_event_to_message_tool_call_skipped() {
+        let store = Arc::new(InMemoryMessageStore::new());
+        let (_tx, rx) = broadcast::channel(100);
+        let listener = SessionListener::new(rx, store, "session-1".to_string());
+
+        let event = AgentStreamEvent::ToolCallSkipped {
+            tool_call_id: "call_123".to_string(),
+            tool_name: "bash".to_string(),
+            reason: "User rejected".to_string(),
+        };
+
+        let msg = listener.event_to_message(&event).unwrap();
+        assert_eq!(msg.session_id, "session-1");
+        assert_eq!(msg.message.role, vol_llm_core::MessageRole::Tool);
+        assert_eq!(msg.message.tool_call_id, Some("call_123".to_string()));
     }
 }
