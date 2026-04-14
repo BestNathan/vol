@@ -245,7 +245,7 @@ impl RunContext {
         tools: Arc<ToolRegistry>,
         config: AgentConfig,
     ) -> (Self, mpsc::Receiver<PluginRequest>, mpsc::Receiver<(ApprovalRequest, oneshot::Sender<ApprovalResponse>)>) {
-        let (event_tx, _) = broadcast::channel(100);
+        let (event_tx, _) = broadcast::channel(1024);
         let (plugin_event_tx, plugin_event_rx) = mpsc::channel(100);
         let (approval_tx, approval_rx) = mpsc::channel(100);
 
