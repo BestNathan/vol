@@ -146,6 +146,8 @@ pub struct RunContext {
     pub(crate) tool_call_records: Arc<RwLock<Vec<ToolCallRecord>>>,
     pub(crate) final_content: Arc<RwLock<Option<String>>>,
     pub(crate) error: Arc<RwLock<Option<String>>>,
+    /// Tracks the ID of the last message added, for auto-setting parent_id.
+    pub last_message_id: Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl RunContext {
@@ -187,6 +189,7 @@ impl RunContext {
             tool_call_records: Arc::new(RwLock::new(Vec::new())),
             final_content: Arc::new(RwLock::new(None)),
             error: Arc::new(RwLock::new(None)),
+            last_message_id: Arc::new(std::sync::Mutex::new(None)),
         };
 
         (ctx, plugin_event_rx, approval_rx)
@@ -243,13 +246,23 @@ impl RunContext {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// Add a message to the messages list and sync to session
+    /// Add a message to the messages list and sync to session.
+    /// Automatically sets parent_id to the previous message's ID.
     pub async fn add_message(&self, message: Message) -> Result<(), crate::AgentError> {
         // 1. Add to runtime messages array
         self.messages.write().await.push(message.clone());
 
-        // 2. Persist to session
-        let session_msg = SessionMessage::new(self.session_id.clone(), message);
+        // 2. Create SessionMessage with auto-set parent_id
+        let session_msg = {
+            let mut last_id = self.last_message_id.lock().unwrap();
+            let msg = SessionMessage::new(self.session_id.clone(), message.clone());
+            let msg = last_id.as_ref().map(|id| msg.with_parent_id(id.clone())).unwrap_or(msg);
+            let new_id = msg.id.clone();
+            *last_id = Some(new_id);
+            msg
+        };
+
+        // 3. Persist to session
         self.session.add_message(session_msg).await.map_err(|e| {
             crate::AgentError::SessionError(format!("Failed to save message: {}", e))
         })?;
@@ -459,6 +472,7 @@ impl Clone for RunContext {
             tool_call_records: self.tool_call_records.clone(),
             final_content: self.final_content.clone(),
             error: self.error.clone(),
+            last_message_id: self.last_message_id.clone(),
         }
     }
 }
@@ -852,5 +866,23 @@ mod tests {
         assert_eq!(response.reasoning[0].thinking, "thought");
         assert_eq!(response.run_id, "test-run");
         assert_eq!(response.session_id, "session-1");
+    }
+
+    #[tokio::test]
+    async fn test_add_message_auto_sets_parent_id() {
+        let ctx = create_test_context();
+
+        // Add first message
+        ctx.add_message(Message::user("first")).await.unwrap();
+
+        // Add second message
+        ctx.add_message(Message::assistant("second")).await.unwrap();
+
+        // Verify second message has parent_id set
+        let session_msgs = ctx.session.get_messages(10).await.unwrap();
+        assert_eq!(session_msgs.len(), 2);
+        assert!(session_msgs[0].parent_id.is_none()); // first message, no parent
+        assert!(session_msgs[1].parent_id.is_some()); // second message has parent
+        assert_eq!(session_msgs[1].parent_id.as_ref().unwrap(), &session_msgs[0].id);
     }
 }
