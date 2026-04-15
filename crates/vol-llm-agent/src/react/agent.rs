@@ -23,6 +23,8 @@ pub struct AgentConfig {
     pub prompt_context: PromptContext,
     pub verbose: bool,
     pub plugin_registry: PluginRegistry,
+    /// Skip HITL approval — auto-approve all tool calls
+    pub unsafe_mode: bool,
 
     // Observability fields
     pub agent_id: String,
@@ -52,6 +54,7 @@ impl Default for AgentConfig {
             prompt_context,
             verbose: false,
             plugin_registry: PluginRegistry::new(),
+            unsafe_mode: false,
             agent_id: generate_agent_id(),
             log_base_path: PathBuf::from("logs/agents"),
         }
@@ -340,12 +343,16 @@ impl ReActAgent {
 
                                 match sensitivity {
                                     ToolSensitivity::RequiresApproval { reason } => {
-                                        let metadata = serde_json::json!({
-                                            "tool_call_id": call.id,
-                                            "arguments": call.arguments
-                                        });
-                                        match run_ctx.request_tool_approval(&call.name, &reason, metadata).await {
-                                            Ok(approval) if !approval.approved => {
+                                        // Skip approval check in unsafe mode
+                                        if config.unsafe_mode {
+                                            // Auto-approve, proceed directly
+                                        } else {
+                                            let metadata = serde_json::json!({
+                                                "tool_call_id": call.id,
+                                                "arguments": call.arguments
+                                            });
+                                            match run_ctx.request_tool_approval(&call.name, &reason, metadata).await {
+                                                Ok(approval) if !approval.approved => {
                                                 let duration_ms = tool_begin.elapsed().as_millis() as u64;
                                                 // Emit ToolCallSkipped
                                                 run_ctx.emit(AgentStreamEvent::tool_call_skipped(
@@ -372,6 +379,7 @@ impl ReActAgent {
                                                 tracing::warn!("HITL approval error: {}", e);
                                                 // Fail open — proceed without approval
                                             }
+                                        }
                                         }
                                     }
                                     ToolSensitivity::Safe => {
@@ -711,6 +719,7 @@ mod tests {
             prompt_context,
             verbose: true,
             plugin_registry: PluginRegistry::new(),
+            unsafe_mode: false,
             agent_id: "custom_agent".to_string(),
             log_base_path: PathBuf::from("custom/logs"),
         };

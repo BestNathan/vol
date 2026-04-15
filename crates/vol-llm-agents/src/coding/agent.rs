@@ -59,6 +59,7 @@ impl CodingAgent {
             ),
             verbose: config.verbose,
             plugin_registry: config.plugin_registry.clone(),
+            unsafe_mode: config.unsafe_mode,
             agent_id: if config.agent_id.is_empty() { generate_agent_id() } else { config.agent_id.clone() },
             log_base_path: config.log_base_path.clone(),
         };
