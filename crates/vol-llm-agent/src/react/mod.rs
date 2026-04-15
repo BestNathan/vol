@@ -61,3 +61,6 @@ pub use stream::{AgentStreamEvent, AgentStreamReceiver};
 pub use crate::prompt_context::{
     FragmentType, MessageAssembler, PromptContext, PromptFragment, PromptTemplate,
 };
+
+#[cfg(test)]
+mod tests;
