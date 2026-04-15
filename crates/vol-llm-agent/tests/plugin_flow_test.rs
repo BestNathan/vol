@@ -281,6 +281,7 @@ async fn test_listener_parallel_execution() {
 
     let event = AgentStreamEvent::AgentStart {
         input: "test".to_string(),
+        timestamp: chrono::Utc::now(),
     };
     let ctx = create_test_plugin_context();
 

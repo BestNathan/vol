@@ -142,6 +142,7 @@ async fn test_session_listener_records_what_events() {
     event_tx
         .send(TracedEvent::without_span(vol_llm_core::AgentStreamEvent::AgentStart {
             input: "User's first input".to_string(),
+            timestamp: chrono::Utc::now(),
         }))
         .map_err(|_| "send error")
         .unwrap();
@@ -151,6 +152,7 @@ async fn test_session_listener_records_what_events() {
         .send(TracedEvent::without_span(
             vol_llm_core::AgentStreamEvent::ThinkingComplete {
                 thinking: "Let me think...".to_string(),
+                timestamp: chrono::Utc::now(),
             },
         ))
         .map_err(|_| "send error")
