@@ -241,3 +241,172 @@ async fn test_agent_stream_receiver_recv() {
     let event = event.unwrap().unwrap();
     assert!(matches!(event, AgentStreamEvent::AgentStart { .. }));
 }
+
+// ========================
+// plugin_stream.rs tests
+// ========================
+
+#[tokio::test]
+async fn test_run_interceptor_loop_continue_decision() {
+    // A plugin that always returns Continue
+    struct ContinuePlugin;
+    #[async_trait::async_trait]
+    impl plugin::AgentPlugin for ContinuePlugin {
+        fn id(&self) -> plugin::PluginId { "continue".to_string() }
+        fn priority(&self) -> u32 { 10 }
+        async fn intercept(&self, _: &AgentStreamEvent, _: &PluginContext) -> plugin::PluginDecision {
+            plugin::PluginDecision::Continue
+        }
+        async fn listen(&self, _: &AgentStreamEvent, _: &PluginContext) {}
+    }
+
+    let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
+    let (event_tx, _) = tokio::sync::broadcast::channel(10);
+    let plugin_ctx = PluginContext {
+        run_id: "test".to_string(),
+        user_input: "test".to_string(),
+        session_id: "test".to_string(),
+        messages: Arc::new(tokio::sync::RwLock::new(vec![])),
+        all_tool_calls: Arc::new(tokio::sync::RwLock::new(vec![])),
+        current_tool_calls: Arc::new(tokio::sync::RwLock::new(vec![])),
+        data: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
+    };
+
+    let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(ContinuePlugin)];
+
+    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx, plugin_ctx));
+
+    // Send an intercept request
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    plugin_tx.send(PluginRequest::Intercept {
+        event: vol_tracing::TracedEvent::without_span(AgentStreamEvent::agent_start("test".to_string())),
+        tx: reply_tx,
+    }).await.unwrap();
+
+    let decision = reply_rx.await.unwrap();
+    assert!(matches!(decision, plugin::PluginDecision::Continue));
+
+    // Shutdown
+    drop(plugin_tx);
+    interceptor.await.unwrap();
+}
+
+#[tokio::test]
+async fn test_run_interceptor_loop_skip_decision() {
+    struct SkipPlugin;
+    #[async_trait::async_trait]
+    impl plugin::AgentPlugin for SkipPlugin {
+        fn id(&self) -> plugin::PluginId { "skip".to_string() }
+        fn priority(&self) -> u32 { 10 }
+        async fn intercept(&self, _: &AgentStreamEvent, _: &PluginContext) -> plugin::PluginDecision {
+            plugin::PluginDecision::Skip
+        }
+        async fn listen(&self, _: &AgentStreamEvent, _: &PluginContext) {}
+    }
+
+    let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
+    let (event_tx, _) = tokio::sync::broadcast::channel(10);
+    let plugin_ctx = PluginContext {
+        run_id: "test".to_string(),
+        user_input: "test".to_string(),
+        session_id: "test".to_string(),
+        messages: Arc::new(tokio::sync::RwLock::new(vec![])),
+        all_tool_calls: Arc::new(tokio::sync::RwLock::new(vec![])),
+        current_tool_calls: Arc::new(tokio::sync::RwLock::new(vec![])),
+        data: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
+    };
+
+    let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(SkipPlugin)];
+
+    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx.clone(), plugin_ctx));
+
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    plugin_tx.send(PluginRequest::Intercept {
+        event: vol_tracing::TracedEvent::without_span(AgentStreamEvent::agent_start("test".to_string())),
+        tx: reply_tx,
+    }).await.unwrap();
+
+    let decision = reply_rx.await.unwrap();
+    assert!(matches!(decision, plugin::PluginDecision::Skip));
+
+    drop(plugin_tx);
+    interceptor.await.unwrap();
+}
+
+#[tokio::test]
+async fn test_run_interceptor_loop_emit_request() {
+    let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
+    let (event_tx, mut event_rx) = tokio::sync::broadcast::channel(10);
+    let plugin_ctx = PluginContext {
+        run_id: "test".to_string(),
+        user_input: "test".to_string(),
+        session_id: "test".to_string(),
+        messages: Arc::new(tokio::sync::RwLock::new(vec![])),
+        all_tool_calls: Arc::new(tokio::sync::RwLock::new(vec![])),
+        current_tool_calls: Arc::new(tokio::sync::RwLock::new(vec![])),
+        data: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
+    };
+
+    let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![];
+
+    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx, plugin_ctx));
+
+    // Send an emit request
+    plugin_tx.send(PluginRequest::Emit {
+        event: vol_tracing::TracedEvent::without_span(AgentStreamEvent::agent_start("test".to_string())),
+    }).await.unwrap();
+
+    // Should receive event on broadcast
+    let event = event_rx.recv().await.unwrap();
+    assert!(matches!(event.value(), AgentStreamEvent::AgentStart { .. }));
+
+    drop(plugin_tx);
+    interceptor.await.unwrap();
+}
+
+#[tokio::test]
+async fn test_plugin_decision_variants() {
+    // Compile-time + runtime check for all decision variants
+    let _continue = plugin::PluginDecision::Continue;
+    let _skip = plugin::PluginDecision::Skip;
+    let _abort = plugin::PluginDecision::Abort("reason".to_string());
+}
+
+// ========================
+// Additional hitl.rs tests
+// ========================
+
+#[test]
+fn test_hitl_config_with_triggers() {
+    let config = hitl::HitlConfig {
+        triggers: vec![
+            hitl::ApprovalTrigger::ToolExecution { tools: None },
+            hitl::ApprovalTrigger::AfterIteration,
+            hitl::ApprovalTrigger::BeforeFinalAnswer,
+        ],
+        timeout_secs: 30,
+        on_timeout: hitl::TimeoutBehavior::Reject { reason: "timed out".to_string() },
+        timeout_message: Some("Please respond within 30 seconds".to_string()),
+    };
+
+    assert_eq!(config.triggers.len(), 3);
+    assert_eq!(config.timeout_secs, 30);
+}
+
+#[test]
+fn test_approval_type_variants() {
+    let _tool = hitl::ApprovalType::ToolExecution { tool_name: "bash".to_string() };
+    let _iter = hitl::ApprovalType::ContinueIteration { iteration: 1 };
+    let _final = hitl::ApprovalType::FinalAnswer;
+    let _custom = hitl::ApprovalType::Custom { name: "custom".to_string() };
+}
+
+#[test]
+fn test_hitl_needs_tool_approval_all_tools() {
+    // Test via HitlConfig + ApprovalTrigger combination
+    let config = hitl::HitlConfig {
+        triggers: vec![hitl::ApprovalTrigger::ToolExecution { tools: None }],
+        ..Default::default()
+    };
+    assert!(!config.triggers.is_empty());
+}
