@@ -23,3 +23,6 @@ pub use sandbox::*;
 pub use stream::*;
 pub use streaming::*;
 pub use tool::*;
+
+#[cfg(feature = "test-utils")]
+pub mod test_utils;
