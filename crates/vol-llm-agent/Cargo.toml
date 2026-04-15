@@ -36,4 +36,5 @@ tracing-subscriber = "0.3"
 chrono = "0.4"
 vol-tdengine = { path = "../vol-tdengine" }
 vol-llm-tdengine = { path = "../vol-llm-tdengine" }
+vol-llm-core = { path = "../vol-llm-core", features = ["test-utils"] }
 tempfile = "3"

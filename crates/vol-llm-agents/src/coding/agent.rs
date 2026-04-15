@@ -118,6 +118,16 @@ impl CodingAgent {
         self
     }
 
+    /// Get the agent's configuration
+    pub fn config(&self) -> &CodingAgentConfig {
+        &self.config
+    }
+
+    /// Get the event observer
+    pub fn observer(&self) -> Option<&Arc<dyn EventObserver>> {
+        self.observer.as_ref()
+    }
+
     /// Set the sandbox for tool execution (overrides auto-init from working_dir)
     pub fn with_sandbox(mut self, sandbox: vol_llm_core::SandboxRef) -> Self {
         self.sandbox = Some(sandbox);
