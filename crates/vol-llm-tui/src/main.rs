@@ -1,9 +1,8 @@
 //! vol-llm-tui: Interactive CLI for the coding agent.
 //!
-//! Provides a REPL loop for interacting with the ReAct agent,
-//! with color-coded event rendering and HITL approval for dangerous tools.
+//! Provides a REPL loop with structured, deduplicated event rendering
+//! via EventBuffer.
 
-#[allow(dead_code)]
 mod render;
 
 use crossterm::{
@@ -12,10 +11,9 @@ use crossterm::{
 };
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
-use vol_llm_agent::react::AgentBuilder;
-use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore, Session};
-use vol_llm_provider::{AnthropicProvider, LLMConfig};
-use vol_llm_tool::ToolRegistry;
+use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, EventObserver, ObserverError};
+use vol_llm_core::AgentStreamEvent;
+use vol_llm_tool::{ToolConfig, ProxyConfig};
 
 fn print_colored(color: Color, text: &str) {
     let _ = execute!(io::stdout(), SetForegroundColor(color), Print(text), ResetColor);
@@ -31,70 +29,43 @@ fn print_help() {
     println!("Type any message to send to the agent.");
 }
 
+/// Observer that forwards events to EventBuffer for rendering.
+struct TuiRenderer {
+    buffer: tokio::sync::Mutex<render::EventBuffer>,
+}
+
+#[async_trait::async_trait]
+impl EventObserver for TuiRenderer {
+    async fn on_event(&self, event: &AgentStreamEvent) -> Result<(), ObserverError> {
+        let mut buf = self.buffer.lock().await;
+        buf.render(event);
+        Ok(())
+    }
+
+    async fn on_complete(&self) -> Result<(), ObserverError> {
+        Ok(())
+    }
+}
+
+impl TuiRenderer {
+    fn new() -> Self {
+        Self {
+            buffer: tokio::sync::Mutex::new(render::EventBuffer::new()),
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing for diagnostics
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("vol_llm_tui=info".parse()?)
-                .add_directive("vol_llm_agent=info".parse()?)
-                .add_directive("vol_llm_provider=info".parse()?),
-        )
-        .with_target(false)
-        .init();
-
-    // Load API key
-    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
+    // Verify API key is set (CodingAgent::new() reads from env internally)
+    let _api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
         .expect("ANTHROPIC_AUTH_TOKEN must be set");
-
-    // Create LLM provider
-    let llm_config = LLMConfig::with_literal_key(
-        vol_llm_core::LLMProvider::Anthropic,
-        "qwen3.5-plus",
-        api_key,
-        "https://coding.dashscope.aliyuncs.com/apps/anthropic",
-    );
-    let provider = AnthropicProvider::new(&llm_config)?;
-    let llm: Arc<dyn vol_llm_core::LLMClient> = Arc::new(provider);
-
-    // Create tools
-    let mut tools = ToolRegistry::new();
-    vol_llm_tools_builtin::register_all(&mut tools);
-
-    // Register web tools if configured
-    let mut tool_config = vol_llm_tool::ToolConfig::new();
-    if let Ok(api_key) = std::env::var("TAVILY_API_KEY") {
-        let search_cfg = vol_llm_tools_builtin::WebSearchConfig {
-            provider: "tavily".to_string(),
-            api_key,
-            proxy: vol_llm_tool::ProxyConfig::default(),
-        };
-        tool_config.set("web_search", search_cfg);
-    }
-    if let Ok(max_len) = std::env::var("WEB_FETCH_MAX_LENGTH") {
-        let fetch_cfg = vol_llm_tools_builtin::WebFetchConfig {
-            max_content_length: max_len.parse().ok(),
-            proxy: vol_llm_tool::ProxyConfig::default(),
-        };
-        tool_config.set("web_fetch", fetch_cfg);
-    }
-    vol_llm_tools_builtin::register_web_all(&mut tools, &tool_config);
-    let web_tools = tool_config.get::<vol_llm_tools_builtin::WebSearchConfig>("web_search")
-        .map(|_| 1).unwrap_or(0)
-        + tool_config.get::<vol_llm_tools_builtin::WebFetchConfig>("web_fetch")
-        .map(|_| 1).unwrap_or(0);
 
     // Print startup banner
     println!();
     print_colored(Color::Cyan, "=== Coding Agent TUI ===\n");
     println!();
-    print_colored(Color::White, &format!("Core tools: {}\n", tools.definitions().len() - web_tools));
-    if web_tools > 0 {
-        print_colored(Color::Green, &format!("Web tools: {}\n", web_tools));
-    } else {
-        print_colored(Color::Yellow, "Web tools: not configured (set TAVILY_API_KEY to enable)\n");
-    }
+    print_colored(Color::White, "Type /help for commands.\n");
     println!();
     print_help();
 
@@ -107,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let mut line = String::new();
         match stdin.lock().read_line(&mut line) {
-            Ok(0) => break, // EOF
+            Ok(0) => break,
             Ok(_) => {}
             Err(e) => {
                 eprintln!("Error reading input: {}", e);
@@ -133,34 +104,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
             _ => {
-                // Display user input using render module
-                render::render_event(&vol_llm_agent::AgentStreamEvent::agent_start(input.to_string()));
+                // Configure tool_config
+                let mut tool_config = ToolConfig::new();
 
-                // Create a new session for each run
-                let session = Arc::new(Session::new(
-                    format!("tui_{}", uuid::Uuid::new_v4().simple()),
-                    Arc::new(InMemorySessionStore::new()),
-                    Arc::new(InMemoryMessageStore::new()),
-                ));
+                // Register web tools if configured
+                if let Ok(tavily_key) = std::env::var("TAVILY_API_KEY") {
+                    tool_config.set("web_search", vol_llm_tools_builtin::WebSearchConfig {
+                        provider: "tavily".to_string(),
+                        api_key: tavily_key,
+                        proxy: ProxyConfig::default(),
+                    });
+                }
+                if let Ok(max_len) = std::env::var("WEB_FETCH_MAX_LENGTH") {
+                    tool_config.set("web_fetch", vol_llm_tools_builtin::WebFetchConfig {
+                        max_content_length: max_len.parse().ok(),
+                        proxy: ProxyConfig::default(),
+                    });
+                }
 
-                // Build agent
-                let agent = AgentBuilder::new()
-                    .with_llm(llm.clone())
-                    .with_max_iterations(10)
-                    .with_verbose(false)
-                    .with_max_history_messages(20)
-                    .with_observability_plugin()
-                    .with_session(session)
-                    .build()?;
+                let config = CodingAgentConfig {
+                    max_iterations: 10,
+                    working_dir: std::env::current_dir()?,
+                    hitl_enabled: true,
+                    verbose: false,
+                    html_report_path: None,
+                    tool_config,
+                    ..Default::default()
+                };
 
-                // Run agent — events are rendered internally via the observer system
-                // and HITL approval prompts appear inline for dangerous tools
+                let agent = match CodingAgent::new(config).await {
+                    Ok(a) => a,
+                    Err(e) => {
+                        print_colored(Color::Red, &format!("Error creating agent: {}\n", e));
+                        continue;
+                    }
+                };
+
+                // Attach TUI renderer as observer
+                let renderer = Arc::new(TuiRenderer::new());
+                let agent = agent.with_observer(renderer.clone());
+
+                // Run agent — all events render via TuiRenderer -> EventBuffer
                 match agent.run(input).await {
-                    Ok(response) => {
-                        if !response.content.is_empty() {
-                            println!();
-                            print_colored(Color::Green, &format!("{}\n", response.content));
-                        }
+                    Ok(_response) => {
+                        // Final answer already rendered via IterationComplete
+                        // AgentComplete summary line also rendered by EventBuffer
                     }
                     Err(e) => {
                         println!();
