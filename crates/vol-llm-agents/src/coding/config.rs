@@ -1,6 +1,7 @@
 //! Coding Agent configuration.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use vol_llm_agent::react::PluginRegistry;
 use vol_llm_tool::ToolConfig;
 
@@ -9,6 +10,10 @@ use vol_llm_tool::ToolConfig;
 pub struct CodingAgentConfig {
     /// Agent identifier
     pub agent_id: String,
+
+    /// LLM client for generating responses.
+    /// Caller constructs this; CodingAgent does not read env vars.
+    pub llm: Option<Arc<dyn vol_llm_core::LLMClient>>,
 
     /// Maximum reasoning iterations
     pub max_iterations: u32,
@@ -31,9 +36,6 @@ pub struct CodingAgentConfig {
     /// HTML report output path (None = no report)
     pub html_report_path: Option<PathBuf>,
 
-    /// LLM provider ID
-    pub llm_provider_id: String,
-
     /// Plugin registry for extending agent functionality
     pub plugin_registry: PluginRegistry,
 
@@ -45,6 +47,7 @@ impl std::fmt::Debug for CodingAgentConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CodingAgentConfig")
             .field("agent_id", &self.agent_id)
+            .field("llm", &"<LLMClient>")
             .field("max_iterations", &self.max_iterations)
             .field("working_dir", &self.working_dir)
             .field("log_base_path", &self.log_base_path)
@@ -52,7 +55,6 @@ impl std::fmt::Debug for CodingAgentConfig {
             .field("unsafe_mode", &self.unsafe_mode)
             .field("verbose", &self.verbose)
             .field("html_report_path", &self.html_report_path)
-            .field("llm_provider_id", &self.llm_provider_id)
             .field("plugin_registry", &"<PluginRegistry>")
             .field("tool_config", &self.tool_config)
             .finish()
@@ -70,7 +72,7 @@ impl Default for CodingAgentConfig {
             unsafe_mode: false,
             verbose: false,
             html_report_path: None,
-            llm_provider_id: "anthropic-main".to_string(),
+            llm: None,
             plugin_registry: PluginRegistry::new(),
             tool_config: ToolConfig::new(),
         }
