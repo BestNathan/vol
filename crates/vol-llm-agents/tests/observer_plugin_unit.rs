@@ -140,5 +140,5 @@ fn create_test_plugin_context() -> vol_llm_agent::react::PluginContext {
             log_base_path: std::path::PathBuf::from("logs/test"),
         },
     );
-    vol_llm_agent::react::PluginContext::from_run_ctx(&ctx)
+    vol_llm_agent::react::plugin_context_from_run_ctx(&ctx)
 }
