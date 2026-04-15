@@ -113,14 +113,32 @@ async fn test_observer_plugin_forwards_multiple_events() {
 }
 
 // Helper function to create test PluginContext
-fn create_test_plugin_context() -> PluginContext {
-    PluginContext {
-        run_id: "test-run".to_string(),
-        user_input: "test input".to_string(),
-        session_id: "session-1".to_string(),
-        messages: Arc::new(RwLock::new(vec![])),
-        all_tool_calls: Arc::new(RwLock::new(vec![])),
-        current_tool_calls: Arc::new(RwLock::new(vec![])),
-        data: Arc::new(RwLock::new(HashMap::new())),
-    }
+fn create_test_plugin_context() -> vol_llm_agent::react::PluginContext {
+    use vol_llm_agent::react::{AgentConfig, PluginRegistry, RunContext};
+    use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore, Session};
+    use vol_llm_tool::ToolRegistry;
+
+    let (ctx, _plugin_rx, _approval_rx) = RunContext::new(
+        "test-run".to_string(),
+        "test input".to_string(),
+        "session-1".to_string(),
+        Arc::new(Session::new(
+            "session-1".to_string(),
+            Arc::new(InMemorySessionStore::new()),
+            Arc::new(InMemoryMessageStore::new()),
+        )),
+        Arc::new(ToolRegistry::new()),
+        AgentConfig {
+            max_iterations: 10,
+            max_history_messages: 20,
+            prompt_context: vol_llm_agent::PromptContext::new(
+                vol_llm_agent::PromptTemplate::new("test", "test context")
+            ),
+            verbose: false,
+            plugin_registry: PluginRegistry::new(),
+            agent_id: "test-agent".to_string(),
+            log_base_path: std::path::PathBuf::from("logs/test"),
+        },
+    );
+    vol_llm_agent::react::PluginContext::from_run_ctx(&ctx)
 }
