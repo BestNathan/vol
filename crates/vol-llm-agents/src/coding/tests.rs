@@ -5,6 +5,20 @@ use std::sync::Arc;
 use vol_llm_core::Sandbox;
 use vol_llm_core::AgentPlugin;
 
+// Dummy LLM client for builder/agent construction tests
+use vol_llm_core::LLMClient;
+use vol_llm_core::{ConversationRequest, ConversationResponse, StreamReceiver, SupportedParam};
+
+struct DummyLlm;
+#[async_trait::async_trait]
+impl LLMClient for DummyLlm {
+    fn provider(&self) -> vol_llm_core::LLMProvider { vol_llm_core::LLMProvider::Anthropic }
+    fn model(&self) -> &str { "dummy" }
+    fn supported_params(&self) -> &[SupportedParam] { &[] }
+    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> { unimplemented!() }
+    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> { unimplemented!() }
+}
+
 // ========================
 // config.rs tests
 // ========================
@@ -291,4 +305,122 @@ async fn test_observer_plugin_priority() {
     let observer = Arc::new(ChannelledEventObserver::new());
     let plugin = ObserverPlugin::new(observer);
     assert_eq!(plugin.priority(), 0);
+}
+
+// ========================
+// agent.rs — Builder tests
+// ========================
+
+#[tokio::test]
+async fn test_builder_default() {
+    let builder = CodingAgentBuilder::new();
+    // Build without LLM should fail
+    let result = builder.build().await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_builder_with_llm() {
+    let llm = Arc::new(DummyLlm);
+    let agent = CodingAgentBuilder::new()
+        .llm(llm)
+        .build()
+        .await
+        .unwrap();
+    // Agent created successfully
+    assert!(agent.config().llm.is_some());
+}
+
+#[tokio::test]
+async fn test_builder_with_all_methods() {
+    let llm = Arc::new(DummyLlm);
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let agent = CodingAgentBuilder::new()
+        .llm(llm)
+        .working_dir(tmp_dir.path().to_path_buf())
+        .hitl_enabled(true)
+        .unsafe_mode(true)
+        .max_iterations(20)
+        .build()
+        .await
+        .unwrap();
+
+    assert_eq!(agent.config().max_iterations, 20);
+    assert!(agent.config().unsafe_mode);
+    assert!(agent.config().hitl_enabled);
+}
+
+#[tokio::test]
+async fn test_builder_consumable_default() {
+    // Builder::new() returns a fresh instance each time
+    let _b1 = CodingAgentBuilder::new();
+    let _b2 = CodingAgentBuilder::new();
+    // No interference between instances
+}
+
+// ========================
+// agent.rs — CodingAgent tests
+// ========================
+
+#[tokio::test]
+async fn test_agent_new_validation() {
+    let llm = Arc::new(DummyLlm);
+    let config = CodingAgentConfig {
+        llm: Some(llm),
+        ..Default::default()
+    };
+    let result = CodingAgent::new(config).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_agent_new_missing_llm() {
+    let config = CodingAgentConfig::default();
+    let result = CodingAgent::new(config).await;
+    assert!(result.is_err());
+    if let Err(CodingAgentError::Config(msg)) = result {
+        assert!(msg.contains("llm"));
+    } else {
+        panic!("Expected Config error");
+    }
+}
+
+#[tokio::test]
+async fn test_agent_with_observer() {
+    let llm = Arc::new(DummyLlm);
+    let config = CodingAgentConfig {
+        llm: Some(llm),
+        ..Default::default()
+    };
+    let observer = Arc::new(ChannelledEventObserver::new());
+    let agent = CodingAgent::new(config).await.unwrap()
+        .with_observer(observer);
+    assert!(agent.observer().is_some());
+}
+
+#[tokio::test]
+async fn test_agent_with_methods() {
+    let llm = Arc::new(DummyLlm);
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let config = CodingAgentConfig {
+        llm: Some(llm),
+        ..Default::default()
+    };
+    let agent = CodingAgent::new(config).await.unwrap()
+        .with_agent_id("test_123".to_string())
+        .with_log_base_path(tmp_dir.path().join("logs"));
+    assert_eq!(agent.config().agent_id, "test_123");
+}
+
+#[tokio::test]
+async fn test_coding_agent_response() {
+    let response = CodingAgentResponse {
+        success: true,
+        summary: "done".to_string(),
+        iterations: 3,
+        tool_calls: 5,
+    };
+    assert!(response.success);
+    assert_eq!(response.iterations, 3);
+    assert_eq!(response.tool_calls, 5);
 }
