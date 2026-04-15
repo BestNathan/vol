@@ -312,10 +312,15 @@ async fn test_observer_plugin_priority() {
 
 #[tokio::test]
 async fn test_builder_default() {
-    let builder = CodingAgentBuilder::new();
-    // Build without LLM should fail
-    let result = builder.build().await;
-    assert!(result.is_err());
+    // Builder default creates a config with llm=None, which falls back to
+    // env-based LLM creation. Without ANTHROPIC_AUTH_TOKEN, it should fail.
+    let token = std::env::var("ANTHROPIC_AUTH_TOKEN").ok();
+    if token.is_none() {
+        let builder = CodingAgentBuilder::new();
+        let result = builder.build().await;
+        assert!(result.is_err());
+    }
+    // If ANTHROPIC_AUTH_TOKEN is set, the builder will succeed via env fallback
 }
 
 #[tokio::test]
@@ -372,14 +377,20 @@ async fn test_agent_new_validation() {
 
 #[tokio::test]
 async fn test_agent_new_missing_llm() {
-    let config = CodingAgentConfig::default();
-    let result = CodingAgent::new(config).await;
-    assert!(result.is_err());
-    if let Err(CodingAgentError::Config(msg)) = result {
-        assert!(msg.contains("llm"));
-    } else {
-        panic!("Expected Config error");
+    // Without ANTHROPIC_AUTH_TOKEN, default config (llm=None) should fail.
+    // With the env var set, it falls back to env-based creation and succeeds.
+    let token = std::env::var("ANTHROPIC_AUTH_TOKEN").ok();
+    if token.is_none() {
+        let config = CodingAgentConfig::default();
+        let result = CodingAgent::new(config).await;
+        assert!(result.is_err());
+        if let Err(CodingAgentError::Config(msg)) = result {
+            assert!(msg.contains("ANTHROPIC_AUTH_TOKEN"));
+        } else {
+            panic!("Expected Config error");
+        }
     }
+    // If ANTHROPIC_AUTH_TOKEN is set, the agent will be created via env fallback
 }
 
 #[tokio::test]
