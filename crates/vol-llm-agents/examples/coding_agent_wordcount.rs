@@ -2,6 +2,8 @@
 
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, HTMLReporter, LocalSandbox};
 use vol_llm_core::Sandbox;
+use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
+use vol_llm_core::LLMProvider;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -23,13 +25,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let report_path = work_dir.join("report.html");
 
+    // Construct LLM externally
+    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
+        .expect("ANTHROPIC_AUTH_TOKEN must be set");
+    let llm_config = LLMProviderConfig {
+        id: "anthropic-main".to_string(),
+        config: LLMConfig {
+            provider: LLMProvider::Anthropic,
+            model: "qwen3.5-plus".to_string(),
+            api_key: Secret::literal(api_key),
+            base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
+        },
+    };
+    let registry = LLMProviderRegistry::from_configs(&[llm_config])?;
+    let llm = registry.get("anthropic-main").expect("LLM provider not found").clone();
+
     let config = CodingAgentConfig {
         max_iterations: 20,
         working_dir: work_dir.clone(),
         hitl_enabled: false,
         verbose: true,
         html_report_path: Some(report_path.clone()),
-        llm_provider_id: "anthropic-main".to_string(),
+        llm: Some(llm),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
         ..Default::default()
     };

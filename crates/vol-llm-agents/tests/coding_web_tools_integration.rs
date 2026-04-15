@@ -14,6 +14,8 @@ use tempfile::tempdir;
 use vol_llm_tool::ToolConfig;
 use vol_llm_tools_builtin::{WebFetchConfig, ProxyConfig};
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, ChannelledEventObserver};
+use vol_llm_core::{LLMClient, LLMProvider};
+use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
 use vol_llm_agent::AgentStreamEvent;
 
 /// Helper to configure web_fetch in ToolConfig
@@ -23,6 +25,23 @@ fn configure_web_fetch(tool_config: &mut ToolConfig) {
         proxy: ProxyConfig::default(),
     };
     tool_config.set("web_fetch", fetch_cfg);
+}
+
+/// Helper to construct the LLM client for tests.
+fn create_test_llm() -> Arc<dyn LLMClient> {
+    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
+        .expect("ANTHROPIC_AUTH_TOKEN must be set");
+    let llm_config = LLMProviderConfig {
+        id: "anthropic-main".to_string(),
+        config: LLMConfig {
+            provider: LLMProvider::Anthropic,
+            model: "qwen3.5-plus".to_string(),
+            api_key: Secret::literal(api_key),
+            base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
+        },
+    };
+    let registry = LLMProviderRegistry::from_configs(&[llm_config]).unwrap();
+    registry.get("anthropic-main").unwrap().clone()
 }
 
 /// Test that CodingAgent registers web_fetch when ToolConfig is provided
@@ -42,7 +61,7 @@ async fn test_coding_agent_uses_web_fetch_for_deribit_docs() {
         hitl_enabled: false,
         verbose: true,
         html_report_path: None,
-        llm_provider_id: "anthropic-main".to_string(),
+        llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
         tool_config,
         ..Default::default()
@@ -118,10 +137,11 @@ async fn test_coding_agent_without_web_fetch_has_core_tools_only() {
         hitl_enabled: false,
         verbose: false,
         html_report_path: None,
-        llm_provider_id: "anthropic-main".to_string(),
+        llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
         tool_config: ToolConfig::new(), // empty
         ..Default::default()
+    };
 
     let agent = CodingAgent::new(config).await.unwrap();
 

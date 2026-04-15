@@ -3,9 +3,29 @@
 //! Requires real LLM API key to run. Skip by default.
 
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, HTMLReporter};
+use vol_llm_core::LLMClient;
+use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
+use vol_llm_core::LLMProvider;
 use vol_llm_tool::ToolConfig;
 use std::sync::Arc;
 use tempfile::tempdir;
+
+/// Helper to construct the LLM client for tests.
+fn create_test_llm() -> Arc<dyn LLMClient> {
+    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
+        .expect("ANTHROPIC_AUTH_TOKEN must be set");
+    let llm_config = LLMProviderConfig {
+        id: "anthropic-main".to_string(),
+        config: LLMConfig {
+            provider: LLMProvider::Anthropic,
+            model: "qwen3.5-plus".to_string(),
+            api_key: Secret::literal(api_key),
+            base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
+        },
+    };
+    let registry = LLMProviderRegistry::from_configs(&[llm_config]).unwrap();
+    registry.get("anthropic-main").unwrap().clone()
+}
 
 #[tokio::test]
 #[ignore] // Requires real LLM API key (ANTHROPIC_AUTH_TOKEN)
@@ -23,7 +43,7 @@ async fn test_coding_agent_e2e_read_file() {
         hitl_enabled: false,
         verbose: false,
         html_report_path: Some(report_path.clone()),
-        llm_provider_id: "anthropic-main".to_string(),
+        llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
         tool_config: ToolConfig::new(),
         ..Default::default()
@@ -63,7 +83,7 @@ async fn test_coding_agent_e2e_edit_file() {
         hitl_enabled: false,
         verbose: false,
         html_report_path: Some(report_path.clone()),
-        llm_provider_id: "anthropic-main".to_string(),
+        llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
         tool_config: ToolConfig::new(),
         ..Default::default()
@@ -103,7 +123,7 @@ async fn test_coding_agent_html_report_contains_timeline() {
         hitl_enabled: false,
         verbose: false,
         html_report_path: Some(report_path.clone()),
-        llm_provider_id: "anthropic-main".to_string(),
+        llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
         tool_config: ToolConfig::new(),
         ..Default::default()

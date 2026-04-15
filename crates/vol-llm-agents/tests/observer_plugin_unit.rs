@@ -1,9 +1,11 @@
 //! Unit tests for ObserverPlugin
 
 use vol_llm_agents::coding::{ObserverPlugin, EventObserver, ObserverError};
-use vol_llm_core::{AgentStreamEvent, ToolCall};
+use vol_llm_core::{AgentStreamEvent, PluginContext, ToolCall};
 use vol_llm_agent::react::AgentPlugin;
+use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 struct MockObserver {
     events: tokio::sync::Mutex<Vec<AgentStreamEvent>>,
@@ -40,10 +42,10 @@ async fn test_observer_plugin_forwards_events() {
 
     let event = AgentStreamEvent::AgentStart {
         input: "test task".to_string(),
+        timestamp: chrono::Utc::now(),
     };
 
     // Create minimal PluginContext
-    use vol_llm_agent::react::PluginContext;
     let ctx = create_test_plugin_context();
 
     plugin.listen(&event, &ctx).await;
@@ -78,22 +80,28 @@ async fn test_observer_plugin_forwards_multiple_events() {
 
     // Send multiple events
     let events = vec![
-        AgentStreamEvent::AgentStart { input: "task".to_string() },
-        AgentStreamEvent::ThinkingComplete { thinking: "thinking...".to_string() },
+        AgentStreamEvent::AgentStart { input: "task".to_string(), timestamp: chrono::Utc::now() },
+        AgentStreamEvent::ThinkingComplete { thinking: "thinking...".to_string(), timestamp: chrono::Utc::now() },
         AgentStreamEvent::ToolCallBegin {
+            timestamp: chrono::Utc::now(),
+            tool_call_id: "call_1".to_string(),
             tool_name: "read_file".to_string(),
             arguments: r#"{"file": "test.txt"}"#.to_string()
         },
         AgentStreamEvent::ToolCallComplete {
+            timestamp: chrono::Utc::now(),
+            tool_call_id: "call_1".to_string(),
             tool_name: "read_file".to_string(),
-            result: "success".to_string()
+            result: "success".to_string(),
+            duration_ms: Some(10),
         },
         AgentStreamEvent::IterationComplete {
+            timestamp: chrono::Utc::now(),
             iteration: 1,
             tool_calls: vec![],
             final_answer: None,
         },
-        AgentStreamEvent::AgentComplete,
+        AgentStreamEvent::AgentComplete { response: None, timestamp: chrono::Utc::now() },
     ];
 
     for event in events {
@@ -105,32 +113,14 @@ async fn test_observer_plugin_forwards_multiple_events() {
 }
 
 // Helper function to create test PluginContext
-fn create_test_plugin_context() -> vol_llm_agent::react::PluginContext {
-    use vol_llm_agent::react::{AgentConfig, PluginRegistry, RunContext};
-    use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore, Session};
-    use vol_llm_tool::ToolRegistry;
-
-    let (ctx, _plugin_rx, _approval_rx) = RunContext::new(
-        "test-run".to_string(),
-        "test input".to_string(),
-        "session-1".to_string(),
-        Arc::new(Session::new(
-            "session-1".to_string(),
-            Arc::new(InMemorySessionStore::new()),
-            Arc::new(InMemoryMessageStore::new()),
-        )),
-        Arc::new(ToolRegistry::new()),
-        AgentConfig {
-            max_iterations: 10,
-            max_history_messages: 20,
-            prompt_context: vol_llm_agent::PromptContext::new(
-                vol_llm_agent::PromptTemplate::new("test", "test context")
-            ),
-            verbose: false,
-            plugin_registry: PluginRegistry::new(),
-            agent_id: "test-agent".to_string(),
-            log_base_path: std::path::PathBuf::from("logs/test"),
-        },
-    );
-    vol_llm_agent::react::PluginContext::from_run_ctx(&ctx)
+fn create_test_plugin_context() -> PluginContext {
+    PluginContext {
+        run_id: "test-run".to_string(),
+        user_input: "test input".to_string(),
+        session_id: "session-1".to_string(),
+        messages: Arc::new(RwLock::new(vec![])),
+        all_tool_calls: Arc::new(RwLock::new(vec![])),
+        current_tool_calls: Arc::new(RwLock::new(vec![])),
+        data: Arc::new(RwLock::new(HashMap::new())),
+    }
 }

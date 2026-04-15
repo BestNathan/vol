@@ -1,10 +1,28 @@
 //! Integration test for ObserverPlugin with CodingAgent
 
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, HTMLReporter, ObserverPlugin};
-use vol_llm_core::AgentStreamEvent;
+use vol_llm_core::{AgentStreamEvent, LLMClient, LLMProvider};
+use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
 use vol_llm_agent::react::AgentPlugin;
 use std::sync::Arc;
 use tempfile::tempdir;
+
+/// Helper to construct the LLM client for tests.
+fn create_test_llm() -> Arc<dyn LLMClient> {
+    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
+        .expect("ANTHROPIC_AUTH_TOKEN must be set");
+    let llm_config = LLMProviderConfig {
+        id: "anthropic-main".to_string(),
+        config: LLMConfig {
+            provider: LLMProvider::Anthropic,
+            model: "qwen3.5-plus".to_string(),
+            api_key: Secret::literal(api_key),
+            base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
+        },
+    };
+    let registry = LLMProviderRegistry::from_configs(&[llm_config]).unwrap();
+    registry.get("anthropic-main").unwrap().clone()
+}
 
 #[tokio::test]
 async fn test_observer_plugin_receives_all_events() {
@@ -36,10 +54,10 @@ async fn test_observer_plugin_receives_all_events() {
                 AgentStreamEvent::LLMCallStart { .. } => "LLMCallStart",
                 AgentStreamEvent::LLMCallComplete { .. } => "LLMCallComplete",
                 AgentStreamEvent::LLMCallError { .. } => "LLMCallError",
-                AgentStreamEvent::ThinkingStart => "ThinkingStart",
+                AgentStreamEvent::ThinkingStart { timestamp: _ } => "ThinkingStart",
                 AgentStreamEvent::ThinkingDelta { .. } => "ThinkingDelta",
                 AgentStreamEvent::ThinkingComplete { .. } => "ThinkingComplete",
-                AgentStreamEvent::ContentStart => "ContentStart",
+                AgentStreamEvent::ContentStart { timestamp: _ } => "ContentStart",
                 AgentStreamEvent::ContentDelta { .. } => "ContentDelta",
                 AgentStreamEvent::ContentComplete { .. } => "ContentComplete",
                 AgentStreamEvent::ToolCallBegin { .. } => "ToolCallBegin",
@@ -47,7 +65,7 @@ async fn test_observer_plugin_receives_all_events() {
                 AgentStreamEvent::ToolCallError { .. } => "ToolCallError",
                 AgentStreamEvent::ToolCallSkipped { .. } => "ToolCallSkipped",
                 AgentStreamEvent::IterationComplete { .. } => "IterationComplete",
-                AgentStreamEvent::AgentComplete => "AgentComplete",
+                AgentStreamEvent::AgentComplete { .. } => "AgentComplete",
                 AgentStreamEvent::AgentAborted { .. } => "AgentAborted",
                 AgentStreamEvent::PluginEvent { .. } => "PluginEvent",
             }
@@ -79,7 +97,7 @@ async fn test_coding_agent_generates_complete_html_report() {
         hitl_enabled: false,
         verbose: false,
         html_report_path: Some(report_path.clone()),
-        llm_provider_id: "anthropic-main".to_string(),
+        llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
         ..Default::default()
     };
