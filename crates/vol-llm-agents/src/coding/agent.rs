@@ -4,12 +4,12 @@ use std::sync::Arc;
 use std::path::PathBuf;
 use vol_llm_tool::{ToolRegistry, ToolConfig};
 use vol_llm_agent::{ReActAgent, AgentConfig, Session};
-use vol_llm_provider::{LLMProviderConfig, LLMProviderRegistry};
-
 use crate::coding::config::CodingAgentConfig;
 use crate::coding::error::CodingAgentError;
 use crate::coding::observer::EventObserver;
 use crate::coding::observer_plugin::ObserverPlugin;
+use vol_llm_core::Sandbox;
+use crate::coding::sandbox::LocalSandbox;
 
 /// Coding Agent response
 #[derive(Debug, Clone)]
@@ -36,30 +36,17 @@ pub struct CodingAgent {
 }
 
 impl CodingAgent {
-    /// Create a new CodingAgent from config
+    /// Create a new CodingAgent from config.
+    ///
+    /// The caller must provide an LLMClient via `config.llm`.
+    /// If `config.working_dir` is not ".", a LocalSandbox is automatically
+    /// created and passed to the ReActAgent.
     pub async fn new(config: CodingAgentConfig) -> Result<Self, CodingAgentError> {
-        // Initialize LLM
-        let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
-            .map_err(|_| CodingAgentError::Config("ANTHROPIC_AUTH_TOKEN not set".to_string()))?;
+        // Get LLM from config — caller constructs this
+        let llm = config.llm.clone()
+            .ok_or_else(|| CodingAgentError::Config("llm not set: config.llm must be provided by caller".to_string()))?;
 
-        let llm_config = LLMProviderConfig {
-            id: config.llm_provider_id.clone(),
-            config: vol_llm_provider::LLMConfig {
-                provider: vol_llm_core::LLMProvider::Anthropic,
-                model: "qwen3.5-plus".to_string(),
-                api_key: vol_llm_provider::Secret::literal(api_key),
-                base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
-            },
-        };
-
-        let registry = LLMProviderRegistry::from_configs(&[llm_config])
-            .map_err(|e| CodingAgentError::Config(format!("Failed to initialize LLM: {}", e)))?;
-
-        let llm = registry.get(&config.llm_provider_id)
-            .ok_or_else(|| CodingAgentError::Config(format!("LLM provider '{}' not found", config.llm_provider_id)))?
-            .clone();
-
-        // Create tool registry with coding tools and web tools
+        // Create tool registry with coding tools
         let mut tool_registry = ToolRegistry::new();
         Self::register_coding_tools(&mut tool_registry, &config.tool_config);
 
@@ -76,6 +63,17 @@ impl CodingAgent {
             log_base_path: config.log_base_path.clone(),
         };
 
+        // Auto-init sandbox from working_dir if not current directory
+        let sandbox: Option<vol_llm_core::SandboxRef> = if config.working_dir != PathBuf::from(".") {
+            let sandbox = LocalSandbox::new(Some(config.working_dir.clone()));
+            sandbox.start().map_err(|e| CodingAgentError::Config(
+                format!("Failed to start sandbox at {:?}: {}", config.working_dir, e)
+            ))?;
+            Some(Arc::new(sandbox))
+        } else {
+            None
+        };
+
         Ok(Self {
             config,
             state: Some(CodingAgentState {
@@ -84,7 +82,7 @@ impl CodingAgent {
                 agent_config,
             }),
             observer: None,
-            sandbox: None,
+            sandbox,
         })
     }
 
@@ -119,7 +117,7 @@ impl CodingAgent {
         self
     }
 
-    /// Set the sandbox for tool execution
+    /// Set the sandbox for tool execution (overrides auto-init from working_dir)
     pub fn with_sandbox(mut self, sandbox: vol_llm_core::SandboxRef) -> Self {
         self.sandbox = Some(sandbox);
         self
@@ -247,6 +245,13 @@ impl CodingAgentBuilder {
         self
     }
 
+    /// Set the LLM client for this agent.
+    /// The caller constructs the LLM; CodingAgent does not read env vars.
+    pub fn llm(mut self, llm: Arc<dyn vol_llm_core::LLMClient>) -> Self {
+        self.config.llm = Some(llm);
+        self
+    }
+
     pub fn tool_config(mut self, tool_config: ToolConfig) -> Self {
         self.config.tool_config = tool_config;
         self
@@ -259,7 +264,9 @@ impl CodingAgentBuilder {
 
     pub async fn build(self) -> Result<CodingAgent, CodingAgentError> {
         let mut agent = CodingAgent::new(self.config).await?;
-        agent.sandbox = self.sandbox;
+        if let Some(sandbox) = self.sandbox {
+            agent.sandbox = Some(sandbox);
+        }
         Ok(agent)
     }
 }
