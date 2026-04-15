@@ -39,7 +39,7 @@ impl ExecutableTool for WriteTool {
     }
 
     fn description(&self) -> &'static str {
-        "Create or overwrite a file with the specified content. The parent directory must exist."
+        "Create or overwrite a file with the specified content. Parent directories will be created if they don't exist."
     }
 
     fn parameters(&self) -> serde_json::Value {
@@ -74,16 +74,12 @@ impl ExecutableTool for WriteTool {
             ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e))
         })?;
 
-        // Check if parent directory exists
-        let parent = file_path
-            .parent()
-            .ok_or_else(|| ToolError::ExecutionFailed("Invalid file path".to_string()))?;
-
-        if !parent.as_os_str().is_empty() && !tokio::fs::try_exists(parent).await.unwrap_or(false) {
-            return Err(ToolError::ExecutionFailed(format!(
-                "Parent directory does not exist: {}",
-                parent.display()
-            )));
+        // Create parent directories if they don't exist
+        if let Some(parent) = file_path.parent() {
+            if !parent.as_os_str().is_empty() {
+                tokio::fs::create_dir_all(parent).await
+                    .map_err(|e| ToolError::ExecutionFailed(format!("Failed to create parent directory: {}", e)))?;
+            }
         }
 
         // Write file content
