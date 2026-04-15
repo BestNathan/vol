@@ -31,7 +31,6 @@ fn test_config_default() {
     assert_eq!(config.working_dir, std::path::PathBuf::from("."));
     assert_eq!(config.log_base_path, std::path::PathBuf::from("logs"));
     assert!(config.hitl_enabled);
-    assert!(!config.unsafe_mode);
     assert!(!config.verbose);
     assert!(config.html_report_path.is_none());
     assert!(config.llm.is_none());
@@ -339,14 +338,12 @@ async fn test_builder_with_all_methods() {
         .llm(llm)
         .working_dir(tmp_dir.path().to_path_buf())
         .hitl_enabled(true)
-        .unsafe_mode(true)
         .max_iterations(20)
         .build()
         .await
         .unwrap();
 
     assert_eq!(agent.config().max_iterations, 20);
-    assert!(agent.config().unsafe_mode);
     assert!(agent.config().hitl_enabled);
 }
 

@@ -32,6 +32,7 @@ async fn test_session_listener_full_workflow() {
         .send(TracedEvent::without_span(
             AgentStreamEvent::ThinkingComplete {
                 thinking: "Let me search...".to_string(),
+                timestamp: chrono::Utc::now(),
             },
         ))
         .map_err(|_| "send error")
@@ -40,6 +41,7 @@ async fn test_session_listener_full_workflow() {
     // ToolCallBegin
     event_tx
         .send(TracedEvent::without_span(AgentStreamEvent::ToolCallBegin {
+            timestamp: chrono::Utc::now(),
             tool_call_id: "call_1".to_string(),
             tool_name: "volatility_index".to_string(),
             arguments: r#"{"symbol": "BTC"}"#.to_string(),
@@ -51,9 +53,11 @@ async fn test_session_listener_full_workflow() {
     event_tx
         .send(TracedEvent::without_span(
             AgentStreamEvent::ToolCallComplete {
+                timestamp: chrono::Utc::now(),
                 tool_call_id: "call_1".to_string(),
                 tool_name: "volatility_index".to_string(),
                 result: "Index: btc_usd | Volatility: 42.98%".to_string(),
+                duration_ms: None,
             },
         ))
         .map_err(|_| "send error")
@@ -63,6 +67,7 @@ async fn test_session_listener_full_workflow() {
     event_tx
         .send(TracedEvent::without_span(
             AgentStreamEvent::IterationComplete {
+                timestamp: chrono::Utc::now(),
                 iteration: 1,
                 tool_calls: vec![],
                 final_answer: Some("BTC 当前波动率为 42.98%...".to_string()),
@@ -117,6 +122,7 @@ async fn test_session_listener_filters_events() {
         .send(TracedEvent::without_span(
             AgentStreamEvent::ThinkingComplete {
                 thinking: "Thinking...".to_string(),
+                timestamp: chrono::Utc::now(),
             },
         ))
         .map_err(|_| "send error")
@@ -126,6 +132,7 @@ async fn test_session_listener_filters_events() {
     event_tx
         .send(TracedEvent::without_span(AgentStreamEvent::AgentStart {
             input: "test input".to_string(),
+            timestamp: chrono::Utc::now(),
         }))
         .map_err(|_| "send error")
         .unwrap();
@@ -134,9 +141,11 @@ async fn test_session_listener_filters_events() {
     event_tx
         .send(TracedEvent::without_span(
             AgentStreamEvent::ToolCallComplete {
+                timestamp: chrono::Utc::now(),
                 tool_call_id: "call_2".to_string(),
                 tool_name: "test_tool".to_string(),
                 result: "result".to_string(),
+                duration_ms: None,
             },
         ))
         .map_err(|_| "send error")
@@ -194,6 +203,7 @@ async fn test_session_listener_handles_lag() {
         let _ = event_tx.send(TracedEvent::without_span(
             AgentStreamEvent::ThinkingComplete {
                 thinking: format!("Thinking {}", i),
+                timestamp: chrono::Utc::now(),
             },
         ));
     }

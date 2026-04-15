@@ -4,11 +4,12 @@ use std::sync::Arc;
 use std::path::PathBuf;
 use vol_llm_tool::{ToolRegistry, ToolConfig};
 use vol_llm_agent::{ReActAgent, AgentConfig, Session};
+use vol_llm_provider::{LLMProviderConfig, LLMProviderRegistry};
 use crate::coding::config::CodingAgentConfig;
 use crate::coding::error::CodingAgentError;
 use crate::coding::observer::EventObserver;
 use crate::coding::observer_plugin::ObserverPlugin;
-use vol_llm_core::Sandbox;
+use vol_llm_core::{Sandbox, LLMProvider};
 use crate::coding::sandbox::LocalSandbox;
 
 /// Coding Agent response
@@ -42,9 +43,32 @@ impl CodingAgent {
     /// If `config.working_dir` is not ".", a LocalSandbox is automatically
     /// created and passed to the ReActAgent.
     pub async fn new(config: CodingAgentConfig) -> Result<Self, CodingAgentError> {
-        // Get LLM from config — caller constructs this
-        let llm = config.llm.clone()
-            .ok_or_else(|| CodingAgentError::Config("llm not set: config.llm must be provided by caller".to_string()))?;
+        // Get LLM from config — injected (tests) or env-based (production)
+        let llm = match &config.llm {
+            Some(llm) => llm.clone(),
+            None => {
+                let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
+                    .map_err(|_| CodingAgentError::Config(
+                        "ANTHROPIC_AUTH_TOKEN not set and no LLM client provided".to_string()
+                    ))?;
+                let llm_config = LLMProviderConfig {
+                    id: config.llm_provider_id.clone(),
+                    config: vol_llm_provider::LLMConfig {
+                        provider: LLMProvider::Anthropic,
+                        model: "qwen3.5-plus".to_string(),
+                        api_key: vol_llm_provider::Secret::literal(api_key),
+                        base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
+                    },
+                };
+                let registry = LLMProviderRegistry::from_configs(&[llm_config])
+                    .map_err(|e| CodingAgentError::Config(format!("LLM provider error: {}", e)))?;
+                registry.get(&config.llm_provider_id)
+                    .ok_or_else(|| CodingAgentError::Config(
+                        format!("LLM provider '{}' not found", config.llm_provider_id)
+                    ))?
+                    .clone()
+            }
+        };
 
         // Create tool registry with coding tools
         let mut tool_registry = ToolRegistry::new();
@@ -59,9 +83,9 @@ impl CodingAgent {
             ),
             verbose: config.verbose,
             plugin_registry: config.plugin_registry.clone(),
-            unsafe_mode: config.unsafe_mode,
             agent_id: if config.agent_id.is_empty() { generate_agent_id() } else { config.agent_id.clone() },
             log_base_path: config.log_base_path.clone(),
+            ..Default::default()
         };
 
         // Auto-init sandbox from working_dir if not current directory
@@ -265,11 +289,6 @@ impl CodingAgentBuilder {
 
     pub fn tool_config(mut self, tool_config: ToolConfig) -> Self {
         self.config.tool_config = tool_config;
-        self
-    }
-
-    pub fn unsafe_mode(mut self, enabled: bool) -> Self {
-        self.config.unsafe_mode = enabled;
         self
     }
 

@@ -13,7 +13,11 @@ pub struct CodingAgentConfig {
 
     /// LLM client for generating responses.
     /// Caller constructs this; CodingAgent does not read env vars.
+    /// If None, the LLM is created from llm_provider_id using ANTHROPIC_AUTH_TOKEN.
     pub llm: Option<Arc<dyn vol_llm_core::LLMClient>>,
+
+    /// LLM provider ID for env-based LLM creation (used when llm is None).
+    pub llm_provider_id: String,
 
     /// Maximum reasoning iterations
     pub max_iterations: u32,
@@ -26,9 +30,6 @@ pub struct CodingAgentConfig {
 
     /// Enable HITL confirmation for dangerous operations
     pub hitl_enabled: bool,
-
-    /// Skip HITL approval (auto-approve all tool calls)
-    pub unsafe_mode: bool,
 
     /// Verbose output
     pub verbose: bool,
@@ -48,11 +49,11 @@ impl std::fmt::Debug for CodingAgentConfig {
         f.debug_struct("CodingAgentConfig")
             .field("agent_id", &self.agent_id)
             .field("llm", &"<LLMClient>")
+            .field("llm_provider_id", &self.llm_provider_id)
             .field("max_iterations", &self.max_iterations)
             .field("working_dir", &self.working_dir)
             .field("log_base_path", &self.log_base_path)
             .field("hitl_enabled", &self.hitl_enabled)
-            .field("unsafe_mode", &self.unsafe_mode)
             .field("verbose", &self.verbose)
             .field("html_report_path", &self.html_report_path)
             .field("plugin_registry", &"<PluginRegistry>")
@@ -65,11 +66,11 @@ impl Default for CodingAgentConfig {
     fn default() -> Self {
         Self {
             agent_id: "coding-agent".to_string(),
+            llm_provider_id: "anthropic-main".to_string(),
             max_iterations: 10,
             working_dir: PathBuf::from("."),
             log_base_path: PathBuf::from("logs"),
             hitl_enabled: true,
-            unsafe_mode: false,
             verbose: false,
             html_report_path: None,
             llm: None,
