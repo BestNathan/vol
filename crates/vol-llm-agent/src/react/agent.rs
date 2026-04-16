@@ -243,14 +243,39 @@ impl ReActAgent {
 
                 if iteration > config.max_iterations {
                     // Emit max iterations reached event
-                    let reason = format!("Max iterations ({}) reached", config.max_iterations);
-                    run_ctx
-                        .emit(AgentStreamEvent::agent_aborted(reason.clone()))
-                        .await;
+                    run_ctx.emit(AgentStreamEvent::max_iterations_reached(
+                        iteration,
+                        config.max_iterations,
+                    )).await;
 
-                    return Err(crate::AgentError::MaxIterationsReached {
-                        max: config.max_iterations,
-                    });
+                    // Ask user via HITL approval channel whether to continue
+                    match run_ctx.request_continue_approval(
+                        iteration,
+                        config.max_iterations,
+                    ).await {
+                        Ok(true) => true,
+                        Ok(false) => {
+                            // User declined — abort
+                            let reason = format!("Max iterations ({}) reached, user declined to continue", config.max_iterations);
+                            run_ctx.emit(AgentStreamEvent::agent_aborted(reason.clone())).await;
+                            return Err(crate::AgentError::MaxIterationsReached {
+                                max: config.max_iterations,
+                            });
+                        }
+                        Err(e) => {
+                            // No HITL handler connected or error — abort
+                            let reason = format!("Max iterations ({}) reached, continuation request failed: {}", config.max_iterations, e);
+                            run_ctx.emit(AgentStreamEvent::agent_aborted(reason.clone())).await;
+                            return Err(crate::AgentError::MaxIterationsReached {
+                                max: config.max_iterations,
+                            });
+                        }
+                    };
+
+                    // User approved — reset and continue
+                    run_ctx.emit(AgentStreamEvent::iteration_continued(iteration)).await;
+                    run_ctx.reset_iteration();
+                    continue;
                 }
 
                 // Reason phase - call LLM with streaming
