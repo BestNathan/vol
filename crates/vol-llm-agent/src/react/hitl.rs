@@ -330,17 +330,28 @@ pub fn run_cli_approval_loop(
 ) {
     use std::io::{self, BufRead, Write};
 
+    const CONTINUE_SENTINEL: &str = "__continue__";
+
     std::thread::spawn(move || {
         let stdin = io::stdin();
         let mut rx = rx; // Make mutable
 
         while let Some((request, tx)) = rx.blocking_recv() {
-            // Display request
+            // Check if this is a continuation request
+            let is_continue = request.tool_name == CONTINUE_SENTINEL;
+
+            // Display request with different format for continuation
             println!();
-            println!("⚠ Approval required:");
-            println!("  Tool: {}", request.tool_name);
-            println!("  Reason: {}", request.reason);
-            print!("  Approve? [y/n] > ");
+            if is_continue {
+                println!("\u{26a0} Agent reached max iterations");
+                println!("  {}", request.reason);
+                println!("  Continue? (iteration counter will reset) [y/n] > ");
+            } else {
+                println!("\u{26a0} Approval required:");
+                println!("  Tool: {}", request.tool_name);
+                println!("  Reason: {}", request.reason);
+                print!("  Approve? [y/n] > ");
+            }
             let _ = io::stdout().flush();
 
             // Read response
