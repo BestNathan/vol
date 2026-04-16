@@ -78,6 +78,19 @@ pub enum AgentStreamEvent {
         reason: String,
     },
 
+    /// Emitted when max iterations is reached, before asking for continuation.
+    MaxIterationsReached {
+        timestamp: chrono::DateTime<chrono::Utc>,
+        current_iteration: u32,
+        max_iterations: u32,
+    },
+
+    /// Emitted when user approves continuation and iteration counter resets.
+    IterationContinued {
+        timestamp: chrono::DateTime<chrono::Utc>,
+        from_iteration: u32,
+    },
+
     // === LLM Call (3) ===
     LLMCallStart {
         timestamp: chrono::DateTime<chrono::Utc>,
@@ -177,6 +190,12 @@ impl AgentStreamEvent {
     }
     pub fn agent_aborted(reason: String) -> Self {
         Self::AgentAborted { timestamp: chrono::Utc::now(), reason }
+    }
+    pub fn max_iterations_reached(current_iteration: u32, max_iterations: u32) -> Self {
+        Self::MaxIterationsReached { timestamp: chrono::Utc::now(), current_iteration, max_iterations }
+    }
+    pub fn iteration_continued(from_iteration: u32) -> Self {
+        Self::IterationContinued { timestamp: chrono::Utc::now(), from_iteration }
     }
     pub fn llm_call_start(iteration: u32, messages: Vec<Message>) -> Self {
         Self::LLMCallStart { timestamp: chrono::Utc::now(), iteration, messages }
@@ -290,6 +309,33 @@ mod tests {
                 assert_eq!(reason, "max iterations");
             }
             _ => panic!("Expected AgentAborted"),
+        }
+    }
+
+    #[test]
+    fn test_agent_stream_event_max_iterations() {
+        let event = AgentStreamEvent::max_iterations_reached(5, 10);
+        match event {
+            AgentStreamEvent::MaxIterationsReached {
+                current_iteration,
+                max_iterations,
+                ..
+            } => {
+                assert_eq!(current_iteration, 5);
+                assert_eq!(max_iterations, 10);
+            }
+            _ => panic!("Expected MaxIterationsReached"),
+        }
+    }
+
+    #[test]
+    fn test_agent_stream_event_iteration_continued() {
+        let event = AgentStreamEvent::iteration_continued(10);
+        match event {
+            AgentStreamEvent::IterationContinued { from_iteration, .. } => {
+                assert_eq!(from_iteration, 10);
+            }
+            _ => panic!("Expected IterationContinued"),
         }
     }
 
