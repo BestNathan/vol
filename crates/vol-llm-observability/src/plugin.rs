@@ -120,6 +120,12 @@ impl ObservabilityPlugin {
                 }
                 Value::Object(map)
             }
+            AgentStreamEvent::MaxIterationsReached { current_iteration, max_iterations, .. } => {
+                json!({ "current_iteration": current_iteration, "max_iterations": max_iterations })
+            }
+            AgentStreamEvent::IterationContinued { from_iteration, .. } => {
+                json!({ "from_iteration": from_iteration })
+            }
         };
 
         let event_name = event_name(event);
@@ -161,6 +167,8 @@ fn event_name(event: &AgentStreamEvent) -> String {
         AgentStreamEvent::ToolCallSkipped { .. } => "ToolCallSkipped".to_string(),
         AgentStreamEvent::IterationComplete { .. } => "IterationComplete".to_string(),
         AgentStreamEvent::PluginEvent { .. } => "PluginEvent".to_string(),
+        AgentStreamEvent::MaxIterationsReached { .. } => "MaxIterationsReached".to_string(),
+        AgentStreamEvent::IterationContinued { .. } => "IterationContinued".to_string(),
     }
 }
 

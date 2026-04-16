@@ -18,6 +18,9 @@ use vol_llm_core::ToolCall;
 use vol_llm_tool::ToolRegistry;
 use vol_tracing::TracedEvent;
 
+/// Sentinel value for ApprovalRequest.tool_name to indicate a continuation request.
+pub(crate) const CONTINUE_SENTINEL: &str = "__continue__";
+
 /// Create a PluginContext from a RunContext
 pub fn plugin_context_from_run_ctx(ctx: &RunContext) -> PluginContext {
     PluginContext {
@@ -246,6 +249,11 @@ impl RunContext {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
+    /// Reset the iteration counter to 0 (called after user approves continuation).
+    pub fn reset_iteration(&self) {
+        self.iteration.store(0, std::sync::atomic::Ordering::SeqCst);
+    }
+
     /// Add a message to the messages list and sync to session.
     /// Automatically sets parent_id to the previous message's ID.
     pub async fn add_message(&self, message: Message) -> Result<(), crate::AgentError> {
@@ -385,6 +393,38 @@ impl RunContext {
 
         rx.await
             .map_err(|e| crate::AgentError::Context(format!("Approval response error: {}", e)))
+    }
+
+    /// Request human approval to continue after max iterations.
+    /// Blocks until a HITL handler responds.
+    ///
+    /// Returns true if the user approved continuation, false to stop.
+    pub async fn request_continue_approval(
+        &self,
+        current_iteration: u32,
+        max_iterations: u32,
+    ) -> Result<bool, crate::AgentError> {
+        let (tx, rx) = oneshot::channel();
+        let request = ApprovalRequest {
+            tool_name: CONTINUE_SENTINEL.to_string(),
+            reason: format!(
+                "Agent reached max iterations ({}/{})",
+                current_iteration, max_iterations
+            ),
+            metadata: serde_json::json!({
+                "current_iteration": current_iteration,
+                "max_iterations": max_iterations,
+            }),
+        };
+        self.approval_tx
+            .send((request, tx))
+            .await
+            .map_err(|e| crate::AgentError::Context(format!("Approval channel error: {}", e)))?;
+
+        let response = rx.await
+            .map_err(|e| crate::AgentError::Context(format!("Approval response error: {}", e)))?;
+
+        Ok(response.approved)
     }
 
     /// Record a reasoning step
@@ -886,5 +926,15 @@ mod tests {
         assert!(session_msgs[0].parent_id.is_none()); // first message, no parent
         assert!(session_msgs[1].parent_id.is_some()); // second message has parent
         assert_eq!(session_msgs[1].parent_id.as_ref().unwrap(), &session_msgs[0].id);
+    }
+
+    #[tokio::test]
+    async fn test_run_context_reset_iteration() {
+        let ctx = create_test_context();
+        ctx.next_iteration();
+        ctx.next_iteration();
+        assert_eq!(ctx.current_iteration(), 2);
+        ctx.reset_iteration();
+        assert_eq!(ctx.current_iteration(), 0);
     }
 }
