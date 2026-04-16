@@ -5,6 +5,7 @@
 
 mod app;
 mod render;
+mod ui;
 
 use crate::app::AppState;
 use crossterm::{
