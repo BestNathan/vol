@@ -3967,6 +3967,7 @@ name = "vol-llm-tui"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "crossterm",
  "serde",
  "serde_json",
