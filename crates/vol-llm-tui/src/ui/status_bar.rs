@@ -17,8 +17,9 @@ pub fn render_status_bar(frame: &mut Frame, area: Rect, state: &AppState) {
     let status = if state.is_running { "Running" } else { "Idle" };
 
     let text = format!(
-        " Session: {} │ Iter: {} │ Tools: {} │ Time: {} │ {}",
+        " Session: {} │ Run: {} │ Iter: {} │ Tools: {} │ Time: {} │ {}",
         state.session_id,
+        state.run_count,
         state.iteration,
         state.tool_call_count,
         time_str,

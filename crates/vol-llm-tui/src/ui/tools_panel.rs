@@ -4,7 +4,7 @@ use crate::app::{AppState, ToolCallStatus};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::widgets::{Block, Borders, List, ListItem};
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 use ratatui::text::{Line, Span};
 
 /// Render the tools panel.
@@ -15,22 +15,22 @@ pub fn render_tools_panel(frame: &mut Frame, area: Rect, state: &AppState) {
         .title(title)
         .style(Style::default().fg(Color::Blue));
 
+    if state.tool_calls.is_empty() {
+        let empty = Paragraph::new("No tool calls yet")
+            .style(Style::default().fg(Color::DarkGray))
+            .block(block.clone());
+        frame.render_widget(empty, area);
+        return;
+    }
+
     let items: Vec<ListItem> = state.tool_calls
         .iter()
         .map(|entry| {
-            let status_str = match entry.status {
-                ToolCallStatus::Running => "…",
-                ToolCallStatus::Success => "✓",
-                ToolCallStatus::Error => "✗",
-                ToolCallStatus::Skipped => "⊘",
-            };
+            let (status_str, status_color) = status_display(entry);
 
-            let status_color = match entry.status {
-                ToolCallStatus::Running => Color::Yellow,
-                ToolCallStatus::Success => Color::Green,
-                ToolCallStatus::Error => Color::Red,
-                ToolCallStatus::Skipped => Color::DarkGray,
-            };
+            let duration_str = entry.duration_ms
+                .map(|ms| format!("{ms}ms"))
+                .unwrap_or_default();
 
             let lines = vec![
                 Line::from(vec![
@@ -55,4 +55,13 @@ pub fn render_tools_panel(frame: &mut Frame, area: Rect, state: &AppState) {
 
     let list = List::new(items).block(block);
     frame.render_widget(list, area);
+}
+
+fn status_display(entry: &crate::app::ToolCallEntry) -> (&'static str, Color) {
+    match entry.status {
+        ToolCallStatus::Running => ("…", Color::Yellow),
+        ToolCallStatus::Success => ("✓", Color::Green),
+        ToolCallStatus::Error => ("ERR", Color::Red),
+        ToolCallStatus::Skipped => ("SKIP", Color::DarkGray),
+    }
 }
