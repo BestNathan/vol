@@ -160,7 +160,17 @@ async fn run_event_loop(
                             handle_key(key, &mut state)
                         };
                         match key_action {
-                            KeyAction::Exit => return Ok(()),
+                            KeyAction::Exit => {
+                                let is_exiting = {
+                                    let state_guard = state.lock().await;
+                                    state_guard.exiting
+                                };
+                                if is_exiting {
+                                    // Brief visual feedback before exit
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
+                                }
+                                return Ok(());
+                            }
                             KeyAction::Send(input) => {
                                 spawn_agent(input, state.clone(), session.clone());
                             }
@@ -239,6 +249,9 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
 
         // Quit command
         (_, KeyCode::Char('q')) if key.modifiers == KeyModifiers::CONTROL => {
+            if !state.is_running {
+                state.exiting = true;
+            }
             KeyAction::Exit
         }
 

@@ -80,6 +80,8 @@ pub struct AppState {
     pub run_start: Option<Instant>,
     /// Whether an agent run is in progress.
     pub is_running: bool,
+    /// Whether the app is in the process of exiting.
+    pub exiting: bool,
     /// Conversation history entries for the right panel.
     pub conversation: Vec<ConversationEntry>,
     /// Tool call entries for the left panel.
@@ -114,6 +116,7 @@ impl AppState {
             tool_call_count: 0,
             run_start: None,
             is_running: false,
+            exiting: false,
             conversation: Vec::new(),
             tool_calls: Vec::new(),
             workspace,

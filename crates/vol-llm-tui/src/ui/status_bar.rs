@@ -16,8 +16,10 @@ pub fn render_status_bar(frame: &mut Frame, area: Rect, state: &AppState) {
 
     let status = if state.is_running { "Running" } else { "Idle" };
 
+    let prefix = if state.exiting { "QUITTING · " } else { "" };
     let text = format!(
-        " Session: {} │ Run: {} │ Iter: {} │ Tools: {} │ Time: {} │ {}",
+        " Session: {}{} │ Run: {} │ Iter: {} │ Tools: {} │ Time: {} │ {}",
+        prefix,
         state.session_id,
         state.run_count,
         state.iteration,
