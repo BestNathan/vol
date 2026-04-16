@@ -81,6 +81,22 @@ impl EventBuffer {
                 print_colored(Color::Red, &format!("Aborted: {}\n", reason));
             }
 
+            AgentStreamEvent::MaxIterationsReached { current_iteration, max_iterations, .. } => {
+                println!();
+                print_colored(Color::Yellow, &format!(
+                    "\u{26a0} Max iterations reached ({}/{}) — waiting for user decision...\n",
+                    current_iteration, max_iterations,
+                ));
+            }
+
+            AgentStreamEvent::IterationContinued { from_iteration, .. } => {
+                println!();
+                print_colored(Color::Green, &format!(
+                    ">>> Continuing from iteration {} (counter reset to 0)\n",
+                    from_iteration,
+                ));
+            }
+
             // LLM Call — meta events, not displayed
             AgentStreamEvent::LLMCallStart { .. }
             | AgentStreamEvent::LLMCallComplete { .. }

@@ -109,6 +109,12 @@ impl HTMLReporter {
                 AgentStreamEvent::AgentAborted { reason, .. } => {
                     ("complete", format!("Agent aborted: {}", reason))
                 }
+                AgentStreamEvent::MaxIterationsReached { current_iteration, max_iterations, .. } => {
+                    ("error", format!("Max iterations reached ({}/{}) — waiting for user decision", current_iteration, max_iterations))
+                }
+                AgentStreamEvent::IterationContinued { from_iteration, .. } => {
+                    ("", format!("Continuing from iteration {} (counter reset to 0)", from_iteration))
+                }
                 AgentStreamEvent::PluginEvent { name, data, .. } => {
                     ("", format!("Plugin event: {} = {:?}", name, data))
                 }
@@ -154,6 +160,8 @@ impl HTMLReporter {
             AgentStreamEvent::IterationComplete { .. } => "Iteration",
             AgentStreamEvent::AgentComplete { .. } => "Complete",
             AgentStreamEvent::AgentAborted { .. } => "Aborted",
+            AgentStreamEvent::MaxIterationsReached { .. } => "Max Iterations",
+            AgentStreamEvent::IterationContinued { .. } => "Iteration Continued",
             AgentStreamEvent::PluginEvent { .. } => "Plugin",
         }
     }
