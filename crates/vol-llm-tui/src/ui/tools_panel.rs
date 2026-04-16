@@ -28,7 +28,7 @@ pub fn render_tools_panel(frame: &mut Frame, area: Rect, state: &AppState) {
         .map(|entry| {
             let (status_str, status_color) = status_display(entry);
 
-            let duration_str = entry.duration_ms
+            let _duration_str = entry.duration_ms
                 .map(|ms| format!("{ms}ms"))
                 .unwrap_or_default();
 
