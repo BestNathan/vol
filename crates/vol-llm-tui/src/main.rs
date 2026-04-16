@@ -78,14 +78,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = std::fs::create_dir_all(&session_dir) {
             print_colored(Color::Yellow, &format!("Warning: cannot create session dir: {}\n", e));
             print_colored(Color::Yellow, "Using in-memory session (no history persistence)\n");
-            use vol_llm_agent::session::{InMemorySessionStore, InMemoryMessageStore};
+            use vol_session::{InMemorySessionStore, InMemoryMessageStore};
             Arc::new(vol_llm_agents::coding::Session::new(
                 "tui_memory".to_string(),
                 Arc::new(InMemorySessionStore::new()),
                 Arc::new(InMemoryMessageStore::new()),
             ))
         } else {
-            let session_id = format!("tui_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S"));
+            let session_id = format!("tui_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S%.3f"));
             let message_store = Arc::new(FileMessageStore::new(&session_dir, &session_id));
             let session_store = Arc::new(vol_session::InMemorySessionStore::new());
             let session = Arc::new(vol_llm_agents::coding::Session::new(
