@@ -329,8 +329,7 @@ pub fn run_cli_approval_loop(
     )>,
 ) {
     use std::io::{self, BufRead, Write};
-
-    const CONTINUE_SENTINEL: &str = "__continue__";
+    use super::run_context::CONTINUE_SENTINEL;
 
     std::thread::spawn(move || {
         let stdin = io::stdin();
