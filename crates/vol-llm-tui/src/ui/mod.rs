@@ -52,12 +52,13 @@ pub fn render_ui(frame: &mut Frame, state: &AppState) {
 }
 
 fn render_right_panel(frame: &mut Frame, area: Rect, state: &AppState) {
-    // Tab bar: 1 row at top
+    // Split into: tab bar (1) + content (flexible) + input area (5 rows)
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),  // tab bar
-            Constraint::Min(1),     // tab content
+            Constraint::Length(1),   // tab bar
+            Constraint::Min(3),      // tab content (conversation/workspace)
+            Constraint::Length(5),   // input area (4 rows textarea + 1 row hints)
         ])
         .split(area);
 
@@ -73,6 +74,9 @@ fn render_right_panel(frame: &mut Frame, area: Rect, state: &AppState) {
             render_workspace(frame, chunks[1], state);
         }
     }
+
+    // Render input area
+    render_input_area(frame, chunks[2], state);
 }
 
 fn render_tab_bar(frame: &mut Frame, area: Rect, state: &AppState) {
