@@ -1,11 +1,13 @@
 //! UI layout orchestration.
 
 mod conversation;
+mod input_area;
 mod status_bar;
 mod tools_panel;
 mod workspace_panel;
 
 pub use conversation::render_conversation;
+pub use input_area::render_input_area;
 pub use status_bar::render_status_bar;
 pub use tools_panel::render_tools_panel;
 pub use workspace_panel::render_workspace;
