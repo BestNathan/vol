@@ -14,6 +14,7 @@ use std::sync::Arc;
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, EventObserver, ObserverError};
 use vol_llm_core::AgentStreamEvent;
 use vol_llm_tool::{ToolConfig, ProxyConfig};
+use vol_session::FileMessageStore;
 
 fn print_colored(color: Color, text: &str) {
     let _ = execute!(io::stdout(), SetForegroundColor(color), Print(text), ResetColor);
@@ -68,6 +69,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     print_colored(Color::White, "Type /help for commands.\n");
     println!();
     print_help();
+
+    // Create persistent session for this TUI run
+    let session: Arc<vol_llm_agents::coding::Session> = {
+        let session_dir = std::env::current_dir()
+            .unwrap_or_default()
+            .join(".vol-sessions");
+        if let Err(e) = std::fs::create_dir_all(&session_dir) {
+            print_colored(Color::Yellow, &format!("Warning: cannot create session dir: {}\n", e));
+            print_colored(Color::Yellow, "Using in-memory session (no history persistence)\n");
+            use vol_llm_agent::session::{InMemorySessionStore, InMemoryMessageStore};
+            Arc::new(vol_llm_agents::coding::Session::new(
+                "tui_memory".to_string(),
+                Arc::new(InMemorySessionStore::new()),
+                Arc::new(InMemoryMessageStore::new()),
+            ))
+        } else {
+            let session_id = format!("tui_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S"));
+            let message_store = Arc::new(FileMessageStore::new(&session_dir, &session_id));
+            let session_store = Arc::new(vol_session::InMemorySessionStore::new());
+            let session = Arc::new(vol_llm_agents::coding::Session::new(
+                session_id.clone(),
+                session_store,
+                message_store,
+            ));
+            print_colored(Color::Green, &format!("Session: {}\n", session_id));
+            session
+        }
+    };
 
     // Main REPL loop
     let stdin = io::stdin();
@@ -128,6 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     hitl_enabled: true,
                     verbose: false,
                     html_report_path: None,
+                    session: Some(session.clone()),
                     tool_config,
                     ..Default::default()
                 };
