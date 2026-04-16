@@ -23,5 +23,8 @@ pub use sandbox::LocalSandbox;
 // Re-export ToolConfig so users can configure web tools
 pub use vol_llm_tool::ToolConfig;
 
+// Re-export Session so TUI can create it
+pub use vol_llm_agent::Session;
+
 #[cfg(test)]
 mod tests;

@@ -45,6 +45,10 @@ pub struct CodingAgentConfig {
 
     /// Tool configuration container (for web tools, etc.)
     pub tool_config: ToolConfig,
+
+    /// Shared session for conversation history across runs.
+    /// If provided, CodingAgent::run() reuses it instead of creating a new InMemory session.
+    pub session: Option<Arc<vol_llm_agent::Session>>,
 }
 
 impl std::fmt::Debug for CodingAgentConfig {
@@ -62,6 +66,7 @@ impl std::fmt::Debug for CodingAgentConfig {
             .field("html_report_path", &self.html_report_path)
             .field("plugin_registry", &"<PluginRegistry>")
             .field("tool_config", &self.tool_config)
+            .field("session", &"<Session>")
             .finish()
     }
 }
@@ -81,6 +86,7 @@ impl Default for CodingAgentConfig {
             llm: None,
             plugin_registry: PluginRegistry::new(),
             tool_config: ToolConfig::new(),
+            session: None,
         }
     }
 }

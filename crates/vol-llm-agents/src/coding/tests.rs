@@ -37,6 +37,28 @@ fn test_config_default() {
 }
 
 #[test]
+fn test_config_default_session_is_none() {
+    let config = CodingAgentConfig::default();
+    assert!(config.session.is_none());
+}
+
+#[test]
+fn test_config_with_session() {
+    use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore};
+    let session = Arc::new(vol_llm_agent::Session::new(
+        "test-session".to_string(),
+        Arc::new(InMemorySessionStore::new()),
+        Arc::new(InMemoryMessageStore::new()),
+    ));
+    let config = CodingAgentConfig {
+        session: Some(session.clone()),
+        ..Default::default()
+    };
+    assert!(config.session.is_some());
+    assert!(Arc::ptr_eq(config.session.as_ref().unwrap(), &session));
+}
+
+#[test]
 fn test_config_debug_impl() {
     let config = CodingAgentConfig::default();
     let debug_str = format!("{:?}", config);
