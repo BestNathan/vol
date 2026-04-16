@@ -11,7 +11,6 @@ pub struct EventBuffer {
     thinking_active: bool,
     thinking_buffer: String,
     content_buffer: String,
-    current_tool_call_seq: Option<u32>,
 }
 
 impl EventBuffer {
@@ -20,7 +19,6 @@ impl EventBuffer {
             thinking_active: false,
             thinking_buffer: String::new(),
             content_buffer: String::new(),
-            current_tool_call_seq: None,
         }
     }
 
@@ -36,8 +34,8 @@ impl EventBuffer {
 
             AgentStreamEvent::AgentComplete { response, .. } => {
                 // Flush any pending thinking/content
-                self.flush_thinking(state);
-                self.flush_content(state);
+                self.flush_thinking();
+                self.flush_content();
 
                 let elapsed = state.run_start
                     .map(|s| s.elapsed())
@@ -62,8 +60,8 @@ impl EventBuffer {
             }
 
             AgentStreamEvent::AgentAborted { reason, .. } => {
-                self.flush_thinking(state);
-                self.flush_content(state);
+                self.flush_thinking();
+                self.flush_content();
                 state.conversation.push(ConversationEntry::Error {
                     message: reason.clone(),
                 });
@@ -71,8 +69,8 @@ impl EventBuffer {
             }
 
             AgentStreamEvent::MaxIterationsReached { current_iteration, max_iterations, .. } => {
-                self.flush_thinking(state);
-                self.flush_content(state);
+                self.flush_thinking();
+                self.flush_content();
                 state.conversation.push(ConversationEntry::Error {
                     message: format!(
                         "Max iterations reached ({}/{}) — waiting for user decision...",
@@ -134,7 +132,6 @@ impl EventBuffer {
             AgentStreamEvent::ToolCallBegin { tool_name, arguments, .. } => {
                 let seq = state.tool_call_count + 1;
                 state.tool_call_count = seq;
-                self.current_tool_call_seq = Some(seq);
 
                 let arg_preview = extract_arg_preview(arguments);
                 state.tool_calls.push(ToolCallEntry {
@@ -192,13 +189,13 @@ impl EventBuffer {
                     text: answer.clone(),
                 });
                 // Flush content when iteration completes
-                self.flush_content(state);
+                self.flush_content();
             }
 
             AgentStreamEvent::IterationComplete { iteration, .. } => {
                 state.iteration = *iteration;
                 // Flush content when iteration completes
-                self.flush_content(state);
+                self.flush_content();
             }
 
             // Plugin events — invisible
@@ -213,7 +210,7 @@ impl EventBuffer {
         state.tools_scroll = state.tool_calls.len() as u16;
     }
 
-    fn flush_thinking(&mut self, _state: &mut AppState) {
+    fn flush_thinking(&mut self) {
         if self.thinking_active && !self.thinking_buffer.is_empty() {
             // Thinking is already accumulated via deltas, nothing extra needed
             self.thinking_buffer.clear();
@@ -221,7 +218,7 @@ impl EventBuffer {
         }
     }
 
-    fn flush_content(&mut self, _state: &mut AppState) {
+    fn flush_content(&mut self) {
         if !self.content_buffer.is_empty() {
             // Content is handled via ContentComplete, buffer is just a fallback
             self.content_buffer.clear();
@@ -259,8 +256,9 @@ impl EventBuffer {
 fn extract_arg_preview(arguments: &str) -> String {
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(arguments) {
         if let Some(cmd) = parsed.get("command").and_then(|v| v.as_str()) {
-            if cmd.len() > 80 {
-                return format!("Command: {}...", &cmd[..77]);
+            if cmd.chars().count() > 80 {
+                let truncated: String = cmd.chars().take(77).collect();
+                return format!("Command: {}...", truncated);
             }
             return format!("Command: {}", cmd);
         }
@@ -273,8 +271,9 @@ fn extract_arg_preview(arguments: &str) -> String {
         if let Some(url) = parsed.get("url").and_then(|v| v.as_str()) {
             return format!("URL: {}", url);
         }
-        if arguments.len() > 80 {
-            return format!("Args: {}...", &arguments[..77]);
+        if arguments.chars().count() > 80 {
+            let truncated: String = arguments.chars().take(77).collect();
+            return format!("Args: {}...", truncated);
         }
         return format!("Args: {}", arguments);
     }
@@ -283,14 +282,9 @@ fn extract_arg_preview(arguments: &str) -> String {
 
 fn truncate_preview(s: &str, max_chars: usize) -> String {
     let total_chars = s.chars().count();
-    let chars: Vec<char> = s.chars().take(max_chars).collect();
-    if chars.is_empty() {
-        return String::new();
+    if total_chars <= max_chars {
+        return s.to_string();
     }
-    let truncated: String = chars.into_iter().collect();
-    if truncated.chars().count() < total_chars {
-        format!("{}...", truncated)
-    } else {
-        truncated
-    }
+    let truncated: String = s.chars().take(max_chars).collect();
+    format!("{}...", truncated)
 }
