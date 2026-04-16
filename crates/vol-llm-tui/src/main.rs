@@ -3,6 +3,7 @@
 //! Provides a REPL loop with structured, deduplicated event rendering
 //! via EventBuffer.
 
+mod app;
 mod render;
 
 use crossterm::{
