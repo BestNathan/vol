@@ -1,100 +1,93 @@
-//! Stream event renderer — converts AgentStreamEvent to aligned terminal output.
+//! Event buffer that converts AgentStreamEvent into AppState mutations.
 //!
-//! Uses EventBuffer to track state and deduplicate redundant events:
-//! - ThinkingComplete is suppressed (thinking text already streamed)
-//! - AgentComplete renders a summary line, not just "Done."
-//! - Tool calls use column-aligned formatting
+//! Instead of printing directly, this maintains state that the ratatui
+//! render loop reads from AppState.
 
-use crossterm::{
-    style::{Color, Print, ResetColor, SetForegroundColor},
-    execute,
-};
-use std::io::{stdout, Write};
-use std::time::Duration;
-use vol_llm_agent::AgentStreamEvent;
+use crate::app::{AppState, ConversationEntry, ToolCallEntry, ToolCallStatus};
+use vol_llm_core::AgentStreamEvent;
 
 /// Stateful event buffer that tracks rendering state for deduplication.
 pub struct EventBuffer {
-    iteration: u32,
-    tool_call_count: u32,
-    run_start: Option<std::time::Instant>,
     thinking_active: bool,
+    thinking_buffer: String,
+    content_buffer: String,
+    current_tool_call_seq: Option<u32>,
 }
 
 impl EventBuffer {
     pub fn new() -> Self {
         Self {
-            iteration: 0,
-            tool_call_count: 0,
-            run_start: None,
             thinking_active: false,
+            thinking_buffer: String::new(),
+            content_buffer: String::new(),
+            current_tool_call_seq: None,
         }
     }
 
-    /// Start tracking a new agent run
-    pub fn start_run(&mut self) {
-        self.iteration = 0;
-        self.tool_call_count = 0;
-        self.run_start = Some(std::time::Instant::now());
-        self.thinking_active = false;
-    }
-
-    /// Get total elapsed time for the run
-    pub fn elapsed(&self) -> Duration {
-        self.run_start.map(|s| s.elapsed()).unwrap_or_default()
-    }
-
-    /// Render a single event with deduplication and alignment.
-    pub fn render(&mut self, event: &AgentStreamEvent) {
+    /// Process an event and mutate AppState accordingly.
+    pub fn apply(&mut self, event: &AgentStreamEvent, state: &mut AppState) {
         match event {
             AgentStreamEvent::AgentStart { input, .. } => {
-                self.start_run();
-                println!();
-                print_colored(Color::Cyan, &format!(">>> {}\n", input));
+                state.reset_for_run();
+                state.conversation.push(ConversationEntry::UserInput {
+                    text: input.clone(),
+                });
             }
 
             AgentStreamEvent::AgentComplete { response, .. } => {
-                let elapsed = self.elapsed();
-                println!();
-                print_colored(Color::Green, &format!(
-                    "Done · {} iteration{} · {} tool call{} · {:.0}ms\n",
-                    self.iteration,
-                    if self.iteration == 1 { "" } else { "s" },
-                    self.tool_call_count,
-                    if self.tool_call_count == 1 { "" } else { "s" },
-                    elapsed.as_millis(),
-                ));
-                // Print response content from the event payload
+                // Flush any pending thinking/content
+                self.flush_thinking(state);
+                self.flush_content(state);
+
+                let elapsed = state.run_start
+                    .map(|s| s.elapsed())
+                    .unwrap_or_default();
+                state.conversation.push(ConversationEntry::RunSummary {
+                    iterations: state.iteration,
+                    tool_calls: state.tool_call_count,
+                    elapsed_ms: elapsed.as_millis(),
+                });
+                state.is_running = false;
+
+                // Extract response content if available
                 if let Some(resp) = response {
                     if let Some(content) = resp.get("content").and_then(|v| v.as_str()) {
                         if !content.is_empty() {
-                            println!();
-                            print_colored(Color::White, content);
-                            println!();
+                            state.conversation.push(ConversationEntry::AgentAnswer {
+                                text: content.to_string(),
+                            });
                         }
                     }
                 }
             }
 
             AgentStreamEvent::AgentAborted { reason, .. } => {
-                println!();
-                print_colored(Color::Red, &format!("Aborted: {}\n", reason));
+                self.flush_thinking(state);
+                self.flush_content(state);
+                state.conversation.push(ConversationEntry::Error {
+                    message: reason.clone(),
+                });
+                state.is_running = false;
             }
 
             AgentStreamEvent::MaxIterationsReached { current_iteration, max_iterations, .. } => {
-                println!();
-                print_colored(Color::Yellow, &format!(
-                    "\u{26a0} Max iterations reached ({}/{}) — waiting for user decision...\n",
-                    current_iteration, max_iterations,
-                ));
+                self.flush_thinking(state);
+                self.flush_content(state);
+                state.conversation.push(ConversationEntry::Error {
+                    message: format!(
+                        "Max iterations reached ({}/{}) — waiting for user decision...",
+                        current_iteration, max_iterations,
+                    ),
+                });
             }
 
             AgentStreamEvent::IterationContinued { from_iteration, .. } => {
-                println!();
-                print_colored(Color::Green, &format!(
-                    ">>> Continuing from iteration {} (counter reset to 0)\n",
-                    from_iteration,
-                ));
+                state.conversation.push(ConversationEntry::AgentAnswer {
+                    text: format!(
+                        "Continuing from iteration {} (counter reset to 0)",
+                        from_iteration,
+                    ),
+                });
             }
 
             // LLM Call — meta events, not displayed
@@ -102,105 +95,163 @@ impl EventBuffer {
             | AgentStreamEvent::LLMCallComplete { .. }
             | AgentStreamEvent::LLMCallError { .. } => {}
 
-            // Thinking — stream inline, suppress ThinkingComplete
+            // Thinking — accumulate deltas
             AgentStreamEvent::ThinkingStart { .. } => {
                 self.thinking_active = true;
-                println!();
-                print_colored(Color::Yellow, "Thinking...\n");
+                self.thinking_buffer.clear();
+                state.conversation.push(ConversationEntry::ThinkingStart);
             }
 
             AgentStreamEvent::ThinkingDelta { delta, .. } => {
-                print_colored(Color::DarkGrey, delta);
+                self.thinking_buffer.push_str(delta);
+                state.conversation.push(ConversationEntry::ThinkingDelta {
+                    delta: delta.clone(),
+                });
             }
 
             AgentStreamEvent::ThinkingComplete { .. } => {
-                // Suppress — the delta text already showed the thinking
                 self.thinking_active = false;
             }
 
-            // Content — stream inline
+            // Content — accumulate deltas
             AgentStreamEvent::ContentStart { .. } => {
-                println!();
+                self.content_buffer.clear();
             }
 
             AgentStreamEvent::ContentDelta { delta, .. } => {
-                print_colored(Color::White, delta);
+                self.content_buffer.push_str(delta);
             }
 
-            AgentStreamEvent::ContentComplete { .. } => {
-                // No-op — content already streamed via deltas
+            AgentStreamEvent::ContentComplete { content, .. } => {
+                if !content.is_empty() {
+                    state.conversation.push(ConversationEntry::AgentAnswer {
+                        text: content.clone(),
+                    });
+                }
             }
 
-            // Tools — column-aligned format
+            // Tools
             AgentStreamEvent::ToolCallBegin { tool_name, arguments, .. } => {
-                self.tool_call_count += 1;
+                let seq = state.tool_call_count + 1;
+                state.tool_call_count = seq;
+                self.current_tool_call_seq = Some(seq);
+
                 let arg_preview = extract_arg_preview(arguments);
-                println!();
-                print_colored(Color::Blue, &format!(
-                    "{:<16} {}\n",
-                    format!("[{}]", tool_name),
+                state.tool_calls.push(ToolCallEntry {
+                    sequence: seq,
+                    tool_name: tool_name.clone(),
+                    arg_preview: arg_preview.clone(),
+                    status: ToolCallStatus::Running,
+                    duration_ms: None,
+                });
+                state.conversation.push(ConversationEntry::ToolCall {
+                    tool_name: tool_name.clone(),
                     arg_preview,
-                ));
+                });
             }
 
             AgentStreamEvent::ToolCallComplete { tool_name, result, duration_ms, .. } => {
-                let dur = duration_ms.map(|ms| format!("{}ms", ms))
-                    .unwrap_or_default();
-                print_colored(Color::Green, &format!(
-                    "  {:<14} {}\n",
-                    format!("OK {}", tool_name),
-                    dur,
-                ));
-                // Show truncated result preview
-                let total_chars = result.chars().count();
-                let chars: Vec<char> = result.chars().take(200).collect();
-                if !chars.is_empty() {
-                    let truncated: String = chars.into_iter().collect();
-                    let preview = if truncated.chars().count() < total_chars {
-                        format!("{}...", truncated)
-                    } else {
-                        truncated
-                    };
-                    for line in preview.lines().take(6) {
-                        print_colored(Color::DarkGrey, &format!("    {}\n", line));
+                self.update_tool_call_status(state, tool_name, ToolCallStatus::Success, *duration_ms);
+                let preview = truncate_preview(result, 200);
+                state.conversation.push(ConversationEntry::ToolResult {
+                    tool_name: tool_name.clone(),
+                    preview,
+                    success: true,
+                });
+
+                // Track modified files
+                if tool_name.contains("Write") || tool_name.contains("Edit") {
+                    if let Some(path) = self.extract_file_path_from_result(result) {
+                        state.modified_files.insert(path);
                     }
                 }
             }
 
-            AgentStreamEvent::ToolCallError { tool_name, error, .. } => {
-                println!();
-                print_colored(Color::Red, &format!(
-                    "  {:<14} {}\n",
-                    format!("[{}]", tool_name),
-                    error,
-                ));
+            AgentStreamEvent::ToolCallError { tool_name, error, duration_ms, .. } => {
+                self.update_tool_call_status(state, tool_name, ToolCallStatus::Error, *duration_ms);
+                state.conversation.push(ConversationEntry::ToolResult {
+                    tool_name: tool_name.clone(),
+                    preview: error.clone(),
+                    success: false,
+                });
             }
 
-            AgentStreamEvent::ToolCallSkipped { tool_name, reason, .. } => {
-                println!();
-                print_colored(Color::DarkGrey, &format!(
-                    "  {:<14} {}\n",
-                    format!("[{}]", tool_name),
-                    reason,
-                ));
+            AgentStreamEvent::ToolCallSkipped { tool_name, reason, duration_ms, .. } => {
+                self.update_tool_call_status(state, tool_name, ToolCallStatus::Skipped, *duration_ms);
+                state.conversation.push(ConversationEntry::ToolResult {
+                    tool_name: tool_name.clone(),
+                    preview: reason.clone(),
+                    success: false,
+                });
             }
 
-            // Iteration — show final answer only, skip bare iteration complete
+            // Iteration
             AgentStreamEvent::IterationComplete { final_answer: Some(answer), iteration, .. } => {
-                self.iteration = *iteration;
-                println!();
-                print_colored(Color::Green, &format!(">>> {}\n", answer));
+                state.iteration = *iteration;
+                state.conversation.push(ConversationEntry::AgentAnswer {
+                    text: answer.clone(),
+                });
+                // Flush content when iteration completes
+                self.flush_content(state);
             }
 
             AgentStreamEvent::IterationComplete { iteration, .. } => {
-                self.iteration = *iteration;
-                // Skip bare iteration complete — tool output already shows progress
+                state.iteration = *iteration;
+                // Flush content when iteration completes
+                self.flush_content(state);
             }
 
             // Plugin events — invisible
             AgentStreamEvent::PluginEvent { .. } => {}
         }
-        let _ = stdout().flush();
+
+        // Auto-scroll conversation to bottom on new content
+        if state.conversation_auto_scroll {
+            state.conversation_scroll = state.conversation.len() as u16;
+        }
+        // Auto-scroll tools panel to bottom
+        state.tools_scroll = state.tool_calls.len() as u16;
+    }
+
+    fn flush_thinking(&mut self, _state: &mut AppState) {
+        if self.thinking_active && !self.thinking_buffer.is_empty() {
+            // Thinking is already accumulated via deltas, nothing extra needed
+            self.thinking_buffer.clear();
+            self.thinking_active = false;
+        }
+    }
+
+    fn flush_content(&mut self, _state: &mut AppState) {
+        if !self.content_buffer.is_empty() {
+            // Content is handled via ContentComplete, buffer is just a fallback
+            self.content_buffer.clear();
+        }
+    }
+
+    fn update_tool_call_status(
+        &mut self,
+        state: &mut AppState,
+        tool_name: &str,
+        status: ToolCallStatus,
+        duration_ms: Option<u64>,
+    ) {
+        for entry in state.tool_calls.iter_mut().rev() {
+            if entry.tool_name == tool_name && matches!(entry.status, ToolCallStatus::Running) {
+                entry.status = status;
+                entry.duration_ms = duration_ms;
+                break;
+            }
+        }
+    }
+
+    fn extract_file_path_from_result(&self, result: &str) -> Option<String> {
+        // Try to extract file_path from JSON result
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(result) {
+            if let Some(path) = parsed.get("file_path").and_then(|v| v.as_str()) {
+                return Some(path.to_string());
+            }
+        }
+        None
     }
 }
 
@@ -230,6 +281,16 @@ fn extract_arg_preview(arguments: &str) -> String {
     String::new()
 }
 
-fn print_colored(color: Color, text: &str) {
-    let _ = execute!(stdout(), SetForegroundColor(color), Print(text), ResetColor);
+fn truncate_preview(s: &str, max_chars: usize) -> String {
+    let total_chars = s.chars().count();
+    let chars: Vec<char> = s.chars().take(max_chars).collect();
+    if chars.is_empty() {
+        return String::new();
+    }
+    let truncated: String = chars.into_iter().collect();
+    if truncated.chars().count() < total_chars {
+        format!("{}...", truncated)
+    } else {
+        truncated
+    }
 }

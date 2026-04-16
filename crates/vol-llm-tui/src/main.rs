@@ -6,11 +6,13 @@
 mod app;
 mod render;
 
+use crate::app::AppState;
 use crossterm::{
     style::{Color, Print, ResetColor, SetForegroundColor},
     execute,
 };
 use std::io::{self, BufRead, Write};
+use std::sync::Mutex;
 use std::sync::Arc;
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, EventObserver, ObserverError};
 use vol_llm_core::AgentStreamEvent;
@@ -31,16 +33,18 @@ fn print_help() {
     println!("Type any message to send to the agent.");
 }
 
-/// Observer that forwards events to EventBuffer for rendering.
+/// Observer that forwards events to EventBuffer which mutates AppState.
 struct TuiRenderer {
-    buffer: tokio::sync::Mutex<render::EventBuffer>,
+    buffer: Mutex<render::EventBuffer>,
+    state: Arc<Mutex<AppState>>,
 }
 
 #[async_trait::async_trait]
 impl EventObserver for TuiRenderer {
     async fn on_event(&self, event: &AgentStreamEvent) -> Result<(), ObserverError> {
-        let mut buf = self.buffer.lock().await;
-        buf.render(event);
+        let mut buf = self.buffer.lock().unwrap();
+        let mut state = self.state.lock().unwrap();
+        buf.apply(event, &mut state);
         Ok(())
     }
 
@@ -50,9 +54,10 @@ impl EventObserver for TuiRenderer {
 }
 
 impl TuiRenderer {
-    fn new() -> Self {
+    fn new(state: Arc<Mutex<AppState>>) -> Self {
         Self {
-            buffer: tokio::sync::Mutex::new(render::EventBuffer::new()),
+            buffer: Mutex::new(render::EventBuffer::new()),
+            state,
         }
     }
 }
@@ -171,8 +176,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 };
 
+                // Create AppState for this run
+                let working_dir = std::env::current_dir()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                let session_id = session.id.clone();
+                let state = Arc::new(Mutex::new(AppState::new(session_id, &working_dir)));
+
                 // Attach TUI renderer as observer
-                let renderer = Arc::new(TuiRenderer::new());
+                let renderer = Arc::new(TuiRenderer::new(state.clone()));
                 let agent = agent.with_observer(renderer.clone());
 
                 // Run agent — all events render via TuiRenderer -> EventBuffer
