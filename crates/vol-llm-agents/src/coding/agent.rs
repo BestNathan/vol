@@ -184,13 +184,18 @@ impl CodingAgent {
         let state = self.state.as_ref()
             .ok_or_else(|| CodingAgentError::Config("CodingAgent already consumed".to_string()))?;
 
-        // Create session for this run
-        use vol_llm_agent::session::{InMemorySessionStore, InMemoryMessageStore};
-        let session = Arc::new(Session::new(
-            format!("coding_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S")),
-            Arc::new(InMemorySessionStore::new()),
-            Arc::new(InMemoryMessageStore::new()),
-        ));
+        // Create session for this run — use shared session from config if available
+        let session = match &self.config.session {
+            Some(s) => s.clone(),
+            None => {
+                use vol_llm_agent::session::{InMemorySessionStore, InMemoryMessageStore};
+                Arc::new(Session::new(
+                    format!("coding_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S")),
+                    Arc::new(InMemorySessionStore::new()),
+                    Arc::new(InMemoryMessageStore::new()),
+                ))
+            }
+        };
 
         // Create ReActAgent with the plugin_registry that may have been modified by with_observer()
         // Note: We need to use the config's plugin_registry, not the agent_config's
