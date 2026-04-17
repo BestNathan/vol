@@ -15,9 +15,10 @@ use app::AppState;
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    event::{Event, EventStream, KeyCode, KeyEvent, KeyModifiers},
 };
+use futures::StreamExt;
 use ratatui::backend::CrosstermBackend;
-use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Terminal;
 use ratatui_textarea::TextArea;
 use render::EventBuffer;
@@ -142,19 +143,16 @@ async fn run_event_loop(
     session: Arc<vol_llm_agents::coding::Session>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut render_interval = tokio::time::interval(Duration::from_millis(33)); // ~30fps
+    let mut events = EventStream::new();
 
     loop {
         tokio::select! {
-            // Render tick
-            _ = render_interval.tick() => {
-                let state = state.lock().await;
-                terminal.draw(|f| ui::render_ui(f, &state))?;
-            }
+            // Input checked first — handles key presses immediately
+            biased;
 
-            // Event handling
-            event = poll_event() => {
-                match event {
-                    Some(Event::Key(key)) => {
+            maybe_event = events.next() => {
+                match maybe_event {
+                    Some(Ok(Event::Key(key))) => {
                         let key_action = {
                             let mut state = state.lock().await;
                             handle_key(key, &mut state)
@@ -166,7 +164,6 @@ async fn run_event_loop(
                                     state_guard.exiting
                                 };
                                 if is_exiting {
-                                    // Brief visual feedback before exit
                                     tokio::time::sleep(Duration::from_millis(100)).await;
                                 }
                                 return Ok(());
@@ -177,14 +174,17 @@ async fn run_event_loop(
                             KeyAction::None => {}
                         }
                     }
-                    Some(Event::Resize(_, _)) => {
+                    Some(Ok(Event::Resize(_, _))) => {
                         // Terminal resized — next render will adjust
-                    }
-                    None => {
-                        // No event, just continue (render tick will fire)
                     }
                     _ => {}
                 }
+            }
+
+            // Render on idle — only when no input is pending
+            _ = render_interval.tick() => {
+                let state = state.lock().await;
+                terminal.draw(|f| ui::render_ui(f, &state))?;
             }
         }
     }
@@ -261,17 +261,6 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
             KeyAction::None
         }
     }
-}
-
-/// Poll for a crossterm event with a short timeout.
-async fn poll_event() -> Option<Event> {
-    tokio::task::spawn_blocking(|| {
-        if event::poll(Duration::from_millis(100)).unwrap_or(false) {
-            event::read().ok()
-        } else {
-            None
-        }
-    }).await.unwrap_or(None)
 }
 
 fn spawn_agent(
