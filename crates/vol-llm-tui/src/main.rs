@@ -4,6 +4,7 @@
 //! tabbed conversation/workspace views, multi-line input, and persistent layout.
 
 mod app;
+mod approval;
 mod render;
 mod ui;
 
