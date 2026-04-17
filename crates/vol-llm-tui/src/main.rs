@@ -284,6 +284,19 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
             KeyAction::Exit
         }
 
+        // Unsafe mode toggle
+        (_, KeyCode::Char('u')) if key.modifiers == KeyModifiers::CONTROL => {
+            state.unsafe_mode = !state.unsafe_mode;
+            state.conversation.push(app::ConversationEntry::AgentAnswer {
+                text: if state.unsafe_mode {
+                    "Unsafe mode enabled — all tool approvals auto-approved".to_string()
+                } else {
+                    "Unsafe mode disabled — HITL approval required for dangerous tools".to_string()
+                },
+            });
+            KeyAction::None
+        }
+
         // All other keys: pass to textarea
         _ => {
             state.input.input(key);
