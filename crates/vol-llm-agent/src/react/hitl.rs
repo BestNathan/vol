@@ -6,6 +6,7 @@
 //! - Pluggable approval channel (HTTP, WebSocket, CLI, etc.)
 
 use async_trait::async_trait;
+use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 
@@ -114,7 +115,6 @@ impl Default for HitlConfig {
 use super::plugin::*;
 use super::plugin::PluginContext;
 use super::AgentStreamEvent;
-use std::sync::Arc;
 
 /// Human-in-the-Loop plugin
 pub struct HitlPlugin<C: ApprovalChannel> {
@@ -275,6 +275,76 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
             _ => {}
         }
     }
+}
+
+/// Type-erased approval handler for custom approval UIs (e.g., TUI).
+/// Implement this to provide a custom approval prompt mechanism.
+#[async_trait]
+pub trait ApprovalHandler: Send + Sync {
+    /// Request approval and wait for response.
+    /// Called by the agent loop when a tool requires human approval.
+    async fn request_approval(
+        &self,
+        request: super::run_context::ApprovalRequest,
+    ) -> Result<Option<super::run_context::ApprovalResponse>, ApprovalError>;
+}
+
+/// Cloneable wrapper for boxed ApprovalHandler trait objects.
+/// Uses Arc internally to enable Clone semantics.
+#[derive(Clone)]
+pub struct BoxedApprovalHandler {
+    inner: Arc<dyn ApprovalHandler + Send + Sync>,
+}
+
+impl BoxedApprovalHandler {
+    pub fn new<H: ApprovalHandler + Send + Sync + 'static>(handler: H) -> Self {
+        Self {
+            inner: Arc::new(handler),
+        }
+    }
+}
+
+impl From<Arc<dyn ApprovalHandler + Send + Sync>> for BoxedApprovalHandler {
+    fn from(inner: Arc<dyn ApprovalHandler + Send + Sync>) -> Self {
+        Self { inner }
+    }
+}
+
+#[async_trait]
+impl ApprovalHandler for BoxedApprovalHandler {
+    async fn request_approval(
+        &self,
+        request: super::run_context::ApprovalRequest,
+    ) -> Result<Option<super::run_context::ApprovalResponse>, ApprovalError> {
+        self.inner.request_approval(request).await
+    }
+}
+
+/// Spawn a background task that processes approval requests using the custom handler.
+pub fn spawn_custom_approval_handler(
+    mut rx: tokio::sync::mpsc::Receiver<(
+        super::run_context::ApprovalRequest,
+        tokio::sync::oneshot::Sender<super::run_context::ApprovalResponse>,
+    )>,
+    handler: BoxedApprovalHandler,
+) {
+    tokio::spawn(async move {
+        while let Some((request, response_tx)) = rx.recv().await {
+            match handler.request_approval(request).await {
+                Ok(Some(response)) => {
+                    let _ = response_tx.send(response);
+                }
+                Ok(None) => {
+                    // Timeout/no response — fail open
+                    let _ = response_tx.send(super::run_context::ApprovalResponse::approved());
+                }
+                Err(e) => {
+                    tracing::warn!("Custom approval handler error: {}", e);
+                    let _ = response_tx.send(super::run_context::ApprovalResponse::approved());
+                }
+            }
+        }
+    });
 }
 
 #[cfg(test)]
