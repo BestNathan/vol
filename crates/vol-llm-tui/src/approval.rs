@@ -90,8 +90,3 @@ impl ApprovalHandler for TuiApprovalHandler {
     }
 }
 
-/// Respond to a pending approval request from keyboard input.
-pub async fn respond_to_approval(state: &ApprovalState, approved: bool, reason: Option<String>) {
-    *state.response.lock().await = Some((approved, reason));
-    state.notify.notify_one();
-}

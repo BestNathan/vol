@@ -197,7 +197,35 @@ enum KeyAction {
     None,
 }
 
+fn respond_approval(approval_state: &crate::approval::ApprovalState, approved: bool, reason: Option<String>) {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(async {
+            *approval_state.response.lock().await = Some((approved, reason));
+            approval_state.notify.notify_one();
+        });
+    });
+}
+
 fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
+    // Handle approval response keys — highest priority
+    if state.approval_state.has_pending_approval() {
+        match key.code {
+            KeyCode::Char('a') | KeyCode::Char('A') => {
+                respond_approval(&state.approval_state, true, None);
+                return KeyAction::None;
+            }
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                respond_approval(&state.approval_state, false, Some("User rejected".to_string()));
+                return KeyAction::None;
+            }
+            KeyCode::Char('s') | KeyCode::Char('S') => {
+                respond_approval(&state.approval_state, false, Some("User stopped execution".to_string()));
+                return KeyAction::None;
+            }
+            _ => {}
+        }
+    }
+
     match (key.modifiers, key.code) {
         // Ctrl+Enter: send input
         (KeyModifiers::CONTROL, KeyCode::Enter) => {
@@ -270,10 +298,11 @@ fn spawn_agent(
     session: Arc<vol_llm_agents::coding::Session>,
 ) {
     tokio::spawn(async move {
-        // Set running flag
+        // Set running flag and clear approval state
         {
             let mut state = state.lock().await;
             state.is_running = true;
+            state.approval_state.clear().await;
         }
 
         // Configure tools
@@ -293,10 +322,27 @@ fn spawn_agent(
         }
 
         let working_dir = std::env::current_dir().unwrap_or_default();
+        let unsafe_mode = {
+            let state_guard = state.lock().await;
+            state_guard.unsafe_mode
+        };
+
+        // Get approval state for handler
+        let approval_state = {
+            let state_guard = state.lock().await;
+            state_guard.approval_state.clone()
+        };
+
         let config = CodingAgentConfig {
             max_iterations: 10,
             working_dir,
-            hitl_enabled: true,
+            hitl_enabled: !unsafe_mode,
+            unsafe_mode,
+            approval_handler: if !unsafe_mode {
+                Some(approval_state.into_handler())
+            } else {
+                None
+            },
             verbose: false,
             html_report_path: None,
             session: Some(session.clone()),

@@ -102,6 +102,10 @@ pub struct AppState {
     pub tools_scroll: u16,
     /// Whether conversation auto-scroll is enabled.
     pub conversation_auto_scroll: bool,
+    /// Whether unsafe mode is active (auto-approve all tool approvals).
+    pub unsafe_mode: bool,
+    /// Approval state shared with the TUI approval handler.
+    pub approval_state: crate::approval::ApprovalState,
     /// Last error message to display.
     pub last_error: Option<String>,
 }
@@ -127,6 +131,8 @@ impl AppState {
             workspace_scroll: 0,
             tools_scroll: 0,
             conversation_auto_scroll: true,
+            unsafe_mode: false,
+            approval_state: crate::approval::ApprovalState::new(),
             last_error: None,
         }
     }
