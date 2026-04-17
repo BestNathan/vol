@@ -27,6 +27,9 @@ pub fn render_conversation(frame: &mut Frame, area: Rect, state: &AppState) {
     let text = Text::from(lines);
     let paragraph = Paragraph::new(text);
     frame.render_widget(paragraph.scroll((state.conversation_scroll, 0)), inner);
+
+    // Render approval banner overlay (drawn on top of conversation content)
+    super::render_approval_banner(frame, inner, state);
 }
 
 fn build_conversation_lines<'a>(state: &'a AppState) -> Vec<Line<'a>> {

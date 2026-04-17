@@ -3,7 +3,7 @@
 use crate::app::AppState;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::text::{Line, Span};
 
@@ -44,7 +44,16 @@ pub fn render_input_area(frame: &mut Frame, area: Rect, state: &AppState) {
     frame.render_widget(&textarea_widget, inner);
 
     // Render shortcut hints
-    let hint = if state.is_running {
+    let hint = if state.approval_state.has_pending_approval() {
+        Line::from(vec![
+            Span::styled(" [A] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled("Approve  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" [R] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled("Reject  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" [S] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled("Stop", Style::default().fg(Color::DarkGray)),
+        ])
+    } else if state.is_running {
         Line::from(vec![
             Span::styled(
                 " Running... (input disabled) ",
