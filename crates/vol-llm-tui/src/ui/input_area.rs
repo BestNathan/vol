@@ -6,7 +6,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Paragraph};
 
 /// Render the input area at the bottom of the right panel.
 /// If approval is pending, renders an approval panel instead of the textarea.
@@ -79,7 +79,7 @@ fn render_textarea(frame: &mut Frame, area: Rect, state: &AppState) {
         ])
     };
 
-    let hint_paragraph = Paragraph::new(hint).wrap(Wrap { trim: false });
+    let hint_paragraph = Paragraph::new(hint);
     frame.render_widget(hint_paragraph, hint_area);
 }
 
@@ -99,7 +99,7 @@ fn render_approval_panel(frame: &mut Frame, area: Rect, state: &AppState) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(" Input ");
+        .title(" Approval ");
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -134,7 +134,7 @@ fn render_approval_panel(frame: &mut Frame, area: Rect, state: &AppState) {
         actions,
     ]);
 
-    let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(text);
     frame.render_widget(paragraph, inner);
 }
 

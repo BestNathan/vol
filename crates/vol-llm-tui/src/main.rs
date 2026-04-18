@@ -211,6 +211,8 @@ fn respond_approval(approval_state: &crate::approval::ApprovalState, approved: b
         tokio::runtime::Handle::current().block_on(async {
             *approval_state.response.lock().await = Some((approved, reason));
             approval_state.notify.notify_one();
+            // Clear approval state so UI restores the input box
+            approval_state.clear().await;
         });
     });
 }

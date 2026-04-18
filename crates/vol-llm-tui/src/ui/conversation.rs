@@ -4,7 +4,7 @@ use crate::app::{AppState, ConversationEntry};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::text::{Line, Span, Text};
 
 /// Render the conversation panel.
@@ -33,12 +33,38 @@ pub fn render_conversation(frame: &mut Frame, area: Rect, state: &AppState) {
         state.conversation_scroll
     };
     let text = Text::from(lines);
-    let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(text);
     frame.render_widget(paragraph.scroll((scroll, 0)), inner);
 
 }
 
+/// Wrap a line into multiple lines at `max_chars` boundary, breaking at word boundaries.
+fn wrap_line(text: &str, max_chars: usize) -> Vec<&str> {
+    if text.len() <= max_chars || max_chars == 0 {
+        return vec![text];
+    }
+    let mut lines = Vec::new();
+    let mut remaining = text;
+    while remaining.len() > max_chars {
+        // Find last space within max_chars
+        let split = remaining[..max_chars].rfind(' ').unwrap_or(max_chars);
+        if split == 0 {
+            // No space found, hard break
+            lines.push(&remaining[..max_chars]);
+            remaining = &remaining[max_chars..];
+        } else {
+            lines.push(&remaining[..split]);
+            remaining = &remaining[split + 1..];
+        }
+    }
+    if !remaining.is_empty() {
+        lines.push(remaining);
+    }
+    lines
+}
+
 fn build_conversation_lines<'a>(state: &'a AppState) -> Vec<Line<'a>> {
+    const WRAP_WIDTH: usize = 80;
     let mut lines = Vec::new();
 
     for entry in &state.conversation {
@@ -55,9 +81,11 @@ fn build_conversation_lines<'a>(state: &'a AppState) -> Vec<Line<'a>> {
                     Span::styled("Thinking", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
                 ]));
                 for line in content.lines() {
-                    lines.push(Line::from(vec![
-                        Span::styled(format!("  {}", line), Style::default().fg(Color::DarkGray)),
-                    ]));
+                    for wrapped in wrap_line(line, WRAP_WIDTH - 2) {
+                        lines.push(Line::from(vec![
+                            Span::styled(format!("  {}", wrapped), Style::default().fg(Color::DarkGray)),
+                        ]));
+                    }
                 }
                 lines.push(Line::raw(""));
             }
@@ -68,9 +96,11 @@ fn build_conversation_lines<'a>(state: &'a AppState) -> Vec<Line<'a>> {
                     ]));
                 } else {
                     for line in content.lines() {
-                        lines.push(Line::from(vec![
-                            Span::styled(line, Style::default().fg(Color::White)),
-                        ]));
+                        for wrapped in wrap_line(line, WRAP_WIDTH) {
+                            lines.push(Line::from(vec![
+                                Span::styled(wrapped, Style::default().fg(Color::White)),
+                            ]));
+                        }
                     }
                 }
             }
@@ -94,18 +124,22 @@ fn build_conversation_lines<'a>(state: &'a AppState) -> Vec<Line<'a>> {
                     ),
                 ]));
                 for line in preview.lines().take(6) {
-                    lines.push(Line::from(vec![
-                        Span::styled(format!("    {}", line), Style::default().fg(Color::DarkGray)),
-                    ]));
+                    for wrapped in wrap_line(line, WRAP_WIDTH - 4) {
+                        lines.push(Line::from(vec![
+                            Span::styled(format!("    {}", wrapped), Style::default().fg(Color::DarkGray)),
+                        ]));
+                    }
                 }
                 lines.push(Line::raw(""));
             }
             ConversationEntry::AgentAnswer { text } => {
                 lines.push(Line::raw(""));
                 for line in text.lines() {
-                    lines.push(Line::from(vec![
-                        Span::styled(line, Style::default().fg(Color::White)),
-                    ]));
+                    for wrapped in wrap_line(line, WRAP_WIDTH) {
+                        lines.push(Line::from(vec![
+                            Span::styled(wrapped, Style::default().fg(Color::White)),
+                        ]));
+                    }
                 }
                 lines.push(Line::raw(""));
             }
