@@ -62,7 +62,7 @@ pub fn render_input_area(frame: &mut Frame, area: Rect, state: &AppState) {
         ])
     } else if state.unsafe_mode {
         Line::from(vec![
-            Span::styled(" Ctrl+Enter ", Style::default().fg(Color::Blue)),
+            Span::styled(" Enter ", Style::default().fg(Color::Blue)),
             Span::styled("Send  ", Style::default().fg(Color::DarkGray)),
             Span::styled(" Ctrl+U ", Style::default().fg(Color::Yellow)),
             Span::styled("Unsafe  ", Style::default().fg(Color::DarkGray)),
@@ -71,8 +71,10 @@ pub fn render_input_area(frame: &mut Frame, area: Rect, state: &AppState) {
         ])
     } else {
         Line::from(vec![
-            Span::styled(" Ctrl+Enter ", Style::default().fg(Color::Blue)),
+            Span::styled(" Enter ", Style::default().fg(Color::Blue)),
             Span::styled("Send  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" Esc ", Style::default().fg(Color::Blue)),
+            Span::styled("Clear  ", Style::default().fg(Color::DarkGray)),
             Span::styled(" Ctrl+U ", Style::default().fg(Color::Yellow)),
             Span::styled("Unsafe  ", Style::default().fg(Color::DarkGray)),
             Span::styled(" Ctrl+Q ", Style::default().fg(Color::Red)),

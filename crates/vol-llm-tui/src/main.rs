@@ -197,6 +197,15 @@ enum KeyAction {
     None,
 }
 
+fn send_input(state: &mut AppState) -> KeyAction {
+    let input = state.input.lines().join("\n").trim().to_string();
+    if input.is_empty() {
+        return KeyAction::None;
+    }
+    state.input = TextArea::default();
+    KeyAction::Send(input)
+}
+
 fn respond_approval(approval_state: &crate::approval::ApprovalState, approved: bool, reason: Option<String>) {
     tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current().block_on(async {
@@ -227,17 +236,18 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
     }
 
     match (key.modifiers, key.code) {
-        // Ctrl+Enter: send input
-        (KeyModifiers::CONTROL, KeyCode::Enter) => {
+        // Alt+Enter: insert newline in multi-line input (check BEFORE plain Enter)
+        (KeyModifiers::ALT, KeyCode::Enter) => {
+            state.input.input(key);
+            KeyAction::None
+        }
+
+        // Enter: send input (most terminals don't distinguish Ctrl+Enter)
+        (_, KeyCode::Enter) => {
             if state.is_running {
                 return KeyAction::None;
             }
-            let input = state.input.lines().join("\n").trim().to_string();
-            if input.is_empty() {
-                return KeyAction::None;
-            }
-            state.input = TextArea::default();
-            KeyAction::Send(input)
+            send_input(state)
         }
 
         // Escape: clear input
