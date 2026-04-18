@@ -44,17 +44,17 @@ fn build_conversation_lines<'a>(state: &'a AppState) -> Vec<Line<'a>> {
                 ]));
                 lines.push(Line::raw(""));
             }
-            ConversationEntry::ThinkingStart => {
+            ConversationEntry::ThinkingComplete { content } => {
                 lines.push(Line::from(vec![
-                    Span::styled("Thinking...", Style::default().fg(Color::Yellow)),
+                    Span::styled("Thinking", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
                 ]));
-            }
-            ConversationEntry::ThinkingDelta { delta } => {
-                for line in delta.lines() {
+                // Render accumulated thinking as a single wrapped block
+                for line in content.lines() {
                     lines.push(Line::from(vec![
                         Span::styled(format!("  {}", line), Style::default().fg(Color::DarkGray)),
                     ]));
                 }
+                lines.push(Line::raw(""));
             }
             ConversationEntry::ToolCall { tool_name, arg_preview } => {
                 lines.push(Line::from(vec![

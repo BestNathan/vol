@@ -34,7 +34,7 @@ impl EventBuffer {
 
             AgentStreamEvent::AgentComplete { response, .. } => {
                 // Flush any pending thinking/content
-                self.flush_thinking();
+                self.flush_thinking(state);
                 self.flush_content();
 
                 let elapsed = state.run_start
@@ -60,7 +60,7 @@ impl EventBuffer {
             }
 
             AgentStreamEvent::AgentAborted { reason, .. } => {
-                self.flush_thinking();
+                self.flush_thinking(state);
                 self.flush_content();
                 state.conversation.push(ConversationEntry::Error {
                     message: reason.clone(),
@@ -69,7 +69,7 @@ impl EventBuffer {
             }
 
             AgentStreamEvent::MaxIterationsReached { current_iteration, max_iterations, .. } => {
-                self.flush_thinking();
+                self.flush_thinking(state);
                 self.flush_content();
                 state.conversation.push(ConversationEntry::Error {
                     message: format!(
@@ -93,22 +93,23 @@ impl EventBuffer {
             | AgentStreamEvent::LLMCallComplete { .. }
             | AgentStreamEvent::LLMCallError { .. } => {}
 
-            // Thinking — accumulate deltas
+            // Thinking — accumulate deltas, push single entry on complete
             AgentStreamEvent::ThinkingStart { .. } => {
                 self.thinking_active = true;
                 self.thinking_buffer.clear();
-                state.conversation.push(ConversationEntry::ThinkingStart);
             }
 
             AgentStreamEvent::ThinkingDelta { delta, .. } => {
                 self.thinking_buffer.push_str(delta);
-                state.conversation.push(ConversationEntry::ThinkingDelta {
-                    delta: delta.clone(),
-                });
             }
 
             AgentStreamEvent::ThinkingComplete { .. } => {
                 self.thinking_active = false;
+                if !self.thinking_buffer.is_empty() {
+                    state.conversation.push(ConversationEntry::ThinkingComplete {
+                        content: std::mem::take(&mut self.thinking_buffer),
+                    });
+                }
             }
 
             // Content — accumulate deltas
@@ -204,16 +205,18 @@ impl EventBuffer {
 
         // Auto-scroll conversation to bottom on new content
         if state.conversation_auto_scroll {
-            state.conversation_scroll = state.conversation.len() as u16;
+            let visual_lines = count_conversation_visual_lines(&state.conversation);
+            state.conversation_scroll = visual_lines;
         }
         // Auto-scroll tools panel to bottom
         state.tools_scroll = state.tool_calls.len() as u16;
     }
 
-    fn flush_thinking(&mut self) {
+    fn flush_thinking(&mut self, state: &mut AppState) {
         if self.thinking_active && !self.thinking_buffer.is_empty() {
-            // Thinking is already accumulated via deltas, nothing extra needed
-            self.thinking_buffer.clear();
+            state.conversation.push(ConversationEntry::ThinkingComplete {
+                content: std::mem::take(&mut self.thinking_buffer),
+            });
             self.thinking_active = false;
         }
     }
@@ -287,4 +290,26 @@ fn truncate_preview(s: &str, max_chars: usize) -> String {
     }
     let truncated: String = s.chars().take(max_chars).collect();
     format!("{}...", truncated)
+}
+
+/// Calculate how many visual lines all conversation entries will render as.
+/// This is needed because scroll offsets are in visual lines, not entry count.
+fn count_conversation_visual_lines(entries: &[crate::app::ConversationEntry]) -> u16 {
+    entries.iter().map(|e| match e {
+        crate::app::ConversationEntry::UserInput { text } => {
+            1 + text.lines().count() as u16 + 1  // header + text + blank
+        }
+        crate::app::ConversationEntry::ThinkingComplete { content } => {
+            1 + content.lines().count() as u16 + 1  // header + content + blank
+        }
+        crate::app::ConversationEntry::ToolCall { .. } => 1,
+        crate::app::ConversationEntry::ToolResult { preview, .. } => {
+            2 + preview.lines().take(6).count() as u16 + 1  // status + preview lines + blank
+        }
+        crate::app::ConversationEntry::AgentAnswer { text } => {
+            2 + text.lines().count() as u16  // blank + text + blank
+        }
+        crate::app::ConversationEntry::RunSummary { .. } => 1,
+        crate::app::ConversationEntry::Error { message } => 1 + message.lines().count() as u16,
+    }).sum()
 }
