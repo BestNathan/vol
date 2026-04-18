@@ -1,13 +1,10 @@
 //! UI layout orchestration.
 
-mod approval_banner;
 mod conversation;
 mod input_area;
 mod status_bar;
 mod tools_panel;
 mod workspace_panel;
-
-pub use approval_banner::render_approval_banner;
 
 pub use conversation::render_conversation;
 pub use input_area::render_input_area;
