@@ -41,10 +41,13 @@ impl ApprovalState {
     }
 
     /// Sync check if there's a pending approval request.
+    /// If the lock is currently held, that means the agent is actively
+    /// waiting for approval — treat it as pending.
     pub fn has_pending_approval(&self) -> bool {
-        self.tool_name.try_lock()
-            .map(|g| g.is_some())
-            .unwrap_or(false)
+        match self.tool_name.try_lock() {
+            Ok(guard) => guard.is_some(),
+            Err(_) => true, // lock held → agent is setting up approval → treat as pending
+        }
     }
 
     /// Clear the pending state after response is sent.
@@ -67,6 +70,8 @@ impl ApprovalHandler for TuiApprovalHandler {
         &self,
         request: ApprovalRequest,
     ) -> Result<Option<ApprovalResponse>, ApprovalError> {
+        tracing::info!(tool = %request.tool_name, reason = %request.reason, "TUI approval request received");
+
         // Store the pending request for UI display
         *self.state.tool_name.lock().await = Some(request.tool_name.clone());
         *self.state.reason.lock().await = Some(request.reason.clone());
