@@ -1,6 +1,7 @@
 //! TUI approval handler — shows approval requests in the ratatui UI.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{Mutex, Notify};
 use vol_llm_agent::react::{ApprovalHandler, ApprovalRequest, ApprovalResponse, BoxedApprovalHandler};
 use vol_llm_agent::react::hitl::ApprovalError;
@@ -18,16 +19,19 @@ pub struct ApprovalState {
     pub response: Arc<Mutex<Option<(bool, Option<String>)>>>,
     /// Notifier signaled when response is set by keyboard handler.
     pub notify: Arc<Notify>,
+    /// Shared unsafe_mode flag — checked at runtime in request_approval().
+    pub unsafe_mode: Arc<AtomicBool>,
 }
 
 impl ApprovalState {
-    pub fn new() -> Self {
+    pub fn new(unsafe_mode: bool) -> Self {
         Self {
             tool_name: Arc::new(Mutex::new(None)),
             reason: Arc::new(Mutex::new(None)),
             arguments: Arc::new(Mutex::new(None)),
             response: Arc::new(Mutex::new(None)),
             notify: Arc::new(Notify::new()),
+            unsafe_mode: Arc::new(AtomicBool::new(unsafe_mode)),
         }
     }
 
@@ -70,6 +74,11 @@ impl ApprovalHandler for TuiApprovalHandler {
         &self,
         request: ApprovalRequest,
     ) -> Result<Option<ApprovalResponse>, ApprovalError> {
+        // Check unsafe_mode at runtime — allows toggling mid-run
+        if self.state.unsafe_mode.load(Ordering::Relaxed) {
+            return Ok(Some(ApprovalResponse::approved()));
+        }
+
         tracing::info!(tool = %request.tool_name, reason = %request.reason, "TUI approval request received");
 
         // Store the pending request for UI display

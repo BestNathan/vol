@@ -309,6 +309,7 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
         // Unsafe mode toggle
         (_, KeyCode::Char('u')) if key.modifiers == KeyModifiers::CONTROL => {
             state.unsafe_mode = !state.unsafe_mode;
+            state.approval_state.unsafe_mode.store(state.unsafe_mode, std::sync::atomic::Ordering::Relaxed);
             state.conversation.push(app::ConversationEntry::AgentAnswer {
                 text: if state.unsafe_mode {
                     "Unsafe mode enabled — all tool approvals auto-approved".to_string()
@@ -362,22 +363,20 @@ fn spawn_agent(
             state_guard.unsafe_mode
         };
 
-        // Get approval state for handler
+        // Get approval state for handler — unsafe_mode is shared via AtomicBool
         let approval_state = {
             let state_guard = state.lock().await;
+            // Sync the atomic flag with the current AppState value
+            state_guard.approval_state.unsafe_mode.store(unsafe_mode, std::sync::atomic::Ordering::Relaxed);
             state_guard.approval_state.clone()
         };
 
         let config = CodingAgentConfig {
             max_iterations: 10,
             working_dir,
-            hitl_enabled: !unsafe_mode,
-            unsafe_mode,
-            approval_handler: if !unsafe_mode {
-                Some(approval_state.into_handler())
-            } else {
-                None
-            },
+            hitl_enabled: true, // always enabled — handler decides at runtime
+            unsafe_mode,       // passed for agent config, but handler uses shared atomic
+            approval_handler: Some(approval_state.into_handler()),
             verbose: false,
             html_report_path: None,
             session: Some(session.clone()),

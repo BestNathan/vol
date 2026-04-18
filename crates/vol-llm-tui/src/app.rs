@@ -132,7 +132,7 @@ impl AppState {
             tools_scroll: 0,
             conversation_auto_scroll: true,
             unsafe_mode: false,
-            approval_state: crate::approval::ApprovalState::new(),
+            approval_state: crate::approval::ApprovalState::new(false),
             last_error: None,
         }
     }
