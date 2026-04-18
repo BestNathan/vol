@@ -24,17 +24,25 @@ pub fn render_conversation(frame: &mut Frame, area: Rect, state: &AppState) {
     }
 
     let lines = build_conversation_lines(state);
-    let total_lines = lines.len() as u16;
-    let visible_height = inner.height;
+    let total_lines = lines.len();
+    let visible_height = inner.height as usize;
     let scroll = if state.conversation_scroll == u16::MAX {
-        // Auto-scroll to bottom: skip lines that don't fit in the visible area
+        // Auto-scroll to bottom
         total_lines.saturating_sub(visible_height)
     } else {
-        state.conversation_scroll
+        state.conversation_scroll as usize
     };
-    let text = Text::from(lines);
+
+    // Slice only the visible lines — don't rely on Paragraph::scroll() which
+    // shifts content position but doesn't clip, causing content to disappear.
+    let visible_lines = lines.into_iter()
+        .skip(scroll)
+        .take(visible_height)
+        .collect::<Vec<_>>();
+
+    let text = Text::from(visible_lines);
     let paragraph = Paragraph::new(text);
-    frame.render_widget(paragraph.scroll((scroll, 0)), inner);
+    frame.render_widget(paragraph, inner);
 
 }
 

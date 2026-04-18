@@ -271,7 +271,7 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
             KeyAction::None
         }
         (_, KeyCode::PageDown) => {
-            state.conversation_scroll += 10;
+            state.conversation_scroll = state.conversation_scroll.saturating_add(10);
             state.conversation_auto_scroll = false;
             KeyAction::None
         }
