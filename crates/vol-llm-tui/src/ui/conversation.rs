@@ -39,26 +39,35 @@ pub fn render_conversation(frame: &mut Frame, area: Rect, state: &AppState) {
 }
 
 /// Wrap a line into multiple lines at `max_chars` boundary, breaking at word boundaries.
-fn wrap_line(text: &str, max_chars: usize) -> Vec<&str> {
-    if text.len() <= max_chars || max_chars == 0 {
-        return vec![text];
+fn wrap_line(text: &str, max_chars: usize) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= max_chars || max_chars == 0 {
+        return vec![text.to_string()];
     }
     let mut lines = Vec::new();
-    let mut remaining = text;
-    while remaining.len() > max_chars {
-        // Find last space within max_chars
-        let split = remaining[..max_chars].rfind(' ').unwrap_or(max_chars);
-        if split == 0 {
-            // No space found, hard break
-            lines.push(&remaining[..max_chars]);
-            remaining = &remaining[max_chars..];
-        } else {
-            lines.push(&remaining[..split]);
-            remaining = &remaining[split + 1..];
+    let mut start = 0;
+    while start < chars.len() {
+        let end = start + max_chars;
+        if end >= chars.len() {
+            lines.push(chars[start..].iter().collect());
+            break;
         }
-    }
-    if !remaining.is_empty() {
-        lines.push(remaining);
+        // Find last space within range
+        let mut split = end;
+        for i in (start..end).rev() {
+            if chars[i] == ' ' {
+                split = i;
+                break;
+            }
+        }
+        if split == start || chars[start..end].iter().all(|&c| c != ' ') {
+            // No space found, hard break
+            lines.push(chars[start..end].iter().collect());
+            start = end;
+        } else {
+            lines.push(chars[start..split].iter().collect());
+            start = split + 1; // skip the space
+        }
     }
     lines
 }

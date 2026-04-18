@@ -158,8 +158,12 @@ fn extract_command_preview(arguments: &str) -> String {
 }
 
 fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() > max_len {
-        format!("{}...", &s[..max_len - 3])
+    if max_len < 3 {
+        return String::new();
+    }
+    let char_count = s.chars().count();
+    if char_count > max_len {
+        format!("{}...", s.chars().take(max_len - 3).collect::<String>())
     } else {
         s.to_string()
     }
