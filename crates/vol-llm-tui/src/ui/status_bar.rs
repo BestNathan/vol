@@ -4,7 +4,7 @@ use crate::app::AppState;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::Paragraph;
 
 /// Render the status bar.
 pub fn render_status_bar(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -40,11 +40,7 @@ pub fn render_status_bar(frame: &mut Frame, area: Rect, state: &AppState) {
     );
 
     let paragraph = Paragraph::new(text)
-        .style(Style::default().fg(Color::White).bg(Color::DarkGray))
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .title(" vol-llm-tui ")
-            .style(Style::default().fg(Color::Cyan)));
+        .style(Style::default().fg(Color::White).bg(Color::DarkGray));
 
     frame.render_widget(paragraph, area);
 }

@@ -27,7 +27,7 @@ pub fn render_ui(frame: &mut Frame, state: &AppState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // status bar
+            Constraint::Length(1),  // status bar
             Constraint::Min(1),     // remaining area
         ])
         .split(area);
