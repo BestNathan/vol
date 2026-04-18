@@ -26,24 +26,25 @@ pub fn render_conversation(frame: &mut Frame, area: Rect, state: &AppState) {
     let lines = build_conversation_lines(state);
     let total_lines = lines.len();
     let visible_height = inner.height as usize;
-    let scroll = if state.conversation_scroll == u16::MAX {
-        // Auto-scroll to bottom
+
+    // Calculate scroll offset
+    let scroll = if state.conversation_auto_scroll {
+        // Auto-scroll: show bottom of content
         total_lines.saturating_sub(visible_height)
     } else {
-        state.conversation_scroll as usize
+        // Manual scroll: use stored offset, clamped to content bounds
+        (state.conversation_scroll as usize).min(total_lines.saturating_sub(1))
     };
 
-    // Slice only the visible lines — don't rely on Paragraph::scroll() which
-    // shifts content position but doesn't clip, causing content to disappear.
-    let visible_lines = lines.into_iter()
+    // Slice only the visible lines to prevent overflow beyond widget bounds
+    let visible_lines: Vec<Line> = lines.into_iter()
         .skip(scroll)
         .take(visible_height)
-        .collect::<Vec<_>>();
+        .collect();
 
     let text = Text::from(visible_lines);
     let paragraph = Paragraph::new(text);
     frame.render_widget(paragraph, inner);
-
 }
 
 /// Wrap a line into multiple lines at `max_chars` boundary, breaking at word boundaries.

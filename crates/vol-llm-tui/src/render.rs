@@ -208,10 +208,9 @@ impl EventBuffer {
         }
 
         // Auto-scroll conversation to bottom on new content.
-        // We set scroll to a very large value to signal "scroll to bottom".
-        // The render layer interprets this and adjusts the actual offset.
         if state.conversation_auto_scroll {
-            state.conversation_scroll = u16::MAX;
+            // Scroll position will be computed by render layer based on auto_scroll flag
+            state.conversation_scroll = 0;
         }
         // Auto-scroll tools panel to bottom
         state.tools_scroll = state.tool_calls.len() as u16;
