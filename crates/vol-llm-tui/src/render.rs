@@ -203,10 +203,11 @@ impl EventBuffer {
             AgentStreamEvent::PluginEvent { .. } => {}
         }
 
-        // Auto-scroll conversation to bottom on new content
+        // Auto-scroll conversation to bottom on new content.
+        // We set scroll to a very large value to signal "scroll to bottom".
+        // The render layer interprets this and adjusts the actual offset.
         if state.conversation_auto_scroll {
-            let visual_lines = count_conversation_visual_lines(&state.conversation);
-            state.conversation_scroll = visual_lines;
+            state.conversation_scroll = u16::MAX;
         }
         // Auto-scroll tools panel to bottom
         state.tools_scroll = state.tool_calls.len() as u16;
@@ -290,26 +291,4 @@ fn truncate_preview(s: &str, max_chars: usize) -> String {
     }
     let truncated: String = s.chars().take(max_chars).collect();
     format!("{}...", truncated)
-}
-
-/// Calculate how many visual lines all conversation entries will render as.
-/// This is needed because scroll offsets are in visual lines, not entry count.
-fn count_conversation_visual_lines(entries: &[crate::app::ConversationEntry]) -> u16 {
-    entries.iter().map(|e| match e {
-        crate::app::ConversationEntry::UserInput { text } => {
-            1 + text.lines().count() as u16 + 1  // header + text + blank
-        }
-        crate::app::ConversationEntry::ThinkingComplete { content } => {
-            1 + content.lines().count() as u16 + 1  // header + content + blank
-        }
-        crate::app::ConversationEntry::ToolCall { .. } => 1,
-        crate::app::ConversationEntry::ToolResult { preview, .. } => {
-            2 + preview.lines().take(6).count() as u16 + 1  // status + preview lines + blank
-        }
-        crate::app::ConversationEntry::AgentAnswer { text } => {
-            2 + text.lines().count() as u16  // blank + text + blank
-        }
-        crate::app::ConversationEntry::RunSummary { .. } => 1,
-        crate::app::ConversationEntry::Error { message } => 1 + message.lines().count() as u16,
-    }).sum()
 }

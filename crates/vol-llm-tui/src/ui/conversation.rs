@@ -24,9 +24,17 @@ pub fn render_conversation(frame: &mut Frame, area: Rect, state: &AppState) {
     }
 
     let lines = build_conversation_lines(state);
+    let total_lines = lines.len() as u16;
+    let visible_height = inner.height;
+    let scroll = if state.conversation_scroll == u16::MAX {
+        // Auto-scroll to bottom: skip lines that don't fit in the visible area
+        total_lines.saturating_sub(visible_height)
+    } else {
+        state.conversation_scroll
+    };
     let text = Text::from(lines);
     let paragraph = Paragraph::new(text);
-    frame.render_widget(paragraph.scroll((state.conversation_scroll, 0)), inner);
+    frame.render_widget(paragraph.scroll((scroll, 0)), inner);
 
     // Render approval banner overlay (drawn on top of conversation content)
     super::render_approval_banner(frame, inner, state);
