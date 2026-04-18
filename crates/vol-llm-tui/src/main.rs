@@ -262,15 +262,25 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
             KeyAction::None
         }
 
-        // PageUp/PageDown: scroll conversation
+        // PageUp/PageDown: scroll conversation (10-line step)
         (_, KeyCode::PageUp) => {
-            if state.conversation_scroll > 0 {
-                state.conversation_scroll -= 1;
-                state.conversation_auto_scroll = false;
-            }
+            state.conversation_scroll = state.conversation_scroll.saturating_sub(10);
+            state.conversation_auto_scroll = false;
             KeyAction::None
         }
         (_, KeyCode::PageDown) => {
+            state.conversation_scroll += 10;
+            state.conversation_auto_scroll = false;
+            KeyAction::None
+        }
+
+        // Up/Down: scroll conversation (1-line step)
+        (_, KeyCode::Up) => {
+            state.conversation_scroll = state.conversation_scroll.saturating_sub(1);
+            state.conversation_auto_scroll = false;
+            KeyAction::None
+        }
+        (_, KeyCode::Down) => {
             state.conversation_scroll += 1;
             state.conversation_auto_scroll = false;
             KeyAction::None

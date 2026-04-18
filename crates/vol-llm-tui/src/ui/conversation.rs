@@ -4,7 +4,7 @@ use crate::app::{AppState, ConversationEntry};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::text::{Line, Span, Text};
 
 /// Render the conversation panel.
@@ -33,7 +33,7 @@ pub fn render_conversation(frame: &mut Frame, area: Rect, state: &AppState) {
         state.conversation_scroll
     };
     let text = Text::from(lines);
-    let paragraph = Paragraph::new(text);
+    let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
     frame.render_widget(paragraph.scroll((scroll, 0)), inner);
 
     // Render approval banner overlay (drawn on top of conversation content)
@@ -52,17 +52,29 @@ fn build_conversation_lines<'a>(state: &'a AppState) -> Vec<Line<'a>> {
                 ]));
                 lines.push(Line::raw(""));
             }
-            ConversationEntry::ThinkingComplete { content } => {
+            ConversationEntry::Thinking { content } => {
                 lines.push(Line::from(vec![
                     Span::styled("Thinking", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
                 ]));
-                // Render accumulated thinking as a single wrapped block
                 for line in content.lines() {
                     lines.push(Line::from(vec![
                         Span::styled(format!("  {}", line), Style::default().fg(Color::DarkGray)),
                     ]));
                 }
                 lines.push(Line::raw(""));
+            }
+            ConversationEntry::ContentStreaming { content } => {
+                if content.is_empty() {
+                    lines.push(Line::from(vec![
+                        Span::styled("Generating...", Style::default().fg(Color::DarkGray)),
+                    ]));
+                } else {
+                    for line in content.lines() {
+                        lines.push(Line::from(vec![
+                            Span::styled(line, Style::default().fg(Color::White)),
+                        ]));
+                    }
+                }
             }
             ConversationEntry::ToolCall { tool_name, arg_preview } => {
                 lines.push(Line::from(vec![

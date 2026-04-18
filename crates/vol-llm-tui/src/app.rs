@@ -26,7 +26,8 @@ pub enum ToolCallStatus {
 #[derive(Debug, Clone)]
 pub enum ConversationEntry {
     UserInput { text: String },
-    ThinkingComplete { content: String },
+    Thinking { content: String },
+    ContentStreaming { content: String },
     ToolCall { tool_name: String, arg_preview: String },
     ToolResult { tool_name: String, preview: String, success: bool },
     AgentAnswer { text: String },

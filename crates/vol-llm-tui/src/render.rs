@@ -32,7 +32,7 @@ impl EventBuffer {
                 });
             }
 
-            AgentStreamEvent::AgentComplete { response, .. } => {
+            AgentStreamEvent::AgentComplete { response: _, .. } => {
                 // Flush any pending thinking/content
                 self.flush_thinking(state);
                 self.flush_content();
@@ -46,17 +46,6 @@ impl EventBuffer {
                     elapsed_ms: elapsed.as_millis(),
                 });
                 state.is_running = false;
-
-                // Extract response content if available
-                if let Some(resp) = response {
-                    if let Some(content) = resp.get("content").and_then(|v| v.as_str()) {
-                        if !content.is_empty() {
-                            state.conversation.push(ConversationEntry::AgentAnswer {
-                                text: content.to_string(),
-                            });
-                        }
-                    }
-                }
             }
 
             AgentStreamEvent::AgentAborted { reason, .. } => {
@@ -93,36 +82,51 @@ impl EventBuffer {
             | AgentStreamEvent::LLMCallComplete { .. }
             | AgentStreamEvent::LLMCallError { .. } => {}
 
-            // Thinking — accumulate deltas, push single entry on complete
+            // Thinking — push empty entry on start, mutate last entry on delta
             AgentStreamEvent::ThinkingStart { .. } => {
                 self.thinking_active = true;
                 self.thinking_buffer.clear();
+                state.conversation.push(ConversationEntry::Thinking {
+                    content: String::new(),
+                });
             }
 
             AgentStreamEvent::ThinkingDelta { delta, .. } => {
-                self.thinking_buffer.push_str(delta);
+                // Append to last Thinking entry in-place
+                if let Some(ConversationEntry::Thinking { content }) = state.conversation.last_mut() {
+                    content.push_str(delta);
+                }
             }
 
             AgentStreamEvent::ThinkingComplete { .. } => {
                 self.thinking_active = false;
-                if !self.thinking_buffer.is_empty() {
-                    state.conversation.push(ConversationEntry::ThinkingComplete {
-                        content: std::mem::take(&mut self.thinking_buffer),
-                    });
-                }
+                // Content already streamed, no-op
             }
 
-            // Content — accumulate deltas
+            // Content — push empty streaming entry on start, mutate on delta
             AgentStreamEvent::ContentStart { .. } => {
                 self.content_buffer.clear();
+                state.conversation.push(ConversationEntry::ContentStreaming {
+                    content: String::new(),
+                });
             }
 
             AgentStreamEvent::ContentDelta { delta, .. } => {
-                self.content_buffer.push_str(delta);
+                // Append to last ContentStreaming entry in-place
+                if let Some(ConversationEntry::ContentStreaming { content }) = state.conversation.last_mut() {
+                    content.push_str(delta);
+                }
             }
 
             AgentStreamEvent::ContentComplete { content, .. } => {
-                if !content.is_empty() {
+                // Mutate last ContentStreaming to AgentAnswer (single source)
+                if let Some(ConversationEntry::ContentStreaming { .. }) = state.conversation.last() {
+                    let entry = state.conversation.last_mut().unwrap();
+                    *entry = ConversationEntry::AgentAnswer {
+                        text: content.clone(),
+                    };
+                } else if !content.is_empty() {
+                    // Fallback: no streaming entry was pushed
                     state.conversation.push(ConversationEntry::AgentAnswer {
                         text: content.clone(),
                     });
@@ -215,7 +219,7 @@ impl EventBuffer {
 
     fn flush_thinking(&mut self, state: &mut AppState) {
         if self.thinking_active && !self.thinking_buffer.is_empty() {
-            state.conversation.push(ConversationEntry::ThinkingComplete {
+            state.conversation.push(ConversationEntry::Thinking {
                 content: std::mem::take(&mut self.thinking_buffer),
             });
             self.thinking_active = false;
