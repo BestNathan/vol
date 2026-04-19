@@ -703,7 +703,15 @@ async fn consume_llm_stream(
             StreamEventData::ResponseStart { model: m } => {
                 model = m;
             }
-            _ => {}
+            StreamEventData::ToolCallArgumentDelta { tool_call_id, tool_name, delta } => {
+                run_ctx
+                    .emit(AgentStreamEvent::tool_call_argument_delta(
+                        tool_call_id.clone(),
+                        tool_name.clone(),
+                        delta.clone(),
+                    ))
+                    .await;
+            }
         }
     }
 
