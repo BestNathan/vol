@@ -167,6 +167,14 @@ pub enum AgentStreamEvent {
         duration_ms: Option<u64>,
     },
 
+    // === Tool Argument Streaming (1) ===
+    ToolCallArgumentDelta {
+        timestamp: chrono::DateTime<chrono::Utc>,
+        tool_call_id: String,
+        tool_name: String,
+        delta: String,
+    },
+
     // === Iteration (1) ===
     IterationComplete {
         timestamp: chrono::DateTime<chrono::Utc>,
@@ -240,6 +248,14 @@ impl AgentStreamEvent {
     }
     pub fn tool_call_skipped(tool_call_id: String, tool_name: String, reason: String, duration_ms: Option<u64>) -> Self {
         Self::ToolCallSkipped { timestamp: chrono::Utc::now(), tool_call_id, tool_name, reason, duration_ms }
+    }
+    pub fn tool_call_argument_delta(tool_call_id: String, tool_name: String, delta: String) -> Self {
+        Self::ToolCallArgumentDelta {
+            timestamp: chrono::Utc::now(),
+            tool_call_id,
+            tool_name,
+            delta,
+        }
     }
     pub fn iteration_complete(iteration: u32, tool_calls: Vec<ToolCall>, final_answer: Option<String>) -> Self {
         Self::IterationComplete { timestamp: chrono::Utc::now(), iteration, tool_calls, final_answer }
