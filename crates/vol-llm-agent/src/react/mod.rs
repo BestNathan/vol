@@ -44,8 +44,8 @@ pub mod stream;
 pub use agent::{AgentConfig, ReActAgent};
 pub use builder::AgentBuilder;
 pub use hitl::{
-    run_cli_approval_loop, ApprovalChannel, ApprovalTrigger, ApprovalType, HitlConfig,
-    TimeoutBehavior,
+    run_cli_approval_loop, spawn_custom_approval_handler, ApprovalChannel, ApprovalHandler,
+    ApprovalTrigger, ApprovalType, BoxedApprovalHandler, HitlConfig, TimeoutBehavior,
 };
 pub use plugin::{AgentPlugin, PluginContext, PluginDecision, PluginRegistry, PluginId};
 pub use plugin_stream::{

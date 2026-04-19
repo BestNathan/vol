@@ -27,6 +27,13 @@ pub struct AgentConfig {
     // Observability fields
     pub agent_id: String,
     pub log_base_path: PathBuf,
+
+    /// When true, skip all HITL approval checks and auto-approve dangerous tools.
+    pub unsafe_mode: bool,
+
+    /// Custom approval handler. If set, this replaces the default CLI handler.
+    /// Use this for TUI/HTTP-based approval flows.
+    pub approval_handler: Option<super::BoxedApprovalHandler>,
 }
 
 /// Generate a short random agent ID if not provided
@@ -54,6 +61,8 @@ impl Default for AgentConfig {
             plugin_registry: PluginRegistry::new(),
             agent_id: generate_agent_id(),
             log_base_path: PathBuf::from("logs/agents"),
+            unsafe_mode: false,
+            approval_handler: None,
         }
     }
 }
@@ -128,7 +137,7 @@ impl ReActAgent {
         let config = self.config.clone();
         let session = self.session.clone();
 
-        let (run_ctx, plugin_rx, approval_rx) = RunContext::new(
+        let (run_ctx, plugin_rx, mut approval_rx) = RunContext::new(
             run_id.clone(),
             user_input.to_string(),
             self.session.id.clone(),
@@ -147,8 +156,21 @@ impl ReActAgent {
             }
         });
 
-        // === Phase 1.6: Spawn CLI approval handler for HITL ===
-        super::run_cli_approval_loop(approval_rx);
+        // === Phase 1.6: Spawn approval handler for HITL ===
+        if self.config.unsafe_mode {
+            // Auto-approve all requests — no HITL intervention
+            tokio::spawn(async move {
+                while let Some((_request, tx)) = approval_rx.recv().await {
+                    let _ = tx.send(super::run_context::ApprovalResponse::approved());
+                }
+            });
+        } else if let Some(handler) = &self.config.approval_handler {
+            // Use custom approval handler (e.g., TUI)
+            super::spawn_custom_approval_handler(approval_rx, handler.clone());
+        } else {
+            // Default: CLI approval handler
+            super::run_cli_approval_loop(approval_rx);
+        }
 
         // === Phase 2: Initialize messages (call once before loop) ===
         run_ctx.init_messages().await?;
@@ -749,6 +771,8 @@ mod tests {
             plugin_registry: PluginRegistry::new(),
             agent_id: "custom_agent".to_string(),
             log_base_path: PathBuf::from("custom/logs"),
+            unsafe_mode: false,
+            approval_handler: None,
         };
         assert_eq!(config.max_history_messages, 50);
         assert_eq!(config.agent_id, "custom_agent");

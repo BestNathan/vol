@@ -201,6 +201,8 @@ impl CodingAgent {
         // Note: We need to use the config's plugin_registry, not the agent_config's
         let agent_config = AgentConfig {
             plugin_registry: self.config.plugin_registry.clone(),
+            unsafe_mode: self.config.unsafe_mode,
+            approval_handler: self.config.approval_handler.clone(),
             ..state.agent_config.clone()
         };
 
@@ -272,6 +274,16 @@ impl CodingAgentBuilder {
 
     pub fn hitl_enabled(mut self, enabled: bool) -> Self {
         self.config.hitl_enabled = enabled;
+        self
+    }
+
+    pub fn unsafe_mode(mut self, enabled: bool) -> Self {
+        self.config.unsafe_mode = enabled;
+        self
+    }
+
+    pub fn approval_handler(mut self, handler: vol_llm_agent::react::BoxedApprovalHandler) -> Self {
+        self.config.approval_handler = Some(handler);
         self
     }
 

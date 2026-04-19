@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use vol_llm_agent::react::PluginRegistry;
+use vol_llm_agent::react::{BoxedApprovalHandler, PluginRegistry};
 use vol_llm_tool::ToolConfig;
 
 /// Coding Agent configuration
@@ -49,6 +49,9 @@ pub struct CodingAgentConfig {
     /// Shared session for conversation history across runs.
     /// If provided, CodingAgent::run() reuses it instead of creating a new InMemory session.
     pub session: Option<Arc<vol_llm_agent::Session>>,
+
+    /// Custom approval handler for TUI/HTTP-based approval flows.
+    pub approval_handler: Option<BoxedApprovalHandler>,
 }
 
 impl std::fmt::Debug for CodingAgentConfig {
@@ -67,6 +70,7 @@ impl std::fmt::Debug for CodingAgentConfig {
             .field("plugin_registry", &"<PluginRegistry>")
             .field("tool_config", &self.tool_config)
             .field("session", &"<Session>")
+            .field("approval_handler", &"<ApprovalHandler>")
             .finish()
     }
 }
@@ -87,6 +91,7 @@ impl Default for CodingAgentConfig {
             plugin_registry: PluginRegistry::new(),
             tool_config: ToolConfig::new(),
             session: None,
+            approval_handler: None,
         }
     }
 }
