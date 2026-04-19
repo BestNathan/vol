@@ -28,6 +28,11 @@ pub enum StreamEventData {
 
     // Tool calls
     ToolCallComplete { tool_call: ToolCall },
+    ToolCallArgumentDelta {
+        tool_call_id: String,
+        tool_name: String,
+        delta: String,
+    },
 
     // Usage
     UsageUpdate { usage: TokenUsage },
