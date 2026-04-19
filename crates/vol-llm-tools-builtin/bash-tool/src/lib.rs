@@ -184,7 +184,7 @@ impl ExecutableTool for BashTool {
             let working_dir = params.working_dir.clone();
             let sandbox_root = context.sandbox.as_ref().map(|s| s.root_path().to_path_buf());
             move || -> Result<std::process::Output, String> {
-                let mut std_cmd = std::process::Command::new("sh");
+                let mut std_cmd = std::process::Command::new("bash");
                 std_cmd.arg("-c").arg(&command_str);
 
                 #[cfg(unix)]
