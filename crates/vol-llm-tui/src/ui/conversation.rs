@@ -23,7 +23,7 @@ pub fn render_conversation(frame: &mut Frame, area: Rect, state: &AppState) {
         return;
     }
 
-    let lines = build_conversation_lines(state);
+    let lines = build_conversation_lines(state, inner.width as usize);
     let total_lines = lines.len();
     let visible_height = inner.height as usize;
 
@@ -81,25 +81,32 @@ fn wrap_line(text: &str, max_chars: usize) -> Vec<String> {
     lines
 }
 
-fn build_conversation_lines<'a>(state: &'a AppState) -> Vec<Line<'a>> {
-    const WRAP_WIDTH: usize = 80;
+fn build_conversation_lines<'a>(state: &'a AppState, max_width: usize) -> Vec<Line<'a>> {
     let mut lines = Vec::new();
 
     for entry in &state.conversation {
         match entry {
             ConversationEntry::UserInput { text } => {
+                let wrap = max_width.saturating_sub(4); // ">>> "
                 lines.push(Line::from(vec![
                     Span::styled(">>> ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                    Span::styled(text.clone(), Style::default().fg(Color::White)),
                 ]));
+                for line in text.lines() {
+                    for wrapped in wrap_line(line, wrap) {
+                        lines.push(Line::from(vec![
+                            Span::styled(wrapped, Style::default().fg(Color::White)),
+                        ]));
+                    }
+                }
                 lines.push(Line::raw(""));
             }
             ConversationEntry::Thinking { content } => {
                 lines.push(Line::from(vec![
                     Span::styled("Thinking", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
                 ]));
+                let wrap = max_width.saturating_sub(2);
                 for line in content.lines() {
-                    for wrapped in wrap_line(line, WRAP_WIDTH - 2) {
+                    for wrapped in wrap_line(line, wrap) {
                         lines.push(Line::from(vec![
                             Span::styled(format!("  {}", wrapped), Style::default().fg(Color::DarkGray)),
                         ]));
@@ -114,7 +121,7 @@ fn build_conversation_lines<'a>(state: &'a AppState) -> Vec<Line<'a>> {
                     ]));
                 } else {
                     for line in content.lines() {
-                        for wrapped in wrap_line(line, WRAP_WIDTH) {
+                        for wrapped in wrap_line(line, max_width) {
                             lines.push(Line::from(vec![
                                 Span::styled(wrapped, Style::default().fg(Color::White)),
                             ]));
@@ -127,9 +134,11 @@ fn build_conversation_lines<'a>(state: &'a AppState) -> Vec<Line<'a>> {
                     Span::styled(format!("[{}]", tool_name), Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
                 ]));
                 if !arg_preview.is_empty() {
-                    lines.push(Line::from(vec![
-                        Span::styled(format!("  {}", arg_preview), Style::default().fg(Color::DarkGray)),
-                    ]));
+                    for wrapped in wrap_line(arg_preview, max_width.saturating_sub(2)) {
+                        lines.push(Line::from(vec![
+                            Span::styled(format!("  {}", wrapped), Style::default().fg(Color::DarkGray)),
+                        ]));
+                    }
                 }
             }
             ConversationEntry::ToolResult { tool_name, preview, success } => {
@@ -141,8 +150,9 @@ fn build_conversation_lines<'a>(state: &'a AppState) -> Vec<Line<'a>> {
                         Style::default().fg(color),
                     ),
                 ]));
+                let wrap = max_width.saturating_sub(4);
                 for line in preview.lines().take(6) {
-                    for wrapped in wrap_line(line, WRAP_WIDTH - 4) {
+                    for wrapped in wrap_line(line, wrap) {
                         lines.push(Line::from(vec![
                             Span::styled(format!("    {}", wrapped), Style::default().fg(Color::DarkGray)),
                         ]));
@@ -153,7 +163,7 @@ fn build_conversation_lines<'a>(state: &'a AppState) -> Vec<Line<'a>> {
             ConversationEntry::AgentAnswer { text } => {
                 lines.push(Line::raw(""));
                 for line in text.lines() {
-                    for wrapped in wrap_line(line, WRAP_WIDTH) {
+                    for wrapped in wrap_line(line, max_width) {
                         lines.push(Line::from(vec![
                             Span::styled(wrapped, Style::default().fg(Color::White)),
                         ]));
