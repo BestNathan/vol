@@ -185,6 +185,10 @@ impl EventBuffer {
                 ));
             }
 
+            AgentStreamEvent::ToolCallArgumentDelta { tool_name, delta, .. } => {
+                print_colored(Color::DarkGrey, &format!("\r  {:<14} {} bytes\r", format!("[{}] args...", tool_name), delta.len()));
+            }
+
             // Iteration — show final answer only, skip bare iteration complete
             AgentStreamEvent::IterationComplete { final_answer: Some(answer), iteration, .. } => {
                 self.iteration = *iteration;
