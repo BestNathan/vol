@@ -8,9 +8,11 @@ use ratatui::widgets::Paragraph;
 
 /// Render the status bar.
 pub fn render_status_bar(frame: &mut Frame, area: Rect, state: &AppState) {
-    let elapsed = state.run_start
-        .map(|s| s.elapsed())
-        .unwrap_or_default();
+    let elapsed = if state.is_running {
+        state.run_start.map(|s| s.elapsed()).unwrap_or_default()
+    } else {
+        state.run_elapsed
+    };
     let elapsed_secs = elapsed.as_secs();
     let time_str = format!("{:02}:{:02}", elapsed_secs / 60, elapsed_secs % 60);
 

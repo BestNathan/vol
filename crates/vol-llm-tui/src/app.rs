@@ -78,6 +78,8 @@ pub struct AppState {
     pub tool_call_count: u32,
     /// When the current run started.
     pub run_start: Option<Instant>,
+    /// Frozen elapsed time from the last completed run (used when idle).
+    pub run_elapsed: std::time::Duration,
     /// Whether an agent run is in progress.
     pub is_running: bool,
     /// Whether the app is in the process of exiting.
@@ -119,6 +121,7 @@ impl AppState {
             iteration: 0,
             tool_call_count: 0,
             run_start: None,
+            run_elapsed: std::time::Duration::ZERO,
             is_running: false,
             exiting: false,
             conversation: Vec::new(),
@@ -142,6 +145,7 @@ impl AppState {
         self.iteration = 0;
         self.tool_call_count = 0;
         self.run_start = Some(Instant::now());
+        self.run_elapsed = std::time::Duration::ZERO;
         self.tool_calls.clear();
         self.modified_files.clear();
         self.tools_scroll = 0;

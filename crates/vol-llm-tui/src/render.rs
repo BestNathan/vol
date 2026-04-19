@@ -40,6 +40,7 @@ impl EventBuffer {
                 let elapsed = state.run_start
                     .map(|s| s.elapsed())
                     .unwrap_or_default();
+                state.run_elapsed = elapsed;
                 state.conversation.push(ConversationEntry::RunSummary {
                     iterations: state.iteration,
                     tool_calls: state.tool_call_count,
@@ -51,6 +52,10 @@ impl EventBuffer {
             AgentStreamEvent::AgentAborted { reason, .. } => {
                 self.flush_thinking(state);
                 self.flush_content();
+                let elapsed = state.run_start
+                    .map(|s| s.elapsed())
+                    .unwrap_or_default();
+                state.run_elapsed = elapsed;
                 state.conversation.push(ConversationEntry::Error {
                     message: reason.clone(),
                 });
