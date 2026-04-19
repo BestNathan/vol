@@ -96,6 +96,9 @@ impl HTMLReporter {
                 AgentStreamEvent::ToolCallSkipped { tool_name, reason, .. } => {
                     ("", format!("Tool {} skipped: {}", tool_name, reason))
                 }
+                AgentStreamEvent::ToolCallArgumentDelta { tool_name, delta, .. } => {
+                    ("tool", format!("→ {} argument delta: {}", tool_name, delta))
+                }
                 AgentStreamEvent::IterationComplete { iteration, tool_calls, final_answer, .. } => {
                     ("", format!("Iteration {} complete{}{}",
                         iteration,
@@ -157,6 +160,7 @@ impl HTMLReporter {
             AgentStreamEvent::ToolCallComplete { .. } => "Tool Result",
             AgentStreamEvent::ToolCallError { .. } => "Tool Error",
             AgentStreamEvent::ToolCallSkipped { .. } => "Tool Skipped",
+            AgentStreamEvent::ToolCallArgumentDelta { .. } => "Tool Argument Delta",
             AgentStreamEvent::IterationComplete { .. } => "Iteration",
             AgentStreamEvent::AgentComplete { .. } => "Complete",
             AgentStreamEvent::AgentAborted { .. } => "Aborted",

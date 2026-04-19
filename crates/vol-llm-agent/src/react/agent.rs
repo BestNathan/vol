@@ -712,6 +712,9 @@ async fn consume_llm_stream(
                     ))
                     .await;
             }
+            StreamEventData::Error { code, message } => {
+                tracing::warn!(%code, %message, "Stream error event received");
+            }
         }
     }
 

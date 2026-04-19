@@ -101,6 +101,9 @@ impl ObservabilityPlugin {
             AgentStreamEvent::ToolCallSkipped { tool_call_id, tool_name, reason, duration_ms, .. } => {
                 json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "reason": reason, "duration_ms": duration_ms })
             }
+            AgentStreamEvent::ToolCallArgumentDelta { tool_call_id, tool_name, delta, .. } => {
+                json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "delta": delta })
+            }
             AgentStreamEvent::IterationComplete { iteration, tool_calls, final_answer, .. } => {
                 let tc: Vec<Value> = tool_calls.iter().map(|tc| {
                     json!({
@@ -165,6 +168,7 @@ fn event_name(event: &AgentStreamEvent) -> String {
         AgentStreamEvent::ToolCallComplete { .. } => "ToolCallComplete".to_string(),
         AgentStreamEvent::ToolCallError { .. } => "ToolCallError".to_string(),
         AgentStreamEvent::ToolCallSkipped { .. } => "ToolCallSkipped".to_string(),
+        AgentStreamEvent::ToolCallArgumentDelta { .. } => "ToolCallArgumentDelta".to_string(),
         AgentStreamEvent::IterationComplete { .. } => "IterationComplete".to_string(),
         AgentStreamEvent::PluginEvent { .. } => "PluginEvent".to_string(),
         AgentStreamEvent::MaxIterationsReached { .. } => "MaxIterationsReached".to_string(),

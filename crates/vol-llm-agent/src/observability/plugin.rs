@@ -83,6 +83,7 @@ impl ObservabilityPlugin {
             AgentStreamEvent::ContentComplete { .. } => ("ContentComplete", json!({})),
             AgentStreamEvent::ToolCallError { .. } => ("ToolCallError", json!({})),
             AgentStreamEvent::ToolCallSkipped { .. } => ("ToolCallSkipped", json!({})),
+            AgentStreamEvent::ToolCallArgumentDelta { .. } => ("ToolCallArgumentDelta", json!({})),
             AgentStreamEvent::MaxIterationsReached { current_iteration, max_iterations, .. } => {
                 ("MaxIterationsReached", json!({ "current_iteration": current_iteration, "max_iterations": max_iterations }))
             }
