@@ -19,7 +19,7 @@ source .env && ./target/release/vol-monitor --config config.dev.toml
 
 ```
 nq-deribit/
-├── crates/                          # 22 workspace crates
+├── crates/                          # 24 workspace crates
 │   │
 │   ├── === Monitoring System ===
 │   ├── vol-core/                    # Shared traits & data models
@@ -42,8 +42,10 @@ nq-deribit/
 │   ├── vol-llm-agent/               # ReAct Agent core: plugin system, HITL, observability, RAG, embeddings
 │   ├── vol-llm-agents/              # Specialized agents: CodingAgent, AdviceAgent, QaAgent, PptAgent
 │   ├── vol-llm-tools-builtin/       # Built-in tools: read, write, edit, bash, glob, grep, web_fetch, web_search
-│   ├── vol-llm-tui/                 # Interactive CLI REPL for coding agent sessions
+│   ├── vol-llm-tui/                 # Full-screen TUI with ratatui: tabs, conversation, workspace, HITL approval
 │   ├── vol-llm-tdengine/            # TDengine tools for LLM agent queries
+│   ├── vol-llm-observability/       # Agent observability: RunLogLogger, observability plugin
+│   ├── vol-llm-memory/              # Cross-session memory: Store/Retriever traits, MemoryManager
 │   ├── vol-session/                 # Session management & message persistence (JSONL)
 │   │
 │   └── ppt-agent/                   # PPT generation agent (uses lark-whiteboard)
@@ -85,7 +87,9 @@ Deribit WebSocket → DataSource → mpsc → MonitoringEngine → Rules → Not
 | `vol-llm-agent` | ReAct Agent loop, plugin system, HITL approval, observability, session management |
 | `vol-llm-agents` | Specialized agents: `CodingAgent`, `AdviceAgent`, `QaAgent`, `PptAgent` |
 | `vol-llm-tools-builtin` | Built-in tools: read, write, edit, bash, glob, grep, web_fetch, web_search |
-| `vol-llm-tui` | Interactive CLI REPL with colored streaming output |
+| `vol-llm-tui` | Full-screen ratatui TUI with Conversation/Workspace tabs, input area, status bar, HITL approval, unsafe mode |
+| `vol-llm-memory` | Cross-session memory: `MemoryStore`/`MemoryRetriever` traits, `InMemoryStore`, `KeywordRetriever`, `MemoryManager` |
+| `vol-llm-observability` | Agent observability: `RunLogLogger`, `ObservabilityPlugin` for structured run logs |
 | `vol-session` | Session lifecycle, `SessionListener`, `FileMessageStore` (JSONL persistence) |
 
 **Agent Data Flow:**
@@ -107,6 +111,7 @@ User Input → ReActAgent.run() → LLM → Tool Call → Sandbox → Tool Execu
 - Plugin flow intervention: `intercept()` before tool execution, `listen()` after events
 - HITL approval via dedicated approval channel in `RunContext`
 - Session persistence in JSONL format via `FileMessageStore`
+- Layered memory architecture: `MemoryStore` (CRUD trait) and `MemoryRetriever` (relevance search trait) are separate, allowing swappable implementations
 
 See [docs/architecture/](docs/architecture/) for monitoring architecture and [docs/ai-agent/](docs/ai-agent/) for LLM agent documentation.
 
@@ -231,14 +236,35 @@ NO_PROXY="localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,kubernetes.default.svc,*
 
 **5. LLM Agent TUI**
 
-The `vol-llm-tui` crate provides an interactive CLI REPL for coding agent sessions:
+The `vol-llm-tui` crate provides a full-screen ratatui-based interface for coding agent sessions:
 
 ```bash
 cargo build -p vol-llm-tui
 source .env && ./target/debug/vol-llm-tui
 ```
 
-Commands: `/quit`, `/exit`, `/help`, `/clear`. Requires `ANTHROPIC_AUTH_TOKEN`.
+Features:
+- **Conversation tab**: Scrollable message view with color-coded events (user input, thinking, tool calls, results, agent answers)
+- **Workspace tab**: File browser for exploring project files
+- **Input area**: Multi-line text input with Ctrl+Enter to submit
+- **HITL approval**: Dangerous tool calls (e.g., bash commands) trigger inline approval prompts
+- **Unsafe mode** (Ctrl+U): Toggle to auto-approve all tool calls
+- **Status bar**: Shows agent state (Idle/Running/Waiting for approval), time, crate count
+
+Commands: `/quit`, `/exit`, `/help`, `/clear`, `/unsafe`. Requires `ANTHROPIC_AUTH_TOKEN`.
+
+**6. Agent Memory System**
+
+The `vol-llm-memory` crate provides cross-session memory for agents. `MemoryManager` is optional in `AgentConfig`:
+
+```rust
+pub struct AgentConfig {
+    // ... existing fields ...
+    pub memory: Option<Arc<MemoryManager>>,
+}
+```
+
+When present, the agent can inject relevant memories at session startup (e.g., user preferences, project facts, past experiences) into the system prompt. Memory extraction from sessions (`summarize_session`) is currently a stub — LLM-based extraction is not yet implemented.
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for full configuration guide.
 
@@ -263,3 +289,22 @@ kubectl create secret generic vol-monitor-secrets \
 ```
 
 See [docs/deployment/k8s-deployment.md](docs/deployment/k8s-deployment.md) for complete deployment guide.
+
+## Convension
+
+### Feishu(lark)
+
+- **Wiki SpaceID** for this project is **7630485291026910436**
+- after *spec* or *plan* create, upload the doc to project wiki
+
+#### Commands
+
+```bash
+
+# create wiki doc
+lark-cli docs +create \
+    --title "{title}" \
+    --markdown "$(cat path/to/markdown.md)" \
+    --wiki-space "{wiki space id}" \
+    --as user
+```
