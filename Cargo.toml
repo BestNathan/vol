@@ -26,6 +26,7 @@ members = [
     "crates/vol-llm-observability",
     "crates/vol-llm-memory",
     "crates/vol-llm-skill",
+    "crates/vol-llm-context",
 ]
 
 [workspace.package]
@@ -106,3 +107,4 @@ vol-session = { path = "crates/vol-session" }
 vol-llm-observability = { path = "crates/vol-llm-observability" }
 vol-llm-memory = { path = "crates/vol-llm-memory" }
 vol-llm-skill = { path = "crates/vol-llm-skill" }
+vol-llm-context = { path = "crates/vol-llm-context" }

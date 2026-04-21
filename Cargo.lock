@@ -4096,6 +4096,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "vol-llm-context"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "vol-llm-core",
+ "vol-llm-memory",
+ "vol-llm-skill",
+]
+
+[[package]]
 name = "vol-llm-core"
 version = "0.1.0"
 dependencies = [
