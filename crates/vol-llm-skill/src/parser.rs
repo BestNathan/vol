@@ -112,3 +112,60 @@ fn collect_files_recursive(path: &Path, root: &Path, files: &mut Vec<String>) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_skill_with_frontmatter() {
+        let content = "---
+name: rust-conventions
+version: 1.0.0
+description: Rust coding conventions
+triggers: [rust, conventions]
+---
+
+# Rust Conventions
+
+When writing code:
+- Use snake_case for functions.
+";
+        let result = parse_skill_content(content).unwrap();
+        assert_eq!(result.name, "rust-conventions");
+        assert_eq!(result.version, "1.0.0");
+        assert_eq!(result.description, "Rust coding conventions");
+        assert_eq!(result.triggers, vec!["rust", "conventions"]);
+        assert!(result.body.contains("# Rust Conventions"));
+    }
+
+    #[test]
+    fn test_parse_skill_without_frontmatter() {
+        let content = "# Plain Skill\n\nJust markdown, no frontmatter.";
+        let result = parse_skill_content(content).unwrap();
+        assert_eq!(result.name, "default");
+        assert_eq!(result.version, "1.0.0");
+        assert!(result.body.contains("# Plain Skill"));
+    }
+
+    #[test]
+    fn test_parse_invalid_frontmatter() {
+        let content = "---\ninvalid: yaml: : :\n---\nbody";
+        let result = parse_skill_content(content).unwrap();
+        // Should fail to parse frontmatter, treated as no frontmatter
+        assert_eq!(result.name, "default");
+        assert!(result.body.contains("invalid: yaml:"));
+    }
+
+    #[test]
+    fn test_scan_files() {
+        let files = vec![
+            "SKILL.md".to_string(),
+            "scripts/format.sh".to_string(),
+            "references/style.md".to_string(),
+        ];
+        let filtered = filter_skill_files(&files);
+        assert!(filtered.contains(&"SKILL.md".to_string()));
+        assert!(filtered.contains(&"scripts/format.sh".to_string()));
+    }
+}

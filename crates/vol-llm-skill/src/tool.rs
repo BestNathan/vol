@@ -122,3 +122,40 @@ impl ExecutableTool for SkillTool {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::def::SkillDef;
+
+    #[tokio::test]
+    async fn test_skill_tool_execute() {
+        let loader = SkillLoader::new(None);
+        let mut skill = SkillDef::new("test-skill", "# Test Skill\n\nThis is a test.")
+            .with_description("A test skill")
+            .with_version("1.0.0")
+            .with_triggers(vec!["test".to_string()])
+            .with_file_listing(vec!["SKILL.md".to_string()]);
+        skill.id = "code:test-skill".to_string();
+        loader.register(skill).await;
+
+        let tool = SkillTool::new(Arc::new(loader));
+        let args = serde_json::json!({ "name": "test-skill" });
+        let result = tool.execute(&args, &ToolContext::default()).await;
+        assert!(result.is_ok());
+        let content = result.unwrap().content;
+        assert!(content.contains("=== SKILL: test-skill"));
+        assert!(content.contains("# Test Skill"));
+    }
+
+    #[tokio::test]
+    async fn test_skill_tool_not_found() {
+        let loader = SkillLoader::new(None);
+        let tool = SkillTool::new(Arc::new(loader));
+        let args = serde_json::json!({ "name": "nonexistent" });
+        let result = tool.execute(&args, &ToolContext::default()).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("not found"));
+    }
+}

@@ -16,6 +16,15 @@ pub struct SkillLoader {
 }
 
 impl SkillLoader {
+    /// Creates a loader with no default roots (useful for tests).
+    pub fn new_empty() -> Self {
+        Self {
+            roots: Vec::new(),
+            skills: Arc::new(RwLock::new(HashMap::new())),
+            metadata_cache: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+
     /// Creates a loader with default roots.
     ///
     /// Default roots:
@@ -166,5 +175,92 @@ impl SkillLoader {
         let metadata: Vec<SkillMetadata> = guard.values().map(|d| d.as_ref().into()).collect();
         drop(guard);
         *self.metadata_cache.write().await = metadata;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[tokio::test]
+    async fn test_discover_skills_from_temp_dir() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let skills_dir = temp_dir.path().join(".agents").join("skills");
+        std::fs::create_dir_all(&skills_dir).unwrap();
+
+        // Create a valid skill
+        let rust_dir = skills_dir.join("rust-conventions");
+        std::fs::create_dir_all(&rust_dir).unwrap();
+        let mut f = std::fs::File::create(rust_dir.join("SKILL.md")).unwrap();
+        writeln!(f, "---").unwrap();
+        writeln!(f, "name: rust-conventions").unwrap();
+        writeln!(f, "version: 1.0.0").unwrap();
+        writeln!(f, "description: Rust conventions").unwrap();
+        writeln!(f, "triggers: [rust]").unwrap();
+        writeln!(f, "---").unwrap();
+        writeln!(f, "# Rust Conventions").unwrap();
+
+        // Create an invalid skill (no SKILL.md)
+        let invalid_dir = skills_dir.join("invalid-skill");
+        std::fs::create_dir_all(&invalid_dir).unwrap();
+
+        // Use a loader with only our test root to avoid home dir pollution
+        let mut loader = SkillLoader::new(None);
+        // Replace roots with only our test dir
+        loader.roots.clear();
+        loader.add_root(SkillScope::User, skills_dir.clone());
+        loader.discover_all().await.unwrap();
+
+        // Check that our skill was discovered
+        let skill = loader.get("rust-conventions").await;
+        assert!(skill.is_some(), "rust-conventions skill should exist");
+        assert!(skill.unwrap().content.contains("# Rust Conventions"));
+    }
+
+    #[tokio::test]
+    async fn test_discover_empty_root() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let non_existent = temp_dir.path().join("nonexistent");
+        // Use a loader with only our empty test root
+        let mut loader = SkillLoader::new(None);
+        loader.roots.clear();
+        loader.add_root(SkillScope::User, non_existent);
+        let result = loader.discover_all().await;
+        assert!(result.is_ok());
+        // After discovering from empty root, no new skills should be added
+        // (home dir skills may already exist, so we check no error occurred)
+        let _ = loader.list_metadata().await;
+    }
+
+    #[tokio::test]
+    async fn test_get_by_trigger() {
+        let loader = SkillLoader::new(None);
+        let mut skill = SkillDef::new("test-skill", "some content")
+            .with_triggers(vec!["rust".to_string(), "coding".to_string()]);
+        skill.id = "code:test-skill".to_string();
+        loader.register(skill).await;
+
+        let results = loader.get_by_trigger("rust").await;
+        assert_eq!(results.len(), 1);
+
+        let no_results = loader.get_by_trigger("python").await;
+        assert_eq!(no_results.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_register_overwrites() {
+        let loader = SkillLoader::new(None);
+        let mut skill1 = SkillDef::new("dup", "content1");
+        skill1.id = "user:dup".to_string();
+        loader.register(skill1).await;
+
+        let mut skill2 = SkillDef::new("dup", "content2");
+        skill2.id = "repo:dup".to_string();
+        loader.register(skill2).await;
+
+        // Later registration overwrites (last wins)
+        let skill = loader.get("dup").await.unwrap();
+        assert_eq!(skill.content, "content2");
     }
 }
