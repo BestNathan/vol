@@ -22,6 +22,7 @@ vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-tool = { path = "../vol-llm-tool" }
 vol-llm-provider = { path = "../vol-llm-provider" }
 vol-session = { path = "../vol-session" }
+vol-llm-context = { path = "../vol-llm-context" }
 vol-tracing = { path = "../vol-tracing" }
 
 # Optional HTTP channel support

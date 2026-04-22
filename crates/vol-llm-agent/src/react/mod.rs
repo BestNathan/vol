@@ -32,6 +32,7 @@
 
 pub mod agent;
 pub mod builder;
+pub mod context_contributors;
 pub mod hitl;
 pub mod plugin;
 pub mod plugin_stream;
