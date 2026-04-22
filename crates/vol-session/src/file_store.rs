@@ -155,6 +155,29 @@ impl MessageStore for FileMessageStore {
         unimplemented!("get_before is not yet implemented")
     }
 
+    async fn get_after(
+        &self,
+        _session_id: &str,
+        after: i64,
+        limit: usize,
+    ) -> Result<Vec<SessionMessage>> {
+        let lines = self.read_all_lines().map_err(|e| StoreError::Io(e))?;
+
+        let mut messages = Vec::new();
+        for line in lines {
+            let msg_line: SessionMessageLine = serde_json::from_str(&line).map_err(|e| {
+                StoreError::Serialization(format!("Failed to parse JSONL line: {}", e))
+            })?;
+            if msg_line.timestamp > after {
+                messages.push(Self::from_line(&msg_line)?);
+                if messages.len() >= limit {
+                    break;
+                }
+            }
+        }
+        Ok(messages)
+    }
+
     async fn delete_session(&self, _session_id: &str) -> Result<()> {
         if self.file_path.exists() {
             fs::remove_file(&self.file_path).map_err(|e| StoreError::Io(e))?;

@@ -56,6 +56,14 @@ pub trait MessageStore: Send + Sync {
         limit: usize,
     ) -> Result<Vec<SessionMessage>>;
 
+    /// Get messages after a timestamp (for compressed history)
+    async fn get_after(
+        &self,
+        session_id: &str,
+        after: i64,
+        limit: usize,
+    ) -> Result<Vec<SessionMessage>>;
+
     /// Delete all messages for a session
     async fn delete_session(&self, session_id: &str) -> Result<()>;
 
