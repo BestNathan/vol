@@ -5,6 +5,7 @@ use crate::block::{AttentionAnchor, ContextBlock, estimate_tokens};
 use crate::contributor::ContextContributor;
 
 /// A file specification for FileContributor.
+#[derive(Clone)]
 pub struct FileSpec {
     pub path: String,
     pub anchor: AttentionAnchor,
@@ -76,6 +77,13 @@ impl ContextContributor for FileContributor {
                     .sum()
             })
             .unwrap_or(0)
+    }
+
+    fn clone_box(&self) -> Box<dyn ContextContributor> {
+        Box::new(FileContributor {
+            specs: self.specs.clone(),
+            cached_blocks: self.cached_blocks.clone(),
+        })
     }
 }
 

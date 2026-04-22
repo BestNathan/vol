@@ -53,6 +53,13 @@ impl ContextContributor for SkillsContributor {
             .map(|c| estimate_tokens(&Message::system(c.clone())))
             .unwrap_or(0)
     }
+
+    fn clone_box(&self) -> Box<dyn ContextContributor> {
+        Box::new(SkillsContributor {
+            injector: self.injector.clone(),
+            cached_content: self.cached_content.clone(),
+        })
+    }
 }
 
 /// Pre-cached skills contributor — stores the formatted content directly.
@@ -91,6 +98,12 @@ impl ContextContributor for CachedSkillsContributor {
         } else {
             estimate_tokens(&Message::system(self.content.clone()))
         }
+    }
+
+    fn clone_box(&self) -> Box<dyn ContextContributor> {
+        Box::new(CachedSkillsContributor {
+            content: self.content.clone(),
+        })
     }
 }
 

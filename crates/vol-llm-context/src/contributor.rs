@@ -17,6 +17,9 @@ pub trait ContextContributor: Send + Sync {
 
     /// Estimate token size of this contributor's output.
     fn estimate_size(&self) -> usize;
+
+    /// Clone into a boxed trait object.
+    fn clone_box(&self) -> Box<dyn ContextContributor>;
 }
 
 #[cfg(test)]
@@ -47,6 +50,12 @@ mod tests {
 
         fn estimate_size(&self) -> usize {
             self.content.len() / 4
+        }
+
+        fn clone_box(&self) -> Box<dyn ContextContributor> {
+            Box::new(TestContributor {
+                content: self.content.clone(),
+            })
         }
     }
 

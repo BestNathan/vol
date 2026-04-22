@@ -107,6 +107,15 @@ impl ContextBuilder {
     }
 }
 
+impl Clone for ContextBuilder {
+    fn clone(&self) -> Self {
+        Self {
+            contributors: self.contributors.iter().map(|c| c.clone_box()).collect(),
+            token_budget: self.token_budget.clone(),
+        }
+    }
+}
+
 /// Builder pattern for ContextBuilder.
 pub struct ContextBuilderBuilder {
     token_limit: usize,
@@ -150,6 +159,17 @@ impl ContextBuilderBuilder {
     }
 }
 
+impl Clone for ContextBuilderBuilder {
+    fn clone(&self) -> Self {
+        Self {
+            token_limit: self.token_limit,
+            head_size: self.head_size,
+            tail_size: self.tail_size,
+            contributors: self.contributors.iter().map(|c| c.clone_box()).collect(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,6 +197,14 @@ mod tests {
 
         fn estimate_size(&self) -> usize {
             self.messages.iter().map(estimate_tokens).sum()
+        }
+
+        fn clone_box(&self) -> Box<dyn ContextContributor> {
+            Box::new(SimpleContributor {
+                messages: self.messages.clone(),
+                anchor: self.anchor.clone(),
+                name: self.name.clone(),
+            })
         }
     }
 
