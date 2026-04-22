@@ -3,6 +3,7 @@
 //! Provides session management and message persistence for ReAct Agent.
 
 pub mod compressor;
+pub mod compressors;
 pub mod error;
 pub mod file_store;
 pub mod listener;
@@ -12,6 +13,7 @@ pub mod session;
 pub mod store;
 
 pub use compressor::MessageCompressor;
+pub use compressors::{PositionSampleCompressor, RoleFilterCompressor};
 pub use error::{Result, SessionError};
 pub use file_store::FileMessageStore;
 pub use listener::SessionListener;
