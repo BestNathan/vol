@@ -11,18 +11,20 @@
 //! # Quick Start
 //!
 //! ```rust
-//! use vol_llm_context::{ContextBuilderBuilder, ContextContributor};
-//! use vol_llm_context::builtin::{RoleContributor, TaskContributor, RulesContributor};
+//! use vol_llm_context::{ContextBuilderBuilder, ContextContributor, AttentionAnchor};
+//! use vol_llm_context::builtin::{FileContributor, FileSpec};
 //!
 //! #[tokio::main]
 //! async fn main() {
 //!     let builder = ContextBuilderBuilder::new(10000)
-//!         .add_contributor(Box::new(RoleContributor::new("You are a coding assistant")))
-//!         .add_contributor(Box::new(TaskContributor::new("Fix the bug")))
+//!         .add_contributor(Box::new(FileContributor::new(vec![
+//!             FileSpec::new("ROLE.md", AttentionAnchor::Head(0)),
+//!             FileSpec::new("TASK.md", AttentionAnchor::Tail(0)),
+//!         ])))
 //!         .build();
 //!
 //!     let output = builder.build().await;
-//!     assert!(!output.messages.is_empty());
+//!     // output.messages contains content from files that exist
 //! }
 //! ```
 
