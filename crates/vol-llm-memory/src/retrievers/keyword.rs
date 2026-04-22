@@ -29,7 +29,7 @@ impl MemoryRetriever for KeywordRetriever {
         filter: MemoryFilter,
     ) -> Result<Vec<MemoryItem>> {
         let all = self.store.list(filter).await?;
-        let query_terms: Vec<&str> = query.split_whitespace().map(|s| s.to_lowercase()).collect();
+        let query_terms: Vec<String> = query.split_whitespace().map(|s| s.to_lowercase()).collect();
 
         let mut scored: Vec<(f32, MemoryItem)> = all
             .into_iter()
@@ -52,11 +52,11 @@ impl MemoryRetriever for KeywordRetriever {
     }
 }
 
-fn score_item(content: &str, query_terms: &[&str]) -> f32 {
+fn score_item(content: &str, query_terms: &[String]) -> f32 {
     let content_lower = content.to_lowercase();
     let mut score = 0.0;
     for term in query_terms {
-        let matches = content_lower.matches(*term).count();
+        let matches = content_lower.matches(term.as_str()).count();
         if matches > 0 {
             score += (matches as f32) / (content.len().max(1) as f32 / 100.0);
         }
