@@ -221,7 +221,7 @@ impl RunContext {
         )
         .add_contributors_from(&self.config.context_builder)
         .add_contributor(Box::new(SessionContributor::new(
-            self.session.clone(),
+            Arc::new(tokio::sync::Mutex::new((*self.session).clone())),
             self.config.max_history_messages,
         )))
         .add_contributor(Box::new(UserInputContributor::new(self.user_input.clone())))
