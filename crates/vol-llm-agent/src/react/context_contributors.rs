@@ -5,18 +5,19 @@ use async_trait::async_trait;
 use vol_llm_context::block::{AttentionAnchor, ContextBlock, estimate_tokens};
 use vol_llm_context::contributor::ContextContributor;
 use vol_llm_core::Message;
+use vol_session::SessionMessage;
 use crate::session::Session;
 
 /// Session contributor — retrieves historical messages from a session.
 /// Returns them as a single ContextBlock with Middle(0) anchor.
 pub struct SessionContributor {
-    session: Arc<Session>,
+    session: Arc<tokio::sync::Mutex<Session>>,
     max_history: usize,
     cached_blocks: Option<Vec<ContextBlock>>,
 }
 
 impl SessionContributor {
-    pub fn new(session: Arc<Session>, max_history: usize) -> Self {
+    pub fn new(session: Arc<tokio::sync::Mutex<Session>>, max_history: usize) -> Self {
         Self {
             session,
             max_history,
@@ -38,6 +39,8 @@ impl ContextContributor for SessionContributor {
 
         let history = self
             .session
+            .lock()
+            .await
             .get_messages(self.max_history)
             .await
             .unwrap_or_default();
@@ -52,7 +55,18 @@ impl ContextContributor for SessionContributor {
     }
 
     async fn compress(&mut self) {
-        // Session history is non-compressible
+        if let Some(ref blocks) = self.cached_blocks {
+            let messages: Vec<SessionMessage> = blocks
+                .iter()
+                .flat_map(|b| b.messages.iter().map(|m| SessionMessage::new("".to_string(), m.clone())))
+                .collect();
+
+            let mut session = self.session.lock().await;
+            session.compress(messages).await;
+        }
+
+        // Invalidate cache — next contribute() will get compressed result
+        self.cached_blocks = None;
     }
 
     fn estimate_size(&self) -> usize {
