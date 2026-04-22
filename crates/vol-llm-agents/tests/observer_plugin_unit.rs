@@ -1,11 +1,14 @@
 //! Unit tests for ObserverPlugin
 
 use vol_llm_agents::coding::{ObserverPlugin, EventObserver, ObserverError};
-use vol_llm_core::{AgentStreamEvent, PluginContext, ToolCall};
+use vol_llm_core::{AgentStreamEvent, PluginContext};
 use vol_llm_agent::react::AgentPlugin;
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+
+fn create_test_context_builder() -> vol_llm_context::ContextBuilder {
+    vol_llm_context::ContextBuilderBuilder::new(128_000)
+        .build()
+}
 
 struct MockObserver {
     events: tokio::sync::Mutex<Vec<AgentStreamEvent>>,
@@ -131,13 +134,12 @@ fn create_test_plugin_context() -> vol_llm_agent::react::PluginContext {
         AgentConfig {
             max_iterations: 10,
             max_history_messages: 20,
-            prompt_context: vol_llm_agent::PromptContext::new(
-                vol_llm_agent::PromptTemplate::new("test", "test context")
-            ),
+            context_builder: create_test_context_builder(),
             verbose: false,
             plugin_registry: PluginRegistry::new(),
             agent_id: "test-agent".to_string(),
             log_base_path: std::path::PathBuf::from("logs/test"),
+            ..Default::default()
         },
     );
     vol_llm_agent::react::plugin_context_from_run_ctx(&ctx)
