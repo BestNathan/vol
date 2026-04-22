@@ -2,12 +2,15 @@
 //!
 //! Encapsulates all state and resources for a single `run()` invocation.
 
+use super::context_contributors::SessionContributor;
 use super::plugin::PluginDecision;
 use super::state::{ReasoningStep, ToolCallRecord};
 use super::stream::AgentStreamEvent;
 use super::AgentConfig;
 use crate::session::Session;
 use crate::session::SessionMessage;
+use vol_llm_context::ContextBuilderBuilder;
+use vol_llm_context::builtin::UserInputContributor;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
@@ -201,10 +204,10 @@ impl RunContext {
     /// Initialize messages array - must be called once before the loop
     ///
     /// This method:
-    /// 1. Builds System message from `config.prompt_context.build_system()`
-    /// 2. Gets historical messages from session (only once, limited by `max_history_messages`)
-    /// 3. Adds user input
-    /// 4. Writes all to `self.messages`
+    /// 1. Clones the base ContextBuilder from config
+    /// 2. Adds SessionContributor (Middle zone) and UserInputContributor (Tail zone)
+    /// 3. Builds the context via ContextBuilder.build()
+    /// 4. Writes all messages to `self.messages`
     ///
     /// Note: User input is NOT persisted to session here - it's only added to the
     /// runtime messages array. Callers should persist user input separately if needed.
@@ -212,28 +215,22 @@ impl RunContext {
     /// # Returns
     /// `Ok(())` on success, `Err(AgentError)` if session access fails
     pub async fn init_messages(&self) -> Result<(), crate::AgentError> {
-        let mut messages = Vec::new();
+        // Clone the base context_builder from config and add run-specific contributors
+        let context_builder = ContextBuilderBuilder::new(
+            self.config.context_builder.token_budget().total,
+        )
+        .add_contributors_from(&self.config.context_builder)
+        .add_contributor(Box::new(SessionContributor::new(
+            self.session.clone(),
+            self.config.max_history_messages,
+        )))
+        .add_contributor(Box::new(UserInputContributor::new(self.user_input.clone())))
+        .build();
 
-        // 1. System message from prompt_context (not persisted to session)
-        let system_content = self.config.prompt_context.build_system();
-        messages.push(Message::system(system_content));
-
-        // 2. Historical messages from session (only once)
-        let history = self
-            .session
-            .get_messages(self.config.max_history_messages)
-            .await
-            .unwrap_or_default();
-
-        for session_msg in history {
-            messages.push(session_msg.message);
-        }
-
-        // 3. User input (not persisted to session here)
-        messages.push(Message::user(self.user_input.clone()));
+        let output = context_builder.build().await;
 
         // Write to shared state
-        *self.messages.write().await = messages;
+        *self.messages.write().await = output.messages;
 
         Ok(())
     }
@@ -629,13 +626,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_init_messages_system_message() {
-        use crate::prompt_context::{PromptContext, PromptTemplate};
+        use vol_llm_context::builtin::SimpleContributor;
 
-        let template = PromptTemplate::new("test", "You are a helpful assistant.");
-        let prompt_context = PromptContext::new(template);
+        let context_builder = ContextBuilderBuilder::new(128_000)
+            .add_contributor(Box::new(SimpleContributor::system(
+                "You are a helpful assistant.".to_string(),
+            )))
+            .build();
 
         let config = AgentConfig {
-            prompt_context,
+            context_builder,
             ..Default::default()
         };
 
@@ -668,13 +668,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_init_messages_history() {
-        use crate::prompt_context::{PromptContext, PromptTemplate};
+        use vol_llm_context::builtin::SimpleContributor;
 
-        let template = PromptTemplate::new("test", "System");
-        let prompt_context = PromptContext::new(template);
+        let context_builder = ContextBuilderBuilder::new(128_000)
+            .add_contributor(Box::new(SimpleContributor::system("System".to_string())))
+            .build();
 
         let config = AgentConfig {
-            prompt_context,
+            context_builder,
             max_history_messages: 10,
             ..Default::default()
         };
@@ -719,13 +720,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_init_messages_user_input() {
-        use crate::prompt_context::{PromptContext, PromptTemplate};
+        use vol_llm_context::builtin::SimpleContributor;
 
-        let template = PromptTemplate::new("test", "System");
-        let prompt_context = PromptContext::new(template);
+        let context_builder = ContextBuilderBuilder::new(128_000)
+            .add_contributor(Box::new(SimpleContributor::system("System".to_string())))
+            .build();
 
         let config = AgentConfig {
-            prompt_context,
+            context_builder,
             ..Default::default()
         };
 
@@ -759,13 +761,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_init_messages_only_once() {
-        use crate::prompt_context::{PromptContext, PromptTemplate};
+        use vol_llm_context::builtin::SimpleContributor;
 
-        let template = PromptTemplate::new("test", "System");
-        let prompt_context = PromptContext::new(template);
+        let context_builder = ContextBuilderBuilder::new(128_000)
+            .add_contributor(Box::new(SimpleContributor::system("System".to_string())))
+            .build();
 
         let config = AgentConfig {
-            prompt_context,
+            context_builder,
             ..Default::default()
         };
 

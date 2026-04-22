@@ -103,16 +103,17 @@ pub async fn run_interceptor_loop(
 pub struct AgentConfigSnapshot {
     pub max_iterations: u32,
     pub max_history_messages: usize,
-    pub prompt_context_cache_key: String,
+    pub context_builder_summary: String,
     pub verbose: bool,
 }
 
 impl From<&super::AgentConfig> for AgentConfigSnapshot {
     fn from(config: &super::AgentConfig) -> Self {
+        let contributor_names: Vec<&str> = config.context_builder.contributor_names();
         Self {
             max_iterations: config.max_iterations,
             max_history_messages: config.max_history_messages,
-            prompt_context_cache_key: config.prompt_context.cache_key().to_string(),
+            context_builder_summary: contributor_names.join(", "),
             verbose: config.verbose,
         }
     }
@@ -123,7 +124,7 @@ impl Default for AgentConfigSnapshot {
         Self {
             max_iterations: 5,
             max_history_messages: 20,
-            prompt_context_cache_key: String::new(),
+            context_builder_summary: String::new(),
             verbose: false,
         }
     }

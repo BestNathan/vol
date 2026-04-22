@@ -12,9 +12,6 @@ pub mod session;
 pub use embedding::{DashScopeConfig, DashScopeEmbedder, DashScopeModel, Embedder};
 pub use observability::{cleanup_old_logs, cleanup_run_logs, cleanup_session_logs, LogEntry, ObservabilityPlugin, RunLogLogger};
 pub use plugins::{CliApprovalChannel, SimpleHttpApprovalChannel};
-pub use prompt_context::{
-    FragmentType, MessageAssembler, PromptContext, PromptFragment, PromptTemplate,
-};
 pub use rag::{Document, EmbeddingStore, RagAgent, RagConfig, RagResponse};
 pub use react::state::{ReasoningStep, ToolCallRecord};
 pub use react::{

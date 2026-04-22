@@ -75,12 +75,16 @@ impl CodingAgent {
         Self::register_coding_tools(&mut tool_registry, &config.tool_config);
 
         // Create agent config - use plugin_registry from config
+        let context_builder = vol_llm_context::ContextBuilderBuilder::new(128_000)
+            .add_contributor(Box::new(vol_llm_context::builtin::SimpleContributor::system(
+                "You are an expert coding assistant. Help users understand, modify, and improve their codebase.".to_string(),
+            )))
+            .build();
+
         let agent_config = AgentConfig {
             max_iterations: config.max_iterations,
             max_history_messages: 20,
-            prompt_context: vol_llm_agent::PromptContext::new(
-                vol_llm_agent::PromptTemplate::new("coding", "You are an expert coding assistant. Help users understand, modify, and improve their codebase.")
-            ),
+            context_builder,
             verbose: config.verbose,
             plugin_registry: config.plugin_registry.clone(),
             agent_id: if config.agent_id.is_empty() { generate_agent_id() } else { config.agent_id.clone() },

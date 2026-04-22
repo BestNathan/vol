@@ -2,9 +2,9 @@
 
 use super::agent::{AgentConfig, ReActAgent};
 use super::plugin::AgentPlugin;
-use crate::prompt_context::PromptContext;
 use crate::session::{InMemoryMessageStore, InMemorySessionStore, Session};
 use std::sync::Arc;
+use vol_llm_context::{ContextBuilderBuilder, ContextContributor};
 use vol_llm_core::LLMClient;
 use vol_llm_tool::{ExecutableTool, ToolRegistry};
 
@@ -14,6 +14,7 @@ pub struct AgentBuilder {
     tools: Vec<Box<dyn ExecutableTool>>,
     config: AgentConfig,
     session: Option<Arc<Session>>,
+    contributors: Vec<Box<dyn ContextContributor>>,
 }
 
 impl AgentBuilder {
@@ -23,6 +24,7 @@ impl AgentBuilder {
             tools: Vec::new(),
             config: AgentConfig::default(),
             session: None,
+            contributors: Vec::new(),
         }
     }
 
@@ -42,10 +44,9 @@ impl AgentBuilder {
     }
 
     pub fn with_system_prompt(mut self, prompt: String) -> Self {
-        use crate::prompt_context::{PromptContext, PromptTemplate};
+        use vol_llm_context::builtin::SimpleContributor;
 
-        let template = PromptTemplate::new("custom_system_prompt", &prompt);
-        self.config.prompt_context = PromptContext::new(template);
+        self.contributors.push(Box::new(SimpleContributor::system(prompt)));
         self
     }
 
@@ -59,8 +60,8 @@ impl AgentBuilder {
         self
     }
 
-    pub fn with_prompt_context(mut self, prompt_context: PromptContext) -> Self {
-        self.config.prompt_context = prompt_context;
+    pub fn with_contributor(mut self, contributor: Box<dyn ContextContributor>) -> Self {
+        self.contributors.push(contributor);
         self
     }
 
@@ -98,7 +99,7 @@ impl AgentBuilder {
         self
     }
 
-    pub fn build(self) -> Result<ReActAgent, AgentBuilderError> {
+    pub fn build(mut self) -> Result<ReActAgent, AgentBuilderError> {
         let llm = self.llm.ok_or(AgentBuilderError::MissingLlm)?;
 
         let mut registry = ToolRegistry::new();
@@ -114,6 +115,21 @@ impl AgentBuilder {
                 Arc::new(InMemoryMessageStore::new()),
             ))
         });
+
+        // Build ContextBuilder: start from config defaults, add stored contributors
+        let token_budget = self.config.context_builder.token_budget().total;
+        let head_size = self.config.context_builder.token_budget().head_size;
+        let tail_size = self.config.context_builder.token_budget().tail_size;
+
+        let mut builder = ContextBuilderBuilder::new(token_budget)
+            .head_size(head_size)
+            .tail_size(tail_size);
+
+        for contributor in self.contributors {
+            builder = builder.add_contributor(contributor);
+        }
+
+        self.config.context_builder = builder.build();
 
         Ok(ReActAgent::new(
             llm,

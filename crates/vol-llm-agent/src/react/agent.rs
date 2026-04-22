@@ -4,11 +4,11 @@ use super::{
     AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext,
     plugin_context_from_run_ctx,
 };
-use crate::prompt_context::PromptContext;
 use crate::react::state::ToolCallRecord;
 use crate::session::Session;
 use std::path::PathBuf;
 use std::sync::Arc;
+use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
 use vol_llm_core::{
     ConversationRequest, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
     ToolChoice,
@@ -20,7 +20,7 @@ use vol_llm_tool::{ToolContext, ToolSensitivity};
 pub struct AgentConfig {
     pub max_iterations: u32,
     pub max_history_messages: usize,
-    pub prompt_context: PromptContext,
+    pub context_builder: ContextBuilder,
     pub verbose: bool,
     pub plugin_registry: PluginRegistry,
 
@@ -48,15 +48,12 @@ fn generate_agent_id() -> String {
 
 impl Default for AgentConfig {
     fn default() -> Self {
-        use crate::prompt_context::PromptTemplate;
-
-        let template = PromptTemplate::new("default", "You are a helpful assistant.");
-        let prompt_context = PromptContext::new(template);
+        let context_builder = ContextBuilderBuilder::new(128_000).build();
 
         Self {
             max_iterations: 5,
             max_history_messages: 20,
-            prompt_context,
+            context_builder,
             verbose: false,
             plugin_registry: PluginRegistry::new(),
             agent_id: generate_agent_id(),
@@ -240,7 +237,6 @@ impl ReActAgent {
                     // Continue with normal flow
                 }
                 Ok(PluginDecision::Skip) => {
-                    // Skip AgentStart event but continue with normal flow
                     // Skip only affects the current event, not the entire run
                 }
                 Ok(PluginDecision::Abort(reason)) => {
@@ -250,7 +246,6 @@ impl ReActAgent {
                     return Err(crate::AgentError::Context(reason));
                 }
                 Err(e) => {
-                    // Plugin channel error - log and continue (plugins are optional)
                     tracing::warn!(
                         "Plugin intercept error (plugins may not be wired up yet): {}",
                         e
@@ -277,7 +272,6 @@ impl ReActAgent {
                     ).await {
                         Ok(true) => true,
                         Ok(false) => {
-                            // User declined — abort
                             let reason = format!("Max iterations ({}) reached, user declined to continue", config.max_iterations);
                             run_ctx.emit(AgentStreamEvent::agent_aborted(reason.clone())).await;
                             return Err(crate::AgentError::MaxIterationsReached {
@@ -285,7 +279,6 @@ impl ReActAgent {
                             });
                         }
                         Err(e) => {
-                            // No HITL handler connected or error — abort
                             let reason = format!("Max iterations ({}) reached, continuation request failed: {}", config.max_iterations, e);
                             run_ctx.emit(AgentStreamEvent::agent_aborted(reason.clone())).await;
                             return Err(crate::AgentError::MaxIterationsReached {
@@ -345,11 +338,9 @@ impl ReActAgent {
                 if !tool_calls.is_empty() {
 
                     // IMPORTANT: Add assistant message with tool calls to history
-                    // This tells the LLM what tools it decided to call in the next iteration
                     let assistant_message = if !content.is_empty() {
                         Message::assistant_with_tools(content.clone(), tool_calls.clone())
                     } else {
-                        // If no content, still need to record the tool call decision
                         Message::assistant_with_tools(
                             "Calling tools to get information.".to_string(),
                             tool_calls.clone(),
@@ -394,7 +385,6 @@ impl ReActAgent {
                                         match run_ctx.request_tool_approval(&call.name, &reason, metadata).await {
                                             Ok(approval) if !approval.approved => {
                                                 let duration_ms = tool_begin.elapsed().as_millis() as u64;
-                                                // Emit ToolCallSkipped
                                                 run_ctx.emit(AgentStreamEvent::tool_call_skipped(
                                                     call.id.clone(),
                                                     call.name.clone(),
@@ -402,7 +392,6 @@ impl ReActAgent {
                                                     Some(duration_ms),
                                                 )).await;
 
-                                                // Add rejection message to history
                                                 if let Err(e) = run_ctx.add_message(Message::tool(
                                                     "Execution rejected: permission denied".to_string(),
                                                     call.id.clone(),
@@ -412,18 +401,13 @@ impl ReActAgent {
                                                 run_ctx.clear_current_tool_calls().await;
                                                 continue;
                                             }
-                                            Ok(_) => {
-                                                // Approved, proceed
-                                            }
+                                            Ok(_) => {}
                                             Err(e) => {
                                                 tracing::warn!("HITL approval error: {}", e);
-                                                // Fail open — proceed without approval
                                             }
                                         }
                                     }
-                                    ToolSensitivity::Safe => {
-                                        // Safe tool, proceed directly
-                                    }
+                                    ToolSensitivity::Safe => {}
                                 }
                             }
                             PluginDecision::Skip => {
@@ -456,7 +440,6 @@ impl ReActAgent {
                             Ok(r) => r,
                             Err(e) => {
                                 let duration_ms = tool_begin.elapsed().as_millis() as u64;
-                                // Emit ToolCallError
                                 run_ctx.emit(AgentStreamEvent::tool_call_error(
                                     call.id.clone(),
                                     call.name.clone(),
@@ -464,7 +447,6 @@ impl ReActAgent {
                                     Some(duration_ms),
                                 )).await;
 
-                                // Record failed tool call
                                 run_ctx.record_tool_call(ToolCallRecord {
                                     tool_name: call.name.clone(),
                                     arguments: call.arguments.clone(),
@@ -473,11 +455,8 @@ impl ReActAgent {
                                     success: false,
                                 }).await;
 
-                                // Emit AgentAborted (terminal event)
                                 let reason = format!("Tool execution failed: {}", e);
                                 run_ctx.emit(AgentStreamEvent::agent_aborted(reason)).await;
-
-                                // Set error in RunContext
                                 run_ctx.set_error(format!("Tool execution failed: {}", e)).await;
 
                                 return Err(crate::AgentError::ToolExecution {
@@ -509,7 +488,7 @@ impl ReActAgent {
                             ))
                             .await;
 
-                        // Add tool result to ctx (syncs to session automatically)
+                        // Add tool result to ctx
                         if let Err(e) = run_ctx
                             .add_message(Message::tool(result.content.clone(), call.id.clone()))
                             .await
@@ -530,12 +509,10 @@ impl ReActAgent {
                         ))
                         .await;
 
-                    // Continue to next iteration
                     continue;
                 }
 
                 // No tool calls - we have final answer
-                // Emit IterationComplete with final answer
                 run_ctx
                     .emit(AgentStreamEvent::iteration_complete(
                         iteration,
@@ -544,7 +521,7 @@ impl ReActAgent {
                     ))
                     .await;
 
-                // Save assistant response to session via ctx (user input already saved in init_messages)
+                // Save assistant response to session
                 if let Err(e) = run_ctx
                     .add_message(Message::assistant(content.clone()))
                     .await
@@ -590,16 +567,13 @@ impl ReActAgent {
         };
 
         // Wait for interceptor to finish with timeout
-        // Interceptor exits when plugin_rx is closed (happens when agent_task drops run_ctx)
         let interceptor_result =
             tokio::time::timeout(std::time::Duration::from_secs(5), interceptor_handle).await;
 
         // Wait for listener to finish with timeout
-        // Listener exits when event_tx broadcast channel is closed (all senders dropped)
         let listener_result =
             tokio::time::timeout(std::time::Duration::from_secs(5), listener_handle).await;
 
-        // Handle interceptor result (log but don't fail - plugins are optional)
         match interceptor_result {
             Ok(Ok(())) => {
                 if config.verbose {
@@ -616,7 +590,6 @@ impl ReActAgent {
             }
         }
 
-        // Handle listener result (log but don't fail - plugins are optional)
         match listener_result {
             Ok(Ok(())) => {
                 if config.verbose {
@@ -634,7 +607,6 @@ impl ReActAgent {
         }
 
         // Wait for SessionListener to finish with timeout
-        // SessionListener exits when event_tx broadcast channel is closed
         let session_listener_result =
             tokio::time::timeout(std::time::Duration::from_secs(5), session_listener_handle).await;
 
@@ -660,9 +632,6 @@ impl ReActAgent {
 
 /// Consume LLM stream response, emit streaming events, and accumulate into complete data.
 ///
-/// Emits ThinkingStart/Delta/Complete and ContentStart/Delta/Complete events
-/// as tokens arrive from the LLM.
-///
 /// Returns: (thinking, tool_calls, content, model, usage)
 async fn consume_llm_stream(
     mut stream: StreamReceiver,
@@ -681,9 +650,6 @@ async fn consume_llm_stream(
         let event = result.map_err(|e| crate::AgentError::Llm(e))?;
 
         match event.data {
-            StreamEventData::ResponseComplete { .. } => {
-                // Model info comes from ResponseStart
-            }
             StreamEventData::ThinkingDelta { thinking: delta } => {
                 if !thinking_started {
                     run_ctx.emit(AgentStreamEvent::thinking_start()).await;
@@ -737,6 +703,7 @@ async fn consume_llm_stream(
             StreamEventData::Error { code, message } => {
                 tracing::warn!(%code, %message, "Stream error event received");
             }
+            _ => {}
         }
     }
 
@@ -758,15 +725,14 @@ mod tests {
 
     #[test]
     fn test_agent_config_custom() {
-        use crate::prompt_context::{PromptContext, PromptTemplate};
+        use vol_llm_context::ContextBuilderBuilder;
 
-        let template = PromptTemplate::new("test", "test prompt");
-        let prompt_context = PromptContext::new(template);
+        let context_builder = ContextBuilderBuilder::new(64_000).build();
 
         let config = AgentConfig {
             max_iterations: 10,
             max_history_messages: 50,
-            prompt_context,
+            context_builder,
             verbose: true,
             plugin_registry: PluginRegistry::new(),
             agent_id: "custom_agent".to_string(),

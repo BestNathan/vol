@@ -27,6 +27,16 @@ impl ContextBuilder {
         self.contributors.push(contributor);
     }
 
+    /// Get a reference to the token budget.
+    pub fn token_budget(&self) -> &TokenBudget {
+        &self.token_budget
+    }
+
+    /// Get contributor names as a list.
+    pub fn contributor_names(&self) -> Vec<&str> {
+        self.contributors.iter().map(|c| c.name()).collect()
+    }
+
     /// Build the context: collect blocks, check budget, compress if needed, produce messages.
     pub async fn build(mut self) -> ContextOutput {
         // Step 1: Collect blocks
@@ -146,6 +156,14 @@ impl ContextBuilderBuilder {
 
     pub fn add_contributor(mut self, contributor: Box<dyn ContextContributor>) -> Self {
         self.contributors.push(contributor);
+        self
+    }
+
+    /// Copy contributors from an existing ContextBuilder.
+    pub fn add_contributors_from(mut self, builder: &ContextBuilder) -> Self {
+        for c in &builder.contributors {
+            self.contributors.push(c.clone_box());
+        }
         self
     }
 
