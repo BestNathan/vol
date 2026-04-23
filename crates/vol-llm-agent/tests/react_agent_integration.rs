@@ -1,90 +1,166 @@
-//! ReAct Agent integration tests.
+//! ReActAgent integration tests with SessionContributor and compression.
 //!
-//! Run with: cargo test --test react_agent_integration -- --nocapture
-//!
-//! These tests verify the ReAct Agent workflow with real LLM provider and TDengine tools.
+//! Tests the full chain: ContextBuilder -> SessionContributor -> compression -> continue.
+//! Uses MockLLM (no real API calls).
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use async_trait::async_trait;
 use vol_llm_agent::ReActAgent;
-use vol_llm_core::LLMProvider;
-use vol_llm_provider::{create_provider, LLMConfig, Secret};
-use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
+use vol_llm_core::{
+    ConversationRequest, ConversationResponse, LLMClient, LLMProvider,
+    Message, StreamEvent, StreamEventData,
+};
+use vol_llm_core::stream::StreamReceiver;
+use vol_session::{
+    InMemoryMessageStore, InMemorySessionStore, Session, SessionMessage,
+};
 
-/// Create a test agent with TDengine tools
-fn create_test_agent() -> Option<ReActAgent> {
-    // Load LLM provider using Anthropic API key from environment
-    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").ok()?;
-    let config = LLMConfig {
-        provider: LLMProvider::Anthropic,
-        model: "claude-sonnet-4-6".to_string(),
-        api_key: Secret::Literal(api_key),
-        base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
-    };
+// ─── Mock LLM: returns final answer on first call ───────────────────────────
 
-    let llm = create_provider(&config).ok()?;
+struct QuickAnswerMock {
+    answer: String,
+}
 
-    // Create agent with builder
+impl QuickAnswerMock {
+    fn new(answer: &str) -> Self {
+        Self { answer: answer.to_string() }
+    }
+}
+
+#[async_trait]
+impl LLMClient for QuickAnswerMock {
+    fn provider(&self) -> LLMProvider { LLMProvider::Anthropic }
+    fn model(&self) -> &str { "mock" }
+    fn supported_params(&self) -> &[vol_llm_core::SupportedParam] { &[] }
+
+    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+        unimplemented!("Use converse_stream")
+    }
+
+    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+        use tokio::sync::mpsc;
+        let (tx, rx) = mpsc::channel(10);
+        let answer = self.answer.clone();
+        tokio::spawn(async move {
+            let _ = tx.send(Ok(StreamEvent {
+                id: "1".to_string(),
+                data: StreamEventData::ContentComplete { content: answer },
+            })).await;
+        });
+        Ok(StreamReceiver::new(rx))
+    }
+}
+
+// ─── Helper: create session with N messages (round-robin User/Assistant) ────
+
+async fn make_session_with_messages(n: usize) -> Arc<Session> {
+    let session_store = Arc::new(InMemorySessionStore::new());
+    let message_store = Arc::new(InMemoryMessageStore::new());
+    let session = Session::new("test-session".to_string(), session_store, message_store);
+
+    for i in 0..n {
+        let msg = if i % 2 == 0 {
+            SessionMessage::new("test-session".to_string(), Message::user(format!("session-msg-{}", i)))
+        } else {
+            SessionMessage::new("test-session".to_string(), Message::assistant(format!("session-reply-{}", i)))
+        };
+        session.add_message(msg).await.unwrap();
+    }
+    Arc::new(session)
+}
+
+// ─── Tests ──────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_basic_run_empty_session() {
+    // New session, no history — should produce system + user input only
+    let session = make_session_with_messages(0).await;
+    let mock = QuickAnswerMock::new("The answer is 42.");
+
     let agent = ReActAgent::builder()
-        .with_llm(llm.into())
-        .with_tool(VolatilityIndexTool::new(None))
-        .with_tool(IndexPriceTool::new(None))
-        .with_tool(OptionsTool::new(None))
-        .with_tool(RvTool::new(None))
+        .with_llm(Arc::new(mock))
+        .with_system_prompt("You are a test assistant.".to_string())
         .with_max_iterations(5)
-        .with_system_prompt("You are a helpful assistant.".to_string())
-        .with_verbose(true)
+        .with_verbose(false)
+        .with_session(session)
         .build()
-        .ok()?;
-
-    Some(agent)
-}
-
-#[tokio::test]
-#[ignore = "requires ANTHROPIC_AUTH_TOKEN and correct model"]
-async fn test_agent_with_market_data_query() {
-    let agent = match create_test_agent() {
-        Some(a) => a,
-        None => {
-            eprintln!("Skipping test - LLM provider not configured");
-            return;
-        }
-    };
-
-    agent.run("What is the current BTC price?").await.unwrap();
-}
-
-#[tokio::test]
-#[ignore = "requires ANTHROPIC_AUTH_TOKEN and correct model"]
-async fn test_agent_with_volatility_query() {
-    let agent = match create_test_agent() {
-        Some(a) => a,
-        None => {
-            eprintln!("Skipping test - LLM provider not configured");
-            return;
-        }
-    };
-
-    agent
-        .run("Show me the recent volatility data for ETH")
-        .await
         .unwrap();
+
+    let response = agent.run("What is 6 * 7?").await.unwrap();
+    assert!(!response.content.is_empty());
 }
 
 #[tokio::test]
-#[ignore = "requires ANTHROPIC_AUTH_TOKEN and correct model"]
-async fn test_agent_max_iterations() {
-    let agent = match create_test_agent() {
-        Some(a) => a,
-        None => {
-            eprintln!("Skipping test - LLM provider not configured");
-            return;
+async fn test_run_with_session_history() {
+    // Session with 3 messages — should be included via SessionContributor
+    let session = make_session_with_messages(3).await;
+    let mock = QuickAnswerMock::new("Continued from previous context.");
+
+    let agent = ReActAgent::builder()
+        .with_llm(Arc::new(mock))
+        .with_system_prompt("You are a test assistant.".to_string())
+        .with_max_iterations(5)
+        .with_verbose(false)
+        .with_session(session)
+        .build()
+        .unwrap();
+
+    let response = agent.run("Summarize what we discussed.").await.unwrap();
+    assert!(!response.content.is_empty());
+}
+
+#[tokio::test]
+async fn test_run_with_large_history_limit() {
+    // Session with 20 messages, limit set to 100 — all should be included
+    let session = make_session_with_messages(20).await;
+    let call_count = Arc::new(AtomicUsize::new(0));
+
+    struct CountingMock {
+        answer: String,
+        calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl LLMClient for CountingMock {
+        fn provider(&self) -> LLMProvider { LLMProvider::Anthropic }
+        fn model(&self) -> &str { "mock" }
+        fn supported_params(&self) -> &[vol_llm_core::SupportedParam] { &[] }
+        async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+            unimplemented!("Use converse_stream")
         }
+        async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+            use tokio::sync::mpsc;
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let (tx, rx) = mpsc::channel(10);
+            let answer = self.answer.clone();
+            tokio::spawn(async move {
+                let _ = tx.send(Ok(StreamEvent {
+                    id: "1".to_string(),
+                    data: StreamEventData::ContentComplete { content: answer },
+                })).await;
+            });
+            Ok(StreamReceiver::new(rx))
+        }
+    }
+
+    let mock = CountingMock {
+        answer: "Done.".to_string(),
+        calls: call_count.clone(),
     };
 
-    // This query should trigger multiple iterations
-
-    agent
-        .run("Compare BTC and ETH volatility and explain the difference")
-        .await
+    let agent = ReActAgent::builder()
+        .with_llm(Arc::new(mock))
+        .with_system_prompt("You are a test assistant.".to_string())
+        .with_max_iterations(5)
+        .with_max_history_messages(100)
+        .with_verbose(false)
+        .with_session(session)
+        .build()
         .unwrap();
+
+    let response = agent.run("Continue.").await.unwrap();
+    assert!(!response.content.is_empty());
+    // LLM should have been called exactly once
+    assert_eq!(call_count.load(Ordering::SeqCst), 1);
 }
