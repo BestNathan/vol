@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::block::ContextBlock;
+use crate::context_block::ContextBlock;
 
 /// Trait for context contributors that produce context blocks.
 #[async_trait]
@@ -25,7 +25,8 @@ pub trait ContextContributor: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_llm_core::Message;
+    use crate::message::Message;
+    use crate::context_block::AttentionAnchor;
 
     struct TestContributor {
         content: String,
@@ -40,7 +41,7 @@ mod tests {
         async fn contribute(&self) -> Vec<ContextBlock> {
             vec![ContextBlock::new(
                 vec![Message::user(self.content.clone())],
-                crate::block::AttentionAnchor::Middle(5),
+                AttentionAnchor::Middle(5),
             )]
         }
 

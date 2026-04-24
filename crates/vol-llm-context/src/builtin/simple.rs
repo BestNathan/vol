@@ -1,8 +1,7 @@
 use async_trait::async_trait;
 use vol_llm_core::Message;
 
-use crate::block::{estimate_tokens, AttentionAnchor, ContextBlock};
-use crate::contributor::ContextContributor;
+use vol_llm_core::{AttentionAnchor, ContextBlock, ContextContributor, estimate_tokens};
 
 /// A simple contributor for ad-hoc context blocks.
 pub struct SimpleContributor {

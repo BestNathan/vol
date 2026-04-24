@@ -20,12 +20,14 @@
 //! }
 //! ```
 
+mod context_contributor;
 mod def;
 mod injector;
 mod loader;
 mod parser;
 mod tool;
 
+pub use context_contributor::{CachedSkillsContributor, SkillsContributor};
 pub use def::{SkillDef, SkillMetadata, SkillScope};
 pub use injector::SkillInjector;
 pub use loader::SkillLoader;

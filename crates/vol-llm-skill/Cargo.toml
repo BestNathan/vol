@@ -11,8 +11,8 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 serde_yaml = "0.9"
-vol-llm-tool = { workspace = true }
 vol-llm-core = { workspace = true }
+vol-llm-tool = { workspace = true }
 dirs = "5"
 
 [dev-dependencies]

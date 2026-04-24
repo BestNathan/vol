@@ -4111,7 +4111,6 @@ dependencies = [
  "tracing",
  "vol-llm-core",
  "vol-llm-memory",
- "vol-llm-skill",
 ]
 
 [[package]]

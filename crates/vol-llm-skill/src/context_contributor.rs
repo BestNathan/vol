@@ -1,10 +1,8 @@
 use std::sync::Arc;
 use async_trait::async_trait;
-use vol_llm_core::Message;
+use vol_llm_core::{AttentionAnchor, ContextBlock, ContextContributor, Message, estimate_tokens};
 
-use crate::block::{AttentionAnchor, ContextBlock, estimate_tokens};
-use crate::contributor::ContextContributor;
-use vol_llm_skill::{SkillInjector, SkillLoader};
+use crate::{SkillInjector, SkillLoader};
 
 /// Skills contributor — injects available skill metadata into the system prompt.
 ///
@@ -110,7 +108,7 @@ impl ContextContributor for CachedSkillsContributor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_llm_skill::SkillDef;
+    use crate::SkillDef;
 
     #[tokio::test]
     async fn test_skills_contributor_empty() {

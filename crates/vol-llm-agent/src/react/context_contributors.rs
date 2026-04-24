@@ -3,11 +3,8 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 use async_trait::async_trait;
-use vol_llm_context::block::{AttentionAnchor, ContextBlock, estimate_tokens};
-use vol_llm_context::contributor::ContextContributor;
-use vol_llm_core::Message;
-use vol_session::SessionMessage;
-use crate::session::Session;
+use vol_llm_core::{AttentionAnchor, ContextBlock, ContextContributor, Message, estimate_tokens};
+use vol_session::{Session, SessionMessage};
 
 /// Session contributor — retrieves historical messages from a session.
 /// Returns them as a single ContextBlock with Middle(0) anchor.
