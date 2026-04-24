@@ -185,6 +185,29 @@ impl CodingAgent {
         self
     }
 
+    /// Generate missing context files from built-in templates.
+    /// Files that already exist are not overwritten.
+    pub fn init_context_files(&self) {
+        const AGENT_MD: &str = "# Agent\n\nDefine your role and behavior here.\n";
+        const INSTRUCTION_MD: &str = "# Instructions\n\nAdd project-specific instructions here.\n";
+        const CLI_MD: &str = "# CLI Reference\n\nDocument available CLI tools and commands here.\n";
+
+        let dir = &self.config.working_dir;
+
+        for (filename, content) in &[
+            ("AGENT.md", AGENT_MD),
+            ("INSTRUCTION.md", INSTRUCTION_MD),
+            ("CLI.md", CLI_MD),
+        ] {
+            let path = dir.join(filename);
+            if !path.exists() {
+                if let Err(e) = std::fs::write(&path, content) {
+                    tracing::warn!(path = %path.display(), error = %e, "Failed to create context file");
+                }
+            }
+        }
+    }
+
     /// Run a coding task
     pub async fn run(&self, task: &str) -> Result<CodingAgentResponse, CodingAgentError> {
         // Get state - take ownership of components
