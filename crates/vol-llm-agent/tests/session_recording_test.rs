@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use vol_llm_agent::session::{FileMessageStore, InMemorySessionStore, MessageStore, Session, SessionListener};
+use vol_session::{FileSessionEntryStore, InMemorySessionStore, Session, SessionListener};
 use vol_llm_agent::ReActAgent;
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, LLMProvider, SupportedParam,
@@ -63,16 +63,16 @@ impl LLMClient for MockLlm {
 async fn test_session_records_user_input() {
     let tmp_dir = tempfile::tempdir().unwrap();
 
-    // Create session with FileMessageStore for session recording
+    // Create session with FileSessionEntryStore for session recording
     let session_store = Arc::new(InMemorySessionStore::new());
-    let message_store = Arc::new(FileMessageStore::new(
+    let entry_store = Arc::new(FileSessionEntryStore::new(
         tmp_dir.path().to_str().unwrap(),
         "test-session",
     ));
     let session = Arc::new(Session::new(
         "test-session".to_string(),
         session_store,
-        message_store,
+        entry_store,
     ));
 
     // Create agent
@@ -126,7 +126,7 @@ async fn test_session_listener_records_what_events() {
     let (event_tx, event_rx) = broadcast::channel(100);
 
     let tmp_dir = tempfile::tempdir().unwrap();
-    let store: Arc<dyn MessageStore> = Arc::new(FileMessageStore::new(
+    let store: Arc<dyn vol_session::SessionEntryStore> = Arc::new(FileSessionEntryStore::new(
         tmp_dir.path().to_str().unwrap(),
         "session-events",
     ));

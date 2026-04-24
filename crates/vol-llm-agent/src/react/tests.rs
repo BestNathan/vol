@@ -34,7 +34,7 @@ async fn test_builder_with_methods() {
     let session = Arc::new(vol_session::Session::new(
         "test".to_string(),
         Arc::new(vol_session::InMemorySessionStore::new()),
-        Arc::new(vol_session::InMemoryMessageStore::new()),
+        Arc::new(vol_session::InMemoryEntryStore::new()),
     ));
     // Build succeeds with all builder methods chained
     let result = AgentBuilder::new()

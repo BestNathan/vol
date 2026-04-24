@@ -13,7 +13,7 @@ use vol_llm_core::{
 };
 use vol_llm_core::stream::StreamReceiver;
 use vol_session::{
-    InMemoryMessageStore, InMemorySessionStore, Session, SessionMessage,
+    InMemoryEntryStore, InMemorySessionStore, Session, SessionMessage,
 };
 
 // ─── Mock LLM: returns final answer on first call ───────────────────────────
@@ -56,8 +56,8 @@ impl LLMClient for QuickAnswerMock {
 
 async fn make_session_with_messages(n: usize) -> Arc<Session> {
     let session_store = Arc::new(InMemorySessionStore::new());
-    let message_store = Arc::new(InMemoryMessageStore::new());
-    let session = Session::new("test-session".to_string(), session_store, message_store);
+    let entry_store = Arc::new(InMemoryEntryStore::new());
+    let session = Session::new("test-session".to_string(), session_store, entry_store);
 
     for i in 0..n {
         let msg = if i % 2 == 0 {

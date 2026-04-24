@@ -5,7 +5,7 @@ use super::{
     plugin_context_from_run_ctx,
 };
 use crate::react::state::ToolCallRecord;
-use crate::session::Session;
+use vol_session::Session;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -108,12 +108,12 @@ impl ReActAgent {
 
     /// Create agent with new session
     pub fn with_new_session(&self, session_id: String) -> Self {
-        use crate::session::{InMemoryMessageStore, InMemorySessionStore};
+        use vol_session::{InMemoryEntryStore, InMemorySessionStore};
 
         let new_session = Arc::new(Session::new(
             session_id,
             Arc::new(InMemorySessionStore::new()),
-            Arc::new(InMemoryMessageStore::new()),
+            Arc::new(InMemoryEntryStore::new()),
         ));
         Self {
             session: new_session,
@@ -187,11 +187,11 @@ impl ReActAgent {
         run_ctx.init_messages().await?;
 
         // === Phase 2.5: Spawn SessionListener for session recording ===
-        use crate::session::{FileMessageStore, SessionListener};
+        use vol_session::{FileSessionEntryStore, SessionListener};
 
         let mut session_listener = SessionListener::new(
             run_ctx.event_tx.subscribe(),
-            Arc::new(FileMessageStore::new(
+            Arc::new(FileSessionEntryStore::new(
                 config.log_base_path.join(&config.agent_id),
                 &session.id,
             )),
@@ -641,6 +641,28 @@ impl ReActAgent {
         }
 
         agent_result
+    }
+}
+
+impl ReActAgent {
+    /// Resume from an existing session. Loads checkpoint-based history as context,
+    /// then starts a new run with the given user input.
+    pub async fn resume(&self, user_input: &str) -> Result<AgentResponse, crate::AgentError> {
+        // 1. Load resume messages from session (after latest checkpoint)
+        let resume_messages = self.session.resume_messages().await.map_err(|e| {
+            crate::AgentError::Context(format!("Failed to load resume messages: {}", e))
+        })?;
+
+        // 2. Pre-populate session with resume messages so they're stored as entries
+        for msg in &resume_messages {
+            let session_msg = vol_session::SessionMessage::new(self.session.id.clone(), msg.clone());
+            self.session.add_message(session_msg).await.map_err(|e| {
+                crate::AgentError::SessionError(format!("Failed to save resume message: {}", e))
+            })?;
+        }
+
+        // 3. Run normally -- SessionContributor loads history from entry store
+        self.run(user_input).await
     }
 }
 

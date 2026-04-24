@@ -2,7 +2,7 @@
 
 use super::agent::{AgentConfig, ReActAgent};
 use super::plugin::AgentPlugin;
-use crate::session::{InMemoryMessageStore, InMemorySessionStore, Session};
+use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session};
 use std::sync::Arc;
 use vol_llm_context::{ContextBuilderBuilder, ContextContributor};
 use vol_llm_core::LLMClient;
@@ -112,7 +112,7 @@ impl AgentBuilder {
             Arc::new(Session::new(
                 uuid::Uuid::new_v4().to_string(),
                 Arc::new(InMemorySessionStore::new()),
-                Arc::new(InMemoryMessageStore::new()),
+                Arc::new(InMemoryEntryStore::new()),
             ))
         });
 

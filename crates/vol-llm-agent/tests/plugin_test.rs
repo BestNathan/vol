@@ -58,7 +58,7 @@ async fn test_plugin_priority_ordering() {
 #[tokio::test]
 async fn test_run_context_data_storage() {
     use std::sync::Arc;
-    use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore, Session};
+    use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session};
     use vol_llm_tool::ToolRegistry;
 
     let (ctx, _plugin_rx, _approval_rx) = RunContext::new(
@@ -68,7 +68,7 @@ async fn test_run_context_data_storage() {
         Arc::new(Session::new(
             "session-456".to_string(),
             Arc::new(InMemorySessionStore::new()),
-            Arc::new(InMemoryMessageStore::new()),
+            Arc::new(InMemoryEntryStore::new()),
         )),
         Arc::new(ToolRegistry::new()),
         AgentConfig::default(),

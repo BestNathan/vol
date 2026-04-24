@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore, Session, SessionMessage};
+use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session, SessionMessage};
 use vol_llm_agent::{AgentConfig, ReActAgent};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, LLMProvider, Message, SupportedParam,
@@ -60,11 +60,11 @@ impl LLMClient for MockLlm {
 async fn test_history_limit_applied() {
     // Create session with pre-populated messages
     let session_store = Arc::new(InMemorySessionStore::new());
-    let message_store = Arc::new(InMemoryMessageStore::new());
+    let entry_store = Arc::new(InMemoryEntryStore::new());
     let session = Arc::new(Session::new(
         "test-session".to_string(),
         session_store.clone(),
-        message_store.clone(),
+        entry_store.clone(),
     ));
 
     // Add 30 messages to session (more than default limit of 20)
