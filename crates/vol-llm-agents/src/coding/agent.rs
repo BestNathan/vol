@@ -3,7 +3,8 @@
 use std::sync::Arc;
 use std::path::PathBuf;
 use vol_llm_tool::{ToolRegistry, ToolConfig};
-use vol_llm_agent::{ReActAgent, AgentConfig, Session};
+use vol_llm_agent::{ReActAgent, AgentConfig};
+use vol_session::Session;
 use vol_llm_provider::{LLMProviderConfig, LLMProviderRegistry};
 use crate::coding::config::CodingAgentConfig;
 use crate::coding::error::CodingAgentError;
@@ -211,11 +212,11 @@ impl CodingAgent {
         let session = match &self.config.session {
             Some(s) => s.clone(),
             None => {
-                use vol_llm_agent::session::{InMemorySessionStore, InMemoryMessageStore};
+                use vol_session::{InMemoryEntryStore, InMemorySessionStore};
                 Arc::new(Session::new(
                     format!("coding_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S")),
                     Arc::new(InMemorySessionStore::new()),
-                    Arc::new(InMemoryMessageStore::new()),
+                    Arc::new(InMemoryEntryStore::new()),
                 ))
             }
         };
@@ -253,6 +254,64 @@ impl CodingAgent {
         }
 
         // Extract summary from response
+        let summary = response.content.clone();
+        let iterations = response.iterations;
+        let tool_calls = response.tool_calls.len() as u32;
+
+        Ok(CodingAgentResponse {
+            success: true,
+            summary,
+            iterations,
+            tool_calls,
+        })
+    }
+    /// Resume from an existing session with the given session ID.
+    /// Loads checkpoint-based history, then runs with new user input.
+    pub async fn resume(
+        &self,
+        session_id: &str,
+        user_input: &str,
+    ) -> Result<CodingAgentResponse, CodingAgentError> {
+        use vol_session::{InMemoryEntryStore, InMemorySessionStore};
+
+        // Get state
+        let state = self.state.as_ref()
+            .ok_or_else(|| CodingAgentError::Config("CodingAgent already consumed".to_string()))?;
+
+        // Create session using the provided session_id
+        let session = Arc::new(Session::new(
+            session_id.to_string(),
+            Arc::new(InMemorySessionStore::new()),
+            Arc::new(InMemoryEntryStore::new()),
+        ));
+
+        let agent_config = AgentConfig {
+            plugin_registry: self.config.plugin_registry.clone(),
+            unsafe_mode: self.config.unsafe_mode,
+            approval_handler: self.config.approval_handler.clone(),
+            ..state.agent_config.clone()
+        };
+
+        let mut react_agent = ReActAgent::new(
+            state.llm.clone(),
+            state.tool_registry.clone(),
+            agent_config,
+            session,
+        );
+
+        if let Some(ref sandbox) = self.sandbox {
+            react_agent = react_agent.with_sandbox(sandbox.clone());
+        }
+
+        // Resume the agent
+        let response = react_agent.resume(user_input).await
+            .map_err(|e| CodingAgentError::Agent(e))?;
+
+        if let Some(ref observer) = self.observer {
+            observer.on_complete().await
+                .map_err(|e| CodingAgentError::Observer(e))?;
+        }
+
         let summary = response.content.clone();
         let iterations = response.iterations;
         let tool_calls = response.tool_calls.len() as u32;

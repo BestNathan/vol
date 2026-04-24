@@ -44,11 +44,11 @@ fn test_config_default_session_is_none() {
 
 #[test]
 fn test_config_with_session() {
-    use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore};
-    let session = Arc::new(vol_llm_agent::Session::new(
+    use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session};
+    let session = Arc::new(Session::new(
         "test-session".to_string(),
         Arc::new(InMemorySessionStore::new()),
-        Arc::new(InMemoryMessageStore::new()),
+        Arc::new(InMemoryEntryStore::new()),
     ));
     let config = CodingAgentConfig {
         session: Some(session.clone()),

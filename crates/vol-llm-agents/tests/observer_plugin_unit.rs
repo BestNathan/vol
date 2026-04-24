@@ -118,7 +118,7 @@ async fn test_observer_plugin_forwards_multiple_events() {
 // Helper function to create test PluginContext
 fn create_test_plugin_context() -> vol_llm_agent::react::PluginContext {
     use vol_llm_agent::react::{AgentConfig, PluginRegistry, RunContext};
-    use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore, Session};
+    use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session};
     use vol_llm_tool::ToolRegistry;
 
     let (ctx, _plugin_rx, _approval_rx) = RunContext::new(
@@ -128,7 +128,7 @@ fn create_test_plugin_context() -> vol_llm_agent::react::PluginContext {
         Arc::new(Session::new(
             "session-1".to_string(),
             Arc::new(InMemorySessionStore::new()),
-            Arc::new(InMemoryMessageStore::new()),
+            Arc::new(InMemoryEntryStore::new()),
         )),
         Arc::new(ToolRegistry::new()),
         AgentConfig {
