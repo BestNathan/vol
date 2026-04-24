@@ -454,3 +454,41 @@ async fn test_coding_agent_response() {
     assert_eq!(response.iterations, 3);
     assert_eq!(response.tool_calls, 5);
 }
+
+// ========================
+// agent.rs — init_context_files tests
+// ========================
+
+#[tokio::test]
+async fn test_init_context_files_generates_missing() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let config = CodingAgentConfig {
+        working_dir: temp_dir.path().to_path_buf(),
+        llm: Some(Arc::new(DummyLlm)),
+        ..Default::default()
+    };
+    let agent = CodingAgent::new(config).await.unwrap();
+    agent.init_context_files();
+
+    assert!(temp_dir.path().join("AGENT.md").exists());
+    assert!(temp_dir.path().join("INSTRUCTION.md").exists());
+    assert!(temp_dir.path().join("CLI.md").exists());
+}
+
+#[tokio::test]
+async fn test_init_context_files_skips_existing() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let agent_md = temp_dir.path().join("AGENT.md");
+    std::fs::write(&agent_md, "EXISTING_CONTENT").unwrap();
+
+    let config = CodingAgentConfig {
+        working_dir: temp_dir.path().to_path_buf(),
+        llm: Some(Arc::new(DummyLlm)),
+        ..Default::default()
+    };
+    let agent = CodingAgent::new(config).await.unwrap();
+    agent.init_context_files();
+
+    let content = std::fs::read_to_string(&agent_md).unwrap();
+    assert_eq!(content, "EXISTING_CONTENT");
+}

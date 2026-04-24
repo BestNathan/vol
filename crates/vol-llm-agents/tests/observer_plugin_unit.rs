@@ -138,6 +138,9 @@ fn create_test_plugin_context() -> vol_llm_agent::react::PluginContext {
             plugin_registry: PluginRegistry::new(),
             agent_id: "test-agent".to_string(),
             log_base_path: std::path::PathBuf::from("logs/test"),
+            unsafe_mode: false,
+            approval_handler: None,
+            context_files: Vec::new(),
         },
     );
     vol_llm_agent::react::plugin_context_from_run_ctx(&ctx)
