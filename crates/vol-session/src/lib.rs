@@ -19,7 +19,7 @@ pub use entry::{CheckpointReason, SessionEntry, SessionEntryData, SessionEntryTy
 pub use error::{Result, SessionError};
 pub use file_store::FileSessionEntryStore;
 pub use listener::SessionListener;
-pub use memory_store::{InMemoryMessageStore, InMemorySessionStore};
+pub use memory_store::{InMemoryEntryStore, InMemoryMessageStore, InMemorySessionStore};
 pub use message::SessionMessage;
 pub use session::Session;
 pub use store::{MessageStore, SessionEntryStore, SessionStore, StoreError};

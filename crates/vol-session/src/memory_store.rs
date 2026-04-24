@@ -168,6 +168,141 @@ impl MessageStore for InMemoryMessageStore {
     }
 }
 
+/// In-memory entry store for testing.
+pub struct InMemoryEntryStore {
+    entries: tokio::sync::RwLock<Vec<crate::entry::SessionEntry>>,
+}
+
+impl Default for InMemoryEntryStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InMemoryEntryStore {
+    /// Create a new empty entry store.
+    pub fn new() -> Self {
+        Self {
+            entries: tokio::sync::RwLock::new(Vec::new()),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::store::SessionEntryStore for InMemoryEntryStore {
+    async fn save(&self, entry: crate::entry::SessionEntry) -> crate::store::Result<()> {
+        self.entries.write().await.push(entry);
+        Ok(())
+    }
+
+    async fn get_entries(&self, limit: usize) -> crate::store::Result<Vec<crate::entry::SessionEntry>> {
+        let entries = self.entries.read().await;
+        Ok(entries.iter().take(limit).cloned().collect())
+    }
+
+    async fn get_after(&self, after: i64, limit: usize) -> crate::store::Result<Vec<crate::entry::SessionEntry>> {
+        let entries = self.entries.read().await;
+        Ok(entries
+            .iter()
+            .filter(|e| e.created_at > after)
+            .take(limit)
+            .cloned()
+            .collect())
+    }
+
+    async fn find_latest_checkpoint(&self) -> crate::store::Result<Option<crate::entry::SessionEntry>> {
+        let entries = self.entries.read().await;
+        Ok(entries
+            .iter()
+            .filter(|e| e.r#type == crate::entry::SessionEntryType::Checkpoint)
+            .max_by_key(|e| e.created_at)
+            .cloned())
+    }
+
+    async fn delete_session(&self) -> crate::store::Result<()> {
+        self.entries.write().await.clear();
+        Ok(())
+    }
+
+    async fn get_count(&self) -> crate::store::Result<usize> {
+        let entries = self.entries.read().await;
+        Ok(entries.len())
+    }
+}
+
+#[cfg(test)]
+mod entry_tests {
+    use super::*;
+    use crate::entry::{SessionEntry, SessionEntryType};
+    use crate::store::SessionEntryStore;
+    use crate::CheckpointReason;
+    use vol_llm_core::Message;
+
+    #[tokio::test]
+    async fn test_in_memory_entry_store_save_and_get() {
+        let store = InMemoryEntryStore::new();
+
+        let entry = SessionEntry::new_message(
+            "test-session".to_string(),
+            Message::user("Hello, World!"),
+        );
+
+        store.save(entry.clone()).await.unwrap();
+
+        let entries = store.get_entries(10).await.unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].r#type, SessionEntryType::Message);
+    }
+
+    #[tokio::test]
+    async fn test_in_memory_entry_store_find_checkpoint() {
+        let store = InMemoryEntryStore::new();
+
+        let mut msg1 = SessionEntry::new_message(
+            "test-session".to_string(),
+            Message::user("before"),
+        );
+        msg1.created_at = 100;
+
+        let mut cp = SessionEntry::new_checkpoint(
+            "test-session".to_string(),
+            CheckpointReason::Compression,
+            None,
+        );
+        cp.created_at = 200;
+
+        let mut msg2 = SessionEntry::new_message(
+            "test-session".to_string(),
+            Message::user("after"),
+        );
+        msg2.created_at = 300;
+
+        store.save(msg1).await.unwrap();
+        store.save(cp).await.unwrap();
+        store.save(msg2).await.unwrap();
+
+        let cp = store.find_latest_checkpoint().await.unwrap().unwrap();
+        assert_eq!(cp.r#type, SessionEntryType::Checkpoint);
+
+        let after = store.get_after(cp.created_at, 10).await.unwrap();
+        assert_eq!(after.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_in_memory_entry_store_delete_session() {
+        let store = InMemoryEntryStore::new();
+
+        store.save(SessionEntry::new_message(
+            "test-session".to_string(),
+            Message::user("test"),
+        )).await.unwrap();
+
+        store.delete_session().await.unwrap();
+        let count = store.get_count().await.unwrap();
+        assert_eq!(count, 0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
