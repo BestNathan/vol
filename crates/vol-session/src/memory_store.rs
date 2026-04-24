@@ -204,7 +204,7 @@ impl crate::store::SessionEntryStore for InMemoryEntryStore {
         let entries = self.entries.read().await;
         Ok(entries
             .iter()
-            .filter(|e| e.created_at > after)
+            .filter(|e| e.created_at >= after)
             .take(limit)
             .cloned()
             .collect())
@@ -285,7 +285,7 @@ mod entry_tests {
         assert_eq!(cp.r#type, SessionEntryType::Checkpoint);
 
         let after = store.get_after(cp.created_at, 10).await.unwrap();
-        assert_eq!(after.len(), 1);
+        assert_eq!(after.len(), 2); // checkpoint + after message with >=
     }
 
     #[tokio::test]
@@ -381,8 +381,8 @@ mod tests {
     #[tokio::test]
     async fn test_memory_session_store_crud() {
         let store = Arc::new(InMemorySessionStore::new());
-        let message_store = Arc::new(InMemoryMessageStore::new());
-        let session = Session::new("session-1".to_string(), store.clone(), message_store);
+        let entry_store = Arc::new(InMemoryEntryStore::new());
+        let session = Session::new("session-1".to_string(), store.clone(), entry_store);
 
         store.create(session.clone()).await.unwrap();
 

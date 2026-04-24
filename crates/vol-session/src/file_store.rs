@@ -176,7 +176,7 @@ impl SessionEntryStore for FileSessionEntryStore {
         let mut entries = Vec::new();
         for line in lines {
             let entry = Self::from_json(&line)?;
-            if entry.created_at > after {
+            if entry.created_at >= after {
                 entries.push(entry);
                 if entries.len() >= limit {
                     break;
@@ -277,7 +277,10 @@ mod entry_tests {
         assert_eq!(cp.r#type, SessionEntryType::Checkpoint);
 
         let entries = store.get_after(cp.created_at, 10).await.unwrap();
-        assert_eq!(entries.len(), 1);
+        assert_eq!(entries.len(), 2);
+        // First entry is the checkpoint itself, second is the after message
+        assert_eq!(entries[0].r#type, SessionEntryType::Checkpoint);
+        assert_eq!(entries[1].r#type, SessionEntryType::Message);
     }
 
     #[tokio::test]

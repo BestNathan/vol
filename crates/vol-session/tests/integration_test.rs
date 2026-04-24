@@ -86,9 +86,9 @@ async fn test_file_entry_store_checkpoint_and_resume() {
     let cp = store.find_latest_checkpoint().await.unwrap().unwrap();
     assert_eq!(cp.r#type, vol_session::SessionEntryType::Checkpoint);
 
-    // Get entries after checkpoint
+    // Get entries after checkpoint (>= so includes checkpoint itself)
     let resumed = store.get_after(cp.created_at, 10).await.unwrap();
-    assert_eq!(resumed.len(), 2, "Should have 2 entries after checkpoint");
+    assert_eq!(resumed.len(), 3, "Should have 3 entries (checkpoint + 2 after)");
 
     // Test limit on get_after
     let limited = store.get_after(cp.created_at, 1).await.unwrap();
