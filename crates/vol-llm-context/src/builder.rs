@@ -1,6 +1,6 @@
 use vol_llm_core::Message;
 
-use vol_llm_core::{AttentionAnchor, ContextBlock, ContextContributor, TokenBudget, estimate_tokens};
+use crate::{AttentionAnchor, ContextBlock, ContextContributor, TokenBudget, estimate_tokens};
 
 /// Output from ContextBuilder — ready-to-send LLM messages.
 pub struct ContextOutput {

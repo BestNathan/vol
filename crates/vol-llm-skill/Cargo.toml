@@ -12,6 +12,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 serde_yaml = "0.9"
 vol-llm-core = { workspace = true }
+vol-llm-context = { workspace = true }
 vol-llm-tool = { workspace = true }
 dirs = "5"
 

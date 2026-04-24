@@ -1,8 +1,6 @@
 //! vol-llm-core: Core protocol types for LLM interaction.
 
 pub mod client;
-pub mod context_block;
-pub mod context_contributor;
 pub mod conversation;
 pub mod error;
 pub mod message;
@@ -15,8 +13,6 @@ pub mod streaming;
 pub mod tool;
 
 pub use client::*;
-pub use context_block::*;
-pub use context_contributor::*;
 pub use conversation::*;
 pub use error::*;
 pub use message::*;

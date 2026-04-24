@@ -1,4 +1,4 @@
-use crate::message::Message;
+use vol_llm_core::Message;
 
 /// Attention zone with position value for sorting.
 /// Lower position = closer to the zone boundary.

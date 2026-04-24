@@ -25,8 +25,8 @@ pub trait ContextContributor: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::Message;
     use crate::context_block::AttentionAnchor;
+    use vol_llm_core::Message;
 
     struct TestContributor {
         content: String,

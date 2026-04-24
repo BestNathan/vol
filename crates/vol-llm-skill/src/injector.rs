@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use vol_llm_core::context_block::{AttentionAnchor, ContextBlock};
-use vol_llm_core::context_contributor::ContextContributor;
+use vol_llm_context::{AttentionAnchor, ContextBlock, ContextContributor};
 use vol_llm_core::Message;
 
 use crate::loader::SkillLoader;
@@ -69,7 +68,7 @@ impl ContextContributor for SkillInjector {
 mod tests {
     use super::*;
     use crate::def::SkillDef;
-    use vol_llm_core::context_contributor::ContextContributor;
+    use vol_llm_context::ContextContributor;
 
     #[tokio::test]
     async fn test_format_metadata_empty() {

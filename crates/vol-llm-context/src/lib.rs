@@ -28,8 +28,12 @@
 //! }
 //! ```
 
-// Re-export core types from vol-llm-core to maintain stable public API.
-pub use vol_llm_core::{AttentionAnchor, ContextBlock, ContextContributor, TokenBudget, estimate_tokens};
+// Core types defined locally
+pub mod context_block;
+pub mod context_contributor;
+
+pub use context_block::{AttentionAnchor, ContextBlock, TokenBudget, estimate_tokens};
+pub use context_contributor::ContextContributor;
 
 pub mod builder;
 pub mod builtin;

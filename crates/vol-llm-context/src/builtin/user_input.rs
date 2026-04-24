@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use vol_llm_core::Message;
 
-use vol_llm_core::{AttentionAnchor, ContextBlock, ContextContributor, estimate_tokens};
+use crate::{AttentionAnchor, ContextBlock, ContextContributor, estimate_tokens};
 
 /// User input contributor — wraps the user's query as a Tail-anchored message.
 pub struct UserInputContributor {
