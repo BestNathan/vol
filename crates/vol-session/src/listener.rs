@@ -1,7 +1,7 @@
-//! Session event listener for event-driven message recording.
+//! Session event listener for event-driven entry recording.
 //!
 //! SessionListener subscribes to the event bus and records key events
-//! to the session message store.
+//! to the session entry store.
 
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -10,15 +10,16 @@ use tracing::{error, warn};
 use vol_llm_core::AgentStreamEvent;
 use vol_tracing::TracedEvent;
 
-use crate::{MessageStore, SessionError, SessionMessage};
+use crate::entry::{SessionEntry, SessionEntryData, SessionEntryType};
+use crate::{SessionEntryStore, SessionError, SessionMessage};
 
-/// Event-driven session listener for message recording.
+/// Event-driven session listener for entry recording.
 ///
 /// Subscribes to the agent event bus and filters records key events
-/// to the session message store.
+/// to the session entry store.
 pub struct SessionListener {
     event_rx: broadcast::Receiver<TracedEvent<AgentStreamEvent>>,
-    store: Arc<dyn MessageStore>,
+    store: Arc<dyn SessionEntryStore>,
     session_id: String,
 }
 
@@ -27,11 +28,11 @@ impl SessionListener {
     ///
     /// # Arguments
     /// * `event_rx` - Broadcast receiver for agent stream events
-    /// * `store` - Message store for persisting recorded messages
-    /// * `session_id` - Session ID to associate with recorded messages
+    /// * `store` - Entry store for persisting recorded entries
+    /// * `session_id` - Session ID to associate with recorded entries
     pub fn new(
         event_rx: broadcast::Receiver<TracedEvent<AgentStreamEvent>>,
-        store: Arc<dyn MessageStore>,
+        store: Arc<dyn SessionEntryStore>,
         session_id: String,
     ) -> Self {
         Self {
@@ -167,12 +168,33 @@ impl SessionListener {
         }
     }
 
+    /// Convert an agent event to a session entry and save it.
+    async fn record_event(&self, event: &AgentStreamEvent) -> Result<(), SessionError> {
+        let session_msg = match self.event_to_message(event) {
+            Some(msg) => msg,
+            None => return Ok(()),
+        };
+
+        let entry = SessionEntry {
+            id: session_msg.id,
+            session_id: session_msg.session_id,
+            created_at: session_msg.created_at,
+            parent_id: session_msg.parent_id,
+            r#type: SessionEntryType::Message,
+            data: SessionEntryData::Message {
+                message: session_msg.message,
+            },
+        };
+
+        self.store.save(entry).await.map_err(SessionError::StoreError)
+    }
+
     /// Run the listener loop, receiving events and recording them.
     ///
     /// This method runs until the event channel is closed.
     ///
     /// # Errors
-    /// Returns `Err` if there's an error storing a message.
+    /// Returns `Err` if there's an error storing an entry.
     pub async fn run(&mut self) -> Result<(), SessionError> {
         loop {
             match self.event_rx.recv().await {
@@ -183,11 +205,9 @@ impl SessionListener {
                         continue;
                     }
 
-                    if let Some(session_msg) = self.event_to_message(event) {
-                        if let Err(e) = self.store.save(session_msg).await {
-                            error!("Failed to save session message: {}", e);
-                            return Err(SessionError::StoreError(e));
-                        }
+                    if let Err(e) = self.record_event(event).await {
+                        error!("Failed to save session entry: {}", e);
+                        return Err(e);
                     }
                 }
                 Err(broadcast::error::RecvError::Closed) => {
@@ -209,7 +229,7 @@ impl SessionListener {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::InMemoryMessageStore;
+    use crate::InMemoryEntryStore;
 
     #[tokio::test]
     async fn test_should_record_thinking_complete() {
@@ -265,7 +285,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_event_to_message_agent_start() {
-        let store = Arc::new(InMemoryMessageStore::new());
+        let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
@@ -283,7 +303,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_event_to_message_tool_call_begin() {
-        let store = Arc::new(InMemoryMessageStore::new());
+        let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
@@ -307,7 +327,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_event_to_message_tool_call_complete() {
-        let store = Arc::new(InMemoryMessageStore::new());
+        let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
@@ -328,7 +348,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_event_to_message_iteration_complete_with_final_answer() {
-        let store = Arc::new(InMemoryMessageStore::new());
+        let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
@@ -347,7 +367,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_event_to_message_iteration_without_final_answer_returns_none() {
-        let store = Arc::new(InMemoryMessageStore::new());
+        let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
@@ -364,7 +384,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_listener_run_records_events() {
-        let store = Arc::new(InMemoryMessageStore::new());
+        let store = Arc::new(InMemoryEntryStore::new());
         let (tx, rx) = broadcast::channel(100);
         let mut listener = SessionListener::new(rx, store.clone(), "session-1".to_string());
 
@@ -381,18 +401,20 @@ mod tests {
         // Run the listener until channel closes
         listener.run().await.unwrap();
 
-        // Verify the message was saved
-        let messages = store.get_by_session("session-1", 10).await.unwrap();
-        assert_eq!(messages.len(), 1);
-        assert_eq!(
-            messages[0].message.role,
-            vol_llm_core::MessageRole::Assistant
-        );
+        // Verify the entry was saved
+        let entries = store.get_entries(10).await.unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].r#type, SessionEntryType::Message);
+        if let SessionEntryData::Message { message } = &entries[0].data {
+            assert_eq!(message.role, vol_llm_core::MessageRole::Assistant);
+        } else {
+            panic!("Expected message entry");
+        }
     }
 
     #[tokio::test]
     async fn test_listener_run_records_multiple_events() {
-        let store = Arc::new(InMemoryMessageStore::new());
+        let store = Arc::new(InMemoryEntryStore::new());
         let (tx, rx) = broadcast::channel(100);
         let mut listener = SessionListener::new(rx, store.clone(), "session-1".to_string());
 
@@ -428,24 +450,29 @@ mod tests {
         // Run listener
         listener.run().await.unwrap();
 
-        // Verify all messages were saved
-        let messages = store.get_by_session("session-1", 10).await.unwrap();
-        assert_eq!(messages.len(), 3);
+        // Verify all entries were saved
+        let entries = store.get_entries(10).await.unwrap();
+        assert_eq!(entries.len(), 3);
 
         // First: thinking (Assistant)
-        assert_eq!(
-            messages[0].message.role,
-            vol_llm_core::MessageRole::Assistant
-        );
+        if let SessionEntryData::Message { message } = &entries[0].data {
+            assert_eq!(message.role, vol_llm_core::MessageRole::Assistant);
+        } else {
+            panic!("Expected message entry");
+        }
         // Second: tool result (Tool)
-        assert_eq!(messages[1].message.role, vol_llm_core::MessageRole::Tool);
-        // Verify tool_call_id is set
-        assert_eq!(messages[1].message.tool_call_id, Some("call_1".to_string()));
+        if let SessionEntryData::Message { message } = &entries[1].data {
+            assert_eq!(message.role, vol_llm_core::MessageRole::Tool);
+            assert_eq!(message.tool_call_id, Some("call_1".to_string()));
+        } else {
+            panic!("Expected message entry");
+        }
         // Third: final answer (Assistant)
-        assert_eq!(
-            messages[2].message.role,
-            vol_llm_core::MessageRole::Assistant
-        );
+        if let SessionEntryData::Message { message } = &entries[2].data {
+            assert_eq!(message.role, vol_llm_core::MessageRole::Assistant);
+        } else {
+            panic!("Expected message entry");
+        }
     }
 
     #[tokio::test]
@@ -555,7 +582,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_event_to_message_content_complete() {
-        let store = Arc::new(InMemoryMessageStore::new());
+        let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
@@ -572,7 +599,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_event_to_message_tool_call_error() {
-        let store = Arc::new(InMemoryMessageStore::new());
+        let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
@@ -592,7 +619,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_event_to_message_tool_call_skipped() {
-        let store = Arc::new(InMemoryMessageStore::new());
+        let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
         let listener = SessionListener::new(rx, store, "session-1".to_string());
 
