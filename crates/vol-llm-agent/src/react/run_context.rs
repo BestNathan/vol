@@ -7,8 +7,7 @@ use super::plugin::PluginDecision;
 use super::state::{ReasoningStep, ToolCallRecord};
 use super::stream::AgentStreamEvent;
 use super::AgentConfig;
-use crate::session::Session;
-use crate::session::SessionMessage;
+use vol_session::{Session, SessionMessage};
 use vol_llm_context::ContextBuilderBuilder;
 use vol_llm_context::builtin::UserInputContributor;
 use std::collections::HashMap;
@@ -534,7 +533,7 @@ impl Clone for RunContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session::{InMemoryMessageStore, InMemorySessionStore, SessionMessage};
+    use vol_session::{InMemoryEntryStore, InMemorySessionStore, SessionMessage};
     use vol_llm_core::{MessageContent, MessageRole};
 
     fn create_test_context() -> RunContext {
@@ -545,7 +544,7 @@ mod tests {
             Arc::new(Session::new(
                 "session-1".to_string(),
                 Arc::new(InMemorySessionStore::new()),
-                Arc::new(InMemoryMessageStore::new()),
+                Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
@@ -661,7 +660,7 @@ mod tests {
             Arc::new(Session::new(
                 "session-1".to_string(),
                 Arc::new(InMemorySessionStore::new()),
-                Arc::new(InMemoryMessageStore::new()),
+                Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
@@ -696,7 +695,7 @@ mod tests {
         };
 
         let session_store = Arc::new(InMemorySessionStore::new());
-        let message_store = Arc::new(InMemoryMessageStore::new());
+        let message_store = Arc::new(InMemoryEntryStore::new());
         let session = Arc::new(Session::new(
             "session-1".to_string(),
             session_store.clone(),
@@ -753,7 +752,7 @@ mod tests {
             Arc::new(Session::new(
                 "session-1".to_string(),
                 Arc::new(InMemorySessionStore::new()),
-                Arc::new(InMemoryMessageStore::new()),
+                Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
@@ -788,7 +787,7 @@ mod tests {
         };
 
         let session_store = Arc::new(InMemorySessionStore::new());
-        let message_store = Arc::new(InMemoryMessageStore::new());
+        let message_store = Arc::new(InMemoryEntryStore::new());
         let session = Arc::new(Session::new(
             "session-1".to_string(),
             session_store.clone(),
@@ -832,7 +831,7 @@ mod tests {
             Arc::new(Session::new(
                 "session-1".to_string(),
                 Arc::new(InMemorySessionStore::new()),
-                Arc::new(InMemoryMessageStore::new()),
+                Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
@@ -859,7 +858,7 @@ mod tests {
             Arc::new(Session::new(
                 "session-1".to_string(),
                 Arc::new(InMemorySessionStore::new()),
-                Arc::new(InMemoryMessageStore::new()),
+                Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
@@ -888,7 +887,7 @@ mod tests {
             Arc::new(Session::new(
                 "session-1".to_string(),
                 Arc::new(InMemorySessionStore::new()),
-                Arc::new(InMemoryMessageStore::new()),
+                Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
@@ -910,7 +909,7 @@ mod tests {
             Arc::new(Session::new(
                 "session-1".to_string(),
                 Arc::new(InMemorySessionStore::new()),
-                Arc::new(InMemoryMessageStore::new()),
+                Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
