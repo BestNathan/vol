@@ -34,6 +34,10 @@ pub struct AgentConfig {
     /// Custom approval handler. If set, this replaces the default CLI handler.
     /// Use this for TUI/HTTP-based approval flows.
     pub approval_handler: Option<super::BoxedApprovalHandler>,
+
+    /// Project context files to load into system prompt at startup.
+    /// Files that don't exist are silently skipped.
+    pub context_files: Vec<String>,
 }
 
 /// Generate a short random agent ID if not provided
@@ -63,6 +67,7 @@ impl Default for AgentConfig {
             log_base_path: PathBuf::from("logs/agents"),
             unsafe_mode: false,
             approval_handler: None,
+            context_files: Vec::new(),
         }
     }
 }
@@ -773,6 +778,7 @@ mod tests {
             log_base_path: PathBuf::from("custom/logs"),
             unsafe_mode: false,
             approval_handler: None,
+            context_files: Vec::new(),
         };
         assert_eq!(config.max_history_messages, 50);
         assert_eq!(config.agent_id, "custom_agent");

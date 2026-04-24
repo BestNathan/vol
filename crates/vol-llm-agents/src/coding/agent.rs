@@ -75,6 +75,12 @@ impl CodingAgent {
         Self::register_coding_tools(&mut tool_registry, &config.tool_config);
 
         // Create agent config - use plugin_registry from config
+        let context_files = vec![
+            config.working_dir.join("AGENT.md").to_string_lossy().to_string(),
+            config.working_dir.join("INSTRUCTION.md").to_string_lossy().to_string(),
+            config.working_dir.join("CLI.md").to_string_lossy().to_string(),
+        ];
+
         let agent_config = AgentConfig {
             max_iterations: config.max_iterations,
             max_history_messages: 20,
@@ -85,6 +91,7 @@ impl CodingAgent {
             plugin_registry: config.plugin_registry.clone(),
             agent_id: if config.agent_id.is_empty() { generate_agent_id() } else { config.agent_id.clone() },
             log_base_path: config.log_base_path.clone(),
+            context_files,
             ..Default::default()
         };
 
