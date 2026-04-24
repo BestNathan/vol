@@ -48,7 +48,7 @@ pub struct CodingAgentConfig {
 
     /// Shared session for conversation history across runs.
     /// If provided, CodingAgent::run() reuses it instead of creating a new InMemory session.
-    pub session: Option<Arc<vol_llm_agent::Session>>,
+    pub session: Option<Arc<vol_session::Session>>,
 
     /// Custom approval handler for TUI/HTTP-based approval flows.
     pub approval_handler: Option<BoxedApprovalHandler>,

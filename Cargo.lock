@@ -4188,6 +4188,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "vol-llm-context",
  "vol-llm-core",
  "vol-llm-tool",
 ]

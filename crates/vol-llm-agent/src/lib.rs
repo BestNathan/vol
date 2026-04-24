@@ -6,7 +6,6 @@ pub mod plugins;
 pub mod prompt_context;
 pub mod rag;
 pub mod react;
-pub mod session;
 
 // Re-export vol-session types
 pub use embedding::{DashScopeConfig, DashScopeEmbedder, DashScopeModel, Embedder};
@@ -17,8 +16,4 @@ pub use react::state::{ReasoningStep, ToolCallRecord};
 pub use react::{
     AgentBuilder, AgentConfig, AgentError, AgentResponse, AgentStreamEvent, AgentStreamReceiver,
     ReActAgent,
-};
-pub use vol_session::{
-    FileMessageStore, InMemoryMessageStore, InMemorySessionStore, MessageStore, Result, Session,
-    SessionError, SessionListener, SessionMessage, SessionStore,
 };

@@ -12,6 +12,8 @@ use std::io::{self, stdout};
 use std::sync::Arc;
 use std::time::Duration;
 
+use vol_session::Session;
+
 use app::AppState;
 use crossterm::{
     execute,
@@ -26,7 +28,7 @@ use render::EventBuffer;
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, EventObserver, ObserverError};
 use vol_llm_core::AgentStreamEvent;
 use vol_llm_tool::{ToolConfig, ProxyConfig};
-use vol_session::FileMessageStore;
+use vol_session::FileSessionEntryStore;
 
 /// Observer that forwards events to EventBuffer for AppState mutation.
 struct RatatuiObserver {
@@ -64,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("ANTHROPIC_AUTH_TOKEN must be set");
 
     // Create persistent session
-    let session: Arc<vol_llm_agents::coding::Session> = create_session()?;
+    let session: Arc<Session> = create_session()?;
     let session_id = session.id.clone();
 
     // Setup terminal with panic recovery
@@ -99,7 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     result
 }
 
-fn create_session() -> Result<Arc<vol_llm_agents::coding::Session>, Box<dyn std::error::Error>> {
+fn create_session() -> Result<Arc<Session>, Box<dyn std::error::Error>> {
     let session_dir = std::env::current_dir()
         .unwrap_or_default()
         .join(".vol-sessions");
@@ -107,22 +109,22 @@ fn create_session() -> Result<Arc<vol_llm_agents::coding::Session>, Box<dyn std:
     if let Err(e) = std::fs::create_dir_all(&session_dir) {
         eprintln!("Warning: cannot create session dir: {}", e);
         eprintln!("Using in-memory session (no history persistence)");
-        use vol_session::InMemoryMessageStore;
-        use vol_llm_agent::session::InMemorySessionStore;
-        return Ok(Arc::new(vol_llm_agents::coding::Session::new(
+        use vol_session::InMemorySessionStore;
+        let entry_store = Arc::new(vol_session::InMemoryEntryStore::new());
+        return Ok(Arc::new(Session::new(
             "tui_memory".to_string(),
             Arc::new(InMemorySessionStore::new()),
-            Arc::new(InMemoryMessageStore::new()),
+            entry_store,
         )));
     }
 
     let session_id = format!("tui_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S%.3f"));
-    let message_store = Arc::new(FileMessageStore::new(&session_dir, &session_id));
+    let entry_store = Arc::new(FileSessionEntryStore::new(&session_dir, &session_id));
     let session_store = Arc::new(vol_session::InMemorySessionStore::new());
-    Ok(Arc::new(vol_llm_agents::coding::Session::new(
+    Ok(Arc::new(Session::new(
         session_id.clone(),
         session_store,
-        message_store,
+        entry_store,
     )))
 }
 
@@ -141,7 +143,7 @@ fn cleanup_terminal() -> io::Result<()> {
 async fn run_event_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     state: Arc<tokio::sync::Mutex<AppState>>,
-    session: Arc<vol_llm_agents::coding::Session>,
+    session: Arc<Session>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut render_interval = tokio::time::interval(Duration::from_millis(33)); // ~30fps
     let mut events = EventStream::new();
@@ -331,7 +333,7 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
 fn spawn_agent(
     input: String,
     state: Arc<tokio::sync::Mutex<AppState>>,
-    session: Arc<vol_llm_agents::coding::Session>,
+    session: Arc<Session>,
 ) {
     tokio::spawn(async move {
         // Set running flag and clear approval state
