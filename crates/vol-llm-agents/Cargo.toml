@@ -24,6 +24,7 @@ vol-llm-tdengine = { path = "../vol-llm-tdengine" }
 vol-tdengine = { path = "../vol-tdengine" }
 vol-llm-provider = { path = "../vol-llm-provider" }
 vol-llm-tools-builtin = { path = "../vol-llm-tools-builtin" }
+vol-session = { path = "../vol-session" }
 chrono = "0.4"
 
 [dev-dependencies]

@@ -2,6 +2,7 @@
 
 mod agent;
 mod channelled_observer;
+mod compressor;
 mod config;
 mod error;
 mod hitl;
@@ -12,6 +13,7 @@ mod sandbox;
 
 pub use agent::{CodingAgent, CodingAgentBuilder, CodingAgentResponse};
 pub use channelled_observer::ChannelledEventObserver;
+pub use compressor::ToolCallCompressor;
 pub use config::CodingAgentConfig;
 pub use error::{CodingAgentError, ObserverError, HITLError};
 pub use hitl::{HITLDecision, HITLHandler};
