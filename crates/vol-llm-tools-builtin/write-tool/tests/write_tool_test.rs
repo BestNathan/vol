@@ -50,21 +50,22 @@ async fn test_write_overwrite_file() {
 }
 
 #[tokio::test]
-async fn test_write_parent_not_exist() {
+async fn test_write_creates_parent_dirs() {
+    // WriteTool creates parent directories if they don't exist
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let nested_path = temp_dir.path().join("a").join("b").join("c").join("file.txt");
+    let content = "Nested content";
+
     let tool = WriteTool::new();
     let args = serde_json::json!({
-        "file_path": "/nonexistent/directory/file.txt",
-        "content": "Some content"
+        "file_path": nested_path.to_str().unwrap(),
+        "content": content
     });
     let context = ToolContext::default();
 
-    let result = tool.execute(&args, &context).await;
-    assert!(result.is_err());
+    let result = tool.execute(&args, &context).await.unwrap();
+    assert!(result.success);
 
-    let err = result.unwrap_err();
-    assert!(matches!(err, ToolError::ExecutionFailed(_)));
-
-    // Verify the error message mentions parent directory
-    let err_msg = err.to_string();
-    assert!(err_msg.contains("Parent directory does not exist"));
+    let written_content = tokio::fs::read_to_string(&nested_path).await.unwrap();
+    assert_eq!(written_content, content);
 }

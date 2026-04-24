@@ -27,6 +27,16 @@ impl ContextBuilder {
         self.contributors.push(contributor);
     }
 
+    /// Get a reference to the token budget.
+    pub fn token_budget(&self) -> &TokenBudget {
+        &self.token_budget
+    }
+
+    /// Get contributor names as a list.
+    pub fn contributor_names(&self) -> Vec<&str> {
+        self.contributors.iter().map(|c| c.name()).collect()
+    }
+
     /// Build the context: collect blocks, check budget, compress if needed, produce messages.
     pub async fn build(mut self) -> ContextOutput {
         // Step 1: Collect blocks
@@ -107,6 +117,15 @@ impl ContextBuilder {
     }
 }
 
+impl Clone for ContextBuilder {
+    fn clone(&self) -> Self {
+        Self {
+            contributors: self.contributors.iter().map(|c| c.clone_box()).collect(),
+            token_budget: self.token_budget.clone(),
+        }
+    }
+}
+
 /// Builder pattern for ContextBuilder.
 pub struct ContextBuilderBuilder {
     token_limit: usize,
@@ -140,6 +159,14 @@ impl ContextBuilderBuilder {
         self
     }
 
+    /// Copy contributors from an existing ContextBuilder.
+    pub fn add_contributors_from(mut self, builder: &ContextBuilder) -> Self {
+        for c in &builder.contributors {
+            self.contributors.push(c.clone_box());
+        }
+        self
+    }
+
     pub fn build(self) -> ContextBuilder {
         let budget = TokenBudget::new(self.token_limit, self.head_size, self.tail_size);
         let mut builder = ContextBuilder::new(budget);
@@ -147,6 +174,17 @@ impl ContextBuilderBuilder {
             builder.add_contributor(contributor);
         }
         builder
+    }
+}
+
+impl Clone for ContextBuilderBuilder {
+    fn clone(&self) -> Self {
+        Self {
+            token_limit: self.token_limit,
+            head_size: self.head_size,
+            tail_size: self.tail_size,
+            contributors: self.contributors.iter().map(|c| c.clone_box()).collect(),
+        }
     }
 }
 
@@ -177,6 +215,14 @@ mod tests {
 
         fn estimate_size(&self) -> usize {
             self.messages.iter().map(estimate_tokens).sum()
+        }
+
+        fn clone_box(&self) -> Box<dyn ContextContributor> {
+            Box::new(SimpleContributor {
+                messages: self.messages.clone(),
+                anchor: self.anchor.clone(),
+                name: self.name.clone(),
+            })
         }
     }
 

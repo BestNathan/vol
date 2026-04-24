@@ -117,6 +117,27 @@ impl MessageStore for InMemoryMessageStore {
             .unwrap_or_default())
     }
 
+    async fn get_after(
+        &self,
+        session_id: &str,
+        after: i64,
+        limit: usize,
+    ) -> Result<Vec<SessionMessage>> {
+        let messages = self.messages.read().await;
+        Ok(messages
+            .get(session_id)
+            .map(|msgs| {
+                let mut filtered: Vec<_> = msgs
+                    .iter()
+                    .filter(|m| m.created_at > after)
+                    .cloned()
+                    .collect();
+                filtered.sort_by_key(|m| m.created_at);
+                filtered.into_iter().take(limit).collect()
+            })
+            .unwrap_or_default())
+    }
+
     async fn delete_session(&self, session_id: &str) -> Result<()> {
         let mut messages = self.messages.write().await;
         messages.remove(session_id);
@@ -180,6 +201,30 @@ mod tests {
 
         let retrieved = store.get_before("session-1", 150, 10).await.unwrap();
         assert_eq!(retrieved.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_memory_message_store_get_after() {
+        let store = InMemoryMessageStore::new();
+
+        let mut msg1 = SessionMessage::new("session-1".to_string(), Message::user("First"));
+        msg1.created_at = 100;
+        let mut msg2 = SessionMessage::new("session-1".to_string(), Message::user("Second"));
+        msg2.created_at = 200;
+        let mut msg3 = SessionMessage::new("session-1".to_string(), Message::user("Third"));
+        msg3.created_at = 300;
+
+        store.save(msg1).await.unwrap();
+        store.save(msg2).await.unwrap();
+        store.save(msg3).await.unwrap();
+
+        let retrieved = store.get_after("session-1", 150, 10).await.unwrap();
+        assert_eq!(retrieved.len(), 2);
+        assert_eq!(retrieved[0].message.content.as_ref().unwrap().as_str(), "Second");
+        assert_eq!(retrieved[1].message.content.as_ref().unwrap().as_str(), "Third");
+
+        let limited = store.get_after("session-1", 150, 1).await.unwrap();
+        assert_eq!(limited.len(), 1);
     }
 
     #[tokio::test]
