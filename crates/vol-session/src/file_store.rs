@@ -1,67 +1,71 @@
-//! File-based message store using JSONL format.
+//! File-based entry store using JSONL format.
 
-use crate::message::SessionMessage;
-use crate::store::MessageStore;
-use crate::store::{Result, StoreError};
+use crate::entry::{SessionEntry, SessionEntryData, SessionEntryType};
+use crate::store::{Result, SessionEntryStore, StoreError};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use vol_llm_core::Message;
 
-/// File-based message store using JSONL format.
-pub struct FileMessageStore {
-    base_path: PathBuf,
+/// File-based entry store using JSONL format.
+///
+/// Stores all entry types in `{entry_dir}/{session_id}.jsonl`.
+pub struct FileSessionEntryStore {
+    entry_dir: PathBuf,
     #[allow(dead_code)]
     session_id: String,
     file_path: PathBuf,
 }
 
-/// JSONL line format for persistence
+/// New JSONL line format for SessionEntry.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct SessionMessageLine {
+struct SessionEntryLine {
+    id: String,
+    session_id: String,
+    created_at: i64,
+    parent_id: Option<String>,
+    r#type: String,
+    data: serde_json::Value,
+}
+
+/// Legacy JSONL line format (from old MessageStore era).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct LegacyMessageLine {
     event: String,
-    data: SessionMessageData,
+    data: LegacyMessageData,
     session_id: String,
     timestamp: i64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct SessionMessageData {
+struct LegacyMessageData {
     id: String,
     session_id: String,
     message: serde_json::Value,
     parent_id: Option<String>,
     created_at: i64,
-    metadata: std::collections::HashMap<String, String>,
+    metadata: HashMap<String, String>,
 }
 
-impl FileMessageStore {
-    /// Create a new file message store for a session.
-    ///
-    /// # Arguments
-    /// * `base_path` - Base directory for storing session files
-    /// * `session_id` - Session identifier (used as filename)
-    pub fn new<P: AsRef<Path>>(base_path: P, session_id: &str) -> Self {
-        let base_path = base_path.as_ref().to_path_buf();
-        let sessions_dir = base_path.join("sessions");
-        let file_path = sessions_dir.join(format!("{}.jsonl", session_id));
-
+impl FileSessionEntryStore {
+    /// Create a new file entry store for a session.
+    pub fn new<P: AsRef<Path>>(entry_dir: P, session_id: &str) -> Self {
+        let entry_dir = entry_dir.as_ref().to_path_buf();
+        let file_path = entry_dir.join(format!("{}.jsonl", session_id));
         Self {
-            base_path,
+            entry_dir,
             session_id: session_id.to_string(),
             file_path,
         }
     }
 
-    /// Ensure the sessions directory exists.
     fn ensure_dir(&self) -> std::io::Result<()> {
-        let sessions_dir = self.base_path.join("sessions");
-        fs::create_dir_all(&sessions_dir)
+        fs::create_dir_all(&self.entry_dir)
     }
 
-    /// Append a line to the JSONL file.
     fn append_line(&self, line: &str) -> std::io::Result<()> {
         self.ensure_dir()?;
         let mut file = OpenOptions::new()
@@ -72,7 +76,6 @@ impl FileMessageStore {
         Ok(())
     }
 
-    /// Read all lines from the JSONL file.
     fn read_all_lines(&self) -> std::io::Result<Vec<String>> {
         let mut lines = Vec::new();
         if self.file_path.exists() {
@@ -85,150 +88,210 @@ impl FileMessageStore {
         Ok(lines)
     }
 
-    /// Convert SessionMessage to SessionMessageLine for JSONL storage.
-    fn to_line(message: &SessionMessage) -> SessionMessageLine {
-        SessionMessageLine {
-            event: "SessionMessage".to_string(),
-            data: SessionMessageData {
-                id: message.id.clone(),
-                session_id: message.session_id.clone(),
-                message: serde_json::to_value(&message.message).unwrap_or_default(),
-                parent_id: message.parent_id.clone(),
-                created_at: message.created_at,
-                metadata: message.metadata.clone(),
+    fn to_json(entry: &SessionEntry) -> Result<String> {
+        let line = SessionEntryLine {
+            id: entry.id.clone(),
+            session_id: entry.session_id.clone(),
+            created_at: entry.created_at,
+            parent_id: entry.parent_id.clone(),
+            r#type: match entry.r#type {
+                SessionEntryType::Message => "message".to_string(),
+                SessionEntryType::Checkpoint => "checkpoint".to_string(),
+                SessionEntryType::Summary => "summary".to_string(),
             },
-            session_id: message.session_id.clone(),
-            timestamp: message.created_at,
-        }
+            data: serde_json::to_value(&entry.data).map_err(|e| {
+                StoreError::Serialization(format!("Failed to serialize entry data: {}", e))
+            })?,
+        };
+        serde_json::to_string(&line).map_err(|e| {
+            StoreError::Serialization(format!("Failed to serialize entry: {}", e))
+        })
     }
 
-    /// Convert SessionMessageLine back to SessionMessage.
-    fn from_line(line: &SessionMessageLine) -> Result<SessionMessage> {
-        let message: Message = serde_json::from_value(line.data.message.clone())
-            .map_err(|e| StoreError::Serialization(format!("Failed to parse message: {}", e)))?;
+    fn from_json(json: &str) -> Result<SessionEntry> {
+        // Try new format first
+        if let Ok(line) = serde_json::from_str::<SessionEntryLine>(json) {
+            let data: SessionEntryData = serde_json::from_value(line.data).map_err(|e| {
+                StoreError::Serialization(format!("Failed to parse entry data: {}", e))
+            })?;
+            let entry_type = match line.r#type.as_str() {
+                "message" => SessionEntryType::Message,
+                "checkpoint" => SessionEntryType::Checkpoint,
+                "summary" => SessionEntryType::Summary,
+                _ => return Err(StoreError::Serialization(format!("Unknown entry type: {}", line.r#type))),
+            };
+            return Ok(SessionEntry {
+                id: line.id,
+                session_id: line.session_id,
+                created_at: line.created_at,
+                parent_id: line.parent_id,
+                r#type: entry_type,
+                data,
+            });
+        }
 
-        Ok(SessionMessage {
-            id: line.data.id.clone(),
-            session_id: line.data.session_id.clone(),
-            message,
-            parent_id: line.data.parent_id.clone(),
-            created_at: line.data.created_at,
-            metadata: line.data.metadata.clone(),
-        })
+        // Fall back to legacy format
+        if let Ok(legacy) = serde_json::from_str::<LegacyMessageLine>(json) {
+            let message: Message = serde_json::from_value(legacy.data.message).map_err(|e| {
+                StoreError::Serialization(format!("Failed to parse legacy message: {}", e))
+            })?;
+            Ok(SessionEntry {
+                id: legacy.data.id,
+                session_id: legacy.data.session_id,
+                created_at: legacy.data.created_at,
+                parent_id: legacy.data.parent_id,
+                r#type: SessionEntryType::Message,
+                data: SessionEntryData::Message { message },
+            })
+        } else {
+            Err(StoreError::Serialization(format!(
+                "Failed to parse JSONL line: {}",
+                json
+            )))
+        }
     }
 }
 
 #[async_trait]
-impl MessageStore for FileMessageStore {
-    async fn save(&self, message: SessionMessage) -> Result<()> {
-        let line = Self::to_line(&message);
-        let json = serde_json::to_string(&line).map_err(|e| {
-            StoreError::Serialization(format!("Failed to serialize message: {}", e))
-        })?;
-        self.append_line(&json).map_err(|e| StoreError::Io(e))?;
-        Ok(())
+impl SessionEntryStore for FileSessionEntryStore {
+    async fn save(&self, entry: SessionEntry) -> Result<()> {
+        let json = Self::to_json(&entry)?;
+        self.append_line(&json).map_err(StoreError::Io)
     }
 
-    async fn get_by_session(&self, _session_id: &str, limit: usize) -> Result<Vec<SessionMessage>> {
-        let lines = self.read_all_lines().map_err(|e| StoreError::Io(e))?;
-
-        let mut messages = Vec::new();
+    async fn get_entries(&self, limit: usize) -> Result<Vec<SessionEntry>> {
+        let lines = self.read_all_lines().map_err(StoreError::Io)?;
+        let mut entries = Vec::new();
         for line in lines {
-            let msg_line: SessionMessageLine = serde_json::from_str(&line).map_err(|e| {
-                StoreError::Serialization(format!("Failed to parse JSONL line: {}", e))
-            })?;
-            messages.push(Self::from_line(&msg_line)?);
-            if messages.len() >= limit {
+            if entries.len() >= limit {
                 break;
             }
+            entries.push(Self::from_json(&line)?);
         }
-        Ok(messages)
+        Ok(entries)
     }
 
-    async fn get_before(
-        &self,
-        _session_id: &str,
-        _before: i64,
-        _limit: usize,
-    ) -> Result<Vec<SessionMessage>> {
-        // TODO: Implement timestamp-based pagination
-        unimplemented!("get_before is not yet implemented")
-    }
-
-    async fn get_after(
-        &self,
-        _session_id: &str,
-        after: i64,
-        limit: usize,
-    ) -> Result<Vec<SessionMessage>> {
-        let lines = self.read_all_lines().map_err(|e| StoreError::Io(e))?;
-
-        let mut messages = Vec::new();
+    async fn get_after(&self, after: i64, limit: usize) -> Result<Vec<SessionEntry>> {
+        let lines = self.read_all_lines().map_err(StoreError::Io)?;
+        let mut entries = Vec::new();
         for line in lines {
-            let msg_line: SessionMessageLine = serde_json::from_str(&line).map_err(|e| {
-                StoreError::Serialization(format!("Failed to parse JSONL line: {}", e))
-            })?;
-            if msg_line.timestamp > after {
-                messages.push(Self::from_line(&msg_line)?);
-                if messages.len() >= limit {
+            let entry = Self::from_json(&line)?;
+            if entry.created_at > after {
+                entries.push(entry);
+                if entries.len() >= limit {
                     break;
                 }
             }
         }
-        Ok(messages)
+        Ok(entries)
     }
 
-    async fn delete_session(&self, _session_id: &str) -> Result<()> {
+    async fn find_latest_checkpoint(&self) -> Result<Option<SessionEntry>> {
+        let lines = self.read_all_lines().map_err(StoreError::Io)?;
+        let mut latest: Option<SessionEntry> = None;
+        for line in lines {
+            if let Ok(entry) = Self::from_json(&line) {
+                if entry.r#type == SessionEntryType::Checkpoint {
+                    match &latest {
+                        Some(current) if entry.created_at > current.created_at => {
+                            latest = Some(entry);
+                        }
+                        None => {
+                            latest = Some(entry);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        Ok(latest)
+    }
+
+    async fn delete_session(&self) -> Result<()> {
         if self.file_path.exists() {
-            fs::remove_file(&self.file_path).map_err(|e| StoreError::Io(e))?;
+            fs::remove_file(&self.file_path).map_err(StoreError::Io)?;
         }
         Ok(())
     }
 
-    async fn update(&self, _id: &str, _message: SessionMessage) -> Result<()> {
-        // JSONL is append-only; updates would require rewriting the entire file
-        unimplemented!("update is not supported for append-only JSONL storage")
-    }
-
-    async fn get_count(&self, _session_id: &str) -> Result<usize> {
-        let lines = self.read_all_lines().map_err(|e| StoreError::Io(e))?;
+    async fn get_count(&self) -> Result<usize> {
+        let lines = self.read_all_lines().map_err(StoreError::Io)?;
         Ok(lines.len())
-    }
-
-    async fn cleanup_expired(&self, _before: i64) -> Result<()> {
-        // TODO: Implement time-based cleanup
-        unimplemented!("cleanup_expired is not yet implemented")
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod entry_tests {
     use super::*;
+    use crate::entry::{SessionEntry, SessionEntryType};
+    use crate::CheckpointReason;
     use tempfile::tempdir;
     use vol_llm_core::Message;
 
     #[tokio::test]
-    async fn test_file_message_store_save() {
+    async fn test_file_entry_store_save_and_get() {
         let temp_dir = tempdir().unwrap();
-        let store = FileMessageStore::new(temp_dir.path(), "test-session");
+        let store = FileSessionEntryStore::new(temp_dir.path(), "test-session");
 
-        let message =
-            SessionMessage::new("test-session".to_string(), Message::user("Hello, World!"));
-
-        store.save(message).await.unwrap();
-
-        // Verify file exists and has content
-        assert!(store.file_path.exists(), "JSONL file should exist");
-
-        let content = fs::read_to_string(&store.file_path).unwrap();
-        assert!(!content.is_empty(), "JSONL file should have content");
-        assert!(
-            content.contains("SessionMessage"),
-            "Should contain event type"
+        let entry = SessionEntry::new_message(
+            "test-session".to_string(),
+            Message::user("Hello, World!"),
         );
-        assert!(
-            content.contains("Hello, World!"),
-            "Should contain message content"
+
+        store.save(entry.clone()).await.unwrap();
+
+        let entries = store.get_entries(10).await.unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].r#type, SessionEntryType::Message);
+    }
+
+    #[tokio::test]
+    async fn test_file_entry_store_find_checkpoint() {
+        let temp_dir = tempdir().unwrap();
+        let store = FileSessionEntryStore::new(temp_dir.path(), "test-session");
+
+        let mut before = SessionEntry::new_message(
+            "test-session".to_string(),
+            Message::user("before"),
         );
+        before.created_at = 1000;
+
+        let mut checkpoint = SessionEntry::new_checkpoint(
+            "test-session".to_string(),
+            CheckpointReason::Compression,
+            None,
+        );
+        checkpoint.created_at = 1001;
+
+        let mut after = SessionEntry::new_message(
+            "test-session".to_string(),
+            Message::user("after"),
+        );
+        after.created_at = 1002;
+
+        store.save(before).await.unwrap();
+        store.save(checkpoint).await.unwrap();
+        store.save(after).await.unwrap();
+
+        let cp = store.find_latest_checkpoint().await.unwrap().unwrap();
+        assert_eq!(cp.r#type, SessionEntryType::Checkpoint);
+
+        let entries = store.get_after(cp.created_at, 10).await.unwrap();
+        assert_eq!(entries.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_file_entry_store_delete_session() {
+        let temp_dir = tempdir().unwrap();
+        let store = FileSessionEntryStore::new(temp_dir.path(), "test-session");
+
+        store.save(SessionEntry::new_message(
+            "test-session".to_string(),
+            Message::user("test"),
+        )).await.unwrap();
+
+        store.delete_session().await.unwrap();
+        let count = store.get_count().await.unwrap();
+        assert_eq!(count, 0);
     }
 }

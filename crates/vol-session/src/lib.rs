@@ -17,7 +17,7 @@ pub use compressor::MessageCompressor;
 pub use compressors::{PositionSampleCompressor, RoleFilterCompressor};
 pub use entry::{CheckpointReason, SessionEntry, SessionEntryData, SessionEntryType};
 pub use error::{Result, SessionError};
-pub use file_store::FileMessageStore;
+pub use file_store::FileSessionEntryStore;
 pub use listener::SessionListener;
 pub use memory_store::{InMemoryMessageStore, InMemorySessionStore};
 pub use message::SessionMessage;
