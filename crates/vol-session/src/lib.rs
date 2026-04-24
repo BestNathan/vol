@@ -22,4 +22,4 @@ pub use listener::SessionListener;
 pub use memory_store::{InMemoryMessageStore, InMemorySessionStore};
 pub use message::SessionMessage;
 pub use session::Session;
-pub use store::{MessageStore, SessionStore, StoreError};
+pub use store::{MessageStore, SessionEntryStore, SessionStore, StoreError};
