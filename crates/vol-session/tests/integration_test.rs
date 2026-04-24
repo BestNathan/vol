@@ -1,230 +1,200 @@
-//! Integration tests for SessionListener end-to-end workflow.
+//! Integration tests for FileSessionEntryStore end-to-end workflow.
 //!
-//! These tests verify that SessionListener correctly records events
-//! to a JSONL file using FileMessageStore.
+//! These tests verify that FileSessionEntryStore correctly persists
+//! SessionEntry objects to JSONL files and supports checkpoint/resume.
 
 use std::sync::Arc;
-use tokio::sync::broadcast;
-use vol_llm_core::AgentStreamEvent;
-use vol_session::{FileMessageStore, MessageStore, SessionListener};
-use vol_tracing::TracedEvent;
+use vol_llm_core::Message;
+use vol_session::{FileSessionEntryStore, SessionEntry, SessionEntryStore};
 
-/// Test SessionListener full workflow with FileMessageStore
+/// Test FileSessionEntryStore save and retrieve workflow
 #[tokio::test]
-async fn test_session_listener_full_workflow() {
-    // 1. Create event bus
-    let (event_tx, event_rx) = broadcast::channel(100);
-
-    // 2. Create temporary directory and FileMessageStore
+async fn test_file_entry_store_save_and_get_entries() {
     let tmp_dir = tempfile::tempdir().unwrap();
-    let store: Arc<dyn MessageStore> = Arc::new(FileMessageStore::new(
-        tmp_dir.path().to_str().unwrap(),
-        "session-1",
-    ));
+    let store: Arc<dyn SessionEntryStore> =
+        Arc::new(FileSessionEntryStore::new(tmp_dir.path(), "session-1"));
 
-    // 3. Create and start SessionListener
-    let mut listener = SessionListener::new(event_rx, store, "session-1".to_string());
-    let handle = tokio::spawn(async move { listener.run().await.unwrap() });
+    // Save several entries
+    let entry1 = SessionEntry::new_message("session-1".to_string(), Message::user("Hello"));
+    let entry2 =
+        SessionEntry::new_message("session-1".to_string(), Message::assistant("Hi there!"));
+    let entry3 = SessionEntry::new_message("session-1".to_string(), Message::user("How are you?"));
 
-    // 4. Send test event sequence
-    // Thinking
-    event_tx
-        .send(TracedEvent::without_span(
-            AgentStreamEvent::ThinkingComplete {
-                thinking: "Let me search...".to_string(),
-                timestamp: chrono::Utc::now(),
-            },
-        ))
-        .map_err(|_| "send error")
-        .unwrap();
+    store.save(entry1).await.unwrap();
+    store.save(entry2).await.unwrap();
+    store.save(entry3).await.unwrap();
 
-    // ToolCallBegin
-    event_tx
-        .send(TracedEvent::without_span(AgentStreamEvent::ToolCallBegin {
-            timestamp: chrono::Utc::now(),
-            tool_call_id: "call_1".to_string(),
-            tool_name: "volatility_index".to_string(),
-            arguments: r#"{"symbol": "BTC"}"#.to_string(),
-        }))
-        .map_err(|_| "send error")
-        .unwrap();
+    // Get all entries
+    let entries = store.get_entries(10).await.unwrap();
+    assert_eq!(entries.len(), 3, "Expected 3 entries, got {}", entries.len());
 
-    // ToolCallComplete
-    event_tx
-        .send(TracedEvent::without_span(
-            AgentStreamEvent::ToolCallComplete {
-                timestamp: chrono::Utc::now(),
-                tool_call_id: "call_1".to_string(),
-                tool_name: "volatility_index".to_string(),
-                result: "Index: btc_usd | Volatility: 42.98%".to_string(),
-                duration_ms: None,
-            },
-        ))
-        .map_err(|_| "send error")
-        .unwrap();
-
-    // IterationComplete with final_answer
-    event_tx
-        .send(TracedEvent::without_span(
-            AgentStreamEvent::IterationComplete {
-                timestamp: chrono::Utc::now(),
-                iteration: 1,
-                tool_calls: vec![],
-                final_answer: Some("BTC 当前波动率为 42.98%...".to_string()),
-            },
-        ))
-        .map_err(|_| "send error")
-        .unwrap();
-
-    // 5. Wait for processing
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-
-    // 6. Close channel and wait for listener to exit
-    drop(event_tx);
-    handle.await.unwrap();
-
-    // 7. Verify JSONL file contents
-    let file_path = tmp_dir.path().join("sessions").join("session-1.jsonl");
-    let content = tokio::fs::read_to_string(&file_path).await.unwrap();
-    let lines: Vec<&str> = content.lines().collect();
-
-    // Should have 4 lines (Thinking, ToolCallBegin, ToolCallComplete, IterationComplete)
-    assert_eq!(lines.len(), 4, "Expected 4 lines, got {}", lines.len());
-
-    // Verify each line is valid JSON and contains expected content
-    for line in &lines {
-        assert!(
-            line.contains("SessionMessage"),
-            "Each line should be a SessionMessage"
-        );
-    }
-
-    let line_count = lines.len();
-    println!("Test passed: {} lines written to JSONL file", line_count);
-}
-
-/// Test SessionListener with filtered events (some events should not be recorded)
-#[tokio::test]
-async fn test_session_listener_filters_events() {
-    let (event_tx, event_rx) = broadcast::channel(100);
-
-    let tmp_dir = tempfile::tempdir().unwrap();
-    let store: Arc<dyn MessageStore> = Arc::new(FileMessageStore::new(
-        tmp_dir.path().to_str().unwrap(),
-        "session-filter",
-    ));
-
-    let mut listener = SessionListener::new(event_rx, store, "session-filter".to_string());
-    let handle = tokio::spawn(async move { listener.run().await.unwrap() });
-
-    // Send events that SHOULD be recorded
-    event_tx
-        .send(TracedEvent::without_span(
-            AgentStreamEvent::ThinkingComplete {
-                thinking: "Thinking...".to_string(),
-                timestamp: chrono::Utc::now(),
-            },
-        ))
-        .map_err(|_| "send error")
-        .unwrap();
-
-    // Send AgentStart event (should NOW be recorded)
-    event_tx
-        .send(TracedEvent::without_span(AgentStreamEvent::AgentStart {
-            input: "test input".to_string(),
-            timestamp: chrono::Utc::now(),
-        }))
-        .map_err(|_| "send error")
-        .unwrap();
-
-    // Another recordable event
-    event_tx
-        .send(TracedEvent::without_span(
-            AgentStreamEvent::ToolCallComplete {
-                timestamp: chrono::Utc::now(),
-                tool_call_id: "call_2".to_string(),
-                tool_name: "test_tool".to_string(),
-                result: "result".to_string(),
-                duration_ms: None,
-            },
-        ))
-        .map_err(|_| "send error")
-        .unwrap();
-
-    // Wait for processing
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-    // Close channel
-    drop(event_tx);
-    handle.await.unwrap();
-
-    // Verify 3 lines (Thinking + AgentStart + ToolCallComplete)
-    let file_path = tmp_dir.path().join("sessions").join("session-filter.jsonl");
-    let content = tokio::fs::read_to_string(&file_path).await.unwrap();
-    let lines: Vec<&str> = content.lines().collect();
-
+    // Verify order and types
     assert_eq!(
-        lines.len(),
-        3,
-        "Expected 3 lines (AgentStart now recorded), got {}",
-        lines.len()
+        entries[0].r#type,
+        vol_session::SessionEntryType::Message,
+        "First entry should be a Message"
+    );
+    assert_eq!(
+        entries[2].r#type,
+        vol_session::SessionEntryType::Message,
+        "Third entry should be a Message"
     );
 
-    // Verify AgentStart is recorded as user message
-    let contains_user_input = content.lines().any(|l| l.contains("test input"));
-    assert!(
-        contains_user_input,
-        "Session log should contain user input 'test input'"
-    );
+    // Test limit
+    let limited = store.get_entries(2).await.unwrap();
+    assert_eq!(limited.len(), 2, "Limited get_entries should return 2");
 
-    let line_count = lines.len();
-    println!(
-        "Test passed: Event filtering works correctly, {} lines written",
-        line_count
+    let count = store.get_count().await.unwrap();
+    assert_eq!(count, 3, "Entry count should be 3");
+}
+
+/// Test checkpoint and resume via get_after
+#[tokio::test]
+async fn test_file_entry_store_checkpoint_and_resume() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let store: Arc<dyn SessionEntryStore> =
+        Arc::new(FileSessionEntryStore::new(tmp_dir.path(), "session-checkpoint"));
+
+    // Save entries with explicit timestamps
+    let mut before_cp =
+        SessionEntry::new_message("session-checkpoint".to_string(), Message::user("before"));
+    before_cp.created_at = 1000;
+
+    let mut checkpoint = SessionEntry::new_checkpoint(
+        "session-checkpoint".to_string(),
+        vol_session::CheckpointReason::Compression,
+        None,
+    );
+    checkpoint.created_at = 2000;
+
+    let mut after_cp1 =
+        SessionEntry::new_message("session-checkpoint".to_string(), Message::user("after 1"));
+    after_cp1.created_at = 3000;
+
+    let mut after_cp2 = SessionEntry::new_message(
+        "session-checkpoint".to_string(),
+        Message::assistant("response"),
+    );
+    after_cp2.created_at = 4000;
+
+    store.save(before_cp).await.unwrap();
+    store.save(checkpoint.clone()).await.unwrap();
+    store.save(after_cp1).await.unwrap();
+    store.save(after_cp2).await.unwrap();
+
+    // Find latest checkpoint
+    let cp = store.find_latest_checkpoint().await.unwrap().unwrap();
+    assert_eq!(cp.r#type, vol_session::SessionEntryType::Checkpoint);
+
+    // Get entries after checkpoint
+    let resumed = store.get_after(cp.created_at, 10).await.unwrap();
+    assert_eq!(resumed.len(), 2, "Should have 2 entries after checkpoint");
+
+    // Test limit on get_after
+    let limited = store.get_after(cp.created_at, 1).await.unwrap();
+    assert_eq!(limited.len(), 1, "Limited get_after should return 1");
+}
+
+/// Test delete session
+#[tokio::test]
+async fn test_file_entry_store_delete_session() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let store: Arc<dyn SessionEntryStore> =
+        Arc::new(FileSessionEntryStore::new(tmp_dir.path(), "session-delete"));
+
+    // Save some entries
+    store
+        .save(SessionEntry::new_message(
+            "session-delete".to_string(),
+            Message::user("test"),
+        ))
+        .await
+        .unwrap();
+    store
+        .save(SessionEntry::new_message(
+            "session-delete".to_string(),
+            Message::assistant("reply"),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(store.get_count().await.unwrap(), 2);
+
+    // Delete session
+    store.delete_session().await.unwrap();
+
+    // Verify all entries are gone
+    let count = store.get_count().await.unwrap();
+    assert_eq!(count, 0, "Entry count should be 0 after delete");
+
+    let entries = store.get_entries(10).await.unwrap();
+    assert!(entries.is_empty(), "Entries should be empty after delete");
+}
+
+/// Test JSONL file persistence across re-opens
+#[tokio::test]
+async fn test_file_entry_store_persistence() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+
+    // Create store and save entries
+    {
+        let store = FileSessionEntryStore::new(tmp_dir.path(), "session-persist");
+        store
+            .save(SessionEntry::new_message(
+                "session-persist".to_string(),
+                Message::user("persistent message"),
+            ))
+            .await
+            .unwrap();
+    }
+
+    // Create a new store instance pointing to same location
+    let store2 = FileSessionEntryStore::new(tmp_dir.path(), "session-persist");
+    let entries = store2.get_entries(10).await.unwrap();
+
+    assert_eq!(entries.len(), 1, "Should persist 1 entry across re-opens");
+    assert_eq!(
+        entries[0].r#type,
+        vol_session::SessionEntryType::Message,
+        "Entry type should be Message"
     );
 }
 
-/// Test SessionListener handles channel lag gracefully
+/// Test mixed entry types
 #[tokio::test]
-async fn test_session_listener_handles_lag() {
-    let (event_tx, event_rx) = broadcast::channel(5); // Small buffer to trigger lag
-
+async fn test_file_entry_store_mixed_types() {
     let tmp_dir = tempfile::tempdir().unwrap();
-    let store: Arc<dyn MessageStore> = Arc::new(FileMessageStore::new(
-        tmp_dir.path().to_str().unwrap(),
-        "session-lag",
-    ));
+    let store = FileSessionEntryStore::new(tmp_dir.path(), "session-mixed");
 
-    let mut listener = SessionListener::new(event_rx, store, "session-lag".to_string());
-    let handle = tokio::spawn(async move { listener.run().await.unwrap() });
+    let mut msg = SessionEntry::new_message("session-mixed".to_string(), Message::user("hello"));
+    msg.created_at = 100;
 
-    // Send more events than buffer size to trigger lag
-    for i in 0..10 {
-        let _ = event_tx.send(TracedEvent::without_span(
-            AgentStreamEvent::ThinkingComplete {
-                thinking: format!("Thinking {}", i),
-                timestamp: chrono::Utc::now(),
-            },
-        ));
-    }
-
-    // Wait for processing
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-
-    // Close channel
-    drop(event_tx);
-    handle.await.unwrap();
-
-    // Verify at least some events were recorded (lag handling)
-    let file_path = tmp_dir.path().join("sessions").join("session-lag.jsonl");
-    let content = tokio::fs::read_to_string(&file_path).await.unwrap();
-    let lines: Vec<&str> = content.lines().collect();
-
-    // Should have some lines, but possibly not all 10 due to lag
-    assert!(
-        lines.len() > 0,
-        "Expected at least some lines to be recorded"
+    let mut cp = SessionEntry::new_checkpoint(
+        "session-mixed".to_string(),
+        vol_session::CheckpointReason::Manual,
+        None,
     );
-    let line_count = lines.len();
-    println!("Test passed: {} lines recorded despite lag", line_count);
+    cp.created_at = 200;
+
+    let summary_data = vol_session::SessionEntryData::Summary {
+        summary: "Session summary".to_string(),
+    };
+    let summary = SessionEntry {
+        id: "summary-1".to_string(),
+        session_id: "session-mixed".to_string(),
+        created_at: 300,
+        parent_id: None,
+        r#type: vol_session::SessionEntryType::Summary,
+        data: summary_data,
+    };
+
+    store.save(msg).await.unwrap();
+    store.save(cp).await.unwrap();
+    store.save(summary).await.unwrap();
+
+    let entries = store.get_entries(10).await.unwrap();
+    assert_eq!(entries.len(), 3);
+    assert_eq!(entries[0].r#type, vol_session::SessionEntryType::Message);
+    assert_eq!(entries[1].r#type, vol_session::SessionEntryType::Checkpoint);
+    assert_eq!(entries[2].r#type, vol_session::SessionEntryType::Summary);
 }
