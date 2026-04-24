@@ -1,26 +1,26 @@
-//! Session and MessageStore example.
+//! Session and SessionEntryStore example.
 //!
 //! Demonstrates how to use Session with ReActAgent.
 
 use std::sync::Arc;
-use vol_llm_agent::session::{InMemoryMessageStore, InMemorySessionStore, Session, SessionMessage};
+use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session, SessionMessage};
 use vol_llm_core::Message;
 
 #[tokio::main]
 async fn main() {
-    println!("=== Session and MessageStore Example ===\n");
+    println!("=== Session and SessionEntryStore Example ===\n");
 
     // 1. Create stores
     let session_store = Arc::new(InMemorySessionStore::new());
-    let message_store = Arc::new(InMemoryMessageStore::new());
-    println!("1. Created InMemorySessionStore and InMemoryMessageStore");
+    let entry_store = Arc::new(InMemoryEntryStore::new());
+    println!("1. Created InMemorySessionStore and InMemoryEntryStore");
 
     // 2. Create session
     let session = Arc::new(
         Session::new(
             "session-123".to_string(),
             session_store.clone(),
-            message_store.clone(),
+            entry_store.clone(),
         )
         .with_metadata("user_id", "user-456"),
     );
