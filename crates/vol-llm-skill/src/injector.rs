@@ -1,5 +1,10 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
+use vol_llm_core::context_block::{AttentionAnchor, ContextBlock};
+use vol_llm_core::context_contributor::ContextContributor;
+use vol_llm_core::Message;
+
 use crate::loader::SkillLoader;
 
 /// Formats skill metadata for system prompt injection.
@@ -27,6 +32,36 @@ impl SkillInjector {
         }
         output.push_str("\nUse the `skill` tool to load any skill's full instructions.");
         output
+    }
+}
+
+#[async_trait]
+impl ContextContributor for SkillInjector {
+    fn name(&self) -> &str {
+        "skills"
+    }
+
+    async fn contribute(&self) -> Vec<ContextBlock> {
+        let metadata_text = self.format_metadata().await;
+        if metadata_text.is_empty() {
+            return vec![];
+        }
+        let msg = Message::user(metadata_text);
+        vec![ContextBlock::new(vec![msg], AttentionAnchor::Head(0))]
+    }
+
+    async fn compress(&mut self) {
+        // Skills are static prompt content — nothing to compress.
+    }
+
+    fn estimate_size(&self) -> usize {
+        0
+    }
+
+    fn clone_box(&self) -> Box<dyn ContextContributor> {
+        Box::new(SkillInjector {
+            loader: self.loader.clone(),
+        })
     }
 }
 
