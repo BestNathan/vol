@@ -216,7 +216,23 @@ impl RunContext {
 
         // 1. System message from prompt_context (not persisted to session)
         let system_content = self.config.prompt_context.build_system();
-        messages.push(Message::system(system_content));
+        let mut combined = system_content;
+
+        // Inject context files content (skip missing files silently)
+        let mut extra_context = String::new();
+        for file_path in &self.config.context_files {
+            if let Ok(content) = std::fs::read_to_string(file_path) {
+                if !extra_context.is_empty() {
+                    extra_context.push_str("\n\n---\n\n");
+                }
+                extra_context.push_str(&content);
+            }
+        }
+        if !extra_context.is_empty() {
+            combined.push_str("\n\n---\n\n");
+            combined.push_str(&extra_context);
+        }
+        messages.push(Message::system(combined));
 
         // 2. Historical messages from session (only once)
         let history = self
