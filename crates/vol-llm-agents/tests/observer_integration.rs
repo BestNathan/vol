@@ -68,6 +68,9 @@ async fn test_observer_plugin_receives_all_events() {
                 AgentStreamEvent::AgentComplete { .. } => "AgentComplete",
                 AgentStreamEvent::AgentAborted { .. } => "AgentAborted",
                 AgentStreamEvent::PluginEvent { .. } => "PluginEvent",
+                AgentStreamEvent::MaxIterationsReached { .. } => "MaxIterationsReached",
+                AgentStreamEvent::IterationContinued { .. } => "IterationContinued",
+                AgentStreamEvent::ToolCallArgumentDelta { .. } => "ToolCallArgumentDelta",
             }
         }
 
