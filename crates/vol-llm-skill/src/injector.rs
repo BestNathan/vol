@@ -69,6 +69,7 @@ impl ContextContributor for SkillInjector {
 mod tests {
     use super::*;
     use crate::def::SkillDef;
+    use vol_llm_core::context_contributor::ContextContributor;
 
     #[tokio::test]
     async fn test_format_metadata_empty() {
@@ -94,5 +95,45 @@ mod tests {
         assert!(output.contains("rust-conventions"));
         assert!(output.contains("Rust coding conventions"));
         assert!(output.contains("skill"));
+    }
+
+    #[tokio::test]
+    async fn test_skill_injector_contribute_empty() {
+        let loader = SkillLoader::new(None);
+        let injector = SkillInjector::new(Arc::new(loader));
+        let blocks = injector.contribute().await;
+        assert!(blocks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_skill_injector_contribute_with_skills() {
+        let loader = SkillLoader::new(None);
+        let mut skill = SkillDef::new("rust-conventions", "# Rust")
+            .with_description("Rust coding conventions")
+            .with_triggers(vec!["rust".to_string()]);
+        skill.id = "user:rust-conventions".to_string();
+        loader.register(skill).await;
+
+        let injector = SkillInjector::new(Arc::new(loader));
+        let blocks = injector.contribute().await;
+        assert_eq!(blocks.len(), 1);
+        assert!(blocks[0].messages[0].content.as_ref().unwrap().as_str().contains("Available skills:"));
+        assert!(blocks[0].messages[0].content.as_ref().unwrap().as_str().contains("rust-conventions"));
+    }
+
+    #[tokio::test]
+    async fn test_skill_injector_compress_noop() {
+        let loader = SkillLoader::new(None);
+        let mut injector = SkillInjector::new(Arc::new(loader));
+        injector.compress().await;
+        // No panic, no state change — compress is a no-op
+    }
+
+    #[tokio::test]
+    async fn test_skill_injector_clone_box() {
+        let loader = SkillLoader::new(None);
+        let injector = SkillInjector::new(Arc::new(loader));
+        let cloned = injector.clone_box();
+        assert_eq!(cloned.name(), "skills");
     }
 }
