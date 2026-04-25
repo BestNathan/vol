@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::path::PathBuf;
 use vol_llm_tool::{ToolRegistry, ToolConfig};
 use vol_llm_agent::{ReActAgent, AgentConfig};
+use vol_llm_context::ContextBuilder;
 use vol_session::Session;
 use vol_llm_provider::{LLMProviderConfig, LLMProviderRegistry};
 use crate::coding::config::CodingAgentConfig;
@@ -22,17 +23,12 @@ pub struct CodingAgentResponse {
     pub tool_calls: u32,
 }
 
-/// Internal state for CodingAgent
-struct CodingAgentState {
-    llm: Arc<dyn vol_llm_core::LLMClient>,
-    tool_registry: Arc<ToolRegistry>,
-    agent_config: AgentConfig,
-}
-
 /// Coding Agent
 pub struct CodingAgent {
     config: CodingAgentConfig,
-    state: Option<CodingAgentState>,
+    llm: Arc<dyn vol_llm_core::LLMClient>,
+    tool_registry: Arc<ToolRegistry>,
+    context_builder: ContextBuilder,
     observer: Option<Arc<dyn EventObserver>>,
     sandbox: Option<vol_llm_core::SandboxRef>,
 }
@@ -84,13 +80,6 @@ impl CodingAgent {
             .add_contributor(Box::new(skill_injector))
             .build();
 
-        let agent_config = AgentConfig {
-            max_iterations: config.max_iterations,
-            max_history_messages: 20,
-            context_builder,
-            ..Default::default()
-        };
-
         // Auto-init sandbox from working_dir if not current directory
         let sandbox: Option<vol_llm_core::SandboxRef> = if config.working_dir != PathBuf::from(".") {
             let sandbox = LocalSandbox::new(Some(config.working_dir.clone()));
@@ -104,11 +93,9 @@ impl CodingAgent {
 
         Ok(Self {
             config,
-            state: Some(CodingAgentState {
-                llm,
-                tool_registry: Arc::new(tool_registry),
-                agent_config,
-            }),
+            llm,
+            tool_registry: Arc::new(tool_registry),
+            context_builder,
             observer: None,
             sandbox,
         })
@@ -164,10 +151,6 @@ impl CodingAgent {
     /// Set the agent identifier (for log paths, etc.)
     pub fn with_agent_id(mut self, agent_id: String) -> Self {
         self.config.agent_id = agent_id;
-        // Also update the state's agent_config
-        if let Some(ref mut state) = self.state {
-            state.agent_config.agent_id = self.config.agent_id.clone();
-        }
         self
     }
 
@@ -196,10 +179,6 @@ impl CodingAgent {
 
     /// Run a coding task
     pub async fn run(&self, task: &str) -> Result<CodingAgentResponse, CodingAgentError> {
-        // Get state - take ownership of components
-        let state = self.state.as_ref()
-            .ok_or_else(|| CodingAgentError::Config("CodingAgent already consumed".to_string()))?;
-
         // Create session for this run — use shared session from config if available
         let session = match &self.config.session {
             Some(s) => s.clone(),
@@ -209,18 +188,18 @@ impl CodingAgent {
             }
         };
 
-        // Create ReActAgent with the plugin_registry that may have been modified by with_observer()
-        // Note: We need to use the config's plugin_registry, not the agent_config's
+        // Build AgentConfig on-demand
         let agent_config = AgentConfig {
             plugin_registry: self.config.plugin_registry.clone(),
             unsafe_mode: self.config.unsafe_mode,
             approval_handler: self.config.approval_handler.clone(),
-            ..state.agent_config.clone()
+            context_builder: self.context_builder.clone(),
+            ..Default::default()
         };
 
         let mut react_agent = ReActAgent::new(
-            state.llm.clone(),
-            state.tool_registry.clone(),
+            self.llm.clone(),
+            self.tool_registry.clone(),
             agent_config,
             session,
         );
@@ -262,10 +241,6 @@ impl CodingAgent {
     ) -> Result<CodingAgentResponse, CodingAgentError> {
         use vol_session::{FileSessionEntryStore, InMemoryEntryStore};
 
-        // Get state
-        let state = self.state.as_ref()
-            .ok_or_else(|| CodingAgentError::Config("CodingAgent already consumed".to_string()))?;
-
         // Resume session from the provided session_id
         let session_dir = std::env::current_dir()
             .unwrap_or_default()
@@ -288,12 +263,13 @@ impl CodingAgent {
             plugin_registry: self.config.plugin_registry.clone(),
             unsafe_mode: self.config.unsafe_mode,
             approval_handler: self.config.approval_handler.clone(),
-            ..state.agent_config.clone()
+            context_builder: self.context_builder.clone(),
+            ..Default::default()
         };
 
         let mut react_agent = ReActAgent::new(
-            state.llm.clone(),
-            state.tool_registry.clone(),
+            self.llm.clone(),
+            self.tool_registry.clone(),
             agent_config,
             session,
         );
