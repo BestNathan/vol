@@ -26,9 +26,7 @@ impl TaskScheduler {
         dependencies: Vec<TaskId>,
     ) -> Result<TaskId> {
         let task = Task::new(kind, description, dependencies);
-        let id = task.id;
-        self.store.create(task).await?;
-        Ok(id)
+        self.store.create(task).await
     }
 
     /// Mark a task as completed with its result.
