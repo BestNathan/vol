@@ -4089,6 +4089,7 @@ dependencies = [
  "vol-llm-context",
  "vol-llm-core",
  "vol-llm-provider",
+ "vol-llm-skill",
  "vol-llm-tdengine",
  "vol-llm-tool",
  "vol-llm-tools-builtin",

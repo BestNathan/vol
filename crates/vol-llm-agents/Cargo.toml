@@ -26,6 +26,7 @@ vol-llm-provider = { path = "../vol-llm-provider" }
 vol-llm-tools-builtin = { path = "../vol-llm-tools-builtin" }
 vol-session = { path = "../vol-session" }
 vol-llm-context = { path = "../vol-llm-context" }
+vol-llm-skill = { path = "../vol-llm-skill" }
 chrono = "0.4"
 
 [dev-dependencies]

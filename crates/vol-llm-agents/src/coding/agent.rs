@@ -80,6 +80,7 @@ impl CodingAgent {
             .add_contributor(Box::new(vol_llm_context::builtin::SimpleContributor::system(
                 "You are an expert coding assistant. Help users understand, modify, and improve their codebase.".to_string(),
             )))
+            .add_contributor(Box::new(vol_llm_skill::SkillInjector::from_workdir(&config.working_dir)))
             .build();
 
         let agent_config = AgentConfig {
