@@ -1,11 +1,11 @@
 # Agent & AgentConfig Optimization Design
 
 **Date**: 2026-04-25
-**Status**: Approved
+**Status**: Draft (rev2)
 
 ## Summary
 
-Remove `verbose` field from AgentConfig/CodingAgentConfig/PptConfig (9 files), add `working_dir` to AgentConfig, and remove confirmed dead code items.
+Remove `verbose` and `log_base_path` from AgentConfig/CodingAgentConfig. Add `working_dir` to AgentConfig and derive log paths from it. Remove `context_files` and dead code.
 
 ---
 
@@ -38,40 +38,75 @@ Agent execution logic should not print logs — it should only emit events and h
 | `vol-llm-agents/src/coding/tests.rs:34` | Remove `assert!(!config.verbose)` |
 | `vol-llm-agents/src/advice/service.rs:158` | Remove `.with_verbose(false)` |
 | `vol-llm-agents/src/ppt/config.rs:15,34-36` | Remove verbose field, `with_verbose()` |
-| `vol-llm-agents/src/ppt/agent.rs:68,76,90,98,105,116` | Remove 6 `println!` blocks (replace with nothing — PptAgent should emit events, not println) |
+| `vol-llm-agents/src/ppt/agent.rs:68,76,90,98,105,116` | Remove 6 `println!` blocks (PptAgent should not print) |
 
 ---
 
-## 2. Add `working_dir` to AgentConfig
+## 2. Replace `log_base_path` with `working_dir` Derivation
 
 ### Rationale
 
-ReActAgent needs a working directory reference for file generation (checkpoints, logs, context files). Currently only CodingAgentConfig has this field.
+`log_base_path` is an absolute path configured separately from the project directory. Instead, derive all log paths from `working_dir` using the convention: `{working_dir}/logs/agents/{agent_id}/`.
 
-### Change
+This follows the **path ownership principle** — all paths derive from a single `working_dir` root.
 
-```rust
-pub struct AgentConfig {
-    // ... existing fields ...
-    pub working_dir: PathBuf,
-}
+### Path Convention
+
+```
+{working_dir}/logs/agents/{agent_id}/runs/{run_id}.jsonl   — RunLog entries
+{working_dir}/logs/agents/{agent_id}/sessions/              — Session entries (FileSessionEntryStore)
 ```
 
-Default: `PathBuf::from(".")`. No behavior change — existing code that uses AgentConfig doesn't reference this field yet. CodingAgentConfig already has `working_dir` — no change needed there.
+### Changes
+
+**AgentConfig**: Replace `log_base_path: PathBuf` with `working_dir: PathBuf` (default `"."`).
+Log path is derived internally: `working_dir.join("logs/agents")`.
+
+**CodingAgentConfig**: Remove `log_base_path` (already has `working_dir`).
+Log path derived: `config.working_dir.join("logs/agents")`.
 
 ### Files Affected
 
 | File | Change |
 |------|--------|
-| `vol-llm-agent/src/react/agent.rs` | Add `working_dir: PathBuf` field, update Default, tests |
-| `vol-llm-agent/src/react/builder.rs` | Add `with_working_dir()` method |
+| `vol-llm-agent/src/react/agent.rs` | Replace `log_base_path` → `working_dir` field; derive `log_base_path = working_dir.join("logs/agents")` internally |
+| `vol-llm-agent/src/react/agent.rs:152-157` | `log_base_path.join(&agent_id)` → `config.working_dir.join("logs/agents").join(&agent_id)` |
+| `vol-llm-agent/src/react/agent.rs:193` | Same derivation for FileSessionEntryStore |
+| `vol-llm-agent/src/react/builder.rs:88-90,96` | Replace `with_log_base_path()` → `with_working_dir()`; observability plugin uses derived path |
+| `vol-llm-agents/src/coding/config.rs:29,65,85` | Remove `log_base_path` field |
+| `vol-llm-agents/src/coding/agent.rs:175-179` | Remove `with_log_base_path()` method; derive path from `config.working_dir.join("logs/agents")` |
+| `vol-llm-agents/src/coding/tests.rs:32,439` | Update tests |
+| `vol-llm-agents/tests/observer_plugin_unit.rs:139` | Update to use working_dir |
+| `vol-llm-agents/tests/session_recording_test.rs:74` | Remove `.with_log_base_path()` call |
+| `vol-llm-agents/tests/agent_run_tests.rs:232` | Replace `.with_log_base_path()` → `.with_working_dir()` |
+| `vol-llm-agent/tests/agent_run_tests.rs` (via symlink or same file) | Same |
+| `vol-llm-agent/src/react/tests.rs:46` | Replace `.with_log_base_path()` → `.with_working_dir()` |
+| `vol-llm-agent/examples/agent_cli_approval.rs:282` | Update example |
+| `vol-llm-agent/examples/agent_observability_test.rs:78,88,149` | Update example |
+| `vol-llm-agents/examples/coding_agent_basic.rs:40,43,69,97` | Update example |
+
+**Note**: `vol-llm-observability` crate's `ObservabilityConfig` and `RunLogLogger` keep their `log_base_path` parameter — they are generic utilities. The agent layer computes the full path before passing it.
 
 ---
 
-## 3. Remove Dead Code
+## 3. Remove `context_files` from AgentConfig
+
+### Rationale
+
+`AgentConfig::context_files` (field at line 41) is defined but **never read by any code**. CodingAgent has its own `init_context_files()` that uses hardcoded filenames (`AGENT.md`, `INSTRUCTION.md`, `CLI.md`), not this field.
+
+### Files Affected
+
+| File | Change |
+|------|--------|
+| `vol-llm-agent/src/react/agent.rs:41,68` | Remove `context_files: Vec<String>` field and Default entry |
+| `vol-llm-agent/src/react/agent.rs:752` | Remove from test |
+
+---
+
+## 4. Remove Dead Code
 
 | Item | Location | Reason |
 |------|----------|--------|
 | `ApprovalState::is_pending()` | `vol-llm-tui/src/approval.rs:43` | Never called — only `has_pending_approval()` is used |
 | `generate_agent_id()` | `vol-llm-agents/src/coding/agent.rs:419` | Dead function — CodingAgent uses config's agent_id |
-| `AgentConfig::context_files` | `vol-llm-agent/src/react/agent.rs:41` | Field defined but never read — CodingAgent has its own `init_context_files()` |
