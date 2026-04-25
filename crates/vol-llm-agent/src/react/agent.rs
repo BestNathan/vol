@@ -182,8 +182,7 @@ impl ReActAgent {
             });
         }
 
-        // === Phase 2: Initialize messages (call once before loop) ===
-        run_ctx.init_messages().await?;
+        // === Phase 2: Context is built per-iteration via get_context ===
 
         // === Phase 2.5: Spawn SessionListener for session recording ===
         use vol_session::{FileSessionEntryStore, SessionListener};
@@ -309,15 +308,14 @@ impl ReActAgent {
                 let tools_defs = tools.definitions();
 
                 // Get messages from ctx (not local variable)
-                let messages = run_ctx.get_messages().await;
+                let messages = run_ctx.get_context(&user_input).await.map_err(|e| crate::AgentError::from(e))?;
+
+                // Emit LLMCallStart with full message history
+                run_ctx.emit(AgentStreamEvent::llm_call_start(iteration, messages.clone())).await;
 
                 let request = ConversationRequest::with_history(None, messages)
                     .with_tools(tools_defs)
                     .with_tool_choice(ToolChoice::Auto);
-
-                // Emit LLMCallStart with full message history
-                let messages = run_ctx.get_messages().await;
-                run_ctx.emit(AgentStreamEvent::llm_call_start(iteration, messages)).await;
 
                 let llm_stream = match llm.converse_stream(request).await {
                     Ok(stream) => stream,

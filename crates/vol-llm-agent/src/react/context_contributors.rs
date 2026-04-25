@@ -1,9 +1,8 @@
 //! Agent-local context contributors that depend on vol-session.
 
 use std::sync::Arc;
-use std::sync::Mutex;
 use async_trait::async_trait;
-use vol_llm_context::{AttentionAnchor, ContextBlock, ContextContributor, ContextError, estimate_tokens};
+use vol_llm_context::{AttentionAnchor, ContextBlock, ContextContributor};
 use vol_llm_core::Message;
 use vol_session::{Session, SessionMessage};
 
@@ -12,7 +11,6 @@ use vol_session::{Session, SessionMessage};
 pub struct SessionContributor {
     session: Arc<tokio::sync::Mutex<Session>>,
     max_history: usize,
-    cached_blocks: Mutex<Option<Vec<ContextBlock>>>,
 }
 
 impl SessionContributor {
@@ -20,7 +18,6 @@ impl SessionContributor {
         Self {
             session,
             max_history,
-            cached_blocks: Mutex::new(None),
         }
     }
 }
@@ -31,15 +28,7 @@ impl ContextContributor for SessionContributor {
         "session"
     }
 
-    async fn contribute(&self) -> Result<Vec<ContextBlock>, ContextError> {
-        // Check cache first
-        {
-            let guard = self.cached_blocks.lock().unwrap();
-            if let Some(ref blocks) = *guard {
-                return Ok(blocks.clone());
-            }
-        }
-
+    async fn contribute(&self) -> Result<Vec<ContextBlock>, vol_llm_context::ContextError> {
         let history = self
             .session
             .lock()
@@ -52,51 +41,42 @@ impl ContextContributor for SessionContributor {
             return Ok(vec![]);
         }
 
-        let messages: Vec<Message> = history.into_iter().map(|sm| sm.message).collect();
+        let mut messages: Vec<Message> = history.into_iter().map(|sm| sm.message).collect();
+
+        // Apply max_history limit: keep last N messages
+        if messages.len() > self.max_history {
+            messages = messages.split_off(messages.len() - self.max_history);
+        }
+
         let block = ContextBlock::new(messages, AttentionAnchor::Middle(0));
-        let blocks = vec![block];
-
-        // Cache for compress() to use
-        *self.cached_blocks.lock().unwrap() = Some(blocks.clone());
-
-        Ok(blocks)
+        Ok(vec![block])
     }
 
     async fn compress(&mut self) {
-        // Clone messages out of the cache before the await point
-        let messages: Option<Vec<SessionMessage>> = {
-            let guard = self.cached_blocks.lock().unwrap();
-            guard.as_ref().map(|blocks| {
-                blocks
-                    .iter()
-                    .flat_map(|b| b.messages.iter().map(|m| SessionMessage::new("".to_string(), m.clone())))
-                    .collect()
-            })
-        };
+        let messages: Option<Vec<SessionMessage>> = self
+            .session
+            .lock()
+            .await
+            .get_messages()
+            .await
+            .ok()
+            .map(|history| history);
 
         if let Some(messages) = messages {
             let mut session = self.session.lock().await;
             session.compress(messages).await;
         }
-
-        // Invalidate cache — next contribute() will get compressed result
-        *self.cached_blocks.get_mut().unwrap() = None;
     }
 
     fn estimate_size(&self) -> usize {
-        self.cached_blocks
-            .lock()
-            .unwrap()
-            .as_ref()
-            .map(|blocks| blocks.iter().flat_map(|b| &b.messages).map(estimate_tokens).sum())
-            .unwrap_or(0)
+        // Best-effort unknown without reading Session
+        0
     }
 
     fn clone_box(&self) -> Box<dyn ContextContributor> {
         Box::new(SessionContributor {
             session: self.session.clone(),
             max_history: self.max_history,
-            cached_blocks: Mutex::new(self.cached_blocks.lock().unwrap().clone()),
         })
     }
 }

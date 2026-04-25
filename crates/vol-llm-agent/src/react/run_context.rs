@@ -3,13 +3,13 @@
 //! Encapsulates all state and resources for a single `run()` invocation.
 
 use super::context_contributors::SessionContributor;
+use vol_llm_context::builtin::UserInputContributor;
 use super::plugin::PluginDecision;
 use super::state::{ReasoningStep, ToolCallRecord};
 use super::stream::AgentStreamEvent;
 use super::AgentConfig;
 use vol_session::{Session, SessionMessage};
 use vol_llm_context::ContextBuilderBuilder;
-use vol_llm_context::builtin::UserInputContributor;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
@@ -74,7 +74,7 @@ impl ApprovalResponse {
 /// RunContext encapsulates all state and resources for a single run() invocation.
 ///
 /// This replaces the old PluginContext with a more comprehensive context that includes:
-/// - Mutable state (messages, tool calls, iteration count)
+/// - Mutable state (tool calls, iteration count)
 /// - Resource references (session, tools, config)
 /// - Thread-safe access via Arc/RwLock for async operations
 pub struct RunContext {
@@ -85,7 +85,6 @@ pub struct RunContext {
 
     // Mutable state (internal mutability via AtomicU32 and Arc<RwLock>)
     pub iteration: AtomicU32,
-    pub messages: Arc<RwLock<Vec<Message>>>,
     pub all_tool_calls: Arc<RwLock<Vec<ToolCall>>>,
     pub current_tool_calls: Arc<RwLock<Vec<ToolCall>>>,
     pub data: Arc<RwLock<HashMap<String, serde_json::Value>>>,
@@ -179,7 +178,6 @@ impl RunContext {
             user_input,
             session_id,
             iteration: AtomicU32::new(0),
-            messages: Arc::new(RwLock::new(Vec::new())),
             all_tool_calls: Arc::new(RwLock::new(Vec::new())),
             current_tool_calls: Arc::new(RwLock::new(Vec::new())),
             data: Arc::new(RwLock::new(HashMap::new())),
@@ -199,40 +197,6 @@ impl RunContext {
         (ctx, plugin_event_rx, approval_rx)
     }
 
-    /// Initialize messages array - must be called once before the loop
-    ///
-    /// This method:
-    /// 1. Clones the base ContextBuilder from config
-    /// 2. Adds SessionContributor (Middle zone) and UserInputContributor (Tail zone)
-    /// 3. Builds the context via ContextBuilder.build()
-    /// 4. Writes all messages to `self.messages`
-    ///
-    /// Note: User input is NOT persisted to session here - it's only added to the
-    /// runtime messages array. Callers should persist user input separately if needed.
-    ///
-    /// # Returns
-    /// `Ok(())` on success, `Err(AgentError)` if session access fails
-    pub async fn init_messages(&self) -> Result<(), crate::AgentError> {
-        // Clone the base context_builder from config and add run-specific contributors
-        let context_builder = ContextBuilderBuilder::new(
-            self.config.context_builder.token_budget().total,
-        )
-        .add_contributors_from(&self.config.context_builder)
-        .add_contributor(Box::new(SessionContributor::new(
-            Arc::new(tokio::sync::Mutex::new((*self.session).clone())),
-            self.config.max_history_messages,
-        )))
-        .add_contributor(Box::new(UserInputContributor::new(self.user_input.clone())))
-        .build();
-
-        let output = context_builder.build().await.unwrap();
-
-        // Write to shared state
-        *self.messages.write().await = output.messages;
-
-        Ok(())
-    }
-
     /// Get the current iteration number
     pub fn current_iteration(&self) -> u32 {
         self.iteration.load(std::sync::atomic::Ordering::SeqCst)
@@ -249,16 +213,12 @@ impl RunContext {
         self.iteration.store(0, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// Add a message to the messages list and sync to session.
+    /// Add a message to the session.
     /// Automatically sets parent_id to the previous message's ID.
     pub async fn add_message(&self, message: Message) -> Result<(), crate::AgentError> {
-        // 1. Add to runtime messages array
-        self.messages.write().await.push(message.clone());
-
-        // 2. Create SessionMessage with auto-set parent_id
         let session_msg = {
             let mut last_id = self.last_message_id.lock().unwrap();
-            let mut msg = SessionMessage::new(self.session.id.clone(), message.clone());
+            let mut msg = SessionMessage::new(self.session.id.clone(), message);
             if let Some(id) = last_id.as_ref() {
                 msg = msg.with_parent_id(id.clone());
             }
@@ -267,7 +227,6 @@ impl RunContext {
             msg
         };
 
-        // 3. Persist to session
         self.session.add_message(session_msg).await.map_err(|e| {
             crate::AgentError::SessionError(format!("Failed to save message: {}", e))
         })?;
@@ -275,9 +234,30 @@ impl RunContext {
         Ok(())
     }
 
-    /// Get a clone of all messages
-    pub async fn get_messages(&self) -> Vec<Message> {
-        self.messages.read().await.clone()
+    /// Build the full LLM context for a run iteration.
+    ///
+    /// Combines:
+    /// 1. Base contributors from config (e.g., system prompt, project context)
+    /// 2. SessionContributor (Middle zone) — historical messages from session
+    /// 3. UserInputContributor (Tail zone) — current user input
+    ///
+    /// Call this at the start of each iteration to get the current message list.
+    pub async fn get_context(&self, user_input: &str) -> Result<Vec<Message>, crate::AgentError> {
+        let context_builder = ContextBuilderBuilder::new(
+            self.config.context_builder.token_budget().total,
+        )
+        .add_contributors_from(&self.config.context_builder)
+        .add_contributor(Box::new(SessionContributor::new(
+            Arc::new(tokio::sync::Mutex::new((*self.session).clone())),
+            self.config.max_history_messages,
+        )))
+        .add_contributor(Box::new(UserInputContributor::new(user_input.to_string())))
+        .build();
+
+        let output = context_builder.build().await.map_err(|e| {
+            crate::AgentError::Context(format!("Failed to build context: {}", e))
+        })?;
+        Ok(output.messages)
     }
 
     /// Add a tool call to both current and all_tool_calls lists
@@ -510,7 +490,6 @@ impl Clone for RunContext {
             user_input: self.user_input.clone(),
             session_id: self.session_id.clone(),
             iteration: AtomicU32::new(self.current_iteration()),
-            messages: self.messages.clone(),
             all_tool_calls: self.all_tool_calls.clone(),
             current_tool_calls: self.current_tool_calls.clone(),
             data: self.data.clone(),
@@ -574,7 +553,7 @@ mod tests {
         ctx.add_message(Message::system("test".to_string()))
             .await
             .unwrap();
-        let msgs = ctx.get_messages().await;
+        let msgs = ctx.session.get_messages().await.unwrap();
         assert_eq!(msgs.len(), 1);
     }
 
@@ -584,16 +563,7 @@ mod tests {
 
         // Add a message via add_message (should sync to session)
         let message = Message::user("test message".to_string());
-        ctx.add_message(message.clone()).await.unwrap();
-
-        // Verify message is in runtime messages
-        let msgs = ctx.get_messages().await;
-        assert_eq!(msgs.len(), 1);
-        if let Some(MessageContent::Text(content)) = &msgs[0].content {
-            assert_eq!(content, "test message");
-        } else {
-            panic!("Expected Text content");
-        }
+        ctx.add_message(message).await.unwrap();
 
         // Verify message is persisted to session
         let session_msgs = ctx.session.get_messages().await.unwrap();
@@ -636,7 +606,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_init_messages_system_message() {
+    async fn test_get_context_system_message() {
         use vol_llm_context::builtin::SimpleContributor;
 
         let context_builder = ContextBuilderBuilder::new(128_000)
@@ -661,8 +631,7 @@ mod tests {
             config,
         );
 
-        ctx.init_messages().await.unwrap();
-        let messages = ctx.get_messages().await;
+        let messages = ctx.get_context("test input").await.unwrap();
 
         // First message should be system message
         assert!(messages.len() >= 1);
@@ -676,7 +645,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_init_messages_history() {
+    async fn test_get_context_history() {
         use vol_llm_context::builtin::SimpleContributor;
 
         let context_builder = ContextBuilderBuilder::new(128_000)
@@ -709,8 +678,7 @@ mod tests {
             config,
         );
 
-        ctx.init_messages().await.unwrap();
-        let messages = ctx.get_messages().await;
+        let messages = ctx.get_context("new input").await.unwrap();
 
         // Should have: system + history + user input = 3 messages
         assert_eq!(messages.len(), 3);
@@ -724,7 +692,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_init_messages_user_input() {
+    async fn test_get_context_user_input() {
         use vol_llm_context::builtin::SimpleContributor;
 
         let context_builder = ContextBuilderBuilder::new(128_000)
@@ -747,8 +715,7 @@ mod tests {
             config,
         );
 
-        ctx.init_messages().await.unwrap();
-        let messages = ctx.get_messages().await;
+        let messages = ctx.get_context("analyze market volatility").await.unwrap();
 
         // Last message should be user input
         assert!(messages.len() >= 1);
@@ -763,7 +730,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_init_messages_only_once() {
+    async fn test_get_context_consistent() {
         use vol_llm_context::builtin::SimpleContributor;
 
         let context_builder = ContextBuilderBuilder::new(128_000)
@@ -792,19 +759,15 @@ mod tests {
             config,
         );
 
-        // Call init_messages multiple times
-        ctx.init_messages().await.unwrap();
-        let messages_after_first = ctx.get_messages().await.len();
+        // Call get_context multiple times - each builds fresh
+        let messages_first = ctx.get_context("input").await.unwrap();
+        let messages_second = ctx.get_context("input").await.unwrap();
 
-        ctx.init_messages().await.unwrap();
-        let messages_after_second = ctx.get_messages().await.len();
-
-        // Multiple calls should NOT duplicate - second call overwrites
-        // This is the expected behavior: init_messages replaces, not appends
-        assert_eq!(messages_after_first, messages_after_second);
+        // Same count since no new messages were added between calls
+        assert_eq!(messages_first.len(), messages_second.len());
 
         // Verify we have: system + history + user = 3 messages
-        assert_eq!(messages_after_second, 3);
+        assert_eq!(messages_second.len(), 3);
     }
 
     #[tokio::test]

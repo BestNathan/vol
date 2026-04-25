@@ -311,7 +311,7 @@ impl CodingAgent {
         }
 
         // Resume the agent
-        let response = react_agent.resume(user_input).await
+        let response = react_agent.run(user_input).await
             .map_err(|e| CodingAgentError::Agent(e))?;
 
         if let Some(ref observer) = self.observer {
