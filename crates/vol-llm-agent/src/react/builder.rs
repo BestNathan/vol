@@ -50,11 +50,6 @@ impl AgentBuilder {
         self
     }
 
-    pub fn with_verbose(mut self, verbose: bool) -> Self {
-        self.config.verbose = verbose;
-        self
-    }
-
     pub fn with_max_history_messages(mut self, max: usize) -> Self {
         self.config.max_history_messages = max;
         self

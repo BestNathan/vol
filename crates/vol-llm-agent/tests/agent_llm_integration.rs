@@ -214,7 +214,6 @@ async fn test_agent_with_real_anthropic_api() {
             Always provide clear, concise responses."
                 .to_string(),
         )
-        .with_verbose(true)
         .build()
         .unwrap();
 

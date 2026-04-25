@@ -499,7 +499,6 @@ async fn test_agent_alert_scenario() {
              {}",
             scenario.to_alert_message()
         ))
-        .with_verbose(true)
         .build()
         .unwrap();
 

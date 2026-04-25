@@ -155,7 +155,6 @@ async fn test_agent_executes_full_react_cycle() {
         .with_plugin(tool_counter.clone())
         .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_verbose(true)
         .build()
         .unwrap();
 
@@ -244,7 +243,6 @@ async fn test_agent_max_iterations() {
         .with_tool(RvTool::new(None))
         .with_max_iterations(3)
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_verbose(false)
         .build()
         .unwrap();
 

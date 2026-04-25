@@ -131,7 +131,6 @@ async fn test_tool_results_passed_to_next_iteration() {
         .with_tool(vol_llm_tdengine::IndexPriceTool::new(None))
         .with_max_iterations(3)
         .with_system_prompt("You are a test assistant. Use tools to get information.".to_string())
-        .with_verbose(true)
         .build()
         .unwrap();
 
@@ -234,7 +233,6 @@ async fn test_message_history_grows_correctly() {
         .with_tool(vol_llm_tdengine::IndexPriceTool::new(None))
         .with_max_iterations(3)
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_verbose(false)
         .build()
         .unwrap();
 

@@ -293,7 +293,6 @@ async fn test_code_agent_market_data_query() {
         .with_tool(RvTool::new(None))
         .with_max_iterations(5)
         .with_system_prompt("You are a code analysis assistant.".to_string())
-        .with_verbose(true)
         .with_plugin(tracker)
         .build()
         .unwrap();
@@ -327,7 +326,6 @@ async fn test_code_agent_volatility_query() {
         .with_tool(RvTool::new(None))
         .with_max_iterations(5)
         .with_system_prompt("You are a volatility analysis assistant.".to_string())
-        .with_verbose(true)
         .build()
         .unwrap();
 
@@ -353,7 +351,6 @@ async fn test_code_agent_multi_turn_conversation() {
         .with_tool(RvTool::new(None))
         .with_max_iterations(5)
         .with_system_prompt("You are a helpful market data assistant.".to_string())
-        .with_verbose(true)
         .build()
         .unwrap();
 
@@ -382,7 +379,6 @@ async fn test_code_agent_tool_choice_auto() {
         .with_tool(RvTool::new(None))
         .with_max_iterations(3)
         .with_system_prompt("You are a helpful assistant.".to_string())
-        .with_verbose(true)
         .build()
         .unwrap();
 

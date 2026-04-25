@@ -22,7 +22,6 @@ pub struct AgentConfig {
     pub max_iterations: u32,
     pub max_history_messages: usize,
     pub context_builder: ContextBuilder,
-    pub verbose: bool,
     pub plugin_registry: PluginRegistry,
 
     // Observability fields
@@ -59,7 +58,6 @@ impl Default for AgentConfig {
             max_iterations: 5,
             max_history_messages: 20,
             context_builder,
-            verbose: false,
             plugin_registry: PluginRegistry::new(),
             agent_id: generate_agent_id(),
             log_base_path: PathBuf::from("logs/agents"),
@@ -585,11 +583,7 @@ impl ReActAgent {
             tokio::time::timeout(std::time::Duration::from_secs(5), listener_handle).await;
 
         match interceptor_result {
-            Ok(Ok(())) => {
-                if config.verbose {
-                    tracing::info!("Interceptor task completed gracefully");
-                }
-            }
+            Ok(Ok(())) => {}
             Ok(Err(join_err)) => {
                 tracing::warn!(%join_err, "Interceptor task panicked");
             }
@@ -601,11 +595,7 @@ impl ReActAgent {
         }
 
         match listener_result {
-            Ok(Ok(())) => {
-                if config.verbose {
-                    tracing::info!("Listener task completed gracefully");
-                }
-            }
+            Ok(Ok(())) => {}
             Ok(Err(join_err)) => {
                 tracing::warn!(%join_err, "Listener task panicked");
             }
@@ -621,11 +611,7 @@ impl ReActAgent {
             tokio::time::timeout(std::time::Duration::from_secs(5), session_listener_handle).await;
 
         match session_listener_result {
-            Ok(Ok(())) => {
-                if config.verbose {
-                    tracing::info!("SessionListener task completed gracefully");
-                }
-            }
+            Ok(Ok(())) => {}
             Ok(Err(join_err)) => {
                 tracing::warn!(%join_err, "SessionListener task panicked");
             }
@@ -729,7 +715,6 @@ mod tests {
         let config = AgentConfig::default();
         assert_eq!(config.max_iterations, 5);
         assert_eq!(config.max_history_messages, 20);
-        assert_eq!(config.verbose, false);
         assert_eq!(config.plugin_registry.plugins().len(), 0);
     }
 
@@ -743,7 +728,6 @@ mod tests {
             max_iterations: 10,
             max_history_messages: 50,
             context_builder,
-            verbose: true,
             plugin_registry: PluginRegistry::new(),
             agent_id: "custom_agent".to_string(),
             log_base_path: PathBuf::from("custom/logs"),

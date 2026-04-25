@@ -133,7 +133,6 @@ async fn test_plugin_interceptor_chain_executes() {
         .with_llm(Arc::new(mock_llm))
         .with_max_iterations(1)
         .with_system_prompt("You are a helpful assistant.".to_string())
-        .with_verbose(false)
         .with_plugin(TrackingPlugin::new(
             "tracker1".to_string(),
             10,

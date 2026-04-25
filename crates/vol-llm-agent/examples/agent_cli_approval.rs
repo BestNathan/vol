@@ -288,7 +288,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .to_string(),
         )
         .with_observability_plugin()
-        .with_verbose(true)
         .build()?;
 
     // Example query that will trigger tool calls

@@ -39,7 +39,6 @@ async fn test_builder_with_methods() {
         .with_llm(llm)
         .with_max_iterations(15)
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_verbose(true)
         .with_max_history_messages(50)
         .with_session(session)
         .with_agent_id("test_agent".to_string())

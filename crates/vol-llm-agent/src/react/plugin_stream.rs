@@ -104,7 +104,6 @@ pub struct AgentConfigSnapshot {
     pub max_iterations: u32,
     pub max_history_messages: usize,
     pub context_builder_summary: String,
-    pub verbose: bool,
 }
 
 impl From<&super::AgentConfig> for AgentConfigSnapshot {
@@ -114,7 +113,6 @@ impl From<&super::AgentConfig> for AgentConfigSnapshot {
             max_iterations: config.max_iterations,
             max_history_messages: config.max_history_messages,
             context_builder_summary: contributor_names.join(", "),
-            verbose: config.verbose,
         }
     }
 }
@@ -125,7 +123,6 @@ impl Default for AgentConfigSnapshot {
             max_iterations: 5,
             max_history_messages: 20,
             context_builder_summary: String::new(),
-            verbose: false,
         }
     }
 }
