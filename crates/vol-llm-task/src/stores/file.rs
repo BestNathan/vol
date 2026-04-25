@@ -57,7 +57,7 @@ impl FileTaskStore {
         let path = self.task_path(&task.id);
         let content = serde_json::to_string_pretty(task)
             .map_err(|e| StoreError::Serialization(e.to_string()))?;
-        let tmp = path.with_extension("json.tmp");
+        let tmp = path.with_extension("tmp");
         std::fs::write(&tmp, &content).map_err(StoreError::Io)?;
         std::fs::rename(&tmp, &path).map_err(StoreError::Io)?;
         Ok(())
@@ -128,14 +128,14 @@ impl TaskStore for FileTaskStore {
         }
         let content = serde_json::to_string_pretty(&task)
             .map_err(|e| StoreError::Serialization(e.to_string()))?;
-        let tmp = path.with_extension("json.tmp");
+        let tmp = path.with_extension("tmp");
         std::fs::write(&tmp, &content).map_err(StoreError::Io)?;
         std::fs::rename(&tmp, &path).map_err(StoreError::Io)
     }
 
     async fn delete(&self, task_id: &TaskId) -> Result<()> {
         let path = self.task_path(task_id);
-        match tokio::fs::remove_file(&path).await {
+        match std::fs::remove_file(&path) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(StoreError::Io(e)),
