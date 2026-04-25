@@ -12,13 +12,12 @@ use vol_llm_observability::LoggerPlugin;
 /// Wrapper around LoggerPlugin for backward compatibility.
 pub struct ObservabilityPlugin {
     inner: LoggerPlugin,
-    agent_id: String,
 }
 
 impl ObservabilityPlugin {
-    pub fn new(agent_id: String, log_base_path: PathBuf) -> Self {
+    pub fn new(_agent_id: String, log_base_path: PathBuf) -> Self {
         let inner = LoggerPlugin::new(log_base_path);
-        Self { inner, agent_id }
+        Self { inner }
     }
 
     fn create_log_entry(&self, event: &AgentStreamEvent, ctx: &PluginContext) -> LogEntry {
@@ -97,7 +96,6 @@ impl ObservabilityPlugin {
         LogEntry {
             timestamp: Utc::now(),
             run_id: ctx.run_id.clone(),
-            agent_id: self.agent_id.clone(),
             event: event_name.to_string(),
             data,
         }

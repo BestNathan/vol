@@ -41,7 +41,7 @@ impl LoggerPlugin {
         }
     }
 
-    fn create_log_entry(event: &AgentStreamEvent, run_id: &str, agent_id: &str) -> LogEntry {
+    fn create_log_entry(event: &AgentStreamEvent, run_id: &str) -> LogEntry {
         let data = match event {
             AgentStreamEvent::AgentStart { input, .. } => {
                 json!({ "input": input })
@@ -125,7 +125,6 @@ impl LoggerPlugin {
         LogEntry {
             timestamp: Utc::now(),
             run_id: run_id.to_string(),
-            agent_id: agent_id.to_string(),
             event: event_name,
             data,
         }
@@ -173,7 +172,7 @@ impl AgentPlugin for LoggerPlugin {
     }
 
     async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
-        let entry = Self::create_log_entry(event, &ctx.run_id, "agent");
+        let entry = Self::create_log_entry(event, &ctx.run_id);
         let path = self.log_path(event, &ctx.run_id);
         let line = entry.to_json_line();
         if let Err(e) = append_log(&path, &line).await {
@@ -355,7 +354,7 @@ mod tests {
 
         let _ = &ctx; // suppress unused warning
         for event in events {
-            let entry = LoggerPlugin::create_log_entry(&event, "run-1", "test-agent");
+            let entry = LoggerPlugin::create_log_entry(&event, "run-1");
             let line = entry.to_json_line();
             let path = plugin.log_path(&event, "run-1");
             // Verify log_path is deterministic
@@ -363,7 +362,6 @@ mod tests {
             assert_eq!(path, path2);
             // Verify JSON serialization works
             assert!(line.contains("run-1"));
-            assert!(line.contains("test-agent"));
         }
     }
 

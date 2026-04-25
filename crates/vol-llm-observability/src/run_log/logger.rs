@@ -8,7 +8,6 @@ use serde_json::{json, Value};
 pub struct LogEntry {
     pub timestamp: DateTime<Utc>,
     pub run_id: String,
-    pub agent_id: String,
     pub event: String,
     pub data: Value,
 }
@@ -18,7 +17,6 @@ impl LogEntry {
         json!({
             "timestamp": self.timestamp.to_rfc3339(),
             "run_id": self.run_id,
-            "agent_id": self.agent_id,
             "event": self.event,
             "data": self.data,
         }).to_string()
@@ -66,14 +64,12 @@ mod tests {
         let entry = LogEntry {
             timestamp: Utc::now(),
             run_id: "r1".to_string(),
-            agent_id: "a1".to_string(),
             event: "AgentStart".to_string(),
             data: json!({"input": "hello"}),
         };
         let line = entry.to_json_line();
         assert!(line.contains("AgentStart"));
         assert!(line.contains("r1"));
-        assert!(line.contains("a1"));
         assert!(line.contains("hello"));
     }
 
@@ -82,7 +78,6 @@ mod tests {
         let entry = LogEntry {
             timestamp: Utc::now(),
             run_id: "r1".to_string(),
-            agent_id: "a1".to_string(),
             event: "ToolCallBegin".to_string(),
             data: json!({"tool_name": "bash"}),
         };
