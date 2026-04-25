@@ -20,10 +20,10 @@ impl TaskScheduler {
     pub async fn create_task(
         &self,
         kind: TaskKind,
-        description: String,
+        subject: String,
         dependencies: Vec<TaskId>,
     ) -> Result<TaskId> {
-        let task = Task::new(kind, description, dependencies);
+        let task = Task::new(kind, subject, dependencies);
         self.store.create(task).await
     }
 

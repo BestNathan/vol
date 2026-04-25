@@ -188,7 +188,7 @@ mod tests {
         let task = Task::new(TaskKind::Agent, "file task".to_string(), vec![]);
         let id = store.create(task).await.unwrap();
         let got = store.get(&id).await.unwrap().unwrap();
-        assert_eq!(got.description, "file task");
+        assert_eq!(got.subject, "file task");
     }
 
     #[tokio::test]
@@ -199,7 +199,7 @@ mod tests {
 
         let store2 = FileTaskStore::new(dir.path()).await.unwrap();
         let got = store2.get(&id).await.unwrap().unwrap();
-        assert_eq!(got.description, "persist");
+        assert_eq!(got.subject, "persist");
     }
 
     #[tokio::test]
@@ -209,13 +209,13 @@ mod tests {
         let id = store.create(task).await.unwrap();
 
         let mut updated = store.get(&id).await.unwrap().unwrap();
-        updated.description = "modified".to_string();
+        updated.subject = "modified".to_string();
         updated.status = TaskStatus::Completed;
         store.update(updated).await.unwrap();
 
         let store2 = FileTaskStore::new(dir.path()).await.unwrap();
         let got = store2.get(&id).await.unwrap().unwrap();
-        assert_eq!(got.description, "modified");
+        assert_eq!(got.subject, "modified");
         assert_eq!(got.status, TaskStatus::Completed);
     }
 
@@ -236,8 +236,11 @@ mod tests {
             id: TaskId(999),
             status: TaskStatus::Pending,
             kind: TaskKind::Agent,
-            description: "ghost".to_string(),
+            subject: "ghost".to_string(),
+            description: String::new(),
+            active_form: None,
             dependencies: vec![],
+            blocks: vec![],
             result: None,
             summary: None,
             output_file: None,
@@ -315,7 +318,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
         let mut updated = store.get(&id2).await.unwrap().unwrap();
-        updated.description = "modified 2".to_string();
+        updated.subject = "modified 2".to_string();
         store.update(updated).await.unwrap();
 
         let mtime_after =

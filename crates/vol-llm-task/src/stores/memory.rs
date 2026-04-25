@@ -105,7 +105,7 @@ mod tests {
         let task = Task::new(TaskKind::Agent, "test task".to_string(), vec![]);
         let id = store.create(task).await.unwrap();
         let got = store.get(&id).await.unwrap().unwrap();
-        assert_eq!(got.description, "test task");
+        assert_eq!(got.subject, "test task");
         assert_eq!(got.status, TaskStatus::Pending);
     }
 

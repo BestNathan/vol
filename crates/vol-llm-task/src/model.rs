@@ -46,8 +46,11 @@ pub struct Task {
     pub id: TaskId,
     pub status: TaskStatus,
     pub kind: TaskKind,
+    pub subject: String,
     pub description: String,
+    pub active_form: Option<String>,
     pub dependencies: Vec<TaskId>,
+    pub blocks: Vec<TaskId>,
     pub result: Option<TaskResult>,
     pub summary: Option<String>,
     pub output_file: Option<PathBuf>,
@@ -58,13 +61,16 @@ pub struct Task {
 
 impl Task {
     /// Create a new pending task. Caller must set the id (store assigns it).
-    pub fn new(kind: TaskKind, description: String, dependencies: Vec<TaskId>) -> Self {
+    pub fn new(kind: TaskKind, subject: String, dependencies: Vec<TaskId>) -> Self {
         Self {
             id: TaskId(0),
             status: TaskStatus::Pending,
             kind,
-            description,
+            subject,
+            description: String::new(),
+            active_form: None,
             dependencies,
+            blocks: Vec::new(),
             result: None,
             summary: None,
             output_file: None,
