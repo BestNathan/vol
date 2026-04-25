@@ -32,8 +32,6 @@ async fn test_builder_with_methods() {
     let llm = Arc::new(DummyLlm);
     let tmp_dir = tempfile::tempdir().unwrap();
     let session = Arc::new(vol_session::Session::new(
-        "test".to_string(),
-        Arc::new(vol_session::InMemorySessionStore::new()),
         Arc::new(vol_session::InMemoryEntryStore::new()),
     ));
     // Build succeeds with all builder methods chained

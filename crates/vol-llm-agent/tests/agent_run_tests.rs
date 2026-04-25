@@ -240,9 +240,9 @@ async fn test_agent_run_session_recording() {
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
     // Verify that a session JSONL file was created in the log directory
-    let sessions_path = tmp_dir.path().join(agent_id).join("sessions");
+    let sessions_path = tmp_dir.path().join(agent_id);
     let entries: Vec<_> = std::fs::read_dir(&sessions_path)
-        .expect("Sessions directory should exist")
+        .expect("Session directory should exist")
         .filter(|e| e.as_ref().map(|e| e.file_name().to_string_lossy().ends_with(".jsonl")).unwrap_or(false))
         .collect();
     assert!(!entries.is_empty(), "Session JSONL file should exist in {:?} but found none", sessions_path);

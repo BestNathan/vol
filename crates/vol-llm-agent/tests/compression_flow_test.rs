@@ -4,16 +4,15 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use vol_llm_agent::react::{ContextContributor, context_contributors::SessionContributor};
 use vol_llm_core::Message;
-use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session, SessionMessage};
+use vol_session::{InMemoryEntryStore, Session, SessionMessage};
 
 async fn make_session_with_messages(n: usize) -> Arc<Mutex<Session>> {
-    let session_store = Arc::new(InMemorySessionStore::new());
     let entry_store = Arc::new(InMemoryEntryStore::new());
-    let session = Session::new("test-session".to_string(), session_store, entry_store);
+    let session = Session::new(entry_store);
 
     // Add messages to the store
     for i in 0..n {
-        let msg = SessionMessage::new("test-session".to_string(), Message::user(format!("msg-{}", i)));
+        let msg = SessionMessage::new(session.id.clone(), Message::user(format!("msg-{}", i)));
         session.add_message(msg).await.unwrap();
     }
 
@@ -49,9 +48,8 @@ async fn test_session_contributor_compress_flow() {
 
 #[tokio::test]
 async fn test_session_contributor_empty_session_compress() {
-    let session_store = Arc::new(InMemorySessionStore::new());
     let entry_store = Arc::new(InMemoryEntryStore::new());
-    let session = Session::new("empty-session".to_string(), session_store, entry_store);
+    let session = Session::new(entry_store);
     let session = Arc::new(Mutex::new(session));
 
     let mut contributor = SessionContributor::new(session.clone(), 10);

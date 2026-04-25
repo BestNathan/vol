@@ -5,7 +5,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use vol_llm_agent::react::{PluginContext, PluginDecision};
-use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session};
+use vol_session::{InMemoryEntryStore, Session};
 use vol_llm_agent::{AgentStreamEvent, ReActAgent};
 use vol_llm_core::{ConversationRequest, LLMClient, LLMProvider, StreamEvent, StreamEventData};
 
@@ -88,13 +88,8 @@ impl vol_llm_agent::react::plugin::AgentPlugin for TestObservabilityPlugin {
 
 #[tokio::test]
 async fn test_full_agent_run_with_observability() {
-    let session_store = Arc::new(InMemorySessionStore::new());
     let entry_store = Arc::new(InMemoryEntryStore::new());
-    let session = Arc::new(Session::new(
-        "test-session".to_string(),
-        session_store.clone(),
-        entry_store.clone(),
-    ));
+    let session = Arc::new(Session::new(entry_store.clone()));
 
     // Track observability events
     let event_count = Arc::new(tokio::sync::Mutex::new(0usize));

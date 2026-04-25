@@ -12,7 +12,7 @@ use vol_session::{FileSessionEntryStore, SessionEntry, SessionEntryStore};
 async fn test_file_entry_store_save_and_get_entries() {
     let tmp_dir = tempfile::tempdir().unwrap();
     let store: Arc<dyn SessionEntryStore> =
-        Arc::new(FileSessionEntryStore::new(tmp_dir.path(), "session-1"));
+        Arc::new(FileSessionEntryStore::new(tmp_dir.path()));
 
     // Save several entries
     let entry1 = SessionEntry::new_message("session-1".to_string(), Message::user("Hello"));
@@ -25,7 +25,7 @@ async fn test_file_entry_store_save_and_get_entries() {
     store.save(entry3).await.unwrap();
 
     // Get all entries
-    let entries = store.get_entries(10).await.unwrap();
+    let entries = store.get_entries("session-1").await.unwrap();
     assert_eq!(entries.len(), 3, "Expected 3 entries, got {}", entries.len());
 
     // Verify order and types
@@ -40,11 +40,7 @@ async fn test_file_entry_store_save_and_get_entries() {
         "Third entry should be a Message"
     );
 
-    // Test limit
-    let limited = store.get_entries(2).await.unwrap();
-    assert_eq!(limited.len(), 2, "Limited get_entries should return 2");
-
-    let count = store.get_count().await.unwrap();
+    let count = store.get_count("session-1").await.unwrap();
     assert_eq!(count, 3, "Entry count should be 3");
 }
 
@@ -53,7 +49,7 @@ async fn test_file_entry_store_save_and_get_entries() {
 async fn test_file_entry_store_checkpoint_and_resume() {
     let tmp_dir = tempfile::tempdir().unwrap();
     let store: Arc<dyn SessionEntryStore> =
-        Arc::new(FileSessionEntryStore::new(tmp_dir.path(), "session-checkpoint"));
+        Arc::new(FileSessionEntryStore::new(tmp_dir.path()));
 
     // Save entries with explicit timestamps
     let mut before_cp =
@@ -83,16 +79,12 @@ async fn test_file_entry_store_checkpoint_and_resume() {
     store.save(after_cp2).await.unwrap();
 
     // Find latest checkpoint
-    let cp = store.find_latest_checkpoint().await.unwrap().unwrap();
+    let cp = store.find_latest_checkpoint("session-checkpoint").await.unwrap().unwrap();
     assert_eq!(cp.r#type, vol_session::SessionEntryType::Checkpoint);
 
     // Get entries after checkpoint (>= so includes checkpoint itself)
-    let resumed = store.get_after(cp.created_at, 10).await.unwrap();
+    let resumed = store.get_after("session-checkpoint", cp.created_at).await.unwrap();
     assert_eq!(resumed.len(), 3, "Should have 3 entries (checkpoint + 2 after)");
-
-    // Test limit on get_after
-    let limited = store.get_after(cp.created_at, 1).await.unwrap();
-    assert_eq!(limited.len(), 1, "Limited get_after should return 1");
 }
 
 /// Test delete session
@@ -100,7 +92,7 @@ async fn test_file_entry_store_checkpoint_and_resume() {
 async fn test_file_entry_store_delete_session() {
     let tmp_dir = tempfile::tempdir().unwrap();
     let store: Arc<dyn SessionEntryStore> =
-        Arc::new(FileSessionEntryStore::new(tmp_dir.path(), "session-delete"));
+        Arc::new(FileSessionEntryStore::new(tmp_dir.path()));
 
     // Save some entries
     store
@@ -118,16 +110,16 @@ async fn test_file_entry_store_delete_session() {
         .await
         .unwrap();
 
-    assert_eq!(store.get_count().await.unwrap(), 2);
+    assert_eq!(store.get_count("session-delete").await.unwrap(), 2);
 
     // Delete session
-    store.delete_session().await.unwrap();
+    store.delete_session("session-delete").await.unwrap();
 
     // Verify all entries are gone
-    let count = store.get_count().await.unwrap();
+    let count = store.get_count("session-delete").await.unwrap();
     assert_eq!(count, 0, "Entry count should be 0 after delete");
 
-    let entries = store.get_entries(10).await.unwrap();
+    let entries = store.get_entries("session-delete").await.unwrap();
     assert!(entries.is_empty(), "Entries should be empty after delete");
 }
 
@@ -138,7 +130,7 @@ async fn test_file_entry_store_persistence() {
 
     // Create store and save entries
     {
-        let store = FileSessionEntryStore::new(tmp_dir.path(), "session-persist");
+        let store = FileSessionEntryStore::new(tmp_dir.path());
         store
             .save(SessionEntry::new_message(
                 "session-persist".to_string(),
@@ -149,8 +141,8 @@ async fn test_file_entry_store_persistence() {
     }
 
     // Create a new store instance pointing to same location
-    let store2 = FileSessionEntryStore::new(tmp_dir.path(), "session-persist");
-    let entries = store2.get_entries(10).await.unwrap();
+    let store2 = FileSessionEntryStore::new(tmp_dir.path());
+    let entries = store2.get_entries("session-persist").await.unwrap();
 
     assert_eq!(entries.len(), 1, "Should persist 1 entry across re-opens");
     assert_eq!(
@@ -164,7 +156,7 @@ async fn test_file_entry_store_persistence() {
 #[tokio::test]
 async fn test_file_entry_store_mixed_types() {
     let tmp_dir = tempfile::tempdir().unwrap();
-    let store = FileSessionEntryStore::new(tmp_dir.path(), "session-mixed");
+    let store = FileSessionEntryStore::new(tmp_dir.path());
 
     let mut msg = SessionEntry::new_message("session-mixed".to_string(), Message::user("hello"));
     msg.created_at = 100;
@@ -192,7 +184,7 @@ async fn test_file_entry_store_mixed_types() {
     store.save(cp).await.unwrap();
     store.save(summary).await.unwrap();
 
-    let entries = store.get_entries(10).await.unwrap();
+    let entries = store.get_entries("session-mixed").await.unwrap();
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].r#type, vol_session::SessionEntryType::Message);
     assert_eq!(entries[1].r#type, vol_session::SessionEntryType::Checkpoint);

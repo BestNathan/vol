@@ -3,29 +3,20 @@
 //! Demonstrates how to use Session with ReActAgent.
 
 use std::sync::Arc;
-use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session, SessionMessage};
+use vol_session::{InMemoryEntryStore, Session, SessionMessage};
 use vol_llm_core::Message;
 
 #[tokio::main]
 async fn main() {
     println!("=== Session and SessionEntryStore Example ===\n");
 
-    // 1. Create stores
-    let session_store = Arc::new(InMemorySessionStore::new());
+    // 1. Create entry store
     let entry_store = Arc::new(InMemoryEntryStore::new());
-    println!("1. Created InMemorySessionStore and InMemoryEntryStore");
+    println!("1. Created InMemoryEntryStore");
 
-    // 2. Create session
-    let session = Arc::new(
-        Session::new(
-            "session-123".to_string(),
-            session_store.clone(),
-            entry_store.clone(),
-        )
-        .with_metadata("user_id", "user-456"),
-    );
+    // 2. Create session (auto-generates UUID)
+    let session = Arc::new(Session::new(entry_store.clone()));
     println!("2. Created Session: {}", session.id);
-    println!("   Metadata: {:?}", session.metadata);
 
     // 3. Add messages to session
     let user_msg = SessionMessage::new(session.id.clone(), Message::user("What is the BTC price?"));
@@ -40,7 +31,7 @@ async fn main() {
     println!("4. Added assistant message to session");
 
     // 5. Retrieve messages from session
-    let messages = session.get_messages(10).await.unwrap();
+    let messages = session.get_messages().await.unwrap();
     println!("5. Retrieved {} messages from session", messages.len());
 
     for (i, msg) in messages.iter().enumerate() {
@@ -78,5 +69,5 @@ async fn main() {
     println!("       .build()?;");
 
     println!("\n=== Example Complete ===");
-    println!("Session and MessageStore are ready for use with ReActAgent!");
+    println!("Session and SessionEntryStore are ready for use with ReActAgent!");
 }

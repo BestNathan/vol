@@ -11,11 +11,9 @@ use std::path::{Path, PathBuf};
 /// File-based entry store using JSONL format.
 ///
 /// Stores all entry types in `{entry_dir}/{session_id}.jsonl`.
+/// Session ID is passed per-method-call, not bound at construction.
 pub struct FileSessionEntryStore {
     entry_dir: PathBuf,
-    #[allow(dead_code)]
-    session_id: String,
-    file_path: PathBuf,
 }
 
 /// JSONL line format for SessionEntry.
@@ -30,27 +28,29 @@ struct SessionEntryLine {
 }
 
 impl FileSessionEntryStore {
-    /// Create a new file entry store for a session.
-    pub fn new<P: AsRef<Path>>(entry_dir: P, session_id: &str) -> Self {
-        let entry_dir = entry_dir.as_ref().to_path_buf();
-        let file_path = entry_dir.join(format!("{}.jsonl", session_id));
+    /// Create a new file entry store.
+    pub fn new<P: AsRef<Path>>(entry_dir: P) -> Self {
         Self {
-            entry_dir,
-            session_id: session_id.to_string(),
-            file_path,
+            entry_dir: entry_dir.as_ref().to_path_buf(),
         }
+    }
+
+    /// Resolve file path for a session.
+    fn file_path(&self, session_id: &str) -> PathBuf {
+        self.entry_dir.join(format!("{}.jsonl", session_id))
     }
 
     fn ensure_dir(&self) -> std::io::Result<()> {
         fs::create_dir_all(&self.entry_dir)
     }
 
-    fn append_line(&self, line: &str) -> std::io::Result<()> {
+    fn append_line(&self, session_id: &str, line: &str) -> std::io::Result<()> {
         self.ensure_dir()?;
+        let file_path = self.file_path(session_id);
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&self.file_path)?;
+            .open(&file_path)?;
         writeln!(file, "{}", line)?;
         Ok(())
     }
@@ -97,12 +97,13 @@ impl FileSessionEntryStore {
 
     /// Read entries from the head of the file, parsing up to `max_parsed` lines.
     /// Skips unparseable lines silently.
-    fn read_from_head(&self, max_parsed: usize) -> std::io::Result<Vec<SessionEntry>> {
+    fn read_from_head(&self, session_id: &str, max_parsed: usize) -> std::io::Result<Vec<SessionEntry>> {
+        let file_path = self.file_path(session_id);
         let mut entries = Vec::new();
-        if !self.file_path.exists() {
+        if !file_path.exists() {
             return Ok(entries);
         }
-        let file = File::open(&self.file_path)?;
+        let file = File::open(&file_path)?;
         let reader = BufReader::new(file);
         for line in reader.lines() {
             let line = line?;
@@ -122,11 +123,12 @@ impl FileSessionEntryStore {
     /// Read entries from the tail of the file backwards.
     /// Reads up to `buf_size` bytes from the end, parses complete lines found,
     /// and returns them in file order (oldest first).
-    fn read_from_tail(&self, buf_size: u64) -> std::io::Result<Vec<SessionEntry>> {
-        if !self.file_path.exists() {
+    fn read_from_tail(&self, session_id: &str, buf_size: u64) -> std::io::Result<Vec<SessionEntry>> {
+        let file_path = self.file_path(session_id);
+        if !file_path.exists() {
             return Ok(Vec::new());
         }
-        let file = File::open(&self.file_path)?;
+        let file = File::open(&file_path)?;
         let file_len = file.metadata()?.len();
         if file_len == 0 {
             return Ok(Vec::new());
@@ -138,8 +140,6 @@ impl FileSessionEntryStore {
         reader.seek(SeekFrom::Start(read_from))?;
         reader.read_to_end(&mut buf)?;
 
-        // If we didn't start at position 0, the first chunk may be a partial line.
-        // Skip to the first newline to find a line boundary.
         let text = String::from_utf8_lossy(&buf);
         let start = if read_from > 0 {
             text.find('\n').map(|p| p + 1).unwrap_or(text.len())
@@ -164,19 +164,20 @@ impl FileSessionEntryStore {
 impl SessionEntryStore for FileSessionEntryStore {
     async fn save(&self, entry: SessionEntry) -> Result<()> {
         let json = Self::to_json(&entry)?;
-        self.append_line(&json).map_err(StoreError::Io)
+        self.append_line(&entry.session_id, &json).map_err(StoreError::Io)
     }
 
-    async fn get_entries(&self, limit: usize) -> Result<Vec<SessionEntry>> {
-        self.read_from_head(limit).map_err(StoreError::Io)
+    async fn get_entries(&self, session_id: &str) -> Result<Vec<SessionEntry>> {
+        self.read_from_head(session_id, usize::MAX).map_err(StoreError::Io)
     }
 
-    async fn get_after(&self, after: i64, limit: usize) -> Result<Vec<SessionEntry>> {
+    async fn get_after(&self, session_id: &str, after: i64) -> Result<Vec<SessionEntry>> {
         let mut entries = Vec::new();
-        if !self.file_path.exists() {
+        let file_path = self.file_path(session_id);
+        if !file_path.exists() {
             return Ok(entries);
         }
-        let file = File::open(&self.file_path).map_err(StoreError::Io)?;
+        let file = File::open(&file_path).map_err(StoreError::Io)?;
         let reader = BufReader::new(file);
         for line in reader.lines() {
             let line = line.map_err(StoreError::Io)?;
@@ -186,18 +187,15 @@ impl SessionEntryStore for FileSessionEntryStore {
             if let Some(entry) = Self::from_json(&line) {
                 if entry.created_at >= after {
                     entries.push(entry);
-                    if entries.len() >= limit {
-                        break;
-                    }
                 }
             }
         }
         Ok(entries)
     }
 
-    async fn find_latest_checkpoint(&self) -> Result<Option<SessionEntry>> {
+    async fn find_latest_checkpoint(&self, session_id: &str) -> Result<Option<SessionEntry>> {
         // Try reading from the tail first (last 64KB) — most likely to contain the latest checkpoint.
-        let tail_entries = self.read_from_tail(64 * 1024).map_err(StoreError::Io)?;
+        let tail_entries = self.read_from_tail(session_id, 64 * 1024).map_err(StoreError::Io)?;
         let mut latest: Option<SessionEntry> = None;
         for entry in &tail_entries {
             if entry.r#type == SessionEntryType::Checkpoint {
@@ -215,7 +213,7 @@ impl SessionEntryStore for FileSessionEntryStore {
 
         // If no checkpoint found in tail, fall back to full scan.
         if latest.is_none() {
-            let all = self.read_from_head(usize::MAX).map_err(StoreError::Io)?;
+            let all = self.read_from_head(session_id, usize::MAX).map_err(StoreError::Io)?;
             for entry in all {
                 if entry.r#type == SessionEntryType::Checkpoint {
                     match &latest {
@@ -234,18 +232,20 @@ impl SessionEntryStore for FileSessionEntryStore {
         Ok(latest)
     }
 
-    async fn delete_session(&self) -> Result<()> {
-        if self.file_path.exists() {
-            fs::remove_file(&self.file_path).map_err(StoreError::Io)?;
+    async fn delete_session(&self, session_id: &str) -> Result<()> {
+        let file_path = self.file_path(session_id);
+        if file_path.exists() {
+            fs::remove_file(&file_path).map_err(StoreError::Io)?;
         }
         Ok(())
     }
 
-    async fn get_count(&self) -> Result<usize> {
-        if !self.file_path.exists() {
+    async fn get_count(&self, session_id: &str) -> Result<usize> {
+        let file_path = self.file_path(session_id);
+        if !file_path.exists() {
             return Ok(0);
         }
-        let file = File::open(&self.file_path).map_err(StoreError::Io)?;
+        let file = File::open(&file_path).map_err(StoreError::Io)?;
         let reader = BufReader::new(file);
         let mut count = 0;
         for line in reader.lines() {
@@ -272,7 +272,7 @@ mod entry_tests {
     #[tokio::test]
     async fn test_file_entry_store_save_and_get() {
         let temp_dir = tempdir().unwrap();
-        let store = FileSessionEntryStore::new(temp_dir.path(), "test-session");
+        let store = FileSessionEntryStore::new(temp_dir.path());
 
         let entry = SessionEntry::new_message(
             "test-session".to_string(),
@@ -281,7 +281,7 @@ mod entry_tests {
 
         store.save(entry.clone()).await.unwrap();
 
-        let entries = store.get_entries(10).await.unwrap();
+        let entries = store.get_entries("test-session").await.unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].r#type, SessionEntryType::Message);
     }
@@ -289,7 +289,7 @@ mod entry_tests {
     #[tokio::test]
     async fn test_file_entry_store_find_checkpoint() {
         let temp_dir = tempdir().unwrap();
-        let store = FileSessionEntryStore::new(temp_dir.path(), "test-session");
+        let store = FileSessionEntryStore::new(temp_dir.path());
 
         let mut before = SessionEntry::new_message(
             "test-session".to_string(),
@@ -314,10 +314,10 @@ mod entry_tests {
         store.save(checkpoint).await.unwrap();
         store.save(after).await.unwrap();
 
-        let cp = store.find_latest_checkpoint().await.unwrap().unwrap();
+        let cp = store.find_latest_checkpoint("test-session").await.unwrap().unwrap();
         assert_eq!(cp.r#type, SessionEntryType::Checkpoint);
 
-        let entries = store.get_after(cp.created_at, 10).await.unwrap();
+        let entries = store.get_after("test-session", cp.created_at).await.unwrap();
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].r#type, SessionEntryType::Checkpoint);
         assert_eq!(entries[1].r#type, SessionEntryType::Message);
@@ -326,34 +326,32 @@ mod entry_tests {
     #[tokio::test]
     async fn test_file_entry_store_delete_session() {
         let temp_dir = tempdir().unwrap();
-        let store = FileSessionEntryStore::new(temp_dir.path(), "test-session");
+        let store = FileSessionEntryStore::new(temp_dir.path());
 
         store.save(SessionEntry::new_message(
             "test-session".to_string(),
             Message::user("test"),
         )).await.unwrap();
 
-        store.delete_session().await.unwrap();
-        let count = store.get_count().await.unwrap();
+        store.delete_session("test-session").await.unwrap();
+        let count = store.get_count("test-session").await.unwrap();
         assert_eq!(count, 0);
     }
 
     #[tokio::test]
     async fn test_file_entry_store_skips_bad_lines() {
         let temp_dir = tempdir().unwrap();
-        let store = FileSessionEntryStore::new(temp_dir.path(), "test-session");
+        let store = FileSessionEntryStore::new(temp_dir.path());
 
-        // Write a valid entry, a bad line, then another valid entry.
         let entry1 = SessionEntry::new_message(
             "test-session".to_string(),
             Message::user("hello"),
         );
         store.save(entry1).await.unwrap();
 
-        // Append a malformed line directly.
         std::fs::OpenOptions::new()
             .append(true)
-            .open(&store.file_path)
+            .open(&store.file_path("test-session"))
             .unwrap()
             .write_all(b"this is not valid json\n")
             .unwrap();
@@ -364,16 +362,15 @@ mod entry_tests {
         );
         store.save(entry2).await.unwrap();
 
-        let entries = store.get_entries(10).await.unwrap();
+        let entries = store.get_entries("test-session").await.unwrap();
         assert_eq!(entries.len(), 2);
     }
 
     #[tokio::test]
     async fn test_file_entry_store_read_from_tail() {
         let temp_dir = tempdir().unwrap();
-        let store = FileSessionEntryStore::new(temp_dir.path(), "test-session");
+        let store = FileSessionEntryStore::new(temp_dir.path());
 
-        // Save 5 entries.
         for i in 0..5 {
             let entry = SessionEntry::new_message(
                 "test-session".to_string(),
@@ -382,10 +379,33 @@ mod entry_tests {
             store.save(entry).await.unwrap();
         }
 
-        // read_from_tail with a small buffer should get the last few entries.
-        let tail = store.read_from_tail(256).unwrap();
+        let tail = store.read_from_tail("test-session", 256).unwrap();
         assert!(!tail.is_empty());
-        // The last entry should be msg-4.
         assert_eq!(tail.last().unwrap().data.entry_type(), SessionEntryType::Message);
     }
-}       
+
+    #[tokio::test]
+    async fn test_file_entry_store_multiple_sessions() {
+        let temp_dir = tempdir().unwrap();
+        let store = FileSessionEntryStore::new(temp_dir.path());
+
+        store.save(SessionEntry::new_message(
+            "session-a".to_string(),
+            Message::user("from A"),
+        )).await.unwrap();
+
+        store.save(SessionEntry::new_message(
+            "session-b".to_string(),
+            Message::user("from B"),
+        )).await.unwrap();
+
+        let entries_a = store.get_entries("session-a").await.unwrap();
+        assert_eq!(entries_a.len(), 1);
+
+        let entries_b = store.get_entries("session-b").await.unwrap();
+        assert_eq!(entries_b.len(), 1);
+
+        store.delete_session("session-a").await.unwrap();
+        assert_eq!(store.get_count("session-b").await.unwrap(), 1);
+    }
+}

@@ -44,10 +44,8 @@ fn test_config_default_session_is_none() {
 
 #[test]
 fn test_config_with_session() {
-    use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session};
+    use vol_session::{InMemoryEntryStore, Session};
     let session = Arc::new(Session::new(
-        "test-session".to_string(),
-        Arc::new(InMemorySessionStore::new()),
         Arc::new(InMemoryEntryStore::new()),
     ));
     let config = CodingAgentConfig {

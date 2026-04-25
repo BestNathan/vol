@@ -53,7 +53,7 @@ impl AgentPlugin for RateLimiterPlugin {
 mod tests {
     use super::*;
     use crate::react::{AgentConfig, PluginContext, RunContext};
-    use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session};
+    use vol_session::{InMemoryEntryStore, Session};
     use std::sync::Arc;
 
     fn create_test_plugin_context() -> PluginContext {
@@ -62,8 +62,6 @@ mod tests {
             "test input".to_string(),
             "session-1".to_string(),
             Arc::new(Session::new(
-                "session-1".to_string(),
-                Arc::new(InMemorySessionStore::new()),
                 Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),

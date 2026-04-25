@@ -108,13 +108,12 @@ impl ReActAgent {
 
     /// Create agent with new session
     pub fn with_new_session(&self, session_id: String) -> Self {
-        use vol_session::{InMemoryEntryStore, InMemorySessionStore};
+        use vol_session::InMemoryEntryStore;
 
-        let new_session = Arc::new(Session::new(
-            session_id,
-            Arc::new(InMemorySessionStore::new()),
-            Arc::new(InMemoryEntryStore::new()),
-        ));
+        let entry_store = Arc::new(InMemoryEntryStore::new());
+        let new_session = Arc::new(Session::new(entry_store));
+        // Note: session.id is now self-generated; session_id param is ignored for the ID.
+        // If the caller needs a specific ID, use Session::resume instead.
         Self {
             session: new_session,
             llm: self.llm.clone(),
@@ -193,7 +192,6 @@ impl ReActAgent {
             run_ctx.event_tx.subscribe(),
             Arc::new(FileSessionEntryStore::new(
                 config.log_base_path.join(&config.agent_id),
-                &session.id,
             )),
             session.id.clone(),
         );

@@ -2,7 +2,7 @@
 
 use super::agent::{AgentConfig, ReActAgent};
 use super::plugin::AgentPlugin;
-use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session};
+use vol_session::{InMemoryEntryStore, Session};
 use std::sync::Arc;
 use vol_llm_context::{ContextBuilderBuilder, ContextContributor};
 use vol_llm_core::LLMClient;
@@ -109,11 +109,8 @@ impl AgentBuilder {
 
         // Create session if not provided
         let session = self.session.unwrap_or_else(|| {
-            Arc::new(Session::new(
-                uuid::Uuid::new_v4().to_string(),
-                Arc::new(InMemorySessionStore::new()),
-                Arc::new(InMemoryEntryStore::new()),
-            ))
+            let entry_store = Arc::new(InMemoryEntryStore::new());
+            Arc::new(Session::new(entry_store))
         });
 
         // Build ContextBuilder: start from config defaults, add stored contributors

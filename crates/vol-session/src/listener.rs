@@ -402,7 +402,7 @@ mod tests {
         listener.run().await.unwrap();
 
         // Verify the entry was saved
-        let entries = store.get_entries(10).await.unwrap();
+        let entries = store.get_entries("session-1").await.unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].r#type, SessionEntryType::Message);
         if let SessionEntryData::Message { message } = &entries[0].data {
@@ -451,7 +451,7 @@ mod tests {
         listener.run().await.unwrap();
 
         // Verify all entries were saved
-        let entries = store.get_entries(10).await.unwrap();
+        let entries = store.get_entries("session-1").await.unwrap();
         assert_eq!(entries.len(), 3);
 
         // First: thinking (Assistant)

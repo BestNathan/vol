@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session, SessionMessage};
+use vol_session::{InMemoryEntryStore, Session, SessionMessage};
 use vol_llm_agent::{AgentConfig, ReActAgent};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, LLMProvider, Message, SupportedParam,
@@ -59,13 +59,8 @@ impl LLMClient for MockLlm {
 #[tokio::test]
 async fn test_history_limit_applied() {
     // Create session with pre-populated messages
-    let session_store = Arc::new(InMemorySessionStore::new());
     let entry_store = Arc::new(InMemoryEntryStore::new());
-    let session = Arc::new(Session::new(
-        "test-session".to_string(),
-        session_store.clone(),
-        entry_store.clone(),
-    ));
+    let session = Arc::new(Session::new(entry_store.clone()));
 
     // Add 30 messages to session (more than default limit of 20)
     for i in 0..30 {
@@ -90,7 +85,7 @@ async fn test_history_limit_applied() {
     // Verify: session should have loaded only 10 history messages
     // The agent should have added 1 message (assistant response)
     // User input is added to runtime messages but NOT persisted to session
-    let history = session.get_messages(100).await.unwrap();
+    let history = session.get_messages().await.unwrap();
     // 30 original messages + 1 assistant response = 31 total
     assert_eq!(
         history.len(),

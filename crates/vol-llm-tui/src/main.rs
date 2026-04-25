@@ -109,23 +109,12 @@ fn create_session() -> Result<Arc<Session>, Box<dyn std::error::Error>> {
     if let Err(e) = std::fs::create_dir_all(&session_dir) {
         eprintln!("Warning: cannot create session dir: {}", e);
         eprintln!("Using in-memory session (no history persistence)");
-        use vol_session::InMemorySessionStore;
         let entry_store = Arc::new(vol_session::InMemoryEntryStore::new());
-        return Ok(Arc::new(Session::new(
-            "tui_memory".to_string(),
-            Arc::new(InMemorySessionStore::new()),
-            entry_store,
-        )));
+        return Ok(Arc::new(Session::new(entry_store)));
     }
 
-    let session_id = format!("tui_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S%.3f"));
-    let entry_store = Arc::new(FileSessionEntryStore::new(&session_dir, &session_id));
-    let session_store = Arc::new(vol_session::InMemorySessionStore::new());
-    Ok(Arc::new(Session::new(
-        session_id.clone(),
-        session_store,
-        entry_store,
-    )))
+    let entry_store = Arc::new(FileSessionEntryStore::new(&session_dir));
+    Ok(Arc::new(Session::new(entry_store)))
 }
 
 fn setup_terminal() -> io::Result<()> {

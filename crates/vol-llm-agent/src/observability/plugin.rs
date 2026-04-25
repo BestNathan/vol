@@ -129,7 +129,7 @@ mod tests {
     use crate::react::plugin::PluginContext;
     use crate::react::run_context::RunContext;
     use crate::react::{plugin_context_from_run_ctx, AgentConfig};
-    use vol_session::{InMemoryEntryStore, InMemorySessionStore, Session};
+    use vol_session::{InMemoryEntryStore, Session};
     use std::sync::Arc;
     use tempfile::TempDir;
 
@@ -139,8 +139,6 @@ mod tests {
             "test input".to_string(),
             "session-1".to_string(),
             Arc::new(Session::new(
-                "session-1".to_string(),
-                Arc::new(InMemorySessionStore::new()),
                 Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),

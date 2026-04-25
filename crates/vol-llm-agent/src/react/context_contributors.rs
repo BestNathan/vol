@@ -44,7 +44,7 @@ impl ContextContributor for SessionContributor {
             .session
             .lock()
             .await
-            .get_messages(self.max_history)
+            .get_messages()
             .await
             .unwrap_or_default();
 

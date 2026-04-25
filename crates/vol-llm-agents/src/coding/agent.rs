@@ -212,12 +212,8 @@ impl CodingAgent {
         let session = match &self.config.session {
             Some(s) => s.clone(),
             None => {
-                use vol_session::{InMemoryEntryStore, InMemorySessionStore};
-                Arc::new(Session::new(
-                    format!("coding_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S")),
-                    Arc::new(InMemorySessionStore::new()),
-                    Arc::new(InMemoryEntryStore::new()),
-                ))
+                use vol_session::InMemoryEntryStore;
+                Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())))
             }
         };
 
@@ -272,18 +268,29 @@ impl CodingAgent {
         session_id: &str,
         user_input: &str,
     ) -> Result<CodingAgentResponse, CodingAgentError> {
-        use vol_session::{InMemoryEntryStore, InMemorySessionStore};
+        use vol_session::{FileSessionEntryStore, InMemoryEntryStore};
 
         // Get state
         let state = self.state.as_ref()
             .ok_or_else(|| CodingAgentError::Config("CodingAgent already consumed".to_string()))?;
 
-        // Create session using the provided session_id
-        let session = Arc::new(Session::new(
-            session_id.to_string(),
-            Arc::new(InMemorySessionStore::new()),
-            Arc::new(InMemoryEntryStore::new()),
-        ));
+        // Resume session from the provided session_id
+        let session_dir = std::env::current_dir()
+            .unwrap_or_default()
+            .join(".vol-sessions");
+        let entry_store: Arc<dyn vol_session::SessionEntryStore> =
+            if session_dir.exists() {
+                Arc::new(FileSessionEntryStore::new(&session_dir))
+            } else {
+                Arc::new(InMemoryEntryStore::new())
+            };
+        let session = match Session::resume(session_id.to_string(), entry_store).await {
+            Ok(s) => Arc::new(s),
+            Err(_) => {
+                // If resume fails (no entries), create a new session
+                Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())))
+            }
+        };
 
         let agent_config = AgentConfig {
             plugin_registry: self.config.plugin_registry.clone(),

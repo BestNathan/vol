@@ -41,25 +41,26 @@ pub trait SessionStore: Send + Sync {
 }
 
 /// Entry storage interface — supports Message, Checkpoint, and Summary entry types.
+/// Multi-session: methods accept session_id to scope operations.
 #[async_trait]
 pub trait SessionEntryStore: Send + Sync {
-    /// Append an entry.
+    /// Append an entry (entry already carries session_id).
     async fn save(&self, entry: SessionEntry) -> Result<()>;
 
-    /// Get the most recent N entries (oldest first).
-    async fn get_entries(&self, limit: usize) -> Result<Vec<SessionEntry>>;
+    /// Get all entries for a session.
+    async fn get_entries(&self, session_id: &str) -> Result<Vec<SessionEntry>>;
 
-    /// Get entries after a timestamp (for resume from checkpoint).
-    async fn get_after(&self, after: i64, limit: usize) -> Result<Vec<SessionEntry>>;
+    /// Get entries after a timestamp for a session.
+    async fn get_after(&self, session_id: &str, after: i64) -> Result<Vec<SessionEntry>>;
 
-    /// Find the latest checkpoint entry, if any.
-    async fn find_latest_checkpoint(&self) -> Result<Option<SessionEntry>>;
+    /// Find the latest checkpoint entry for a session.
+    async fn find_latest_checkpoint(&self, session_id: &str) -> Result<Option<SessionEntry>>;
 
-    /// Delete all entries for the current session.
-    async fn delete_session(&self) -> Result<()>;
+    /// Delete all entries for a session.
+    async fn delete_session(&self, session_id: &str) -> Result<()>;
 
-    /// Get entry count.
-    async fn get_count(&self) -> Result<usize>;
+    /// Get entry count for a session.
+    async fn get_count(&self, session_id: &str) -> Result<usize>;
 }
 
 /// Legacy MessageStore trait — kept for backward compatibility.

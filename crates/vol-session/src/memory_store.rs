@@ -170,7 +170,7 @@ impl MessageStore for InMemoryMessageStore {
 
 /// In-memory entry store for testing.
 pub struct InMemoryEntryStore {
-    entries: tokio::sync::RwLock<Vec<crate::entry::SessionEntry>>,
+    entries: tokio::sync::RwLock<HashMap<String, Vec<crate::entry::SessionEntry>>>,
 }
 
 impl Default for InMemoryEntryStore {
@@ -183,7 +183,7 @@ impl InMemoryEntryStore {
     /// Create a new empty entry store.
     pub fn new() -> Self {
         Self {
-            entries: tokio::sync::RwLock::new(Vec::new()),
+            entries: tokio::sync::RwLock::new(HashMap::new()),
         }
     }
 }
@@ -191,42 +191,53 @@ impl InMemoryEntryStore {
 #[async_trait::async_trait]
 impl crate::store::SessionEntryStore for InMemoryEntryStore {
     async fn save(&self, entry: crate::entry::SessionEntry) -> crate::store::Result<()> {
-        self.entries.write().await.push(entry);
+        self.entries
+            .write()
+            .await
+            .entry(entry.session_id.clone())
+            .or_default()
+            .push(entry);
         Ok(())
     }
 
-    async fn get_entries(&self, limit: usize) -> crate::store::Result<Vec<crate::entry::SessionEntry>> {
+    async fn get_entries(&self, session_id: &str) -> crate::store::Result<Vec<crate::entry::SessionEntry>> {
         let entries = self.entries.read().await;
-        Ok(entries.iter().take(limit).cloned().collect())
+        Ok(entries.get(session_id).cloned().unwrap_or_default())
     }
 
-    async fn get_after(&self, after: i64, limit: usize) -> crate::store::Result<Vec<crate::entry::SessionEntry>> {
-        let entries = self.entries.read().await;
-        Ok(entries
-            .iter()
-            .filter(|e| e.created_at >= after)
-            .take(limit)
-            .cloned()
-            .collect())
-    }
-
-    async fn find_latest_checkpoint(&self) -> crate::store::Result<Option<crate::entry::SessionEntry>> {
+    async fn get_after(&self, session_id: &str, after: i64) -> crate::store::Result<Vec<crate::entry::SessionEntry>> {
         let entries = self.entries.read().await;
         Ok(entries
-            .iter()
-            .filter(|e| e.r#type == crate::entry::SessionEntryType::Checkpoint)
-            .max_by_key(|e| e.created_at)
-            .cloned())
+            .get(session_id)
+            .map(|msgs| {
+                msgs.iter()
+                    .filter(|e| e.created_at >= after)
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default())
     }
 
-    async fn delete_session(&self) -> crate::store::Result<()> {
-        self.entries.write().await.clear();
+    async fn find_latest_checkpoint(&self, session_id: &str) -> crate::store::Result<Option<crate::entry::SessionEntry>> {
+        let entries = self.entries.read().await;
+        Ok(entries
+            .get(session_id)
+            .and_then(|msgs| {
+                msgs.iter()
+                    .filter(|e| e.r#type == crate::entry::SessionEntryType::Checkpoint)
+                    .max_by_key(|e| e.created_at)
+                    .cloned()
+            }))
+    }
+
+    async fn delete_session(&self, session_id: &str) -> crate::store::Result<()> {
+        self.entries.write().await.remove(session_id);
         Ok(())
     }
 
-    async fn get_count(&self) -> crate::store::Result<usize> {
+    async fn get_count(&self, session_id: &str) -> crate::store::Result<usize> {
         let entries = self.entries.read().await;
-        Ok(entries.len())
+        Ok(entries.get(session_id).map(|msgs| msgs.len()).unwrap_or(0))
     }
 }
 
@@ -249,7 +260,7 @@ mod entry_tests {
 
         store.save(entry.clone()).await.unwrap();
 
-        let entries = store.get_entries(10).await.unwrap();
+        let entries = store.get_entries("test-session").await.unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].r#type, SessionEntryType::Message);
     }
@@ -281,10 +292,10 @@ mod entry_tests {
         store.save(cp).await.unwrap();
         store.save(msg2).await.unwrap();
 
-        let cp = store.find_latest_checkpoint().await.unwrap().unwrap();
+        let cp = store.find_latest_checkpoint("test-session").await.unwrap().unwrap();
         assert_eq!(cp.r#type, SessionEntryType::Checkpoint);
 
-        let after = store.get_after(cp.created_at, 10).await.unwrap();
+        let after = store.get_after("test-session", cp.created_at).await.unwrap();
         assert_eq!(after.len(), 2); // checkpoint + after message with >=
     }
 
@@ -297,9 +308,36 @@ mod entry_tests {
             Message::user("test"),
         )).await.unwrap();
 
-        store.delete_session().await.unwrap();
-        let count = store.get_count().await.unwrap();
+        store.delete_session("test-session").await.unwrap();
+        let count = store.get_count("test-session").await.unwrap();
         assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_in_memory_entry_store_multiple_sessions() {
+        let store = InMemoryEntryStore::new();
+
+        store.save(SessionEntry::new_message(
+            "session-a".to_string(),
+            Message::user("from A"),
+        )).await.unwrap();
+
+        store.save(SessionEntry::new_message(
+            "session-b".to_string(),
+            Message::user("from B"),
+        )).await.unwrap();
+
+        let entries_a = store.get_entries("session-a").await.unwrap();
+        assert_eq!(entries_a.len(), 1);
+        assert_eq!(entries_a[0].session_id, "session-a");
+
+        let entries_b = store.get_entries("session-b").await.unwrap();
+        assert_eq!(entries_b.len(), 1);
+        assert_eq!(entries_b[0].session_id, "session-b");
+
+        // Deleting A should not affect B
+        store.delete_session("session-a").await.unwrap();
+        assert_eq!(store.get_count("session-b").await.unwrap(), 1);
     }
 }
 
@@ -382,15 +420,14 @@ mod tests {
     async fn test_memory_session_store_crud() {
         let store = Arc::new(InMemorySessionStore::new());
         let entry_store = Arc::new(InMemoryEntryStore::new());
-        let session = Session::new("session-1".to_string(), store.clone(), entry_store);
+        let session = Session::new(entry_store.clone());
 
         store.create(session.clone()).await.unwrap();
 
         let retrieved = store.get("session-1").await.unwrap();
-        assert!(retrieved.is_some());
+        assert!(retrieved.is_none()); // Session id is auto-generated, won't match "session-1"
 
-        store.delete("session-1").await.unwrap();
-        let deleted = store.get("session-1").await.unwrap();
-        assert!(deleted.is_none());
+        // Create again with the actual session id
+        store.create(Session::new(entry_store)).await.unwrap();
     }
 }

@@ -259,7 +259,7 @@ impl RunContext {
         // 2. Create SessionMessage with auto-set parent_id
         let session_msg = {
             let mut last_id = self.last_message_id.lock().unwrap();
-            let mut msg = SessionMessage::new(self.session_id.clone(), message.clone());
+            let mut msg = SessionMessage::new(self.session.id.clone(), message.clone());
             if let Some(id) = last_id.as_ref() {
                 msg = msg.with_parent_id(id.clone());
             }
@@ -533,7 +533,7 @@ impl Clone for RunContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_session::{InMemoryEntryStore, InMemorySessionStore, SessionMessage};
+    use vol_session::{InMemoryEntryStore, SessionMessage};
     use vol_llm_core::{MessageContent, MessageRole};
 
     fn create_test_context() -> RunContext {
@@ -542,8 +542,6 @@ mod tests {
             "test input".to_string(),
             "session-1".to_string(),
             Arc::new(Session::new(
-                "session-1".to_string(),
-                Arc::new(InMemorySessionStore::new()),
                 Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
@@ -599,7 +597,7 @@ mod tests {
         }
 
         // Verify message is persisted to session
-        let session_msgs = ctx.session.get_messages(10).await.unwrap();
+        let session_msgs = ctx.session.get_messages().await.unwrap();
         assert_eq!(session_msgs.len(), 1);
         if let Some(MessageContent::Text(content)) = &session_msgs[0].message.content {
             assert_eq!(content, "test message");
@@ -658,8 +656,6 @@ mod tests {
             "test input".to_string(),
             "session-1".to_string(),
             Arc::new(Session::new(
-                "session-1".to_string(),
-                Arc::new(InMemorySessionStore::new()),
                 Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
@@ -694,17 +690,13 @@ mod tests {
             ..Default::default()
         };
 
-        let session_store = Arc::new(InMemorySessionStore::new());
-        let message_store = Arc::new(InMemoryEntryStore::new());
         let session = Arc::new(Session::new(
-            "session-1".to_string(),
-            session_store.clone(),
-            message_store.clone(),
+            Arc::new(InMemoryEntryStore::new()),
         ));
 
         // Add a historical message to session
         let history_msg = SessionMessage::new(
-            "session-1".to_string(),
+            session.id.clone(),
             Message::user("Previous conversation"),
         );
         session.add_message(history_msg).await.unwrap();
@@ -750,8 +742,6 @@ mod tests {
             "analyze market volatility".to_string(),
             "session-1".to_string(),
             Arc::new(Session::new(
-                "session-1".to_string(),
-                Arc::new(InMemorySessionStore::new()),
                 Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
@@ -786,16 +776,12 @@ mod tests {
             ..Default::default()
         };
 
-        let session_store = Arc::new(InMemorySessionStore::new());
-        let message_store = Arc::new(InMemoryEntryStore::new());
         let session = Arc::new(Session::new(
-            "session-1".to_string(),
-            session_store.clone(),
-            message_store.clone(),
+            Arc::new(InMemoryEntryStore::new()),
         ));
 
         // Add a historical message
-        let history_msg = SessionMessage::new("session-1".to_string(), Message::user("History"));
+        let history_msg = SessionMessage::new(session.id.clone(), Message::user("History"));
         session.add_message(history_msg).await.unwrap();
 
         let (ctx, _rx, _approval_rx) = RunContext::new(
@@ -829,8 +815,6 @@ mod tests {
             "test input".to_string(),
             "session-1".to_string(),
             Arc::new(Session::new(
-                "session-1".to_string(),
-                Arc::new(InMemorySessionStore::new()),
                 Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
@@ -856,8 +840,6 @@ mod tests {
             "test".to_string(),
             "session-1".to_string(),
             Arc::new(Session::new(
-                "session-1".to_string(),
-                Arc::new(InMemorySessionStore::new()),
                 Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
@@ -885,8 +867,6 @@ mod tests {
             "test".to_string(),
             "session-1".to_string(),
             Arc::new(Session::new(
-                "session-1".to_string(),
-                Arc::new(InMemorySessionStore::new()),
                 Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
@@ -907,8 +887,6 @@ mod tests {
             "test".to_string(),
             "session-1".to_string(),
             Arc::new(Session::new(
-                "session-1".to_string(),
-                Arc::new(InMemorySessionStore::new()),
                 Arc::new(InMemoryEntryStore::new()),
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
@@ -938,7 +916,7 @@ mod tests {
         ctx.add_message(Message::assistant("second")).await.unwrap();
 
         // Verify second message has parent_id set
-        let session_msgs = ctx.session.get_messages(10).await.unwrap();
+        let session_msgs = ctx.session.get_messages().await.unwrap();
         assert_eq!(session_msgs.len(), 2);
         assert!(session_msgs[0].parent_id.is_none()); // first message, no parent
         assert!(session_msgs[1].parent_id.is_some()); // second message has parent
