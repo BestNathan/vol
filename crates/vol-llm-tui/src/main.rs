@@ -101,26 +101,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     result
 }
 
-fn create_session() -> Result<Arc<Session>, Box<dyn std::error::Error>> {
+/// Derive store paths from the current working directory.
+/// Returns `(store_dir, sessions_dir)`.
+fn derive_store_paths() -> (std::path::PathBuf, std::path::PathBuf) {
     let working_dir = std::env::current_dir().unwrap_or_default();
     let project_name = working_dir
         .file_name()
         .unwrap_or(std::ffi::OsStr::new("default"))
         .to_string_lossy();
     let home = std::env::var("HOME").unwrap_or_default();
-    let store_dir = std::path::PathBuf::from(home)
+    let base = std::path::PathBuf::from(home)
         .join(".vol-coding")
-        .join(project_name.as_ref())
-        .join("sessions");
+        .join(project_name.as_ref());
+    let sessions = base.join("sessions");
+    (base, sessions)
+}
 
-    if let Err(e) = std::fs::create_dir_all(&store_dir) {
+fn create_session() -> Result<Arc<Session>, Box<dyn std::error::Error>> {
+    let (_base_dir, session_dir) = derive_store_paths();
+
+    if let Err(e) = std::fs::create_dir_all(&session_dir) {
         eprintln!("Warning: cannot create session dir: {}", e);
         eprintln!("Using in-memory session (no history persistence)");
         let entry_store = Arc::new(vol_session::InMemoryEntryStore::new());
         return Ok(Arc::new(Session::new(entry_store)));
     }
 
-    let entry_store = Arc::new(FileSessionEntryStore::new(&store_dir));
+    let entry_store = Arc::new(FileSessionEntryStore::new(&session_dir));
     Ok(Arc::new(Session::new(entry_store)))
 }
 
@@ -355,15 +362,8 @@ fn spawn_agent(
             });
         }
 
+        let (store_dir, _sessions_dir) = derive_store_paths();
         let working_dir = std::env::current_dir().unwrap_or_default();
-        let project_name = working_dir
-            .file_name()
-            .unwrap_or(std::ffi::OsStr::new("default"))
-            .to_string_lossy();
-        let home = std::env::var("HOME").unwrap_or_default();
-        let store_dir = std::path::PathBuf::from(home)
-            .join(".vol-coding")
-            .join(project_name.as_ref());
 
         let unsafe_mode = {
             let state_guard = state.lock().await;
