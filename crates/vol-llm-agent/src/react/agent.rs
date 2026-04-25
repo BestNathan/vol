@@ -142,17 +142,7 @@ impl ReActAgent {
             config.clone(),
         );
 
-        // === Phase 1.5: Run log cleanup (best effort, non-blocking) ===
-        let log_base_path = self.config.working_dir.join("logs/agents");
-        let agent_id = self.config.agent_id.clone();
-        tokio::spawn(async move {
-            let agent_path = log_base_path.join(&agent_id);
-            if let Err(e) = crate::observability::cleanup_old_logs(&agent_path).await {
-                tracing::warn!(agent_id = %agent_id, error = %e, "Log cleanup failed");
-            }
-        });
-
-        // === Phase 1.6: Spawn approval handler for HITL ===
+        // === Phase 1.5: Spawn approval handler for HITL ===
         if self.config.unsafe_mode {
             // Auto-approve all requests — no HITL intervention
             tokio::spawn(async move {
