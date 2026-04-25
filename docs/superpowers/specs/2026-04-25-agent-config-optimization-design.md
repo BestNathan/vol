@@ -13,7 +13,13 @@ Remove `verbose` field from AgentConfig/CodingAgentConfig/PptConfig (9 files), a
 
 ### Rationale
 
-The `verbose` field controls 6 `println!` / `tracing::info!` calls that are low-value debug output. Removing it simplifies the API and reduces config bloat. Shutdown log messages in `agent.rs` will change from `tracing::info!` (gated by verbose) to `tracing::debug!` (always emitted, lower priority).
+Agent execution logic should not print logs — it should only emit events and handle errors. Debugging is done through observability tools (RunLogLogger, event streams). The `verbose` field and its 3 `tracing::info!` gates in shutdown code are deleted entirely (not downgraded to `debug!`).
+
+### Architectural Principle
+
+**Agent run logic emits events, not logs.** Observability is achieved through:
+- `AgentStreamEvent` → plugin system → observability tools
+- `tracing::warn!` / `tracing::error!` for real errors only
 
 ### Files Affected
 
@@ -21,8 +27,10 @@ The `verbose` field controls 6 `println!` / `tracing::info!` calls that are low-
 |------|--------|
 | `vol-llm-agent/src/react/agent.rs:25` | Remove `verbose: bool` field from AgentConfig |
 | `vol-llm-agent/src/react/agent.rs:62` | Remove `verbose: false` from Default |
-| `vol-llm-agent/src/react/agent.rs:589,605,625` | Change `if config.verbose { tracing::info! }` → `tracing::debug!` |
-| `vol-llm-agent/src/react/agent.rs:732,746` | Update tests |
+| `vol-llm-agent/src/react/agent.rs:589-591` | **Delete** `if config.verbose { tracing::info!(...) }` block |
+| `vol-llm-agent/src/react/agent.rs:605-607` | **Delete** `if config.verbose { tracing::info!(...) }` block |
+| `vol-llm-agent/src/react/agent.rs:625-627` | **Delete** `if config.verbose { tracing::info!(...) }` block |
+| `vol-llm-agent/src/react/agent.rs:732,746` | Update tests (remove verbose assertions) |
 | `vol-llm-agent/src/react/builder.rs:53-55` | Remove `with_verbose()` method |
 | `vol-llm-agent/src/react/plugin_stream.rs:107,117,128` | Remove `verbose` from InterceptorConfig |
 | `vol-llm-agent/src/react/tests.rs:42` | Remove `.with_verbose(true)` |
@@ -30,7 +38,7 @@ The `verbose` field controls 6 `println!` / `tracing::info!` calls that are low-
 | `vol-llm-agents/src/coding/tests.rs:34` | Remove `assert!(!config.verbose)` |
 | `vol-llm-agents/src/advice/service.rs:158` | Remove `.with_verbose(false)` |
 | `vol-llm-agents/src/ppt/config.rs:15,34-36` | Remove verbose field, `with_verbose()` |
-| `vol-llm-agents/src/ppt/agent.rs:68,76,90,98,105,116` | Remove 6 `println!` blocks |
+| `vol-llm-agents/src/ppt/agent.rs:68,76,90,98,105,116` | Remove 6 `println!` blocks (replace with nothing — PptAgent should emit events, not println) |
 
 ---
 
