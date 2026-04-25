@@ -171,16 +171,6 @@ impl CodingAgent {
         self
     }
 
-    /// Set the log base path
-    pub fn with_log_base_path(mut self, log_base_path: PathBuf) -> Self {
-        self.config.log_base_path = log_base_path;
-        // Also update the state's agent_config
-        if let Some(ref mut state) = self.state {
-            state.agent_config.log_base_path = self.config.log_base_path.clone();
-        }
-        self
-    }
-
     /// Generate missing context files from built-in templates.
     /// Files that already exist are not overwritten.
     pub fn init_context_files(&self) {

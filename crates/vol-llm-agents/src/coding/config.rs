@@ -25,9 +25,6 @@ pub struct CodingAgentConfig {
     /// Working directory for code operations
     pub working_dir: PathBuf,
 
-    /// Base path for logs
-    pub log_base_path: PathBuf,
-
     /// Enable HITL confirmation for dangerous operations
     pub hitl_enabled: bool,
 
@@ -59,7 +56,6 @@ impl std::fmt::Debug for CodingAgentConfig {
             .field("llm_provider_id", &self.llm_provider_id)
             .field("max_iterations", &self.max_iterations)
             .field("working_dir", &self.working_dir)
-            .field("log_base_path", &self.log_base_path)
             .field("hitl_enabled", &self.hitl_enabled)
             .field("unsafe_mode", &self.unsafe_mode)
             .field("html_report_path", &self.html_report_path)
@@ -78,7 +74,6 @@ impl Default for CodingAgentConfig {
             llm_provider_id: "anthropic-main".to_string(),
             max_iterations: 10,
             working_dir: PathBuf::from("."),
-            log_base_path: PathBuf::from("logs"),
             hitl_enabled: true,
             unsafe_mode: false,
             html_report_path: None,

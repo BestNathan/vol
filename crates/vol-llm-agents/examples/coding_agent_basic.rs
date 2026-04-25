@@ -34,13 +34,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     tool_config.set("web_fetch", fetch_cfg);
 
-    // Set up unique log path for this run
+    // Set up unique agent ID for this run
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     let agent_id = format!("deribit-ws-client-{}", timestamp);
-    let log_base_path = PathBuf::from("logs/agents");
+    let working_dir = PathBuf::from("/tmp/deribit-ws-client");
 
     println!("Agent ID: {}", agent_id);
-    println!("Log base path: {:?}", log_base_path);
+    println!("Working dir: {:?}", working_dir);
 
     // Construct LLM externally — CodingAgent does not read env vars
     let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
@@ -62,10 +62,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = CodingAgentConfig {
         max_iterations: 30,
-        working_dir: PathBuf::from("/tmp/deribit-ws-client"),
+        working_dir: working_dir.clone(),
         hitl_enabled: false,
         agent_id: agent_id.clone(),
-        log_base_path: log_base_path.clone(),
         tool_config,
         llm: Some(llm),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
@@ -93,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("HTML Report: {:?}", report_path);
 
     // Verify session and run logs
-    let session_log_dir = log_base_path.join(&agent_id);
+    let session_log_dir = working_dir.join("logs/agents").join(&agent_id);
     let run_log_dir = session_log_dir.join("runs");
 
     println!("\n=== Session Logs ===");

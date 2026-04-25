@@ -29,7 +29,6 @@ fn test_config_default() {
     assert_eq!(config.agent_id, "coding-agent");
     assert_eq!(config.max_iterations, 10);
     assert_eq!(config.working_dir, std::path::PathBuf::from("."));
-    assert_eq!(config.log_base_path, std::path::PathBuf::from("logs"));
     assert!(config.hitl_enabled);
     assert!(config.html_report_path.is_none());
     assert!(config.llm.is_none());
@@ -428,14 +427,12 @@ async fn test_agent_with_observer() {
 #[tokio::test]
 async fn test_agent_with_methods() {
     let llm = Arc::new(DummyLlm);
-    let tmp_dir = tempfile::tempdir().unwrap();
     let config = CodingAgentConfig {
         llm: Some(llm),
         ..Default::default()
     };
     let agent = CodingAgent::new(config).await.unwrap()
-        .with_agent_id("test_123".to_string())
-        .with_log_base_path(tmp_dir.path().join("logs"));
+        .with_agent_id("test_123".to_string());
     assert_eq!(agent.config().agent_id, "test_123");
 }
 
