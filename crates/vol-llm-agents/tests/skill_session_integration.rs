@@ -83,6 +83,16 @@ async fn test_context_with_skills_and_session() {
     let messages = output.messages;
 
     assert!(!messages.is_empty(), "Should have at least system message");
+
+    // Verify session messages are present
+    let all_content: String = messages
+        .iter()
+        .filter_map(|m| m.content.as_ref())
+        .map(|c| c.as_str().to_string())
+        .collect();
+    assert!(all_content.contains("msg-0"), "Should contain session message msg-0");
+    assert!(all_content.contains("msg-2"), "Should contain session message msg-2");
+    assert!(all_content.contains("Write a function"), "Should contain user input");
 }
 
 #[tokio::test]
@@ -141,9 +151,24 @@ async fn test_context_empty_session_with_skills() {
         .build();
 
     let output = context_builder.build().await.unwrap();
+    let messages = output.messages;
+
     assert!(
-        !output.messages.is_empty(),
-        "Should have system + skills + user messages"
+        messages.len() >= 2,
+        "Should have at least system + user messages (empty session)"
+    );
+
+    let all_content: String = messages
+        .iter()
+        .filter_map(|m| m.content.as_ref())
+        .map(|c| c.as_str().to_string())
+        .collect();
+    assert!(all_content.contains("System."), "Should contain system prompt");
+    assert!(all_content.contains("Hello"), "Should contain user input");
+    // Skills are present from .agents/skills
+    assert!(
+        all_content.contains("test-skill") || all_content.contains("Available skills"),
+        "Should contain skill metadata"
     );
 }
 
