@@ -1,12 +1,15 @@
 //! In-memory task store using DashMap.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use crate::model::{Task, TaskId, TaskStatus};
 use crate::store::{Result, TaskStore};
 use dashmap::DashMap;
 
-/// In-memory task storage — zero persistence, suitable for development and testing.
+/// In-memory task store — zero persistence, suitable for development and testing.
 pub struct InMemoryTaskStore {
     tasks: DashMap<TaskId, Task>,
+    next_id: AtomicU64,
 }
 
 impl Default for InMemoryTaskStore {
@@ -19,15 +22,22 @@ impl InMemoryTaskStore {
     pub fn new() -> Self {
         Self {
             tasks: DashMap::new(),
+            next_id: AtomicU64::new(1),
         }
+    }
+
+    fn assign_id(&self) -> TaskId {
+        TaskId(self.next_id.fetch_add(1, Ordering::SeqCst))
     }
 }
 
 #[async_trait::async_trait]
 impl TaskStore for InMemoryTaskStore {
-    async fn create(&self, task: Task) -> Result<()> {
-        self.tasks.insert(task.id.clone(), task);
-        Ok(())
+    async fn create(&self, mut task: Task) -> Result<TaskId> {
+        let id = self.assign_id();
+        task.id = id;
+        self.tasks.insert(id, task);
+        Ok(id)
     }
 
     async fn get(&self, task_id: &TaskId) -> Result<Option<Task>> {
@@ -35,7 +45,7 @@ impl TaskStore for InMemoryTaskStore {
     }
 
     async fn update(&self, task: Task) -> Result<()> {
-        self.tasks.insert(task.id.clone(), task);
+        self.tasks.insert(task.id, task);
         Ok(())
     }
 
@@ -62,14 +72,14 @@ impl TaskStore for InMemoryTaskStore {
             .tasks
             .iter()
             .filter(|r| r.value().status == TaskStatus::Pending)
-            .map(|r| (r.key().clone(), r.value().dependencies.clone()))
+            .map(|r| (*r.key(), r.value().dependencies.clone()))
             .collect();
 
         let completed_ids: HashSet<TaskId> = self
             .tasks
             .iter()
             .filter(|r| r.value().status == TaskStatus::Completed)
-            .map(|r| r.key().clone())
+            .map(|r| *r.key())
             .collect();
 
         let ready: Vec<TaskId> = pending_tasks
@@ -93,11 +103,24 @@ mod tests {
     async fn test_create_and_get() {
         let store = InMemoryTaskStore::new();
         let task = Task::new(TaskKind::Agent, "test task".to_string(), vec![]);
-        let id = task.id.clone();
-        store.create(task).await.unwrap();
+        let id = store.create(task).await.unwrap();
         let got = store.get(&id).await.unwrap().unwrap();
         assert_eq!(got.description, "test task");
         assert_eq!(got.status, TaskStatus::Pending);
+    }
+
+    #[tokio::test]
+    async fn test_ids_auto_increment() {
+        let store = InMemoryTaskStore::new();
+        let t1 = Task::new(TaskKind::Agent, "first".to_string(), vec![]);
+        let id1 = store.create(t1).await.unwrap();
+
+        let t2 = Task::new(TaskKind::Agent, "second".to_string(), vec![]);
+        let id2 = store.create(t2).await.unwrap();
+
+        assert_ne!(id1.0, 0);
+        assert_ne!(id2.0, 0);
+        assert_ne!(id1, id2);
     }
 
     #[tokio::test]
@@ -117,8 +140,7 @@ mod tests {
     async fn test_update_status() {
         let store = InMemoryTaskStore::new();
         let task = Task::new(TaskKind::Agent, "update me".to_string(), vec![]);
-        let id = task.id.clone();
-        store.create(task).await.unwrap();
+        let id = store.create(task).await.unwrap();
         let mut updated = store.get(&id).await.unwrap().unwrap();
         updated.status = TaskStatus::Completed;
         store.update(updated).await.unwrap();
@@ -130,8 +152,7 @@ mod tests {
     async fn test_delete() {
         let store = InMemoryTaskStore::new();
         let task = Task::new(TaskKind::Agent, "delete me".to_string(), vec![]);
-        let id = task.id.clone();
-        store.create(task).await.unwrap();
+        let id = store.create(task).await.unwrap();
         store.delete(&id).await.unwrap();
         let got = store.get(&id).await.unwrap();
         assert!(got.is_none());
@@ -152,24 +173,19 @@ mod tests {
     async fn test_get_ready_tasks_with_deps() {
         let store = InMemoryTaskStore::new();
         let t1 = Task::new(TaskKind::Agent, "task 1".to_string(), vec![]);
-        let id1 = t1.id.clone();
-        store.create(t1).await.unwrap();
+        let id1 = store.create(t1).await.unwrap();
 
-        // Mark t1 as completed
         let mut t1_done = store.get(&id1).await.unwrap().unwrap();
         t1_done.status = TaskStatus::Completed;
         store.update(t1_done).await.unwrap();
 
-        // t2 depends on t1
-        let t2 = Task::new(TaskKind::Agent, "task 2".to_string(), vec![id1.clone()]);
+        let t2 = Task::new(TaskKind::Agent, "task 2".to_string(), vec![id1]);
         store.create(t2).await.unwrap();
 
-        // t3 depends on nothing
         let t3 = Task::new(TaskKind::Agent, "task 3".to_string(), vec![]);
         store.create(t3).await.unwrap();
 
         let ready = store.get_ready_tasks().await.unwrap();
-        // t2 is ready (dep completed), t3 is ready (no deps)
         assert_eq!(ready.len(), 2);
     }
 
@@ -177,16 +193,13 @@ mod tests {
     async fn test_get_ready_tasks_blocked_dep() {
         let store = InMemoryTaskStore::new();
         let t1 = Task::new(TaskKind::Agent, "task 1".to_string(), vec![]);
-        let id1 = t1.id.clone();
-        store.create(t1).await.unwrap();
+        let id1 = store.create(t1).await.unwrap();
 
-        // t2 depends on t1, but t1 is still Pending
-        let t2 = Task::new(TaskKind::Agent, "task 2".to_string(), vec![id1.clone()]);
+        let t2 = Task::new(TaskKind::Agent, "task 2".to_string(), vec![id1]);
         store.create(t2).await.unwrap();
 
         let ready = store.get_ready_tasks().await.unwrap();
-        // Only t1 is ready (no deps), t2 is blocked
         assert_eq!(ready.len(), 1);
-        assert!(ready.iter().any(|id| id == &id1));
+        assert!(ready.iter().any(|id| *id == id1));
     }
 }

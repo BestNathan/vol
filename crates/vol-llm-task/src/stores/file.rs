@@ -49,13 +49,15 @@ impl FileTaskStore {
 
 #[async_trait::async_trait]
 impl TaskStore for FileTaskStore {
-    async fn create(&self, task: Task) -> Result<()> {
+    async fn create(&self, task: Task) -> Result<TaskId> {
+        let id = task.id;
         let mut tasks = self.load_tasks().await?;
-        if tasks.iter().any(|t| t.id == task.id) {
-            return Err(StoreError::Internal(format!("Duplicate task ID: {}", task.id)));
+        if tasks.iter().any(|t| t.id == id) {
+            return Err(StoreError::Internal(format!("Duplicate task ID: {id}")));
         }
         tasks.push(task);
-        self.save_tasks(&tasks).await
+        self.save_tasks(&tasks).await?;
+        Ok(id)
     }
 
     async fn get(&self, task_id: &TaskId) -> Result<Option<Task>> {

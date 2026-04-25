@@ -23,8 +23,8 @@ pub type Result<T> = std::result::Result<T, StoreError>;
 /// Task storage interface — swappable backends (memory, file, database).
 #[async_trait::async_trait]
 pub trait TaskStore: Send + Sync {
-    /// Create a task
-    async fn create(&self, task: Task) -> Result<()>;
+    /// Create a task, returning the assigned ID
+    async fn create(&self, task: Task) -> Result<TaskId>;
 
     /// Get a task by ID
     async fn get(&self, task_id: &TaskId) -> Result<Option<Task>>;
