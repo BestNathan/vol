@@ -1,6 +1,9 @@
-//! File-based task store — one JSON file per task.
+//! File-based task store — one JSON file per task, cross-process safe.
 
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
+
+use fd_lock::RwLock;
 
 use crate::model::{Task, TaskId, TaskStatus};
 use crate::store::{Result, StoreError, TaskStore};
@@ -10,6 +13,7 @@ use tokio::fs;
 ///
 /// Tasks are stored in `{basedir}/tasks/{id}.json`.
 /// IDs are auto-incrementing u64, assigned on create.
+/// Mutations use exclusive flock for cross-process safety.
 pub struct FileTaskStore {
     tasks_dir: PathBuf,
 }
@@ -25,9 +29,8 @@ impl FileTaskStore {
         Ok(Self { tasks_dir })
     }
 
-    /// Read a single task from disk by its file path.
-    async fn read_task_file(&self, path: &Path) -> Result<Option<Task>> {
-        match fs::read_to_string(path).await {
+    fn read_task_file_blocking(&self, path: &Path) -> Result<Option<Task>> {
+        match std::fs::read_to_string(path) {
             Ok(content) => {
                 let task: Task = serde_json::from_str(&content)
                     .map_err(|e| StoreError::Serialization(e.to_string()))?;
@@ -38,20 +41,22 @@ impl FileTaskStore {
         }
     }
 
-    /// Write a single task to disk atomically (write to temp, then rename).
-    async fn write_task_file(&self, task: &Task) -> Result<()> {
-        let path = self.task_path(&task.id);
-        let tmp = path.with_extension("json.tmp");
-        let content = serde_json::to_string_pretty(task)
-            .map_err(|e| StoreError::Serialization(e.to_string()))?;
-        fs::write(&tmp, content).await.map_err(StoreError::Io)?;
-        fs::rename(&tmp, &path).await.map_err(StoreError::Io)?;
-        Ok(())
-    }
-
     /// Get the file path for a task ID.
     fn task_path(&self, task_id: &TaskId) -> PathBuf {
         self.tasks_dir.join(format!("{}.json", task_id.0))
+    }
+
+    /// Load all tasks from disk.
+    async fn load_all_tasks(&self) -> Result<Vec<Task>> {
+        let ids = self.scan_task_ids().await?;
+        let mut tasks = Vec::with_capacity(ids.len());
+        for id in &ids {
+            let path = self.task_path(&TaskId(*id));
+            if let Some(task) = self.read_task_file_blocking(&path)? {
+                tasks.push(task);
+            }
+        }
+        Ok(tasks)
     }
 
     /// Scan the tasks directory for existing task IDs.
@@ -71,57 +76,110 @@ impl FileTaskStore {
         }
         Ok(ids)
     }
-
-    /// Load all tasks from disk.
-    async fn load_all_tasks(&self) -> Result<Vec<Task>> {
-        let ids = self.scan_task_ids().await?;
-        let mut tasks = Vec::with_capacity(ids.len());
-        for id in &ids {
-            let path = self.task_path(&TaskId(*id));
-            if let Some(task) = self.read_task_file(&path).await? {
-                tasks.push(task);
-            }
-        }
-        Ok(tasks)
-    }
-
-    /// Compute the next available task ID.
-    async fn next_id(&self) -> Result<TaskId> {
-        let ids = self.scan_task_ids().await?;
-        let next = ids.iter().max().map_or(1, |m| m + 1);
-        Ok(TaskId(next))
-    }
 }
 
 #[async_trait::async_trait]
 impl TaskStore for FileTaskStore {
-    async fn create(&self, mut task: Task) -> Result<TaskId> {
-        let id = self.next_id().await?;
-        task.id = id;
-        self.write_task_file(&task).await?;
-        Ok(id)
+    async fn create(&self, task: Task) -> Result<TaskId> {
+        let tasks_dir = self.tasks_dir.clone();
+        let lock_path = self.tasks_dir.join(".lock");
+        tokio::task::spawn_blocking(move || {
+            let mut lock_file = RwLock::new(
+                OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .open(&lock_path)
+                    .map_err(StoreError::Io)?,
+            );
+            let _guard = lock_file.write().map_err(StoreError::Io)?;
+
+            let mut ids = Vec::new();
+            for entry in std::fs::read_dir(&tasks_dir).map_err(StoreError::Io)? {
+                let entry = entry.map_err(StoreError::Io)?;
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if let Some(id_str) = name.strip_suffix(".json") {
+                    if let Ok(id) = id_str.parse::<u64>() {
+                        ids.push(id);
+                    }
+                }
+            }
+            let next_id = TaskId(ids.iter().max().map_or(1, |m| m + 1));
+
+            let mut task = task;
+            task.id = next_id;
+            let content = serde_json::to_string_pretty(&task)
+                .map_err(|e| StoreError::Serialization(e.to_string()))?;
+            let path = tasks_dir.join(format!("{}.json", next_id.0));
+            let tmp = path.with_extension("json.tmp");
+            std::fs::write(&tmp, &content).map_err(StoreError::Io)?;
+            std::fs::rename(&tmp, &path).map_err(StoreError::Io)?;
+            Ok(next_id)
+        })
+        .await
+        .map_err(|e| StoreError::Internal(e.to_string()))?
     }
 
     async fn get(&self, task_id: &TaskId) -> Result<Option<Task>> {
         let path = self.task_path(task_id);
-        self.read_task_file(&path).await
+        self.read_task_file_blocking(&path)
     }
 
     async fn update(&self, task: Task) -> Result<()> {
-        let path = self.task_path(&task.id);
-        if !path.exists() {
-            return Err(StoreError::NotFound(format!("Task {}", task.id)));
-        }
-        self.write_task_file(&task).await
+        let tasks_dir = self.tasks_dir.clone();
+        let lock_path = self.tasks_dir.join(".lock");
+        let task_id = task.id;
+        tokio::task::spawn_blocking(move || {
+            let mut lock_file = RwLock::new(
+                OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .open(&lock_path)
+                    .map_err(StoreError::Io)?,
+            );
+            let _guard = lock_file.write().map_err(StoreError::Io)?;
+
+            let path = tasks_dir.join(format!("{}.json", task_id.0));
+            if !path.exists() {
+                return Err(StoreError::NotFound(format!("Task {}", task_id)));
+            }
+
+            let content = serde_json::to_string_pretty(&task)
+                .map_err(|e| StoreError::Serialization(e.to_string()))?;
+            let tmp = path.with_extension("json.tmp");
+            std::fs::write(&tmp, &content).map_err(StoreError::Io)?;
+            std::fs::rename(&tmp, &path).map_err(StoreError::Io)
+        })
+        .await
+        .map_err(|e| StoreError::Internal(e.to_string()))?
     }
 
     async fn delete(&self, task_id: &TaskId) -> Result<()> {
-        let path = self.task_path(task_id);
-        match fs::remove_file(&path).await {
-            Ok(()) => Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(StoreError::Io(e)),
-        }
+        let tasks_dir = self.tasks_dir.clone();
+        let lock_path = self.tasks_dir.join(".lock");
+        let id = task_id.0;
+        tokio::task::spawn_blocking(move || {
+            let mut lock_file = RwLock::new(
+                OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .open(&lock_path)
+                    .map_err(StoreError::Io)?,
+            );
+            let _guard = lock_file.write().map_err(StoreError::Io)?;
+
+            let path = tasks_dir.join(format!("{}.json", id));
+            match std::fs::remove_file(&path) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(StoreError::Io(e)),
+            }
+        })
+        .await
+        .map_err(|e| StoreError::Internal(e.to_string()))?
     }
 
     async fn list(&self, status: Option<TaskStatus>) -> Result<Vec<Task>> {
@@ -179,7 +237,6 @@ mod tests {
         let task = Task::new(TaskKind::Agent, "persist".to_string(), vec![]);
         let id = store.create(task).await.unwrap();
 
-        // Create a new store instance pointing to the same basedir
         let store2 = FileTaskStore::new(dir.path()).await.unwrap();
         let got = store2.get(&id).await.unwrap().unwrap();
         assert_eq!(got.description, "persist");
@@ -196,7 +253,6 @@ mod tests {
         updated.status = TaskStatus::Completed;
         store.update(updated).await.unwrap();
 
-        // Verify via fresh store
         let store2 = FileTaskStore::new(dir.path()).await.unwrap();
         let got = store2.get(&id).await.unwrap().unwrap();
         assert_eq!(got.description, "modified");
@@ -239,21 +295,18 @@ mod tests {
         let t1 = Task::new(TaskKind::Agent, "task 1".to_string(), vec![]);
         let id1 = store.create(t1).await.unwrap();
 
-        // Complete t1
         let mut t1_done = store.get(&id1).await.unwrap().unwrap();
         t1_done.status = TaskStatus::Completed;
         store.update(t1_done).await.unwrap();
 
-        // t2 depends on t1
         let t2 = Task::new(TaskKind::Agent, "task 2".to_string(), vec![id1]);
         store.create(t2).await.unwrap();
 
-        // t3 no deps
         let t3 = Task::new(TaskKind::Agent, "task 3".to_string(), vec![]);
         store.create(t3).await.unwrap();
 
         let ready = store.get_ready_tasks().await.unwrap();
-        assert_eq!(ready.len(), 2); // t2 (dep done) + t3 (no deps)
+        assert_eq!(ready.len(), 2);
     }
 
     #[tokio::test]
@@ -267,13 +320,19 @@ mod tests {
         let t2 = Task::new(TaskKind::Agent, "task two".to_string(), vec![]);
         store.create(t2).await.unwrap();
 
-        // Should have exactly 2 files in tasks/
-        let entries: Vec<_> = std::fs::read_dir(&tasks_dir).unwrap().collect();
+        // Filter out .lock file
+        let entries: Vec<_> = std::fs::read_dir(&tasks_dir)
+            .unwrap()
+            .filter_map(|e| {
+                let e = e.unwrap();
+                let name = e.file_name();
+                let name = name.to_str().unwrap().to_string();
+                name.ends_with(".json").then_some(e)
+            })
+            .collect();
         assert_eq!(entries.len(), 2);
 
-        // Files should be named {id}.json
         for entry in entries {
-            let entry = entry.unwrap();
             let name = entry.file_name();
             let name = name.to_str().unwrap();
             assert!(name.ends_with(".json"), "unexpected file: {}", name);
@@ -291,21 +350,47 @@ mod tests {
         let t2 = Task::new(TaskKind::Agent, "original 2".to_string(), vec![]);
         let id2 = store.create(t2).await.unwrap();
 
-        // Record modification time of task 1
         let mtime_before =
             std::fs::metadata(tasks_dir.join("1.json")).unwrap().modified().unwrap();
 
-        // Sleep briefly to ensure different mtime
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
-        // Update only task 2
         let mut updated = store.get(&id2).await.unwrap().unwrap();
         updated.description = "modified 2".to_string();
         store.update(updated).await.unwrap();
 
-        // Task 1 file should be unchanged
         let mtime_after =
             std::fs::metadata(tasks_dir.join("1.json")).unwrap().modified().unwrap();
         assert_eq!(mtime_before, mtime_after);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_creates_unique_ids() {
+        let (store, _dir) = temp_store().await;
+        let store = std::sync::Arc::new(store);
+
+        let handles: Vec<_> = (0..10)
+            .map(|i| {
+                let store = std::sync::Arc::clone(&store);
+                tokio::spawn(async move {
+                    let task = Task::new(
+                        TaskKind::Agent,
+                        format!("concurrent task {}", i),
+                        vec![],
+                    );
+                    store.create(task).await.unwrap()
+                })
+            })
+            .collect();
+
+        let mut ids = Vec::new();
+        for h in handles {
+            ids.push(h.await.unwrap());
+        }
+
+        // All IDs must be unique
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), 10, "all 10 concurrent creates must have unique IDs");
     }
 }

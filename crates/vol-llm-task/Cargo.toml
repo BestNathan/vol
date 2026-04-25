@@ -12,6 +12,7 @@ thiserror = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 chrono = { workspace = true }
 dashmap = { workspace = true }
+fd-lock = "4"
 
 [dev-dependencies]
 tempfile = "3"
