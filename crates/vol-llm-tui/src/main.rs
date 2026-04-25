@@ -3,6 +3,7 @@
 //! Provides a full terminal UI with status bar, tool call panel,
 //! tabbed conversation/workspace views, multi-line input, and persistent layout.
 
+mod agent_cache;
 mod app;
 mod approval;
 mod render;
@@ -25,9 +26,8 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use ratatui_textarea::TextArea;
 use render::EventBuffer;
-use vol_llm_agents::coding::{CodingAgentBuilder, EventObserver, ObserverError};
+use vol_llm_agents::coding::{EventObserver, ObserverError};
 use vol_llm_core::AgentStreamEvent;
-use vol_llm_tool::{ToolConfig, ProxyConfig};
 use vol_session::FileSessionEntryStore;
 use vol_session::SessionEntryStore;
 
@@ -82,13 +82,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }));
 
     // Create shared state
-    let working_dir = std::env::current_dir()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .to_string();
+    let working_dir = std::env::current_dir().unwrap_or_default();
     let state = Arc::new(tokio::sync::Mutex::new(
-        AppState::new(session_id, &working_dir),
+        AppState::new(session_id, working_dir.to_string_lossy().as_ref()),
     ));
+
+    // Build pre-built agent configuration cache
+    let (store_dir, _) = derive_store_paths();
+    let cache = Arc::new(agent_cache::AgentCache::new(working_dir, store_dir));
 
     // Create ratatui terminal
     let backend = CrosstermBackend::new(stdout());
@@ -96,7 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.clear()?;
 
     // Main event loop
-    let result = run_event_loop(&mut terminal, state, session).await;
+    let result = run_event_loop(&mut terminal, state, session, cache).await;
 
     // Cleanup
     cleanup_terminal()?;
@@ -150,6 +151,7 @@ async fn run_event_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     state: Arc<tokio::sync::Mutex<AppState>>,
     session: Arc<tokio::sync::Mutex<Arc<Session>>>,
+    cache: Arc<agent_cache::AgentCache>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut render_interval = tokio::time::interval(Duration::from_millis(33)); // ~30fps
     let mut events = EventStream::new();
@@ -178,7 +180,7 @@ async fn run_event_loop(
                                 return Ok(());
                             }
                             KeyAction::Send(input) => {
-                                spawn_agent(input, state.clone(), session.clone());
+                                spawn_agent(input, state.clone(), session.clone(), cache.clone());
                             }
                             KeyAction::ResumeSession(session_id) => {
                                 let session = session.clone();
@@ -478,56 +480,37 @@ fn spawn_agent(
     input: String,
     state: Arc<tokio::sync::Mutex<AppState>>,
     session: Arc<tokio::sync::Mutex<Arc<Session>>>,
+    cache: Arc<agent_cache::AgentCache>,
 ) {
     tokio::spawn(async move {
-        let session = session.lock().await.clone();
-        // Set running flag and clear approval state
         {
             let mut state = state.lock().await;
             state.is_running = true;
             state.approval_state.clear().await;
         }
 
-        // Configure tools
-        let mut tool_config = ToolConfig::new();
-        if let Ok(tavily_key) = std::env::var("TAVILY_API_KEY") {
-            tool_config.set("web_search", vol_llm_tools_builtin::WebSearchConfig {
-                provider: "tavily".to_string(),
-                api_key: tavily_key,
-                proxy: ProxyConfig::default(),
-            });
-        }
-        if let Ok(max_len) = std::env::var("WEB_FETCH_MAX_LENGTH") {
-            tool_config.set("web_fetch", vol_llm_tools_builtin::WebFetchConfig {
-                max_content_length: max_len.parse().ok(),
-                proxy: ProxyConfig::default(),
-            });
-        }
-
-        let (store_dir, _sessions_dir) = derive_store_paths();
-        let working_dir = std::env::current_dir().unwrap_or_default();
+        let session = session.lock().await.clone();
 
         let unsafe_mode = {
             let state_guard = state.lock().await;
             state_guard.unsafe_mode
         };
 
-        // Get approval state for handler — unsafe_mode is shared via AtomicBool
         let approval_state = {
             let state_guard = state.lock().await;
             state_guard.approval_state.unsafe_mode.store(unsafe_mode, std::sync::atomic::Ordering::Relaxed);
             state_guard.approval_state.clone()
         };
 
-        let agent = match CodingAgentBuilder::new()
-            .working_dir(working_dir)
-            .store_dir(store_dir)
+        let agent = match vol_llm_agents::coding::CodingAgentBuilder::new()
+            .working_dir(cache.working_dir.clone())
+            .store_dir(cache.store_dir.clone())
             .max_iterations(10)
             .session(session)
             .hitl_enabled(true)
             .unsafe_mode(unsafe_mode)
             .approval_handler(approval_state.into_handler())
-            .tool_config(tool_config)
+            .tool_config(cache.tool_config.clone())
             .with_logger()
             .build()
             .await
@@ -547,9 +530,7 @@ fn spawn_agent(
         let agent = agent.with_observer(observer);
 
         match agent.run(&input).await {
-            Ok(_response) => {
-                // All events handled via observer
-            }
+            Ok(_response) => {}
             Err(e) => {
                 let mut state = state.lock().await;
                 state.conversation.push(app::ConversationEntry::Error {
