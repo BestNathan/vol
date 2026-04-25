@@ -240,19 +240,17 @@ impl CodingAgent {
             tool_calls,
         })
     }
-    /// Resume from an existing session with the given session ID.
-    /// Loads checkpoint-based history, then runs with new user input.
-    pub async fn resume(
-        &self,
-        session_id: &str,
-        user_input: &str,
-    ) -> Result<CodingAgentResponse, CodingAgentError> {
+    /// Resume a session from disk by its session ID.
+    ///
+    /// Loads the session from `{working_dir}/.vol-sessions` (or creates a new
+    /// in-memory session if the ID is not found) and stores it on the agent.
+    /// Subsequent `run()` calls use this session.
+    ///
+    /// Consumes `self` so it can be chained with `.run()`.
+    pub async fn resume(mut self, session_id: &str) -> Result<Self, CodingAgentError> {
         use vol_session::{FileSessionEntryStore, InMemoryEntryStore};
 
-        // Resume session from the provided session_id
-        let session_dir = std::env::current_dir()
-            .unwrap_or_default()
-            .join(".vol-sessions");
+        let session_dir = self.config.working_dir.join(".vol-sessions");
         let entry_store: Arc<dyn vol_session::SessionEntryStore> =
             if session_dir.exists() {
                 Arc::new(FileSessionEntryStore::new(&session_dir))
@@ -262,43 +260,12 @@ impl CodingAgent {
         let session = match Session::resume(session_id.to_string(), entry_store).await {
             Ok(s) => Arc::new(s),
             Err(_) => {
-                // If resume fails (no entries), create a new session
                 Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())))
             }
         };
 
-        let agent_config = self.build_agent_config();
-
-        let mut react_agent = ReActAgent::new(
-            self.llm.clone(),
-            self.tool_registry.clone(),
-            agent_config,
-            session,
-        );
-
-        if let Some(ref sandbox) = self.sandbox {
-            react_agent = react_agent.with_sandbox(sandbox.clone());
-        }
-
-        // Resume the agent
-        let response = react_agent.run(user_input).await
-            .map_err(|e| CodingAgentError::Agent(e))?;
-
-        if let Some(ref observer) = self.observer {
-            observer.on_complete().await
-                .map_err(|e| CodingAgentError::Observer(e))?;
-        }
-
-        let summary = response.content.clone();
-        let iterations = response.iterations;
-        let tool_calls = response.tool_calls.len() as u32;
-
-        Ok(CodingAgentResponse {
-            success: true,
-            summary,
-            iterations,
-            tool_calls,
-        })
+        self.config.session = Some(session);
+        Ok(self)
     }
 }
 
