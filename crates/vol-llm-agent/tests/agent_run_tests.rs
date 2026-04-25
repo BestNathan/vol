@@ -229,7 +229,7 @@ async fn test_agent_run_session_recording() {
         .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
         .with_agent_id(agent_id.to_string())
-        .with_log_base_path(tmp_dir.path().to_path_buf())
+        .with_working_dir(tmp_dir.path().to_path_buf())
         .build()
         .unwrap();
 
@@ -240,7 +240,7 @@ async fn test_agent_run_session_recording() {
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
     // Verify that a session JSONL file was created in the log directory
-    let sessions_path = tmp_dir.path().join(agent_id);
+    let sessions_path = tmp_dir.path().join("logs/agents").join(agent_id);
     let entries: Vec<_> = std::fs::read_dir(&sessions_path)
         .expect("Session directory should exist")
         .filter(|e| e.as_ref().map(|e| e.file_name().to_string_lossy().ends_with(".jsonl")).unwrap_or(false))

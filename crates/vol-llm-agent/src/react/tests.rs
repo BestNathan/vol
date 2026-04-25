@@ -42,7 +42,7 @@ async fn test_builder_with_methods() {
         .with_max_history_messages(50)
         .with_session(session)
         .with_agent_id("test_agent".to_string())
-        .with_log_base_path(tmp_dir.path().to_path_buf())
+        .with_working_dir(tmp_dir.path().to_path_buf())
         .build();
 
     assert!(result.is_ok());

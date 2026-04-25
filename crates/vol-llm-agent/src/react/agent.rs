@@ -26,7 +26,8 @@ pub struct AgentConfig {
 
     // Observability fields
     pub agent_id: String,
-    pub log_base_path: PathBuf,
+    /// Working directory. Log paths derive from `{working_dir}/logs/agents/{agent_id}/`.
+    pub working_dir: PathBuf,
 
     /// When true, skip all HITL approval checks and auto-approve dangerous tools.
     pub unsafe_mode: bool,
@@ -34,10 +35,6 @@ pub struct AgentConfig {
     /// Custom approval handler. If set, this replaces the default CLI handler.
     /// Use this for TUI/HTTP-based approval flows.
     pub approval_handler: Option<super::BoxedApprovalHandler>,
-
-    /// Project context files to load into system prompt at startup.
-    /// Files that don't exist are silently skipped.
-    pub context_files: Vec<String>,
 }
 
 /// Generate a short random agent ID if not provided
@@ -60,10 +57,9 @@ impl Default for AgentConfig {
             context_builder,
             plugin_registry: PluginRegistry::new(),
             agent_id: generate_agent_id(),
-            log_base_path: PathBuf::from("logs/agents"),
+            working_dir: PathBuf::from("."),
             unsafe_mode: false,
             approval_handler: None,
-            context_files: Vec::new(),
         }
     }
 }
@@ -147,7 +143,7 @@ impl ReActAgent {
         );
 
         // === Phase 1.5: Run log cleanup (best effort, non-blocking) ===
-        let log_base_path = self.config.log_base_path.clone();
+        let log_base_path = self.config.working_dir.join("logs/agents");
         let agent_id = self.config.agent_id.clone();
         tokio::spawn(async move {
             let agent_path = log_base_path.join(&agent_id);
@@ -188,7 +184,7 @@ impl ReActAgent {
         let mut session_listener = SessionListener::new(
             run_ctx.event_tx.subscribe(),
             Arc::new(FileSessionEntryStore::new(
-                config.log_base_path.join(&config.agent_id),
+                config.working_dir.join("logs/agents").join(&config.agent_id),
             )),
             session.id.clone(),
         );
@@ -730,14 +726,13 @@ mod tests {
             context_builder,
             plugin_registry: PluginRegistry::new(),
             agent_id: "custom_agent".to_string(),
-            log_base_path: PathBuf::from("custom/logs"),
+            working_dir: PathBuf::from("/custom/project"),
             unsafe_mode: false,
             approval_handler: None,
-            context_files: Vec::new(),
         };
         assert_eq!(config.max_history_messages, 50);
         assert_eq!(config.agent_id, "custom_agent");
-        assert_eq!(config.log_base_path, PathBuf::from("custom/logs"));
+        assert_eq!(config.working_dir, PathBuf::from("/custom/project"));
     }
 
     #[test]
@@ -746,11 +741,11 @@ mod tests {
 
         let config = AgentConfig {
             agent_id: "test_agent".to_string(),
-            log_base_path: PathBuf::from("logs/agents"),
+            working_dir: PathBuf::from("."),
             ..Default::default()
         };
 
         assert_eq!(config.agent_id, "test_agent");
-        assert_eq!(config.log_base_path, PathBuf::from("logs/agents"));
+        assert_eq!(config.working_dir, PathBuf::from("."));
     }
 }

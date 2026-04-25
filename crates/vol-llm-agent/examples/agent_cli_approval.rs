@@ -271,7 +271,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mock_llm = Arc::new(MockLlmWithTools::new());
 
     // Build agent with HITL plugin and observability
-    let log_path = std::path::PathBuf::from("logs/agents");
+    let working_dir = std::path::PathBuf::from(".");
 
     let agent = ReActAgent::builder()
         .with_llm(mock_llm)
@@ -279,7 +279,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_tool(MockEthVolatilityTool)
         .with_plugin(hitl_plugin)
         .with_agent_id("hitl_demo_agent".to_string())
-        .with_log_base_path(log_path)
+        .with_working_dir(working_dir)
         .with_max_iterations(3)
         .with_system_prompt(
             "你是一个专业的加密货币市场分析师。你有访问市场数据的工具。

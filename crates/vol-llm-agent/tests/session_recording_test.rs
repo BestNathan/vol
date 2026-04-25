@@ -71,7 +71,7 @@ async fn test_session_records_agent_output() {
     let agent = ReActAgent::builder()
         .with_llm(Arc::new(MockLlm))
         .with_session(session.clone())
-        .with_log_base_path(tmp_dir.path().to_path_buf())
+        .with_working_dir(tmp_dir.path().to_path_buf())
         .with_agent_id("test_agent".to_string())
         .build()
         .unwrap();

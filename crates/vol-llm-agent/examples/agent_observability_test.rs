@@ -75,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Configure observability
     let agent_id = "market_analyst_agent".to_string();
-    let log_base_path = PathBuf::from("logs/agents");
+    let working_dir = PathBuf::from(".");
 
     // Build agent with observability plugin
     let agent = ReActAgent::builder()
@@ -85,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_tool(options_tool)
         .with_tool(rv_tool)
         .with_agent_id(agent_id.clone())
-        .with_log_base_path(log_base_path.clone())
+        .with_working_dir(working_dir.clone())
         .with_max_iterations(5)
         .with_system_prompt(
             "你是一个专业的加密货币市场分析师。你有访问 Deribit 市场数据的工具，包括：
@@ -145,7 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Show log file locations
-    let agent_path = log_base_path.join(&agent_id);
+    let agent_path = working_dir.join("logs/agents").join(&agent_id);
     if agent_path.exists() {
         println!("Checking log directories...");
 

@@ -80,15 +80,16 @@ impl AgentBuilder {
         self
     }
 
-    pub fn with_log_base_path(mut self, path: std::path::PathBuf) -> Self {
-        self.config.log_base_path = path;
+    pub fn with_working_dir(mut self, path: std::path::PathBuf) -> Self {
+        self.config.working_dir = path;
         self
     }
 
     pub fn with_observability_plugin(mut self) -> Self {
+        let log_base_path = self.config.working_dir.join("logs/agents");
         let plugin = crate::observability::ObservabilityPlugin::new(
             self.config.agent_id.clone(),
-            self.config.log_base_path.clone(),
+            log_base_path,
         );
         self.config.plugin_registry.register(plugin);
         self
