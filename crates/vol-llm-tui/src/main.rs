@@ -102,18 +102,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn create_session() -> Result<Arc<Session>, Box<dyn std::error::Error>> {
-    let session_dir = std::env::current_dir()
-        .unwrap_or_default()
-        .join(".vol-sessions");
+    let working_dir = std::env::current_dir().unwrap_or_default();
+    let project_name = working_dir
+        .file_name()
+        .unwrap_or(std::ffi::OsStr::new("default"))
+        .to_string_lossy();
+    let home = std::env::var("HOME").unwrap_or_default();
+    let store_dir = std::path::PathBuf::from(home)
+        .join(".vol-coding")
+        .join(project_name.as_ref())
+        .join("sessions");
 
-    if let Err(e) = std::fs::create_dir_all(&session_dir) {
+    if let Err(e) = std::fs::create_dir_all(&store_dir) {
         eprintln!("Warning: cannot create session dir: {}", e);
         eprintln!("Using in-memory session (no history persistence)");
         let entry_store = Arc::new(vol_session::InMemoryEntryStore::new());
         return Ok(Arc::new(Session::new(entry_store)));
     }
 
-    let entry_store = Arc::new(FileSessionEntryStore::new(&session_dir));
+    let entry_store = Arc::new(FileSessionEntryStore::new(&store_dir));
     Ok(Arc::new(Session::new(entry_store)))
 }
 
@@ -349,6 +356,15 @@ fn spawn_agent(
         }
 
         let working_dir = std::env::current_dir().unwrap_or_default();
+        let project_name = working_dir
+            .file_name()
+            .unwrap_or(std::ffi::OsStr::new("default"))
+            .to_string_lossy();
+        let home = std::env::var("HOME").unwrap_or_default();
+        let store_dir = std::path::PathBuf::from(home)
+            .join(".vol-coding")
+            .join(project_name.as_ref());
+
         let unsafe_mode = {
             let state_guard = state.lock().await;
             state_guard.unsafe_mode
@@ -364,7 +380,8 @@ fn spawn_agent(
 
         let config = CodingAgentConfig {
             max_iterations: 10,
-            working_dir,
+            working_dir: working_dir.clone(),
+            store_dir,
             hitl_enabled: true, // always enabled — handler decides at runtime
             unsafe_mode,       // passed for agent config, but handler uses shared atomic
             approval_handler: Some(approval_state.into_handler()),
