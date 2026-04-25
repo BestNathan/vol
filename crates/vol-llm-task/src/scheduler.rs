@@ -1,6 +1,5 @@
 //! TaskScheduler — dependency-aware scheduling facade over TaskStore.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::model::{Task, TaskId, TaskKind, TaskResult, TaskStatus};
@@ -9,13 +8,12 @@ use crate::store::{Result, TaskStore};
 /// Scheduler that delegates to a TaskStore backend.
 pub struct TaskScheduler {
     store: Arc<dyn TaskStore>,
-    work_dir: PathBuf,
 }
 
 impl TaskScheduler {
     /// Create a new TaskScheduler with the given store backend.
-    pub fn new(store: Arc<dyn TaskStore>, work_dir: PathBuf) -> Self {
-        Self { store, work_dir }
+    pub fn new(store: Arc<dyn TaskStore>) -> Self {
+        Self { store }
     }
 
     /// Create a new task and persist it to the store.
@@ -101,23 +99,16 @@ impl TaskScheduler {
     pub fn store(&self) -> &Arc<dyn TaskStore> {
         &self.store
     }
-
-    /// Get the working directory.
-    pub fn work_dir(&self) -> &PathBuf {
-        &self.work_dir
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::stores::InMemoryTaskStore;
+    use std::path::PathBuf;
 
     fn scheduler() -> TaskScheduler {
-        TaskScheduler::new(
-            Arc::new(InMemoryTaskStore::new()),
-            PathBuf::from("/tmp"),
-        )
+        TaskScheduler::new(Arc::new(InMemoryTaskStore::new()))
     }
 
     #[tokio::test]
