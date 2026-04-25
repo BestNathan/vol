@@ -33,3 +33,7 @@ chrono = "0.4"
 vol-llm-core = { path = "../vol-llm-core", features = ["test-utils"] }
 tracing-subscriber = { workspace = true }
 tempfile = "3.10"
+
+[[test]]
+name = "skill_session_integration"
+path = "tests/skill_session_integration.rs"

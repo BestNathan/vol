@@ -16,11 +16,18 @@ impl SkillInjector {
         Self { loader }
     }
 
-    /// Create a SkillInjector that loads skills from `{working_dir}/.agent/skills`.
+    /// Create a SkillInjector that loads skills from `{working_dir}/.agents/skills`.
     pub fn from_workdir(working_dir: &std::path::Path) -> Self {
-        let skill_dir = working_dir.join(".agent/skills");
-        let loader = Arc::new(crate::loader::SkillLoader::new(Some(skill_dir)));
+        let loader = Arc::new(crate::loader::SkillLoader::new(Some(working_dir.to_path_buf())));
         Self::new(loader)
+    }
+
+    /// Discover skills from the configured roots.
+    ///
+    /// This must be called before `contribute()` will return any skills when using
+    /// `from_workdir()` or `new()` with directory roots.
+    pub async fn discover_all(&self) -> crate::Result<()> {
+        self.loader.discover_all().await
     }
 
     /// Format metadata as prompt string for system prompt injection.
