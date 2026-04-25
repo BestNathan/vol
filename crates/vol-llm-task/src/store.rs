@@ -1,12 +1,9 @@
-//! Task store trait and error types.
+//! TaskStore trait and error types.
 
-use async_trait::async_trait;
-use thiserror::Error;
-
-use crate::model::{Task, TaskId};
+use crate::model::{Task, TaskId, TaskStatus};
 
 /// Store operation error
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum StoreError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
@@ -23,18 +20,24 @@ pub enum StoreError {
 
 pub type Result<T> = std::result::Result<T, StoreError>;
 
-/// Task storage interface
-#[async_trait]
+/// Task storage interface — swappable backends (memory, file, database).
+#[async_trait::async_trait]
 pub trait TaskStore: Send + Sync {
-    /// Save or update a task
-    async fn save(&self, task: &Task) -> Result<()>;
+    /// Create a task
+    async fn create(&self, task: Task) -> Result<()>;
 
-    /// Load a task by ID
-    async fn load(&self, id: &TaskId) -> Result<Task>;
+    /// Get a task by ID
+    async fn get(&self, task_id: &TaskId) -> Result<Option<Task>>;
 
-    /// Delete a task by ID
-    async fn delete(&self, id: &TaskId) -> Result<()>;
+    /// Update a task
+    async fn update(&self, task: Task) -> Result<()>;
 
-    /// List all tasks
-    async fn list(&self) -> Result<Vec<Task>>;
+    /// Delete a task
+    async fn delete(&self, task_id: &TaskId) -> Result<()>;
+
+    /// List tasks, optionally filtered by status
+    async fn list(&self, status: Option<TaskStatus>) -> Result<Vec<Task>>;
+
+    /// Get all task IDs that are Pending and have all dependencies Completed
+    async fn get_ready_tasks(&self) -> Result<Vec<TaskId>>;
 }
