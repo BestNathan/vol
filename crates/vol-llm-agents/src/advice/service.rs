@@ -155,7 +155,6 @@ impl AdviceAgent {
             .with_tool(RvTool::new(None))
             .with_max_iterations(5)
             .with_system_prompt(system_prompt().to_string())
-            .with_verbose(false)
             .build()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 

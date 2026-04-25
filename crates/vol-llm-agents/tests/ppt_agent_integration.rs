@@ -52,7 +52,6 @@ async fn test_full_ppt_generation() {
 
     let config = PptAgentConfig::default()
         .with_llm_provider("anthropic-main")
-        .with_verbose(true)
         .with_template_dir(&template_dir)
         .with_default_output_dir(PathBuf::from("test_output"));
 

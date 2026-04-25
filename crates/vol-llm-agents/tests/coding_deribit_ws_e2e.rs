@@ -58,7 +58,6 @@ async fn test_coding_agent_develops_deribit_ws_client() {
         max_iterations: 15, // Only need file creation, no build
         working_dir: temp_dir.path().to_path_buf(), // Agent root — will create project inside
         hitl_enabled: false,
-        verbose: true,
         html_report_path: None,
         llm_provider_id: "anthropic-main".to_string(),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),

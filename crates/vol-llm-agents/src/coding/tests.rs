@@ -31,7 +31,6 @@ fn test_config_default() {
     assert_eq!(config.working_dir, std::path::PathBuf::from("."));
     assert_eq!(config.log_base_path, std::path::PathBuf::from("logs"));
     assert!(config.hitl_enabled);
-    assert!(!config.verbose);
     assert!(config.html_report_path.is_none());
     assert!(config.llm.is_none());
 }

@@ -34,9 +34,6 @@ pub struct CodingAgentConfig {
     /// Skip HITL approval (auto-approve all tool calls)
     pub unsafe_mode: bool,
 
-    /// Verbose output
-    pub verbose: bool,
-
     /// HTML report output path (None = no report)
     pub html_report_path: Option<PathBuf>,
 
@@ -65,7 +62,6 @@ impl std::fmt::Debug for CodingAgentConfig {
             .field("log_base_path", &self.log_base_path)
             .field("hitl_enabled", &self.hitl_enabled)
             .field("unsafe_mode", &self.unsafe_mode)
-            .field("verbose", &self.verbose)
             .field("html_report_path", &self.html_report_path)
             .field("plugin_registry", &"<PluginRegistry>")
             .field("tool_config", &self.tool_config)
@@ -85,7 +81,6 @@ impl Default for CodingAgentConfig {
             log_base_path: PathBuf::from("logs"),
             hitl_enabled: true,
             unsafe_mode: false,
-            verbose: false,
             html_report_path: None,
             llm: None,
             plugin_registry: PluginRegistry::new(),

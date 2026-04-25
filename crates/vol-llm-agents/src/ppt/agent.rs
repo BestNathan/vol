@@ -65,18 +65,9 @@ impl PptAgent {
             PptInput::Text { description, context } => (description.as_str(), context.as_deref()),
         };
 
-        if self.config.verbose {
-            println!("Generating PPT for: {}", description);
-        }
-
         // 2. Analyze requirements
         let analysis = AnalysisModule::new(self.llm.clone());
         let requirements = analysis.analyze(description, context).await?;
-
-        if self.config.verbose {
-            println!("Analyzed requirements: topic={}, audience={:?}, style={:?}",
-                requirements.topic, requirements.audience, requirements.style);
-        }
 
         // 3. Generate outline
         let outline_tool = OutlineGeneratorTool::new(self.llm.clone());
@@ -87,24 +78,12 @@ impl PptAgent {
             requirements.purpose.as_deref()
         ).await?;
 
-        if self.config.verbose {
-            println!("Generated outline with {} slides", outline.slides.len());
-        }
-
         // 4. Expand content
         let content_tool = ContentGeneratorTool::new(self.llm.clone());
         outline = content_tool.expand(&outline).await?;
 
-        if self.config.verbose {
-            println!("Expanded content for all slides");
-        }
-
         // 5. Match template
         let template = self.match_template(&requirements);
-
-        if self.config.verbose {
-            println!("Using template: {} ({})", template.name, template.id);
-        }
 
         // 6. Render PPTX
         let mut renderer = PptxRenderer::new(template.clone());
@@ -112,10 +91,6 @@ impl PptAgent {
 
         let output_path = self.generate_output_path(&requirements.topic);
         renderer.save(&output_path)?;
-
-        if self.config.verbose {
-            println!("Saved PPTX to: {:?}", output_path);
-        }
 
         Ok(PptOutput {
             output_path,

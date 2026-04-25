@@ -133,7 +133,6 @@ fn create_test_plugin_context() -> vol_llm_agent::react::PluginContext {
             max_iterations: 10,
             max_history_messages: 20,
             context_builder: create_test_context_builder(),
-            verbose: false,
             plugin_registry: PluginRegistry::new(),
             agent_id: "test-agent".to_string(),
             log_base_path: std::path::PathBuf::from("logs/test"),

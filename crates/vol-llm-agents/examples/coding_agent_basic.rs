@@ -64,7 +64,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_iterations: 30,
         working_dir: PathBuf::from("/tmp/deribit-ws-client"),
         hitl_enabled: false,
-        verbose: true,
         agent_id: agent_id.clone(),
         log_base_path: log_base_path.clone(),
         tool_config,
