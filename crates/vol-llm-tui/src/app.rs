@@ -55,13 +55,15 @@ pub struct WorkspaceEntry {
 pub enum ActiveTab {
     Conversation,
     Workspace,
+    Logs,
 }
 
 impl ActiveTab {
     pub fn toggle(self) -> Self {
         match self {
             ActiveTab::Conversation => ActiveTab::Workspace,
-            ActiveTab::Workspace => ActiveTab::Conversation,
+            ActiveTab::Workspace => ActiveTab::Logs,
+            ActiveTab::Logs => ActiveTab::Conversation,
         }
     }
 }
@@ -86,6 +88,128 @@ impl SessionDialog {
             sessions: Vec::new(),
             selected: 0,
         }
+    }
+}
+
+/// Log viewer state for the Logs tab.
+pub struct LogViewer {
+    pub run_logs: Vec<LogRunSummary>,
+    pub selected_run: Option<String>,
+    pub entries: Vec<LogLine>,
+    pub scroll: u16,
+    pub auto_scroll: bool,
+    pub loaded: bool,
+}
+
+pub struct LogRunSummary {
+    pub run_id: String,
+    pub event_count: usize,
+    pub last_event: String,
+    pub last_event_time: String,
+}
+
+pub struct LogLine {
+    pub event_type: String,
+    pub summary: String,
+    pub timestamp: String,
+}
+
+impl LogViewer {
+    pub fn new() -> Self {
+        Self {
+            run_logs: Vec::new(),
+            selected_run: None,
+            entries: Vec::new(),
+            scroll: 0,
+            auto_scroll: true,
+            loaded: false,
+        }
+    }
+
+    pub fn scan_logs(&mut self) {
+        let working_dir = std::env::current_dir().unwrap_or_default();
+        let project_name = working_dir
+            .file_name()
+            .unwrap_or(std::ffi::OsStr::new("default"))
+            .to_string_lossy();
+        let home = std::env::var("HOME").unwrap_or_default();
+        let base = std::path::PathBuf::from(home)
+            .join(".vol-coding")
+            .join(project_name.as_ref());
+        let logs_dir = base.join("logs");
+
+        if !logs_dir.exists() {
+            return;
+        }
+
+        let Ok(entries) = std::fs::read_dir(&logs_dir) else { return };
+
+        for entry in entries {
+            let Ok(entry) = entry else { continue };
+            let path = entry.path();
+            if !path.is_file() || path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                continue;
+            }
+            if path.parent() != Some(&logs_dir) {
+                continue;
+            }
+
+            let run_id = match path.file_stem().and_then(|s| s.to_str()) {
+                Some(id) => id.to_string(),
+                None => continue,
+            };
+
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+
+            let lines: Vec<&str> = content.lines().collect();
+            let event_count = lines.len();
+
+            let (last_event, last_event_time) = lines
+                .last()
+                .and_then(|line| serde_json::from_str::<vol_llm_observability::LogEntry>(line).ok())
+                .map(|e| (e.event.clone(), e.timestamp.format("%H:%M:%S").to_string()))
+                .unwrap_or_else(|| ("unknown".to_string(), "—".to_string()));
+
+            self.run_logs.push(LogRunSummary {
+                run_id,
+                event_count,
+                last_event,
+                last_event_time,
+            });
+        }
+
+        self.run_logs.sort_by(|a, b| b.event_count.cmp(&a.event_count));
+    }
+
+    pub fn load_run(&mut self, run_id: &str) {
+        let working_dir = std::env::current_dir().unwrap_or_default();
+        let project_name = working_dir
+            .file_name()
+            .unwrap_or(std::ffi::OsStr::new("default"))
+            .to_string_lossy();
+        let home = std::env::var("HOME").unwrap_or_default();
+        let base = std::path::PathBuf::from(home)
+            .join(".vol-coding")
+            .join(project_name.as_ref());
+        let log_path = base.join("logs").join(format!("{}.jsonl", run_id));
+
+        let content = match std::fs::read_to_string(&log_path) {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+
+        self.entries = content
+            .lines()
+            .filter_map(|line| serde_json::from_str::<vol_llm_observability::LogEntry>(line).ok())
+            .map(|entry| LogLine {
+                event_type: entry.event.clone(),
+                summary: entry.format_event_summary(),
+                timestamp: entry.timestamp.format("%H:%M:%S").to_string(),
+            })
+            .collect();
     }
 }
 
@@ -135,6 +259,8 @@ pub struct AppState {
     pub session_dialog: SessionDialog,
     /// Last error message to display.
     pub last_error: Option<String>,
+    /// Log viewer state for the Logs tab.
+    pub log_viewer: LogViewer,
 }
 
 impl AppState {
@@ -163,6 +289,7 @@ impl AppState {
             approval_state: crate::approval::ApprovalState::new(false),
             session_dialog: SessionDialog::new(),
             last_error: None,
+            log_viewer: LogViewer::new(),
         }
     }
 

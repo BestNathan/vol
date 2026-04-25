@@ -237,7 +237,11 @@ async fn run_event_loop(
 
             // Render on idle — only when no input is pending
             _ = render_interval.tick() => {
-                let state = state.lock().await;
+                let mut state = state.lock().await;
+                if matches!(state.active_tab, app::ActiveTab::Logs) && !state.log_viewer.loaded {
+                    state.log_viewer.scan_logs();
+                    state.log_viewer.loaded = true;
+                }
                 terminal.draw(|f| ui::render_ui(f, &state))?;
             }
         }
@@ -291,7 +295,45 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
         }
     }
 
-    // Session dialog navigation — highest priority when open
+    // Log viewer navigation (Logs tab active, no dialog, not running)
+    if matches!(state.active_tab, app::ActiveTab::Logs) && !state.session_dialog.open && !state.is_running {
+        match key.code {
+            KeyCode::Enter => {
+                if state.log_viewer.selected_run.is_none() && !state.log_viewer.run_logs.is_empty() {
+                    let run_id = state.log_viewer.run_logs[0].run_id.clone();
+                    state.log_viewer.load_run(&run_id);
+                    state.log_viewer.selected_run = Some(run_id);
+                    state.log_viewer.scroll = 0;
+                    state.log_viewer.auto_scroll = true;
+                }
+                return KeyAction::None;
+            }
+            KeyCode::Esc => {
+                if state.log_viewer.selected_run.is_some() {
+                    state.log_viewer.selected_run = None;
+                    state.log_viewer.entries.clear();
+                }
+                return KeyAction::None;
+            }
+            KeyCode::Up => {
+                if state.log_viewer.selected_run.is_some() {
+                    state.log_viewer.scroll = state.log_viewer.scroll.saturating_sub(1);
+                    state.log_viewer.auto_scroll = false;
+                }
+                return KeyAction::None;
+            }
+            KeyCode::Down => {
+                if state.log_viewer.selected_run.is_some() {
+                    state.log_viewer.scroll = state.log_viewer.scroll.saturating_add(1);
+                    state.log_viewer.auto_scroll = false;
+                }
+                return KeyAction::None;
+            }
+            _ => {}
+        }
+    }
+
+    // Session dialog navigation — takes precedence over log viewer keys
     if state.session_dialog.open {
         match key.code {
             KeyCode::Esc => {
@@ -402,6 +444,10 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
         }
         (KeyModifiers::CONTROL, KeyCode::Char('2')) => {
             state.active_tab = app::ActiveTab::Workspace;
+            KeyAction::None
+        }
+        (KeyModifiers::CONTROL, KeyCode::Char('3')) => {
+            state.active_tab = app::ActiveTab::Logs;
             KeyAction::None
         }
 

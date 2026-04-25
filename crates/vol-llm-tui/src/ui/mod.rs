@@ -2,6 +2,7 @@
 
 mod conversation;
 mod input_area;
+mod log_viewer;
 mod session_dialog;
 mod status_bar;
 mod tools_panel;
@@ -9,6 +10,7 @@ mod workspace_panel;
 
 pub use conversation::render_conversation;
 pub use input_area::render_input_area;
+pub use log_viewer::render_log_viewer;
 pub use session_dialog::render_session_dialog;
 pub use status_bar::render_status_bar;
 pub use tools_panel::render_tools_panel;
@@ -78,6 +80,9 @@ fn render_right_panel(frame: &mut Frame, area: Rect, state: &AppState) {
         ActiveTab::Workspace => {
             render_workspace(frame, chunks[1], state);
         }
+        ActiveTab::Logs => {
+            render_log_viewer(frame, chunks[1], state);
+        }
     }
 
     // Render input area
@@ -99,11 +104,19 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &AppState) {
         Style::default().fg(Color::DarkGray)
     };
 
+    let logs_style = if matches!(active, ActiveTab::Logs) {
+        Style::default().fg(Color::Black).bg(Color::White).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
     let tabs = Line::from(vec![
         Span::raw(" "),
         Span::styled(" Conversation ", conv_style),
         Span::raw(" "),
         Span::styled(" Workspace ", ws_style),
+        Span::raw(" "),
+        Span::styled(" Logs ", logs_style),
         Span::raw(" "),
     ]);
 
