@@ -51,39 +51,43 @@ ReActAgent::run(user_input)
 
 ## 2. Changes
 
-### 2.1 CodingAgentConfig
+### 2.1 Path Resolution Principle
 
-Add optional skill directory path:
+**Rule**: Callers pass only `working_dir`. Each component appends its own subdirectory internally.
+
+This prevents double-appending, mismatched conventions, and lets each component own its path logic.
+
+| Component | Subdirectory |
+|-----------|-------------|
+| SkillInjector | `{working_dir}/.agent/skills` |
+| Session | `{working_dir}/.agent/sessions` |
+| LocalSandbox | `{working_dir}/.` (root) |
+
+### 2.2 SkillInjector API Change
+
+Add a constructor that takes `working_dir` and resolves its own path:
+
 ```rust
-pub struct CodingAgentConfig {
-    // ... existing fields ...
-    pub skill_dir: Option<PathBuf>,  // NEW
+impl SkillInjector {
+    pub fn from_workdir(working_dir: &Path) -> Self {
+        let skill_dir = working_dir.join(".agent/skills");
+        let loader = Arc::new(SkillLoader::new(Some(skill_dir)));
+        Self::new(loader)
+    }
 }
 ```
 
-### 2.2 CodingAgent::new()
+### 2.3 CodingAgent::new()
 
-Build ContextBuilder with SkillInjector:
 ```rust
 let mut context_builder = ContextBuilderBuilder::new(128_000)
     .add_contributor(Box::new(SimpleContributor::system(
         "You are an expert coding assistant...".to_string(),
-    )));
-
-// Add SkillInjector if skill_dir configured
-if let Some(skill_dir) = &config.skill_dir {
-    let loader = Arc::new(SkillLoader::new(Some(skill_dir.clone())));
-    context_builder = context_builder.add_contributor(
-        Box::new(SkillInjector::new(loader)),
-    );
-}
-
-let context_builder = context_builder.build();
+    )))
+    .add_contributor(Box::new(SkillInjector::from_workdir(&config.working_dir)));
 ```
 
-### 2.3 ReActAgent
-
-No changes. Already supports arbitrary contributors via `AgentConfig.context_builder`.
+No new fields on `CodingAgentConfig` — `working_dir` is already there.
 
 ---
 
@@ -116,7 +120,6 @@ Use MockLlmClient from vol-llm-core. No real LLM API calls needed — tests veri
 
 | File | Change |
 |------|--------|
-| `crates/vol-llm-agents/src/coding/config.rs` | Add `skill_dir: Option<PathBuf>` |
-| `crates/vol-llm-agents/src/coding/agent.rs` | Build ContextBuilder with SkillInjector |
+| `crates/vol-llm-agents/src/coding/agent.rs` | Build ContextBuilder with SkillInjector, derive path from `working_dir` |
 | `crates/vol-llm-skill/src/injector.rs` | Add `test_skill_injector_clone_contribute` test |
 | `crates/vol-llm-agents/src/coding/tests.rs` | Add integration tests for skill integration |
