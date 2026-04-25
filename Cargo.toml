@@ -27,6 +27,7 @@ members = [
     "crates/vol-llm-memory",
     "crates/vol-llm-skill",
     "crates/vol-llm-context",
+    "crates/vol-llm-task",
 ]
 
 [workspace.package]
@@ -90,7 +91,8 @@ hex = "0.4"
 
 # Data structures
 indexmap = "2.1"
-uuid = "1.6"
+dashmap = "6"
+uuid = { version = "1.6", features = ["v4"] }
 
 # Internal crates
 vol-core = { path = "crates/vol-core" }
@@ -108,3 +110,4 @@ vol-llm-observability = { path = "crates/vol-llm-observability" }
 vol-llm-memory = { path = "crates/vol-llm-memory" }
 vol-llm-skill = { path = "crates/vol-llm-skill" }
 vol-llm-context = { path = "crates/vol-llm-context" }
+vol-llm-task = { path = "crates/vol-llm-task" }
