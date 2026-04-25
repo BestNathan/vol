@@ -27,7 +27,7 @@ impl InMemoryTaskStore {
     }
 
     fn assign_id(&self) -> TaskId {
-        TaskId(self.next_id.fetch_add(1, Ordering::SeqCst))
+        TaskId(self.next_id.fetch_add(1, Ordering::Relaxed))
     }
 }
 
@@ -118,9 +118,8 @@ mod tests {
         let t2 = Task::new(TaskKind::Agent, "second".to_string(), vec![]);
         let id2 = store.create(t2).await.unwrap();
 
-        assert_ne!(id1.0, 0);
-        assert_ne!(id2.0, 0);
-        assert_ne!(id1, id2);
+        assert_eq!(id1, TaskId(1));
+        assert_eq!(id2, TaskId(2));
     }
 
     #[tokio::test]
