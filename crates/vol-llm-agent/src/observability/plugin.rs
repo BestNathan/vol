@@ -1,22 +1,24 @@
-//! ObservabilityPlugin implementation.
+//! ObservabilityPlugin implementation - wraps LoggerPlugin from vol-llm-observability.
 
-use super::run_log::{LogEntry, RunLogLogger};
+use super::run_log::{LogEntry, append_log};
 use crate::react::plugin::{AgentPlugin, PluginDecision, PluginId};
 use crate::react::plugin::PluginContext;
 use crate::AgentStreamEvent;
 use chrono::Utc;
 use serde_json::json;
 use std::path::PathBuf;
-use std::sync::Arc;
+use vol_llm_observability::LoggerPlugin;
 
+/// Wrapper around LoggerPlugin for backward compatibility.
 pub struct ObservabilityPlugin {
-    logger: Arc<RunLogLogger>,
+    inner: LoggerPlugin,
+    agent_id: String,
 }
 
 impl ObservabilityPlugin {
     pub fn new(agent_id: String, log_base_path: PathBuf) -> Self {
-        let logger = Arc::new(RunLogLogger::new(agent_id, log_base_path));
-        Self { logger }
+        let inner = LoggerPlugin::new(log_base_path);
+        Self { inner, agent_id }
     }
 
     fn create_log_entry(&self, event: &AgentStreamEvent, ctx: &PluginContext) -> LogEntry {
@@ -95,7 +97,7 @@ impl ObservabilityPlugin {
         LogEntry {
             timestamp: Utc::now(),
             run_id: ctx.run_id.clone(),
-            agent_id: self.logger.agent_id().to_string(),
+            agent_id: self.agent_id.clone(),
             event: event_name.to_string(),
             data,
         }
@@ -118,8 +120,12 @@ impl AgentPlugin for ObservabilityPlugin {
 
     async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
         let entry = self.create_log_entry(event, ctx);
-        // 只写入 run log
-        self.logger.log(&entry, &ctx.run_id).await;
+        let line = entry.to_json_line();
+        // Use a unified path for all events (no per-plugin subdirectory)
+        let path = self.inner.base_dir().join("logs").join(format!("{}.jsonl", ctx.run_id));
+        if let Err(e) = append_log(&path, &line).await {
+            tracing::warn!(path = %path.display(), error = %e, "Failed to write log entry");
+        }
     }
 }
 
@@ -162,12 +168,11 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Verify log file was created
-        let agent_path = temp_dir.path().join("test_agent");
-        let runs_path = agent_path.join("runs");
-        assert!(runs_path.exists());
+        let logs_path = temp_dir.path().join("logs");
+        assert!(logs_path.exists());
 
         // Check run log contains expected entry
-        let run_log_path = runs_path.join("test-run.jsonl");
+        let run_log_path = logs_path.join("test-run.jsonl");
         let content = std::fs::read_to_string(&run_log_path).unwrap();
         assert!(content.contains("AgentStart"));
     }
@@ -208,12 +213,11 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Verify logs were created
-        let agent_path = temp_dir.path().join("test_agent");
-        assert!(agent_path.exists());
-        assert!(agent_path.join("runs").exists());
+        let logs_path = temp_dir.path().join("logs");
+        assert!(logs_path.exists());
 
         // Verify run logs contain ALL event types
-        let run_log_path = agent_path.join("runs").join("test-run.jsonl");
+        let run_log_path = logs_path.join("test-run.jsonl");
         let run_content = std::fs::read_to_string(&run_log_path).unwrap();
 
         // All 8 events should be in run logs

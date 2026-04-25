@@ -9,7 +9,7 @@ pub mod react;
 
 // Re-export vol-session types
 pub use embedding::{DashScopeConfig, DashScopeEmbedder, DashScopeModel, Embedder};
-pub use observability::{cleanup_old_logs, cleanup_run_logs, cleanup_session_logs, LogEntry, ObservabilityPlugin, RunLogLogger};
+pub use observability::{append_log, cleanup_old_logs, cleanup_run_logs, cleanup_session_logs, LogEntry, LoggerPlugin, ObservabilityPlugin};
 pub use plugins::{CliApprovalChannel, SimpleHttpApprovalChannel};
 pub use rag::{Document, EmbeddingStore, RagAgent, RagConfig, RagResponse};
 pub use react::state::{ReasoningStep, ToolCallRecord};

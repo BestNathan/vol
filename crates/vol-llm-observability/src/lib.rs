@@ -1,10 +1,7 @@
-//! vol-llm-observability: Tracing, metrics, and audit logging for LLM agents.
+//! vol-llm-observability: JSONL event logging for LLM agents.
 //!
-//! Provides an `ObservabilityPlugin` that implements `AgentPlugin` to:
-//! - Record structured run logs (JSONL)
-//! - Collect metrics (TTFT, tool latency, token usage)
-//! - Create tracing spans for LLM calls and tool executions
-//! - Clean up old logs based on retention policy
+//! Provides a `LoggerPlugin` that implements `AgentPlugin` to:
+//! - Write structured run logs as JSONL files
 
 pub mod config;
 pub mod metrics;
@@ -14,5 +11,5 @@ pub mod tracing;
 
 pub use config::ObservabilityConfig;
 pub use metrics::MetricsCollector;
-pub use plugin::ObservabilityPlugin;
-pub use run_log::{LogEntry, RunLogLogger};
+pub use plugin::LoggerPlugin;
+pub use run_log::{LogEntry, append_log};
