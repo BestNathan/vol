@@ -20,12 +20,12 @@ Only the logging part is used by CodingAgent. Metrics and tracing add complexity
 
 ```rust
 pub struct LoggerPlugin {
-    base_dir: PathBuf,  // {store_dir}/{agent_id}/
+    base_dir: PathBuf,  // {store_dir}/logs/{agent_id}/
 }
 
 impl LoggerPlugin {
     pub fn new(store_dir: PathBuf, agent_id: String) -> Self {
-        let base_dir = store_dir.join(&agent_id);
+        let base_dir = store_dir.join("logs").join(&agent_id);
         std::fs::create_dir_all(&base_dir).ok();
         Self { base_dir }
     }
@@ -35,7 +35,7 @@ impl LoggerPlugin {
 ### File Layout
 
 ```
-{store_dir}/{agent_id}/logs/
+{store_dir}/logs/{agent_id}/
 ├── {run_id_1}.jsonl          # AgentStreamEvent logs
 ├── {run_id_2}.jsonl
 ├── my_plugin/
@@ -47,8 +47,8 @@ impl LoggerPlugin {
 ### Plugin Event Handling
 
 `PluginEvent` events have a `name` field identifying the source plugin.
-When a `PluginEvent` is received, it is written to `{base_dir}/logs/{plugin_name}/{run_id}.jsonl`
-instead of the main run log. Other events go to `{base_dir}/logs/{run_id}.jsonl`.
+When a `PluginEvent` is received, it is written to `{store_dir}/logs/{agent_id}/{plugin_name}/{run_id}.jsonl`
+instead of the main run log. Other events go to `{store_dir}/logs/{agent_id}/{run_id}.jsonl`.
 
 Each line is a `LogEntry`:
 
@@ -60,9 +60,9 @@ Each line is a `LogEntry`:
 
 - **`intercept()`**: returns `Continue` (passive, no blocking)
 - **`listen()`**: 
-  - For `PluginEvent { name, .. }`: writes to `{base_dir}/logs/{name}/{run_id}.jsonl`
-  - For all other events: writes to `{base_dir}/logs/{run_id}.jsonl`
-  - Creates directories on demand (`logs/`, `{plugin_name}/`)
+  - For `PluginEvent { name, .. }`: writes to `{store_dir}/logs/{agent_id}/{name}/{run_id}.jsonl`
+  - For all other events: writes to `{store_dir}/logs/{agent_id}/{run_id}.jsonl`
+  - Creates directories on demand
   - Direct file I/O via `fs::OpenOptions::append` — no async spawn
   - Errors logged via `tracing::warn!` and swallowed (never block other plugins)
 
@@ -114,4 +114,4 @@ Become:
 LoggerPlugin::new(store_dir, agent_id)
 ```
 
-Where `store_dir` is the same as the previous `log_base_path` parent (the agent-specific subdir is auto-created).
+Where `store_dir` is the parent of the previous `log_base_path` (the `logs/` subdir is auto-created).
