@@ -31,7 +31,6 @@ pub struct CodingAgent {
     context_builder: ContextBuilder,
     observer: Option<Arc<dyn EventObserver>>,
     sandbox: Option<vol_llm_core::SandboxRef>,
-    store_dir: PathBuf,
 }
 
 impl CodingAgent {
@@ -92,8 +91,6 @@ impl CodingAgent {
             None
         };
 
-        let store_dir = config.store_dir.clone();
-
         Ok(Self {
             config,
             llm,
@@ -101,7 +98,6 @@ impl CodingAgent {
             context_builder,
             observer: None,
             sandbox,
-            store_dir,
         })
     }
 
@@ -254,7 +250,7 @@ impl CodingAgent {
     pub async fn resume(mut self, session_id: &str) -> Result<Self, CodingAgentError> {
         use vol_session::{FileSessionEntryStore, InMemoryEntryStore};
 
-        let session_dir = self.store_dir.join("sessions");
+        let session_dir = self.config.store_dir.join("sessions");
         let entry_store: Arc<dyn vol_session::SessionEntryStore> =
             if session_dir.exists() {
                 Arc::new(FileSessionEntryStore::new(&session_dir))
