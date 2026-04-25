@@ -25,6 +25,11 @@ pub struct CodingAgentConfig {
     /// Working directory for code operations
     pub working_dir: PathBuf,
 
+    /// Directory for persistent agent state (sessions, logs).
+    /// Defaults to `.vol-coding` in the Default impl.
+    /// Builder's `working_dir()` auto-derives this to `~/.vol-coding/{name}/`.
+    pub store_dir: PathBuf,
+
     /// Enable HITL confirmation for dangerous operations
     pub hitl_enabled: bool,
 
@@ -56,6 +61,7 @@ impl std::fmt::Debug for CodingAgentConfig {
             .field("llm_provider_id", &self.llm_provider_id)
             .field("max_iterations", &self.max_iterations)
             .field("working_dir", &self.working_dir)
+            .field("store_dir", &self.store_dir)
             .field("hitl_enabled", &self.hitl_enabled)
             .field("unsafe_mode", &self.unsafe_mode)
             .field("html_report_path", &self.html_report_path)
@@ -74,6 +80,7 @@ impl Default for CodingAgentConfig {
             llm_provider_id: "anthropic-main".to_string(),
             max_iterations: 10,
             working_dir: PathBuf::from("."),
+            store_dir: PathBuf::from(".vol-coding"),
             hitl_enabled: true,
             unsafe_mode: false,
             html_report_path: None,
