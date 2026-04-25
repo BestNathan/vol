@@ -34,8 +34,9 @@ pub struct CodingAgentConfig {
 ### Defaults
 
 - `working_dir` defaults to `"."` (current directory)
-- `store_dir` defaults to `~/.vol-coding/{workdir_basename}/`
-- Setting `working_dir()` on the builder auto-derives `store_dir` unless explicitly overridden
+- `store_dir` defaults to `PathBuf::from(".vol-coding")` in the `Default` impl
+- On the builder, calling `working_dir()` auto-derives `store_dir` to `~/.vol-coding/{workdir_basename}/` unless `store_dir()` was called explicitly
+- The builder's `build()` resolves any unset defaults with full paths
 
 ### Builder
 
