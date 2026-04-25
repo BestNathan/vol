@@ -39,11 +39,6 @@ impl ApprovalState {
         BoxedApprovalHandler::new(TuiApprovalHandler { state: self.clone() })
     }
 
-    /// Check if there's a pending approval request.
-    pub async fn is_pending(&self) -> bool {
-        self.tool_name.lock().await.is_some()
-    }
-
     /// Sync check if there's a pending approval request.
     /// If the lock is currently held, that means the agent is actively
     /// waiting for approval — treat it as pending.

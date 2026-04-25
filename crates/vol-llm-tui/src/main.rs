@@ -368,7 +368,6 @@ fn spawn_agent(
             hitl_enabled: true, // always enabled — handler decides at runtime
             unsafe_mode,       // passed for agent config, but handler uses shared atomic
             approval_handler: Some(approval_state.into_handler()),
-            verbose: false,
             html_report_path: None,
             session: Some(session.clone()),
             tool_config,

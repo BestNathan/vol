@@ -404,13 +404,3 @@ impl Default for CodingAgentBuilder {
         Self::new()
     }
 }
-
-/// Generate a short random agent ID
-fn generate_agent_id() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
-    format!("coding_{:x}", timestamp % 0xFFFFFF)
-}

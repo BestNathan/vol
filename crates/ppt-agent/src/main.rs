@@ -83,8 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Create config
             let mut config = PptAgentConfig::default()
-                .with_llm_provider("anthropic-main")
-                .with_verbose(verbose);
+                .with_llm_provider("anthropic-main");
 
             // Set template dir to bundled templates
             let template_dir = PathBuf::from("crates/vol-llm-agents/src/ppt/templates");
