@@ -13,6 +13,7 @@ uuid = { workspace = true, features = ["v4"] }
 chrono = { workspace = true }
 dashmap = { workspace = true }
 fd-lock = "4"
+vol-llm-tool = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
