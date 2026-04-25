@@ -25,7 +25,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use ratatui_textarea::TextArea;
 use render::EventBuffer;
-use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, EventObserver, ObserverError};
+use vol_llm_agents::coding::{CodingAgentBuilder, EventObserver, ObserverError};
 use vol_llm_core::AgentStreamEvent;
 use vol_llm_tool::{ToolConfig, ProxyConfig};
 use vol_session::FileSessionEntryStore;
@@ -373,25 +373,23 @@ fn spawn_agent(
         // Get approval state for handler — unsafe_mode is shared via AtomicBool
         let approval_state = {
             let state_guard = state.lock().await;
-            // Sync the atomic flag with the current AppState value
             state_guard.approval_state.unsafe_mode.store(unsafe_mode, std::sync::atomic::Ordering::Relaxed);
             state_guard.approval_state.clone()
         };
 
-        let config = CodingAgentConfig {
-            max_iterations: 10,
-            working_dir: working_dir.clone(),
-            store_dir,
-            hitl_enabled: true, // always enabled — handler decides at runtime
-            unsafe_mode,       // passed for agent config, but handler uses shared atomic
-            approval_handler: Some(approval_state.into_handler()),
-            html_report_path: None,
-            session: Some(session.clone()),
-            tool_config,
-            ..Default::default()
-        };
-
-        let agent = match CodingAgent::new(config).await {
+        let agent = match CodingAgentBuilder::new()
+            .working_dir(working_dir)
+            .store_dir(store_dir)
+            .max_iterations(10)
+            .session(session)
+            .hitl_enabled(true)
+            .unsafe_mode(unsafe_mode)
+            .approval_handler(approval_state.into_handler())
+            .tool_config(tool_config)
+            .with_logger()
+            .build()
+            .await
+        {
             Ok(a) => a,
             Err(e) => {
                 let mut state = state.lock().await;
