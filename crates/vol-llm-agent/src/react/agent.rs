@@ -640,28 +640,6 @@ impl ReActAgent {
     }
 }
 
-impl ReActAgent {
-    /// Resume from an existing session. Loads checkpoint-based history as context,
-    /// then starts a new run with the given user input.
-    pub async fn resume(&self, user_input: &str) -> Result<AgentResponse, crate::AgentError> {
-        // 1. Load resume messages from session (after latest checkpoint)
-        let resume_messages = self.session.resume_messages().await.map_err(|e| {
-            crate::AgentError::Context(format!("Failed to load resume messages: {}", e))
-        })?;
-
-        // 2. Pre-populate session with resume messages so they're stored as entries
-        for msg in &resume_messages {
-            let session_msg = vol_session::SessionMessage::new(self.session.id.clone(), msg.clone());
-            self.session.add_message(session_msg).await.map_err(|e| {
-                crate::AgentError::SessionError(format!("Failed to save resume message: {}", e))
-            })?;
-        }
-
-        // 3. Run normally -- SessionContributor loads history from entry store
-        self.run(user_input).await
-    }
-}
-
 /// Consume LLM stream response, emit streaming events, and accumulate into complete data.
 ///
 /// Returns: (thinking, tool_calls, content, model, usage)
