@@ -177,6 +177,20 @@ impl CodingAgent {
         }
     }
 
+    /// Build an AgentConfig for a single ReActAgent run.
+    fn build_agent_config(&self) -> AgentConfig {
+        AgentConfig {
+            max_iterations: self.config.max_iterations,
+            max_history_messages: 20,
+            context_builder: self.context_builder.clone(),
+            plugin_registry: self.config.plugin_registry.clone(),
+            agent_id: self.config.agent_id.clone(),
+            working_dir: self.config.working_dir.clone(),
+            unsafe_mode: self.config.unsafe_mode,
+            approval_handler: self.config.approval_handler.clone(),
+        }
+    }
+
     /// Run a coding task
     pub async fn run(&self, task: &str) -> Result<CodingAgentResponse, CodingAgentError> {
         // Create session for this run — use shared session from config if available
@@ -189,13 +203,7 @@ impl CodingAgent {
         };
 
         // Build AgentConfig on-demand
-        let agent_config = AgentConfig {
-            plugin_registry: self.config.plugin_registry.clone(),
-            unsafe_mode: self.config.unsafe_mode,
-            approval_handler: self.config.approval_handler.clone(),
-            context_builder: self.context_builder.clone(),
-            ..Default::default()
-        };
+        let agent_config = self.build_agent_config();
 
         let mut react_agent = ReActAgent::new(
             self.llm.clone(),
@@ -259,13 +267,7 @@ impl CodingAgent {
             }
         };
 
-        let agent_config = AgentConfig {
-            plugin_registry: self.config.plugin_registry.clone(),
-            unsafe_mode: self.config.unsafe_mode,
-            approval_handler: self.config.approval_handler.clone(),
-            context_builder: self.context_builder.clone(),
-            ..Default::default()
-        };
+        let agent_config = self.build_agent_config();
 
         let mut react_agent = ReActAgent::new(
             self.llm.clone(),
