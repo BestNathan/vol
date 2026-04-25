@@ -53,8 +53,7 @@ async fn test_context_with_skills_and_session() {
     let tmp_dir = make_workdir_with_skills();
     let workdir = tmp_dir.path().to_path_buf();
 
-    let skill_injector = SkillInjector::from_workdir(&workdir);
-    skill_injector.discover_all().await.unwrap();
+    let skill_injector = SkillInjector::from_workdir(&workdir).await;
     let session = make_session(3).await;
 
     let context_builder = ContextBuilderBuilder::new(128_000)
@@ -79,8 +78,7 @@ async fn test_context_zone_ordering() {
     let tmp_dir = make_workdir_with_skills();
     let workdir = tmp_dir.path().to_path_buf();
 
-    let skill_injector = SkillInjector::from_workdir(&workdir);
-    skill_injector.discover_all().await.unwrap();
+    let skill_injector = SkillInjector::from_workdir(&workdir).await;
     let session = make_session(2).await;
 
     let context_builder = ContextBuilderBuilder::new(128_000)
@@ -116,8 +114,7 @@ async fn test_context_empty_session_with_skills() {
     let tmp_dir = make_workdir_with_skills();
     let workdir = tmp_dir.path().to_path_buf();
 
-    let skill_injector = SkillInjector::from_workdir(&workdir);
-    skill_injector.discover_all().await.unwrap();
+    let skill_injector = SkillInjector::from_workdir(&workdir).await;
     let empty_session = make_session(0).await;
 
     let context_builder = ContextBuilderBuilder::new(128_000)
@@ -143,8 +140,7 @@ async fn test_skill_injector_from_workdir_path_resolution() {
     let tmp_dir = make_workdir_with_skills();
     let workdir = tmp_dir.path().to_path_buf();
 
-    let injector = SkillInjector::from_workdir(&workdir);
-    injector.discover_all().await.unwrap();
+    let injector = SkillInjector::from_workdir(&workdir).await;
     let blocks = injector.contribute().await.unwrap();
 
     // Should have found and loaded the skill

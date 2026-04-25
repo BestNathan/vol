@@ -17,9 +17,13 @@ impl SkillInjector {
     }
 
     /// Create a SkillInjector that loads skills from `{working_dir}/.agents/skills`.
-    pub fn from_workdir(working_dir: &std::path::Path) -> Self {
+    ///
+    /// Automatically discovers skills from the directory.
+    pub async fn from_workdir(working_dir: &std::path::Path) -> Self {
         let loader = Arc::new(crate::loader::SkillLoader::new(Some(working_dir.to_path_buf())));
-        Self::new(loader)
+        let injector = Self::new(loader);
+        let _ = injector.discover_all().await;
+        injector
     }
 
     /// Discover skills from the configured roots.

@@ -76,11 +76,12 @@ impl CodingAgent {
         Self::register_coding_tools(&mut tool_registry, &config.tool_config);
 
         // Create agent config - use plugin_registry from config
+        let skill_injector = vol_llm_skill::SkillInjector::from_workdir(&config.working_dir).await;
         let context_builder = vol_llm_context::ContextBuilderBuilder::new(128_000)
             .add_contributor(Box::new(vol_llm_context::builtin::SimpleContributor::system(
                 "You are an expert coding assistant. Help users understand, modify, and improve their codebase.".to_string(),
             )))
-            .add_contributor(Box::new(vol_llm_skill::SkillInjector::from_workdir(&config.working_dir)))
+            .add_contributor(Box::new(skill_injector))
             .build();
 
         let agent_config = AgentConfig {
