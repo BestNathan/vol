@@ -32,6 +32,7 @@ fn test_config_default() {
     assert!(config.hitl_enabled);
     assert!(config.html_report_path.is_none());
     assert!(config.llm.is_none());
+    assert_eq!(config.store_dir, std::path::PathBuf::from(".vol-coding"));
 }
 
 #[test]
@@ -69,6 +70,7 @@ fn test_config_clone() {
     assert_eq!(cloned.agent_id, config.agent_id);
     assert_eq!(cloned.max_iterations, config.max_iterations);
     assert_eq!(cloned.working_dir, config.working_dir);
+    assert_eq!(cloned.store_dir, config.store_dir);
 }
 
 #[test]
@@ -376,6 +378,30 @@ async fn test_builder_consumable_default() {
     let _b1 = CodingAgentBuilder::new();
     let _b2 = CodingAgentBuilder::new();
     // No interference between instances
+}
+
+#[tokio::test]
+async fn test_builder_store_dir_derived_from_workdir() {
+    let tmp = std::env::temp_dir();
+    let project_name = "test_project";
+    let project_dir = tmp.join(project_name);
+
+    let llm = Arc::new(DummyLlm);
+    let agent = CodingAgentBuilder::new()
+        .llm(llm)
+        .working_dir(project_dir.clone())
+        .build()
+        .await
+        .unwrap();
+
+    // store_dir should be derived from workdir basename
+    let home = std::env::var("HOME").unwrap_or_default();
+    assert_eq!(
+        agent.config().store_dir,
+        std::path::PathBuf::from(home)
+            .join(".vol-coding")
+            .join(project_name)
+    );
 }
 
 // ========================
