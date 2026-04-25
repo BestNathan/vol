@@ -16,6 +16,13 @@ impl SkillInjector {
         Self { loader }
     }
 
+    /// Create a SkillInjector that loads skills from `{working_dir}/.agent/skills`.
+    pub fn from_workdir(working_dir: &std::path::Path) -> Self {
+        let skill_dir = working_dir.join(".agent/skills");
+        let loader = Arc::new(crate::loader::SkillLoader::new(Some(skill_dir)));
+        Self::new(loader)
+    }
+
     /// Format metadata as prompt string for system prompt injection.
     ///
     /// Returns empty string if no skills are available.
@@ -134,5 +141,26 @@ mod tests {
         let injector = SkillInjector::new(Arc::new(loader));
         let cloned = injector.clone_box();
         assert_eq!(cloned.name(), "skills");
+    }
+
+    #[tokio::test]
+    async fn test_skill_injector_clone_contribute() {
+        let loader = SkillLoader::new(None);
+        let mut skill = SkillDef::new("test-skill", "# Test")
+            .with_description("A test skill")
+            .with_triggers(vec!["test".to_string()]);
+        skill.id = "user:test-skill".to_string();
+        loader.register(skill).await;
+
+        let injector = SkillInjector::new(Arc::new(loader));
+        let original = injector.contribute().await.unwrap();
+        let cloned = injector.clone_box();
+        let cloned_result = cloned.contribute().await.unwrap();
+
+        assert_eq!(original.len(), cloned_result.len());
+        assert_eq!(
+            original[0].messages[0].content.as_ref().unwrap().as_str(),
+            cloned_result[0].messages[0].content.as_ref().unwrap().as_str()
+        );
     }
 }
