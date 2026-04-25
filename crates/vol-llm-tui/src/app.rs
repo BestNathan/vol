@@ -66,6 +66,29 @@ impl ActiveTab {
     }
 }
 
+/// State for the session list dialog overlay.
+pub struct SessionDialog {
+    pub open: bool,
+    pub sessions: Vec<SessionDialogEntry>,
+    pub selected: usize,
+}
+
+pub struct SessionDialogEntry {
+    pub session_id: String,
+    pub entry_count: usize,
+    pub age_label: String,
+}
+
+impl SessionDialog {
+    pub fn new() -> Self {
+        Self {
+            open: false,
+            sessions: Vec::new(),
+            selected: 0,
+        }
+    }
+}
+
 /// Shared application state.
 pub struct AppState {
     /// Session ID displayed in status bar.
@@ -108,6 +131,8 @@ pub struct AppState {
     pub unsafe_mode: bool,
     /// Approval state shared with the TUI approval handler.
     pub approval_state: crate::approval::ApprovalState,
+    /// Session list dialog state.
+    pub session_dialog: SessionDialog,
     /// Last error message to display.
     pub last_error: Option<String>,
 }
@@ -136,6 +161,7 @@ impl AppState {
             conversation_auto_scroll: true,
             unsafe_mode: false,
             approval_state: crate::approval::ApprovalState::new(false),
+            session_dialog: SessionDialog::new(),
             last_error: None,
         }
     }

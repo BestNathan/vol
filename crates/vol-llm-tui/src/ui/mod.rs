@@ -2,12 +2,14 @@
 
 mod conversation;
 mod input_area;
+mod session_dialog;
 mod status_bar;
 mod tools_panel;
 mod workspace_panel;
 
 pub use conversation::render_conversation;
 pub use input_area::render_input_area;
+pub use session_dialog::render_session_dialog;
 pub use status_bar::render_status_bar;
 pub use tools_panel::render_tools_panel;
 pub use workspace_panel::render_workspace;
@@ -49,6 +51,9 @@ pub fn render_ui(frame: &mut Frame, state: &AppState) {
 
     // Render content panel with tab bar
     render_right_panel(frame, main_chunks[1], state);
+
+    // Render session dialog overlay if open
+    render_session_dialog(frame, area, state);
 }
 
 fn render_right_panel(frame: &mut Frame, area: Rect, state: &AppState) {

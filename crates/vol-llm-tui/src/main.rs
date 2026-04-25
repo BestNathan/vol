@@ -29,6 +29,7 @@ use vol_llm_agents::coding::{CodingAgentBuilder, EventObserver, ObserverError};
 use vol_llm_core::AgentStreamEvent;
 use vol_llm_tool::{ToolConfig, ProxyConfig};
 use vol_session::FileSessionEntryStore;
+use vol_session::SessionEntryStore;
 
 /// Observer that forwards events to EventBuffer for AppState mutation.
 struct RatatuiObserver {
@@ -66,8 +67,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("ANTHROPIC_AUTH_TOKEN must be set");
 
     // Create persistent session
-    let session: Arc<Session> = create_session()?;
-    let session_id = session.id.clone();
+    let initial_session = create_session()?;
+    let session: Arc<tokio::sync::Mutex<Arc<Session>>> =
+        Arc::new(tokio::sync::Mutex::new(initial_session));
+    let session_id = session.lock().await.id.clone();
 
     // Setup terminal with panic recovery
     setup_terminal()?;
@@ -146,7 +149,7 @@ fn cleanup_terminal() -> io::Result<()> {
 async fn run_event_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     state: Arc<tokio::sync::Mutex<AppState>>,
-    session: Arc<Session>,
+    session: Arc<tokio::sync::Mutex<Arc<Session>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut render_interval = tokio::time::interval(Duration::from_millis(33)); // ~30fps
     let mut events = EventStream::new();
@@ -177,6 +180,49 @@ async fn run_event_loop(
                             KeyAction::Send(input) => {
                                 spawn_agent(input, state.clone(), session.clone());
                             }
+                            KeyAction::ResumeSession(session_id) => {
+                                let session = session.clone();
+                                let state = state.clone();
+                                tokio::spawn(async move {
+                                    let (_, sessions_dir) = derive_store_paths();
+                                    let store = Arc::new(vol_session::FileSessionEntryStore::new(&sessions_dir));
+                                    match vol_session::Session::resume(session_id.clone(), store).await {
+                                        Ok(resumed) => {
+                                            let mut state = state.lock().await;
+                                            state.session_id = resumed.id.clone();
+                                            state.last_error = None;
+                                            state.is_running = false;
+                                            state.session_dialog.open = false;
+                                            state.conversation.clear();
+                                            if let Ok(msgs) = resumed.get_messages().await {
+                                                for msg in msgs {
+                                                    match msg.message.role {
+                                                        vol_llm_core::MessageRole::User => {
+                                                            if let Some(content) = &msg.message.content {
+                                                                state.conversation.push(app::ConversationEntry::UserInput { text: content.as_str().to_string() });
+                                                            }
+                                                        }
+                                                        vol_llm_core::MessageRole::Assistant => {
+                                                            if let Some(content) = &msg.message.content {
+                                                                state.conversation.push(app::ConversationEntry::AgentAnswer { text: content.as_str().to_string() });
+                                                            }
+                                                        }
+                                                        vol_llm_core::MessageRole::System => {}
+                                                        vol_llm_core::MessageRole::Tool => {}
+                                                    }
+                                                }
+                                            }
+                                            let mut sess = session.lock().await;
+                                            *sess = Arc::new(resumed);
+                                        }
+                                        Err(e) => {
+                                            let mut state = state.lock().await;
+                                            state.session_dialog.open = false;
+                                            state.last_error = Some(format!("Failed to resume session: {}", e));
+                                        }
+                                    }
+                                });
+                            }
                             KeyAction::None => {}
                         }
                     }
@@ -199,6 +245,7 @@ async fn run_event_loop(
 enum KeyAction {
     Exit,
     Send(String),
+    ResumeSession(String),
     None,
 }
 
@@ -236,6 +283,59 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
             }
             KeyCode::Char('s') | KeyCode::Char('S') => {
                 respond_approval(&state.approval_state, false, Some("User stopped execution".to_string()));
+                return KeyAction::None;
+            }
+            _ => {}
+        }
+    }
+
+    // Session dialog navigation — highest priority when open
+    if state.session_dialog.open {
+        match key.code {
+            KeyCode::Esc => {
+                state.session_dialog.open = false;
+                return KeyAction::None;
+            }
+            KeyCode::Enter => {
+                if let Some(entry) = state.session_dialog.sessions.get(state.session_dialog.selected) {
+                    return KeyAction::ResumeSession(entry.session_id.clone());
+                }
+                return KeyAction::None;
+            }
+            KeyCode::Up => {
+                if state.session_dialog.selected > 0 {
+                    state.session_dialog.selected -= 1;
+                }
+                return KeyAction::None;
+            }
+            KeyCode::Down => {
+                if state.session_dialog.selected + 1 < state.session_dialog.sessions.len() {
+                    state.session_dialog.selected += 1;
+                }
+                return KeyAction::None;
+            }
+            KeyCode::Char('n') => {
+                state.session_dialog.open = false;
+                state.session_id = uuid::Uuid::new_v4().to_string();
+                return KeyAction::None;
+            }
+            KeyCode::Char('d') => {
+                if let Some(entry) = state.session_dialog.sessions.get(state.session_dialog.selected) {
+                    if entry.session_id != state.session_id {
+                        let id = entry.session_id.clone();
+                        let (_, sessions_dir) = derive_store_paths();
+                        let store = vol_session::FileSessionEntryStore::new(&sessions_dir);
+                        // Block on deletion — near-instant for local file
+                        if tokio::task::block_in_place(|| {
+                            tokio::runtime::Handle::current().block_on(store.delete_session(&id))
+                        }).is_ok() {
+                            state.session_dialog.sessions.remove(state.session_dialog.selected);
+                            state.session_dialog.selected = 0.min(state.session_dialog.sessions.len().saturating_sub(1));
+                        } else {
+                            state.last_error = Some(format!("Failed to delete session: {}", id));
+                        }
+                    }
+                }
                 return KeyAction::None;
             }
             _ => {}
@@ -303,6 +403,28 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
             KeyAction::None
         }
 
+        // Ctrl+S: toggle session list dialog
+        (KeyModifiers::CONTROL, KeyCode::Char('s')) => {
+            if !state.is_running {
+                state.session_dialog.open = !state.session_dialog.open;
+                if state.session_dialog.open {
+                    let (_, sessions_dir) = derive_store_paths();
+                    let store = vol_session::FileSessionEntryStore::new(&sessions_dir);
+                    let summaries = store.list_sessions().unwrap_or_default();
+                    state.session_dialog.sessions = summaries
+                        .into_iter()
+                        .map(|s| app::SessionDialogEntry {
+                            session_id: s.session_id,
+                            entry_count: s.entry_count,
+                            age_label: format_age(s.created_at),
+                        })
+                        .collect();
+                    state.session_dialog.selected = 0;
+                }
+            }
+            KeyAction::None
+        }
+
         // Quit command
         (_, KeyCode::Char('q')) if key.modifiers == KeyModifiers::CONTROL => {
             if !state.is_running {
@@ -333,12 +455,32 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
     }
 }
 
+fn format_age(created_at: i64) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let diff = now.saturating_sub(created_at);
+    if diff < 60 {
+        "just now".to_string()
+    } else if diff < 3600 {
+        format!("{}m ago", diff / 60)
+    } else if diff < 86400 {
+        format!("{}h ago", diff / 3600)
+    } else if diff < 172800 {
+        "yesterday".to_string()
+    } else {
+        format!("{}d ago", diff / 86400)
+    }
+}
+
 fn spawn_agent(
     input: String,
     state: Arc<tokio::sync::Mutex<AppState>>,
-    session: Arc<Session>,
+    session: Arc<tokio::sync::Mutex<Arc<Session>>>,
 ) {
     tokio::spawn(async move {
+        let session = session.lock().await.clone();
         // Set running flag and clear approval state
         {
             let mut state = state.lock().await;
