@@ -354,6 +354,25 @@ impl CodingAgentBuilder {
         self
     }
 
+    /// Register LoggerPlugin to write JSONL event logs to store_dir/logs/.
+    pub fn with_logger(mut self) -> Self {
+        let logger = vol_llm_observability::LoggerPlugin::new(self.config.store_dir.clone());
+        self.config.plugin_registry.register(logger);
+        self
+    }
+
+    /// Set the shared session for conversation history.
+    pub fn session(mut self, session: Arc<vol_session::Session>) -> Self {
+        self.config.session = Some(session);
+        self
+    }
+
+    /// Set the LLM provider ID (used when `llm` is None).
+    pub fn llm_provider_id(mut self, id: String) -> Self {
+        self.config.llm_provider_id = id;
+        self
+    }
+
     pub async fn build(self) -> Result<CodingAgent, CodingAgentError> {
         let mut agent = CodingAgent::new(self.config).await?;
         if let Some(sandbox) = self.sandbox {
