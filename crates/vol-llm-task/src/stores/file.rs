@@ -36,11 +36,13 @@ impl FileTaskStore {
         }
     }
 
-    /// Write all tasks to disk
+    /// Write all tasks to disk atomically (write to temp, then rename).
     async fn save_tasks(&self, tasks: &[Task]) -> Result<()> {
+        let tmp = self.path.with_extension("json.tmp");
         let content = serde_json::to_string_pretty(tasks)
             .map_err(|e| StoreError::Serialization(e.to_string()))?;
-        fs::write(&self.path, content).await.map_err(StoreError::Io)?;
+        fs::write(&tmp, content).await.map_err(StoreError::Io)?;
+        fs::rename(&tmp, &self.path).await.map_err(StoreError::Io)?;
         Ok(())
     }
 }
@@ -49,6 +51,9 @@ impl FileTaskStore {
 impl TaskStore for FileTaskStore {
     async fn create(&self, task: Task) -> Result<()> {
         let mut tasks = self.load_tasks().await?;
+        if tasks.iter().any(|t| t.id == task.id) {
+            return Err(StoreError::Internal(format!("Duplicate task ID: {}", task.id)));
+        }
         tasks.push(task);
         self.save_tasks(&tasks).await
     }
@@ -78,7 +83,7 @@ impl TaskStore for FileTaskStore {
         let tasks = self.load_tasks().await?;
         Ok(tasks
             .into_iter()
-            .filter(|t| status.map_or(true, |s| t.status == s))
+            .filter(|t| status.is_none_or(|s| t.status == s))
             .collect())
     }
 

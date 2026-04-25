@@ -49,7 +49,7 @@ impl TaskStore for InMemoryTaskStore {
             .tasks
             .iter()
             .filter(|r| {
-                status.map_or(true, |s| r.value().status == s)
+                status.is_none_or(|s| r.value().status == s)
             })
             .map(|r| r.value().clone())
             .collect())
