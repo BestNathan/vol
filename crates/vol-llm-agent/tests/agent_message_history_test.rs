@@ -8,11 +8,7 @@ use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use vol_llm_agent::{
-    react::plugin::{AgentPlugin, PluginDecision},
-    react::PluginContext,
-    AgentStreamEvent, ReActAgent,
-};
+use vol_llm_agent::ReActAgent;
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, LLMProvider, MessageRole, StreamEvent,
     StreamEventData, ToolCall,
@@ -123,34 +119,6 @@ impl LLMClient for TrackingMock {
     }
 }
 
-/// Plugin that captures all messages from RunContext
-struct MessageCapturePlugin {
-    captured_messages: Arc<Mutex<Vec<Vec<vol_llm_core::Message>>>>,
-}
-
-#[async_trait]
-impl AgentPlugin for MessageCapturePlugin {
-    fn id(&self) -> String {
-        "message_capture".to_string()
-    }
-
-    fn priority(&self) -> u32 {
-        100
-    }
-
-    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
-        PluginDecision::Continue
-    }
-
-    async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
-        // Capture messages at key events
-        if let AgentStreamEvent::IterationComplete { .. } = event {
-            let messages = ctx.get_messages().await;
-            self.captured_messages.lock().await.push(messages);
-        }
-    }
-}
-
 #[tokio::test]
 async fn test_tool_results_passed_to_next_iteration() {
     println!("\n=== Test: Tool Results in Message History ===\n");
@@ -158,15 +126,9 @@ async fn test_tool_results_passed_to_next_iteration() {
     let message_tracker = Arc::new(Mutex::new(Vec::new()));
     let mock_llm = TrackingMock::new(message_tracker.clone());
 
-    let captured_messages = Arc::new(Mutex::new(Vec::new()));
-    let capture_plugin = MessageCapturePlugin {
-        captured_messages: captured_messages.clone(),
-    };
-
     let agent = ReActAgent::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(vol_llm_tdengine::IndexPriceTool::new(None))
-        .with_plugin(capture_plugin)
         .with_max_iterations(3)
         .with_system_prompt("You are a test assistant. Use tools to get information.".to_string())
         .with_verbose(true)

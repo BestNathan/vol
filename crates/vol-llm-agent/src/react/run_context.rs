@@ -29,7 +29,6 @@ pub fn plugin_context_from_run_ctx(ctx: &RunContext) -> PluginContext {
         run_id: ctx.run_id.clone(),
         user_input: ctx.user_input.clone(),
         session_id: ctx.session_id.clone(),
-        messages: ctx.messages.clone(),
         all_tool_calls: ctx.all_tool_calls.clone(),
         current_tool_calls: ctx.current_tool_calls.clone(),
         data: ctx.data.clone(),

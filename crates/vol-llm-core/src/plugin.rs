@@ -32,18 +32,12 @@ pub struct PluginContext {
     pub run_id: String,
     pub user_input: String,
     pub session_id: String,
-    pub messages: Arc<RwLock<Vec<crate::Message>>>,
     pub all_tool_calls: Arc<RwLock<Vec<crate::ToolCall>>>,
     pub current_tool_calls: Arc<RwLock<Vec<crate::ToolCall>>>,
     pub data: Arc<RwLock<HashMap<String, serde_json::Value>>>,
 }
 
 impl PluginContext {
-    /// Get a clone of all messages
-    pub async fn get_messages(&self) -> Vec<crate::Message> {
-        self.messages.read().await.clone()
-    }
-
     /// Get a clone of current tool calls
     pub async fn get_current_tool_calls(&self) -> Vec<crate::ToolCall> {
         self.current_tool_calls.read().await.clone()

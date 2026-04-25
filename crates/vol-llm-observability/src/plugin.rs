@@ -299,7 +299,6 @@ mod tests {
             run_id: "test-run".to_string(),
             user_input: "test input".to_string(),
             session_id: "session-1".to_string(),
-            messages: Arc::new(RwLock::new(Vec::new())),
             all_tool_calls: Arc::new(RwLock::new(Vec::new())),
             current_tool_calls: Arc::new(RwLock::new(Vec::new())),
             data: Arc::new(RwLock::new(HashMap::new())),
