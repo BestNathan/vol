@@ -160,6 +160,70 @@ impl FileSessionEntryStore {
     }
 }
 
+/// Summary of a session file for listing purposes.
+pub struct SessionSummary {
+    pub session_id: String,
+    pub created_at: i64,
+    pub entry_count: usize,
+}
+
+impl FileSessionEntryStore {
+    /// Scan `{entry_dir}/*.jsonl` and return session summaries.
+    pub fn list_sessions(&self) -> std::io::Result<Vec<SessionSummary>> {
+        let mut summaries = Vec::new();
+        let dir = match std::fs::read_dir(&self.entry_dir) {
+            Ok(d) => d,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(summaries),
+            Err(e) => return Err(e),
+        };
+
+        for entry in dir {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                continue;
+            }
+            if !path.is_file() {
+                continue;
+            }
+
+            let session_id = match path.file_stem().and_then(|s| s.to_str()) {
+                Some(id) => id.to_string(),
+                None => continue,
+            };
+
+            let file = std::fs::File::open(&path)?;
+            let reader = std::io::BufReader::new(file);
+            let mut count = 0;
+            let mut created_at: Option<i64> = None;
+
+            for line in reader.lines() {
+                let line = line?;
+                if line.trim().is_empty() {
+                    continue;
+                }
+                if created_at.is_none() {
+                    if let Some(parsed) = Self::from_json(&line) {
+                        created_at = Some(parsed.created_at);
+                    }
+                }
+                count += 1;
+            }
+
+            if let Some(ts) = created_at {
+                summaries.push(SessionSummary {
+                    session_id,
+                    created_at: ts,
+                    entry_count: count,
+                });
+            }
+        }
+
+        summaries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(summaries)
+    }
+}
+
 #[async_trait]
 impl SessionEntryStore for FileSessionEntryStore {
     async fn save(&self, entry: SessionEntry) -> Result<()> {
@@ -407,5 +471,30 @@ mod entry_tests {
 
         store.delete_session("session-a").await.unwrap();
         assert_eq!(store.get_count("session-b").await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_file_entry_store_list_sessions() {
+        let temp_dir = tempdir().unwrap();
+        let store = FileSessionEntryStore::new(temp_dir.path());
+
+        let entry_a = SessionEntry::new_message("session-a".to_string(), Message::user("hello"));
+        store.save(entry_a).await.unwrap();
+
+        let entry_b = SessionEntry::new_message("session-b".to_string(), Message::user("world"));
+        store.save(entry_b).await.unwrap();
+
+        let summaries = store.list_sessions().unwrap();
+        assert_eq!(summaries.len(), 2);
+        assert_eq!(summaries[0].entry_count, 1);
+        assert_eq!(summaries[1].entry_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_file_entry_store_list_sessions_empty_dir() {
+        let temp_dir = tempdir().unwrap();
+        let store = FileSessionEntryStore::new(temp_dir.path());
+        let summaries = store.list_sessions().unwrap();
+        assert!(summaries.is_empty());
     }
 }
