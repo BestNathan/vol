@@ -277,6 +277,7 @@ impl CodingAgent {
 pub struct CodingAgentBuilder {
     config: CodingAgentConfig,
     sandbox: Option<vol_llm_core::SandboxRef>,
+    store_dir_set: bool,
 }
 
 impl CodingAgentBuilder {
@@ -284,6 +285,7 @@ impl CodingAgentBuilder {
         Self {
             config: CodingAgentConfig::default(),
             sandbox: None,
+            store_dir_set: false,
         }
     }
 
@@ -298,7 +300,24 @@ impl CodingAgentBuilder {
     }
 
     pub fn working_dir(mut self, path: PathBuf) -> Self {
-        self.config.working_dir = path;
+        self.config.working_dir = path.clone();
+        if !self.store_dir_set {
+            let basename = path
+                .file_name()
+                .unwrap_or(std::ffi::OsStr::new("default"))
+                .to_string_lossy();
+            let home = std::env::var("HOME").unwrap_or_default();
+            self.config.store_dir =
+                PathBuf::from(home).join(".vol-coding").join(basename.as_ref());
+        }
+        self
+    }
+
+    /// Set the storage directory for sessions, logs, and other persistent data.
+    /// When called, it overrides the auto-derived store_dir from working_dir.
+    pub fn store_dir(mut self, path: PathBuf) -> Self {
+        self.config.store_dir = path;
+        self.store_dir_set = true;
         self
     }
 
