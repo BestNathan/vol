@@ -1,6 +1,6 @@
 use vol_llm_core::Message;
 
-use crate::{AttentionAnchor, ContextBlock, ContextContributor, TokenBudget, estimate_tokens};
+use crate::{AttentionAnchor, ContextBlock, ContextContributor, ContextError, TokenBudget, estimate_tokens};
 
 /// Output from ContextBuilder — ready-to-send LLM messages.
 pub struct ContextOutput {
@@ -37,11 +37,11 @@ impl ContextBuilder {
     }
 
     /// Build the context: collect blocks, check budget, compress if needed, produce messages.
-    pub async fn build(mut self) -> ContextOutput {
+    pub async fn build(mut self) -> Result<ContextOutput, ContextError> {
         // Step 1: Collect blocks
         let mut all_blocks = Vec::new();
         for contributor in &self.contributors {
-            let blocks = contributor.contribute().await;
+            let blocks = contributor.contribute().await?;
             all_blocks.extend(blocks);
         }
 
@@ -63,7 +63,7 @@ impl ContextBuilder {
             // Step 4: Re-collect blocks
             all_blocks.clear();
             for contributor in &self.contributors {
-                let blocks = contributor.contribute().await;
+                let blocks = contributor.contribute().await?;
                 all_blocks.extend(blocks);
             }
         }
@@ -112,7 +112,7 @@ impl ContextBuilder {
             messages.extend(block.messages);
         }
 
-        ContextOutput { messages }
+        Ok(ContextOutput { messages })
     }
 }
 
@@ -204,8 +204,8 @@ mod tests {
             &self.name
         }
 
-        async fn contribute(&self) -> Vec<ContextBlock> {
-            vec![ContextBlock::new(self.messages.clone(), self.anchor.clone())]
+        async fn contribute(&self) -> Result<Vec<ContextBlock>, ContextError> {
+            Ok(vec![ContextBlock::new(self.messages.clone(), self.anchor.clone())])
         }
 
         async fn compress(&mut self) {
@@ -242,7 +242,7 @@ mod tests {
             }))
             .build();
 
-        let output = builder.build().await;
+        let output = builder.build().await.unwrap();
         assert_eq!(output.messages.len(), 2);
         assert_eq!(output.messages[0].role, vol_llm_core::message::MessageRole::System);
         assert_eq!(output.messages[1].role, vol_llm_core::message::MessageRole::User);
@@ -273,7 +273,7 @@ mod tests {
             }))
             .build();
 
-        let output = builder.build().await;
+        let output = builder.build().await.unwrap();
         assert_eq!(output.messages[0].content.as_ref().unwrap().as_str(), "Head first");
         assert_eq!(output.messages[1].content.as_ref().unwrap().as_str(), "Head second");
         assert_eq!(output.messages[2].content.as_ref().unwrap().as_str(), "Middle data");

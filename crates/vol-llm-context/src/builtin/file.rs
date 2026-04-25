@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use vol_llm_core::Message;
 
-use crate::{AttentionAnchor, ContextBlock, ContextContributor, estimate_tokens};
+use crate::{AttentionAnchor, ContextBlock, ContextContributor, ContextError, estimate_tokens};
 
 /// A file specification for FileContributor.
 #[derive(Clone)]
@@ -22,14 +22,12 @@ impl FileSpec {
 /// File-based context contributor — reads markdown files from disk.
 pub struct FileContributor {
     specs: Vec<FileSpec>,
-    cached_blocks: Option<Vec<ContextBlock>>,
 }
 
 impl FileContributor {
     pub fn new(specs: Vec<FileSpec>) -> Self {
         Self {
             specs,
-            cached_blocks: None,
         }
     }
 }
@@ -40,11 +38,7 @@ impl ContextContributor for FileContributor {
         "file"
     }
 
-    async fn contribute(&self) -> Vec<ContextBlock> {
-        if let Some(ref blocks) = self.cached_blocks {
-            return blocks.clone();
-        }
-
+    async fn contribute(&self) -> Result<Vec<ContextBlock>, ContextError> {
         let mut blocks = Vec::new();
         for spec in &self.specs {
             match std::fs::read_to_string(&spec.path) {
@@ -58,7 +52,7 @@ impl ContextContributor for FileContributor {
             }
         }
 
-        blocks
+        Ok(blocks)
     }
 
     async fn compress(&mut self) {
@@ -66,22 +60,16 @@ impl ContextContributor for FileContributor {
     }
 
     fn estimate_size(&self) -> usize {
-        self.cached_blocks
-            .as_ref()
-            .map(|blocks| {
-                blocks
-                    .iter()
-                    .flat_map(|b| &b.messages)
-                    .map(estimate_tokens)
-                    .sum()
-            })
-            .unwrap_or(0)
+        self.specs
+            .iter()
+            .filter_map(|spec| std::fs::read_to_string(&spec.path).ok())
+            .map(|content| estimate_tokens(&Message::system(content)))
+            .sum()
     }
 
     fn clone_box(&self) -> Box<dyn ContextContributor> {
         Box::new(FileContributor {
             specs: self.specs.clone(),
-            cached_blocks: self.cached_blocks.clone(),
         })
     }
 }
@@ -99,7 +87,7 @@ mod tests {
             file.path().to_str().unwrap(),
             AttentionAnchor::Head(0),
         )]);
-        let blocks = contributor.contribute().await;
+        let blocks = contributor.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
         assert!(matches!(blocks[0].anchor, AttentionAnchor::Head(0)));
         assert!(blocks[0].messages[0].content.as_ref().unwrap().as_str().contains("# Role"));
@@ -116,7 +104,7 @@ mod tests {
             FileSpec::new(f1.path().to_str().unwrap(), AttentionAnchor::Head(0)),
             FileSpec::new(f2.path().to_str().unwrap(), AttentionAnchor::Tail(0)),
         ]);
-        let blocks = contributor.contribute().await;
+        let blocks = contributor.contribute().await.unwrap();
         assert_eq!(blocks.len(), 2);
         assert!(matches!(blocks[0].anchor, AttentionAnchor::Head(0)));
         assert!(matches!(blocks[1].anchor, AttentionAnchor::Tail(0)));
@@ -128,7 +116,7 @@ mod tests {
             "/nonexistent/path.md",
             AttentionAnchor::Head(0),
         )]);
-        let blocks = contributor.contribute().await;
+        let blocks = contributor.contribute().await.unwrap();
         assert_eq!(blocks.len(), 0);
     }
 
@@ -140,7 +128,7 @@ mod tests {
             FileSpec::new(f.path().to_str().unwrap(), AttentionAnchor::Head(0)),
             FileSpec::new("/nonexistent/path.md", AttentionAnchor::Tail(0)),
         ]);
-        let blocks = contributor.contribute().await;
+        let blocks = contributor.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
         assert!(matches!(blocks[0].anchor, AttentionAnchor::Head(0)));
     }
@@ -156,7 +144,7 @@ mod tests {
         )]);
         contributor.compress().await;
         // compress is no-op, content unchanged
-        let blocks = contributor.contribute().await;
+        let blocks = contributor.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
     }
 }

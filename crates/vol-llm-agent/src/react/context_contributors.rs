@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 use async_trait::async_trait;
-use vol_llm_context::{AttentionAnchor, ContextBlock, ContextContributor, estimate_tokens};
+use vol_llm_context::{AttentionAnchor, ContextBlock, ContextContributor, ContextError, estimate_tokens};
 use vol_llm_core::Message;
 use vol_session::{Session, SessionMessage};
 
@@ -31,12 +31,12 @@ impl ContextContributor for SessionContributor {
         "session"
     }
 
-    async fn contribute(&self) -> Vec<ContextBlock> {
+    async fn contribute(&self) -> Result<Vec<ContextBlock>, ContextError> {
         // Check cache first
         {
             let guard = self.cached_blocks.lock().unwrap();
             if let Some(ref blocks) = *guard {
-                return blocks.clone();
+                return Ok(blocks.clone());
             }
         }
 
@@ -49,7 +49,7 @@ impl ContextContributor for SessionContributor {
             .unwrap_or_default();
 
         if history.is_empty() {
-            return vec![];
+            return Ok(vec![]);
         }
 
         let messages: Vec<Message> = history.into_iter().map(|sm| sm.message).collect();
@@ -59,7 +59,7 @@ impl ContextContributor for SessionContributor {
         // Cache for compress() to use
         *self.cached_blocks.lock().unwrap() = Some(blocks.clone());
 
-        blocks
+        Ok(blocks)
     }
 
     async fn compress(&mut self) {

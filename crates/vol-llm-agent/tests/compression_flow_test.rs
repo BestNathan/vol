@@ -28,7 +28,7 @@ async fn test_session_contributor_compress_flow() {
     let mut contributor = SessionContributor::new(session.clone(), 10);
 
     // First contribute: should get all 10 messages
-    let blocks = contributor.contribute().await;
+    let blocks = contributor.contribute().await.unwrap();
     assert_eq!(blocks.len(), 1);
     let total_messages: usize = blocks.iter().map(|b| b.messages.len()).sum();
     assert_eq!(total_messages, 10);
@@ -37,7 +37,7 @@ async fn test_session_contributor_compress_flow() {
     contributor.compress().await;
 
     // Second contribute: should get compressed result
-    let blocks = contributor.contribute().await;
+    let blocks = contributor.contribute().await.unwrap();
     assert_eq!(blocks.len(), 1);
     let compressed_count = blocks.iter().map(|b| b.messages.len()).sum::<usize>();
     // Default PositionSampleCompressor(keep_first=3, sample_every=5) on 10 messages:
@@ -55,13 +55,13 @@ async fn test_session_contributor_empty_session_compress() {
     let mut contributor = SessionContributor::new(session.clone(), 10);
 
     // Contribute from empty session
-    let blocks = contributor.contribute().await;
+    let blocks = contributor.contribute().await.unwrap();
     assert!(blocks.is_empty());
 
     // Compress with no messages — should be no-op
     contributor.compress().await;
 
     // Contribute again — still empty
-    let blocks = contributor.contribute().await;
+    let blocks = contributor.contribute().await.unwrap();
     assert!(blocks.is_empty());
 }

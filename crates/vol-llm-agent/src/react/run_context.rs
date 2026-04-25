@@ -226,7 +226,7 @@ impl RunContext {
         .add_contributor(Box::new(UserInputContributor::new(self.user_input.clone())))
         .build();
 
-        let output = context_builder.build().await;
+        let output = context_builder.build().await.unwrap();
 
         // Write to shared state
         *self.messages.write().await = output.messages;

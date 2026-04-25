@@ -23,7 +23,7 @@
 //!         ])))
 //!         .build();
 //!
-//!     let output = builder.build().await;
+//!     let output = builder.build().await.unwrap();
 //!     // output.messages contains content from files that exist
 //! }
 //! ```
@@ -33,7 +33,7 @@ pub mod context_block;
 pub mod context_contributor;
 
 pub use context_block::{AttentionAnchor, ContextBlock, TokenBudget, estimate_tokens};
-pub use context_contributor::ContextContributor;
+pub use context_contributor::{ContextContributor, ContextError};
 
 pub mod builder;
 pub mod builtin;

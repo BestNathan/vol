@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use vol_llm_context::{AttentionAnchor, ContextBlock, ContextContributor};
+use vol_llm_context::{AttentionAnchor, ContextBlock, ContextContributor, ContextError};
 use vol_llm_core::Message;
 
 use crate::loader::SkillLoader;
@@ -40,13 +40,13 @@ impl ContextContributor for SkillInjector {
         "skills"
     }
 
-    async fn contribute(&self) -> Vec<ContextBlock> {
+    async fn contribute(&self) -> Result<Vec<ContextBlock>, ContextError> {
         let metadata_text = self.format_metadata().await;
         if metadata_text.is_empty() {
-            return vec![];
+            return Ok(vec![]);
         }
         let msg = Message::user(metadata_text);
-        vec![ContextBlock::new(vec![msg], AttentionAnchor::Head(0))]
+        Ok(vec![ContextBlock::new(vec![msg], AttentionAnchor::Head(0))])
     }
 
     async fn compress(&mut self) {
@@ -100,7 +100,7 @@ mod tests {
     async fn test_skill_injector_contribute_empty() {
         let loader = SkillLoader::new(None);
         let injector = SkillInjector::new(Arc::new(loader));
-        let blocks = injector.contribute().await;
+        let blocks = injector.contribute().await.unwrap();
         assert!(blocks.is_empty());
     }
 
@@ -114,7 +114,7 @@ mod tests {
         loader.register(skill).await;
 
         let injector = SkillInjector::new(Arc::new(loader));
-        let blocks = injector.contribute().await;
+        let blocks = injector.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
         assert!(blocks[0].messages[0].content.as_ref().unwrap().as_str().contains("Available skills:"));
         assert!(blocks[0].messages[0].content.as_ref().unwrap().as_str().contains("rust-conventions"));
