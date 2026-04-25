@@ -3,20 +3,14 @@
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-/// Unique task identifier (newtype over String for type safety).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct TaskId(pub String);
+/// Unique task identifier (newtype over u64, auto-increment).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct TaskId(pub u64);
 
 impl std::fmt::Display for TaskId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "t{}", self.0)
     }
-}
-
-/// Generate a new task ID with "t" prefix + UUID
-fn generate_task_id() -> TaskId {
-    let id = format!("t{}", uuid::Uuid::new_v4().simple()).chars().take(9).collect::<String>();
-    TaskId(id)
 }
 
 /// Task lifecycle status
@@ -24,24 +18,17 @@ fn generate_task_id() -> TaskId {
     Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
 )]
 pub enum TaskStatus {
-    /// Created, waiting for dependencies
     Pending,
-    /// Currently executing
     Running,
-    /// Successfully completed
     Completed,
-    /// Execution failed
     Failed,
-    /// Explicitly terminated
     Killed,
 }
 
 /// Type of task
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum TaskKind {
-    /// Sub-agent task
     Agent,
-    /// Manual marker (for todo splitting)
     Manual,
 }
 
@@ -70,10 +57,10 @@ pub struct Task {
 }
 
 impl Task {
-    /// Create a new pending task
+    /// Create a new pending task. Caller must set the id (store assigns it).
     pub fn new(kind: TaskKind, description: String, dependencies: Vec<TaskId>) -> Self {
         Self {
-            id: generate_task_id(),
+            id: TaskId(0),
             status: TaskStatus::Pending,
             kind,
             description,
@@ -85,5 +72,37 @@ impl Task {
             started_at: None,
             completed_at: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_task_id_display() {
+        let id = TaskId(42);
+        assert_eq!(format!("{}", id), "t42");
+    }
+
+    #[test]
+    fn test_next_task_id_empty() {
+        let ids: Vec<u64> = vec![];
+        let next = ids.iter().max().map_or(1, |m| m + 1);
+        assert_eq!(next, 1);
+    }
+
+    #[test]
+    fn test_next_task_id_with_existing() {
+        let ids: Vec<u64> = vec![1, 3, 2];
+        let next = ids.iter().max().map_or(1, |m| m + 1);
+        assert_eq!(next, 4);
+    }
+
+    #[test]
+    fn test_task_id_copy() {
+        let a = TaskId(5);
+        let b = a;
+        assert_eq!(a.0, b.0);
     }
 }

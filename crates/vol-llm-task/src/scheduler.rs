@@ -26,7 +26,7 @@ impl TaskScheduler {
         dependencies: Vec<TaskId>,
     ) -> Result<TaskId> {
         let task = Task::new(kind, description, dependencies);
-        let id = task.id.clone();
+        let id = task.id;
         self.store.create(task).await?;
         Ok(id)
     }
@@ -129,7 +129,7 @@ mod tests {
             .create_task(TaskKind::Agent, "test".to_string(), vec![])
             .await
             .unwrap();
-        assert!(id.0.starts_with("t"));
+        assert!(id.0 > 0);
     }
 
     #[tokio::test]
@@ -239,7 +239,7 @@ mod tests {
             .await
             .unwrap();
         let _t2 = sched
-            .create_task(TaskKind::Agent, "task 2".to_string(), vec![t1.clone()])
+            .create_task(TaskKind::Agent, "task 2".to_string(), vec![t1])
             .await
             .unwrap();
 
