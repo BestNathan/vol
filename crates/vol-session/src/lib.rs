@@ -11,7 +11,10 @@ pub mod listener;
 pub mod memory_store;
 pub mod message;
 pub mod session;
+pub mod session_contributor;
 pub mod store;
+
+pub use session_contributor::SessionContributor;
 
 pub use compressor::MessageCompressor;
 pub use compressors::{PositionSampleCompressor, RoleFilterCompressor};

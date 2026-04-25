@@ -32,7 +32,6 @@
 
 pub mod agent;
 pub mod builder;
-pub mod context_contributors;
 pub mod hitl;
 pub mod plugin;
 pub mod plugin_stream;
@@ -61,9 +60,8 @@ pub use stream::{AgentStreamEvent, AgentStreamReceiver};
 // Re-export vol-llm-context types for convenience
 pub use vol_llm_context::{
     AttentionAnchor, ContextBlock, ContextBuilder, ContextBuilderBuilder, ContextContributor,
+    ContextError,
 };
-
-pub use context_contributors::SessionContributor;
 
 #[cfg(test)]
 mod tests;

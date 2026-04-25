@@ -4462,6 +4462,7 @@ dependencies = [
  "tracing",
  "uuid",
  "vol-core",
+ "vol-llm-context",
  "vol-llm-core",
  "vol-tracing",
 ]

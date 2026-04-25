@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use vol_llm_agent::react::{ContextContributor, context_contributors::SessionContributor};
+use vol_llm_agent::react::ContextContributor;
 use vol_llm_core::Message;
-use vol_session::{InMemoryEntryStore, Session, SessionMessage};
+use vol_session::{InMemoryEntryStore, Session, SessionContributor, SessionMessage};
 
 async fn make_session_with_messages(n: usize) -> Arc<Mutex<Session>> {
     let entry_store = Arc::new(InMemoryEntryStore::new());
