@@ -290,7 +290,69 @@ kubectl create secret generic vol-monitor-secrets \
 
 See [docs/deployment/k8s-deployment.md](docs/deployment/k8s-deployment.md) for complete deployment guide.
 
-## Convension
+## Conventions
+
+### Session Implementation
+
+**Session is the Single Source of Truth (SSOT) for conversation messages.**
+
+`RunContext` does NOT store a duplicate message list — all messages live in `Session`. The LLM context is built on-demand via `RunContext::get_context()` which assembles a `ContextBuilder` with contributors.
+
+#### Architecture
+
+```
+RunContext::get_context(user_input)
+  └── ContextBuilderBuilder
+       ├── add_contributors_from(&config.context_builder)   # Head zone: system prompt, SkillInjector
+       ├── SessionContributor::new(session, max_history)     # Middle zone: session history
+       └── UserInputContributor::new(user_input)             # Tail zone: current input
+```
+
+#### Key Types
+
+| Type | Crate | Purpose |
+|------|-------|---------|
+| `Session` | `vol-session` | Session lifecycle, message storage, compression |
+| `SessionContributor` | `vol-session` | Adapter: Session → ContextContributor (Middle zone) |
+| `ContextBuilder` | `vol-llm-context` | Zone-aware context assembly (Head/Middle/Tail) |
+| `ContextContributor` | `vol-llm-context` | Trait: `contribute()`, `compress()`, `clone_box()` |
+| `SkillInjector` | `vol-llm-skill` | ContextContributor for skill metadata (Head zone) |
+
+#### Session Entry Types
+
+| Entry Type | Purpose |
+|------------|---------|
+| `Message` | Normal conversation message (user/assistant/system) |
+| `Checkpoint` | Seals old messages — `get_messages()` returns only entries after the latest checkpoint |
+| `Summary` | Compressed representation of old messages, returned as a synthetic `system` message |
+
+#### Path Ownership Principle
+
+Components receive only `working_dir` from callers and append their own subdirectories internally. This prevents double-appending and mismatched conventions.
+
+| Component | Subdirectory | Example |
+|-----------|-------------|---------|
+| `SkillInjector` | `{working_dir}/.agents/skills` | `/project/.agents/skills/rust/SKILL.md` |
+| `Session` | `{working_dir}/.agent/sessions` | (handled by entry store) |
+| `LocalSandbox` | `{working_dir}/.` | (root of working_dir) |
+
+#### CodingAgent Context Assembly
+
+`CodingAgent::new()` builds a `ContextBuilder` with:
+1. `SimpleContributor::system("...")` — system prompt (Head, position 0)
+2. `SkillInjector::from_workdir(&config.working_dir).await` — skill metadata (Head, position 1, auto-discovers)
+
+ReActAgent needs zero code changes for skill injection — `AgentConfig.context_builder` supports arbitrary contributors via `clone_box()`.
+
+#### Session Compression Flow
+
+```
+session.get_messages()          → all messages after latest checkpoint
+session.compress(messages)      → writes checkpoint + summary + compressed entries
+session.get_messages()          → summary + compressed entries only
+```
+
+The `PositionSampleCompressor` (default: `keep_first=3, sample_every=5`) keeps early messages for context continuity and samples the rest.
 
 ### Feishu(lark)
 
