@@ -31,6 +31,7 @@ pub struct CodingAgent {
     context_builder: ContextBuilder,
     observer: Option<Arc<dyn EventObserver>>,
     sandbox: Option<vol_llm_core::SandboxRef>,
+    store_dir: PathBuf,
 }
 
 impl CodingAgent {
@@ -91,6 +92,8 @@ impl CodingAgent {
             None
         };
 
+        let store_dir = config.store_dir.clone();
+
         Ok(Self {
             config,
             llm,
@@ -98,6 +101,7 @@ impl CodingAgent {
             context_builder,
             observer: None,
             sandbox,
+            store_dir,
         })
     }
 
@@ -242,7 +246,7 @@ impl CodingAgent {
     }
     /// Resume a session from disk by its session ID.
     ///
-    /// Loads the session from `{working_dir}/.vol-sessions` (or creates a new
+    /// Loads the session from `{store_dir}/sessions` (or creates a new
     /// in-memory session if the ID is not found) and stores it on the agent.
     /// Subsequent `run()` calls use this session.
     ///
@@ -250,7 +254,7 @@ impl CodingAgent {
     pub async fn resume(mut self, session_id: &str) -> Result<Self, CodingAgentError> {
         use vol_session::{FileSessionEntryStore, InMemoryEntryStore};
 
-        let session_dir = self.config.working_dir.join(".vol-sessions");
+        let session_dir = self.store_dir.join("sessions");
         let entry_store: Arc<dyn vol_session::SessionEntryStore> =
             if session_dir.exists() {
                 Arc::new(FileSessionEntryStore::new(&session_dir))
