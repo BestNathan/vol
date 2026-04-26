@@ -93,7 +93,10 @@ impl SkillsConfig {
         existing: &ContextBuilder,
     ) -> ContextBuilder {
         let injector = SkillInjector::new(self.loader.clone());
-        ContextBuilderBuilder::new(existing.token_budget().total)
+        let budget = existing.token_budget();
+        ContextBuilderBuilder::new(budget.total)
+            .head_size(budget.head_size)
+            .tail_size(budget.tail_size)
             .add_contributors_from(existing)
             .add_contributor(Box::new(injector))
             .build()
@@ -797,12 +800,6 @@ mod tests {
     }
 
     #[test]
-    fn test_skills_config_from_workdir() {
-        let skills = SkillsConfig::from_workdir(Path::new("/tmp/test-project"));
-        // Created successfully (no IO at creation time)
-    }
-
-    #[test]
     fn test_skills_config_register_tool() {
         let skills = SkillsConfig::from_workdir(Path::new("/tmp/test-project"));
         let mut registry = ToolRegistry::new();
@@ -816,6 +813,7 @@ mod tests {
         let skills = SkillsConfig::from_workdir(Path::new("/tmp/test-project"));
         let existing = ContextBuilderBuilder::new(128_000).build();
         let enhanced = skills.enhance_context_builder(&existing);
-        drop(enhanced);
+        let names = enhanced.contributor_names();
+        assert!(names.contains(&"skills"));
     }
 }
