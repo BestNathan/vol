@@ -81,18 +81,13 @@ impl ContextContributor for SessionContributor {
         }
 
         // 3. Write checkpoint (seal old messages)
-        let checkpoint_ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64;
-
         let session = self.session.lock().await;
         let mut cp_entry = SessionEntry::new_checkpoint(
             session_id.clone(),
             CheckpointReason::Compression,
             None,
         );
-        cp_entry.created_at = checkpoint_ts;
+        let base_ts = cp_entry.created_at;
         if let Err(e) = session.entry_store.save(cp_entry).await {
             tracing::error!("Failed to write checkpoint before compression: {}", e);
             return;
@@ -111,7 +106,7 @@ impl ContextContributor for SessionContributor {
             session_id.clone(),
             summary,
         );
-        summary_entry.created_at = checkpoint_ts + 1;
+        summary_entry.created_at = base_ts + 1;
         if let Err(e) = session.entry_store.save(summary_entry).await {
             tracing::error!("Failed to write summary during compression: {}", e);
             return;
@@ -120,7 +115,7 @@ impl ContextContributor for SessionContributor {
         // 6. Write compressed message entries (timestamp after checkpoint)
         for (i, msg) in compressed.iter().enumerate() {
             let mut entry = SessionEntry::from_message(msg.clone());
-            entry.created_at = checkpoint_ts + 1 + (i as i64);
+            entry.created_at = base_ts + 1 + (i as i64);
             if let Err(e) = session.entry_store.save(entry).await {
                 tracing::error!("Failed to write compressed message: {}", e);
             }
