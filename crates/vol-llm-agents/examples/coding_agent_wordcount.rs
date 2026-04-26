@@ -43,7 +43,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = CodingAgentConfig {
         max_iterations: 20,
         working_dir: work_dir.clone(),
-        hitl_enabled: false,
         html_report_path: Some(report_path.clone()),
         llm: Some(llm),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),

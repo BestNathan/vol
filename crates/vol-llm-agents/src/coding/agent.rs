@@ -198,8 +198,6 @@ impl CodingAgent {
             plugin_registry: self.config.plugin_registry.clone(),
             agent_id: self.config.agent_id.clone(),
             working_dir: self.config.working_dir.clone(),
-            unsafe_mode: self.config.unsafe_mode,
-            approval_handler: self.config.approval_handler.clone(),
         }
     }
 
@@ -326,21 +324,6 @@ impl CodingAgentBuilder {
     pub fn store_dir(mut self, path: PathBuf) -> Self {
         self.config.store_dir = path;
         self.store_dir_set = true;
-        self
-    }
-
-    pub fn hitl_enabled(mut self, enabled: bool) -> Self {
-        self.config.hitl_enabled = enabled;
-        self
-    }
-
-    pub fn unsafe_mode(mut self, enabled: bool) -> Self {
-        self.config.unsafe_mode = enabled;
-        self
-    }
-
-    pub fn approval_handler(mut self, handler: vol_llm_agent::react::BoxedApprovalHandler) -> Self {
-        self.config.approval_handler = Some(handler);
         self
     }
 

@@ -63,7 +63,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = CodingAgentConfig {
         max_iterations: 30,
         working_dir: working_dir.clone(),
-        hitl_enabled: false,
         agent_id: agent_id.clone(),
         tool_config,
         llm: Some(llm),

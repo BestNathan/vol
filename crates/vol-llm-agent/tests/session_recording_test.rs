@@ -101,6 +101,7 @@ async fn test_session_listener_records_what_events() {
         event_rx,
         store,
         "session-events".to_string(),
+        "run-123".to_string(),
     );
     let handle = tokio::spawn(async move { listener.run().await.unwrap() });
 

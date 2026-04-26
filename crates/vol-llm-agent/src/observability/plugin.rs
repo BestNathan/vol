@@ -138,7 +138,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn create_test_plugin_context() -> PluginContext {
-        let (ctx, _rx, _approval_rx) = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
             "session-1".to_string(),

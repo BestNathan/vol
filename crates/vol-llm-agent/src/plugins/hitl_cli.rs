@@ -14,11 +14,10 @@ impl ApprovalChannel for CliApprovalChannel {
         timeout: Option<std::time::Duration>,
     ) -> Result<Option<ApprovalResponse>, ApprovalError> {
         println!("\n════════════════════════════════════════");
-        println!("🔔 Approval Request");
+        println!("Approval Request");
         println!("════════════════════════════════════════");
-        println!("Run ID: {}", request.run_id);
-        println!("Type: {:?}", request.request_type);
-        println!("Message: {}", request.message);
+        println!("Tool: {}", request.tool_name);
+        println!("Reason: {}", request.reason);
         println!("════════════════════════════════════════");
         println!("[A]pprove / [R]eject / [S]top");
         print!("Your choice: ");

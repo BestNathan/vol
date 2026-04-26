@@ -39,7 +39,6 @@ async fn test_coding_agent_writes_log_counter_cli() {
     let config = CodingAgentConfig {
         max_iterations: 15,
         working_dir: work_dir.clone(),
-        hitl_enabled: false,
         html_report_path: Some(report_path.clone()),
         llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
@@ -116,7 +115,6 @@ async fn test_html_report_shows_ordered_timeline() {
     let config = CodingAgentConfig {
         max_iterations: 5,
         working_dir: temp_dir.path().to_path_buf(),
-        hitl_enabled: false,
         html_report_path: Some(report_path.clone()),
         llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),

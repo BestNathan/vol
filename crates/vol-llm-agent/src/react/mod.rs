@@ -45,7 +45,7 @@ pub use agent::{AgentConfig, ReActAgent, SkillsConfig};
 pub use builder::AgentBuilder;
 pub use hitl::{
     run_cli_approval_loop, spawn_custom_approval_handler, ApprovalChannel, ApprovalHandler,
-    ApprovalTrigger, ApprovalType, BoxedApprovalHandler, HitlConfig, TimeoutBehavior,
+    ApprovalTrigger, BoxedApprovalHandler, HitlConfig, TimeoutBehavior,
 };
 pub use plugin::{AgentPlugin, PluginContext, PluginDecision, PluginRegistry, PluginId};
 pub use plugin_stream::{
@@ -53,7 +53,8 @@ pub use plugin_stream::{
 };
 pub use prompt::{default_system_prompt, SystemPromptBuilder};
 pub use response::{AgentError, AgentResponse};
-pub use run_context::{ApprovalRequest, ApprovalResponse, PluginRequest, RunContext, plugin_context_from_run_ctx};
+pub use run_context::{PluginRequest, RunContext, plugin_context_from_run_ctx};
+pub use hitl::{ApprovalRequest, ApprovalResponse};
 pub use state::{ReasoningStep, ToolCallRecord};
 pub use stream::{AgentStreamEvent, AgentStreamReceiver};
 

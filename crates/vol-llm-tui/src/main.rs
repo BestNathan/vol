@@ -537,29 +537,24 @@ fn spawn_agent(
 
         let session = session.lock().await.clone();
 
-        let unsafe_mode = {
-            let state_guard = state.lock().await;
-            state_guard.unsafe_mode
-        };
-
         let approval_state = {
             let state_guard = state.lock().await;
-            state_guard.approval_state.unsafe_mode.store(unsafe_mode, std::sync::atomic::Ordering::Relaxed);
             state_guard.approval_state.clone()
         };
 
-        let agent = match vol_llm_agents::coding::CodingAgentBuilder::new()
-            .working_dir(cache.working_dir.clone())
-            .store_dir(cache.store_dir.clone())
-            .max_iterations(10)
-            .session(session)
-            .hitl_enabled(true)
-            .unsafe_mode(unsafe_mode)
-            .approval_handler(approval_state.into_handler())
-            .tool_config(cache.tool_config.clone())
-            .with_logger()
-            .build()
-        {
+        // Build HitlPlugin from the TUI's approval state and register it
+        let hitl_plugin = approval_state.clone().into_hitl_plugin();
+
+        // Build config directly so we can register the HitlPlugin
+        let mut config = vol_llm_agents::coding::CodingAgentConfig::default();
+        config.working_dir = cache.working_dir.clone();
+        config.store_dir = cache.store_dir.clone();
+        config.max_iterations = 10;
+        config.session = Some(session);
+        config.tool_config = cache.tool_config.clone();
+        config.plugin_registry.register(hitl_plugin);
+
+        let agent = match vol_llm_agents::coding::CodingAgent::new(config) {
             Ok(a) => a,
             Err(e) => {
                 let mut state = state.lock().await;

@@ -388,14 +388,6 @@ fn test_hitl_config_with_triggers() {
 }
 
 #[test]
-fn test_approval_type_variants() {
-    let _tool = hitl::ApprovalType::ToolExecution { tool_name: "bash".to_string() };
-    let _iter = hitl::ApprovalType::ContinueIteration { iteration: 1 };
-    let _final = hitl::ApprovalType::FinalAnswer;
-    let _custom = hitl::ApprovalType::Custom { name: "custom".to_string() };
-}
-
-#[test]
 fn test_hitl_needs_tool_approval_all_tools() {
     // Test via HitlConfig + ApprovalTrigger combination
     let config = hitl::HitlConfig {

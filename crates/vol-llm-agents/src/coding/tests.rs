@@ -29,7 +29,6 @@ fn test_config_default() {
     assert_eq!(config.agent_id, "coding-agent");
     assert_eq!(config.max_iterations, 10);
     assert_eq!(config.working_dir, std::path::PathBuf::from("."));
-    assert!(config.hitl_enabled);
     assert!(config.html_report_path.is_none());
     assert!(config.llm.is_none());
     assert_eq!(config.store_dir, std::path::PathBuf::from(".vol-coding"));
@@ -361,13 +360,11 @@ async fn test_builder_with_all_methods() {
     let agent = CodingAgentBuilder::new()
         .llm(llm)
         .working_dir(tmp_dir.path().to_path_buf())
-        .hitl_enabled(true)
         .max_iterations(20)
         .build()
         .unwrap();
 
     assert_eq!(agent.config().max_iterations, 20);
-    assert!(agent.config().hitl_enabled);
 }
 
 #[tokio::test]

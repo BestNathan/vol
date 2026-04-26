@@ -18,13 +18,11 @@ use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig};
 let config = CodingAgentConfig {
     max_iterations: 10,
     working_dir: std::path::PathBuf::from("."),
-    hitl_enabled: true,
-    verbose: false,
-    html_report_path: None,
     llm_provider_id: "anthropic-main".to_string(),
+    ..Default::default()
 };
 
-let agent = CodingAgent::new(config).await?;
+let agent = CodingAgent::new(config)?;
 let result = agent.run("Add a new API endpoint for user login").await?;
 ```
 
@@ -34,8 +32,6 @@ let result = agent.run("Add a new API endpoint for user login").await?;
 |-------|---------|-------------|
 | `max_iterations` | 10 | Maximum reasoning iterations |
 | `working_dir` | "." | Working directory |
-| `hitl_enabled` | true | Enable HITL for dangerous ops |
-| `verbose` | false | Verbose output |
 | `html_report_path` | None | HTML report output path |
 | `llm_provider_id` | "anthropic-main" | LLM provider ID |
 
@@ -47,14 +43,7 @@ let result = agent.run("Add a new API endpoint for user login").await?;
 
 ## HITL Protection
 
-Dangerous operations that require confirmation:
-- `rm -rf /` and similar destructive commands
-- Fork bombs
-- Disk formatting
-- Device writes
-- Reverse shells
-
-The HITL system uses pattern matching to detect dangerous commands in bash tool arguments. When detected, the operation is rejected.
+Dangerous operations are intercepted by the `HitlPlugin` which uses the plugin system's `intercept()` hook. The plugin uses pattern matching to detect dangerous commands (e.g., `rm -rf /`, fork bombs, disk formatting). When detected, the plugin returns `PluginDecision::Abort`, preventing execution.
 
 ## HTML Reports
 
@@ -69,7 +58,7 @@ let config = CodingAgentConfig {
     ..Default::default()
 };
 
-let agent = CodingAgent::new(config).await?;
+let agent = CodingAgent::new(config)?;
 let observer = Arc::new(HTMLReporter::new(
     "report.html".into(),
     "My Task".to_string(),

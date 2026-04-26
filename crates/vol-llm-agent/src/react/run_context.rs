@@ -18,8 +18,6 @@ use vol_llm_core::ToolCall;
 use vol_llm_tool::ToolRegistry;
 use vol_tracing::TracedEvent;
 
-/// Sentinel value for ApprovalRequest.tool_name to indicate a continuation request.
-pub(crate) const CONTINUE_SENTINEL: &str = "__continue__";
 
 /// Create a PluginContext from a RunContext
 pub fn plugin_context_from_run_ctx(ctx: &RunContext) -> PluginContext {
@@ -44,30 +42,6 @@ pub enum PluginRequest {
     },
 }
 
-/// Request for human approval before tool execution.
-#[derive(Debug, Clone)]
-pub struct ApprovalRequest {
-    pub tool_name: String,
-    pub reason: String,
-    pub metadata: serde_json::Value,
-}
-
-/// Response to an approval request.
-#[derive(Debug, Clone)]
-pub struct ApprovalResponse {
-    pub approved: bool,
-    pub reason: Option<String>,
-}
-
-impl ApprovalResponse {
-    pub fn approved() -> Self {
-        Self { approved: true, reason: None }
-    }
-
-    pub fn rejected(reason: String) -> Self {
-        Self { approved: false, reason: Some(reason) }
-    }
-}
 
 /// RunContext encapsulates all state and resources for a single run() invocation.
 ///
@@ -137,10 +111,6 @@ pub struct RunContext {
     /// before the agent run is considered complete.
     pub plugin_event_tx: mpsc::Sender<PluginRequest>,
 
-    /// Dedicated approval channel sender.
-    /// Tools call request_tool_approval() which sends through this channel.
-    /// A HITL handler (CLI/HTTP/etc.) receives requests and sends back responses.
-    pub approval_tx: mpsc::Sender<(ApprovalRequest, oneshot::Sender<ApprovalResponse>)>,
 
     // Internal state collection
     pub(crate) reasoning_chain: Arc<RwLock<Vec<ReasoningStep>>>,
@@ -154,11 +124,10 @@ pub struct RunContext {
 impl RunContext {
     /// Create a new RunContext.
     ///
-    /// Returns `(RunContext, mpsc::Receiver<PluginRequest>, mpsc::Receiver<(ApprovalRequest, oneshot::Sender<ApprovalResponse>)>)`.
+    /// Returns `(RunContext, mpsc::Receiver<PluginRequest>)`.
     ///
-    /// The first receiver should be passed to `run_interceptor_loop()` to handle
-    /// plugin interception requests. The second receiver should be passed to a
-    /// HITL approval handler (e.g., `run_cli_approval_loop()`).
+    /// The receiver should be passed to `run_interceptor_loop()` to handle
+    /// plugin interception requests.
     pub fn new(
         run_id: String,
         user_input: String,
@@ -166,10 +135,9 @@ impl RunContext {
         session: Arc<Session>,
         tools: Arc<ToolRegistry>,
         config: AgentConfig,
-    ) -> (Self, mpsc::Receiver<PluginRequest>, mpsc::Receiver<(ApprovalRequest, oneshot::Sender<ApprovalResponse>)>) {
+    ) -> (Self, mpsc::Receiver<PluginRequest>) {
         let (event_tx, _) = broadcast::channel(1024);
         let (plugin_event_tx, plugin_event_rx) = mpsc::channel(100);
-        let (approval_tx, approval_rx) = mpsc::channel(100);
 
         let ctx = Self {
             run_id,
@@ -184,7 +152,6 @@ impl RunContext {
             config,
             event_tx,
             plugin_event_tx,
-            approval_tx,
             reasoning_chain: Arc::new(RwLock::new(Vec::new())),
             tool_call_records: Arc::new(RwLock::new(Vec::new())),
             final_content: Arc::new(RwLock::new(None)),
@@ -192,7 +159,7 @@ impl RunContext {
             last_message_id: Arc::new(std::sync::Mutex::new(None)),
         };
 
-        (ctx, plugin_event_rx, approval_rx)
+        (ctx, plugin_event_rx)
     }
 
     /// Get the current iteration number
@@ -342,78 +309,6 @@ impl RunContext {
             .map_err(|e| crate::AgentError::Context(format!("Plugin response error: {}", e)))
     }
 
-    /// Request human approval before tool execution.
-    /// Blocks until a HITL handler responds.
-    ///
-    /// Returns Err if no HITL handler is connected.
-    pub async fn request_tool_approval(
-        &self,
-        tool_name: &str,
-        reason: &str,
-        metadata: serde_json::Value,
-    ) -> Result<ApprovalResponse, crate::AgentError> {
-        let (tx, rx) = oneshot::channel();
-        let request = ApprovalRequest {
-            tool_name: tool_name.to_string(),
-            reason: reason.to_string(),
-            metadata,
-        };
-        self.approval_tx
-            .send((request, tx))
-            .await
-            .map_err(|e| crate::AgentError::Context(format!("Approval channel error: {}", e)))?;
-
-        rx.await
-            .map_err(|e| crate::AgentError::Context(format!("Approval response error: {}", e)))
-    }
-
-    /// Request human approval to continue after max iterations.
-    /// Blocks until a HITL handler responds.
-    ///
-    /// Returns true if the user approved continuation, false to stop.
-    pub async fn request_continue_approval(
-        &self,
-        current_iteration: u32,
-        max_iterations: u32,
-    ) -> Result<bool, crate::AgentError> {
-        let (tx, rx) = oneshot::channel();
-        let request = ApprovalRequest {
-            tool_name: CONTINUE_SENTINEL.to_string(),
-            reason: format!(
-                "Agent reached max iterations ({}/{})",
-                current_iteration, max_iterations
-            ),
-            metadata: serde_json::json!({
-                "current_iteration": current_iteration,
-                "max_iterations": max_iterations,
-            }),
-        };
-        self.approval_tx
-            .send((request, tx))
-            .await
-            .map_err(|e| crate::AgentError::Context(format!("Approval channel error: {}", e)))?;
-
-        // Wait for approval response with timeout. If no approval handler
-        // is processing requests, the oneshot will time out and we
-        // return false (decline to continue) rather than hanging forever.
-        let timeout_dur = std::time::Duration::from_secs(5);
-        match tokio::time::timeout(timeout_dur, rx).await {
-            Ok(Ok(response)) => Ok(response.approved),
-            Ok(Err(e)) => Err(crate::AgentError::Context(
-                format!("Approval response error: {}", e)
-            )),
-            Err(_) => {
-                tracing::warn!(
-                    iteration = current_iteration,
-                    max = max_iterations,
-                    "Approval request timed out after {:?}, declining to continue",
-                    timeout_dur,
-                );
-                Ok(false)
-            }
-        }
-    }
-
     /// Record a reasoning step
     pub async fn record_reasoning_step(&self, thinking: String, duration_ms: Option<u64>) {
         let iteration = self.iteration.load(std::sync::atomic::Ordering::SeqCst);
@@ -495,7 +390,6 @@ impl Clone for RunContext {
             config: self.config.clone(),
             event_tx: self.event_tx.clone(),
             plugin_event_tx: self.plugin_event_tx.clone(),
-            approval_tx: self.approval_tx.clone(),
             reasoning_chain: self.reasoning_chain.clone(),
             tool_call_records: self.tool_call_records.clone(),
             final_content: self.final_content.clone(),
@@ -512,7 +406,7 @@ mod tests {
     use vol_llm_core::{MessageContent, MessageRole};
 
     fn create_test_context() -> RunContext {
-        let (ctx, _rx, _approval_rx) = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
             "session-1".to_string(),
@@ -617,7 +511,7 @@ mod tests {
             ..Default::default()
         };
 
-        let (ctx, _rx, _approval_rx) = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
             "session-1".to_string(),
@@ -666,7 +560,7 @@ mod tests {
         );
         session.add_message(history_msg).await.unwrap();
 
-        let (ctx, _rx, _approval_rx) = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "new input".to_string(),
             "session-1".to_string(),
@@ -705,7 +599,7 @@ mod tests {
             Arc::new(InMemoryEntryStore::new()),
         ));
 
-        let (ctx, _rx, _approval_rx) = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "analyze market volatility".to_string(),
             "session-1".to_string(),
@@ -753,7 +647,7 @@ mod tests {
         let history_msg = SessionMessage::new(session.id.clone(), Message::user("History"));
         session.add_message(history_msg).await.unwrap();
 
-        let (ctx, _rx, _approval_rx) = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "input".to_string(),
             "session-1".to_string(),
@@ -775,7 +669,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_record_reasoning_step() {
-        let (ctx, _rx, _approval_rx) = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
             "session-1".to_string(),
@@ -800,7 +694,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_record_tool_call() {
-        let (ctx, _rx, _approval_rx) = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test".to_string(),
             "session-1".to_string(),
@@ -827,7 +721,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_set_final_content() {
-        let (ctx, _rx, _approval_rx) = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test".to_string(),
             "session-1".to_string(),
@@ -847,7 +741,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_finalize() {
-        let (ctx, _rx, _approval_rx) = RunContext::new(
+        let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test".to_string(),
             "session-1".to_string(),
