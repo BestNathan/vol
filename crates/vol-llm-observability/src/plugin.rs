@@ -64,7 +64,15 @@ impl LoggerPlugin {
                 json!({ "reason": reason })
             }
             AgentStreamEvent::LLMCallStart { iteration, messages, .. } => {
-                json!({ "iteration": iteration, "message_count": messages.len() })
+                let last_n: Vec<_> = messages.iter().rev().take(5).rev().collect();
+                let msgs: Vec<Value> = last_n.iter().map(|m| {
+                    let content = m.content.as_ref().map(|c| {
+                        let s = c.as_str();
+                        if s.len() > 100 { format!("{}...", &s[..100]) } else { s.to_string() }
+                    }).unwrap_or_default();
+                    json!({ "role": m.role, "content": content })
+                }).collect();
+                json!({ "iteration": iteration, "messages": msgs })
             }
             AgentStreamEvent::LLMCallComplete { model, usage, .. } => {
                 json!({ "model": model, "usage": usage })

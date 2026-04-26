@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {
@@ -14,12 +14,16 @@ pub struct LogEntry {
 
 impl LogEntry {
     pub fn to_json_line(&self) -> String {
-        json!({
-            "timestamp": self.timestamp.to_rfc3339(),
-            "run_id": self.run_id,
-            "event": self.event,
-            "data": self.data,
-        }).to_string()
+        let mut map = serde_json::Map::new();
+        map.insert("timestamp".to_string(), serde_json::Value::String(self.timestamp.to_rfc3339()));
+        map.insert("event".to_string(), serde_json::Value::String(self.event.clone()));
+        map.insert("run_id".to_string(), serde_json::Value::String(self.run_id.clone()));
+        if let serde_json::Value::Object(data_map) = &self.data {
+            for (k, v) in data_map {
+                map.insert(k.clone(), v.clone());
+            }
+        }
+        serde_json::Value::Object(map).to_string()
     }
 
     pub fn format_event_summary(&self) -> String {
@@ -60,6 +64,7 @@ pub async fn append_log(path: &std::path::Path, line: &str) -> std::io::Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use tempfile::TempDir;
 
     #[test]
