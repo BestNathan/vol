@@ -1,7 +1,7 @@
 //! Plugin system integration tests.
 
 use vol_llm_agent::react::plugin::PluginId;
-use vol_llm_agent::react::PluginContext;
+use vol_llm_agent::react::RunContext;
 use vol_llm_agent::react::*;
 use vol_llm_agent::*;
 
@@ -26,12 +26,12 @@ async fn test_plugin_priority_ordering() {
         async fn intercept(
             &self,
             _event: &AgentStreamEvent,
-            _ctx: &PluginContext,
+            _ctx: &RunContext,
         ) -> PluginDecision {
             PluginDecision::Continue
         }
 
-        async fn listen(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) {
+        async fn listen(&self, _event: &AgentStreamEvent, _ctx: &RunContext) {
             // no-op
         }
     }

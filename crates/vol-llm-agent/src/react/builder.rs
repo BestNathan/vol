@@ -85,16 +85,6 @@ impl AgentBuilder {
         self
     }
 
-    pub fn with_observability_plugin(mut self) -> Self {
-        let log_base_path = self.config.working_dir.join("logs/agents");
-        let plugin = crate::observability::ObservabilityPlugin::new(
-            self.config.agent_id.clone(),
-            log_base_path,
-        );
-        self.config.plugin_registry.register(plugin);
-        self
-    }
-
     pub fn build(mut self) -> Result<ReActAgent, AgentBuilderError> {
         let llm = self.llm.ok_or(AgentBuilderError::MissingLlm)?;
 

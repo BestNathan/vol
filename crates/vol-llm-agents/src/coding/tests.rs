@@ -3,7 +3,7 @@
 use crate::coding::*;
 use std::sync::Arc;
 use vol_llm_core::Sandbox;
-use vol_llm_core::AgentPlugin;
+use vol_llm_agent::react::AgentPlugin;
 
 // Dummy LLM client for builder/agent construction tests
 use vol_llm_core::LLMClient;

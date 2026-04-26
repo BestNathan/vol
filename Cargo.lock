@@ -694,6 +694,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
 
 [[package]]
+name = "fd-lock"
+version = "4.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ce92ff622d6dadf7349484f42c93271a0d49b7cc4d466a936405bacbe10aa78"
+dependencies = [
+ "cfg-if",
+ "rustix",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4079,7 +4090,6 @@ dependencies = [
  "uuid",
  "vol-llm-context",
  "vol-llm-core",
- "vol-llm-observability",
  "vol-llm-provider",
  "vol-llm-skill",
  "vol-llm-tdengine",
@@ -4179,7 +4189,10 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "vol-llm-agent",
  "vol-llm-core",
+ "vol-llm-tool",
+ "vol-session",
 ]
 
 [[package]]
@@ -4223,12 +4236,14 @@ dependencies = [
  "async-trait",
  "chrono",
  "dashmap",
+ "fd-lock",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "uuid",
+ "vol-llm-tool",
 ]
 
 [[package]]

@@ -1,7 +1,6 @@
 //! Caching plugin with semantic cache support.
 
 use crate::react::plugin::*;
-use crate::react::plugin::PluginContext;
 use crate::{AgentResponse, AgentStreamEvent};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -119,12 +118,12 @@ impl AgentPlugin for CachingPlugin {
     }
 
     /// Interceptor hook - no-op for caching (cache logic handled externally)
-    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
+    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
         PluginDecision::Continue
     }
 
     /// Listener hook - logs caching events
-    async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
+    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
         match event {
             AgentStreamEvent::AgentStart { input, .. } => {
                 tracing::debug!(
@@ -147,11 +146,11 @@ impl AgentPlugin for CachingPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::react::{AgentConfig, PluginContext, RunContext};
+    use crate::react::{AgentConfig, RunContext};
     use vol_session::{InMemoryEntryStore, Session};
     use std::sync::Arc;
 
-    fn create_test_plugin_context() -> PluginContext {
+    fn create_test_run_context() -> RunContext {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
@@ -162,7 +161,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
         );
-        crate::react::plugin_context_from_run_ctx(&ctx)
+        ctx
     }
 
     #[tokio::test]
@@ -207,7 +206,7 @@ mod tests {
     #[tokio::test]
     async fn test_caching_plugin_intercept() {
         let plugin = CachingPlugin::new(300);
-        let ctx = create_test_plugin_context();
+        let ctx = create_test_run_context();
 
         let event = AgentStreamEvent::agent_start("test".to_string());
         match plugin.intercept(&event, &ctx).await {

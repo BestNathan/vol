@@ -2,13 +2,9 @@
 //!
 //! Run with: cargo test --test session_recording_test
 
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use vol_session::{InMemoryEntryStore, Session, SessionEntryStore, SessionRecorderPlugin};
-use vol_llm_core::{
-    AgentPlugin, AgentStreamEvent, PluginContext,
-};
+use vol_llm_core::AgentStreamEvent;
 
 /// Test SessionRecorderPlugin records events directly
 #[tokio::test]
@@ -20,26 +16,17 @@ async fn test_session_recorder_plugin_records_events() {
         entry_store.clone(),
     );
 
-    let plugin_ctx = PluginContext {
-        run_id: "test-run".to_string(),
-        user_input: "test".to_string(),
-        session_id: session.id.clone(),
-        all_tool_calls: Arc::new(RwLock::new(vec![])),
-        current_tool_calls: Arc::new(RwLock::new(vec![])),
-        data: Arc::new(RwLock::new(HashMap::new())),
-    };
-
     // Send AgentStart event (user input)
-    plugin.listen(&AgentStreamEvent::AgentStart {
+    plugin.record(&AgentStreamEvent::AgentStart {
         input: "User's first input".to_string(),
         timestamp: chrono::Utc::now(),
-    }, &plugin_ctx).await;
+    }, "test-run").await;
 
     // Send ThinkingComplete event
-    plugin.listen(&AgentStreamEvent::ThinkingComplete {
+    plugin.record(&AgentStreamEvent::ThinkingComplete {
         thinking: "Let me think...".to_string(),
         timestamp: chrono::Utc::now(),
-    }, &plugin_ctx).await;
+    }, "test-run").await;
 
     let entries = entry_store.get_entries(&session.id).await.unwrap();
     assert_eq!(entries.len(), 2, "Should have 2 recorded entries");

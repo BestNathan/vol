@@ -2,8 +2,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use vol_llm_agent::react::{AgentPlugin, PluginContext};
-use vol_llm_agent::react::plugin::PluginId;
+use vol_llm_agent::react::{AgentPlugin, PluginId, RunContext};
 use vol_llm_core::AgentStreamEvent;
 
 use crate::coding::observer::EventObserver;
@@ -35,7 +34,7 @@ impl AgentPlugin for ObserverPlugin {
         0 // Low priority value = high priority, runs first
     }
 
-    async fn listen(&self, event: &AgentStreamEvent, _ctx: &PluginContext) {
+    async fn listen(&self, event: &AgentStreamEvent, _ctx: &RunContext) {
         // Forward to observer, ignore errors to not block other plugins
         let _ = self.observer.on_event(event).await;
     }

@@ -2,10 +2,8 @@
 
 use std::path::PathBuf;
 
-use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::{json, Value};
-use vol_llm_core::plugin::{AgentPlugin, PluginContext, PluginDecision};
 use vol_llm_core::stream::AgentStreamEvent;
 
 use crate::run_log::logger::{LogEntry, append_log};
@@ -43,7 +41,7 @@ impl LoggerPlugin {
 
     /// Whether an event should be logged to the JSONL file.
     /// Skips high-frequency streaming delta events.
-    fn should_log(event: &AgentStreamEvent) -> bool {
+    pub fn should_log(event: &AgentStreamEvent) -> bool {
         !matches!(
             event,
             AgentStreamEvent::ThinkingDelta { .. }
@@ -52,7 +50,7 @@ impl LoggerPlugin {
         )
     }
 
-    fn create_log_entry(event: &AgentStreamEvent, run_id: &str) -> LogEntry {
+    pub fn create_log_entry(event: &AgentStreamEvent, run_id: &str) -> LogEntry {
         let data = match event {
             AgentStreamEvent::AgentStart { input, .. } => {
                 json!({ "input": input })
@@ -181,6 +179,9 @@ fn event_name(event: &AgentStreamEvent) -> String {
     }
 }
 
+use async_trait::async_trait;
+use vol_llm_agent::react::{AgentPlugin, PluginDecision, RunContext};
+
 #[async_trait]
 impl AgentPlugin for LoggerPlugin {
     fn id(&self) -> String {
@@ -191,11 +192,11 @@ impl AgentPlugin for LoggerPlugin {
         10
     }
 
-    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &PluginContext) -> PluginDecision {
+    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
         PluginDecision::Continue
     }
 
-    async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
+    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
         if !Self::should_log(event) {
             return;
         }
@@ -218,18 +219,22 @@ mod tests {
         LoggerPlugin::new(temp_dir.path().to_path_buf())
     }
 
-    fn create_test_context() -> PluginContext {
-        use std::collections::HashMap;
+    fn create_test_context() -> RunContext {
         use std::sync::Arc;
-        use tokio::sync::RwLock;
-        PluginContext {
-            run_id: "test-run".to_string(),
-            user_input: "test input".to_string(),
-            session_id: "session-1".to_string(),
-            all_tool_calls: Arc::new(RwLock::new(Vec::new())),
-            current_tool_calls: Arc::new(RwLock::new(Vec::new())),
-            data: Arc::new(RwLock::new(HashMap::new())),
-        }
+        use vol_llm_agent::react::AgentConfig;
+        use vol_llm_tool::ToolRegistry;
+        use vol_session::{InMemoryEntryStore, Session};
+        let (ctx, _rx) = RunContext::new(
+            "test-run".to_string(),
+            "test input".to_string(),
+            "session-1".to_string(),
+            Arc::new(Session::new(
+                Arc::new(InMemoryEntryStore::new()),
+            )),
+            Arc::new(ToolRegistry::new()),
+            AgentConfig::default(),
+        );
+        ctx
     }
 
     #[test]

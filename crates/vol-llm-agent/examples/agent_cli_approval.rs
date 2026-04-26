@@ -287,7 +287,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             请使用中文回复。"
                 .to_string(),
         )
-        .with_observability_plugin()
         .build()?;
 
     // Example query that will trigger tool calls

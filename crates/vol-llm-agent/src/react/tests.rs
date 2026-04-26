@@ -64,8 +64,8 @@ async fn test_build_with_plugin() {
     impl plugin::AgentPlugin for DummyPlugin {
         fn id(&self) -> plugin::PluginId { "dummy".to_string() }
         fn priority(&self) -> u32 { 50 }
-        async fn intercept(&self, _: &AgentStreamEvent, _: &PluginContext) -> plugin::PluginDecision { plugin::PluginDecision::Continue }
-        async fn listen(&self, _: &AgentStreamEvent, _: &PluginContext) {}
+        async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision { plugin::PluginDecision::Continue }
+        async fn listen(&self, _: &AgentStreamEvent, _: &RunContext) {}
     }
 
     let llm = Arc::new(DummyLlm);
@@ -251,26 +251,28 @@ async fn test_run_interceptor_loop_continue_decision() {
     impl plugin::AgentPlugin for ContinuePlugin {
         fn id(&self) -> plugin::PluginId { "continue".to_string() }
         fn priority(&self) -> u32 { 10 }
-        async fn intercept(&self, _: &AgentStreamEvent, _: &PluginContext) -> plugin::PluginDecision {
+        async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision {
             plugin::PluginDecision::Continue
         }
-        async fn listen(&self, _: &AgentStreamEvent, _: &PluginContext) {}
+        async fn listen(&self, _: &AgentStreamEvent, _: &RunContext) {}
     }
 
     let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
     let (event_tx, _) = tokio::sync::broadcast::channel(10);
-    let plugin_ctx = PluginContext {
-        run_id: "test".to_string(),
-        user_input: "test".to_string(),
-        session_id: "test".to_string(),
-        all_tool_calls: Arc::new(tokio::sync::RwLock::new(vec![])),
-        current_tool_calls: Arc::new(tokio::sync::RwLock::new(vec![])),
-        data: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
-    };
+    let (run_ctx, _rx) = RunContext::new(
+        "test".to_string(),
+        "test".to_string(),
+        "test".to_string(),
+        Arc::new(vol_session::Session::new(
+            Arc::new(vol_session::InMemoryEntryStore::new()),
+        )),
+        Arc::new(vol_llm_tool::ToolRegistry::new()),
+        AgentConfig::default(),
+    );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(ContinuePlugin)];
 
-    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx, plugin_ctx));
+    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx, run_ctx));
 
     // Send an intercept request
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
@@ -294,26 +296,28 @@ async fn test_run_interceptor_loop_skip_decision() {
     impl plugin::AgentPlugin for SkipPlugin {
         fn id(&self) -> plugin::PluginId { "skip".to_string() }
         fn priority(&self) -> u32 { 10 }
-        async fn intercept(&self, _: &AgentStreamEvent, _: &PluginContext) -> plugin::PluginDecision {
+        async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision {
             plugin::PluginDecision::Skip
         }
-        async fn listen(&self, _: &AgentStreamEvent, _: &PluginContext) {}
+        async fn listen(&self, _: &AgentStreamEvent, _: &RunContext) {}
     }
 
     let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
     let (event_tx, _) = tokio::sync::broadcast::channel(10);
-    let plugin_ctx = PluginContext {
-        run_id: "test".to_string(),
-        user_input: "test".to_string(),
-        session_id: "test".to_string(),
-        all_tool_calls: Arc::new(tokio::sync::RwLock::new(vec![])),
-        current_tool_calls: Arc::new(tokio::sync::RwLock::new(vec![])),
-        data: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
-    };
+    let (run_ctx, _rx) = RunContext::new(
+        "test".to_string(),
+        "test".to_string(),
+        "test".to_string(),
+        Arc::new(vol_session::Session::new(
+            Arc::new(vol_session::InMemoryEntryStore::new()),
+        )),
+        Arc::new(vol_llm_tool::ToolRegistry::new()),
+        AgentConfig::default(),
+    );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(SkipPlugin)];
 
-    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx.clone(), plugin_ctx));
+    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx.clone(), run_ctx));
 
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
     plugin_tx.send(PluginRequest::Intercept {
@@ -332,18 +336,20 @@ async fn test_run_interceptor_loop_skip_decision() {
 async fn test_run_interceptor_loop_emit_request() {
     let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
     let (event_tx, mut event_rx) = tokio::sync::broadcast::channel(10);
-    let plugin_ctx = PluginContext {
-        run_id: "test".to_string(),
-        user_input: "test".to_string(),
-        session_id: "test".to_string(),
-        all_tool_calls: Arc::new(tokio::sync::RwLock::new(vec![])),
-        current_tool_calls: Arc::new(tokio::sync::RwLock::new(vec![])),
-        data: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
-    };
+    let (run_ctx, _rx) = RunContext::new(
+        "test".to_string(),
+        "test".to_string(),
+        "test".to_string(),
+        Arc::new(vol_session::Session::new(
+            Arc::new(vol_session::InMemoryEntryStore::new()),
+        )),
+        Arc::new(vol_llm_tool::ToolRegistry::new()),
+        AgentConfig::default(),
+    );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![];
 
-    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx, plugin_ctx));
+    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx, run_ctx));
 
     // Send an emit request
     plugin_tx.send(PluginRequest::Emit {

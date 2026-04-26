@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use async_trait::async_trait;
 use vol_llm_agent::react::{
     AgentBuilder, AgentError, AgentStreamEvent,
-    plugin::{AgentPlugin, PluginContext, PluginDecision, PluginId},
+    plugin::{AgentPlugin, RunContext, PluginDecision, PluginId},
 };
 use vol_llm_core::{
     LLMClient, LLMProvider, ConversationRequest, ConversationResponse,
@@ -134,10 +134,10 @@ async fn test_agent_run_multiple_iterations() {
     impl AgentPlugin for CountingPlugin {
         fn id(&self) -> PluginId { "counter".to_string() }
         fn priority(&self) -> u32 { 100 }
-        async fn intercept(&self, _: &AgentStreamEvent, _: &PluginContext) -> PluginDecision {
+        async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> PluginDecision {
             PluginDecision::Continue
         }
-        async fn listen(&self, event: &AgentStreamEvent, _: &PluginContext) {
+        async fn listen(&self, event: &AgentStreamEvent, _: &RunContext) {
             if matches!(event, AgentStreamEvent::ToolCallBegin { .. }) {
                 self.tool_count.fetch_add(1, Ordering::SeqCst);
             }
@@ -216,7 +216,7 @@ async fn test_agent_run_llm_error_propagates() {
 
 #[tokio::test]
 async fn test_agent_run_session_recording() {
-    use vol_session::{InMemoryEntryStore, Session, SessionEntryStore, SessionRecorderPlugin};
+    use vol_session::{InMemoryEntryStore, Session, SessionEntryStore};
 
     let mock = MockLlmClient::new();
     mock.set_stream_events(vec![
@@ -237,7 +237,6 @@ async fn test_agent_run_session_recording() {
         .with_agent_id(agent_id.to_string())
         .with_working_dir(tmp_dir.path().to_path_buf())
         .with_session(session.clone())
-        .with_plugin(SessionRecorderPlugin::new(session.clone(), entry_store.clone()))
         .build()
         .unwrap();
 
@@ -264,10 +263,10 @@ struct EventCollectorPlugin {
 impl AgentPlugin for EventCollectorPlugin {
     fn id(&self) -> PluginId { "collector".to_string() }
     fn priority(&self) -> u32 { 100 }
-    async fn intercept(&self, _: &AgentStreamEvent, _: &PluginContext) -> PluginDecision {
+    async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> PluginDecision {
         PluginDecision::Continue
     }
-    async fn listen(&self, event: &AgentStreamEvent, _: &PluginContext) {
+    async fn listen(&self, event: &AgentStreamEvent, _: &RunContext) {
         let event_name = match event {
             AgentStreamEvent::AgentStart { .. } => "AgentStart",
             AgentStreamEvent::LLMCallStart { .. } => "LLMCallStart",
@@ -406,14 +405,14 @@ struct AbortPlugin;
 impl AgentPlugin for AbortPlugin {
     fn id(&self) -> PluginId { "aborter".to_string() }
     fn priority(&self) -> u32 { 1 } // High priority (lower number = earlier in sorted order)
-    async fn intercept(&self, event: &AgentStreamEvent, _: &PluginContext) -> PluginDecision {
+    async fn intercept(&self, event: &AgentStreamEvent, _: &RunContext) -> PluginDecision {
         if matches!(event, AgentStreamEvent::AgentStart { .. }) {
             PluginDecision::Abort("Plugin vetoed".to_string())
         } else {
             PluginDecision::Continue
         }
     }
-    async fn listen(&self, _: &AgentStreamEvent, _: &PluginContext) {}
+    async fn listen(&self, _: &AgentStreamEvent, _: &RunContext) {}
 }
 
 #[tokio::test]

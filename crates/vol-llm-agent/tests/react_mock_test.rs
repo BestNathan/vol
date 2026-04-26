@@ -7,9 +7,9 @@
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision};
-use vol_llm_agent::react::PluginContext;
-use vol_llm_agent::{AgentStreamEvent, ReActAgent};
+use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision, RunContext};
+use vol_llm_agent::AgentStreamEvent;
+use vol_llm_agent::ReActAgent;
 use vol_llm_core::{ConversationRequest, ConversationResponse, LLMClient, LLMProvider};
 use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
 
@@ -101,7 +101,7 @@ impl LLMClient for SimpleMock {
 #[tokio::test]
 async fn test_agent_executes_full_react_cycle() {
     // Track tool calls via a counting plugin
-    use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision};
+    use vol_llm_agent::ReActAgent;
 
     struct ToolCallCounter {
         count: Arc<AtomicUsize>,
@@ -128,12 +128,12 @@ async fn test_agent_executes_full_react_cycle() {
         async fn intercept(
             &self,
             _event: &AgentStreamEvent,
-            _ctx: &PluginContext,
+            _ctx: &RunContext,
         ) -> PluginDecision {
             PluginDecision::Continue
         }
 
-        async fn listen(&self, event: &AgentStreamEvent, _ctx: &PluginContext) {
+        async fn listen(&self, event: &AgentStreamEvent, _ctx: &RunContext) {
             if let AgentStreamEvent::ToolCallBegin { .. } = event {
                 self.count.fetch_add(1, Ordering::SeqCst);
             }

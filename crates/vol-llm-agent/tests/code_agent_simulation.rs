@@ -8,8 +8,7 @@ use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision};
-use vol_llm_agent::react::PluginContext;
+use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision, RunContext};
 use vol_llm_agent::{AgentStreamEvent, ReActAgent};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMProvider, Message,
@@ -267,12 +266,12 @@ async fn test_code_agent_market_data_query() {
         async fn intercept(
             &self,
             _event: &AgentStreamEvent,
-            _ctx: &PluginContext,
+            _ctx: &RunContext,
         ) -> PluginDecision {
             PluginDecision::Continue
         }
 
-        async fn listen(&self, event: &AgentStreamEvent, _ctx: &PluginContext) {
+        async fn listen(&self, event: &AgentStreamEvent, _ctx: &RunContext) {
             if let AgentStreamEvent::ToolCallComplete { tool_name, .. } = event {
                 let mut calls = self.calls.lock().await;
                 calls.push(tool_name.clone());

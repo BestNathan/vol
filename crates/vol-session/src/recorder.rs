@@ -1,11 +1,14 @@
-//! SessionRecorderPlugin — records agent events to session via AgentPlugin::listen().
+//! SessionRecorderPlugin — records agent events to session.
 //!
 //! This is a standalone plugin provided for future external registration.
 //! Not registered by default in agent.rs or CodingAgent.
+//!
+//! Note: To use as an AgentPlugin, wrap it and implement AgentPlugin in your
+//! application crate (e.g. vol-llm-agent) which has access to the plugin trait.
 
 use std::sync::Arc;
-use async_trait::async_trait;
-use vol_llm_core::{AgentPlugin, AgentStreamEvent, PluginContext};
+
+use vol_llm_core::AgentStreamEvent;
 
 use crate::entry::{SessionEntry, RUN_ID_KEY};
 use crate::{Session, SessionEntryStore, SessionMessage};
@@ -116,17 +119,10 @@ impl SessionRecorderPlugin {
     }
 }
 
-#[async_trait]
-impl AgentPlugin for SessionRecorderPlugin {
-    fn id(&self) -> vol_llm_core::PluginId {
-        "session_recorder".to_string()
-    }
-
-    fn priority(&self) -> u32 {
-        0
-    }
-
-    async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
+impl SessionRecorderPlugin {
+    /// Record a single event to the session entry store.
+    /// Callers implementing AgentPlugin should invoke this from their listen() method.
+    pub async fn record(&self, event: &AgentStreamEvent, run_id: &str) {
         if !Self::should_record(event) {
             return;
         }
@@ -134,7 +130,7 @@ impl AgentPlugin for SessionRecorderPlugin {
         let Some(msg) = self.event_to_session_message(event) else {
             return;
         };
-        let msg = msg.with_metadata(RUN_ID_KEY, &ctx.run_id);
+        let msg = msg.with_metadata(RUN_ID_KEY, run_id);
         let entry = SessionEntry::from_message(msg);
 
         if let Err(e) = self.entry_store.save(entry).await {
@@ -148,42 +144,30 @@ mod tests {
     use super::*;
     use crate::InMemoryEntryStore;
     use crate::entry::{SessionEntryData, SessionEntryType};
-    use vol_llm_core::{AgentStreamEvent, PluginContext};
-    use std::collections::HashMap;
+    use vol_llm_core::AgentStreamEvent;
     use std::sync::Arc;
-    use tokio::sync::RwLock;
 
-    fn make_plugin() -> (SessionRecorderPlugin, PluginContext) {
+    fn make_plugin() -> SessionRecorderPlugin {
         let entry_store: Arc<dyn crate::SessionEntryStore> = Arc::new(InMemoryEntryStore::new());
         let session = Session::new(entry_store.clone());
-        let plugin = SessionRecorderPlugin::new(Arc::new(session), entry_store);
-
-        let ctx = PluginContext {
-            run_id: "test-run".to_string(),
-            user_input: "test".to_string(),
-            session_id: "test-session".to_string(),
-            all_tool_calls: Arc::new(RwLock::new(vec![])),
-            current_tool_calls: Arc::new(RwLock::new(vec![])),
-            data: Arc::new(RwLock::new(HashMap::new())),
-        };
-
-        (plugin, ctx)
+        SessionRecorderPlugin::new(Arc::new(session), entry_store)
     }
 
     #[tokio::test]
     async fn test_plugin_id() {
-        let (plugin, _) = make_plugin();
-        assert_eq!(plugin.id(), "session_recorder");
+        // SessionRecorderPlugin no longer implements AgentPlugin,
+        // so just verify the struct can be created
+        let _ = make_plugin();
     }
 
     #[tokio::test]
     async fn test_plugin_records_thinking_complete() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::ThinkingComplete {
             timestamp: chrono::Utc::now(),
             thinking: "Let me think...".to_string(),
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert_eq!(entries.len(), 1);
@@ -197,14 +181,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_records_tool_call_begin() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::ToolCallBegin {
             timestamp: chrono::Utc::now(),
             tool_call_id: "call_123".to_string(),
             tool_name: "get_weather".to_string(),
             arguments: r#"{"city": "Beijing"}"#.to_string(),
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert_eq!(entries.len(), 1);
@@ -219,7 +203,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_records_tool_call_complete() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::ToolCallComplete {
             timestamp: chrono::Utc::now(),
             tool_call_id: "call_123".to_string(),
@@ -227,7 +211,7 @@ mod tests {
             result: "25°C".to_string(),
             duration_ms: None,
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert_eq!(entries.len(), 1);
@@ -241,7 +225,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_records_tool_call_error() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::ToolCallError {
             timestamp: chrono::Utc::now(),
             tool_call_id: "call_123".to_string(),
@@ -249,7 +233,7 @@ mod tests {
             error: "command failed".to_string(),
             duration_ms: None,
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert_eq!(entries.len(), 1);
@@ -262,7 +246,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_records_tool_call_skipped() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::ToolCallSkipped {
             timestamp: chrono::Utc::now(),
             tool_call_id: "call_123".to_string(),
@@ -270,7 +254,7 @@ mod tests {
             reason: "User rejected".to_string(),
             duration_ms: None,
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert_eq!(entries.len(), 1);
@@ -283,12 +267,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_records_agent_start() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::AgentStart {
             timestamp: chrono::Utc::now(),
             input: "Hello".to_string(),
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert_eq!(entries.len(), 1);
@@ -301,14 +285,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_records_iteration_complete_with_final_answer() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::IterationComplete {
             timestamp: chrono::Utc::now(),
             iteration: 1,
             tool_calls: Vec::new(),
             final_answer: Some("The answer is 42".to_string()),
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert_eq!(entries.len(), 1);
@@ -321,12 +305,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_records_run_id_in_metadata() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::ThinkingComplete {
             timestamp: chrono::Utc::now(),
             thinking: "test".to_string(),
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         if let SessionEntryData::Message { message } = &entries[0].data {
@@ -341,11 +325,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_does_not_record_thinking_start() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::ThinkingStart {
             timestamp: chrono::Utc::now(),
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert!(entries.is_empty(), "ThinkingStart should not be recorded");
@@ -353,12 +337,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_does_not_record_thinking_delta() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::ThinkingDelta {
             timestamp: chrono::Utc::now(),
             delta: "test".to_string(),
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert!(entries.is_empty(), "ThinkingDelta should not be recorded");
@@ -366,13 +350,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_does_not_record_llm_call_start() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::LLMCallStart {
             timestamp: chrono::Utc::now(),
             iteration: 1,
             messages: vec![],
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert!(entries.is_empty(), "LLMCallStart should not be recorded");
@@ -380,11 +364,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_does_not_record_content_start() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::ContentStart {
             timestamp: chrono::Utc::now(),
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert!(entries.is_empty(), "ContentStart should not be recorded");
@@ -392,12 +376,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_does_not_record_content_delta() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::ContentDelta {
             timestamp: chrono::Utc::now(),
             delta: "test".to_string(),
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert!(entries.is_empty(), "ContentDelta should not be recorded");
@@ -405,13 +389,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_does_not_record_llm_call_complete() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::LLMCallComplete {
             timestamp: chrono::Utc::now(),
             model: "test".to_string(),
             usage: None,
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert!(entries.is_empty(), "LLMCallComplete should not be recorded");
@@ -419,12 +403,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_plugin_does_not_record_llm_call_error() {
-        let (plugin, ctx) = make_plugin();
+        let plugin = make_plugin();
         let event = AgentStreamEvent::LLMCallError {
             timestamp: chrono::Utc::now(),
             error: "test".to_string(),
         };
-        plugin.listen(&event, &ctx).await;
+        plugin.record(&event, "test-run").await;
 
         let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
         assert!(entries.is_empty(), "LLMCallError should not be recorded");

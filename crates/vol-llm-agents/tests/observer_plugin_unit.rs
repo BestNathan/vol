@@ -1,8 +1,8 @@
 //! Unit tests for ObserverPlugin
 
 use vol_llm_agents::coding::{ObserverPlugin, EventObserver, ObserverError};
-use vol_llm_core::{AgentStreamEvent, PluginContext};
-use vol_llm_agent::react::AgentPlugin;
+use vol_llm_agent::react::{AgentPlugin, RunContext};
+use vol_llm_core::AgentStreamEvent;
 use std::sync::Arc;
 
 fn create_test_context_builder() -> vol_llm_context::ContextBuilder {
@@ -48,8 +48,8 @@ async fn test_observer_plugin_forwards_events() {
         timestamp: chrono::Utc::now(),
     };
 
-    // Create minimal PluginContext
-    let ctx = create_test_plugin_context();
+    // Create minimal RunContext
+    let ctx = create_test_context();
 
     plugin.listen(&event, &ctx).await;
 
@@ -79,7 +79,7 @@ async fn test_observer_plugin_forwards_multiple_events() {
     let mock_observer = Arc::new(MockObserver::new());
     let plugin = ObserverPlugin::new(mock_observer.clone());
 
-    let ctx = create_test_plugin_context();
+    let ctx = create_test_context();
 
     // Send multiple events
     let events = vec![
@@ -115,8 +115,8 @@ async fn test_observer_plugin_forwards_multiple_events() {
     assert_eq!(recorded_events.len(), 6);
 }
 
-// Helper function to create test PluginContext
-fn create_test_plugin_context() -> vol_llm_agent::react::PluginContext {
+// Helper function to create test RunContext
+fn create_test_context() -> RunContext {
     use vol_llm_agent::react::{AgentConfig, PluginRegistry, RunContext};
     use vol_session::{InMemoryEntryStore, Session};
     use vol_llm_tool::ToolRegistry;
@@ -138,5 +138,5 @@ fn create_test_plugin_context() -> vol_llm_agent::react::PluginContext {
             ..Default::default()
         },
     );
-    vol_llm_agent::react::plugin_context_from_run_ctx(&ctx)
+    ctx
 }
