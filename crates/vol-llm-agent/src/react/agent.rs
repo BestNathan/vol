@@ -411,14 +411,17 @@ impl ReActAgent {
                                     success: false,
                                 }).await;
 
-                                let reason = format!("Tool execution failed: {}", e);
-                                run_ctx.emit(AgentStreamEvent::agent_aborted(reason)).await;
-                                run_ctx.set_error(format!("Tool execution failed: {}", e)).await;
+                                // Add error message to session — LLM sees it on next turn
+                                let error_content =
+                                    format!("Tool '{}' error: {}", call.name, e);
+                                if let Err(e) = run_ctx
+                                    .add_message(Message::tool(error_content, call.id.clone()))
+                                    .await
+                                {
+                                    return Err(crate::AgentError::from(e));
+                                }
 
-                                return Err(crate::AgentError::ToolExecution {
-                                    tool: call.name.clone(),
-                                    error: e.to_string(),
-                                });
+                                continue;
                             }
                         };
 
