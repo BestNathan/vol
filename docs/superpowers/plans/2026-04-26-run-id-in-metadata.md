@@ -1,21 +1,21 @@
-# Move run_id out of Session Entry — Implementation Plan
+# Move run_id into Session Message Metadata — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Remove `run_id` from session persistence types. Metadata lives only on `SessionMessage` (runtime-only, not persisted). `SessionEntry::new_message()` takes `SessionMessage` as its single parameter.
+**Goal:** Remove `run_id` from session types. `SessionEntryData::Message` wraps `SessionMessage` (which carries metadata). `SessionEntry::from_message()` takes `SessionMessage` by value.
 
-**Architecture:** `SessionMessage` keeps `metadata` for runtime extensibility. `SessionEntry` is a pure persistence wrapper — no metadata, no run_id. It takes `SessionMessage` and extracts the fields it needs. run_id is never persisted to JSONL.
+**Architecture:** `SessionMessage` owns `metadata` for extensibility and persistence. `SessionEntry` has no `run_id` or `metadata` — the message data variant IS `SessionMessage`, so metadata flows through serialization naturally. No backward compatibility for old JSONL.
 
 **Tech Stack:** Rust, serde, tokio, vol-session crate
 
 ---
 
-### Task 1: Update `SessionEntry` — remove `run_id`, take `SessionMessage`
+### Task 1: Update `SessionEntry` — remove `run_id`, `SessionEntryData::Message` wraps `SessionMessage`
 
 **Files:**
 - Modify: `crates/vol-session/src/entry.rs`
 
-- [ ] **Step 1: Rewrite `SessionEntry`**
+- [ ] **Step 1: Rewrite `entry.rs`**
 
 Full file content:
 
@@ -51,7 +51,7 @@ pub enum CheckpointReason {
 pub enum SessionEntryData {
     #[serde(rename = "message")]
     Message {
-        message: vol_llm_core::Message,
+        message: SessionMessage,
     },
     #[serde(rename = "checkpoint")]
     Checkpoint {
@@ -76,7 +76,6 @@ impl SessionEntryData {
 }
 
 /// Unified session entry — all content types stored in a single JSONL file.
-/// Pure persistence wrapper with no runtime metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionEntry {
     pub id: String,
@@ -89,16 +88,14 @@ pub struct SessionEntry {
 
 impl SessionEntry {
     /// Create a message entry from a SessionMessage.
-    pub fn from_message(msg: &SessionMessage) -> Self {
+    pub fn from_message(msg: SessionMessage) -> Self {
         Self {
             id: msg.id.clone(),
             session_id: msg.session_id.clone(),
             created_at: msg.created_at,
             parent_id: msg.parent_id.clone(),
             r#type: SessionEntryType::Message,
-            data: SessionEntryData::Message {
-                message: msg.message.clone(),
-            },
+            data: SessionEntryData::Message { message: msg },
         }
     }
 
@@ -135,27 +132,20 @@ impl SessionEntry {
             data: SessionEntryData::Summary { summary },
         }
     }
-
-    /// Extract the Message from this entry, if it is a Message type.
-    pub fn into_message(self) -> Option<vol_llm_core::Message> {
-        match self.data {
-            SessionEntryData::Message { message } => Some(message),
-            _ => None,
-        }
-    }
 }
 ```
 
 Key changes:
-- `run_id` field removed, no metadata added
-- `new_message()` replaced by `from_message(&SessionMessage)` — extracts fields from SessionMessage
+- `run_id` removed from `SessionEntry`
+- `SessionEntryData::Message` wraps `SessionMessage` (not `vol_llm_core::Message`)
+- `from_message()` takes `SessionMessage` by value
 - `RUN_ID_KEY` constant exported
-- No `HashMap` import needed on entry.rs
+- No `into_message()` — callers match on `SessionEntryData::Message { message }` directly
 
 - [ ] **Step 2: Verify compilation**
 
 Run: `cargo check -p vol-session`
-Expected: Fails at call sites still using `SessionEntry::new_message()` or referencing `.run_id`/`.metadata`.
+Expected: Fails at call sites still using `SessionEntry::new_message()` or referencing `.run_id`.
 
 - [ ] **Step 3: Commit**
 
@@ -171,7 +161,7 @@ git commit -m "refactor(vol-session): SessionEntry.from_message() takes SessionM
 **Files:**
 - Modify: `crates/vol-session/src/message.rs`
 
-- [ ] **Step 1: Rewrite `SessionMessage`**
+- [ ] **Step 1: Rewrite `message.rs`**
 
 Full file content:
 
@@ -181,36 +171,23 @@ Full file content:
 //! Wraps `vol_llm_core::Message` with session-related fields.
 
 use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 use vol_llm_core::Message;
 
 /// Session message wrapper
 ///
 /// Wraps `vol_llm_core::Message` with session-related fields.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SessionMessage {
-    /// Message unique ID (UUID)
     pub id: String,
-
-    /// Session ID this message belongs to
     pub session_id: String,
-
-    /// Core message body
     pub message: Message,
-
-    /// Parent message ID, supports tree conversation structure
-    /// None means root message (conversation start)
     pub parent_id: Option<String>,
-
-    /// Creation timestamp (Unix seconds)
     pub created_at: i64,
-
-    /// Metadata for extensible purposes
-    /// e.g., user_id, tags, etc. Runtime-only, not persisted to JSONL.
     pub metadata: HashMap<String, String>,
 }
 
 impl SessionMessage {
-    /// Create a new session message.
     pub fn new(session_id: String, message: Message) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
@@ -225,13 +202,11 @@ impl SessionMessage {
         }
     }
 
-    /// Set parent message ID
     pub fn with_parent_id(mut self, parent_id: String) -> Self {
         self.parent_id = Some(parent_id);
         self
     }
 
-    /// Add metadata
     pub fn with_metadata(mut self, key: &str, value: &str) -> Self {
         self.metadata.insert(key.to_string(), value.to_string());
         self
@@ -245,7 +220,6 @@ mod tests {
     #[test]
     fn test_session_message_creation() {
         let msg = SessionMessage::new("session-123".to_string(), Message::user("Hello"));
-
         assert_eq!(msg.session_id, "session-123");
         assert!(msg.parent_id.is_none());
         assert!(!msg.id.is_empty());
@@ -255,7 +229,6 @@ mod tests {
     fn test_session_message_with_parent() {
         let msg = SessionMessage::new("session-123".to_string(), Message::user("Reply"))
             .with_parent_id("msg-456".to_string());
-
         assert_eq!(msg.parent_id, Some("msg-456".to_string()));
     }
 
@@ -263,7 +236,6 @@ mod tests {
     fn test_session_message_metadata() {
         let msg = SessionMessage::new("session-123".to_string(), Message::user("Test"))
             .with_metadata("user_id", "user-1");
-
         assert_eq!(msg.metadata.get("user_id"), Some(&"user-1".to_string()));
     }
 }
@@ -272,7 +244,6 @@ mod tests {
 Key changes:
 - Removed `run_id: Option<String>` field
 - Removed `with_run_id()` builder
-- `with_metadata()` remains
 
 - [ ] **Step 2: Verify compilation**
 
@@ -287,17 +258,16 @@ git commit -m "refactor(vol-session): remove run_id field from SessionMessage"
 
 ---
 
-### Task 3: Update `FileSessionEntryStore` — remove `run_id` from JSONL
+### Task 3: Update `FileSessionEntryStore` — remove `run_id` from JSONL line
 
 **Files:**
 - Modify: `crates/vol-session/src/file_store.rs`
 
 - [ ] **Step 1: Update `SessionEntryLine` and serialization**
 
-Replace the struct:
+Replace the struct (remove `run_id`):
 
 ```rust
-/// JSONL line format for SessionEntry.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct SessionEntryLine {
     id: String,
@@ -309,7 +279,7 @@ struct SessionEntryLine {
 }
 ```
 
-Update `to_json`:
+Update `to_json` — remove `run_id` field:
 
 ```rust
 fn to_json(entry: &SessionEntry) -> Result<String> {
@@ -333,7 +303,7 @@ fn to_json(entry: &SessionEntry) -> Result<String> {
 }
 ```
 
-Update `from_json`:
+Update `from_json` — remove `run_id`:
 
 ```rust
 fn from_json(json: &str) -> Option<SessionEntry> {
@@ -376,30 +346,28 @@ git commit -m "refactor(vol-session): remove run_id from SessionEntryLine JSONL 
 
 - [ ] **Step 1: Update `add_message`**
 
-Replace:
-
 ```rust
 pub async fn add_message(&self, message: SessionMessage) -> Result<()> {
-    let entry = SessionEntry::from_message(&message);
+    let entry = SessionEntry::from_message(message);
     self.entry_store.save(entry).await
 }
 ```
 
+Note: `from_message` takes by value, so no `&` or `.clone()`.
+
 - [ ] **Step 2: Update `get_messages`**
 
-Replace the two `SessionMessage` construction blocks (Message and Summary arms):
+Message arm — just move the inner `SessionMessage` out:
 
 ```rust
 SessionEntryData::Message { message } => {
-    messages.push(SessionMessage {
-        id: entry.id,
-        session_id: entry.session_id,
-        message,
-        parent_id: entry.parent_id,
-        created_at: entry.created_at,
-        metadata: HashMap::new(),
-    });
+    messages.push(message);
 }
+```
+
+Summary arm — unchanged pattern, create SessionMessage manually:
+
+```rust
 SessionEntryData::Summary { summary } => {
     messages.push(SessionMessage {
         id: entry.id,
@@ -414,26 +382,26 @@ SessionEntryData::Summary { summary } => {
 
 - [ ] **Step 3: Update `compress`**
 
-Replace the compressed entry construction:
+Replace the inline entry construction with:
 
 ```rust
-let entry = SessionEntry {
-    id: msg.id.clone(),
-    session_id: self.id.clone(),
-    created_at: msg.created_at.max(checkpoint_ts + 1),
-    parent_id: msg.parent_id.clone(),
-    r#type: SessionEntryType::Message,
-    data: SessionEntryData::Message {
-        message: msg.message.clone(),
-    },
-};
+let entry = SessionEntry::from_message(msg);
 ```
 
-Note: no `metadata` field, no `run_id` field on `SessionEntry`.
+The for loop becomes:
+```rust
+for (i, msg) in compressed.into_iter().enumerate() {
+    let mut entry = SessionEntry::from_message(msg);
+    entry.created_at = checkpoint_ts + 1 + (i as i64);
+    if let Err(e) = self.entry_store.save(entry).await {
+        tracing::error!("Failed to write compressed message: {}", e);
+    }
+}
+```
 
 - [ ] **Step 4: Verify compilation and tests**
 
-Run: `cargo check -p vol-session && cargo test -p vol-session`
+Run: `cargo test -p vol-session`
 Expected: All tests pass.
 
 - [ ] **Step 5: Commit**
@@ -461,12 +429,12 @@ async fn record_event(&self, event: &AgentStreamEvent) -> Result<(), SessionErro
         None => return Ok(()),
     };
 
-    let entry = SessionEntry::from_message(&session_msg);
+    let entry = SessionEntry::from_message(session_msg);
     self.store.save(entry).await.map_err(SessionError::StoreError)
 }
 ```
 
-The run_id flows through `SessionMessage::with_metadata` → `SessionMessage::metadata`, but is NOT persisted because `SessionEntry::from_message` only copies persistence fields.
+run_id flows through `SessionMessage::with_metadata` → `metadata` → JSONL (since `SessionEntryData::Message` wraps the full `SessionMessage`).
 
 - [ ] **Step 2: Verify compilation and tests**
 
@@ -488,6 +456,7 @@ git commit -m "refactor(vol-session): SessionListener uses with_metadata for run
 - Modify: `crates/vol-session/tests/integration_test.rs`
 - Modify: `crates/vol-session/src/file_store.rs` (inline `entry_tests`)
 - Modify: `crates/vol-session/src/memory_store.rs` (inline `entry_tests`)
+- Modify: `crates/vol-session/src/lib.rs`
 
 - [ ] **Step 1: Fix integration tests**
 
@@ -495,11 +464,11 @@ All `SessionEntry::new_message("session", "run-1", Message::...)` calls become:
 
 ```rust
 SessionEntry::from_message(
-    &SessionMessage::new("session-1".to_string(), Message::user("Hello"))
+    SessionMessage::new("session-1".to_string(), Message::user("Hello"))
 )
 ```
 
-For `test_file_entry_store_mixed_types`, replace the summary struct construction (remove `run_id: None`):
+For `test_file_entry_store_mixed_types`, replace the summary struct (no `run_id` field):
 
 ```rust
 let summary = SessionEntry::new_summary("session-mixed".to_string(), "Session summary".to_string());
@@ -507,30 +476,34 @@ let summary = SessionEntry::new_summary("session-mixed".to_string(), "Session su
 
 - [ ] **Step 2: Fix file_store.rs inline tests**
 
-Replace all `SessionEntry::new_message("session", "run-1", Message::...)` with:
+Replace `SessionEntry::new_message("session", "run-1", Message::...)` with:
 
 ```rust
 SessionEntry::from_message(
-    &SessionMessage::new("test-session".to_string(), Message::user("hello"))
+    SessionMessage::new("test-session".to_string(), Message::user("hello"))
 )
 ```
 
-For tests that need explicit timestamps, set `created_at` on the entry after construction:
-
+Tests needing explicit timestamps:
 ```rust
 let mut entry = SessionEntry::from_message(
-    &SessionMessage::new("test-session".to_string(), Message::user("before"))
+    SessionMessage::new("test-session".to_string(), Message::user("before"))
 );
 entry.created_at = 1000;
 ```
 
 - [ ] **Step 3: Fix memory_store.rs inline tests**
 
-Same pattern — replace `SessionEntry::new_message(...)` with `SessionEntry::from_message(&SessionMessage::new(...))`. Set `created_at` on the entry when explicit timestamps are needed.
+Same pattern:
+```rust
+let entry = SessionEntry::from_message(
+    SessionMessage::new("test-session".to_string(), Message::user("Hello, World!"))
+);
+```
+
+Explicit timestamps on entry after construction.
 
 - [ ] **Step 4: Update lib.rs exports**
-
-Remove `SessionEntry` from direct constructor usage expectations. Add `RUN_ID_KEY` to exports:
 
 ```rust
 pub use entry::{CheckpointReason, RUN_ID_KEY, SessionEntry, SessionEntryData, SessionEntryType};
@@ -552,18 +525,15 @@ git commit -m "refactor(vol-session): update tests for SessionEntry::from_messag
 
 ### Task 7: Verify workspace-wide
 
-**Files:**
-- Search: `crates/`
-
 - [ ] **Step 1: Search for remaining `.run_id` references in vol-session**
 
 Run: `grep -rn "\.run_id\|run_id:" crates/vol-session/src/ crates/vol-session/tests/ --include="*.rs"`
 
-Expected: Only `listener.rs` struct field `run_id: String`, `RUN_ID_KEY` constant, and string literals like `"run-1"` in tests.
+Expected: Only `listener.rs` struct field `run_id: String`, `RUN_ID_KEY` constant, string literals in tests.
 
 - [ ] **Step 2: Search for `SessionEntry::new_message` callers**
 
-Run: `grep -rn "SessionEntry::new_message\|new_message(" crates/vol-session/ --include="*.rs"`
+Run: `grep -rn "SessionEntry::new_message" crates/vol-session/ --include="*.rs"`
 
 Expected: None — replaced by `SessionEntry::from_message`.
 
