@@ -83,10 +83,14 @@ impl ExecutableTool for ReadTool {
             ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
         })?;
 
-        // Resolve path through sandbox
-        let file_path = context.resolve_path(&params.file_path).map_err(|e| {
-            ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e))
-        })?;
+        // If absolute path, read directly; if relative, resolve through sandbox
+        let file_path = if std::path::Path::new(&params.file_path).is_absolute() {
+            std::path::PathBuf::from(&params.file_path)
+        } else {
+            context.resolve_path(&params.file_path).map_err(|e| {
+                ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e))
+            })?
+        };
 
         // Read file contents
         let content = match tokio::fs::read_to_string(&file_path).await {
