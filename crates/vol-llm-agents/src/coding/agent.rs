@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 use std::path::PathBuf;
+use vol_llm_skill::{SkillLoader, SkillInjector, SkillTool};
 use vol_llm_tool::{ToolRegistry, ToolConfig};
 use vol_llm_agent::{ReActAgent, AgentConfig};
 use vol_llm_context::ContextBuilder;
@@ -71,8 +72,14 @@ impl CodingAgent {
         let mut tool_registry = ToolRegistry::new();
         Self::register_coding_tools(&mut tool_registry, &config.tool_config);
 
-        // Create agent config - use plugin_registry from config
-        let skill_injector = vol_llm_skill::SkillInjector::from_workdir(&config.working_dir).await;
+        // Create shared SkillLoader for both injector and tool
+        let skill_loader = Arc::new(SkillLoader::new(Some(config.working_dir.clone())));
+        let _ = skill_loader.discover_all().await;
+
+        let skill_injector = SkillInjector::new(skill_loader.clone());
+        let skill_tool = SkillTool::new(skill_loader);
+        tool_registry.register(skill_tool);
+
         let context_builder = vol_llm_context::ContextBuilderBuilder::new(128_000)
             .add_contributor(Box::new(vol_llm_context::builtin::SimpleContributor::system(
                 "You are an expert coding assistant. Help users understand, modify, and improve their codebase.".to_string(),
