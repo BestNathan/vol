@@ -47,13 +47,13 @@ pub use hitl::{
     run_cli_approval_loop, spawn_custom_approval_handler, ApprovalChannel, ApprovalHandler,
     ApprovalTrigger, BoxedApprovalHandler, HitlConfig, TimeoutBehavior,
 };
-pub use plugin::{AgentPlugin, PluginContext, PluginDecision, PluginRegistry, PluginId};
+pub use plugin::{AgentPlugin, PluginDecision, PluginId, PluginRegistry};
 pub use plugin_stream::{
     create_shortcircuit_stream, create_skip_stream, run_interceptor_loop, spawn_listener_task,
 };
 pub use prompt::{default_system_prompt, SystemPromptBuilder};
 pub use response::{AgentError, AgentResponse};
-pub use run_context::{PluginRequest, RunContext, plugin_context_from_run_ctx};
+pub use run_context::{PluginRequest, RunContext};
 pub use hitl::{ApprovalRequest, ApprovalResponse};
 pub use state::{ReasoningStep, ToolCallRecord};
 pub use stream::{AgentStreamEvent, AgentStreamReceiver};
