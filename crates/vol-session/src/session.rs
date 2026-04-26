@@ -1,7 +1,5 @@
 //! Session management with entry-based persistence.
 
-use crate::compressor::MessageCompressor;
-use crate::compressors::PositionSampleCompressor;
 use crate::entry::{CheckpointReason, SessionEntry, SessionEntryData, SessionEntryType};
 use crate::message::SessionMessage;
 use crate::store::{Result, SessionEntryStore};
@@ -14,7 +12,6 @@ pub struct Session {
     pub id: String,
     pub created_at: i64,
     pub(crate) entry_store: Arc<dyn SessionEntryStore>,
-    compressor: Arc<dyn MessageCompressor>,
 }
 
 impl Session {
@@ -27,7 +24,6 @@ impl Session {
                 .unwrap()
                 .as_secs() as i64,
             entry_store,
-            compressor: Arc::new(PositionSampleCompressor::default()),
         }
     }
 
@@ -41,14 +37,7 @@ impl Session {
             id,
             created_at,
             entry_store,
-            compressor: Arc::new(PositionSampleCompressor::default()),
         })
-    }
-
-    /// Set the compression strategy.
-    pub fn with_compressor(mut self, compressor: Arc<dyn MessageCompressor>) -> Self {
-        self.compressor = compressor;
-        self
     }
 
     /// Add a message entry.
@@ -138,56 +127,6 @@ impl Session {
         Ok(messages)
     }
 
-    /// Compress the given messages and write checkpoint + summary + compressed entries.
-    pub async fn compress(&mut self, messages: Vec<SessionMessage>) {
-        if messages.is_empty() {
-            return;
-        }
-
-        // 1. Write checkpoint first (seal old messages) — use explicit timestamp
-        let checkpoint_ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64;
-        let mut cp_entry = SessionEntry::new_checkpoint(self.id.clone(), CheckpointReason::Compression, None);
-        cp_entry.created_at = checkpoint_ts;
-        if let Err(e) = self.entry_store.save(cp_entry).await {
-            tracing::error!("Failed to write checkpoint before compression: {}", e);
-            return;
-        }
-
-        // 2. Compress input messages
-        let compressed = self.compressor.compress(messages).await;
-        if compressed.is_empty() {
-            return;
-        }
-
-        // 3. Build summary text from compressed messages
-        let summary = compressed
-            .iter()
-            .filter_map(|m| m.message.content.as_ref())
-            .map(|c| c.as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        // 4. Write summary entry (timestamp after checkpoint)
-        let mut summary_entry = SessionEntry::new_summary(self.id.clone(), summary);
-        summary_entry.created_at = checkpoint_ts + 1;
-        if let Err(e) = self.entry_store.save(summary_entry).await {
-            tracing::error!("Failed to write summary during compression: {}", e);
-            return;
-        }
-
-        // 5. Write compressed message entries (timestamp after checkpoint)
-        for (i, msg) in compressed.into_iter().enumerate() {
-            let mut entry = SessionEntry::from_message(msg);
-            entry.created_at = checkpoint_ts + 1 + (i as i64);
-            if let Err(e) = self.entry_store.save(entry).await {
-                tracing::error!("Failed to write compressed message: {}", e);
-            }
-        }
-    }
-
     /// Add metadata (no-op, kept for backward compatibility during transition).
     pub fn with_metadata(self, _key: &str, _value: &str) -> Self {
         self
@@ -200,7 +139,6 @@ impl Clone for Session {
             id: self.id.clone(),
             created_at: self.created_at,
             entry_store: self.entry_store.clone(),
-            compressor: self.compressor.clone(),
         }
     }
 }
@@ -243,75 +181,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_session_compress_flow() {
-        let entry_store = Arc::new(InMemoryEntryStore::new());
-
-        let mut session = Session::new(entry_store.clone());
-
-        // Add 10 messages
-        for i in 0..10 {
-            let msg = SessionMessage::new(
-                session.id.clone(),
-                Message::user(format!("msg-{}", i)),
-            );
-            session.add_message(msg).await.unwrap();
-        }
-
-        // Before compression: no checkpoint, get all 10
-        let messages = session.get_messages().await.unwrap();
-        assert_eq!(messages.len(), 10);
-
-        // Compress
-        session.compressor = Arc::new(PositionSampleCompressor::new(2, 3));
-        session.compress(messages).await;
-
-        // After compression:
-        // 1 checkpoint (not returned as message) + 1 summary + 6 compressed = 7 messages returned
-        let after = session.get_messages().await.unwrap();
-        assert_eq!(after.len(), 7);
-
-        // First should be the summary as a system message
-        assert_eq!(after[0].message.role, vol_llm_core::MessageRole::System);
-    }
-
-    #[tokio::test]
-    async fn test_session_compress_empty_messages() {
-        let entry_store = Arc::new(InMemoryEntryStore::new());
-
-        let mut session = Session::new(entry_store);
-
-        // Compress with empty input should be no-op
-        session.compress(vec![]).await;
-        let messages = session.get_messages().await.unwrap();
-        assert!(messages.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_session_resume_messages_includes_summary() {
-        let entry_store = Arc::new(InMemoryEntryStore::new());
-
-        let mut session = Session::new(entry_store.clone());
-
-        for i in 0..5 {
-            let msg = SessionMessage::new(
-                session.id.clone(),
-                Message::user(format!("msg-{}", i)),
-            );
-            session.add_message(msg).await.unwrap();
-        }
-
-        let messages = session.get_messages().await.unwrap();
-        session.compressor = Arc::new(PositionSampleCompressor::new(2, 3));
-        session.compress(messages).await;
-
-        // get_messages after compress: returns messages after checkpoint (summary + compressed)
-        let msgs = session.get_messages().await.unwrap();
-        assert!(!msgs.is_empty());
-        // First is summary as system message
-        assert_eq!(msgs[0].message.role, vol_llm_core::MessageRole::System);
-    }
-
-    #[tokio::test]
     async fn test_session_resume_constructor() {
         let entry_store = Arc::new(InMemoryEntryStore::new());
 
@@ -329,62 +198,5 @@ mod tests {
         // get_messages should return the messages after checkpoint (all, since no checkpoint)
         let messages = resumed.get_messages().await.unwrap();
         assert_eq!(messages.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn test_session_multiple_compressions() {
-        let entry_store = Arc::new(InMemoryEntryStore::new());
-
-        let mut session = Session::new(entry_store.clone());
-
-        // First batch: 6 messages with explicit timestamps
-        for i in 0..6 {
-            let mut msg = SessionMessage::new(
-                session.id.clone(),
-                Message::user(format!("batch1-{}", i)),
-            );
-            msg.created_at = 100 + i;
-            session.add_message(msg).await.unwrap();
-        }
-        let messages = session.get_messages().await.unwrap();
-        assert_eq!(messages.len(), 6);
-        session.compressor = Arc::new(PositionSampleCompressor::new(2, 3));
-        session.compress(messages).await;
-
-        // After first compress: summary + 4 compressed (keep_first=2, sample_every=3 on 6 msgs) = 5 messages
-        let after1 = session.get_messages().await.unwrap();
-        assert_eq!(after1.len(), 5);
-        assert_eq!(after1[0].message.role, vol_llm_core::MessageRole::System);
-
-        // Get the checkpoint timestamp to calculate new message timestamps after it
-        let checkpoint_ts = entry_store
-            .find_latest_checkpoint(&session.id)
-            .await
-            .unwrap()
-            .unwrap()
-            .created_at;
-
-        // Add 3 more messages with timestamps after the compression entries
-        for i in 0..3 {
-            let mut msg = SessionMessage::new(
-                session.id.clone(),
-                Message::user(format!("batch2-{}", i)),
-            );
-            msg.created_at = checkpoint_ts + 10 + i;
-            session.add_message(msg).await.unwrap();
-        }
-
-        // Now: summary + 4 compressed + 3 new = 8 messages
-        let messages2 = session.get_messages().await.unwrap();
-        assert_eq!(messages2.len(), 8);
-
-        // Compress again
-        session.compress(messages2).await;
-
-        // After second compress: new checkpoint + summary + compressed
-        let after2 = session.get_messages().await.unwrap();
-        // The previous summary+compressed (4) + new messages (3) = 7 total
-        // Compressor keeps 3 → summary + 3 compressed
-        assert!(!after2.is_empty());
     }
 }
