@@ -18,12 +18,10 @@ impl SkillInjector {
 
     /// Create a SkillInjector that loads skills from `{working_dir}/.agents/skills`.
     ///
-    /// Automatically discovers skills from the directory.
+    /// Skills are discovered lazily on first access.
     pub async fn from_workdir(working_dir: &std::path::Path) -> Self {
         let loader = Arc::new(crate::loader::SkillLoader::new(Some(working_dir.to_path_buf())));
-        let injector = Self::new(loader);
-        let _ = injector.discover_all().await;
-        injector
+        Self::new(loader)
     }
 
     /// Discover skills from the configured roots.
@@ -90,7 +88,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_format_metadata_empty() {
-        let loader = SkillLoader::new(None);
+        let loader = SkillLoader::new_empty();
         let injector = SkillInjector::new(Arc::new(loader));
         let output = injector.format_metadata().await;
         assert!(output.is_empty());
@@ -116,7 +114,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_skill_injector_contribute_empty() {
-        let loader = SkillLoader::new(None);
+        let loader = SkillLoader::new_empty();
         let injector = SkillInjector::new(Arc::new(loader));
         let blocks = injector.contribute().await.unwrap();
         assert!(blocks.is_empty());
@@ -124,7 +122,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_skill_injector_contribute_with_skills() {
-        let loader = SkillLoader::new(None);
+        let loader = SkillLoader::new_empty();
         let mut skill = SkillDef::new("rust-conventions", "# Rust")
             .with_description("Rust coding conventions")
             .with_triggers(vec!["rust".to_string()]);

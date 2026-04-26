@@ -72,9 +72,8 @@ impl CodingAgent {
         let mut tool_registry = ToolRegistry::new();
         Self::register_coding_tools(&mut tool_registry, &config.tool_config);
 
-        // Create shared SkillLoader for both injector and tool
+        // Create shared SkillLoader for both injector and tool (lazy discovery on first access)
         let skill_loader = Arc::new(SkillLoader::new(Some(config.working_dir.clone())));
-        let _ = skill_loader.discover_all().await;
 
         let skill_injector = SkillInjector::new(skill_loader.clone());
         let skill_tool = SkillTool::new(skill_loader);

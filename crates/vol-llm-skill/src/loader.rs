@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use tokio::sync::RwLock;
+use tokio::sync::{OnceCell, RwLock};
 
 use crate::def::{SkillDef, SkillMetadata, SkillScope};
 use crate::parser::{parse_skill_content, scan_skill_files};
@@ -13,6 +13,7 @@ pub struct SkillLoader {
     roots: Vec<(SkillScope, PathBuf)>,
     skills: Arc<RwLock<HashMap<String, Arc<SkillDef>>>>,
     metadata_cache: Arc<RwLock<Vec<SkillMetadata>>>,
+    discovered: OnceCell<()>,
 }
 
 impl SkillLoader {
@@ -22,6 +23,7 @@ impl SkillLoader {
             roots: Vec::new(),
             skills: Arc::new(RwLock::new(HashMap::new())),
             metadata_cache: Arc::new(RwLock::new(Vec::new())),
+            discovered: OnceCell::new(),
         }
     }
 
@@ -30,11 +32,14 @@ impl SkillLoader {
     /// Default roots:
     /// - User: `~/.agents/skills/`
     /// - Repo: `{working_dir}/.agents/skills/` (if working_dir provided)
+    ///
+    /// Discovery is lazy — skills are loaded on first access to `get()` or `list_metadata()`.
     pub fn new(working_dir: Option<PathBuf>) -> Self {
         let mut loader = Self {
             roots: Vec::new(),
             skills: Arc::new(RwLock::new(HashMap::new())),
             metadata_cache: Arc::new(RwLock::new(Vec::new())),
+            discovered: OnceCell::new(),
         };
 
         // User root
@@ -137,18 +142,30 @@ impl SkillLoader {
         Ok(())
     }
 
+    /// Ensure skills are discovered on first access.
+    async fn ensure_discovered(&self) {
+        self.discovered
+            .get_or_init(|| async {
+                let _ = self.discover_all().await;
+            })
+            .await;
+    }
+
     /// List metadata for progressive disclosure.
     pub async fn list_metadata(&self) -> Vec<SkillMetadata> {
+        self.ensure_discovered().await;
         self.metadata_cache.read().await.clone()
     }
 
     /// Get full skill by name.
     pub async fn get(&self, name: &str) -> Option<Arc<SkillDef>> {
+        self.ensure_discovered().await;
         self.skills.read().await.get(name).cloned()
     }
 
     /// Find skills whose triggers match the query (case-insensitive keyword match).
     pub async fn get_by_trigger(&self, query: &str) -> Vec<Arc<SkillDef>> {
+        self.ensure_discovered().await;
         let guard = self.skills.read().await;
         let query_lower = query.to_lowercase();
         guard
