@@ -49,8 +49,11 @@ pub async fn append_log(path: &std::path::Path, line: &str) -> std::io::Result<(
         .append(true)
         .open(path)
         .await?;
-    file.write_all(line.as_bytes()).await?;
-    file.write_all(b"\n").await?;
+    // Single write to avoid interleaving with concurrent append_log calls.
+    let mut buf = line.as_bytes().to_vec();
+    buf.push(b'\n');
+    file.write_all(&buf).await?;
+    file.flush().await?;
     Ok(())
 }
 
