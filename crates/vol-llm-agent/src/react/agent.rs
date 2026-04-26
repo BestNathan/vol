@@ -7,9 +7,11 @@ use super::{
 use crate::react::state::ToolCallRecord;
 use vol_session::Session;
 use std::io::IsTerminal;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
+use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
+use vol_llm_tool::ToolRegistry;
 use vol_llm_core::{
     ConversationRequest, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
     ToolChoice,
@@ -60,6 +62,52 @@ impl Default for AgentConfig {
             working_dir: PathBuf::from("."),
             unsafe_mode: false,
             approval_handler: None,
+        }
+    }
+}
+
+/// Holds a shared SkillLoader and provides helpers to register skills
+/// into the tool registry and context builder.
+pub struct SkillsConfig {
+    loader: Arc<SkillLoader>,
+}
+
+impl SkillsConfig {
+    /// Create from a working directory. The SkillLoader discovers skills
+    /// lazily on first access (no I/O during construction).
+    pub fn from_workdir(working_dir: &Path) -> Self {
+        Self {
+            loader: Arc::new(SkillLoader::new(Some(working_dir.to_path_buf()))),
+        }
+    }
+
+    /// Register the SkillTool into the tool registry.
+    /// Call this on a mutable reference before wrapping the registry in Arc.
+    pub fn register_tool(&self, registry: &mut ToolRegistry) {
+        registry.register(SkillTool::new(self.loader.clone()));
+    }
+
+    /// Build a new ContextBuilder from an existing one, adding the SkillInjector.
+    pub fn enhance_context_builder(
+        &self,
+        existing: &ContextBuilder,
+    ) -> ContextBuilder {
+        let injector = SkillInjector::new(self.loader.clone());
+        ContextBuilderBuilder::new(existing.token_budget().total)
+            .add_contributors_from(existing)
+            .add_contributor(Box::new(injector))
+            .build()
+    }
+}
+
+impl AgentConfig {
+    /// Enhance this config with skill injection in the context builder.
+    pub fn with_skills(self, working_dir: &Path) -> Self {
+        let skills = SkillsConfig::from_workdir(working_dir);
+        let new_context = skills.enhance_context_builder(&self.context_builder);
+        AgentConfig {
+            context_builder: new_context,
+            ..self
         }
     }
 }
@@ -185,6 +233,7 @@ impl ReActAgent {
                 config.working_dir.join("logs/agents").join(&config.agent_id),
             )),
             session.id.clone(),
+            run_id.clone(),
         );
         let session_listener_handle = tokio::spawn(async move {
             let _ = session_listener.run().await;
@@ -745,5 +794,28 @@ mod tests {
 
         assert_eq!(config.agent_id, "test_agent");
         assert_eq!(config.working_dir, PathBuf::from("."));
+    }
+
+    #[test]
+    fn test_skills_config_from_workdir() {
+        let skills = SkillsConfig::from_workdir(Path::new("/tmp/test-project"));
+        // Created successfully (no IO at creation time)
+    }
+
+    #[test]
+    fn test_skills_config_register_tool() {
+        let skills = SkillsConfig::from_workdir(Path::new("/tmp/test-project"));
+        let mut registry = ToolRegistry::new();
+        skills.register_tool(&mut registry);
+        let defs = registry.definitions();
+        assert!(defs.iter().any(|d| d.name == "skill"));
+    }
+
+    #[test]
+    fn test_skills_config_enhance_context_builder() {
+        let skills = SkillsConfig::from_workdir(Path::new("/tmp/test-project"));
+        let existing = ContextBuilderBuilder::new(128_000).build();
+        let enhanced = skills.enhance_context_builder(&existing);
+        drop(enhanced);
     }
 }
