@@ -68,7 +68,12 @@ impl LoggerPlugin {
                 let msgs: Vec<Value> = last_n.iter().map(|m| {
                     let content = m.content.as_ref().map(|c| {
                         let s = c.as_str();
-                        if s.len() > 100 { format!("{}...", &s[..100]) } else { s.to_string() }
+                        if s.chars().count() > 100 {
+                            let truncated: String = s.chars().take(100).collect();
+                            format!("{}...", truncated)
+                        } else {
+                            s.to_string()
+                        }
                     }).unwrap_or_default();
                     json!({ "role": m.role, "content": content })
                 }).collect();
