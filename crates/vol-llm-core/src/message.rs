@@ -82,6 +82,9 @@ pub struct Message {
     /// Optional name for the participant
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Thinking content (assistant messages only)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<String>,
 }
 
 impl Message {
@@ -93,6 +96,7 @@ impl Message {
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            thinking: None,
         }
     }
 
@@ -104,6 +108,7 @@ impl Message {
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            thinking: None,
         }
     }
 
@@ -115,6 +120,7 @@ impl Message {
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            thinking: None,
         }
     }
 
@@ -129,6 +135,7 @@ impl Message {
             tool_calls: Some(tool_calls),
             tool_call_id: None,
             name: None,
+            thinking: None,
         }
     }
 
@@ -140,6 +147,7 @@ impl Message {
             tool_calls: None,
             tool_call_id: Some(call_id),
             name: None,
+            thinking: None,
         }
     }
 }

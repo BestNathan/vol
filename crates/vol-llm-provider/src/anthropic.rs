@@ -75,6 +75,14 @@ impl AnthropicProvider {
                 MessageRole::Assistant => {
                     let mut content = Vec::new();
 
+                    // Thinking content (must come before text for Anthropic)
+                    if let Some(ref thinking) = msg.thinking {
+                        content.push(json!({
+                            "type": "thinking",
+                            "thinking": thinking,
+                        }));
+                    }
+
                     // Text content
                     if let Some(ref c) = msg.content {
                         content.push(json!({
