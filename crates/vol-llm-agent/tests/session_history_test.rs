@@ -83,14 +83,13 @@ async fn test_history_limit_applied() {
     // If we get here without error, agent completed successfully
 
     // Verify: session should have loaded only 10 history messages
-    // The agent should have added 1 message (assistant response)
-    // User input is added to runtime messages but NOT persisted to session
+    // The agent persists user input + 1 assistant response = 2 new messages
+    // 30 original + 1 user input + 1 assistant response = 32 total
     let history = session.get_messages().await.unwrap();
-    // 30 original messages + 1 assistant response = 31 total
     assert_eq!(
         history.len(),
-        31,
-        "Should have 31 total messages (30 original + 1 assistant response)"
+        32,
+        "Should have 32 total messages (30 original + 1 user input + 1 assistant response)"
     );
 }
 

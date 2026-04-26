@@ -142,6 +142,14 @@ impl ReActAgent {
             config.clone(),
         );
 
+        // Persist user message to session so it's available via SessionContributor.
+        // This replaces the old UserInputContributor which injected input directly
+        // into the context without persisting it.
+        let user_msg = Message::user(user_input.to_string());
+        run_ctx.add_message(user_msg).await.map_err(|e| {
+            crate::AgentError::SessionError(format!("Failed to persist user message: {}", e))
+        })?;
+
         // === Phase 1.5: Spawn approval handler for HITL ===
         if self.config.unsafe_mode {
             // Auto-approve all requests — no HITL intervention
@@ -292,7 +300,7 @@ impl ReActAgent {
                 let tools_defs = tools.definitions();
 
                 // Get messages from ctx (not local variable)
-                let messages = run_ctx.get_context(&user_input).await.map_err(|e| crate::AgentError::from(e))?;
+                let messages = run_ctx.get_context().await.map_err(|e| crate::AgentError::from(e))?;
 
                 // Emit LLMCallStart with full message history
                 run_ctx.emit(AgentStreamEvent::llm_call_start(iteration, messages.clone())).await;

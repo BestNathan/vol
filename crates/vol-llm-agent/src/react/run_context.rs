@@ -3,7 +3,7 @@
 //! Encapsulates all state and resources for a single `run()` invocation.
 
 use vol_session::{Session, SessionContributor, SessionMessage};
-use vol_llm_context::{ContextBuilderBuilder, builtin::UserInputContributor};
+use vol_llm_context::ContextBuilderBuilder;
 use super::plugin::PluginDecision;
 use super::state::{ReasoningStep, ToolCallRecord};
 use super::stream::AgentStreamEvent;
@@ -237,10 +237,9 @@ impl RunContext {
     /// Combines:
     /// 1. Base contributors from config (e.g., system prompt, project context)
     /// 2. SessionContributor (Middle zone) — historical messages from session
-    /// 3. UserInputContributor (Tail zone) — current user input
     ///
     /// Call this at the start of each iteration to get the current message list.
-    pub async fn get_context(&self, user_input: &str) -> Result<Vec<Message>, crate::AgentError> {
+    pub async fn get_context(&self) -> Result<Vec<Message>, crate::AgentError> {
         let context_builder = ContextBuilderBuilder::new(
             self.config.context_builder.token_budget().total,
         )
@@ -249,7 +248,6 @@ impl RunContext {
             Arc::new(tokio::sync::Mutex::new((*self.session).clone())),
             self.config.max_history_messages,
         )))
-        .add_contributor(Box::new(UserInputContributor::new(user_input.to_string())))
         .build();
 
         let output = context_builder.build().await.map_err(|e| {
@@ -629,7 +627,7 @@ mod tests {
             config,
         );
 
-        let messages = ctx.get_context("test input").await.unwrap();
+        let messages = ctx.get_context().await.unwrap();
 
         // First message should be system message
         assert!(messages.len() >= 1);
@@ -676,10 +674,10 @@ mod tests {
             config,
         );
 
-        let messages = ctx.get_context("new input").await.unwrap();
+        let messages = ctx.get_context().await.unwrap();
 
-        // Should have: system + history + user input = 3 messages
-        assert_eq!(messages.len(), 3);
+        // Should have: system + history = 2 messages (user input comes from session, not parameter)
+        assert_eq!(messages.len(), 2);
         assert_eq!(messages[1].role, MessageRole::User);
         assert!(messages[1]
             .content
@@ -690,7 +688,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_context_user_input() {
+    async fn test_get_context_user_message_from_session() {
         use vol_llm_context::builtin::SimpleContributor;
 
         let context_builder = ContextBuilderBuilder::new(128_000)
@@ -702,24 +700,30 @@ mod tests {
             ..Default::default()
         };
 
+        let session = Arc::new(Session::new(
+            Arc::new(InMemoryEntryStore::new()),
+        ));
+
         let (ctx, _rx, _approval_rx) = RunContext::new(
             "test-run".to_string(),
             "analyze market volatility".to_string(),
             "session-1".to_string(),
-            Arc::new(Session::new(
-                Arc::new(InMemoryEntryStore::new()),
-            )),
+            session.clone(),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
         );
 
-        let messages = ctx.get_context("analyze market volatility").await.unwrap();
+        // Persist user message to session (simulating what agent.rs does at run start)
+        ctx.add_message(Message::user("analyze market volatility")).await.unwrap();
 
-        // Last message should be user input
-        assert!(messages.len() >= 1);
-        let last_msg = messages.last().unwrap();
-        assert_eq!(last_msg.role, MessageRole::User);
-        assert!(last_msg
+        // get_context should now pick up the user message from the session
+        let messages = ctx.get_context().await.unwrap();
+
+        // Should have: system + user message from session = 2 messages
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, MessageRole::System);
+        assert_eq!(messages[1].role, MessageRole::User);
+        assert!(messages[1]
             .content
             .as_ref()
             .unwrap()
@@ -758,14 +762,14 @@ mod tests {
         );
 
         // Call get_context multiple times - each builds fresh
-        let messages_first = ctx.get_context("input").await.unwrap();
-        let messages_second = ctx.get_context("input").await.unwrap();
+        let messages_first = ctx.get_context().await.unwrap();
+        let messages_second = ctx.get_context().await.unwrap();
 
         // Same count since no new messages were added between calls
         assert_eq!(messages_first.len(), messages_second.len());
 
-        // Verify we have: system + history + user = 3 messages
-        assert_eq!(messages_second.len(), 3);
+        // Verify we have: system + history = 2 messages (user input from session, not parameter)
+        assert_eq!(messages_second.len(), 2);
     }
 
     #[tokio::test]
