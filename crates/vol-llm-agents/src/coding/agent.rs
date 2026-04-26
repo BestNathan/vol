@@ -37,48 +37,60 @@ pub struct CodingAgent {
 impl CodingAgent {
     /// Create a new CodingAgent from config.
     ///
-    /// The caller must provide an LLMClient via `config.llm`.
-    /// If `config.working_dir` is not ".", a LocalSandbox is automatically
-    /// created and passed to the ReActAgent.
+    /// If `config.llm` is None, an LLM is created from `ANTHROPIC_AUTH_TOKEN`.
+    /// If `config.working_dir` is not ".", a LocalSandbox is automatically created.
     pub async fn new(config: CodingAgentConfig) -> Result<Self, CodingAgentError> {
-        // Get LLM from config — injected (tests) or env-based (production)
-        let llm = match &config.llm {
-            Some(llm) => llm.clone(),
-            None => {
-                let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
-                    .map_err(|_| CodingAgentError::Config(
-                        "ANTHROPIC_AUTH_TOKEN not set and no LLM client provided".to_string()
-                    ))?;
-                let llm_config = LLMProviderConfig {
-                    id: config.llm_provider_id.clone(),
-                    config: vol_llm_provider::LLMConfig {
-                        provider: LLMProvider::Anthropic,
-                        model: "qwen3.5-plus".to_string(),
-                        api_key: vol_llm_provider::Secret::literal(api_key),
-                        base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
-                    },
-                };
-                let registry = LLMProviderRegistry::from_configs(&[llm_config])
-                    .map_err(|e| CodingAgentError::Config(format!("LLM provider error: {}", e)))?;
-                registry.get(&config.llm_provider_id)
-                    .ok_or_else(|| CodingAgentError::Config(
-                        format!("LLM provider '{}' not found", config.llm_provider_id)
-                    ))?
-                    .clone()
-            }
-        };
+        let llm = Self::resolve_llm(&config)?;
+        let (tool_registry, context_builder) = Self::build_tools_and_context(&config)?;
+        let sandbox = Self::init_sandbox(&config.working_dir)?;
 
-        // Create tool registry with coding tools
+        Ok(Self {
+            config,
+            llm,
+            tool_registry,
+            context_builder,
+            observer: None,
+            sandbox,
+        })
+    }
+
+    /// Resolve LLM from config or create from env.
+    fn resolve_llm(config: &CodingAgentConfig) -> Result<Arc<dyn vol_llm_core::LLMClient>, CodingAgentError> {
+        if let Some(llm) = &config.llm {
+            return Ok(llm.clone());
+        }
+
+        let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
+            .map_err(|_| CodingAgentError::Config(
+                "ANTHROPIC_AUTH_TOKEN not set and no LLM client provided".to_string()
+            ))?;
+        let llm_config = LLMProviderConfig {
+            id: config.llm_provider_id.clone(),
+            config: vol_llm_provider::LLMConfig {
+                provider: LLMProvider::Anthropic,
+                model: "qwen3.5-plus".to_string(),
+                api_key: vol_llm_provider::Secret::literal(api_key),
+                base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
+            },
+        };
+        let registry = LLMProviderRegistry::from_configs(&[llm_config])
+            .map_err(|e| CodingAgentError::Config(format!("LLM provider error: {}", e)))?;
+        registry.get(&config.llm_provider_id)
+            .ok_or_else(|| CodingAgentError::Config(
+                format!("LLM provider '{}' not found", config.llm_provider_id)
+            ))
+            .map(|llm| llm.clone())
+    }
+
+    /// Build tool registry and context builder together (they share the SkillLoader).
+    fn build_tools_and_context(config: &CodingAgentConfig) -> Result<(Arc<ToolRegistry>, ContextBuilder), CodingAgentError> {
         let mut tool_registry = ToolRegistry::new();
         Self::register_coding_tools(&mut tool_registry, &config.tool_config);
 
-        // Create shared SkillLoader for both injector and tool (lazy discovery on first access)
         let skill_loader = Arc::new(SkillLoader::new(Some(config.working_dir.clone())));
+        tool_registry.register(SkillTool::new(skill_loader.clone()));
 
-        let skill_injector = SkillInjector::new(skill_loader.clone());
-        let skill_tool = SkillTool::new(skill_loader);
-        tool_registry.register(skill_tool);
-
+        let skill_injector = SkillInjector::new(skill_loader);
         let context_builder = vol_llm_context::ContextBuilderBuilder::new(128_000)
             .add_contributor(Box::new(vol_llm_context::builtin::SimpleContributor::system(
                 "You are an expert coding assistant. Help users understand, modify, and improve their codebase.".to_string(),
@@ -86,26 +98,21 @@ impl CodingAgent {
             .add_contributor(Box::new(skill_injector))
             .build();
 
-        // Auto-init sandbox from working_dir if not current directory
-        let sandbox: Option<vol_llm_core::SandboxRef> = if config.working_dir != PathBuf::from(".") {
-            let sandbox = LocalSandbox::new(Some(config.working_dir.clone()));
-            sandbox.start().map_err(|e| CodingAgentError::Config(
-                format!("Failed to start sandbox at {:?}: {}", config.working_dir, e)
-            ))?;
-            Some(Arc::new(sandbox))
-        } else {
-            None
-        };
-
-        Ok(Self {
-            config,
-            llm,
-            tool_registry: Arc::new(tool_registry),
-            context_builder,
-            observer: None,
-            sandbox,
-        })
+        Ok((Arc::new(tool_registry), context_builder))
     }
+
+    /// Initialize sandbox if working_dir is not ".".
+    fn init_sandbox(working_dir: &PathBuf) -> Result<Option<vol_llm_core::SandboxRef>, CodingAgentError> {
+        if working_dir == &PathBuf::from(".") {
+            return Ok(None);
+        }
+        let sandbox = LocalSandbox::new(Some(working_dir.clone()));
+        sandbox.start().map_err(|e| CodingAgentError::Config(
+            format!("Failed to start sandbox at {:?}: {}", working_dir, e)
+        ))?;
+        Ok(Some(Arc::new(sandbox)))
+    }
+
 
     /// Register coding tools and web tools to the tool registry
     fn register_coding_tools(registry: &mut ToolRegistry, tool_config: &ToolConfig) {
