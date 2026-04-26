@@ -21,6 +21,7 @@ pub struct SessionListener {
     event_rx: broadcast::Receiver<TracedEvent<AgentStreamEvent>>,
     store: Arc<dyn SessionEntryStore>,
     session_id: String,
+    run_id: String,
 }
 
 impl SessionListener {
@@ -30,15 +31,18 @@ impl SessionListener {
     /// * `event_rx` - Broadcast receiver for agent stream events
     /// * `store` - Entry store for persisting recorded entries
     /// * `session_id` - Session ID to associate with recorded entries
+    /// * `run_id` - Run ID to associate with recorded entries
     pub fn new(
         event_rx: broadcast::Receiver<TracedEvent<AgentStreamEvent>>,
         store: Arc<dyn SessionEntryStore>,
         session_id: String,
+        run_id: String,
     ) -> Self {
         Self {
             event_rx,
             store,
             session_id,
+            run_id,
         }
     }
 
@@ -171,21 +175,11 @@ impl SessionListener {
     /// Convert an agent event to a session entry and save it.
     async fn record_event(&self, event: &AgentStreamEvent) -> Result<(), SessionError> {
         let session_msg = match self.event_to_message(event) {
-            Some(msg) => msg,
+            Some(msg) => msg.with_metadata(crate::entry::RUN_ID_KEY, &self.run_id),
             None => return Ok(()),
         };
 
-        let entry = SessionEntry {
-            id: session_msg.id,
-            session_id: session_msg.session_id,
-            created_at: session_msg.created_at,
-            parent_id: session_msg.parent_id,
-            r#type: SessionEntryType::Message,
-            data: SessionEntryData::Message {
-                message: session_msg.message,
-            },
-        };
-
+        let entry = SessionEntry::from_message(session_msg);
         self.store.save(entry).await.map_err(SessionError::StoreError)
     }
 
@@ -287,7 +281,7 @@ mod tests {
     async fn test_event_to_message_agent_start() {
         let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
-        let listener = SessionListener::new(rx, store, "session-1".to_string());
+        let listener = SessionListener::new(rx, store, "session-1".to_string(), "run-1".to_string());
 
         let event = AgentStreamEvent::AgentStart {
             timestamp: chrono::Utc::now(),
@@ -305,7 +299,7 @@ mod tests {
     async fn test_event_to_message_tool_call_begin() {
         let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
-        let listener = SessionListener::new(rx, store, "session-1".to_string());
+        let listener = SessionListener::new(rx, store, "session-1".to_string(), "run-1".to_string());
 
         let event = AgentStreamEvent::ToolCallBegin {
             timestamp: chrono::Utc::now(),
@@ -329,7 +323,7 @@ mod tests {
     async fn test_event_to_message_tool_call_complete() {
         let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
-        let listener = SessionListener::new(rx, store, "session-1".to_string());
+        let listener = SessionListener::new(rx, store, "session-1".to_string(), "run-1".to_string());
 
         let event = AgentStreamEvent::ToolCallComplete {
             timestamp: chrono::Utc::now(),
@@ -350,7 +344,7 @@ mod tests {
     async fn test_event_to_message_iteration_complete_with_final_answer() {
         let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
-        let listener = SessionListener::new(rx, store, "session-1".to_string());
+        let listener = SessionListener::new(rx, store, "session-1".to_string(), "run-1".to_string());
 
         let event = AgentStreamEvent::IterationComplete {
             timestamp: chrono::Utc::now(),
@@ -369,7 +363,7 @@ mod tests {
     async fn test_event_to_message_iteration_without_final_answer_returns_none() {
         let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
-        let listener = SessionListener::new(rx, store, "session-1".to_string());
+        let listener = SessionListener::new(rx, store, "session-1".to_string(), "run-1".to_string());
 
         let event = AgentStreamEvent::IterationComplete {
             timestamp: chrono::Utc::now(),
@@ -386,7 +380,7 @@ mod tests {
     async fn test_listener_run_records_events() {
         let store = Arc::new(InMemoryEntryStore::new());
         let (tx, rx) = broadcast::channel(100);
-        let mut listener = SessionListener::new(rx, store.clone(), "session-1".to_string());
+        let mut listener = SessionListener::new(rx, store.clone(), "session-1".to_string(), "run-1".to_string());
 
         // Send a ThinkingComplete event
         let event = TracedEvent::without_span(AgentStreamEvent::ThinkingComplete {
@@ -406,7 +400,7 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].r#type, SessionEntryType::Message);
         if let SessionEntryData::Message { message } = &entries[0].data {
-            assert_eq!(message.role, vol_llm_core::MessageRole::Assistant);
+            assert_eq!(message.message.role, vol_llm_core::MessageRole::Assistant);
         } else {
             panic!("Expected message entry");
         }
@@ -416,7 +410,7 @@ mod tests {
     async fn test_listener_run_records_multiple_events() {
         let store = Arc::new(InMemoryEntryStore::new());
         let (tx, rx) = broadcast::channel(100);
-        let mut listener = SessionListener::new(rx, store.clone(), "session-1".to_string());
+        let mut listener = SessionListener::new(rx, store.clone(), "session-1".to_string(), "run-1".to_string());
 
         // Send multiple events
         let events = vec![
@@ -456,20 +450,20 @@ mod tests {
 
         // First: thinking (Assistant)
         if let SessionEntryData::Message { message } = &entries[0].data {
-            assert_eq!(message.role, vol_llm_core::MessageRole::Assistant);
+            assert_eq!(message.message.role, vol_llm_core::MessageRole::Assistant);
         } else {
             panic!("Expected message entry");
         }
         // Second: tool result (Tool)
         if let SessionEntryData::Message { message } = &entries[1].data {
-            assert_eq!(message.role, vol_llm_core::MessageRole::Tool);
-            assert_eq!(message.tool_call_id, Some("call_1".to_string()));
+            assert_eq!(message.message.role, vol_llm_core::MessageRole::Tool);
+            assert_eq!(message.message.tool_call_id, Some("call_1".to_string()));
         } else {
             panic!("Expected message entry");
         }
         // Third: final answer (Assistant)
         if let SessionEntryData::Message { message } = &entries[2].data {
-            assert_eq!(message.role, vol_llm_core::MessageRole::Assistant);
+            assert_eq!(message.message.role, vol_llm_core::MessageRole::Assistant);
         } else {
             panic!("Expected message entry");
         }
@@ -584,7 +578,7 @@ mod tests {
     async fn test_event_to_message_content_complete() {
         let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
-        let listener = SessionListener::new(rx, store, "session-1".to_string());
+        let listener = SessionListener::new(rx, store, "session-1".to_string(), "run-1".to_string());
 
         let event = AgentStreamEvent::ContentComplete {
             timestamp: chrono::Utc::now(),
@@ -601,7 +595,7 @@ mod tests {
     async fn test_event_to_message_tool_call_error() {
         let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
-        let listener = SessionListener::new(rx, store, "session-1".to_string());
+        let listener = SessionListener::new(rx, store, "session-1".to_string(), "run-1".to_string());
 
         let event = AgentStreamEvent::ToolCallError {
             timestamp: chrono::Utc::now(),
@@ -621,7 +615,7 @@ mod tests {
     async fn test_event_to_message_tool_call_skipped() {
         let store = Arc::new(InMemoryEntryStore::new());
         let (_tx, rx) = broadcast::channel(100);
-        let listener = SessionListener::new(rx, store, "session-1".to_string());
+        let listener = SessionListener::new(rx, store, "session-1".to_string(), "run-1".to_string());
 
         let event = AgentStreamEvent::ToolCallSkipped {
             timestamp: chrono::Utc::now(),

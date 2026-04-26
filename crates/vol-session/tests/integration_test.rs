@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 use vol_llm_core::Message;
-use vol_session::{FileSessionEntryStore, SessionEntry, SessionEntryStore};
+use vol_session::{FileSessionEntryStore, SessionEntry, SessionEntryStore, SessionMessage};
 
 /// Test FileSessionEntryStore save and retrieve workflow
 #[tokio::test]
@@ -15,10 +15,15 @@ async fn test_file_entry_store_save_and_get_entries() {
         Arc::new(FileSessionEntryStore::new(tmp_dir.path()));
 
     // Save several entries
-    let entry1 = SessionEntry::new_message("session-1".to_string(), Message::user("Hello"));
-    let entry2 =
-        SessionEntry::new_message("session-1".to_string(), Message::assistant("Hi there!"));
-    let entry3 = SessionEntry::new_message("session-1".to_string(), Message::user("How are you?"));
+    let entry1 = SessionEntry::from_message(
+        SessionMessage::new("session-1".to_string(), Message::user("Hello"))
+    );
+    let entry2 = SessionEntry::from_message(
+        SessionMessage::new("session-1".to_string(), Message::assistant("Hi there!"))
+    );
+    let entry3 = SessionEntry::from_message(
+        SessionMessage::new("session-1".to_string(), Message::user("How are you?"))
+    );
 
     store.save(entry1).await.unwrap();
     store.save(entry2).await.unwrap();
@@ -52,8 +57,9 @@ async fn test_file_entry_store_checkpoint_and_resume() {
         Arc::new(FileSessionEntryStore::new(tmp_dir.path()));
 
     // Save entries with explicit timestamps
-    let mut before_cp =
-        SessionEntry::new_message("session-checkpoint".to_string(), Message::user("before"));
+    let mut before_cp = SessionEntry::from_message(
+        SessionMessage::new("session-checkpoint".to_string(), Message::user("before"))
+    );
     before_cp.created_at = 1000;
 
     let mut checkpoint = SessionEntry::new_checkpoint(
@@ -63,13 +69,13 @@ async fn test_file_entry_store_checkpoint_and_resume() {
     );
     checkpoint.created_at = 2000;
 
-    let mut after_cp1 =
-        SessionEntry::new_message("session-checkpoint".to_string(), Message::user("after 1"));
+    let mut after_cp1 = SessionEntry::from_message(
+        SessionMessage::new("session-checkpoint".to_string(), Message::user("after 1"))
+    );
     after_cp1.created_at = 3000;
 
-    let mut after_cp2 = SessionEntry::new_message(
-        "session-checkpoint".to_string(),
-        Message::assistant("response"),
+    let mut after_cp2 = SessionEntry::from_message(
+        SessionMessage::new("session-checkpoint".to_string(), Message::assistant("response"))
     );
     after_cp2.created_at = 4000;
 
@@ -96,16 +102,14 @@ async fn test_file_entry_store_delete_session() {
 
     // Save some entries
     store
-        .save(SessionEntry::new_message(
-            "session-delete".to_string(),
-            Message::user("test"),
+        .save(SessionEntry::from_message(
+            SessionMessage::new("session-delete".to_string(), Message::user("test")),
         ))
         .await
         .unwrap();
     store
-        .save(SessionEntry::new_message(
-            "session-delete".to_string(),
-            Message::assistant("reply"),
+        .save(SessionEntry::from_message(
+            SessionMessage::new("session-delete".to_string(), Message::assistant("reply")),
         ))
         .await
         .unwrap();
@@ -132,9 +136,8 @@ async fn test_file_entry_store_persistence() {
     {
         let store = FileSessionEntryStore::new(tmp_dir.path());
         store
-            .save(SessionEntry::new_message(
-                "session-persist".to_string(),
-                Message::user("persistent message"),
+            .save(SessionEntry::from_message(
+                SessionMessage::new("session-persist".to_string(), Message::user("persistent message")),
             ))
             .await
             .unwrap();
@@ -158,7 +161,9 @@ async fn test_file_entry_store_mixed_types() {
     let tmp_dir = tempfile::tempdir().unwrap();
     let store = FileSessionEntryStore::new(tmp_dir.path());
 
-    let mut msg = SessionEntry::new_message("session-mixed".to_string(), Message::user("hello"));
+    let mut msg = SessionEntry::from_message(
+        SessionMessage::new("session-mixed".to_string(), Message::user("hello"))
+    );
     msg.created_at = 100;
 
     let mut cp = SessionEntry::new_checkpoint(
@@ -168,17 +173,7 @@ async fn test_file_entry_store_mixed_types() {
     );
     cp.created_at = 200;
 
-    let summary_data = vol_session::SessionEntryData::Summary {
-        summary: "Session summary".to_string(),
-    };
-    let summary = SessionEntry {
-        id: "summary-1".to_string(),
-        session_id: "session-mixed".to_string(),
-        created_at: 300,
-        parent_id: None,
-        r#type: vol_session::SessionEntryType::Summary,
-        data: summary_data,
-    };
+    let summary = SessionEntry::new_summary("session-mixed".to_string(), "Session summary".to_string());
 
     store.save(msg).await.unwrap();
     store.save(cp).await.unwrap();

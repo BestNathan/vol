@@ -18,7 +18,7 @@ pub use session_contributor::SessionContributor;
 
 pub use compressor::MessageCompressor;
 pub use compressors::{PositionSampleCompressor, RoleFilterCompressor};
-pub use entry::{CheckpointReason, SessionEntry, SessionEntryData, SessionEntryType};
+pub use entry::{CheckpointReason, RUN_ID_KEY, SessionEntry, SessionEntryData, SessionEntryType};
 pub use error::{Result, SessionError};
 pub use file_store::{FileSessionEntryStore, SessionSummary};
 pub use listener::SessionListener;

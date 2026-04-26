@@ -245,6 +245,7 @@ impl crate::store::SessionEntryStore for InMemoryEntryStore {
 mod entry_tests {
     use super::*;
     use crate::entry::{SessionEntry, SessionEntryType};
+    use crate::message::SessionMessage;
     use crate::store::SessionEntryStore;
     use crate::CheckpointReason;
     use vol_llm_core::Message;
@@ -253,9 +254,8 @@ mod entry_tests {
     async fn test_in_memory_entry_store_save_and_get() {
         let store = InMemoryEntryStore::new();
 
-        let entry = SessionEntry::new_message(
-            "test-session".to_string(),
-            Message::user("Hello, World!"),
+        let entry = SessionEntry::from_message(
+            SessionMessage::new("test-session".to_string(), Message::user("Hello, World!")),
         );
 
         store.save(entry.clone()).await.unwrap();
@@ -269,9 +269,8 @@ mod entry_tests {
     async fn test_in_memory_entry_store_find_checkpoint() {
         let store = InMemoryEntryStore::new();
 
-        let mut msg1 = SessionEntry::new_message(
-            "test-session".to_string(),
-            Message::user("before"),
+        let mut msg1 = SessionEntry::from_message(
+            SessionMessage::new("test-session".to_string(), Message::user("before")),
         );
         msg1.created_at = 100;
 
@@ -282,9 +281,8 @@ mod entry_tests {
         );
         cp.created_at = 200;
 
-        let mut msg2 = SessionEntry::new_message(
-            "test-session".to_string(),
-            Message::user("after"),
+        let mut msg2 = SessionEntry::from_message(
+            SessionMessage::new("test-session".to_string(), Message::user("after")),
         );
         msg2.created_at = 300;
 
@@ -296,16 +294,15 @@ mod entry_tests {
         assert_eq!(cp.r#type, SessionEntryType::Checkpoint);
 
         let after = store.get_after("test-session", cp.created_at).await.unwrap();
-        assert_eq!(after.len(), 2); // checkpoint + after message with >=
+        assert_eq!(after.len(), 2);
     }
 
     #[tokio::test]
     async fn test_in_memory_entry_store_delete_session() {
         let store = InMemoryEntryStore::new();
 
-        store.save(SessionEntry::new_message(
-            "test-session".to_string(),
-            Message::user("test"),
+        store.save(SessionEntry::from_message(
+            SessionMessage::new("test-session".to_string(), Message::user("test")),
         )).await.unwrap();
 
         store.delete_session("test-session").await.unwrap();
@@ -317,14 +314,12 @@ mod entry_tests {
     async fn test_in_memory_entry_store_multiple_sessions() {
         let store = InMemoryEntryStore::new();
 
-        store.save(SessionEntry::new_message(
-            "session-a".to_string(),
-            Message::user("from A"),
+        store.save(SessionEntry::from_message(
+            SessionMessage::new("session-a".to_string(), Message::user("from A")),
         )).await.unwrap();
 
-        store.save(SessionEntry::new_message(
-            "session-b".to_string(),
-            Message::user("from B"),
+        store.save(SessionEntry::from_message(
+            SessionMessage::new("session-b".to_string(), Message::user("from B")),
         )).await.unwrap();
 
         let entries_a = store.get_entries("session-a").await.unwrap();

@@ -216,7 +216,8 @@ impl RunContext {
     pub async fn add_message(&self, message: Message) -> Result<(), crate::AgentError> {
         let session_msg = {
             let mut last_id = self.last_message_id.lock().unwrap();
-            let mut msg = SessionMessage::new(self.session.id.clone(), message);
+            let mut msg = SessionMessage::new(self.session.id.clone(), message)
+                .with_metadata(vol_session::RUN_ID_KEY, &self.run_id);
             if let Some(id) = last_id.as_ref() {
                 msg = msg.with_parent_id(id.clone());
             }

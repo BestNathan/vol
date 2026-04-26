@@ -2,6 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::message::SessionMessage;
+
+/// Metadata key for run_id.
+pub const RUN_ID_KEY: &str = "run_id";
+
 /// Entry type discriminator.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -24,7 +29,7 @@ pub enum CheckpointReason {
 pub enum SessionEntryData {
     #[serde(rename = "message")]
     Message {
-        message: vol_llm_core::Message,
+        message: SessionMessage,
     },
     #[serde(rename = "checkpoint")]
     Checkpoint {
@@ -60,18 +65,15 @@ pub struct SessionEntry {
 }
 
 impl SessionEntry {
-    /// Create a new message entry.
-    pub fn new_message(session_id: String, message: vol_llm_core::Message) -> Self {
+    /// Create a message entry from a SessionMessage.
+    pub fn from_message(msg: SessionMessage) -> Self {
         Self {
-            id: uuid::Uuid::new_v4().to_string(),
-            session_id,
-            created_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64,
-            parent_id: None,
+            id: msg.id.clone(),
+            session_id: msg.session_id.clone(),
+            created_at: msg.created_at,
+            parent_id: msg.parent_id.clone(),
             r#type: SessionEntryType::Message,
-            data: SessionEntryData::Message { message },
+            data: SessionEntryData::Message { message: msg },
         }
     }
 
@@ -106,14 +108,6 @@ impl SessionEntry {
             parent_id: None,
             r#type: SessionEntryType::Summary,
             data: SessionEntryData::Summary { summary },
-        }
-    }
-
-    /// Extract the Message from this entry, if it is a Message type.
-    pub fn into_message(self) -> Option<vol_llm_core::Message> {
-        match self.data {
-            SessionEntryData::Message { message } => Some(message),
-            _ => None,
         }
     }
 }

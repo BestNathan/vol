@@ -329,6 +329,7 @@ impl SessionEntryStore for FileSessionEntryStore {
 mod entry_tests {
     use super::*;
     use crate::entry::{SessionEntry, SessionEntryType};
+    use crate::message::SessionMessage;
     use crate::CheckpointReason;
     use tempfile::tempdir;
     use vol_llm_core::Message;
@@ -338,9 +339,8 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::new(temp_dir.path());
 
-        let entry = SessionEntry::new_message(
-            "test-session".to_string(),
-            Message::user("Hello, World!"),
+        let entry = SessionEntry::from_message(
+            SessionMessage::new("test-session".to_string(), Message::user("Hello, World!")),
         );
 
         store.save(entry.clone()).await.unwrap();
@@ -355,9 +355,8 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::new(temp_dir.path());
 
-        let mut before = SessionEntry::new_message(
-            "test-session".to_string(),
-            Message::user("before"),
+        let mut before = SessionEntry::from_message(
+            SessionMessage::new("test-session".to_string(), Message::user("before")),
         );
         before.created_at = 1000;
 
@@ -368,9 +367,8 @@ mod entry_tests {
         );
         checkpoint.created_at = 1001;
 
-        let mut after = SessionEntry::new_message(
-            "test-session".to_string(),
-            Message::user("after"),
+        let mut after = SessionEntry::from_message(
+            SessionMessage::new("test-session".to_string(), Message::user("after")),
         );
         after.created_at = 1002;
 
@@ -392,9 +390,8 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::new(temp_dir.path());
 
-        store.save(SessionEntry::new_message(
-            "test-session".to_string(),
-            Message::user("test"),
+        store.save(SessionEntry::from_message(
+            SessionMessage::new("test-session".to_string(), Message::user("test")),
         )).await.unwrap();
 
         store.delete_session("test-session").await.unwrap();
@@ -407,9 +404,8 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::new(temp_dir.path());
 
-        let entry1 = SessionEntry::new_message(
-            "test-session".to_string(),
-            Message::user("hello"),
+        let entry1 = SessionEntry::from_message(
+            SessionMessage::new("test-session".to_string(), Message::user("hello")),
         );
         store.save(entry1).await.unwrap();
 
@@ -420,9 +416,8 @@ mod entry_tests {
             .write_all(b"this is not valid json\n")
             .unwrap();
 
-        let entry2 = SessionEntry::new_message(
-            "test-session".to_string(),
-            Message::user("world"),
+        let entry2 = SessionEntry::from_message(
+            SessionMessage::new("test-session".to_string(), Message::user("world")),
         );
         store.save(entry2).await.unwrap();
 
@@ -436,14 +431,13 @@ mod entry_tests {
         let store = FileSessionEntryStore::new(temp_dir.path());
 
         for i in 0..5 {
-            let entry = SessionEntry::new_message(
-                "test-session".to_string(),
-                Message::user(format!("msg-{i}")),
+            let entry = SessionEntry::from_message(
+                SessionMessage::new("test-session".to_string(), Message::user(format!("msg-{i}"))),
             );
             store.save(entry).await.unwrap();
         }
 
-        let tail = store.read_from_tail("test-session", 256).unwrap();
+        let tail = store.read_from_tail("test-session", 1024).unwrap();
         assert!(!tail.is_empty());
         assert_eq!(tail.last().unwrap().data.entry_type(), SessionEntryType::Message);
     }
@@ -453,22 +447,23 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::new(temp_dir.path());
 
-        store.save(SessionEntry::new_message(
-            "session-a".to_string(),
-            Message::user("from A"),
+        store.save(SessionEntry::from_message(
+            SessionMessage::new("session-a".to_string(), Message::user("from A")),
         )).await.unwrap();
 
-        store.save(SessionEntry::new_message(
-            "session-b".to_string(),
-            Message::user("from B"),
+        store.save(SessionEntry::from_message(
+            SessionMessage::new("session-b".to_string(), Message::user("from B")),
         )).await.unwrap();
 
         let entries_a = store.get_entries("session-a").await.unwrap();
         assert_eq!(entries_a.len(), 1);
+        assert_eq!(entries_a[0].session_id, "session-a");
 
         let entries_b = store.get_entries("session-b").await.unwrap();
         assert_eq!(entries_b.len(), 1);
+        assert_eq!(entries_b[0].session_id, "session-b");
 
+        // Deleting A should not affect B
         store.delete_session("session-a").await.unwrap();
         assert_eq!(store.get_count("session-b").await.unwrap(), 1);
     }
@@ -478,10 +473,14 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::new(temp_dir.path());
 
-        let entry_a = SessionEntry::new_message("session-a".to_string(), Message::user("hello"));
+        let entry_a = SessionEntry::from_message(
+            SessionMessage::new("session-a".to_string(), Message::user("hello")),
+        );
         store.save(entry_a).await.unwrap();
 
-        let entry_b = SessionEntry::new_message("session-b".to_string(), Message::user("world"));
+        let entry_b = SessionEntry::from_message(
+            SessionMessage::new("session-b".to_string(), Message::user("world")),
+        );
         store.save(entry_b).await.unwrap();
 
         let summaries = store.list_sessions().unwrap();

@@ -53,16 +53,7 @@ impl Session {
 
     /// Add a message entry.
     pub async fn add_message(&self, message: SessionMessage) -> Result<()> {
-        let entry = SessionEntry {
-            id: message.id.clone(),
-            session_id: message.session_id.clone(),
-            created_at: message.created_at,
-            parent_id: message.parent_id.clone(),
-            r#type: SessionEntryType::Message,
-            data: SessionEntryData::Message {
-                message: message.message,
-            },
-        };
+        let entry = SessionEntry::from_message(message);
         self.entry_store.save(entry).await
     }
 
@@ -96,14 +87,7 @@ impl Session {
         for entry in entries {
             match entry.data {
                 SessionEntryData::Message { message } => {
-                    messages.push(SessionMessage {
-                        id: entry.id,
-                        session_id: entry.session_id,
-                        message,
-                        parent_id: entry.parent_id,
-                        created_at: entry.created_at,
-                        metadata: HashMap::new(),
-                    });
+                    messages.push(message);
                 }
                 SessionEntryData::Summary { summary } => {
                     messages.push(SessionMessage {
@@ -140,7 +124,7 @@ impl Session {
         for entry in entries {
             match entry.data {
                 SessionEntryData::Message { message } => {
-                    messages.push(message);
+                    messages.push(message.message);
                 }
                 SessionEntryData::Summary { summary } => {
                     messages.push(Message::system(summary));
@@ -195,17 +179,8 @@ impl Session {
         }
 
         // 5. Write compressed message entries (timestamp after checkpoint)
-        for (i, msg) in compressed.iter().enumerate() {
-            let mut entry = SessionEntry {
-                id: msg.id.clone(),
-                session_id: self.id.clone(),
-                created_at: msg.created_at.max(checkpoint_ts + 1),
-                parent_id: msg.parent_id.clone(),
-                r#type: SessionEntryType::Message,
-                data: SessionEntryData::Message {
-                    message: msg.message.clone(),
-                },
-            };
+        for (i, msg) in compressed.into_iter().enumerate() {
+            let mut entry = SessionEntry::from_message(msg);
             entry.created_at = checkpoint_ts + 1 + (i as i64);
             if let Err(e) = self.entry_store.save(entry).await {
                 tracing::error!("Failed to write compressed message: {}", e);
