@@ -6,7 +6,7 @@ use vol_llm_core::Message;
 use crate::compressor::MessageCompressor;
 use crate::compressors::PositionSampleCompressor;
 use crate::entry::{CheckpointReason, SessionEntry};
-use crate::Session;
+use crate::{Session, SessionMessage};
 
 /// Session contributor — retrieves historical messages from a session
 /// and supports compression to manage context size.
@@ -64,9 +64,11 @@ impl ContextContributor for SessionContributor {
 
     async fn compress(&mut self) {
         // 1. Get current messages from session
-        let messages = match self.session.lock().await.get_messages().await {
-            Ok(msgs) => msgs,
-            Err(_) => return,
+        let (session_id, messages) = {
+            let session = self.session.lock().await;
+            let id = session.id.clone();
+            let msgs = session.get_messages().await.unwrap_or_default();
+            (id, msgs)
         };
         if messages.is_empty() {
             return;
@@ -83,13 +85,15 @@ impl ContextContributor for SessionContributor {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64;
+
+        let session = self.session.lock().await;
         let mut cp_entry = SessionEntry::new_checkpoint(
-            self.session.lock().await.id.clone(),
+            session_id.clone(),
             CheckpointReason::Compression,
             None,
         );
         cp_entry.created_at = checkpoint_ts;
-        if let Err(e) = self.session.lock().await.entry_store.save(cp_entry).await {
+        if let Err(e) = session.entry_store.save(cp_entry).await {
             tracing::error!("Failed to write checkpoint before compression: {}", e);
             return;
         }
@@ -104,11 +108,11 @@ impl ContextContributor for SessionContributor {
 
         // 5. Write summary entry (timestamp after checkpoint)
         let mut summary_entry = SessionEntry::new_summary(
-            self.session.lock().await.id.clone(),
+            session_id.clone(),
             summary,
         );
         summary_entry.created_at = checkpoint_ts + 1;
-        if let Err(e) = self.session.lock().await.entry_store.save(summary_entry).await {
+        if let Err(e) = session.entry_store.save(summary_entry).await {
             tracing::error!("Failed to write summary during compression: {}", e);
             return;
         }
@@ -117,7 +121,7 @@ impl ContextContributor for SessionContributor {
         for (i, msg) in compressed.iter().enumerate() {
             let mut entry = SessionEntry::from_message(msg.clone());
             entry.created_at = checkpoint_ts + 1 + (i as i64);
-            if let Err(e) = self.session.lock().await.entry_store.save(entry).await {
+            if let Err(e) = session.entry_store.save(entry).await {
                 tracing::error!("Failed to write compressed message: {}", e);
             }
         }
@@ -204,6 +208,8 @@ mod tests {
         // After compression — fewer messages
         let blocks = contributor.contribute().await.unwrap();
         assert!(blocks[0].messages.len() < 10);
+        // First message should be the summary (system role)
+        assert_eq!(blocks[0].messages[0].role, vol_llm_core::MessageRole::System);
     }
 
     #[tokio::test]
