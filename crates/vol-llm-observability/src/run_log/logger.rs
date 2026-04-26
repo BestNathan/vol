@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {
@@ -15,15 +15,15 @@ pub struct LogEntry {
 impl LogEntry {
     pub fn to_json_line(&self) -> String {
         let mut map = serde_json::Map::new();
-        map.insert("timestamp".to_string(), serde_json::Value::String(self.timestamp.to_rfc3339()));
-        map.insert("event".to_string(), serde_json::Value::String(self.event.clone()));
-        map.insert("run_id".to_string(), serde_json::Value::String(self.run_id.clone()));
-        if let serde_json::Value::Object(data_map) = &self.data {
+        map.insert("timestamp".to_string(), json!(self.timestamp.to_rfc3339()));
+        map.insert("event".to_string(), json!(self.event));
+        map.insert("run_id".to_string(), json!(self.run_id));
+        if let Some(data_map) = self.data.as_object() {
             for (k, v) in data_map {
                 map.insert(k.clone(), v.clone());
             }
         }
-        serde_json::Value::Object(map).to_string()
+        json!(map).to_string()
     }
 
     pub fn format_event_summary(&self) -> String {

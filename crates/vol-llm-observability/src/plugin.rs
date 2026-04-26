@@ -72,7 +72,7 @@ impl LoggerPlugin {
                     }).unwrap_or_default();
                     json!({ "role": m.role, "content": content })
                 }).collect();
-                json!({ "iteration": iteration, "messages": msgs })
+                json!({ "iteration": iteration, "message_count": messages.len(), "messages": msgs })
             }
             AgentStreamEvent::LLMCallComplete { model, usage, .. } => {
                 json!({ "model": model, "usage": usage })
