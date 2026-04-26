@@ -2,7 +2,6 @@
 
 use super::{
     AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext,
-    plugin_context_from_run_ctx,
 };
 use crate::react::state::ToolCallRecord;
 use vol_session::Session;
@@ -202,10 +201,9 @@ impl ReActAgent {
         // Note: We create plugin_ctx and subscribe here to avoid cloning RunContext
         // (which would clone senders and prevent channel close)
         let listener_event_rx = run_ctx.event_tx.subscribe();
-        let plugin_ctx = plugin_context_from_run_ctx(&run_ctx);
         let listener_handle = spawn_listener_task(
             self.config.plugin_registry.plugins().to_vec(),
-            plugin_ctx,
+            run_ctx.clone(),
             listener_event_rx,
         );
 
@@ -213,13 +211,13 @@ impl ReActAgent {
         // When plugin_rx is closed (agent drops run_ctx), interceptor exits
         let interceptor_event_tx = run_ctx.event_tx.clone();
         let interceptor_plugins = self.config.plugin_registry.plugins().to_vec();
-        let interceptor_plugin_ctx = plugin_context_from_run_ctx(&run_ctx);
+        let interceptor_ctx = run_ctx.clone();
         let interceptor_handle = tokio::spawn(async move {
             run_interceptor_loop(
                 plugin_rx,
                 interceptor_plugins,
                 interceptor_event_tx,
-                interceptor_plugin_ctx,
+                interceptor_ctx,
             )
             .await;
         });
@@ -228,10 +226,7 @@ impl ReActAgent {
         let llm = self.llm.clone();
         let tools = self.tools.clone();
         let config = self.config.clone();
-        let _session_id = self.session.id.clone();
-        let _session = self.session.clone();
         let user_input = user_input.to_string();
-        let _run_id_clone = run_id.clone();
         let sandbox = self.sandbox.clone();
 
         let agent_task = tokio::spawn(async move {

@@ -13,23 +13,10 @@ use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use vol_llm_core::Message;
-use vol_llm_core::PluginContext;
 use vol_llm_core::ToolCall;
 use vol_llm_tool::ToolRegistry;
 use vol_tracing::TracedEvent;
 
-
-/// Create a PluginContext from a RunContext
-pub fn plugin_context_from_run_ctx(ctx: &RunContext) -> PluginContext {
-    PluginContext {
-        run_id: ctx.run_id.clone(),
-        user_input: ctx.user_input.clone(),
-        session_id: ctx.session_id.clone(),
-        all_tool_calls: ctx.all_tool_calls.clone(),
-        current_tool_calls: ctx.current_tool_calls.clone(),
-        data: ctx.data.clone(),
-    }
-}
 
 /// Request type for plugin event bus communication
 pub enum PluginRequest {
@@ -45,7 +32,7 @@ pub enum PluginRequest {
 
 /// RunContext encapsulates all state and resources for a single run() invocation.
 ///
-/// This replaces the old PluginContext with a more comprehensive context that includes:
+/// It provides:
 /// - Mutable state (tool calls, iteration count)
 /// - Resource references (session, tools, config)
 /// - Thread-safe access via Arc/RwLock for async operations

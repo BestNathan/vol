@@ -1,6 +1,6 @@
 //! Plugin interceptor and listener utilities.
 
-use super::plugin::{AgentPlugin, PluginContext, PluginDecision};
+use super::plugin::{AgentPlugin, PluginDecision};
 use super::run_context::{PluginRequest, RunContext};
 use super::{AgentError, AgentResponse, AgentStreamEvent, AgentStreamReceiver};
 use std::sync::Arc;
@@ -20,16 +20,9 @@ use vol_tracing::TracedEvent;
 /// 3. Listener sees `RecvError` (all senders dropped) → exits
 ///
 /// This ensures all pending `plugin.listen()` calls have time to complete.
-///
-/// # Sender Reference Counting
-///
-/// This function accepts a `PluginContext` which does NOT contain sender references.
-/// The broadcast subscription is created separately and passed in.
-/// This ensures the broadcast channel sender count remains at 2 (agent + interceptor)
-/// and drops to 0 when both drop their RunContext instances.
 pub fn spawn_listener_task(
     plugins: Vec<Arc<dyn AgentPlugin>>,
-    plugin_ctx: PluginContext,
+    ctx: RunContext,
     mut event_rx: broadcast::Receiver<TracedEvent<AgentStreamEvent>>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
@@ -39,10 +32,10 @@ pub fn spawn_listener_task(
             for plugin in &plugins {
                 let plugin = plugin.clone();
                 let event = event.clone();
-                let plugin_ctx = plugin_ctx.clone();
+                let ctx = ctx.clone();
 
                 tokio::spawn(async move {
-                    plugin.listen(&event, &plugin_ctx).await;
+                    plugin.listen(&event, &ctx).await;
                 });
             }
         }
@@ -58,17 +51,11 @@ pub fn spawn_listener_task(
 /// - For `Emit` requests: broadcasts the event to the event bus
 ///
 /// This is called once at agent startup to handle all plugin interception.
-///
-/// # Sender Reference Counting
-///
-/// This function accepts only the broadcast sender and PluginContext, not a full RunContext.
-/// PluginContext does NOT contain sender references, so the broadcast channel sender
-/// count remains at 1 (just the agent).
 pub async fn run_interceptor_loop(
     mut plugin_rx: mpsc::Receiver<PluginRequest>,
     plugins: Vec<Arc<dyn AgentPlugin>>,
     event_tx: broadcast::Sender<TracedEvent<AgentStreamEvent>>,
-    plugin_ctx: PluginContext,
+    ctx: RunContext,
 ) {
     while let Some(msg) = plugin_rx.recv().await {
         match msg {
@@ -76,7 +63,7 @@ pub async fn run_interceptor_loop(
                 // Run plugins sequentially - first non-Continue decision wins
                 let mut decision = PluginDecision::Continue;
                 for plugin in &plugins {
-                    match plugin.intercept(event.value(), &plugin_ctx).await {
+                    match plugin.intercept(event.value(), &ctx).await {
                         PluginDecision::Continue => continue,
                         PluginDecision::Skip => {
                             decision = PluginDecision::Skip;
