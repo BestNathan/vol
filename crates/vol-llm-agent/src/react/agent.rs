@@ -227,21 +227,6 @@ impl ReActAgent {
 
         // === Phase 2: Context is built per-iteration via get_context ===
 
-        // === Phase 2.5: Spawn SessionListener for session recording ===
-        use vol_session::{FileSessionEntryStore, SessionListener};
-
-        let mut session_listener = SessionListener::new(
-            run_ctx.event_tx.subscribe(),
-            Arc::new(FileSessionEntryStore::new(
-                config.working_dir.join("logs/agents").join(&config.agent_id),
-            )),
-            session.id.clone(),
-            run_id.clone(),
-        );
-        let session_listener_handle = tokio::spawn(async move {
-            let _ = session_listener.run().await;
-        });
-
         // === Phase 2.6: Spawn listener and interceptor tasks ===
         use super::plugin_stream::{run_interceptor_loop, spawn_listener_task};
 
@@ -648,22 +633,6 @@ impl ReActAgent {
             Err(_timeout) => {
                 tracing::warn!(
                     "Listener task timeout after 5s - task may be hanging, proceeding anyway"
-                );
-            }
-        }
-
-        // Wait for SessionListener to finish with timeout
-        let session_listener_result =
-            tokio::time::timeout(std::time::Duration::from_secs(5), session_listener_handle).await;
-
-        match session_listener_result {
-            Ok(Ok(())) => {}
-            Ok(Err(join_err)) => {
-                tracing::warn!(%join_err, "SessionListener task panicked");
-            }
-            Err(_timeout) => {
-                tracing::warn!(
-                    "SessionListener task timeout after 5s - task may be hanging, proceeding anyway"
                 );
             }
         }

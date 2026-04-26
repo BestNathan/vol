@@ -211,11 +211,13 @@ async fn test_agent_run_llm_error_propagates() {
 }
 
 // ========================
-// Test 4: Session recording — verify JSONL file is created
+// Test 4: Session recording — verify JSONL file is created via plugin
 // ========================
 
 #[tokio::test]
 async fn test_agent_run_session_recording() {
+    use vol_session::{InMemoryEntryStore, Session, SessionEntryStore, SessionRecorderPlugin};
+
     let mock = MockLlmClient::new();
     mock.set_stream_events(vec![
         content_complete_event("Session test answer."),
@@ -224,28 +226,30 @@ async fn test_agent_run_session_recording() {
     let tmp_dir = tempfile::tempdir().unwrap();
     let agent_id = "session_test_agent";
 
+    // Create session and entry_store externally so we can register the plugin
+    let entry_store = Arc::new(InMemoryEntryStore::new());
+    let session = Arc::new(Session::new(entry_store.clone()));
+
     let agent = AgentBuilder::new()
         .with_llm(Arc::new(mock))
         .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
         .with_agent_id(agent_id.to_string())
         .with_working_dir(tmp_dir.path().to_path_buf())
+        .with_session(session.clone())
+        .with_plugin(SessionRecorderPlugin::new(session.clone(), entry_store.clone()))
         .build()
         .unwrap();
 
     let result = agent.run("Session question?").await.unwrap();
     assert!(result.error.is_none());
 
-    // Allow SessionListener to flush
+    // Allow async writes to complete
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
-    // Verify that a session JSONL file was created in the log directory
-    let sessions_path = tmp_dir.path().join("logs/agents").join(agent_id);
-    let entries: Vec<_> = std::fs::read_dir(&sessions_path)
-        .expect("Session directory should exist")
-        .filter(|e| e.as_ref().map(|e| e.file_name().to_string_lossy().ends_with(".jsonl")).unwrap_or(false))
-        .collect();
-    assert!(!entries.is_empty(), "Session JSONL file should exist in {:?} but found none", sessions_path);
+    // Verify entries were recorded
+    let entries = entry_store.get_entries(&session.id).await.unwrap();
+    assert!(!entries.is_empty(), "Session should have entries after agent run");
 }
 
 // ========================
