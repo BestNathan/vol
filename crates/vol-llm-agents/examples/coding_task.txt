@@ -1,0 +1,5 @@
+参考文档https://docs.deribit.com/llms.txt
+
+使用golang，开发一个websocket客户端监听期权消息，并运行保存最近5条日志
+
+注意：deribit网站连接需要代理才可以访问，可以使用http://192.168.2.98:8890这个代理建立websocket连接
