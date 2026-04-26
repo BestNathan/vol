@@ -13,7 +13,7 @@ use vol_llm_core::Message;
 pub struct Session {
     pub id: String,
     pub created_at: i64,
-    entry_store: Arc<dyn SessionEntryStore>,
+    pub(crate) entry_store: Arc<dyn SessionEntryStore>,
     compressor: Arc<dyn MessageCompressor>,
 }
 

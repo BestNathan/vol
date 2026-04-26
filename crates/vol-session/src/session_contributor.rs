@@ -3,13 +3,17 @@ use async_trait::async_trait;
 use vol_llm_context::{AttentionAnchor, ContextBlock, ContextContributor};
 use vol_llm_core::Message;
 
-use crate::{Session, SessionMessage};
+use crate::compressor::MessageCompressor;
+use crate::compressors::PositionSampleCompressor;
+use crate::entry::{CheckpointReason, SessionEntry};
+use crate::Session;
 
-/// Session contributor — retrieves historical messages from a session.
-/// Returns them as a single ContextBlock with Middle(0) anchor.
+/// Session contributor — retrieves historical messages from a session
+/// and supports compression to manage context size.
 pub struct SessionContributor {
     session: Arc<tokio::sync::Mutex<Session>>,
     max_history: usize,
+    compressor: Arc<dyn MessageCompressor>,
 }
 
 impl SessionContributor {
@@ -17,7 +21,14 @@ impl SessionContributor {
         Self {
             session,
             max_history,
+            compressor: Arc::new(PositionSampleCompressor::default()),
         }
+    }
+
+    /// Set a custom compression strategy.
+    pub fn with_compressor(mut self, compressor: Arc<dyn MessageCompressor>) -> Self {
+        self.compressor = compressor;
+        self
     }
 }
 
@@ -52,18 +63,63 @@ impl ContextContributor for SessionContributor {
     }
 
     async fn compress(&mut self) {
-        let messages: Option<Vec<SessionMessage>> = self
-            .session
-            .lock()
-            .await
-            .get_messages()
-            .await
-            .ok()
-            .map(|history| history);
+        // 1. Get current messages from session
+        let messages = match self.session.lock().await.get_messages().await {
+            Ok(msgs) => msgs,
+            Err(_) => return,
+        };
+        if messages.is_empty() {
+            return;
+        }
 
-        if let Some(messages) = messages {
-            let mut session = self.session.lock().await;
-            session.compress(messages).await;
+        // 2. Compress the messages
+        let compressed = self.compressor.compress(messages).await;
+        if compressed.is_empty() {
+            return;
+        }
+
+        // 3. Write checkpoint (seal old messages)
+        let checkpoint_ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let mut cp_entry = SessionEntry::new_checkpoint(
+            self.session.lock().await.id.clone(),
+            CheckpointReason::Compression,
+            None,
+        );
+        cp_entry.created_at = checkpoint_ts;
+        if let Err(e) = self.session.lock().await.entry_store.save(cp_entry).await {
+            tracing::error!("Failed to write checkpoint before compression: {}", e);
+            return;
+        }
+
+        // 4. Build summary text from compressed messages
+        let summary = compressed
+            .iter()
+            .filter_map(|m| m.message.content.as_ref())
+            .map(|c| c.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // 5. Write summary entry (timestamp after checkpoint)
+        let mut summary_entry = SessionEntry::new_summary(
+            self.session.lock().await.id.clone(),
+            summary,
+        );
+        summary_entry.created_at = checkpoint_ts + 1;
+        if let Err(e) = self.session.lock().await.entry_store.save(summary_entry).await {
+            tracing::error!("Failed to write summary during compression: {}", e);
+            return;
+        }
+
+        // 6. Write compressed message entries (timestamp after checkpoint)
+        for (i, msg) in compressed.iter().enumerate() {
+            let mut entry = SessionEntry::from_message(msg.clone());
+            entry.created_at = checkpoint_ts + 1 + (i as i64);
+            if let Err(e) = self.session.lock().await.entry_store.save(entry).await {
+                tracing::error!("Failed to write compressed message: {}", e);
+            }
         }
     }
 
@@ -76,6 +132,7 @@ impl ContextContributor for SessionContributor {
         Box::new(SessionContributor {
             session: self.session.clone(),
             max_history: self.max_history,
+            compressor: self.compressor.clone(),
         })
     }
 }
@@ -83,7 +140,8 @@ impl ContextContributor for SessionContributor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InMemoryEntryStore, SessionMessage};
+    use crate::message::SessionMessage;
+    use crate::InMemoryEntryStore;
 
     #[tokio::test]
     async fn test_session_contributor_contribute() {
@@ -146,5 +204,20 @@ mod tests {
         // After compression — fewer messages
         let blocks = contributor.contribute().await.unwrap();
         assert!(blocks[0].messages.len() < 10);
+    }
+
+    #[tokio::test]
+    async fn test_session_contributor_compress_empty() {
+        let entry_store = Arc::new(InMemoryEntryStore::new());
+        let session = Session::new(entry_store);
+        let session = Arc::new(tokio::sync::Mutex::new(session));
+
+        let mut contributor = SessionContributor::new(session.clone(), 10);
+
+        // Compress on empty session — no-op
+        contributor.compress().await;
+
+        let blocks = contributor.contribute().await.unwrap();
+        assert!(blocks.is_empty());
     }
 }
