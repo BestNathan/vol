@@ -41,6 +41,17 @@ impl LoggerPlugin {
         }
     }
 
+    /// Whether an event should be logged to the JSONL file.
+    /// Skips high-frequency streaming delta events.
+    fn should_log(event: &AgentStreamEvent) -> bool {
+        !matches!(
+            event,
+            AgentStreamEvent::ThinkingDelta { .. }
+                | AgentStreamEvent::ContentDelta { .. }
+                | AgentStreamEvent::ToolCallArgumentDelta { .. }
+        )
+    }
+
     fn create_log_entry(event: &AgentStreamEvent, run_id: &str) -> LogEntry {
         let data = match event {
             AgentStreamEvent::AgentStart { input, .. } => {
@@ -64,17 +75,11 @@ impl LoggerPlugin {
             AgentStreamEvent::ThinkingStart { .. } => {
                 json!({})
             }
-            AgentStreamEvent::ThinkingDelta { delta, .. } => {
-                json!({ "delta": delta })
-            }
             AgentStreamEvent::ThinkingComplete { thinking, .. } => {
                 json!({ "thinking": thinking })
             }
             AgentStreamEvent::ContentStart { .. } => {
                 json!({})
-            }
-            AgentStreamEvent::ContentDelta { delta, .. } => {
-                json!({ "delta": delta })
             }
             AgentStreamEvent::ContentComplete { content, .. } => {
                 json!({ "content": content })
@@ -90,9 +95,6 @@ impl LoggerPlugin {
             }
             AgentStreamEvent::ToolCallSkipped { tool_call_id, tool_name, reason, duration_ms, .. } => {
                 json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "reason": reason, "duration_ms": duration_ms })
-            }
-            AgentStreamEvent::ToolCallArgumentDelta { tool_call_id, tool_name, delta, .. } => {
-                json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "delta": delta })
             }
             AgentStreamEvent::IterationComplete { iteration, tool_calls, final_answer, .. } => {
                 let tc: Vec<Value> = tool_calls.iter().map(|tc| {
@@ -119,6 +121,12 @@ impl LoggerPlugin {
             AgentStreamEvent::IterationContinued { from_iteration, .. } => {
                 json!({ "from_iteration": from_iteration })
             }
+            // Delta events are filtered out by should_log() but required for exhaustive matching
+            AgentStreamEvent::ThinkingDelta { .. }
+            | AgentStreamEvent::ContentDelta { .. }
+            | AgentStreamEvent::ToolCallArgumentDelta { .. } => {
+                unreachable!("delta events should be filtered by should_log()")
+            }
         };
 
         let event_name = event_name(event);
@@ -140,20 +148,23 @@ fn event_name(event: &AgentStreamEvent) -> String {
         AgentStreamEvent::LLMCallComplete { .. } => "LLMCallComplete".to_string(),
         AgentStreamEvent::LLMCallError { .. } => "LLMCallError".to_string(),
         AgentStreamEvent::ThinkingStart { .. } => "ThinkingStart".to_string(),
-        AgentStreamEvent::ThinkingDelta { .. } => "ThinkingDelta".to_string(),
         AgentStreamEvent::ThinkingComplete { .. } => "ThinkingComplete".to_string(),
         AgentStreamEvent::ContentStart { .. } => "ContentStart".to_string(),
-        AgentStreamEvent::ContentDelta { .. } => "ContentDelta".to_string(),
         AgentStreamEvent::ContentComplete { .. } => "ContentComplete".to_string(),
         AgentStreamEvent::ToolCallBegin { .. } => "ToolCallBegin".to_string(),
         AgentStreamEvent::ToolCallComplete { .. } => "ToolCallComplete".to_string(),
         AgentStreamEvent::ToolCallError { .. } => "ToolCallError".to_string(),
         AgentStreamEvent::ToolCallSkipped { .. } => "ToolCallSkipped".to_string(),
-        AgentStreamEvent::ToolCallArgumentDelta { .. } => "ToolCallArgumentDelta".to_string(),
         AgentStreamEvent::IterationComplete { .. } => "IterationComplete".to_string(),
         AgentStreamEvent::PluginEvent { .. } => "PluginEvent".to_string(),
         AgentStreamEvent::MaxIterationsReached { .. } => "MaxIterationsReached".to_string(),
         AgentStreamEvent::IterationContinued { .. } => "IterationContinued".to_string(),
+        // Delta events are filtered out by should_log() but required for exhaustive matching
+        AgentStreamEvent::ThinkingDelta { .. }
+        | AgentStreamEvent::ContentDelta { .. }
+        | AgentStreamEvent::ToolCallArgumentDelta { .. } => {
+            unreachable!("delta events should be filtered by should_log()")
+        }
     }
 }
 
@@ -172,6 +183,9 @@ impl AgentPlugin for LoggerPlugin {
     }
 
     async fn listen(&self, event: &AgentStreamEvent, ctx: &PluginContext) {
+        if !Self::should_log(event) {
+            return;
+        }
         let entry = Self::create_log_entry(event, &ctx.run_id);
         let path = self.log_path(event, &ctx.run_id);
         let line = entry.to_json_line();
@@ -217,6 +231,41 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let plugin = create_test_plugin(&temp_dir);
         assert_eq!(plugin.priority(), 10);
+    }
+
+    #[test]
+    fn test_should_log_skips_delta_events() {
+        assert!(LoggerPlugin::should_log(&AgentStreamEvent::ThinkingStart {
+            timestamp: Utc::now(),
+        }));
+        assert!(!LoggerPlugin::should_log(&AgentStreamEvent::ThinkingDelta {
+            timestamp: Utc::now(),
+            delta: "chunk".to_string(),
+        }));
+        assert!(LoggerPlugin::should_log(&AgentStreamEvent::ThinkingComplete {
+            timestamp: Utc::now(),
+            thinking: "done".to_string(),
+        }));
+        assert!(!LoggerPlugin::should_log(&AgentStreamEvent::ContentDelta {
+            timestamp: Utc::now(),
+            delta: "partial".to_string(),
+        }));
+        assert!(LoggerPlugin::should_log(&AgentStreamEvent::ContentComplete {
+            timestamp: Utc::now(),
+            content: "full".to_string(),
+        }));
+        assert!(!LoggerPlugin::should_log(&AgentStreamEvent::ToolCallArgumentDelta {
+            timestamp: Utc::now(),
+            tool_call_id: "c1".to_string(),
+            tool_name: "bash".to_string(),
+            delta: "arg".to_string(),
+        }));
+        assert!(LoggerPlugin::should_log(&AgentStreamEvent::ToolCallBegin {
+            timestamp: Utc::now(),
+            tool_call_id: "c1".to_string(),
+            tool_name: "bash".to_string(),
+            arguments: "{}".to_string(),
+        }));
     }
 
     #[test]
@@ -276,19 +325,11 @@ mod tests {
                 error: "timeout".to_string(),
             },
             AgentStreamEvent::ThinkingStart { timestamp: Utc::now() },
-            AgentStreamEvent::ThinkingDelta {
-                timestamp: Utc::now(),
-                delta: "thinking...".to_string(),
-            },
             AgentStreamEvent::ThinkingComplete {
                 timestamp: Utc::now(),
                 thinking: "done".to_string(),
             },
             AgentStreamEvent::ContentStart { timestamp: Utc::now() },
-            AgentStreamEvent::ContentDelta {
-                timestamp: Utc::now(),
-                delta: "partial".to_string(),
-            },
             AgentStreamEvent::ContentComplete {
                 timestamp: Utc::now(),
                 content: "final".to_string(),
@@ -320,12 +361,6 @@ mod tests {
                 reason: "not allowed".to_string(),
                 duration_ms: None,
             },
-            AgentStreamEvent::ToolCallArgumentDelta {
-                timestamp: Utc::now(),
-                tool_call_id: "c1".to_string(),
-                tool_name: "bash".to_string(),
-                delta: "arg".to_string(),
-            },
             AgentStreamEvent::IterationComplete {
                 timestamp: Utc::now(),
                 iteration: 1,
@@ -354,6 +389,9 @@ mod tests {
 
         let _ = &ctx; // suppress unused warning
         for event in events {
+            if !LoggerPlugin::should_log(&event) {
+                continue;
+            }
             let entry = LoggerPlugin::create_log_entry(&event, "run-1");
             let line = entry.to_json_line();
             let path = plugin.log_path(&event, "run-1");
