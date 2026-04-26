@@ -337,7 +337,7 @@ async fn test_builder_default() {
     let token = std::env::var("ANTHROPIC_AUTH_TOKEN").ok();
     if token.is_none() {
         let builder = CodingAgentBuilder::new();
-        let result = builder.build().await;
+        let result = builder.build();
         assert!(result.is_err());
     }
     // If ANTHROPIC_AUTH_TOKEN is set, the builder will succeed via env fallback
@@ -349,7 +349,6 @@ async fn test_builder_with_llm() {
     let agent = CodingAgentBuilder::new()
         .llm(llm)
         .build()
-        .await
         .unwrap();
     // Agent created successfully
     assert!(agent.config().llm.is_some());
@@ -365,7 +364,6 @@ async fn test_builder_with_all_methods() {
         .hitl_enabled(true)
         .max_iterations(20)
         .build()
-        .await
         .unwrap();
 
     assert_eq!(agent.config().max_iterations, 20);
@@ -391,7 +389,6 @@ async fn test_builder_store_dir_derived_from_workdir() {
         .llm(llm)
         .working_dir(project_dir.clone())
         .build()
-        .await
         .unwrap();
 
     // store_dir should be derived from workdir basename
@@ -415,7 +412,7 @@ async fn test_agent_new_validation() {
         llm: Some(llm),
         ..Default::default()
     };
-    let result = CodingAgent::new(config).await;
+    let result = CodingAgent::new(config);
     assert!(result.is_ok());
 }
 
@@ -426,7 +423,7 @@ async fn test_agent_new_missing_llm() {
     let token = std::env::var("ANTHROPIC_AUTH_TOKEN").ok();
     if token.is_none() {
         let config = CodingAgentConfig::default();
-        let result = CodingAgent::new(config).await;
+        let result = CodingAgent::new(config);
         assert!(result.is_err());
         if let Err(CodingAgentError::Config(msg)) = result {
             assert!(msg.contains("ANTHROPIC_AUTH_TOKEN"));
@@ -445,7 +442,7 @@ async fn test_agent_with_observer() {
         ..Default::default()
     };
     let observer = Arc::new(ChannelledEventObserver::new());
-    let agent = CodingAgent::new(config).await.unwrap()
+    let agent = CodingAgent::new(config).unwrap()
         .with_observer(observer);
     assert!(agent.observer().is_some());
 }
@@ -457,7 +454,7 @@ async fn test_agent_with_methods() {
         llm: Some(llm),
         ..Default::default()
     };
-    let agent = CodingAgent::new(config).await.unwrap()
+    let agent = CodingAgent::new(config).unwrap()
         .with_agent_id("test_123".to_string());
     assert_eq!(agent.config().agent_id, "test_123");
 }
@@ -487,7 +484,7 @@ async fn test_init_context_files_generates_missing() {
         llm: Some(Arc::new(DummyLlm)),
         ..Default::default()
     };
-    let agent = CodingAgent::new(config).await.unwrap();
+    let agent = CodingAgent::new(config).unwrap();
     agent.init_context_files();
 
     assert!(temp_dir.path().join("AGENT.md").exists());
@@ -506,7 +503,7 @@ async fn test_init_context_files_skips_existing() {
         llm: Some(Arc::new(DummyLlm)),
         ..Default::default()
     };
-    let agent = CodingAgent::new(config).await.unwrap();
+    let agent = CodingAgent::new(config).unwrap();
     agent.init_context_files();
 
     let content = std::fs::read_to_string(&agent_md).unwrap();

@@ -66,7 +66,7 @@ async fn test_coding_agent_develops_deribit_ws_client() {
     };
 
     // Create agent
-    let agent = CodingAgent::new(config).await.unwrap();
+    let agent = CodingAgent::new(config).unwrap();
 
     // Set up a channelled observer to capture events
     let observer = Arc::new(ChannelledEventObserver::new());

@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sandbox = Arc::new(LocalSandbox::new(Some(work_dir.clone())));
     sandbox.start()?;
 
-    let agent = CodingAgent::new(config).await?;
+    let agent = CodingAgent::new(config)?;
 
     let observer = Arc::new(HTMLReporter::new(
         report_path.clone(),

@@ -203,7 +203,7 @@ async fn test_coding_agent_has_skill_injector() {
         working_dir: workdir,
         ..Default::default()
     };
-    let agent = CodingAgent::new(config).await.unwrap();
+    let agent = CodingAgent::new(config).unwrap();
 
     // Agent was created successfully — this proves SkillInjector injection
     // works (if from_workdir or context_builder failed, new() would panic)

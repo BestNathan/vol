@@ -39,7 +39,7 @@ impl CodingAgent {
     ///
     /// If `config.llm` is None, an LLM is created from `ANTHROPIC_AUTH_TOKEN`.
     /// If `config.working_dir` is not ".", a LocalSandbox is automatically created.
-    pub async fn new(config: CodingAgentConfig) -> Result<Self, CodingAgentError> {
+    pub fn new(config: CodingAgentConfig) -> Result<Self, CodingAgentError> {
         let llm = Self::resolve_llm(&config)?;
         let (tool_registry, context_builder) = Self::build_tools_and_context(&config)?;
         let sandbox = Self::init_sandbox(&config.working_dir)?;
@@ -386,8 +386,8 @@ impl CodingAgentBuilder {
         self
     }
 
-    pub async fn build(self) -> Result<CodingAgent, CodingAgentError> {
-        let mut agent = CodingAgent::new(self.config).await?;
+    pub fn build(self) -> Result<CodingAgent, CodingAgentError> {
+        let mut agent = CodingAgent::new(self.config)?;
         if let Some(sandbox) = self.sandbox {
             agent.sandbox = Some(sandbox);
         }

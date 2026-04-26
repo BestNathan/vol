@@ -48,7 +48,7 @@ async fn test_coding_agent_e2e_read_file() {
         ..Default::default()
     };
 
-    let agent = CodingAgent::new(config).await.unwrap();
+    let agent = CodingAgent::new(config).unwrap();
 
     // Create observer
     let observer = Arc::new(HTMLReporter::new(
@@ -87,7 +87,7 @@ async fn test_coding_agent_e2e_edit_file() {
         ..Default::default()
     };
 
-    let agent = CodingAgent::new(config).await.unwrap();
+    let agent = CodingAgent::new(config).unwrap();
 
     let observer = Arc::new(HTMLReporter::new(
         report_path.clone(),
@@ -126,7 +126,7 @@ async fn test_coding_agent_html_report_contains_timeline() {
         ..Default::default()
     };
 
-    let agent = CodingAgent::new(config).await.unwrap();
+    let agent = CodingAgent::new(config).unwrap();
 
     let observer = Arc::new(HTMLReporter::new(
         report_path.clone(),

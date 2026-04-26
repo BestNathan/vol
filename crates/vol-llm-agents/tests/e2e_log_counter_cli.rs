@@ -46,7 +46,7 @@ async fn test_coding_agent_writes_log_counter_cli() {
         ..Default::default()
     };
 
-    let agent = CodingAgent::new(config).await.unwrap();
+    let agent = CodingAgent::new(config).unwrap();
 
     let observer = Arc::new(HTMLReporter::new(
         report_path.clone(),
@@ -123,7 +123,7 @@ async fn test_html_report_shows_ordered_timeline() {
         ..Default::default()
     };
 
-    let agent = CodingAgent::new(config).await.unwrap();
+    let agent = CodingAgent::new(config).unwrap();
 
     let observer = Arc::new(HTMLReporter::new(
         report_path.clone(),

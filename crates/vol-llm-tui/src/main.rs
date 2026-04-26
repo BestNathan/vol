@@ -559,7 +559,6 @@ fn spawn_agent(
             .tool_config(cache.tool_config.clone())
             .with_logger()
             .build()
-            .await
         {
             Ok(a) => a,
             Err(e) => {

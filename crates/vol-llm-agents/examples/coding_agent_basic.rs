@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     };
 
-    let agent = CodingAgent::new(config).await?;
+    let agent = CodingAgent::new(config)?;
 
     // Create observer for HTML report
     let report_path = PathBuf::from(format!("coding-report-{}.html", timestamp));

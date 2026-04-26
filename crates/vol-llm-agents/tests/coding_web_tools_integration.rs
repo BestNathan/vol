@@ -67,7 +67,7 @@ async fn test_coding_agent_uses_web_fetch_for_deribit_docs() {
     };
 
     // Create agent
-    let agent = CodingAgent::new(config).await.unwrap();
+    let agent = CodingAgent::new(config).unwrap();
 
     // Set up a channelled observer to capture events
     let observer = Arc::new(ChannelledEventObserver::new());
@@ -141,7 +141,7 @@ async fn test_coding_agent_without_web_fetch_has_core_tools_only() {
         ..Default::default()
     };
 
-    let agent = CodingAgent::new(config).await.unwrap();
+    let agent = CodingAgent::new(config).unwrap();
 
     // Should still work for file-based tasks
     let test_file = temp_dir.path().join("hello.txt");

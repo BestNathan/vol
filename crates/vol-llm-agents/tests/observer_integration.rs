@@ -104,7 +104,7 @@ async fn test_coding_agent_generates_complete_html_report() {
         ..Default::default()
     };
 
-    let agent = CodingAgent::new(config).await.unwrap();
+    let agent = CodingAgent::new(config).unwrap();
 
     let observer = Arc::new(HTMLReporter::new(
         report_path.clone(),
