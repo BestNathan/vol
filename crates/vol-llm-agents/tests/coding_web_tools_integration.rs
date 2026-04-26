@@ -58,7 +58,6 @@ async fn test_coding_agent_uses_web_fetch_for_deribit_docs() {
     let config = CodingAgentConfig {
         max_iterations: 5,
         working_dir: temp_dir.path().to_path_buf(),
-        hitl_enabled: false,
         html_report_path: None,
         llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
@@ -133,7 +132,6 @@ async fn test_coding_agent_without_web_fetch_has_core_tools_only() {
     let config = CodingAgentConfig {
         max_iterations: 3,
         working_dir: temp_dir.path().to_path_buf(),
-        hitl_enabled: false,
         html_report_path: None,
         llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),

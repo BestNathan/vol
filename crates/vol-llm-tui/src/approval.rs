@@ -1,9 +1,10 @@
-//! TUI approval handler — shows approval requests in the ratatui UI.
+//! TUI approval channel — bridges ApprovalState to the ApprovalChannel trait.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use tokio::sync::{Mutex, Notify};
-use vol_llm_agent::react::{ApprovalHandler, ApprovalRequest, ApprovalResponse, BoxedApprovalHandler};
+use vol_llm_agent::react::{ApprovalChannel, ApprovalRequest, ApprovalResponse};
 use vol_llm_agent::react::hitl::ApprovalError;
 
 /// Shared state for pending approval requests in the TUI.
@@ -19,7 +20,7 @@ pub struct ApprovalState {
     pub response: Arc<Mutex<Option<(bool, Option<String>)>>>,
     /// Notifier signaled when response is set by keyboard handler.
     pub notify: Arc<Notify>,
-    /// Shared unsafe_mode flag — checked at runtime in request_approval().
+    /// Shared unsafe_mode flag — checked at runtime in the channel.
     pub unsafe_mode: Arc<AtomicBool>,
 }
 
@@ -35,17 +36,11 @@ impl ApprovalState {
         }
     }
 
-    pub fn into_handler(self) -> BoxedApprovalHandler {
-        BoxedApprovalHandler::new(TuiApprovalHandler { state: self.clone() })
-    }
-
     /// Sync check if there's a pending approval request.
-    /// If the lock is currently held, that means the agent is actively
-    /// waiting for approval — treat it as pending.
     pub fn has_pending_approval(&self) -> bool {
         match self.tool_name.try_lock() {
             Ok(guard) => guard.is_some(),
-            Err(_) => true, // lock held → agent is setting up approval → treat as pending
+            Err(_) => true,
         }
     }
 
@@ -56,18 +51,33 @@ impl ApprovalState {
         *self.arguments.lock().await = None;
         *self.response.lock().await = None;
     }
+
+    /// Create a HitlPlugin configured with a TuiApprovalChannel.
+    pub fn into_hitl_plugin(self) -> vol_llm_agent::react::hitl::HitlPlugin<TuiApprovalChannel> {
+        use vol_llm_agent::react::{ApprovalTrigger, HitlConfig};
+
+        let channel = TuiApprovalChannel { state: self.clone() };
+        let config = HitlConfig {
+            triggers: vec![ApprovalTrigger::ToolExecution { tools: None }],
+            timeout_secs: 0,
+            on_timeout: vol_llm_agent::react::TimeoutBehavior::Approve,
+            timeout_message: None,
+        };
+        vol_llm_agent::react::hitl::HitlPlugin::new(config, Arc::new(channel))
+    }
 }
 
-/// Approval handler that stores the request and waits for UI response.
-pub struct TuiApprovalHandler {
+/// ApprovalChannel implementation that bridges to the TUI's ApprovalState.
+pub struct TuiApprovalChannel {
     state: ApprovalState,
 }
 
 #[async_trait::async_trait]
-impl ApprovalHandler for TuiApprovalHandler {
+impl ApprovalChannel for TuiApprovalChannel {
     async fn request_approval(
         &self,
         request: ApprovalRequest,
+        _timeout: Option<Duration>,
     ) -> Result<Option<ApprovalResponse>, ApprovalError> {
         // Check unsafe_mode at runtime — allows toggling mid-run
         if self.state.unsafe_mode.load(Ordering::Relaxed) {
@@ -98,4 +108,3 @@ impl ApprovalHandler for TuiApprovalHandler {
         }
     }
 }
-

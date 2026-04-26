@@ -40,7 +40,6 @@ async fn test_coding_agent_e2e_read_file() {
     let config = CodingAgentConfig {
         max_iterations: 3,
         working_dir: temp_dir.path().to_path_buf(),
-        hitl_enabled: false,
         html_report_path: Some(report_path.clone()),
         llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
@@ -79,7 +78,6 @@ async fn test_coding_agent_e2e_edit_file() {
     let config = CodingAgentConfig {
         max_iterations: 5,
         working_dir: temp_dir.path().to_path_buf(),
-        hitl_enabled: false,
         html_report_path: Some(report_path.clone()),
         llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
@@ -118,7 +116,6 @@ async fn test_coding_agent_html_report_contains_timeline() {
     let config = CodingAgentConfig {
         max_iterations: 5,
         working_dir: temp_dir.path().to_path_buf(),
-        hitl_enabled: false,
         html_report_path: Some(report_path.clone()),
         llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),

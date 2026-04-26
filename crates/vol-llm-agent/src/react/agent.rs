@@ -16,7 +16,7 @@ use vol_llm_core::{
     ConversationRequest, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
     ToolChoice,
 };
-use vol_llm_tool::{ToolContext, ToolSensitivity};
+use vol_llm_tool::ToolContext;
 
 /// Agent configuration
 #[derive(Clone)]
@@ -30,13 +30,6 @@ pub struct AgentConfig {
     pub agent_id: String,
     /// Working directory. Log paths derive from `{working_dir}/logs/agents/{agent_id}/`.
     pub working_dir: PathBuf,
-
-    /// When true, skip all HITL approval checks and auto-approve dangerous tools.
-    pub unsafe_mode: bool,
-
-    /// Custom approval handler. If set, this replaces the default CLI handler.
-    /// Use this for TUI/HTTP-based approval flows.
-    pub approval_handler: Option<super::BoxedApprovalHandler>,
 }
 
 /// Generate a short random agent ID if not provided
@@ -60,8 +53,6 @@ impl Default for AgentConfig {
             plugin_registry: PluginRegistry::new(),
             agent_id: generate_agent_id(),
             working_dir: PathBuf::from("."),
-            unsafe_mode: false,
-            approval_handler: None,
         }
     }
 }
@@ -184,7 +175,7 @@ impl ReActAgent {
         let config = self.config.clone();
         let session = self.session.clone();
 
-        let (run_ctx, plugin_rx, mut approval_rx) = RunContext::new(
+        let (run_ctx, plugin_rx) = RunContext::new(
             run_id.clone(),
             user_input.to_string(),
             self.session.id.clone(),
@@ -200,30 +191,6 @@ impl ReActAgent {
         run_ctx.add_message(user_msg).await.map_err(|e| {
             crate::AgentError::SessionError(format!("Failed to persist user message: {}", e))
         })?;
-
-        // === Phase 1.5: Spawn approval handler for HITL ===
-        if self.config.unsafe_mode {
-            // Auto-approve all requests — no HITL intervention
-            tokio::spawn(async move {
-                while let Some((_request, tx)) = approval_rx.recv().await {
-                    let _ = tx.send(super::run_context::ApprovalResponse::approved());
-                }
-            });
-        } else if let Some(handler) = &self.config.approval_handler {
-            // Use custom approval handler (e.g., TUI)
-            super::spawn_custom_approval_handler(approval_rx, handler.clone());
-        } else if std::io::stdin().is_terminal() {
-            // Default: CLI approval handler (only when interactive)
-            super::run_cli_approval_loop(approval_rx);
-        } else {
-            // Non-interactive: auto-deny all approval requests to prevent
-            // blocking on stdin (e.g., in tests or CI).
-            tokio::spawn(async move {
-                while let Some((_request, tx)) = approval_rx.recv().await {
-                    let _ = tx.send(super::run_context::ApprovalResponse::rejected("non-interactive".to_string()));
-                }
-            });
-        }
 
         // === Phase 2: Context is built per-iteration via get_context ===
 
@@ -299,38 +266,25 @@ impl ReActAgent {
                 let iteration = run_ctx.current_iteration();
 
                 if iteration > config.max_iterations {
-                    // Emit max iterations reached event
                     run_ctx.emit(AgentStreamEvent::max_iterations_reached(
                         iteration,
                         config.max_iterations,
                     )).await;
 
-                    // Ask user via HITL approval channel whether to continue
-                    match run_ctx.request_continue_approval(
-                        iteration,
-                        config.max_iterations,
-                    ).await {
-                        Ok(true) => true,
-                        Ok(false) => {
-                            let reason = format!("Max iterations ({}) reached, user declined to continue", config.max_iterations);
+                    match run_ctx.intercept(&AgentStreamEvent::iteration_complete(iteration, vec![], None)).await {
+                        Ok(PluginDecision::Continue) => {
+                            run_ctx.emit(AgentStreamEvent::iteration_continued(iteration)).await;
+                            run_ctx.reset_iteration();
+                            continue;
+                        }
+                        _ => {
+                            let reason = format!("Max iterations ({}) reached", config.max_iterations);
                             run_ctx.emit(AgentStreamEvent::agent_aborted(reason.clone())).await;
                             return Err(crate::AgentError::MaxIterationsReached {
                                 max: config.max_iterations,
                             });
                         }
-                        Err(e) => {
-                            let reason = format!("Max iterations ({}) reached, continuation request failed: {}", config.max_iterations, e);
-                            run_ctx.emit(AgentStreamEvent::agent_aborted(reason.clone())).await;
-                            return Err(crate::AgentError::MaxIterationsReached {
-                                max: config.max_iterations,
-                            });
-                        }
-                    };
-
-                    // User approved — reset and continue
-                    run_ctx.emit(AgentStreamEvent::iteration_continued(iteration)).await;
-                    run_ctx.reset_iteration();
-                    continue;
+                    }
                 }
 
                 // Reason phase - call LLM with streaming
@@ -410,44 +364,7 @@ impl ReActAgent {
 
                         match tool_decision {
                             PluginDecision::Continue => {
-                                // Check tool sensitivity before execution
-                                let args: serde_json::Value = serde_json::from_str(&call.arguments)
-                                    .unwrap_or(serde_json::json!({}));
-                                let sensitivity = tools.tool_sensitivity(&call.name, &args);
-
-                                match sensitivity {
-                                    ToolSensitivity::RequiresApproval { reason } => {
-                                        let metadata = serde_json::json!({
-                                            "tool_call_id": call.id,
-                                            "arguments": call.arguments
-                                        });
-                                        match run_ctx.request_tool_approval(&call.name, &reason, metadata).await {
-                                            Ok(approval) if !approval.approved => {
-                                                let duration_ms = tool_begin.elapsed().as_millis() as u64;
-                                                run_ctx.emit(AgentStreamEvent::tool_call_skipped(
-                                                    call.id.clone(),
-                                                    call.name.clone(),
-                                                    "User rejected".to_string(),
-                                                    Some(duration_ms),
-                                                )).await;
-
-                                                if let Err(e) = run_ctx.add_message(Message::tool(
-                                                    "Execution rejected: permission denied".to_string(),
-                                                    call.id.clone(),
-                                                )).await {
-                                                    return Err(crate::AgentError::from(e));
-                                                }
-                                                run_ctx.clear_current_tool_calls().await;
-                                                continue;
-                                            }
-                                            Ok(_) => {}
-                                            Err(e) => {
-                                                tracing::warn!("HITL approval error: {}", e);
-                                            }
-                                        }
-                                    }
-                                    ToolSensitivity::Safe => {}
-                                }
+                                // Execute tool directly — approval is handled by HitlPlugin via intercept()
                             }
                             PluginDecision::Skip => {
                                 tracing::warn!("Plugin intercepted to skip tool: {}", call.name);
@@ -746,8 +663,6 @@ mod tests {
             plugin_registry: PluginRegistry::new(),
             agent_id: "custom_agent".to_string(),
             working_dir: PathBuf::from("/custom/project"),
-            unsafe_mode: false,
-            approval_handler: None,
         };
         assert_eq!(config.max_history_messages, 50);
         assert_eq!(config.agent_id, "custom_agent");

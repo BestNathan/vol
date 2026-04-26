@@ -10,29 +10,30 @@ use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 
-/// Approval request context
+/// Approval request context (temporary — will be moved into new HitlPlugin in Task 2)
 #[derive(Debug, Clone)]
 pub struct ApprovalRequest {
-    pub run_id: String,
-    pub request_type: ApprovalType,
-    pub message: String,
+    pub tool_name: String,
+    pub reason: String,
     pub metadata: serde_json::Value,
 }
 
-/// Type of approval needed
-#[derive(Debug, Clone, PartialEq)]
-pub enum ApprovalType {
-    ToolExecution { tool_name: String },
-    ContinueIteration { iteration: u32 },
-    FinalAnswer,
-    Custom { name: String },
+impl ApprovalRequest {
+    pub fn new(tool_name: String, reason: String, metadata: serde_json::Value) -> Self {
+        Self { tool_name, reason, metadata }
+    }
 }
 
-/// Approval response
+/// Approval response (temporary — will be moved into new HitlPlugin in Task 2)
 #[derive(Debug, Clone)]
 pub enum ApprovalResponse {
     Approved,
     Rejected { reason: String },
+}
+
+impl ApprovalResponse {
+    pub fn approved() -> Self { Self::Approved }
+    pub fn rejected(reason: String) -> Self { Self::Rejected { reason } }
 }
 
 /// Approval channel trait - pluggable transport for approval requests
@@ -192,18 +193,14 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
             } => {
                 if self.needs_tool_approval(tool_name) {
                     let request = ApprovalRequest {
-                        run_id: ctx.run_id.clone(),
-                        request_type: ApprovalType::ToolExecution {
-                            tool_name: tool_name.clone(),
-                        },
-                        message: format!("Execute tool: {} with args: {}", tool_name, arguments),
+                        tool_name: tool_name.clone(),
+                        reason: format!("Execute tool: {} with args: {}", tool_name, arguments),
                         metadata: serde_json::json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "arguments": arguments }),
                     };
 
                     match self.request_approval(request).await {
                         Ok(ApprovalResponse::Approved) => PluginDecision::Continue,
                         Ok(ApprovalResponse::Rejected { reason }) => {
-                            // Return skip with rejection reason - caller should handle
                             PluginDecision::Abort(format!("Rejected: {}", reason))
                         }
                         Err(ApprovalError::Timeout) => {
@@ -223,11 +220,8 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
             } => {
                 if self.needs_iteration_pause() && final_answer.is_none() {
                     let request = ApprovalRequest {
-                        run_id: ctx.run_id.clone(),
-                        request_type: ApprovalType::ContinueIteration {
-                            iteration: *iteration,
-                        },
-                        message: format!("Iteration {} complete. Continue?", iteration),
+                        tool_name: "continue".to_string(),
+                        reason: format!("Iteration {} complete. Continue?", iteration),
                         metadata: serde_json::json!({ "iteration": iteration }),
                     };
 
@@ -285,8 +279,8 @@ pub trait ApprovalHandler: Send + Sync {
     /// Called by the agent loop when a tool requires human approval.
     async fn request_approval(
         &self,
-        request: super::run_context::ApprovalRequest,
-    ) -> Result<Option<super::run_context::ApprovalResponse>, ApprovalError>;
+        request: ApprovalRequest,
+    ) -> Result<Option<ApprovalResponse>, ApprovalError>;
 }
 
 /// Cloneable wrapper for boxed ApprovalHandler trait objects.
@@ -314,8 +308,8 @@ impl From<Arc<dyn ApprovalHandler + Send + Sync>> for BoxedApprovalHandler {
 impl ApprovalHandler for BoxedApprovalHandler {
     async fn request_approval(
         &self,
-        request: super::run_context::ApprovalRequest,
-    ) -> Result<Option<super::run_context::ApprovalResponse>, ApprovalError> {
+        request: ApprovalRequest,
+    ) -> Result<Option<ApprovalResponse>, ApprovalError> {
         self.inner.request_approval(request).await
     }
 }
@@ -323,8 +317,8 @@ impl ApprovalHandler for BoxedApprovalHandler {
 /// Spawn a background task that processes approval requests using the custom handler.
 pub fn spawn_custom_approval_handler(
     mut rx: tokio::sync::mpsc::Receiver<(
-        super::run_context::ApprovalRequest,
-        tokio::sync::oneshot::Sender<super::run_context::ApprovalResponse>,
+        ApprovalRequest,
+        tokio::sync::oneshot::Sender<ApprovalResponse>,
     )>,
     handler: BoxedApprovalHandler,
 ) {
@@ -336,11 +330,11 @@ pub fn spawn_custom_approval_handler(
                 }
                 Ok(None) => {
                     // Timeout/no response — fail open
-                    let _ = response_tx.send(super::run_context::ApprovalResponse::approved());
+                    let _ = response_tx.send(ApprovalResponse::approved());
                 }
                 Err(e) => {
                     tracing::warn!("Custom approval handler error: {}", e);
-                    let _ = response_tx.send(super::run_context::ApprovalResponse::approved());
+                    let _ = response_tx.send(ApprovalResponse::approved());
                 }
             }
         }
@@ -394,33 +388,23 @@ mod tests {
 /// ```
 pub fn run_cli_approval_loop(
     rx: tokio::sync::mpsc::Receiver<(
-        super::run_context::ApprovalRequest,
-        tokio::sync::oneshot::Sender<super::run_context::ApprovalResponse>,
+        ApprovalRequest,
+        tokio::sync::oneshot::Sender<ApprovalResponse>,
     )>,
 ) {
     use std::io::{self, BufRead, Write};
-    use super::run_context::CONTINUE_SENTINEL;
 
     std::thread::spawn(move || {
         let stdin = io::stdin();
         let mut rx = rx; // Make mutable
 
         while let Some((request, tx)) = rx.blocking_recv() {
-            // Check if this is a continuation request
-            let is_continue = request.tool_name == CONTINUE_SENTINEL;
-
-            // Display request with different format for continuation
+            // Display request
             println!();
-            if is_continue {
-                println!("\u{26a0} Agent reached max iterations");
-                println!("  {}", request.reason);
-                println!("  Continue? (iteration counter will reset) [y/n] > ");
-            } else {
-                println!("\u{26a0} Approval required:");
-                println!("  Tool: {}", request.tool_name);
-                println!("  Reason: {}", request.reason);
-                print!("  Approve? [y/n] > ");
-            }
+            println!("\u{26a0} Approval required:");
+            println!("  Tool: {}", request.tool_name);
+            println!("  Reason: {}", request.reason);
+            print!("  Approve? [y/n] > ");
             let _ = io::stdout().flush();
 
             // Read response
@@ -434,9 +418,9 @@ pub fn run_cli_approval_loop(
             };
 
             let response = if approved {
-                super::run_context::ApprovalResponse::approved()
+                ApprovalResponse::approved()
             } else {
-                super::run_context::ApprovalResponse::rejected("User rejected".into())
+                ApprovalResponse::rejected("User rejected".into())
             };
 
             let _ = tx.send(response);

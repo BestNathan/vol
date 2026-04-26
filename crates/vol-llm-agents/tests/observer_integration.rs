@@ -97,7 +97,6 @@ async fn test_coding_agent_generates_complete_html_report() {
     let config = CodingAgentConfig {
         max_iterations: 5,
         working_dir: temp_dir.path().to_path_buf(),
-        hitl_enabled: false,
         html_report_path: Some(report_path.clone()),
         llm: Some(create_test_llm()),
         plugin_registry: vol_llm_agent::react::PluginRegistry::new(),

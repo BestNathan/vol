@@ -4061,6 +4061,7 @@ dependencies = [
  "vol-llm-core",
  "vol-llm-observability",
  "vol-llm-provider",
+ "vol-llm-skill",
  "vol-llm-tdengine",
  "vol-llm-tool",
  "vol-session",

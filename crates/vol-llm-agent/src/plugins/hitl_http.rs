@@ -99,7 +99,7 @@ impl ApprovalChannel for SimpleHttpApprovalChannel {
         // Register pending request
         {
             let mut pending = self.pending_requests.lock().await;
-            pending.insert(request.run_id.clone(), callback_tx);
+            pending.insert(request.tool_name.clone(), callback_tx);
         }
 
         // In a real implementation, here you would:
@@ -118,7 +118,7 @@ impl ApprovalChannel for SimpleHttpApprovalChannel {
         // Clean up pending request
         {
             let mut pending = self.pending_requests.lock().await;
-            pending.remove(&request.run_id);
+            pending.remove(&request.tool_name);
         }
 
         result.map(Some).map_err(|_| ApprovalError::ChannelClosed)
