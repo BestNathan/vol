@@ -16,8 +16,8 @@ Remove the dedicated `run_id` field from `SessionEntry`, `SessionMessage`, and `
 
 - Remove `run_id: Option<String>` from `SessionEntry`
 - Add `metadata: HashMap<String, String>` with `#[serde(default)]`
-- `new_message()`: accept `run_id: Option<String>`, put into metadata if present
-- `new_checkpoint()` / `new_summary()`: metadata starts empty
+- `new_message()`: takes only `session_id` and `message` — no run_id
+- Add `with_metadata()` builder to `SessionEntry`
 - Export constant `RUN_ID_KEY: &str = "run_id"`
 
 ### 2. `crates/vol-session/src/message.rs`
@@ -41,7 +41,7 @@ Remove the dedicated `run_id` field from `SessionEntry`, `SessionMessage`, and `
 ### 5. `crates/vol-session/src/listener.rs`
 
 - `SessionListener` still carries `run_id` (needed at construction)
-- `record_event()`: put run_id into entry metadata instead of top-level field
+- `record_event()`: build entry normally, chain `.with_metadata(RUN_ID_KEY, &self.run_id)`
 
 ### 6. `crates/vol-session/tests/`
 

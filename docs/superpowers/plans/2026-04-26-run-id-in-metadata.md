@@ -90,11 +90,7 @@ pub struct SessionEntry {
 
 impl SessionEntry {
     /// Create a new message entry.
-    pub fn new_message(session_id: String, run_id: Option<String>, message: vol_llm_core::Message) -> Self {
-        let mut metadata = HashMap::new();
-        if let Some(rid) = run_id {
-            metadata.insert(RUN_ID_KEY.to_string(), rid);
-        }
+    pub fn new_message(session_id: String, message: vol_llm_core::Message) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             session_id,
@@ -105,8 +101,14 @@ impl SessionEntry {
             parent_id: None,
             r#type: SessionEntryType::Message,
             data: SessionEntryData::Message { message },
-            metadata,
+            metadata: HashMap::new(),
         }
+    }
+
+    /// Add metadata to an entry.
+    pub fn with_metadata(mut self, key: &str, value: &str) -> Self {
+        self.metadata.insert(key.to_string(), value.to_string());
+        self
     }
 
     /// Create a new checkpoint entry.
@@ -157,7 +159,8 @@ impl SessionEntry {
 
 Key changes:
 - `run_id: Option<String>` → `metadata: HashMap<String, String>` with `#[serde(default)]`
-- `new_message()` signature: `run_id: String` → `run_id: Option<String>`, puts it in metadata
+- `new_message()` takes only `session_id` and `message` — no run_id parameter
+- `with_metadata()` builder added to SessionEntry
 - `RUN_ID_KEY` constant exported
 
 - [ ] **Step 2: Verify compilation**
@@ -485,9 +488,6 @@ async fn record_event(&self, event: &AgentStreamEvent) -> Result<(), SessionErro
         None => return Ok(()),
     };
 
-    let mut metadata = session_msg.metadata;
-    metadata.insert(crate::entry::RUN_ID_KEY.to_string(), self.run_id.clone());
-
     let entry = SessionEntry {
         id: session_msg.id,
         session_id: session_msg.session_id,
@@ -497,8 +497,9 @@ async fn record_event(&self, event: &AgentStreamEvent) -> Result<(), SessionErro
         data: SessionEntryData::Message {
             message: session_msg.message,
         },
-        metadata,
-    };
+        metadata: session_msg.metadata,
+    }
+    .with_metadata(crate::entry::RUN_ID_KEY, &self.run_id);
 
     self.store.save(entry).await.map_err(SessionError::StoreError)
 }
@@ -543,31 +544,56 @@ let summary = SessionEntry {
 
 - [ ] **Step 2: Fix file_store.rs inline tests**
 
-In `crates/vol-session/src/file_store.rs`, the `entry_tests` module uses `SessionEntry::new_message()` which now takes `Option<String>` for run_id. Change all occurrences of `"run-1".to_string()` to `Some("run-1".to_string())`. For example:
+In `crates/vol-session/src/file_store.rs`, the `entry_tests` module uses `SessionEntry::new_message()` with two args now (run_id removed). For tests that need run_id in metadata, chain `with_metadata`:
 
 ```rust
 let entry = SessionEntry::new_message(
     "test-session".to_string(),
-    Some("run-1".to_string()),
+    Message::user("Hello, World!"),
+).with_metadata(crate::entry::RUN_ID_KEY, "run-1");
+```
+
+Tests that don't care about run_id just use:
+```rust
+let entry = SessionEntry::new_message(
+    "test-session".to_string(),
     Message::user("Hello, World!"),
 );
 ```
 
-Apply this to all test functions in the `entry_tests` module.
+Apply to all test functions in the `entry_tests` module.
 
 - [ ] **Step 3: Fix memory_store.rs inline tests**
 
-Same treatment — change all `"run-1".to_string()` / `"run-a".to_string()` / `"run-b".to_string()` in `InMemoryEntryStore` tests to `Some(...)`. For example:
+Same treatment. Tests that reference run_id use `with_metadata`:
 
 ```rust
 let entry = SessionEntry::new_message(
     "test-session".to_string(),
-    Some("run-1".to_string()),
     Message::user("Hello, World!"),
+).with_metadata(crate::entry::RUN_ID_KEY, "run-1");
+```
+
+Tests that don't care:
+```rust
+let entry = SessionEntry::new_message(
+    "test-session".to_string(),
+    Message::user("test"),
 );
 ```
 
-- [ ] **Step 4: Update lib.rs exports**
+- [ ] **Step 4: Fix integration tests**
+
+In `crates/vol-session/tests/integration_test.rs`, all `SessionEntry::new_message` calls change from:
+```rust
+SessionEntry::new_message("session-1".to_string(), "run-1".to_string(), Message::user("Hello"))
+```
+to:
+```rust
+SessionEntry::new_message("session-1".to_string(), Message::user("Hello"))
+```
+
+- [ ] **Step 5: Update lib.rs exports**
 
 Add `RUN_ID_KEY` to the public exports:
 
@@ -575,12 +601,12 @@ Add `RUN_ID_KEY` to the public exports:
 pub use entry::{CheckpointReason, RUN_ID_KEY, SessionEntry, SessionEntryData, SessionEntryType};
 ```
 
-- [ ] **Step 5: Full build and test**
+- [ ] **Step 6: Full build and test**
 
 Run: `cargo test -p vol-session --all-features`
 Expected: All tests pass.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add crates/vol-session/tests/integration_test.rs crates/vol-session/src/file_store.rs crates/vol-session/src/memory_store.rs crates/vol-session/src/lib.rs
@@ -598,7 +624,7 @@ git commit -m "refactor(vol-session): update tests for run_id in metadata"
 
 Run: `grep -rn "run_id" crates/vol-session/src/ crates/vol-session/tests/ --include="*.rs"`
 
-Expected output: Only `listener.rs` field `run_id: String` (the internal struct field), `RUN_ID_KEY` constant references, and test string literals should remain. No `.run_id` field access on `SessionEntry` or `SessionMessage`.
+Expected output: Only `listener.rs` field `run_id: String` (the internal struct field), `RUN_ID_KEY` constant references, test `with_metadata` calls, and test string literals should remain. No `.run_id` field access on `SessionEntry` or `SessionMessage`, no `new_message` with run_id parameter.
 
 - [ ] **Step 2: Full workspace check**
 
