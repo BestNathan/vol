@@ -28,6 +28,7 @@ members = [
     "crates/vol-llm-skill",
     "crates/vol-llm-context",
     "crates/vol-llm-task",
+    "crates/vol-llm-wiki",
 ]
 
 [workspace.package]
@@ -111,3 +112,5 @@ vol-llm-memory = { path = "crates/vol-llm-memory" }
 vol-llm-skill = { path = "crates/vol-llm-skill" }
 vol-llm-context = { path = "crates/vol-llm-context" }
 vol-llm-task = { path = "crates/vol-llm-task" }
+vol-llm-tools-builtin = { path = "crates/vol-llm-tools-builtin" }
+vol-llm-wiki = { path = "crates/vol-llm-wiki" }

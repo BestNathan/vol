@@ -4430,6 +4430,31 @@ dependencies = [
  "vol-llm-core",
  "vol-llm-observability",
  "vol-llm-provider",
+ "vol-llm-skill",
+ "vol-llm-tool",
+ "vol-llm-tools-builtin",
+ "vol-session",
+]
+
+[[package]]
+name = "vol-llm-wiki"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "dirs",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "uuid",
+ "vol-config",
+ "vol-llm-agent",
+ "vol-llm-context",
+ "vol-llm-core",
+ "vol-llm-provider",
  "vol-llm-tool",
  "vol-llm-tools-builtin",
  "vol-session",
