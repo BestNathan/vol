@@ -25,6 +25,18 @@ pub struct WikiLoader {
 }
 
 impl WikiLoader {
+    /// Create a WikiLoader with no roots (for testing).
+    pub fn new_empty() -> Self {
+        Self {
+            roots: Vec::new(),
+            pages: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+
+    /// Replace the internal pages list (for testing).
+    pub async fn set_pages(&self, pages: Vec<WikiPage>) {
+        *self.pages.write().await = pages;
+    }
     pub fn new(working_dir: Option<&std::path::Path>) -> Self {
         let mut roots = Vec::new();
 
