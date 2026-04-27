@@ -28,6 +28,7 @@ vol-session = { path = "../vol-session" }
 vol-llm-context = { path = "../vol-llm-context" }
 vol-llm-skill = { path = "../vol-llm-skill" }
 vol-llm-observability = { path = "../vol-llm-observability" }
+vol-llm-wiki = { path = "../vol-llm-wiki" }
 chrono = "0.4"
 
 [dev-dependencies]
