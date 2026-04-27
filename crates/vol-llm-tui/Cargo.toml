@@ -14,8 +14,8 @@ vol-llm-tools-builtin = { path = "../vol-llm-tools-builtin" }
 vol-llm-tool = { path = "../vol-llm-tool" }
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-provider = { path = "../vol-llm-provider" }
-vol-llm-skill = { path = "../vol-llm-skill" }
 vol-llm-observability = { path = "../vol-llm-observability" }
+vol-llm-skill = { path = "../vol-llm-skill" }
 vol-config = { path = "../vol-config" }
 vol-session = { path = "../vol-session" }
 tokio = { workspace = true, features = ["full"] }
