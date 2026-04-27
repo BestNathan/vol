@@ -29,14 +29,20 @@ pub fn render_status_bar(frame: &mut Frame, area: Rect, state: &AppState) {
 
     let prefix = if state.exiting { "QUITTING · " } else { "" };
     let unsafe_prefix = if state.unsafe_mode { "!! " } else { "" };
+    let skills_part = if state.skills.is_empty() {
+        String::new()
+    } else {
+        format!(" │ Skills: {}", state.skills.len())
+    };
     let text = format!(
-        " {}Session: {}{} │ Run: {} │ Iter: {} │ Tools: {} │ Time: {} │ {}",
+        " {}Session: {}{} │ Run: {} │ Iter: {} │ Tools: {}{} │ Time: {} │ {}",
         unsafe_prefix,
         prefix,
         state.session_id,
         state.run_count,
         state.iteration,
         state.tool_call_count,
+        skills_part,
         time_str,
         status,
     );
