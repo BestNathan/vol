@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use vol_session::Session;
+use vol_llm_skill::SkillLoader;
 
 use app::AppState;
 use crossterm::{
@@ -81,10 +82,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         original_hook(panic);
     }));
 
-    // Create shared state
+    // Discover skills at startup
     let working_dir = std::env::current_dir().unwrap_or_default();
+    let skills = discover_skills(&working_dir).await;
+
+    // Create shared state
     let state = Arc::new(tokio::sync::Mutex::new(
-        AppState::new(session_id, working_dir.to_string_lossy().as_ref()),
+        AppState::new(session_id, working_dir.to_string_lossy().as_ref(), skills),
     ));
 
     // Build pre-built agent configuration cache
@@ -119,6 +123,30 @@ fn derive_store_paths() -> (std::path::PathBuf, std::path::PathBuf) {
         .join(project_name.as_ref());
     let sessions = base.join("sessions");
     (base, sessions)
+}
+
+/// Discover skills from the working directory and return display entries.
+async fn discover_skills(working_dir: &std::path::Path) -> Vec<app::SkillDisplayEntry> {
+    let loader = SkillLoader::new(Some(working_dir.to_path_buf()));
+    if let Err(e) = loader.discover_all().await {
+        tracing::warn!(error = %e, "Failed to discover skills");
+        return Vec::new();
+    }
+    loader
+        .list_metadata()
+        .await
+        .into_iter()
+        .map(|m| app::SkillDisplayEntry {
+            name: m.name,
+            version: m.version,
+            scope: match m.scope {
+                vol_llm_skill::SkillScope::User => "User".to_string(),
+                vol_llm_skill::SkillScope::Repo => "Repo".to_string(),
+                vol_llm_skill::SkillScope::Custom(p) => format!("Custom:{}", p.display()),
+            },
+            description: m.description,
+        })
+        .collect()
 }
 
 fn create_session() -> Result<Arc<Session>, Box<dyn std::error::Error>> {

@@ -277,7 +277,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(session_id: String, working_dir: &str) -> Self {
+    pub fn new(session_id: String, working_dir: &str, skills: Vec<SkillDisplayEntry>) -> Self {
         let workspace = scan_workspace(working_dir);
         Self {
             session_id,
@@ -303,7 +303,7 @@ impl AppState {
             session_dialog: SessionDialog::new(),
             last_error: None,
             log_viewer: LogViewer::new(),
-            skills: Vec::new(),
+            skills,
         }
     }
 
