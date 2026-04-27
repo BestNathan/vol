@@ -13,5 +13,5 @@ mod error;
 pub use agent::{WikiAgent, WikiCompressResult};
 pub use config::WikiAgentConfig;
 pub use error::WikiAgentError;
-pub use loader::WikiLoader;
+pub use loader::{WikiLoader, WikiPage};
 pub use injector::WikiInjector;
