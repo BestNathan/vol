@@ -117,6 +117,7 @@ pub struct LogLine {
 }
 
 /// Display-friendly skill entry for the Skills tab.
+#[derive(Debug, Clone)]
 pub struct SkillDisplayEntry {
     pub name: String,
     pub version: String,
