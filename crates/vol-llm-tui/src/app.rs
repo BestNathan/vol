@@ -55,6 +55,7 @@ pub struct WorkspaceEntry {
 pub enum ActiveTab {
     Conversation,
     Workspace,
+    Skills,
     Logs,
 }
 
@@ -62,7 +63,8 @@ impl ActiveTab {
     pub fn toggle(self) -> Self {
         match self {
             ActiveTab::Conversation => ActiveTab::Workspace,
-            ActiveTab::Workspace => ActiveTab::Logs,
+            ActiveTab::Workspace => ActiveTab::Skills,
+            ActiveTab::Skills => ActiveTab::Logs,
             ActiveTab::Logs => ActiveTab::Conversation,
         }
     }
@@ -112,6 +114,14 @@ pub struct LogLine {
     pub event_type: String,
     pub summary: String,
     pub timestamp: String,
+}
+
+/// Display-friendly skill entry for the Skills tab.
+pub struct SkillDisplayEntry {
+    pub name: String,
+    pub version: String,
+    pub scope: String,
+    pub description: String,
 }
 
 impl LogViewer {
@@ -261,6 +271,8 @@ pub struct AppState {
     pub last_error: Option<String>,
     /// Log viewer state for the Logs tab.
     pub log_viewer: LogViewer,
+    /// Discovered skills for the Skills tab.
+    pub skills: Vec<SkillDisplayEntry>,
 }
 
 impl AppState {
@@ -290,6 +302,7 @@ impl AppState {
             session_dialog: SessionDialog::new(),
             last_error: None,
             log_viewer: LogViewer::new(),
+            skills: Vec::new(),
         }
     }
 

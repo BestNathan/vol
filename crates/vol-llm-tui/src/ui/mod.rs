@@ -83,6 +83,9 @@ fn render_right_panel(frame: &mut Frame, area: Rect, state: &AppState) {
         ActiveTab::Logs => {
             render_log_viewer(frame, chunks[1], state);
         }
+        ActiveTab::Skills => {
+            // Rendered in a later task — placeholder to satisfy exhaustiveness.
+        }
     }
 
     // Render input area
