@@ -478,6 +478,11 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
             state.active_tab = app::ActiveTab::Logs;
             KeyAction::None
         }
+        // Ctrl+4: direct tab switch to Skills
+        (KeyModifiers::CONTROL, KeyCode::Char('4')) => {
+            state.active_tab = app::ActiveTab::Skills;
+            KeyAction::None
+        }
 
         // Ctrl+S: toggle session list dialog
         (KeyModifiers::CONTROL, KeyCode::Char('s')) => {
