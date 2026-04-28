@@ -4,20 +4,20 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-vol-llm-agent = { path = "../vol-llm-agent" }
-vol-llm-context = { path = "../vol-llm-context" }
-vol-llm-core = { path = "../vol-llm-core" }
-vol-llm-provider = { path = "../vol-llm-provider" }
-vol-llm-tool = { path = "../vol-llm-tool" }
-vol-llm-tools-builtin = { path = "../vol-llm-tools-builtin" }
-vol-llm-observability = { path = "../vol-llm-observability" }
-vol-session = { path = "../vol-session" }
+vol-llm-agent = { workspace = true }
+vol-llm-context = { workspace = true }
+vol-llm-core = { workspace = true }
+vol-llm-provider = { workspace = true }
+vol-llm-tool = { workspace = true }
+vol-llm-tools-builtin = { workspace = true }
+vol-llm-observability = { workspace = true }
+vol-session = { workspace = true }
 serde = { workspace = true }
 serde_yaml = "0.9"
 tokio = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
-thiserror = "1.0"
+thiserror = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
