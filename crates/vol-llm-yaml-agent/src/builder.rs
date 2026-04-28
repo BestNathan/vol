@@ -35,6 +35,11 @@ impl YamlAgentBuilder {
         Ok(Self { config, llm_registry })
     }
 
+    /// Get a reference to the parsed config.
+    pub fn config(&self) -> &YamlAgentConfig {
+        &self.config
+    }
+
     /// Set the LLM provider registry.
     ///
     /// Must be called before `build()` if the YAML references an LLM provider.

@@ -1,0 +1,13 @@
+name: test-agent
+llm: test-provider
+max_iterations: 5
+system: "You are a test assistant. Answer briefly."
+tools:
+  - read
+  - write
+  - edit
+  - glob
+  - grep
+  - bash
+plugins:
+  - logger
