@@ -14,6 +14,7 @@ mod config;
 mod error;
 mod builder;
 mod tools;
+mod plugins;
 
 pub use config::YamlAgentConfig;
 pub use error::YamlAgentError;
