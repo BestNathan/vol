@@ -13,6 +13,7 @@
 mod config;
 mod error;
 mod builder;
+mod tools;
 
 pub use config::YamlAgentConfig;
 pub use error::YamlAgentError;
