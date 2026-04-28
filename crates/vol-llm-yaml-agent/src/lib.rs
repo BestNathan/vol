@@ -15,7 +15,9 @@ mod error;
 mod builder;
 mod tools;
 mod plugins;
+mod discovery;
 
 pub use config::YamlAgentConfig;
 pub use error::YamlAgentError;
 pub use builder::YamlAgentBuilder;
+pub use discovery::{discover_agents, discover_from_workdir};
