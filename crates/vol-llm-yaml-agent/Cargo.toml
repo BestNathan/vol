@@ -1,0 +1,24 @@
+[package]
+name = "vol-llm-yaml-agent"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+vol-llm-agent = { path = "../vol-llm-agent" }
+vol-llm-context = { path = "../vol-llm-context" }
+vol-llm-core = { path = "../vol-llm-core" }
+vol-llm-provider = { path = "../vol-llm-provider" }
+vol-llm-tool = { path = "../vol-llm-tool" }
+vol-llm-tools-builtin = { path = "../vol-llm-tools-builtin" }
+vol-llm-observability = { path = "../vol-llm-observability" }
+vol-session = { path = "../vol-session" }
+serde = { workspace = true }
+serde_yaml = "0.9"
+tokio = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+thiserror = "1.0"
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

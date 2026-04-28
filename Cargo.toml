@@ -29,6 +29,7 @@ members = [
     "crates/vol-llm-context",
     "crates/vol-llm-task",
     "crates/vol-llm-wiki",
+    "crates/vol-llm-yaml-agent",
 ]
 
 [workspace.package]
