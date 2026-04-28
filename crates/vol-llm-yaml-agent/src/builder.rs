@@ -57,11 +57,13 @@ impl YamlAgentBuilder {
         let system_prompt = self.build_system_prompt();
 
         // 4. Build context
-        let context_builder = ContextBuilderBuilder::new(128_000)
-            .add_contributor(Box::new(vol_llm_context::builtin::SimpleContributor::system(
-                system_prompt,
-            )))
-            .build();
+        let mut context_builder_builder = ContextBuilderBuilder::new(128_000);
+        if !system_prompt.is_empty() {
+            context_builder_builder = context_builder_builder.add_contributor(Box::new(
+                vol_llm_context::builtin::SimpleContributor::system(system_prompt),
+            ));
+        }
+        let context_builder = context_builder_builder.build();
 
         // 5. Build agent config
         let mut plugin_registry = vol_llm_agent::react::PluginRegistry::new();
@@ -158,5 +160,24 @@ system_files:
         let prompt = builder.build_system_prompt();
         // Should only contain the inline part, file is skipped with warning
         assert_eq!(prompt, "Base");
+    }
+
+    #[test]
+    fn test_build_system_prompt_with_existing_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let file_path = temp.path().join("instructions.md");
+        std::fs::write(&file_path, "File content here.").unwrap();
+
+        let yaml = format!(r#"
+name: test
+llm: p
+system: "Inline prefix"
+system_files:
+  - {}
+"#, file_path.display());
+        let builder = YamlAgentBuilder::from_yaml(&yaml).unwrap();
+        let prompt = builder.build_system_prompt();
+        assert!(prompt.contains("Inline prefix"));
+        assert!(prompt.contains("File content here."));
     }
 }
