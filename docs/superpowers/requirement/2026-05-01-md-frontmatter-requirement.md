@@ -37,9 +37,9 @@
 
 ## Constraints
 - 命名: `md-frontmatter`
-- 依赖: `serde`, `serde_yaml`, `thiserror`（错误处理）, `glob` 或 `walkdir`（目录扫描）
-- 纯同步 API，不需要 async
-- 遵循 workspace 的 `serde` 和 `thiserror` 版本
+- 依赖: `serde`, `serde_yaml`, `thiserror`（错误处理）, `tokio`（异步文件 I/O）
+- **Async-first**: 文件读取/写入/目录扫描全部使用 `tokio::fs`，与项目整体 async-first 风格一致。`from_str()` 解析函数保持同步（纯内存操作）
+- 遵循 workspace 的 `serde`、`thiserror` 和 `tokio` 版本
 
 ## Success Criteria
 1. 解析正确: 能通过所有 parser 单元测试（含有效/无效/缺失 frontmatter 边界情况）
