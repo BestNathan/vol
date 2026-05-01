@@ -1,6 +1,5 @@
 //! WikiAgent - LLM-powered wiki compression agent.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use vol_llm_agent::ReActAgent;
@@ -67,11 +66,11 @@ impl WikiAgent {
         let registry = LLMProviderRegistry::from_configs(&[llm_config])
             .map_err(|e| WikiAgentError::Config(format!("LLM provider error: {}", e)))?;
 
-        registry.get(&config.llm_provider_id)
+        let llm = registry.get(&config.llm_provider_id)
             .ok_or_else(|| WikiAgentError::Config(
                 format!("LLM provider '{}' not found", config.llm_provider_id),
-            ))
-            .map(|llm| llm.clone())
+            ))?;
+        Ok(Arc::clone(&llm))
     }
 
     /// Build tool registry and context builder.
@@ -105,7 +104,7 @@ impl WikiAgent {
     }
 
     /// Build the system prompt for WikiAgent.
-    fn system_prompt(wiki_dir: &PathBuf) -> String {
+    fn system_prompt(wiki_dir: &std::path::Path) -> String {
         format!(
             r#"你是一个知识管理 agent。你的任务是分析一段对话记录，从中提取有价值的信息，
 维护一个位于 {wiki_dir} 的知识 Wiki。
@@ -177,7 +176,7 @@ impl WikiAgent {
         let response = react_agent
             .run(&prompt)
             .await
-            .map_err(|e| WikiAgentError::Agent(e))?;
+            .map_err(WikiAgentError::Agent)?;
 
         // Extract created/updated pages from the wiki directory
         let wiki_dir = self.config.working_dir.join(".agent").join("wikis");
@@ -191,7 +190,7 @@ impl WikiAgent {
     }
 
     /// Scan the wiki directory for changes (naive: returns all files).
-    fn scan_wiki_changes(wiki_dir: &PathBuf) -> (Vec<String>, Vec<String>) {
+    fn scan_wiki_changes(wiki_dir: &std::path::Path) -> (Vec<String>, Vec<String>) {
         let mut all = Vec::new();
         if wiki_dir.exists() {
             Self::walk_files(wiki_dir, &mut all);
