@@ -4230,9 +4230,9 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "dirs",
+ "md-frontmatter",
  "serde",
  "serde_json",
- "serde_yaml",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",

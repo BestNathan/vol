@@ -1,12 +1,27 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use serde::Deserialize;
 use tokio::sync::{OnceCell, RwLock};
 
 use crate::def::{SkillDef, SkillMetadata, SkillScope};
-use crate::parser::{parse_skill_content, scan_skill_files};
 use crate::Result;
+
+fn default_version() -> String {
+    "1.0.0".to_string()
+}
+
+#[derive(Debug, Deserialize)]
+struct SkillFrontmatter {
+    name: String,
+    #[serde(default = "default_version")]
+    version: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    triggers: Vec<String>,
+}
 
 /// Discovers, loads, and caches skills from registered roots.
 pub struct SkillLoader {
@@ -28,12 +43,6 @@ impl SkillLoader {
     }
 
     /// Creates a loader with default roots.
-    ///
-    /// Default roots:
-    /// - User: `~/.agents/skills/`
-    /// - Repo: `{working_dir}/.agents/skills/` (if working_dir provided)
-    ///
-    /// Discovery is lazy — skills are loaded on first access to `get()` or `list_metadata()`.
     pub fn new(working_dir: Option<PathBuf>) -> Self {
         let mut loader = Self {
             roots: Vec::new(),
@@ -42,13 +51,11 @@ impl SkillLoader {
             discovered: OnceCell::new(),
         };
 
-        // User root
         if let Some(home) = dirs::home_dir() {
             let user_root = home.join(".agents").join("skills");
             loader.add_root(SkillScope::User, user_root);
         }
 
-        // Repo root
         if let Some(ref wd) = working_dir {
             let repo_root = wd.join(".agents").join("skills");
             loader.add_root(SkillScope::Repo, repo_root);
@@ -98,45 +105,45 @@ impl SkillLoader {
                     }
                 };
 
-                let parsed = match parse_skill_content(&content) {
-                    Ok(p) => p,
+                let fm = match md_frontmatter::parse::<SkillFrontmatter>(&content) {
+                    Ok(doc) => doc.frontmatter,
                     Err(e) => {
-                        tracing::warn!(path = %skill_md.display(), error = %e, "Failed to parse SKILL.md, skipping");
+                        tracing::warn!(path = %skill_md.display(), error = %e, "Failed to parse SKILL.md frontmatter, skipping");
                         continue;
                     }
                 };
 
                 let file_listing = scan_skill_files(&dir_path);
-                let id = format!("{}:{}", scope.prefix(), parsed.name);
+                let id = format!("{}:{}", scope.prefix(), fm.name);
 
                 let def = SkillDef {
                     id: id.clone(),
-                    name: parsed.name.clone(),
-                    version: parsed.version,
-                    description: parsed.description,
+                    name: fm.name.clone(),
+                    version: fm.version,
+                    description: fm.description,
                     scope: scope.clone(),
-                    triggers: parsed.triggers,
-                    content: parsed.body,
+                    triggers: fm.triggers,
+                    content: doc_to_body(&content),
                     file_listing,
                 };
 
-                // First-loaded wins: don't overwrite existing
-                if !skills_map.contains_key(&parsed.name) {
-                    skills_map.insert(parsed.name, Arc::new(def));
-                } else {
-                    tracing::warn!(skill = %parsed.name, "Duplicate skill name, keeping existing");
+                match skills_map.entry(fm.name) {
+                    std::collections::hash_map::Entry::Vacant(e) => {
+                        e.insert(Arc::new(def));
+                    }
+                    std::collections::hash_map::Entry::Occupied(e) => {
+                        tracing::warn!(skill = %e.key(), "Duplicate skill name, keeping existing");
+                    }
                 }
             }
         }
 
-        // Merge into main map (discover_all can be called multiple times)
         let mut guard = self.skills.write().await;
         for (name, def) in skills_map {
             guard.insert(name, def);
         }
         drop(guard);
 
-        // Rebuild metadata cache
         self.rebuild_metadata().await;
 
         Ok(())
@@ -163,7 +170,7 @@ impl SkillLoader {
         self.skills.read().await.get(name).cloned()
     }
 
-    /// Find skills whose triggers match the query (case-insensitive keyword match).
+    /// Find skills whose triggers match the query.
     pub async fn get_by_trigger(&self, query: &str) -> Vec<Arc<SkillDef>> {
         self.ensure_discovered().await;
         let guard = self.skills.read().await;
@@ -179,7 +186,7 @@ impl SkillLoader {
             .collect()
     }
 
-    /// Register a skill directly (code-registered).
+    /// Register a skill directly.
     pub async fn register(&self, skill: SkillDef) {
         let name = skill.name.clone();
         self.skills.write().await.insert(name, Arc::new(skill));
@@ -195,6 +202,48 @@ impl SkillLoader {
     }
 }
 
+/// Scan a skill directory for all files, returning relative paths.
+fn scan_skill_files(root: &Path) -> Vec<String> {
+    let mut files = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            collect_files_recursive(&path, root, &mut files);
+        }
+    }
+    files.sort();
+    files
+}
+
+fn collect_files_recursive(path: &Path, root: &Path, files: &mut Vec<String>) {
+    if path.is_file() {
+        if let Ok(rel) = path.strip_prefix(root) {
+            files.push(rel.to_string_lossy().to_string());
+        }
+    } else if path.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(path) {
+            for entry in entries.flatten() {
+                collect_files_recursive(&entry.path(), root, files);
+            }
+        }
+    }
+}
+
+/// Extract the body from SKILL.md content by finding the closing --- delimiter.
+/// This is only used for the `content` field of SkillDef; frontmatter is parsed separately.
+fn doc_to_body(content: &str) -> String {
+    let trimmed = content.trim_start();
+    if !trimmed.starts_with("---") {
+        return content.to_string();
+    }
+    let rest = &trimmed[3..];
+    if let Some(end_idx) = rest.find("\n---") {
+        rest[end_idx + 4..].to_string()
+    } else {
+        content.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,7 +255,6 @@ mod tests {
         let skills_dir = temp_dir.path().join(".agents").join("skills");
         std::fs::create_dir_all(&skills_dir).unwrap();
 
-        // Create a valid skill
         let rust_dir = skills_dir.join("rust-conventions");
         std::fs::create_dir_all(&rust_dir).unwrap();
         let mut f = std::fs::File::create(rust_dir.join("SKILL.md")).unwrap();
@@ -218,18 +266,14 @@ mod tests {
         writeln!(f, "---").unwrap();
         writeln!(f, "# Rust Conventions").unwrap();
 
-        // Create an invalid skill (no SKILL.md)
         let invalid_dir = skills_dir.join("invalid-skill");
         std::fs::create_dir_all(&invalid_dir).unwrap();
 
-        // Use a loader with only our test root to avoid home dir pollution
         let mut loader = SkillLoader::new(None);
-        // Replace roots with only our test dir
         loader.roots.clear();
         loader.add_root(SkillScope::User, skills_dir.clone());
         loader.discover_all().await.unwrap();
 
-        // Check that our skill was discovered
         let skill = loader.get("rust-conventions").await;
         assert!(skill.is_some(), "rust-conventions skill should exist");
         assert!(skill.unwrap().content.contains("# Rust Conventions"));
@@ -239,14 +283,11 @@ mod tests {
     async fn test_discover_empty_root() {
         let temp_dir = tempfile::tempdir().unwrap();
         let non_existent = temp_dir.path().join("nonexistent");
-        // Use a loader with only our empty test root
         let mut loader = SkillLoader::new(None);
         loader.roots.clear();
         loader.add_root(SkillScope::User, non_existent);
         let result = loader.discover_all().await;
         assert!(result.is_ok());
-        // After discovering from empty root, no new skills should be added
-        // (home dir skills may already exist, so we check no error occurred)
         let _ = loader.list_metadata().await;
     }
 
@@ -276,7 +317,6 @@ mod tests {
         skill2.id = "repo:dup".to_string();
         loader.register(skill2).await;
 
-        // Later registration overwrites (last wins)
         let skill = loader.get("dup").await.unwrap();
         assert_eq!(skill.content, "content2");
     }

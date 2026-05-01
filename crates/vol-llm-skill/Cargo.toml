@@ -10,7 +10,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-serde_yaml = "0.9"
+md-frontmatter = { workspace = true }
 vol-llm-core = { workspace = true }
 vol-llm-context = { workspace = true }
 vol-llm-tool = { workspace = true }

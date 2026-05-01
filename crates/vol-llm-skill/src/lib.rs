@@ -23,7 +23,6 @@
 mod def;
 mod injector;
 mod loader;
-mod parser;
 mod tool;
 
 pub use def::{SkillDef, SkillMetadata, SkillScope};
