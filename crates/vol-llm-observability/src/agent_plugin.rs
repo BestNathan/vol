@@ -1,7 +1,6 @@
 //! ObservabilityPlugin — sends agent events to the observability service.
 
 use tokio::sync::mpsc;
-use vol_llm_core::AgentStreamEvent;
 
 use crate::agent_client::{BatchCommand, spawn_batch_sender};
 use crate::agent_config::ObservabilityAgentConfig;
@@ -34,69 +33,20 @@ impl ObservabilityPlugin {
         Self { tx }
     }
 
+    /// Send an event to the batch sender.
+    pub async fn send_event(&self, event: vol_llm_core::AgentStreamEvent) {
+        let _ = self.tx.send(BatchCommand::Event(event)).await;
+    }
+
     /// Whether this plugin is enabled.
     pub fn is_enabled(config: &ObservabilityAgentConfig) -> bool {
         config.enabled
     }
 }
 
-#[async_trait::async_trait]
-impl vol_llm_agent::react::AgentPlugin for ObservabilityPlugin {
-    fn id(&self) -> String {
-        "observability".to_string()
-    }
-
-    fn priority(&self) -> u32 {
-        5 // Lower than logger (10) so logger runs first
-    }
-
-    async fn intercept(
-        &self,
-        _event: &AgentStreamEvent,
-        _ctx: &vol_llm_agent::react::RunContext,
-    ) -> vol_llm_agent::react::PluginDecision {
-        vol_llm_agent::react::PluginDecision::Continue
-    }
-
-    async fn listen(
-        &self,
-        event: &AgentStreamEvent,
-        _ctx: &vol_llm_agent::react::RunContext,
-    ) {
-        let _ = self.tx.send(BatchCommand::Event(event.clone())).await;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_llm_agent::react::AgentPlugin;
-
-    #[tokio::test]
-    async fn test_plugin_id() {
-        let config = ObservabilityAgentConfig::default();
-        let plugin = ObservabilityPlugin::new(
-            &config,
-            "run-1".to_string(),
-            "session-1".to_string(),
-            "agent-1".to_string(),
-            "CodingAgent".to_string(),
-        );
-        assert_eq!(plugin.id(), "observability");
-    }
-
-    #[tokio::test]
-    async fn test_plugin_priority() {
-        let config = ObservabilityAgentConfig::default();
-        let plugin = ObservabilityPlugin::new(
-            &config,
-            "run-1".to_string(),
-            "session-1".to_string(),
-            "agent-1".to_string(),
-            "CodingAgent".to_string(),
-        );
-        assert_eq!(plugin.priority(), 5);
-    }
 
     #[test]
     fn test_is_enabled() {

@@ -4101,6 +4101,7 @@ dependencies = [
  "uuid",
  "vol-llm-context",
  "vol-llm-core",
+ "vol-llm-observability",
  "vol-llm-provider",
  "vol-llm-skill",
  "vol-llm-tdengine",
@@ -4193,7 +4194,6 @@ dependencies = [
 name = "vol-llm-observability"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "chrono",
  "reqwest 0.11.27",
  "serde",
@@ -4202,10 +4202,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "vol-llm-agent",
  "vol-llm-core",
- "vol-llm-tool",
- "vol-session",
 ]
 
 [[package]]

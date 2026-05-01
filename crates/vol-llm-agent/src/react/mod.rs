@@ -33,6 +33,7 @@
 pub mod agent;
 pub mod builder;
 pub mod hitl;
+pub mod observability_plugin;
 pub mod plugin;
 pub mod plugin_stream;
 pub mod prompt;
