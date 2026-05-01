@@ -11,6 +11,7 @@ async-trait = { workspace = true }
 tracing = { workspace = true }
 chrono = { workspace = true }
 tempfile = "3"
+reqwest = { workspace = true }
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-agent = { path = "../vol-llm-agent" }
 
