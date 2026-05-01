@@ -54,6 +54,7 @@ async fn test_agent_run_single_iteration() {
         .with_llm(Arc::new(mock))
         .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
+        .with_observability(None)
         .build()
         .unwrap();
 
@@ -154,6 +155,7 @@ async fn test_agent_run_multiple_iterations() {
         .with_plugin(plugin)
         .with_max_iterations(10)
         .with_system_prompt("You are a test assistant.".to_string())
+        .with_observability(None)
         .build()
         .unwrap();
 
@@ -202,6 +204,7 @@ async fn test_agent_run_llm_error_propagates() {
         .with_llm(Arc::new(mock))
         .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
+        .with_observability(None)
         .build()
         .unwrap();
 
@@ -295,6 +298,7 @@ async fn test_agent_run_event_emission() {
         .with_plugin(plugin)
         .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
+        .with_observability(None)
         .build()
         .unwrap();
 
@@ -356,6 +360,7 @@ async fn test_agent_run_max_iterations_reached() {
         .with_tool(EchoTool)
         .with_max_iterations(3)
         .with_system_prompt("You are a test assistant.".to_string())
+        .with_observability(None)
         .build()
         .unwrap();
 
@@ -386,6 +391,7 @@ async fn test_mock_llm_call_tracking() {
         .with_llm(Arc::new(mock))
         .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
+        .with_observability(None)
         .build()
         .unwrap();
 
@@ -427,6 +433,7 @@ async fn test_plugin_intercept_abort() {
         .with_plugin(AbortPlugin)
         .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
+        .with_observability(None)
         .build()
         .unwrap();
 
