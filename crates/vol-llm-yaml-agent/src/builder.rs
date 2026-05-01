@@ -85,6 +85,7 @@ impl YamlAgentBuilder {
             plugin_registry,
             agent_id: self.config.name.clone(),
             working_dir: self.config.working_dir.clone(),
+            observability: None,
         };
 
         // 6. Create session

@@ -15,7 +15,7 @@ pub fn register_plugin_by_name(
 
     match name {
         "logger" => {
-            let logger = vol_llm_observability::LoggerPlugin::new(working_dir.to_path_buf());
+            let logger = vol_llm_agent::react::LoggerAgentPlugin::new(working_dir.to_path_buf());
             registry.register(logger);
         }
         _ => return Err(YamlAgentError::UnknownPlugin(name.to_string())),
