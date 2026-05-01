@@ -30,6 +30,7 @@ members = [
     "crates/vol-llm-task",
     "crates/vol-llm-wiki",
     "crates/vol-llm-yaml-agent",
+    "crates/vol-observability",
 ]
 
 [workspace.package]
@@ -48,6 +49,7 @@ async-trait = "0.1"
 tokio-tungstenite = { version = "0.21", features = ["rustls-tls-webpki-roots"] }
 
 # HTTP
+axum = "0.7"
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls", "multipart"] }
 
 # Serialization
@@ -115,3 +117,4 @@ vol-llm-context = { path = "crates/vol-llm-context" }
 vol-llm-task = { path = "crates/vol-llm-task" }
 vol-llm-tools-builtin = { path = "crates/vol-llm-tools-builtin" }
 vol-llm-wiki = { path = "crates/vol-llm-wiki" }
+vol-observability = { path = "crates/vol-observability" }

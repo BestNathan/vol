@@ -3535,6 +3535,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-test"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6d24790a10a7af737693a3e8f1d03faef7e6ca0cc99aae5066f533766de545"
+dependencies = [
+ "futures-core",
+ "tokio",
+ "tokio-stream",
+]
+
+[[package]]
 name = "tokio-tungstenite"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4126,6 +4137,7 @@ dependencies = [
  "vol-llm-tdengine",
  "vol-llm-tool",
  "vol-llm-tools-builtin",
+ "vol-llm-wiki",
  "vol-notification",
  "vol-session",
  "vol-tdengine",
@@ -4461,6 +4473,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "vol-llm-yaml-agent"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "vol-llm-agent",
+ "vol-llm-context",
+ "vol-llm-core",
+ "vol-llm-observability",
+ "vol-llm-provider",
+ "vol-llm-tool",
+ "vol-llm-tools-builtin",
+ "vol-session",
+]
+
+[[package]]
 name = "vol-monitor"
 version = "0.1.0"
 dependencies = [
@@ -4511,6 +4545,25 @@ dependencies = [
  "vol-core",
  "vol-deribit",
  "vol-tracing",
+]
+
+[[package]]
+name = "vol-observability"
+version = "0.1.0"
+dependencies = [
+ "axum 0.7.9",
+ "chrono",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "tracing-subscriber",
+ "vol-config",
+ "vol-llm-core",
+ "vol-tdengine",
 ]
 
 [[package]]
