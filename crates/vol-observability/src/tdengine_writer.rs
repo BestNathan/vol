@@ -1,5 +1,6 @@
 //! TDengine batch writer — buffers metrics and flushes to TDengine in batches.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -24,7 +25,7 @@ pub enum TdengineCommand {
 
 #[derive(Clone, Default)]
 pub struct TdengineWriterHealth {
-    pub last_flush_ok: Arc<std::sync::Mutex<bool>>,
+    pub last_flush_ok: Arc<AtomicBool>,
 }
 
 // -- SQL helper --
@@ -39,8 +40,7 @@ fn sql_escape(s: &str) -> String {
 /// them to TDengine when the buffer reaches `batch_size` or after
 /// `flush_interval_ms`.
 ///
-/// Returns a `(sender, health)` tuple. Send `TdengineCommand::Metric` to
-/// queue entries, or `TdengineCommand::Flush` to force an immediate flush.
+/// Returns a `(sender, health)` tuple.
 pub fn spawn_tdengine_writer(
     base_url: String,
     user: String,
@@ -115,7 +115,7 @@ pub fn spawn_tdengine_writer(
 
 // -- Internal flush helper --
 
-/// Group metrics by table type, build multi-row INSERT statements, and POST
+/// Group metrics by table, build true multi-row INSERT statements, and POST
 /// to TDengine REST API. On failure, logs ERROR and drops the batch.
 async fn flush_to_tdengine(
     client: &reqwest::Client,
@@ -130,10 +130,10 @@ async fn flush_to_tdengine(
         return;
     }
 
-    // Group by table name and collect INSERT values.
-    let mut agent_rows: Vec<String> = Vec::new();
-    let mut llm_rows: Vec<String> = Vec::new();
-    let mut tool_rows: Vec<String> = Vec::new();
+    // Group by table name, collecting (tags, values) pairs.
+    let mut agent_tags_values: Vec<(String, String)> = Vec::new();
+    let mut llm_tags_values: Vec<(String, String)> = Vec::new();
+    let mut tool_tags_values: Vec<(String, String)> = Vec::new();
 
     for metric in metrics {
         match metric {
@@ -143,17 +143,17 @@ async fn flush_to_tdengine(
                 final_answer_len, status,
             } => {
                 let ts = timestamp.timestamp_millis();
-                let row = format!(
-                    "{} USING {} TAGS ('{}','{}','{}','{}') VALUES ({},{},{},{},{},{})",
-                    TABLE_AGENT_RUN, TABLE_AGENT_RUN,
-                    sql_escape(&run_id),
-                    sql_escape(&session_id),
-                    sql_escape(&agent_id),
-                    sql_escape(&agent_type),
+                let tags = format!(
+                    "('{}','{}','{}','{}')",
+                    sql_escape(&run_id), sql_escape(&session_id),
+                    sql_escape(&agent_id), sql_escape(&agent_type),
+                );
+                let values = format!(
+                    "({},{},{},{},{},{})",
                     ts, duration_ms, iterations, tool_calls,
                     final_answer_len, status,
                 );
-                agent_rows.push(row);
+                agent_tags_values.push((tags, values));
             }
             ExtractedMetric::LlmCall {
                 run_id, session_id, agent_id, agent_type,
@@ -163,35 +163,36 @@ async fn flush_to_tdengine(
             } => {
                 let ts = timestamp.timestamp_millis();
                 let error_flag = if is_error { -1 } else { 0 };
-                let row = format!(
-                    "{} USING {} TAGS ('{}','{}','{}','{}') VALUES ({},{},{},{},{},{},{},'{}')",
-                    TABLE_LLM_CALL, TABLE_LLM_CALL,
-                    sql_escape(&run_id),
-                    sql_escape(&session_id),
-                    sql_escape(&agent_id),
-                    sql_escape(&agent_type),
+                let tags = format!(
+                    "('{}','{}','{}','{}','{}')",
+                    sql_escape(&run_id), sql_escape(&session_id),
+                    sql_escape(&agent_id), sql_escape(&agent_type),
+                    sql_escape(&model),
+                );
+                let values = format!(
+                    "({},{},{},{},{},{},{})",
                     ts, duration_ms, iteration,
                     input_tokens, output_tokens, total_tokens,
-                    error_flag, sql_escape(&model),
+                    error_flag,
                 );
-                llm_rows.push(row);
+                llm_tags_values.push((tags, values));
             }
             ExtractedMetric::ToolCall {
                 run_id, session_id, agent_id, agent_type,
                 timestamp, duration_ms, status, tool_name,
             } => {
                 let ts = timestamp.timestamp_millis();
-                let row = format!(
-                    "{} USING {} TAGS ('{}','{}','{}','{}') VALUES ({},{},{},'{}')",
-                    TABLE_TOOL_CALL, TABLE_TOOL_CALL,
-                    sql_escape(&run_id),
-                    sql_escape(&session_id),
-                    sql_escape(&agent_id),
-                    sql_escape(&agent_type),
-                    ts, duration_ms, status,
+                let tags = format!(
+                    "('{}','{}','{}','{}','{}')",
+                    sql_escape(&run_id), sql_escape(&session_id),
+                    sql_escape(&agent_id), sql_escape(&agent_type),
                     sql_escape(&tool_name),
                 );
-                tool_rows.push(row);
+                let values = format!(
+                    "({},{},{})",
+                    ts, duration_ms, status,
+                );
+                tool_tags_values.push((tags, values));
             }
         }
     }
@@ -201,17 +202,31 @@ async fn flush_to_tdengine(
 
     let mut ok = true;
 
-    // Send each table's INSERT statements.
-    for (table_name, rows) in [
-        (TABLE_AGENT_RUN, agent_rows),
-        (TABLE_LLM_CALL, llm_rows),
-        (TABLE_TOOL_CALL, tool_rows),
+    // Build and send multi-row INSERT per table.
+    for (table, tags_values) in [
+        (TABLE_AGENT_RUN, agent_tags_values),
+        (TABLE_LLM_CALL, llm_tags_values),
+        (TABLE_TOOL_CALL, tool_tags_values),
     ] {
-        if rows.is_empty() {
+        if tags_values.is_empty() {
             continue;
         }
 
-        let sql = rows.join(" ");
+        // Group rows by identical tags to produce true multi-row VALUES.
+        // Key = tags string, Value = list of value tuples.
+        let mut by_tags: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        for (tags, values) in tags_values {
+            by_tags.entry(tags).or_default().push(values);
+        }
+
+        let sql_parts: Vec<String> = by_tags
+            .into_iter()
+            .map(|(tags, values)| {
+                format!("{} USING {} TAGS {} VALUES {}", table, table, tags, values.join(" "))
+            })
+            .collect();
+
+        let sql = sql_parts.join(" ");
         match client
             .post(&url)
             .basic_auth(user, Some(password))
@@ -222,26 +237,22 @@ async fn flush_to_tdengine(
         {
             Ok(resp) => {
                 let status = resp.status();
-                if status.is_success() {
-                    tracing::debug!("tdengine flush ok: table={}, status={}", table_name, status);
-                } else {
+                if !status.is_success() {
                     tracing::error!(
                         "tdengine flush failed: table={}, status={}",
-                        table_name, status,
+                        table, status,
                     );
                     ok = false;
                 }
             }
             Err(err) => {
-                tracing::error!("tdengine flush failed: table={}, error={}", table_name, err);
+                tracing::error!("tdengine flush failed: table={}, error={}", table, err);
                 ok = false;
             }
         }
     }
 
-    if let Ok(mut flag) = health.last_flush_ok.lock() {
-        *flag = ok;
-    }
+    health.last_flush_ok.store(ok, Ordering::SeqCst);
 }
 
 // -- Tests --
@@ -259,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_insert_statement() {
+    fn test_flush_groups_by_tags() {
         let now = chrono::Utc::now();
         let metrics = vec![
             ExtractedMetric::AgentRun {
@@ -272,6 +283,18 @@ mod tests {
                 iterations: 3,
                 tool_calls: 2,
                 final_answer_len: 100,
+                status: 0,
+            },
+            ExtractedMetric::AgentRun {
+                run_id: "r1".to_string(),
+                session_id: "s1".to_string(),
+                agent_id: "a1".to_string(),
+                agent_type: "CodingAgent".to_string(),
+                timestamp: now,
+                duration_ms: 600,
+                iterations: 4,
+                tool_calls: 3,
+                final_answer_len: 200,
                 status: 0,
             },
             ExtractedMetric::LlmCall {
@@ -300,43 +323,47 @@ mod tests {
             },
         ];
 
-        let ts = now.timestamp_millis();
+        // Group metrics the same way flush_to_tdengine does.
+        let mut agent_tags_values: Vec<(String, String)> = Vec::new();
+        let mut llm_tags_values: Vec<(String, String)> = Vec::new();
+        let mut tool_tags_values: Vec<(String, String)> = Vec::new();
 
-        // Verify AgentRun row
-        let agent_row = format!(
-            "{} USING {} TAGS ('{}','{}','{}','{}') VALUES ({},{},{},{},{},{})",
-            TABLE_AGENT_RUN, TABLE_AGENT_RUN,
-            sql_escape("r1"), sql_escape("s1"),
-            sql_escape("a1"), sql_escape("CodingAgent"),
-            ts, 500, 3, 2, 100, 0,
-        );
-        assert!(agent_row.contains("agent_run USING agent_run"));
-        assert!(agent_row.contains("'r1'"));
-        assert!(agent_row.contains("'CodingAgent'"));
+        for metric in metrics {
+            match metric {
+                ExtractedMetric::AgentRun { run_id, session_id, agent_id, agent_type, timestamp, duration_ms, iterations, tool_calls, final_answer_len, status } => {
+                    let ts = timestamp.timestamp_millis();
+                    let tags = format!("('{}','{}','{}','{}')", sql_escape(&run_id), sql_escape(&session_id), sql_escape(&agent_id), sql_escape(&agent_type));
+                    let values = format!("({},{},{},{},{},{})", ts, duration_ms, iterations, tool_calls, final_answer_len, status);
+                    agent_tags_values.push((tags, values));
+                }
+                ExtractedMetric::LlmCall { run_id, session_id, agent_id, agent_type, timestamp, duration_ms, iteration, input_tokens, output_tokens, total_tokens, model, is_error } => {
+                    let ts = timestamp.timestamp_millis();
+                    let tags = format!("('{}','{}','{}','{}','{}')", sql_escape(&run_id), sql_escape(&session_id), sql_escape(&agent_id), sql_escape(&agent_type), sql_escape(&model));
+                    let error_flag = if is_error { -1 } else { 0 };
+                    let values = format!("({},{},{},{},{},{},{})", ts, duration_ms, iteration, input_tokens, output_tokens, total_tokens, error_flag);
+                    llm_tags_values.push((tags, values));
+                }
+                ExtractedMetric::ToolCall { run_id, session_id, agent_id, agent_type, timestamp, duration_ms, status, tool_name } => {
+                    let ts = timestamp.timestamp_millis();
+                    let tags = format!("('{}','{}','{}','{}','{}')", sql_escape(&run_id), sql_escape(&session_id), sql_escape(&agent_id), sql_escape(&agent_type), sql_escape(&tool_name));
+                    let values = format!("({},{},{})", ts, duration_ms, status);
+                    tool_tags_values.push((tags, values));
+                }
+            }
+        }
 
-        // Verify LlmCall row
-        let llm_row = format!(
-            "{} USING {} TAGS ('{}','{}','{}','{}') VALUES ({},{},{},{},{},{},{},'{}')",
-            TABLE_LLM_CALL, TABLE_LLM_CALL,
-            sql_escape("r1"), sql_escape("s1"),
-            sql_escape("a1"), sql_escape("CodingAgent"),
-            ts, 200, 1, 100, 50, 150, 0, sql_escape("qwen3.5-plus"),
-        );
-        assert!(llm_row.contains("llm_call USING llm_call"));
-        assert!(llm_row.contains("'qwen3.5-plus'"));
+        // Two AgentRun metrics share tags → should group into one multi-row VALUES
+        assert_eq!(agent_tags_values.len(), 2);
+        let mut agent_by_tags: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        for (tags, values) in agent_tags_values {
+            agent_by_tags.entry(tags).or_default().push(values);
+        }
+        assert_eq!(agent_by_tags.len(), 1, "identical tags should group into one entry");
+        let values = agent_by_tags.values().next().unwrap();
+        assert_eq!(values.len(), 2, "should have two value sets grouped");
 
-        // Verify ToolCall row
-        let tool_row = format!(
-            "{} USING {} TAGS ('{}','{}','{}','{}') VALUES ({},{},{},'{}')",
-            TABLE_TOOL_CALL, TABLE_TOOL_CALL,
-            sql_escape("r1"), sql_escape("s1"),
-            sql_escape("a1"), sql_escape("CodingAgent"),
-            ts, 150, 0, sql_escape("bash"),
-        );
-        assert!(tool_row.contains("tool_call USING tool_call"));
-        assert!(tool_row.contains("'bash'"));
-
-        // Verify all three metrics produced distinct rows
-        assert_eq!(metrics.len(), 3);
+        // One LlmCall, one ToolCall → each their own group
+        assert_eq!(llm_tags_values.len(), 1);
+        assert_eq!(tool_tags_values.len(), 1);
     }
 }

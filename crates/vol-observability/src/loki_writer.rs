@@ -1,6 +1,7 @@
 //! Loki batch writer — buffers log entries and flushes to Loki in batches.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -33,7 +34,7 @@ pub enum LokiCommand {
 
 #[derive(Clone, Default)]
 pub struct LokiWriterHealth {
-    pub last_flush_ok: Arc<std::sync::Mutex<bool>>,
+    pub last_flush_ok: Arc<AtomicBool>,
 }
 
 // -- Public API --
@@ -157,9 +158,7 @@ async fn flush_to_loki(
                 let status = resp.status();
                 if status.is_success() {
                     tracing::debug!("loki flush ok: status={}", status);
-                    if let Ok(mut ok) = health.last_flush_ok.lock() {
-                        *ok = true;
-                    }
+                    health.last_flush_ok.store(true, Ordering::SeqCst);
                     return;
                 }
                 last_err = Some(format!("status={}", status));
@@ -176,9 +175,7 @@ async fn flush_to_loki(
 
     // All attempts exhausted.
     tracing::error!("loki flush failed after {} attempts: {}", max_attempts, last_err.as_ref().unwrap());
-    if let Ok(mut ok) = health.last_flush_ok.lock() {
-        *ok = false;
-    }
+    health.last_flush_ok.store(false, Ordering::SeqCst);
 }
 
 // -- Tests --
