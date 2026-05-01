@@ -108,7 +108,7 @@ pub fn spawn_loki_writer(
 // -- Internal flush helper --
 
 /// Group entries by label set, build a `LokiPushRequest`, and POST to Loki.
-/// On failure, logs an ERROR and drops the batch (no retry).
+/// Retries once on failure, then drops the batch and logs ERROR.
 async fn flush_to_loki(
     client: &reqwest::Client,
     url: &str,
@@ -145,27 +145,39 @@ async fn flush_to_loki(
 
     let push_url = format!("{}/loki/api/v1/push", url.trim_end_matches('/'));
 
-    match client.post(&push_url).json(&request).send().await {
-        Ok(resp) => {
-            let status = resp.status();
-            if status.is_success() {
-                tracing::debug!("loki flush ok: status={}", status);
-                if let Ok(mut ok) = health.last_flush_ok.lock() {
-                    *ok = true;
+    // Retry once on failure, then drop.
+    let mut attempt = 0;
+    let max_attempts = 2;
+    let mut last_err = None;
+
+    while attempt < max_attempts {
+        attempt += 1;
+        match client.post(&push_url).json(&request).send().await {
+            Ok(resp) => {
+                let status = resp.status();
+                if status.is_success() {
+                    tracing::debug!("loki flush ok: status={}", status);
+                    if let Ok(mut ok) = health.last_flush_ok.lock() {
+                        *ok = true;
+                    }
+                    return;
                 }
-            } else {
-                tracing::error!("loki flush failed: status={}", status);
-                if let Ok(mut ok) = health.last_flush_ok.lock() {
-                    *ok = false;
-                }
+                last_err = Some(format!("status={}", status));
+            }
+            Err(err) => {
+                last_err = Some(err.to_string());
             }
         }
-        Err(err) => {
-            tracing::error!("loki flush error: {}", err);
-            if let Ok(mut ok) = health.last_flush_ok.lock() {
-                *ok = false;
-            }
+        if attempt < max_attempts {
+            tracing::warn!("loki flush failed (attempt {}), retrying: {}", attempt, last_err.as_ref().unwrap());
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
+    }
+
+    // All attempts exhausted.
+    tracing::error!("loki flush failed after {} attempts: {}", max_attempts, last_err.as_ref().unwrap());
+    if let Ok(mut ok) = health.last_flush_ok.lock() {
+        *ok = false;
     }
 }
 
