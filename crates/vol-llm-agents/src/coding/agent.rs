@@ -198,6 +198,7 @@ impl CodingAgent {
             plugin_registry: self.config.plugin_registry.clone(),
             agent_id: self.config.agent_id.clone(),
             working_dir: self.config.working_dir.clone(),
+            observability: None,
         }
     }
 
@@ -351,7 +352,7 @@ impl CodingAgentBuilder {
 
     /// Register LoggerPlugin to write JSONL event logs to store_dir/logs/.
     pub fn with_logger(mut self) -> Self {
-        let logger = vol_llm_observability::LoggerPlugin::new(self.config.store_dir.clone());
+        let logger = vol_llm_agent::react::LoggerAgentPlugin::new(self.config.store_dir.clone());
         self.config.plugin_registry.register(logger);
         self
     }

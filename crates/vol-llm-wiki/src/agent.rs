@@ -165,6 +165,7 @@ impl WikiAgent {
             plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
             agent_id: self.config.agent_id.clone(),
             working_dir: self.config.working_dir.clone(),
+            observability: None,
         };
 
         let react_agent = ReActAgent::new(
