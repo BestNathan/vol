@@ -105,8 +105,8 @@ impl SkillLoader {
                     }
                 };
 
-                let fm = match md_frontmatter::parse::<SkillFrontmatter>(&content) {
-                    Ok(doc) => doc.frontmatter,
+                let doc = match md_frontmatter::parse::<SkillFrontmatter>(&content) {
+                    Ok(doc) => doc,
                     Err(e) => {
                         tracing::warn!(path = %skill_md.display(), error = %e, "Failed to parse SKILL.md frontmatter, skipping");
                         continue;
@@ -114,20 +114,20 @@ impl SkillLoader {
                 };
 
                 let file_listing = scan_skill_files(&dir_path);
-                let id = format!("{}:{}", scope.prefix(), fm.name);
+                let id = format!("{}:{}", scope.prefix(), doc.frontmatter.name);
 
                 let def = SkillDef {
                     id: id.clone(),
-                    name: fm.name.clone(),
-                    version: fm.version,
-                    description: fm.description,
+                    name: doc.frontmatter.name.clone(),
+                    version: doc.frontmatter.version,
+                    description: doc.frontmatter.description,
                     scope: scope.clone(),
-                    triggers: fm.triggers,
-                    content: doc_to_body(&content),
+                    triggers: doc.frontmatter.triggers,
+                    content: doc.body,
                     file_listing,
                 };
 
-                match skills_map.entry(fm.name) {
+                match skills_map.entry(doc.frontmatter.name) {
                     std::collections::hash_map::Entry::Vacant(e) => {
                         e.insert(Arc::new(def));
                     }
@@ -229,21 +229,6 @@ fn collect_files_recursive(path: &Path, root: &Path, files: &mut Vec<String>) {
     }
 }
 
-/// Extract the body from SKILL.md content by finding the closing --- delimiter.
-/// This is only used for the `content` field of SkillDef; frontmatter is parsed separately.
-fn doc_to_body(content: &str) -> String {
-    let trimmed = content.trim_start();
-    if !trimmed.starts_with("---") {
-        return content.to_string();
-    }
-    let rest = &trimmed[3..];
-    if let Some(end_idx) = rest.find("\n---") {
-        rest[end_idx + 4..].to_string()
-    } else {
-        content.to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -319,5 +304,36 @@ mod tests {
 
         let skill = loader.get("dup").await.unwrap();
         assert_eq!(skill.content, "content2");
+    }
+
+    #[tokio::test]
+    async fn test_invalid_frontmatter_skipped() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let skills_dir = temp_dir.path().join(".agents").join("skills");
+        std::fs::create_dir_all(&skills_dir).unwrap();
+
+        // Skill with no frontmatter — should be skipped
+        let no_fm_dir = skills_dir.join("no-frontmatter");
+        std::fs::create_dir_all(&no_fm_dir).unwrap();
+        std::fs::write(no_fm_dir.join("SKILL.md"), "# No Frontmatter\n\nJust markdown.").unwrap();
+
+        // Skill with invalid YAML — should be skipped
+        let bad_yaml_dir = skills_dir.join("bad-yaml");
+        std::fs::create_dir_all(&bad_yaml_dir).unwrap();
+        let mut f = std::fs::File::create(bad_yaml_dir.join("SKILL.md")).unwrap();
+        writeln!(f, "---").unwrap();
+        writeln!(f, "name: [unclosed").unwrap();
+        writeln!(f, "---").unwrap();
+        writeln!(f, "# Body").unwrap();
+
+        let mut loader = SkillLoader::new(None);
+        loader.roots.clear();
+        loader.add_root(SkillScope::User, skills_dir.clone());
+        loader.discover_all().await.unwrap();
+
+        // Both should be skipped — no skills discovered
+        assert!(loader.get("no-frontmatter").await.is_none());
+        assert!(loader.get("bad-yaml").await.is_none());
+        assert!(loader.list_metadata().await.is_empty());
     }
 }
