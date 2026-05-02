@@ -35,7 +35,8 @@ impl fmt::Display for AgentScope {
 /// A parsed agent definition from a .md file.
 #[derive(Debug, Clone)]
 pub struct AgentDef {
-    /// Unique ID: "{scope_prefix}:{name}" e.g. "repo:test-runner"
+    /// Unique ID: "{scope_prefix}:{name}" e.g. "repo:test-runner".
+    /// `new()` uses a placeholder prefix; the loader sets the correct scope-based ID.
     pub id: String,
     /// Agent name from frontmatter
     pub name: String,
