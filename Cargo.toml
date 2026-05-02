@@ -117,3 +117,4 @@ vol-llm-task = { path = "crates/vol-llm-task" }
 vol-llm-tools-builtin = { path = "crates/vol-llm-tools-builtin" }
 vol-llm-wiki = { path = "crates/vol-llm-wiki" }
 md-frontmatter = { path = "crates/md-frontmatter" }
+dirs = "5.0"
