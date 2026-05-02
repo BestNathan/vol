@@ -1,4 +1,15 @@
 //! AgentTool — dispatches sub-agents by type, running a full ReAct loop.
+//!
+//! # YAGNI Notes
+//!
+//! - **Tool filtering**: `AgentDef.tools` and `AgentDef.disallowed_tools` are parsed from
+//!   frontmatter but not enforced at runtime. Sub-agents inherit all parent tools.
+//!   The fields serve as metadata for the LLM and are reserved for future enforcement.
+//! - **Model override**: `AgentDef.model` is parsed but not used. Sub-agents inherit the
+//!   parent's LLM client.
+//! - **Sensitivity**: `AgentTool` returns `Safe` because it is a dispatcher. The actual
+//!   tool calls made by the sub-agent go through the parent's `ToolRegistry`, where each
+//!   tool's own `sensitivity()` is still evaluated by the HITL system.
 
 use std::path::PathBuf;
 use std::sync::Arc;

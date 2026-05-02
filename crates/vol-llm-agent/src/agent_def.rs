@@ -207,6 +207,9 @@ impl AgentFrontmatter {
 }
 
 /// Error type for agent definition operations.
+///
+/// Currently reserved for future use — the loader handles errors by logging
+/// warnings and skipping invalid files rather than propagating them.
 #[derive(Debug, thiserror::Error)]
 pub enum AgentDefError {
     #[error("Agent type '{0}' not found")]
@@ -217,6 +220,13 @@ pub enum AgentDefError {
     InvalidDef(String),
     #[error("Loader error: {0}")]
     Loader(String),
+}
+
+impl AgentDefError {
+    /// Create a TypeNotFound error. Used internally by AgentTool (via ToolError wrapper).
+    pub fn type_not_found(r#type: &str) -> Self {
+        Self::TypeNotFound(r#type.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -281,5 +291,80 @@ mod tests {
         let meta = AgentMetadata::from(&def);
         assert_eq!(meta.name, "test");
         assert_eq!(meta.r#type, "reviewer");
+    }
+
+    #[test]
+    fn test_frontmatter_resolve_type_defaults_to_name() {
+        let fm = AgentFrontmatter {
+            name: "my-agent".to_string(),
+            r#type: None,
+            description: "desc".to_string(),
+            tools: None,
+            disallowed_tools: None,
+            model: None,
+            max_iterations: None,
+            max_turns: None,
+        };
+        assert_eq!(fm.resolve_type(), "my-agent");
+    }
+
+    #[test]
+    fn test_frontmatter_resolve_type_explicit() {
+        let fm = AgentFrontmatter {
+            name: "my-agent".to_string(),
+            r#type: Some("code-reviewer".to_string()),
+            description: "desc".to_string(),
+            tools: None,
+            disallowed_tools: None,
+            model: None,
+            max_iterations: None,
+            max_turns: None,
+        };
+        assert_eq!(fm.resolve_type(), "code-reviewer");
+    }
+
+    #[test]
+    fn test_frontmatter_resolve_max_iterations_prefers_explicit() {
+        let fm = AgentFrontmatter {
+            name: "a".to_string(),
+            r#type: None,
+            description: "d".to_string(),
+            tools: None,
+            disallowed_tools: None,
+            model: None,
+            max_iterations: Some(10),
+            max_turns: Some(20),
+        };
+        assert_eq!(fm.resolve_max_iterations(), Some(10));
+    }
+
+    #[test]
+    fn test_frontmatter_resolve_max_iterations_falls_back_to_turns() {
+        let fm = AgentFrontmatter {
+            name: "a".to_string(),
+            r#type: None,
+            description: "d".to_string(),
+            tools: None,
+            disallowed_tools: None,
+            model: None,
+            max_iterations: None,
+            max_turns: Some(20),
+        };
+        assert_eq!(fm.resolve_max_iterations(), Some(20));
+    }
+
+    #[test]
+    fn test_frontmatter_resolve_max_iterations_none() {
+        let fm = AgentFrontmatter {
+            name: "a".to_string(),
+            r#type: None,
+            description: "d".to_string(),
+            tools: None,
+            disallowed_tools: None,
+            model: None,
+            max_iterations: None,
+            max_turns: None,
+        };
+        assert!(fm.resolve_max_iterations().is_none());
     }
 }
