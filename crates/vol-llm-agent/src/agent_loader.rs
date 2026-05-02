@@ -114,8 +114,9 @@ impl AgentLoader {
                     std::collections::hash_map::Entry::Vacant(e) => {
                         e.insert(Arc::new(def));
                     }
-                    std::collections::hash_map::Entry::Occupied(e) => {
-                        tracing::warn!(agent = %e.key(), "Duplicate agent name, keeping existing");
+                    std::collections::hash_map::Entry::Occupied(mut e) => {
+                        tracing::warn!(agent = %e.key(), "Duplicate agent name, repo overrides user");
+                        e.insert(Arc::new(def));
                     }
                 }
             }
@@ -310,5 +311,28 @@ mod tests {
         assert_eq!(def.r#type, "my-agent");
         let by_type = loader.get_by_type("my-agent").await;
         assert_eq!(by_type.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_repo_overrides_user() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let user_dir = temp_dir.path().join("user_agents");
+        let repo_dir = temp_dir.path().join("repo_agents");
+        std::fs::create_dir_all(&user_dir).unwrap();
+        std::fs::create_dir_all(&repo_dir).unwrap();
+
+        create_agent_file(&user_dir, "helper", "helper", "User helper", "User content.");
+        create_agent_file(&repo_dir, "helper", "helper", "Repo helper", "Repo content.");
+
+        let mut loader = AgentLoader::new(None);
+        loader.roots.clear();
+        // Register user first, then repo — repo should win
+        loader.add_root(AgentScope::User, user_dir);
+        loader.add_root(AgentScope::Repo, repo_dir);
+        loader.discover_all().await.unwrap();
+
+        let def = loader.get("helper").await.unwrap();
+        assert!(def.content.contains("Repo content."));
+        assert_eq!(def.scope, AgentScope::Repo);
     }
 }
