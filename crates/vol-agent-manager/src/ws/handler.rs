@@ -9,6 +9,7 @@ use crate::events::{EventBus, ManagerEvent};
 use crate::metrics::collector::MetricsCollector;
 use crate::state::manager::AgentStateManager;
 use crate::state::models::{AgentState, AgentStatus};
+use crate::task::dispatcher::TaskDispatcher;
 
 /// Handle a single WebSocket connection for an agent.
 pub async fn handle_agent_connection(
@@ -17,6 +18,7 @@ pub async fn handle_agent_connection(
     state_manager: Arc<AgentStateManager>,
     metrics: Arc<MetricsCollector>,
     event_bus: Arc<EventBus>,
+    task_dispatcher: Arc<TaskDispatcher>,
     expected_token: Option<String>,
 ) {
     // Auth check
@@ -120,7 +122,7 @@ pub async fn handle_agent_connection(
         match ws.recv().await {
             Some(Ok(Message::Text(text))) => {
                 if let Err(e) = handle_agent_message(
-                    &text, &id, &state_manager, &metrics, &event_bus,
+                    &text, &id, &state_manager, &metrics, &event_bus, &task_dispatcher,
                 ).await {
                     let err_msg = WsMessage::error(&id, &e.to_string());
                     let _ = ws
@@ -163,6 +165,7 @@ async fn handle_agent_message(
     state_manager: &AgentStateManager,
     metrics: &MetricsCollector,
     event_bus: &EventBus,
+    task_dispatcher: &TaskDispatcher,
 ) -> Result<(), anyhow::Error> {
     let msg: WsMessage = serde_json::from_str(text)?;
     let agent_type = state_manager
@@ -203,9 +206,22 @@ async fn handle_agent_message(
             metrics.increment_messages("event", agent_id, &agent_type);
         }
         "task_result" => {
-            let _payload: TaskResultPayload = serde_json::from_value(msg.payload)?;
+            let payload: TaskResultPayload = serde_json::from_value(msg.payload)?;
             if let Some(ref task_id) = msg.task_id {
-                tracing::info!(task_id, agent_id, "Task result received");
+                match payload.status.as_str() {
+                    "Completed" => {
+                        task_dispatcher.complete_task(task_id, payload.result, payload.duration_ms).await;
+                        event_bus.emit(ManagerEvent::task_completed(task_id, agent_id));
+                    }
+                    "Failed" => {
+                        let error = payload.error.as_deref().unwrap_or("unknown error");
+                        task_dispatcher.fail_task(task_id, error).await;
+                        event_bus.emit(ManagerEvent::task_failed(task_id, agent_id, error));
+                    }
+                    _ => {
+                        warn!(task_id, agent_id, status = %payload.status, "Unknown task result status");
+                    }
+                }
             }
             metrics.increment_messages("task_result", agent_id, &agent_type);
         }

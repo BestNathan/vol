@@ -30,6 +30,7 @@ async fn upgrade_ws(
             state.state_manager.clone(),
             state.metrics.clone(),
             state.event_bus.clone(),
+            state.task_dispatcher.clone(),
             state.config.security.token.clone(),
         )
     })
