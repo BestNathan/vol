@@ -31,7 +31,7 @@ LLM 在会话中带着该指令工作
     │
     ▼
 LLM 自动执行:
-  1. wiki-ingest (整合 spec/plan → docs/wiki/)
+  1. wiki-ingest (整合 spec/plan → .agents/wikis/wiki/)
   2. wiki-lint (健康检查 + 自动修复)
   3. lark-cli 推送变更页面到 Feishu wiki (spaceID: 7630485291026910436)
 ```
@@ -69,7 +69,7 @@ Reads JSON from stdin (hook payload), writes JSON to stdout with `systemMessage`
 cat <<'EOF'
 {
   "continue": true,
-  "systemMessage": "【Wiki Sync Reminder】\nWhen a full superpowers workflow completes in this session (brainstorming → writing-plans → executing-plans → finishing-a-development-branch), automatically:\n1. Run wiki-ingest on new spec/plan files in docs/superpowers/specs/ and docs/superpowers/plans/ to integrate into docs/wiki/\n2. Run wiki-lint on docs/wiki/ to health-check and auto-fix (orphans, broken links, index staleness)\n3. Push only changed wiki pages to Feishu wiki space 7630485291026910436 via lark-cli\nCheck the transcript for skill invocation patterns to detect workflow completion."
+  "systemMessage": "【Wiki Sync Reminder】\nWhen a full superpowers workflow completes in this session (brainstorming → writing-plans → executing-plans → finishing-a-development-branch), automatically:\n1. Run wiki-ingest on new spec/plan files in docs/superpowers/specs/ and docs/superpowers/plans/ to integrate into .agents/wikis/wiki/\n2. Run wiki-lint on .agents/wikis/wiki/ to health-check and auto-fix (orphans, broken links, index staleness)\n3. Push only changed wiki pages to Feishu wiki space 7630485291026910436 via lark-cli\nCheck the transcript for skill invocation patterns to detect workflow completion."
 }
 EOF
 exit 0
