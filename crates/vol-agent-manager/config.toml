@@ -1,0 +1,10 @@
+[server]
+listen_addr = "0.0.0.0:8080"
+
+[health]
+check_interval_secs = 15
+heartbeat_timeout_secs = 90
+disconnect_retention_secs = 300
+
+[security]
+# token = "your-secret-token"
