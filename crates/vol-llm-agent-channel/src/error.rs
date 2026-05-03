@@ -1,10 +1,20 @@
 //! Channel error types.
 
-use thiserror::Error;
+#[derive(Debug, thiserror::Error)]
+pub enum ChannelError {
+    /// Target agent not found in router.
+    #[error("agent '{0}' not registered")]
+    AgentNotFound(String),
 
-// Placeholder — to be implemented in subsequent tasks.
+    /// Request was cancelled before execution.
+    #[error("request '{0}' was cancelled")]
+    Cancelled(String),
 
-/// Placeholder error type.
-#[derive(Debug, Error)]
-#[error("channel error: {0}")]
-pub struct ChannelError(String);
+    /// Dispatcher dropped while request was pending.
+    #[error("dispatcher dropped")]
+    DispatcherDropped,
+
+    /// Internal agent error (from ReActAgent::run).
+    #[error("agent execution error: {0}")]
+    AgentError(String),
+}
