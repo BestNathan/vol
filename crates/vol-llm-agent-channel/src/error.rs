@@ -18,3 +18,8 @@ pub enum ChannelError {
     #[error("agent execution error: {0}")]
     AgentError(String),
 }
+
+/// Stub: connection error type — will be fully defined in a subsequent task.
+#[derive(Debug, thiserror::Error)]
+#[error("connection error: {0}")]
+pub struct ConnectionError(pub String);
