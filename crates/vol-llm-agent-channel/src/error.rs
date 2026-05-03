@@ -19,7 +19,26 @@ pub enum ChannelError {
     AgentError(String),
 }
 
-/// Stub: connection error type — will be fully defined in a subsequent task.
+/// Error type for connection operations.
 #[derive(Debug, thiserror::Error)]
-#[error("connection error: {0}")]
-pub struct ConnectionError(pub String);
+pub enum ConnectionError {
+    /// WebSocket send failed.
+    #[error("websocket send error: {0}")]
+    WsSendError(String),
+
+    /// WebSocket receive failed.
+    #[error("websocket receive error: {0}")]
+    WsReceiveError(String),
+
+    /// Failed to parse message.
+    #[error("parse error: {0}")]
+    ParseError(String),
+
+    /// Connection was closed.
+    #[error("connection closed")]
+    Closed,
+
+    /// Channel send failed (in-memory transport).
+    #[error("channel send error: {0}")]
+    ChannelError(String),
+}
