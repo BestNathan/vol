@@ -17,4 +17,4 @@ pub use error::{ChannelError, ConnectionError};
 pub use protocol::{InboundMessage, OutboundMessage};
 pub use request::{AgentRequest, RunResult};
 pub use router::AgentRouter;
-pub use transport::{MemoryConnection, MemoryHandle, WsServer};
+pub use transport::{WsConnection, WsServer};
