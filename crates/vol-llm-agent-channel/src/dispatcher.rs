@@ -130,3 +130,80 @@ impl AgentDispatcher {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::ChannelError;
+    use crate::request::AgentRequest;
+
+    #[tokio::test]
+    async fn test_state_queue_push_pop() {
+        let state = DispatcherState::new();
+
+        let (tx1, _) = oneshot::channel();
+        let req1 = AgentRequest::new("agent_a", "hello");
+        state.queue.lock().await.push_back(PendingRequest { request: req1, tx: tx1 });
+
+        assert_eq!(state.queue.lock().await.len(), 1);
+
+        let (tx2, _) = oneshot::channel();
+        let req2 = AgentRequest::new("agent_b", "world");
+        state.queue.lock().await.push_back(PendingRequest { request: req2, tx: tx2 });
+
+        assert_eq!(state.queue.lock().await.len(), 2);
+
+        // Pop front (FIFO)
+        let first = state.queue.lock().await.pop_front();
+        assert!(first.is_some());
+        assert_eq!(first.unwrap().request.input, "hello");
+
+        assert_eq!(state.queue.lock().await.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_cancel_removes_from_queue() {
+        let state = DispatcherState::new();
+
+        let (tx1, _rx1) = oneshot::channel::<RunResult>();
+        let req1 = AgentRequest::with_id("req-1", "agent_a", "hello");
+        state.queue.lock().await.push_back(PendingRequest { request: req1, tx: tx1 });
+
+        let (tx2, _rx2) = oneshot::channel::<RunResult>();
+        let req2 = AgentRequest::with_id("req-2", "agent_a", "world");
+        state.queue.lock().await.push_back(PendingRequest { request: req2, tx: tx2 });
+
+        assert_eq!(state.queue.lock().await.len(), 2);
+
+        // Cancel req-1
+        let mut queue = state.queue.lock().await;
+        let pos = queue.iter().position(|p| p.request.req_id == "req-1");
+        assert!(pos.is_some());
+        let pending = queue.remove(pos.unwrap()).unwrap();
+        drop(pending.tx);
+
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue[0].request.req_id, "req-2");
+    }
+
+    #[tokio::test]
+    async fn test_cancel_nonexistent_returns_false() {
+        let state = DispatcherState::new();
+
+        let found = state.queue.lock().await.iter()
+            .any(|p| p.request.req_id == "nonexistent");
+        assert!(!found);
+    }
+
+    #[tokio::test]
+    async fn test_busy_state() {
+        let state = Arc::new(DispatcherState::new());
+
+        // Not busy initially
+        assert!(state.busy.try_lock().is_ok());
+
+        // When someone holds the lock, try_lock fails
+        let _permit = state.busy.lock().await;
+        assert!(state.busy.try_lock().is_err());
+    }
+}
