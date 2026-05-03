@@ -86,3 +86,60 @@ impl AgentPlugin for ConnectionHolder {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A no-op Connection implementation for testing.
+    struct MockConnection {
+        protocol: String,
+    }
+
+    #[async_trait]
+    impl Connection for MockConnection {
+        fn protocol(&self) -> &str { &self.protocol }
+        async fn recv(&mut self) -> Option<Result<InboundMessage, ConnectionError>> { None }
+        async fn send_event(&self, _event: &AgentStreamEvent) -> Result<(), ConnectionError> { Ok(()) }
+        async fn send_result(&self, _result: &RunResult) -> Result<(), ConnectionError> { Ok(()) }
+    }
+
+    #[tokio::test]
+    async fn test_holder_new_is_empty() {
+        let holder = ConnectionHolder::new();
+        assert!(!holder.is_connected().await);
+    }
+
+    #[tokio::test]
+    async fn test_holder_attach() {
+        let holder = ConnectionHolder::new();
+        let conn = Arc::new(MockConnection { protocol: "test".to_string() });
+
+        holder.attach(conn.clone()).await;
+        assert!(holder.is_connected().await);
+        assert_eq!(holder.connection().await.unwrap().protocol(), "test");
+    }
+
+    #[tokio::test]
+    async fn test_holder_detach_replaces_connection() {
+        let holder = ConnectionHolder::new();
+        let conn1 = Arc::new(MockConnection { protocol: "test1".to_string() });
+        let conn2 = Arc::new(MockConnection { protocol: "test2".to_string() });
+
+        holder.attach(conn1).await;
+        assert_eq!(holder.connection().await.unwrap().protocol(), "test1");
+
+        holder.attach(conn2).await;
+        assert_eq!(holder.connection().await.unwrap().protocol(), "test2");
+    }
+
+    #[tokio::test]
+    async fn test_holder_detach_clears() {
+        let holder = ConnectionHolder::new();
+        let conn = Arc::new(MockConnection { protocol: "test".to_string() });
+
+        holder.attach(conn).await;
+        holder.detach().await;
+        assert!(!holder.is_connected().await);
+    }
+}
