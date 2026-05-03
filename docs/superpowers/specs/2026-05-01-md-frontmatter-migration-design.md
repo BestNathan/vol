@@ -19,7 +19,7 @@ Replace ad-hoc frontmatter parsing in `vol-llm-skill` and `vol-llm-wiki` with th
 
 **Key behavior change:** `parse_skill_content` previously returned defaults on missing/invalid frontmatter. New code: `md_frontmatter::parse<T>` returns `Err`, caller logs warning and `continue`s to skip the file.
 
-**`scan_skill_files` moves inline to `loader.rs`** since it's only called from one place and `parser.rs` is being deleted. The function itself is unchanged — it still returns ALL files (not just .md) for the LLM's file listing.
+**`scan_skill_files` moves to `loader.rs`** as a private helper function (`fn collect_files_recursive`) since `parser.rs` is being deleted. The function itself is unchanged — it still returns ALL files (not just .md) for the LLM's file listing.
 
 ### vol-llm-wiki (Task 2)
 

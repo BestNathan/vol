@@ -59,8 +59,8 @@ This prevents double-appending, mismatched conventions, and lets each component 
 
 | Component | Subdirectory |
 |-----------|-------------|
-| SkillInjector | `{working_dir}/.agent/skills` |
-| Session | `{working_dir}/.agent/sessions` |
+| SkillInjector | `{working_dir}/.agents/skills` |
+| Session | `{working_dir}/.agents/sessions` |
 | LocalSandbox | `{working_dir}/.` (root) |
 
 ### 2.2 SkillInjector API Change
@@ -70,7 +70,7 @@ Add a constructor that takes `working_dir` and resolves its own path:
 ```rust
 impl SkillInjector {
     pub fn from_workdir(working_dir: &Path) -> Self {
-        let skill_dir = working_dir.join(".agent/skills");
+        let skill_dir = working_dir.join(".agents/skills");
         let loader = Arc::new(SkillLoader::new(Some(skill_dir)));
         Self::new(loader)
     }

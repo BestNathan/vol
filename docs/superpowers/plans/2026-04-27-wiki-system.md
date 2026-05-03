@@ -4,7 +4,7 @@
 
 **Goal:** Create `vol-llm-wiki` crate with WikiLoader, WikiInjector, and WikiAgent for session-to-wiki compression.
 
-**Architecture:** Mirrors the skills pattern — WikiLoader discovers wiki pages from `.agent/wikis/`, WikiInjector injects index+directory listing into system prompt, WikiAgent uses ReActAgent with read/write/edit tools to analyze conversations and maintain wiki pages.
+**Architecture:** Mirrors the skills pattern — WikiLoader discovers wiki pages from `.agents/wikis/`, WikiInjector injects index+directory listing into system prompt, WikiAgent uses ReActAgent with read/write/edit tools to analyze conversations and maintain wiki pages.
 
 **Tech Stack:** Rust, vol-llm-agent (ReActAgent), vol-llm-context, vol-llm-core, vol-session, vol-llm-tools-builtin
 
@@ -63,7 +63,7 @@ thiserror = "1.0"
 ```rust
 //! vol-llm-wiki: LLM-powered wiki compression and management.
 //!
-//! Wiki pages live in `.agent/wikis/` with progressive loading
+//! Wiki pages live in `.agents/wikis/` with progressive loading
 //! (index + directory injected, model reads pages on demand via `read` tool).
 //! `WikiAgent` analyzes session conversations and creates/updates wiki pages.
 
@@ -134,7 +134,7 @@ pub struct WikiPage {
     pub absolute_path: PathBuf,
 }
 
-/// Discovers wiki pages from `.agent/wikis/` directories.
+/// Discovers wiki pages from `.agents/wikis/` directories.
 pub struct WikiLoader {
     roots: Vec<PathBuf>,
     pages: Arc<RwLock<Vec<WikiPage>>>,
@@ -370,7 +370,7 @@ impl WikiInjector {
         Self { loader }
     }
 
-    /// Create a WikiInjector that loads wiki pages from `{working_dir}/.agent/wikis`.
+    /// Create a WikiInjector that loads wiki pages from `{working_dir}/.agents/wikis`.
     pub async fn from_workdir(working_dir: &std::path::Path) -> Self {
         let loader = Arc::new(WikiLoader::new(Some(working_dir)));
         Self::new(loader)
@@ -542,7 +542,7 @@ pub struct WikiAgentConfig {
     pub max_iterations: u32,
 
     /// Working directory for wiki file operations.
-    /// Wiki pages are stored in `{working_dir}/.agent/wikis/`.
+    /// Wiki pages are stored in `{working_dir}/.agents/wikis/`.
     pub working_dir: PathBuf,
 }
 

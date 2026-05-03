@@ -6,7 +6,7 @@
 
 ## Goal
 
-Consolidate all agent-related files (skills, wikis, YAML agents, schema) under a single `.agents/` directory, eliminating the inconsistency between `.agents/` (used by vol-llm-skill) and `.agent/` (used by vol-llm-wiki, vol-llm-yaml-agent).
+Consolidate all agent-related files (skills, wikis, YAML agents, schema) under a single `.agents/` directory, eliminating the inconsistency between `.agents/` (used by vol-llm-skill) and `.agents/` (used by vol-llm-wiki, vol-llm-yaml-agent).
 
 ## Directory Structure
 
@@ -48,20 +48,20 @@ Consolidate all agent-related files (skills, wikis, YAML agents, schema) under a
 - **`schema.md` at root** — shared conventions for wikis and skills, not wiki-specific
 - **`INDEX.md`/`LOG.md` inside `wikis/`** — wiki-internal, not at `.agents/` root
 - **Discovery order** — user-level `~/.agents/<type>/` first, repo-level `{working_dir}/.agents/<type>/` second. First-loaded wins for name conflicts (existing vol-llm-skill behavior)
-- **No backward compatibility** — all `.agent/` references renamed atomically
+- **No backward compatibility** — all `.agents/` references renamed atomically
 
 ## Code Changes
 
-### Path Updates (`.agent/` → `.agents/`)
+### Path Updates (`.agents/` → `.agents/`)
 
 | Crate | File | Path Change |
 |-------|------|-------------|
-| `vol-llm-wiki` | `src/config.rs` | `.agent/wikis/` → `.agents/wikis/` |
-| `vol-llm-wiki` | `src/loader.rs` | `.agent/wikis/` → `.agents/wikis/` |
-| `vol-llm-wiki` | `src/injector.rs` | `.agent/wikis/` → `.agents/wikis/` |
-| `vol-llm-wiki` | `src/lib.rs` | `.agent/wikis/` → `.agents/wikis/` |
-| `vol-llm-yaml-agent` | `src/lib.rs` | `.agent/agents/` → `.agents/agents/` |
-| `vol-llm-yaml-agent` | `src/discovery.rs` | `.agent/agents/` → `.agents/agents/` |
+| `vol-llm-wiki` | `src/config.rs` | `.agents/wikis/` → `.agents/wikis/` |
+| `vol-llm-wiki` | `src/loader.rs` | `.agents/wikis/` → `.agents/wikis/` |
+| `vol-llm-wiki` | `src/injector.rs` | `.agents/wikis/` → `.agents/wikis/` |
+| `vol-llm-wiki` | `src/lib.rs` | `.agents/wikis/` → `.agents/wikis/` |
+| `vol-llm-yaml-agent` | `src/lib.rs` | `.agents/agents/` → `.agents/agents/` |
+| `vol-llm-yaml-agent` | `src/discovery.rs` | `.agents/agents/` → `.agents/agents/` |
 
 Plus test files (~5 files) and documentation (~10 files).
 
@@ -74,19 +74,19 @@ Plus test files (~5 files) and documentation (~10 files).
 ## Migration Plan
 
 **Phase 1: Update code references**
-- Replace `.agent/wikis/` → `.agents/wikis/` across `crates/`
-- Replace `.agent/agents/` → `.agents/agents/` across `crates/`
+- Replace `.agents/wikis/` → `.agents/wikis/` across `crates/`
+- Replace `.agents/agents/` → `.agents/agents/` across `crates/`
 - Update doc comments in affected files
 - Run `cargo check --workspace` to verify compilation
 
 **Phase 2: Move existing files**
-- Move `.agent/wikis/*` → `.agents/wikis/`
-- Move any `.agent/agents/*.yaml` → `.agents/agents/`
-- Remove empty `.agent/` directory
+- Move `.agents/wikis/*` → `.agents/wikis/`
+- Move any `.agents/agents/*.yaml` → `.agents/agents/`
+- Remove empty `.agents/` directory
 - Update wiki INDEX.md to reflect new paths if needed
 
 **Phase 3: Update specs and plans**
-- Update spec/plans referencing `.agent/` paths (grep in `docs/superpowers/`)
+- Update spec/plans referencing `.agents/` paths (grep in `docs/superpowers/`)
 - Update wiki pages if they reference old paths
 
 ## Out of Scope

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Inject SkillInjector into CodingAgent's ContextBuilder so skill metadata from `.agent/skills/` appears in the LLM system prompt, with integration tests.
+**Goal:** Inject SkillInjector into CodingAgent's ContextBuilder so skill metadata from `.agents/skills/` appears in the LLM system prompt, with integration tests.
 
 **Architecture:** CodingAgent::new() already builds a ContextBuilder with SimpleContributor (system prompt). We add SkillInjector::from_workdir() as a second contributor. ReActAgent needs zero changes — it already clones contributors from AgentConfig.context_builder at runtime.
 
@@ -24,10 +24,10 @@ Add this method to the `impl SkillInjector` block (after `pub fn new()`):
 impl SkillInjector {
     // ... existing new() ...
 
-    /// Create a SkillInjector that loads skills from `{working_dir}/.agent/skills`.
+    /// Create a SkillInjector that loads skills from `{working_dir}/.agents/skills`.
     pub fn from_workdir(working_dir: &std::path::Path) -> Self {
         use std::sync::Arc;
-        let skill_dir = working_dir.join(".agent/skills");
+        let skill_dir = working_dir.join(".agents/skills");
         let loader = Arc::new(crate::loader::SkillLoader::new(Some(skill_dir)));
         Self::new(loader)
     }
@@ -123,7 +123,7 @@ Expected: No errors
 - [ ] **Step 4: Run existing tests**
 
 Run: `cargo test -p vol-llm-agents -- --test-threads=1`
-Expected: All existing tests pass (the new SkillInjector injection is transparent when `.agent/skills` doesn't exist — format_metadata returns empty string, contribute returns empty vec)
+Expected: All existing tests pass (the new SkillInjector injection is transparent when `.agents/skills` doesn't exist — format_metadata returns empty string, contribute returns empty vec)
 
 - [ ] **Step 5: Commit**
 
@@ -182,8 +182,8 @@ async fn make_session(n: usize) -> Arc<Mutex<Session>> {
 
 /// Helper: create a SkillInjector with skills from a temp dir
 async fn make_skill_injector_with_skills(dir: &PathBuf) -> SkillInjector {
-    // Create the .agent/skills directory
-    let skills_dir = dir.join(".agent/skills");
+    // Create the .agents/skills directory
+    let skills_dir = dir.join(".agents/skills");
     std::fs::create_dir_all(&skills_dir).unwrap();
 
     // Create a skill file
@@ -271,7 +271,7 @@ async fn test_context_zone_ordering() {
     // Head(0) = system, Head(1) = skills, Middle(0) = session, Tail(0) = user_input
     assert!(!messages.is_empty(), "Should have messages");
 
-    // Skills content should appear (from .agent/skills)
+    // Skills content should appear (from .agents/skills)
     let all_content: String = messages
         .iter()
         .filter_map(|m| m.content.as_ref())
@@ -348,8 +348,8 @@ async fn test_skill_injector_from_workdir_path_resolution() {
     let tmp_dir = tempfile::tempdir().unwrap();
     let workdir = tmp_dir.path().to_path_buf();
 
-    // Create .agent/skills with a skill
-    let skills_dir = workdir.join(".agent/skills");
+    // Create .agents/skills with a skill
+    let skills_dir = workdir.join(".agents/skills");
     std::fs::create_dir_all(&skills_dir).unwrap();
     std::fs::write(
         skills_dir.join("my-skill.md"),

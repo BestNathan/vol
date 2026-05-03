@@ -2,7 +2,7 @@
 
 ## Overview
 
-Build `vol-llm-wiki` — a new crate that provides LLM-powered wiki compression and management. Wiki pages live in `.agent/wikis/` with progressive loading (index + directory injected, model reads pages on demand via `read` tool). `WikiAgent` analyzes session conversations and creates/updates wiki pages.
+Build `vol-llm-wiki` — a new crate that provides LLM-powered wiki compression and management. Wiki pages live in `.agents/wikis/` with progressive loading (index + directory injected, model reads pages on demand via `read` tool). `WikiAgent` analyzes session conversations and creates/updates wiki pages.
 
 ## Architecture
 
@@ -12,7 +12,7 @@ Build `vol-llm-wiki` — a new crate that provides LLM-powered wiki compression 
 crates/vol-llm-wiki/
 ├── src/
 │   ├── lib.rs           # Public types: WikiLoader, WikiInjector, WikiAgent
-│   ├── loader.rs        # Scan .agent/wikis/ roots, build page listing
+│   ├── loader.rs        # Scan .agents/wikis/ roots, build page listing
 │   ├── injector.rs      # WikiInjector: ContextContributor for system prompt injection
 │   ├── agent.rs         # WikiAgent: ReActAgent-based compression agent
 │   ├── config.rs        # WikiAgentConfig
@@ -23,7 +23,7 @@ crates/vol-llm-wiki/
 
 **`WikiLoader`** discovers wiki pages from multiple roots:
 - `~/.agents/wikis/` — user-level wiki
-- `{working_dir}/.agent/wikis/` — project-level wiki
+- `{working_dir}/.agents/wikis/` — project-level wiki
 
 Scans all `.md` files, builds a flat list of `WikiPage` (path, title, frontmatter).
 
@@ -61,7 +61,7 @@ pub struct WikiAgent {
 WikiAgent's prompt instructs it to:
 1. Analyze the provided conversation
 2. Extract entities, concepts, decisions, TODOs
-3. Create or update wiki pages in `.agent/wikis/`
+3. Create or update wiki pages in `.agents/wikis/`
 4. Keep `INDEX.md` current
 5. Pages use frontmatter (`title`, `tags`, `updated_at`) and link via relative paths
 
@@ -95,13 +95,13 @@ Deribit WebSocket client for market data. See [architecture](projects/deribit.md
 - **No dedicated `wiki` tool** — WikiAgent uses existing `read`/`write`/`edit` tools. The wiki content is injected as context (index + directory listing), and the model navigates via standard tools.
 - **Progressive loading mirrors skills** — Same pattern: loader discovers, injector injects summary, model loads full content on demand.
 - **WikiAgent is a ReActAgent** — Reuses `ReActAgent` infrastructure (tool registry, sandbox, plugin system). No custom agent loop.
-- **Wiki pages are flat Markdown** — No subdirectory nesting in v1. All `.md` files in `.agent/wikis/` root. `INDEX.md` provides virtual hierarchy.
+- **Wiki pages are flat Markdown** — No subdirectory nesting in v1. All `.md` files in `.agents/wikis/` root. `INDEX.md` provides virtual hierarchy.
 
 ## Error Handling
 
 - `WikiLoader` silently skips unreadable files/directories (matching `SkillLoader` behavior)
 - `WikiAgent` returns error if LLM call fails; wiki files are not modified on failure
-- Missing `.agent/wikis/` directory is created on first write by WikiAgent
+- Missing `.agents/wikis/` directory is created on first write by WikiAgent
 
 ## Testing
 

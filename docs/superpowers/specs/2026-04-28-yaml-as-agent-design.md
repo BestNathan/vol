@@ -7,7 +7,7 @@ Allow users to define a ReActAgent instance purely via a YAML template file. Par
 ## YAML Format
 
 ```yaml
-# .agent/agents/<name>.yaml
+# .agents/agents/<name>.yaml
 name: coding              # Agent identifier
 llm: anthropic-main       # References llm_provider_id
 max_iterations: 20
@@ -17,8 +17,8 @@ max_history_messages: 20
 system: "You are an expert coding assistant."
 # System prompt: load from files (content appended after inline system)
 system_files:
-  - .agent/AGENT.md
-  - .agent/INSTRUCTION.md
+  - .agents/AGENT.md
+  - .agents/INSTRUCTION.md
 
 # Tools by name
 tools:
@@ -45,7 +45,7 @@ working_dir: "."
 
 ## Directory Convention
 
-YAML files live in `{working_dir}/.agent/agents/<name>.yaml`.
+YAML files live in `{working_dir}/.agents/agents/<name>.yaml`.
 
 The loader discovers all YAML files in this directory at startup.
 

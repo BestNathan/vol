@@ -482,7 +482,7 @@ struct WikiFrontmatter {
     tags: Vec<String>,
 }
 
-/// Discovers wiki pages from `.agent/wikis/` directories.
+/// Discovers wiki pages from `.agents/wikis/` directories.
 pub struct WikiLoader {
     roots: Vec<PathBuf>,
     pages: Arc<RwLock<Vec<WikiPage>>>,
