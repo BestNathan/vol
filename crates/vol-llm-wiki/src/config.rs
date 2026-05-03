@@ -20,7 +20,7 @@ pub struct WikiAgentConfig {
     pub max_iterations: u32,
 
     /// Working directory for wiki file operations.
-    /// Wiki pages are stored in `{working_dir}/.agent/wikis/`.
+    /// Wiki pages are stored in `{working_dir}/.agents/wikis/`.
     pub working_dir: PathBuf,
 }
 

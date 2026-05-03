@@ -50,7 +50,7 @@ async fn test_compress_real_session() {
 
     // Create temp wiki directory
     let temp_wiki = tempfile::tempdir().unwrap();
-    let wiki_dir = temp_wiki.path().join(".agent").join("wikis");
+    let wiki_dir = temp_wiki.path().join(".agents").join("wikis");
     std::fs::create_dir_all(&wiki_dir).unwrap();
 
     // Create WikiAgent

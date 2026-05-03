@@ -26,7 +26,7 @@ struct WikiFrontmatter {
     tags: Vec<String>,
 }
 
-/// Discovers wiki pages from `.agent/wikis/` directories.
+/// Discovers wiki pages from `.agents/wikis/` directories.
 pub struct WikiLoader {
     roots: Vec<PathBuf>,
     pages: Arc<RwLock<Vec<WikiPage>>>,
@@ -54,7 +54,7 @@ impl WikiLoader {
         }
 
         if let Some(wd) = working_dir {
-            roots.push(wd.join(".agent").join("wikis"));
+            roots.push(wd.join(".agents").join("wikis"));
         }
 
         Self {

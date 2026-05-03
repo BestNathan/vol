@@ -18,7 +18,7 @@ impl WikiInjector {
         Self { loader }
     }
 
-    /// Create a WikiInjector that loads wiki pages from `{working_dir}/.agent/wikis`.
+    /// Create a WikiInjector that loads wiki pages from `{working_dir}/.agents/wikis`.
     pub async fn from_workdir(working_dir: &std::path::Path) -> Self {
         let loader = Arc::new(WikiLoader::new(Some(working_dir)));
         Self::new(loader)

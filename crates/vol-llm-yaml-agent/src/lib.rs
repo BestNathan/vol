@@ -5,7 +5,7 @@
 //! # Example
 //!
 //! ```ignore
-//! let agent = YamlAgentBuilder::from_file(".agent/agents/coding.yaml")?
+//! let agent = YamlAgentBuilder::from_file(".agents/agents/coding.yaml")?
 //!     .build()?;
 //! let response = agent.run("Hello!").await?;
 //! ```

@@ -77,8 +77,8 @@ max_iterations: 20
 max_history_messages: 30
 system: "You are a coding assistant."
 system_files:
-  - .agent/AGENT.md
-  - .agent/INSTRUCTION.md
+  - .agents/AGENT.md
+  - .agents/INSTRUCTION.md
 tools:
   - read
   - write

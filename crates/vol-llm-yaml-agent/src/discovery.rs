@@ -24,9 +24,9 @@ pub fn discover_agents(dir: &Path) -> Result<Vec<PathBuf>, YamlAgentError> {
     Ok(files)
 }
 
-/// Discover agents from the standard `.agent/agents/` directory.
+/// Discover agents from the standard `.agents/agents/` directory.
 pub fn discover_from_workdir(working_dir: &Path) -> Result<Vec<PathBuf>, YamlAgentError> {
-    let agents_dir = working_dir.join(".agent").join("agents");
+    let agents_dir = working_dir.join(".agents").join("agents");
     discover_agents(&agents_dir)
 }
 
@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn test_discover_from_workdir() {
         let temp = tempfile::tempdir().unwrap();
-        let agents_dir = temp.path().join(".agent").join("agents");
+        let agents_dir = temp.path().join(".agents").join("agents");
         std::fs::create_dir_all(&agents_dir).unwrap();
         std::fs::write(agents_dir.join("coding.yaml"), "name: c\nllm: p\n").unwrap();
 

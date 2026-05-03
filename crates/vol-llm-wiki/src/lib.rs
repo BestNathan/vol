@@ -1,6 +1,6 @@
 //! vol-llm-wiki: LLM-powered wiki compression and management.
 //!
-//! Wiki pages live in `.agent/wikis/` with progressive loading
+//! Wiki pages live in `.agents/wikis/` with progressive loading
 //! (index + directory injected, model reads pages on demand via `read` tool).
 //! `WikiAgent` analyzes session conversations and creates/updates wiki pages.
 
