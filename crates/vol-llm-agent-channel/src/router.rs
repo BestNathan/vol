@@ -62,3 +62,33 @@ impl Default for AgentRouter {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_router_empty_returns_not_found() {
+        let router = AgentRouter::new();
+        let req = AgentRequest::new("nonexistent", "hello");
+        let result = router.send("nonexistent", req).await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ChannelError::AgentNotFound(id) => assert_eq!(id, "nonexistent"),
+            other => panic!("Expected AgentNotFound, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_router_has_agent_empty() {
+        let router = AgentRouter::new();
+        assert!(!router.has_agent("agent_a").await);
+    }
+
+    #[tokio::test]
+    async fn test_router_list_agents_empty() {
+        let router = AgentRouter::new();
+        let agents = router.list_agents().await;
+        assert!(agents.is_empty());
+    }
+}
