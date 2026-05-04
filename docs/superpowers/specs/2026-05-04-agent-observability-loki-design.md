@@ -91,6 +91,73 @@ CodingAgentBuilder::new()
 - No retry, no fallback, no circuit breaker
 - Unconfigured Loki: `with_loki()` is a no-op
 
+## Refactoring: Self-Bootstrapping LokiPlugin (2026-05-04)
+
+### Problem
+
+`LokiPlugin` stores `agent_type` at construction time and passes 5 separate parameters to `create_loki_entry()`. The type at construction (`"coding"`) may not match the actual `AgentDef.r#type` if the agent is dispatched from a file definition. All of `run_id`, `session_id`, `agent_id`, and `agent_type` are available from `RunContext`.
+
+### Changes
+
+#### LokiPlugin struct — remove `agent_type`
+
+```rust
+pub struct LokiPlugin {
+    writer: Arc<LokiWriter>,
+}
+```
+
+Constructor becomes `LokiPlugin::new(config: LokiConfig)` — no `agent_type` parameter.
+
+#### `create_loki_entry` — derive from RunContext
+
+```rust
+pub fn create_loki_entry(event: &AgentStreamEvent, ctx: &RunContext) -> LokiEntry
+```
+
+Internally derive:
+- `agent_type`: `ctx.config.def.as_ref().map(|d| &d.r#type).unwrap_or("unknown")`
+- `agent_id`: `ctx.config.def.as_ref().map(|d| &d.name).unwrap_or("unknown")`
+- `run_id`: `&ctx.run_id`
+- `session_id`: `&ctx.session_id`
+
+#### `listen()` simplifies
+
+```rust
+async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
+    if !Self::should_send(event) { return; }
+    let entry = Self::create_loki_entry(event, ctx);
+    self.writer.send(entry).await;
+}
+```
+
+#### Call site update
+
+```rust
+// Before: vol_llm_observability::loki::LokiPlugin::new(config, "coding")
+// After:  vol_llm_observability::loki::LokiPlugin::new(config)
+```
+
+`CodingAgentBuilder::with_loki()` and any other agent builders that register LokiPlugin need their call site updated.
+
+#### Tests
+
+`create_loki_entry` now takes `&RunContext`. Tests should build a minimal `RunContext` to exercise the real derivation path. Alternatively, keep a secondary `from_parts` variant for unit testing if constructing a full `RunContext` is too heavy.
+
+### Affected files
+
+| File | Change |
+|------|--------|
+| `crates/vol-llm-observability/src/loki/plugin.rs` | Remove `agent_type` field, refactor `new()`, `create_loki_entry()`, `listen()` |
+| `crates/vol-llm-agents/src/coding/agent.rs` | Update `.with_loki()` call site |
+| `crates/vol-llm-agents/src/advice/agent.rs` | Update if `.with_loki()` exists |
+| `crates/vol-llm-agents/src/qa/agent.rs` | Update if `.with_loki()` exists |
+| `crates/vol-llm-agents/src/ppt/agent.rs` | Update if `.with_loki()` exists |
+
+### Risk
+
+Low — internal refactoring only, no behavioral change to log output or Loki interaction.
+
 ## Dependencies
 
 - `reqwest` (workspace) — HTTP client with rustls TLS
