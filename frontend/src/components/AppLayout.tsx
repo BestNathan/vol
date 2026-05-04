@@ -4,6 +4,7 @@ import {
   DashboardOutlined,
   AppstoreOutlined,
   ClusterOutlined,
+  MessageOutlined,
   NotificationOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -15,8 +16,15 @@ const menuItems = [
   { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
   { key: '/agent-types', icon: <AppstoreOutlined />, label: 'Agent Types' },
   { key: '/instances', icon: <ClusterOutlined />, label: 'Instances' },
+  { key: '/chat', icon: <MessageOutlined />, label: 'Chat' },
   { key: '/events', icon: <NotificationOutlined />, label: 'Events' },
 ];
+
+const getSelectedKey = (pathname: string): string => {
+  if (pathname.startsWith('/chat')) return '/chat';
+  if (pathname === '/' || pathname === '/agent-types' || pathname === '/instances' || pathname === '/events') return pathname;
+  return '/';
+};
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -41,7 +49,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         </div>
         <Menu
           mode="inline"
-          selectedKeys={[location.pathname.split('/chat')[0] || '/']}
+          selectedKeys={[getSelectedKey(location.pathname)]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
         />

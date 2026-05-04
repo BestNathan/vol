@@ -1,22 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Table, Button, Empty, Spin, Alert } from 'antd';
 import { MessageOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { fetchAgentTypes } from '../api/agentTypes';
 import type { AgentTypeMeta } from '../types';
 
-const columns = [
-  { title: 'Name', dataIndex: 'name', key: 'name' },
-  { title: 'Type', dataIndex: 'type', key: 'type' },
-  { title: 'Description', dataIndex: 'description', key: 'description' },
-  { title: 'Scope', dataIndex: 'scope', key: 'scope', width: 100 },
-  {
-    title: 'Actions',
-    key: 'actions',
-    width: 140,
-    render: (_: unknown, record: AgentTypeMeta) => {
-      const navigate = useNavigate();
-      return (
+function createColumns(navigate: ReturnType<typeof useNavigate>) {
+  return [
+    { title: 'Name', dataIndex: 'name', key: 'name' },
+    { title: 'Type', dataIndex: 'type', key: 'type' },
+    { title: 'Description', dataIndex: 'description', key: 'description' },
+    { title: 'Scope', dataIndex: 'scope', key: 'scope', width: 100 },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 140,
+      render: (_: unknown, record: AgentTypeMeta) => (
         <Button
           type="primary"
           icon={<MessageOutlined />}
@@ -25,12 +24,14 @@ const columns = [
         >
           Start Chat
         </Button>
-      );
+      ),
     },
-  },
-];
+  ];
+}
 
 export const AgentTypes: React.FC = () => {
+  const navigate = useNavigate();
+  const columns = useMemo(() => createColumns(navigate), [navigate]);
   const [types, setTypes] = useState<AgentTypeMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

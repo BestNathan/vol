@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Table, Button, Modal, Form, Input, Select, Space,
   Popconfirm, message, Tag, Alert, Spin,
@@ -52,7 +52,7 @@ export const Instances: React.FC = () => {
     }
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     { title: 'Agent Type', dataIndex: 'agent_type', key: 'agent_type' },
     { title: 'Session ID', dataIndex: 'session_id', key: 'session_id', ellipsis: true },
     { title: 'Parent Session', dataIndex: 'parent_session_id', key: 'parent_session_id', ellipsis: true, render: (v: string | null) => v || '-' },
@@ -88,7 +88,7 @@ export const Instances: React.FC = () => {
         </Space>
       ),
     },
-  ];
+  ], [navigate, handleDestroy]);
 
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '48px auto' }} />;
 
