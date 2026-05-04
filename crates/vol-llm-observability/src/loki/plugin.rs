@@ -7,8 +7,8 @@
 //!
 //! Each entry is sent to Loki with labels:
 //! - `namespace`: `"agent"` (fixed)
-//! - `agent`: Agent type (e.g., `"coding"`, `"advice"`)
-//! - `agent_id`: From `AgentConfig.agent_id`
+//! - `agent`: From `AgentDef.r#type` (via `RunContext.config.def`)
+//! - `agent_id`: From `AgentDef.name` (via `RunContext.config.def`)
 //!
 //! High-cardinality fields (`run_id`, `session_id`) are placed in the log
 //! line content, not as labels, to avoid Loki performance issues.
@@ -27,23 +27,21 @@ use crate::loki::labels::LokiLabels;
 ///
 /// Uses a shared `LokiWriter` so that multiple clones of the plugin
 /// (as happens with `Arc<dyn AgentPlugin>`) write to the same background task.
+///
+/// Agent identity (type, id) is derived from `RunContext.config.def` at runtime.
 pub struct LokiPlugin {
-    agent_type: String,
     writer: Arc<LokiWriter>,
 }
 
 impl LokiPlugin {
     /// Create a new LokiPlugin.
-    ///
-    /// Returns `None` if no Loki URL is configured (via `LokiConfig::from_env()`).
-    pub fn new(config: LokiConfig, agent_type: &str) -> Self {
+    pub fn new(config: LokiConfig) -> Self {
         let writer = LokiWriter::spawn(
             config.url,
             config.batch_size,
             config.flush_interval_ms,
         );
         Self {
-            agent_type: agent_type.to_string(),
             writer: Arc::new(writer),
         }
     }
@@ -60,7 +58,13 @@ impl LokiPlugin {
     }
 
     /// Convert an event to a Loki entry.
-    pub fn create_loki_entry(event: &AgentStreamEvent, run_id: &str, session_id: &str, agent_id: &str, agent_type: &str) -> LokiEntry {
+    pub fn create_loki_entry(event: &AgentStreamEvent, ctx: &RunContext) -> LokiEntry {
+        let def = ctx.config.def.as_ref();
+        let agent_type = def.map(|d| &d.r#type).map_or("unknown", |v| v.as_str());
+        let agent_id = def.map(|d| &d.name).map_or("unknown", |v| v.as_str());
+        let run_id = &ctx.run_id;
+        let session_id = &ctx.session_id;
+
         let labels = LokiLabels::new(agent_type, agent_id);
         let mut labels = labels.into_inner();
 
@@ -217,7 +221,7 @@ impl AgentPlugin for LokiPlugin {
         if !Self::should_send(event) {
             return;
         }
-        let entry = Self::create_loki_entry(event, &ctx.run_id, &ctx.session_id, &ctx.config.def.as_ref().map(|d| &d.name).unwrap_or(&String::new()), &self.agent_type);
+        let entry = Self::create_loki_entry(event, ctx);
         self.writer.send(entry).await;
     }
 }
@@ -227,17 +231,60 @@ mod tests {
     use super::*;
     use serde_json::Map;
 
+    fn make_test_context(run_id: &str, session_id: &str, agent_name: &str, agent_type: &str) -> RunContext {
+        use vol_llm_agent::agent_def::AgentDef;
+        use vol_llm_agent::react::{AgentConfig, PluginRegistry, RunContext};
+        use vol_llm_context::ContextBuilderBuilder;
+        use vol_session::{InMemoryEntryStore, Session};
+        use vol_llm_tool::ToolRegistry;
+
+        let def = AgentDef::new(agent_name, "prompt").with_type(agent_type);
+        let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
+        let tools = Arc::new(ToolRegistry::new());
+        let context_builder = ContextBuilderBuilder::new(128_000).build();
+        let config = AgentConfig {
+            def: Some(def),
+            llm: Arc::new(DummyLlm),
+            tools: tools.clone(),
+            session: session.clone(),
+            sandbox: None,
+            context_builder,
+            plugin_registry: PluginRegistry::new(),
+        };
+
+        let (ctx, _rx) = RunContext::new(
+            run_id.to_string(),
+            "test input".to_string(),
+            session_id.to_string(),
+            session,
+            tools,
+            config,
+            20,
+        );
+        ctx
+    }
+
+    struct DummyLlm;
+    #[async_trait::async_trait]
+    impl vol_llm_core::LLMClient for DummyLlm {
+        fn provider(&self) -> vol_llm_core::LLMProvider { vol_llm_core::LLMProvider::Anthropic }
+        fn model(&self) -> &str { "test" }
+        fn supported_params(&self) -> &[vol_llm_core::SupportedParam] { &[] }
+        async fn converse(&self, _: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> { unimplemented!() }
+        async fn converse_stream(&self, _: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::StreamReceiver> { unimplemented!() }
+    }
+
     #[tokio::test]
     async fn test_plugin_id() {
         let config = LokiConfig::with_url("http://loki:3100".to_string());
-        let plugin = LokiPlugin::new(config, "coding");
+        let plugin = LokiPlugin::new(config);
         assert_eq!(plugin.id(), "loki");
     }
 
     #[tokio::test]
     async fn test_plugin_priority() {
         let config = LokiConfig::with_url("http://loki:3100".to_string());
-        let plugin = LokiPlugin::new(config, "coding");
+        let plugin = LokiPlugin::new(config);
         assert_eq!(plugin.priority(), 20);
     }
 
@@ -276,7 +323,8 @@ mod tests {
             tool_name: "bash".to_string(),
             arguments: "{}".to_string(),
         };
-        let entry = LokiPlugin::create_loki_entry(&event, "run-1", "sess-1", "agent-001", "coding");
+        let ctx = make_test_context("run-1", "sess-1", "agent-001", "coding");
+        let entry = LokiPlugin::create_loki_entry(&event, &ctx);
         assert!(entry.line.contains("bash"));
         assert!(entry.line.contains("run-1"));
         assert!(entry.line.contains("sess-1"));
@@ -291,7 +339,8 @@ mod tests {
             model: "qwen3.5-plus".to_string(),
             usage: None,
         };
-        let entry = LokiPlugin::create_loki_entry(&event, "run-1", "sess-1", "agent-001", "coding");
+        let ctx = make_test_context("run-1", "sess-1", "agent-001", "coding");
+        let entry = LokiPlugin::create_loki_entry(&event, &ctx);
         assert!(entry.labels.contains_key("model"));
         assert_eq!(entry.labels["model"], "qwen3.5-plus");
     }
@@ -301,8 +350,50 @@ mod tests {
         let mut data = Map::new();
         data.insert("key".to_string(), json!("value"));
         let event = AgentStreamEvent::plugin_event("my_plugin".to_string(), data);
-        let entry = LokiPlugin::create_loki_entry(&event, "run-1", "sess-1", "agent-001", "coding");
+        let ctx = make_test_context("run-1", "sess-1", "agent-001", "coding");
+        let entry = LokiPlugin::create_loki_entry(&event, &ctx);
         assert!(entry.line.contains("PluginEvent"));
         assert!(entry.line.contains("my_plugin"));
+    }
+
+    #[test]
+    fn test_loki_entry_fallback_no_agent_def() {
+        use vol_llm_agent::react::{AgentConfig, PluginRegistry, RunContext};
+        use vol_llm_context::ContextBuilderBuilder;
+        use vol_session::{InMemoryEntryStore, Session};
+        use vol_llm_tool::ToolRegistry;
+
+        // Build context with def = None
+        let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
+        let tools = Arc::new(ToolRegistry::new());
+        let context_builder = ContextBuilderBuilder::new(128_000).build();
+        let config = AgentConfig {
+            def: None,
+            llm: Arc::new(DummyLlm),
+            tools: tools.clone(),
+            session: session.clone(),
+            sandbox: None,
+            context_builder,
+            plugin_registry: PluginRegistry::new(),
+        };
+
+        let (ctx, _rx) = RunContext::new(
+            "run-x".to_string(),
+            "test".to_string(),
+            "sess-x".to_string(),
+            session,
+            tools,
+            config,
+            20,
+        );
+
+        let event = AgentStreamEvent::AgentStart {
+            timestamp: Utc::now(),
+            input: "hello".to_string(),
+        };
+        let entry = LokiPlugin::create_loki_entry(&event, &ctx);
+        assert!(entry.labels.contains_key("agent"));
+        assert_eq!(entry.labels["agent"], "unknown");
+        assert_eq!(entry.labels["agent_id"], "unknown");
     }
 }

@@ -354,11 +354,12 @@ impl CodingAgentBuilder {
 
     /// Register LokiPlugin to send agent events to Loki.
     ///
+    /// Agent identity (type, id) is derived from `RunContext.config.def` at runtime.
     /// Reads the Loki URL from the `LOKI_URL` environment variable.
     /// If not set, this is a no-op (no plugin is registered).
     pub fn with_loki(mut self) -> Self {
         if let Some(config) = vol_llm_observability::loki::LokiConfig::from_env() {
-            let plugin = vol_llm_observability::loki::LokiPlugin::new(config, "coding");
+            let plugin = vol_llm_observability::loki::LokiPlugin::new(config);
             self.config.plugin_registry.register(plugin);
         }
         self

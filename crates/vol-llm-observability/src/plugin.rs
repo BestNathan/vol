@@ -233,6 +233,7 @@ mod tests {
             )),
             Arc::new(ToolRegistry::new()),
             AgentConfig::default(),
+            20,
         );
         ctx
     }
