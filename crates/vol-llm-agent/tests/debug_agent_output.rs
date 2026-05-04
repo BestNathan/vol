@@ -110,7 +110,6 @@ async fn test_agent_produces_output() {
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(IndexPriceTool::new(None))
-        .with_max_iterations(3)
         .with_system_prompt("You are a test assistant. Use tools to get information.".to_string())
         .build()
         .unwrap();

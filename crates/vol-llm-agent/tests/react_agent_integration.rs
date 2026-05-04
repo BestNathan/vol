@@ -80,7 +80,6 @@ async fn test_basic_run_empty_session() {
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_max_iterations(5)
         .with_session(session)
         .build()
         .unwrap();
@@ -99,7 +98,6 @@ async fn test_run_with_session_history() {
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_max_iterations(5)
         .with_session(session)
         .build()
         .unwrap();
@@ -151,8 +149,6 @@ async fn test_run_with_large_history_limit() {
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_max_iterations(5)
-        .with_max_history_messages(100)
         .with_session(session)
         .build()
         .unwrap();

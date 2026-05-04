@@ -163,9 +163,6 @@ impl WikiAgent {
             .with_session(session)
             .with_context_builder(self.context_builder.clone())
             .with_plugin_registry(vol_llm_agent::react::PluginRegistry::new())
-            .with_agent_id(self.config.agent_id.clone())
-            .with_working_dir(self.config.working_dir.clone())
-            .with_max_iterations(self.config.max_iterations)
             .build()
             .map_err(|e| WikiAgentError::Config(format!("Failed to build agent config: {}", e)))?;
 

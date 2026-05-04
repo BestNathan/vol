@@ -489,7 +489,6 @@ async fn test_agent_alert_scenario() {
         .with_llm(Arc::new(mock_llm))
         .with_tool(VolatilityIndexTool::new(None))
         .with_tool(IndexPriceTool::new(None))
-        .with_max_iterations(5)
         .with_system_prompt(format!(
             "You are an AI assistant for the Deribit Volatility Monitor system. \
              You analyze volatility alerts and provide actionable insights to traders. \

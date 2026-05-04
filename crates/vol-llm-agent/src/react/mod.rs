@@ -23,7 +23,6 @@
 //! // let config = AgentConfig::builder()
 //! //     .with_llm(llm)
 //! //     .with_tool(my_tool)
-//! //     .with_max_iterations(5)
 //! //     .build()
 //! //     .unwrap();
 //! // let agent = ReActAgent::new(config);

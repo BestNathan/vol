@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::Deserialize;
-use vol_llm_context::ContextBuilder;
 use vol_llm_core::LLMClient;
 use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity};
 use vol_llm_tool::ToolRegistry;
@@ -168,7 +167,6 @@ impl ExecutableTool for AgentTool {
             def.prompt.clone()
         };
 
-        let max_iterations = def.max_iterations.unwrap_or(5);
         let tools = self.build_tool_registry(&def);
 
         let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
@@ -178,10 +176,8 @@ impl ExecutableTool for AgentTool {
             .with_llm(self.llm.clone())
             .with_tools(tools)
             .with_session(session)
-            .with_max_iterations(max_iterations)
             .with_system_prompt(system_prompt)
             .with_plugin_registry(PluginRegistry::new())
-            .with_working_dir(self.working_dir.clone())
             .build()
             .map_err(|e| ToolError::ExecutionFailed(format!("Failed to build agent config: {}", e)))?;
 

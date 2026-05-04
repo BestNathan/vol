@@ -84,9 +84,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_tool(price_tool)
         .with_tool(options_tool)
         .with_tool(rv_tool)
-        .with_agent_id(agent_id.clone())
-        .with_working_dir(working_dir.clone())
-        .with_max_iterations(5)
         .with_system_prompt(
             "你是一个专业的加密货币市场分析师。你有访问 Deribit 市场数据的工具，包括：
             - volatility_index: 查询波动率指数数据

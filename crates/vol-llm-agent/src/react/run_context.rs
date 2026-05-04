@@ -52,6 +52,8 @@ pub struct RunContext {
     pub session: Arc<Session>,
     pub tools: Arc<ToolRegistry>,
     pub config: AgentConfig,
+    /// Max history messages from session, resolved from def or default.
+    pub max_history_messages: usize,
 
     // Event bus
     pub event_tx: broadcast::Sender<TracedEvent<AgentStreamEvent>>,
@@ -122,6 +124,7 @@ impl RunContext {
         session: Arc<Session>,
         tools: Arc<ToolRegistry>,
         config: AgentConfig,
+        max_history_messages: usize,
     ) -> (Self, mpsc::Receiver<PluginRequest>) {
         let (event_tx, _) = broadcast::channel(1024);
         let (plugin_event_tx, plugin_event_rx) = mpsc::channel(100);
@@ -137,6 +140,7 @@ impl RunContext {
             session,
             tools,
             config,
+            max_history_messages,
             event_tx,
             plugin_event_tx,
             reasoning_chain: Arc::new(RwLock::new(Vec::new())),
@@ -201,7 +205,7 @@ impl RunContext {
         .add_contributors_from(&self.config.context_builder)
         .add_contributor(Box::new(SessionContributor::new(
             Arc::new(tokio::sync::Mutex::new((*self.session).clone())),
-            self.config.max_history_messages,
+            self.max_history_messages,
         )))
         .build();
 
@@ -375,6 +379,7 @@ impl Clone for RunContext {
             session: self.session.clone(),
             tools: self.tools.clone(),
             config: self.config.clone(),
+            max_history_messages: self.max_history_messages,
             event_tx: self.event_tx.clone(),
             plugin_event_tx: self.plugin_event_tx.clone(),
             reasoning_chain: self.reasoning_chain.clone(),
@@ -402,6 +407,7 @@ mod tests {
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
+            20,
         );
         ctx
     }
@@ -507,6 +513,7 @@ mod tests {
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
+            20,
         );
 
         let messages = ctx.get_context().await.unwrap();
@@ -532,7 +539,6 @@ mod tests {
 
         let config = AgentConfig {
             context_builder,
-            max_history_messages: 10,
             ..Default::default()
         };
 
@@ -554,6 +560,7 @@ mod tests {
             session.clone(),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
+            10,
         );
 
         let messages = ctx.get_context().await.unwrap();
@@ -593,6 +600,7 @@ mod tests {
             session.clone(),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
+            20,
         );
 
         // Persist user message to session (simulating what agent.rs does at run start)
@@ -641,6 +649,7 @@ mod tests {
             session.clone(),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
+            20,
         );
 
         // Call get_context multiple times - each builds fresh
@@ -665,6 +674,7 @@ mod tests {
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
+            20,
         );
 
         ctx.record_reasoning_step("First thought".to_string(), Some(100))
@@ -690,6 +700,7 @@ mod tests {
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
+            20,
         );
 
         let record = ToolCallRecord {
@@ -717,6 +728,7 @@ mod tests {
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
+            20,
         );
 
         ctx.set_final_content("Final answer".to_string()).await;
@@ -737,6 +749,7 @@ mod tests {
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
+            20,
         );
 
         ctx.record_reasoning_step("thought".to_string(), None).await;

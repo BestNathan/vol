@@ -197,9 +197,6 @@ impl CodingAgent {
             .with_session(session)
             .with_context_builder(self.context_builder.clone())
             .with_plugin_registry(self.config.plugin_registry.clone())
-            .with_agent_id(self.config.agent_id.clone())
-            .with_working_dir(self.config.working_dir.clone())
-            .with_max_iterations(self.config.max_iterations)
             .build()
             .expect("AgentConfig builder should not fail")
     }

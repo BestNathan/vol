@@ -217,7 +217,7 @@ impl AgentPlugin for LokiPlugin {
         if !Self::should_send(event) {
             return;
         }
-        let entry = Self::create_loki_entry(event, &ctx.run_id, &ctx.session_id, &ctx.config.agent_id, &self.agent_type);
+        let entry = Self::create_loki_entry(event, &ctx.run_id, &ctx.session_id, &ctx.config.def.as_ref().map(|d| &d.name).unwrap_or(&String::new()), &self.agent_type);
         self.writer.send(entry).await;
     }
 }

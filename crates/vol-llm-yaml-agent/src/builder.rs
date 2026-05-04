@@ -88,10 +88,6 @@ impl YamlAgentBuilder {
             .with_session(session)
             .with_context_builder(context_builder)
             .with_plugin_registry(plugin_registry)
-            .with_agent_id(self.config.name.clone())
-            .with_working_dir(self.config.working_dir.clone())
-            .with_max_iterations(self.config.max_iterations)
-            .with_max_history_messages(self.config.max_history_messages)
             .build()
             .map_err(|e| YamlAgentError::Config(format!("Failed to build agent config: {}", e)))?;
 

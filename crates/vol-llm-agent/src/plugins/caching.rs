@@ -160,6 +160,7 @@ mod tests {
             )),
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
+            20,
         );
         ctx
     }

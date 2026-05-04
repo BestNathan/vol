@@ -6,21 +6,10 @@ use crate::agent_def::AgentDef;
 use vol_llm_context::ContextBuilderBuilder;
 use vol_llm_tool::ToolRegistry;
 use vol_session::{InMemoryEntryStore, Session};
-use std::path::PathBuf;
 use std::sync::Arc;
 use vol_llm_context::ContextContributor;
 use vol_llm_core::SandboxRef;
 use vol_llm_tool::ExecutableTool;
-
-/// Generate a short random agent ID if not provided.
-fn generate_agent_id() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
-    format!("agent_{:x}", timestamp % 0xFFFFFF)
-}
 
 /// Builder for AgentConfig.
 pub struct AgentConfigBuilder {
@@ -33,10 +22,6 @@ pub struct AgentConfigBuilder {
     context_builder: Option<vol_llm_context::ContextBuilder>,
     plugin_registry: PluginRegistry,
     contributors: Vec<Box<dyn ContextContributor>>,
-    agent_id: Option<String>,
-    working_dir: Option<PathBuf>,
-    max_iterations: u32,
-    max_history_messages: usize,
 }
 
 impl AgentConfigBuilder {
@@ -51,10 +36,6 @@ impl AgentConfigBuilder {
             context_builder: None,
             plugin_registry: PluginRegistry::new(),
             contributors: Vec::new(),
-            agent_id: None,
-            working_dir: None,
-            max_iterations: 5,
-            max_history_messages: 20,
         }
     }
 
@@ -114,27 +95,7 @@ impl AgentConfigBuilder {
         self
     }
 
-    pub fn with_agent_id(mut self, agent_id: String) -> Self {
-        self.agent_id = Some(agent_id);
-        self
-    }
-
-    pub fn with_working_dir(mut self, path: PathBuf) -> Self {
-        self.working_dir = Some(path);
-        self
-    }
-
-    pub fn with_max_iterations(mut self, max: u32) -> Self {
-        self.max_iterations = max;
-        self
-    }
-
-    pub fn with_max_history_messages(mut self, max: usize) -> Self {
-        self.max_history_messages = max;
-        self
-    }
-
-    pub fn build(mut self) -> Result<AgentConfig, AgentConfigBuildError> {
+    pub fn build(self) -> Result<AgentConfig, AgentConfigBuildError> {
         let llm = self
             .llm
             .ok_or(AgentConfigBuildError::MissingLlm)?;
@@ -189,10 +150,6 @@ impl AgentConfigBuilder {
             sandbox: self.sandbox,
             context_builder,
             plugin_registry: self.plugin_registry,
-            max_iterations: self.max_iterations,
-            max_history_messages: self.max_history_messages,
-            agent_id: self.agent_id.unwrap_or_else(generate_agent_id),
-            working_dir: self.working_dir.unwrap_or_else(|| PathBuf::from(".")),
         })
     }
 }
@@ -253,9 +210,6 @@ mod tests {
         assert!(result.is_ok());
         let config = result.unwrap();
         assert!(config.def.is_none());
-        assert_eq!(config.max_iterations, 5);
-        assert_eq!(config.max_history_messages, 20);
-        assert_eq!(config.working_dir, PathBuf::from("."));
     }
 
     #[tokio::test]
@@ -274,22 +228,6 @@ mod tests {
             .unwrap();
         assert!(config.def.is_some());
         assert_eq!(config.def.as_ref().unwrap().name, "test");
-    }
-
-    #[tokio::test]
-    async fn test_builder_with_custom_values() {
-        let config = AgentConfigBuilder::new()
-            .with_llm(Arc::new(MockLlm))
-            .with_agent_id("custom-id".to_string())
-            .with_working_dir(PathBuf::from("/tmp/test"))
-            .with_max_iterations(10)
-            .with_max_history_messages(50)
-            .build()
-            .unwrap();
-        assert_eq!(config.agent_id, "custom-id");
-        assert_eq!(config.working_dir, PathBuf::from("/tmp/test"));
-        assert_eq!(config.max_iterations, 10);
-        assert_eq!(config.max_history_messages, 50);
     }
 
     #[tokio::test]

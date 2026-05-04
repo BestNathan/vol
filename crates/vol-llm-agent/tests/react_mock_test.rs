@@ -152,7 +152,6 @@ async fn test_agent_executes_full_react_cycle() {
         .with_tool(OptionsTool::new(None))
         .with_tool(RvTool::new(None))
         .with_plugin(tool_counter.clone())
-        .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
@@ -241,7 +240,6 @@ async fn test_agent_max_iterations() {
         .with_tool(IndexPriceTool::new(None))
         .with_tool(OptionsTool::new(None))
         .with_tool(RvTool::new(None))
-        .with_max_iterations(3)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();

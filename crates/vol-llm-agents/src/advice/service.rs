@@ -6,7 +6,6 @@
 use tokio::sync::broadcast;
 use tracing::{error, info, warn};
 use vol_core::{Alert, NotificationHandler, Result as VolResult};
-use vol_llm_agent::ReActAgent;
 use vol_llm_provider::LLMProviderRegistry;
 use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
 use vol_llm_tool::ToolRegistry;
@@ -153,7 +152,6 @@ impl AdviceAgent {
             .with_tool(VolatilityIndexTool::new(None))
             .with_tool(OptionsTool::new(None))
             .with_tool(RvTool::new(None))
-            .with_max_iterations(5)
             .with_system_prompt(system_prompt().to_string())
             .build()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;

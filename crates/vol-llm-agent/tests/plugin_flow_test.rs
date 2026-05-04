@@ -129,7 +129,6 @@ async fn test_plugin_interceptor_chain_executes() {
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
-        .with_max_iterations(1)
         .with_system_prompt("You are a helpful assistant.".to_string())
         .with_plugin(TrackingPlugin::new(
             "tracker1".to_string(),
@@ -209,7 +208,6 @@ async fn test_plugin_skip_stops_current_event() {
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
-        .with_max_iterations(1)
         .with_system_prompt("You are a helpful assistant.".to_string())
         .with_plugin(SkipFirstPlugin {
             call_count: call_count.clone(),
@@ -326,6 +324,7 @@ fn create_test_run_context() -> RunContext {
         )),
         Arc::new(ToolRegistry::new()),
         AgentConfig::default(),
+        20,
     );
 
     ctx

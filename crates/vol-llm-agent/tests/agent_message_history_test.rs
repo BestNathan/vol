@@ -129,7 +129,6 @@ async fn test_tool_results_passed_to_next_iteration() {
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(vol_llm_tdengine::IndexPriceTool::new(None))
-        .with_max_iterations(3)
         .with_system_prompt("You are a test assistant. Use tools to get information.".to_string())
         .build()
         .unwrap();
@@ -232,7 +231,6 @@ async fn test_message_history_grows_correctly() {
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(vol_llm_tdengine::IndexPriceTool::new(None))
-        .with_max_iterations(3)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();

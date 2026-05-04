@@ -31,18 +31,15 @@ async fn test_builder_default() {
 async fn test_builder_with_methods() {
     let llm = Arc::new(DummyLlm);
     let tmp_dir = tempfile::tempdir().unwrap();
+    let _tmp_dir = tmp_dir; // kept for future test expansion
     let session = Arc::new(vol_session::Session::new(
         Arc::new(vol_session::InMemoryEntryStore::new()),
     ));
     // Build succeeds with all builder methods chained
     let result = AgentConfig::builder()
         .with_llm(llm)
-        .with_max_iterations(15)
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_max_history_messages(50)
         .with_session(session)
-        .with_agent_id("test_agent".to_string())
-        .with_working_dir(tmp_dir.path().to_path_buf())
         .build();
 
     assert!(result.is_ok());
@@ -269,6 +266,7 @@ async fn test_run_interceptor_loop_continue_decision() {
         )),
         Arc::new(vol_llm_tool::ToolRegistry::new()),
         AgentConfig::default(),
+        20,
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(ContinuePlugin)];
@@ -314,6 +312,7 @@ async fn test_run_interceptor_loop_skip_decision() {
         )),
         Arc::new(vol_llm_tool::ToolRegistry::new()),
         AgentConfig::default(),
+        20,
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(SkipPlugin)];
@@ -346,6 +345,7 @@ async fn test_run_interceptor_loop_emit_request() {
         )),
         Arc::new(vol_llm_tool::ToolRegistry::new()),
         AgentConfig::default(),
+        20,
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![];

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use async_trait::async_trait;
 use vol_llm_agent::react::{
-    AgentBuilder, AgentError, AgentStreamEvent,
+    AgentConfig, AgentError, AgentStreamEvent, ReActAgent,
     plugin::{AgentPlugin, RunContext, PluginDecision, PluginId},
 };
 use vol_llm_core::{
@@ -50,12 +50,12 @@ async fn test_agent_run_single_iteration() {
         content_complete_event("Hello, I can help with that."),
     ]).await;
 
-    let agent = AgentBuilder::new()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
-        .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     let result = agent.run("Hi").await.unwrap();
     assert!(result.error.is_none());
@@ -148,14 +148,14 @@ async fn test_agent_run_multiple_iterations() {
     let tool_count = Arc::new(AtomicUsize::new(0));
     let plugin = CountingPlugin { tool_count: tool_count.clone() };
 
-    let agent = AgentBuilder::new()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
         .with_tool(EchoTool)
         .with_plugin(plugin)
-        .with_max_iterations(10)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     let result = agent.run("Read test.txt").await.unwrap();
     assert!(result.error.is_none());
@@ -198,12 +198,12 @@ impl LLMClient for ErrorOnFirstMock {
 async fn test_agent_run_llm_error_propagates() {
     let (mock, count) = ErrorOnFirstMock::new();
 
-    let agent = AgentBuilder::new()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
-        .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     let result = agent.run("test").await;
     assert!(result.is_err());
@@ -224,21 +224,21 @@ async fn test_agent_run_session_recording() {
     ]).await;
 
     let tmp_dir = tempfile::tempdir().unwrap();
+    let _tmp_dir = tmp_dir;
     let agent_id = "session_test_agent";
+    let _agent_id = agent_id;
 
     // Create session and entry_store externally so we can register the plugin
     let entry_store = Arc::new(InMemoryEntryStore::new());
     let session = Arc::new(Session::new(entry_store.clone()));
 
-    let agent = AgentBuilder::new()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
-        .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_agent_id(agent_id.to_string())
-        .with_working_dir(tmp_dir.path().to_path_buf())
         .with_session(session.clone())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     let result = agent.run("Session question?").await.unwrap();
     assert!(result.error.is_none());
@@ -290,13 +290,13 @@ async fn test_agent_run_event_emission() {
     let events = Arc::new(tokio::sync::Mutex::new(Vec::new()));
     let plugin = EventCollectorPlugin { events: events.clone() };
 
-    let agent = AgentBuilder::new()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
         .with_plugin(plugin)
-        .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     let result = agent.run("Event question?").await.unwrap();
     assert!(result.error.is_none());
@@ -351,13 +351,16 @@ impl LLMClient for LoopMock {
 async fn test_agent_run_max_iterations_reached() {
     let (mock, count) = LoopMock::new();
 
-    let agent = AgentBuilder::new()
+    let def = vol_llm_agent::agent_def::AgentDef::new("loop-test", "You are a test assistant.")
+        .with_max_iterations(3);
+
+    let config = AgentConfig::builder()
+        .with_def(def)
         .with_llm(Arc::new(mock))
         .with_tool(EchoTool)
-        .with_max_iterations(3)
-        .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     let result = agent.run("Keep querying...").await;
     match result {
@@ -382,12 +385,12 @@ async fn test_mock_llm_call_tracking() {
         content_complete_event("Tracked answer."),
     ]).await;
 
-    let agent = AgentBuilder::new()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
-        .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     let _ = agent.run("Track me").await.unwrap();
 
@@ -422,13 +425,13 @@ async fn test_plugin_intercept_abort() {
         content_complete_event("This should never be returned."),
     ]).await;
 
-    let agent = AgentBuilder::new()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
         .with_plugin(AbortPlugin)
-        .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     let result = agent.run("Hello").await;
     assert!(result.is_err());

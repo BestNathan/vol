@@ -207,7 +207,6 @@ async fn test_agent_with_real_anthropic_api() {
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(IndexPriceTool::new(None))
-        .with_max_iterations(5)
         .with_system_prompt(
             "You are a helpful cryptocurrency market assistant. \
             Use the market_data tool to get current prices before answering questions. \

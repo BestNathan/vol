@@ -72,7 +72,6 @@ async fn test_history_limit_applied() {
     let config = AgentConfig::builder()
         .with_llm(Arc::new(MockLlm))
         .with_session(session.clone())
-        .with_max_history_messages(10)
         .build()
         .unwrap();
     let agent = ReActAgent::new(config);
@@ -96,10 +95,8 @@ async fn test_history_limit_applied() {
 
 #[tokio::test]
 async fn test_default_history_limit_is_20() {
-    // Verify default config has max_history_messages = 20
+    // max_history_messages is now computed from AgentDef at runtime with default 20.
+    // This is verified in the agent's run() method via the def.as_ref().unwrap_or(20) logic.
     let config = AgentConfig::default();
-    assert_eq!(
-        config.max_history_messages, 20,
-        "Default max_history_messages should be 20"
-    );
+    assert!(config.def.is_none(), "Default config should have no def");
 }

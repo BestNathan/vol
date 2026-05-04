@@ -5,14 +5,13 @@ use super::{
 };
 use crate::react::state::ToolCallRecord;
 use vol_session::{InMemoryEntryStore, Session};
-use std::io::IsTerminal;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::ToolRegistry;
 use vol_llm_core::{
-    ConversationRequest, ConversationResponse, FinishReason, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
+    ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
     ToolChoice,
 };
 use vol_llm_tool::ToolContext;
@@ -32,25 +31,6 @@ pub struct AgentConfig {
     // === Context and plugins ===
     pub context_builder: ContextBuilder,
     pub plugin_registry: PluginRegistry,
-
-    // === Runtime tuning (defaults; can be overridden by def) ===
-    pub max_iterations: u32,
-    pub max_history_messages: usize,
-
-    // === Metadata ===
-    pub agent_id: String,
-    /// Working directory. Log paths derive from `{working_dir}/logs/agents/{agent_id}/`.
-    pub working_dir: PathBuf,
-}
-
-/// Generate a short random agent ID if not provided
-fn generate_agent_id() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
-    format!("agent_{:x}", timestamp % 0xFFFFFF)
 }
 
 impl AgentConfig {
@@ -73,10 +53,6 @@ impl AgentConfig {
             sandbox: None,
             context_builder: ContextBuilderBuilder::new(128_000).build(),
             plugin_registry: PluginRegistry::new(),
-            max_iterations: 5,
-            max_history_messages: 20,
-            agent_id: generate_agent_id(),
-            working_dir: PathBuf::from("."),
         }
     }
 }
@@ -91,10 +67,6 @@ impl Default for AgentConfig {
             sandbox: None,
             context_builder: ContextBuilderBuilder::new(128_000).build(),
             plugin_registry: PluginRegistry::new(),
-            max_iterations: 5,
-            max_history_messages: 20,
-            agent_id: generate_agent_id(),
-            working_dir: PathBuf::from("."),
         }
     }
 }
@@ -182,7 +154,7 @@ impl ReActAgent {
     }
 
     /// Create agent with new session
-    pub fn with_new_session(&self, session_id: String) -> Self {
+    pub fn with_new_session(&self, _session_id: String) -> Self {
         use vol_session::InMemoryEntryStore;
 
         let entry_store = Arc::new(InMemoryEntryStore::new());
@@ -219,18 +191,16 @@ impl ReActAgent {
             self.config.tools.clone()
         };
 
-        // Read max_iterations and max_history from def if set, else use config defaults
+        // Read max_iterations and max_history from def if set, else use hardcoded defaults
         let max_iterations = self.config.def.as_ref()
             .and_then(|d| d.max_iterations)
-            .unwrap_or(self.config.max_iterations);
+            .unwrap_or(5);
         let max_history_messages = self.config.def.as_ref()
             .and_then(|d| d.max_history_messages)
-            .unwrap_or(self.config.max_history_messages);
+            .unwrap_or(20);
 
-        // Clone config with computed values
+        // Clone config with effective tools
         let config = AgentConfig {
-            max_iterations,
-            max_history_messages,
             tools: effective_tools.clone(),
             ..self.config.clone()
         };
@@ -246,6 +216,7 @@ impl ReActAgent {
             session.clone(),
             effective_tools,
             config.clone(),
+            max_history_messages,
         );
 
         // Persist user message to session so it's available via SessionContributor.
@@ -291,6 +262,7 @@ impl ReActAgent {
         let llm = self.config.llm.clone();
         let user_input = user_input.to_string();
         let sandbox = self.config.sandbox.clone();
+        let max_iterations = max_iterations;
 
         let agent_task = tokio::spawn(async move {
             // === Emit and intercept AgentStart ===
@@ -323,10 +295,10 @@ impl ReActAgent {
                 run_ctx.next_iteration();
                 let iteration = run_ctx.current_iteration();
 
-                if iteration > config.max_iterations {
+                if iteration > max_iterations {
                     run_ctx.emit(AgentStreamEvent::max_iterations_reached(
                         iteration,
-                        config.max_iterations,
+                        max_iterations,
                     )).await;
 
                     match run_ctx.intercept(&AgentStreamEvent::iteration_complete(iteration, vec![], None)).await {
@@ -336,10 +308,10 @@ impl ReActAgent {
                             continue;
                         }
                         _ => {
-                            let reason = format!("Max iterations ({}) reached", config.max_iterations);
+                            let reason = format!("Max iterations ({}) reached", max_iterations);
                             run_ctx.emit(AgentStreamEvent::agent_aborted(reason.clone())).await;
                             return Err(crate::AgentError::MaxIterationsReached {
-                                max: config.max_iterations,
+                                max: max_iterations,
                             });
                         }
                     }
@@ -704,6 +676,7 @@ mod tests {
     use super::*;
     use vol_llm_core::{ConversationResponse, FinishReason, Message as CoreMessage, StreamReceiver};
 
+    use crate::agent_def::AgentDef;
     use crate::react::plugin::PluginRegistry;
     use vol_session::InMemoryEntryStore;
 
@@ -745,31 +718,24 @@ mod tests {
     #[test]
     fn test_agent_config_default() {
         let config = make_config();
-        assert_eq!(config.max_iterations, 5);
-        assert_eq!(config.max_history_messages, 20);
+        assert!(config.def.is_none());
         assert_eq!(config.plugin_registry.plugins().len(), 0);
     }
 
     #[test]
-    fn test_agent_config_custom() {
-        let mut config = make_config();
-        config.max_iterations = 10;
-        config.max_history_messages = 50;
-        config.agent_id = "custom_agent".to_string();
-        config.working_dir = PathBuf::from("/custom/project");
-        assert_eq!(config.max_history_messages, 50);
-        assert_eq!(config.agent_id, "custom_agent");
-        assert_eq!(config.working_dir, PathBuf::from("/custom/project"));
-    }
-
-    #[test]
-    fn test_agent_config_with_observability() {
-        let mut config = make_config();
-        config.agent_id = "test_agent".to_string();
-        config.working_dir = PathBuf::from(".");
-
-        assert_eq!(config.agent_id, "test_agent");
-        assert_eq!(config.working_dir, PathBuf::from("."));
+    fn test_agent_config_with_def() {
+        let def = AgentDef::new("test-agent", "You are a test agent.")
+            .with_type("test-runner")
+            .with_max_iterations(10)
+            .with_max_history_messages(50);
+        let config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_def(def)
+            .build()
+            .unwrap();
+        assert_eq!(config.def.as_ref().unwrap().name, "test-agent");
+        assert_eq!(config.def.as_ref().unwrap().max_iterations, Some(10));
+        assert_eq!(config.def.as_ref().unwrap().max_history_messages, Some(50));
     }
 
     #[test]
