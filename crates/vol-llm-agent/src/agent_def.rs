@@ -55,7 +55,9 @@ pub struct AgentDef {
     /// Max ReAct iterations
     pub max_iterations: Option<u32>,
     /// Markdown body (system prompt)
-    pub content: String,
+    pub max_history_messages: Option<usize>,
+    /// Markdown body (system prompt)
+    pub prompt: String,
 }
 
 impl AgentDef {
@@ -72,7 +74,8 @@ impl AgentDef {
             disallowed_tools: None,
             model: None,
             max_iterations: None,
-            content: content_str,
+            max_history_messages: None,
+            prompt: content_str,
         }
     }
 
@@ -103,6 +106,12 @@ impl AgentDef {
     /// Set max iterations.
     pub fn with_max_iterations(mut self, max: u32) -> Self {
         self.max_iterations = Some(max);
+        self
+    }
+
+    /// Set max history messages.
+    pub fn with_max_history_messages(mut self, max: usize) -> Self {
+        self.max_history_messages = Some(max);
         self
     }
 }
@@ -192,6 +201,9 @@ pub struct AgentFrontmatter {
     /// Optional. Alias for max_iterations
     #[serde(default)]
     pub max_turns: Option<u32>,
+    /// Optional. Max history messages from session
+    #[serde(default)]
+    pub max_history_messages: Option<usize>,
 }
 
 impl AgentFrontmatter {
@@ -260,7 +272,7 @@ mod tests {
         let def = AgentDef::new("test-agent", "You are a test agent.");
         assert_eq!(def.name, "test-agent");
         assert_eq!(def.r#type, "test-agent");
-        assert_eq!(def.content, "You are a test agent.");
+        assert_eq!(def.prompt, "You are a test agent.");
         assert!(def.tools.is_none());
     }
 
@@ -304,6 +316,7 @@ mod tests {
             model: None,
             max_iterations: None,
             max_turns: None,
+            max_history_messages: None,
         };
         assert_eq!(fm.resolve_type(), "my-agent");
     }
@@ -319,6 +332,7 @@ mod tests {
             model: None,
             max_iterations: None,
             max_turns: None,
+            max_history_messages: None,
         };
         assert_eq!(fm.resolve_type(), "code-reviewer");
     }
@@ -334,6 +348,7 @@ mod tests {
             model: None,
             max_iterations: Some(10),
             max_turns: Some(20),
+            max_history_messages: None,
         };
         assert_eq!(fm.resolve_max_iterations(), Some(10));
     }
@@ -349,6 +364,7 @@ mod tests {
             model: None,
             max_iterations: None,
             max_turns: Some(20),
+            max_history_messages: None,
         };
         assert_eq!(fm.resolve_max_iterations(), Some(20));
     }
@@ -364,6 +380,7 @@ mod tests {
             model: None,
             max_iterations: None,
             max_turns: None,
+            max_history_messages: None,
         };
         assert!(fm.resolve_max_iterations().is_none());
     }

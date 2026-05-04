@@ -95,7 +95,8 @@ impl AgentLoader {
                     disallowed_tools: fm.disallowed_tools.clone(),
                     model: fm.model.clone(),
                     max_iterations: fm.resolve_max_iterations(),
-                    content: doc.body,
+                    max_history_messages: fm.max_history_messages,
+                    prompt: doc.body,
                 };
 
                 match agents_map.entry(doc.frontmatter.name) {
@@ -208,7 +209,7 @@ mod tests {
         assert!(agent.is_some());
         let def = agent.unwrap();
         assert_eq!(def.r#type, "test-runner");
-        assert!(def.content.contains("You are a test runner."));
+        assert!(def.prompt.contains("You are a test runner."));
     }
 
     #[tokio::test]
@@ -248,7 +249,7 @@ mod tests {
         loader.register(def2).await;
 
         let def = loader.get("dup").await.unwrap();
-        assert_eq!(def.content, "content2");
+        assert_eq!(def.prompt, "content2");
     }
 
     #[tokio::test]
@@ -320,7 +321,7 @@ mod tests {
         loader.discover_all().await.unwrap();
 
         let def = loader.get("helper").await.unwrap();
-        assert!(def.content.contains("Repo content."));
+        assert!(def.prompt.contains("Repo content."));
         assert_eq!(def.scope, AgentScope::Repo);
     }
 }

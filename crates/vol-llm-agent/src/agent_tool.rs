@@ -162,10 +162,10 @@ impl ExecutableTool for AgentTool {
         let def = agents[0].clone();
 
         // Build system prompt
-        let system_prompt = if def.content.trim().is_empty() {
+        let system_prompt = if def.prompt.trim().is_empty() {
             DEFAULT_AGENT_PROMPT.to_string()
         } else {
-            def.content.clone()
+            def.prompt.clone()
         };
 
         let max_iterations = def.max_iterations.unwrap_or(5);
