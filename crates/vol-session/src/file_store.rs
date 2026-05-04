@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 /// Session ID is passed per-method-call, not bound at construction.
 pub struct FileSessionEntryStore {
     entry_dir: PathBuf,
+    agent_type: Option<String>,
 }
 
 /// JSONL line format for SessionEntry.
@@ -32,16 +33,41 @@ impl FileSessionEntryStore {
     pub fn new<P: AsRef<Path>>(entry_dir: P) -> Self {
         Self {
             entry_dir: entry_dir.as_ref().to_path_buf(),
+            agent_type: None,
         }
     }
 
+    /// Create a new file entry store, optionally scoped to an agent type subdirectory.
+    ///
+    /// When `agent_type` is `Some`, entries are stored in `{entry_dir}/{agent_type}/{session_id}.jsonl`.
+    /// When `None`, entries use the original path `{entry_dir}/{session_id}.jsonl`.
+    pub fn with_agent_type<P: AsRef<Path>>(entry_dir: P, agent_type: Option<String>) -> Self {
+        Self {
+            entry_dir: entry_dir.as_ref().to_path_buf(),
+            agent_type,
+        }
+    }
+
+    /// Return the base entry directory.
+    pub fn entry_dir(&self) -> &Path {
+        &self.entry_dir
+    }
+
     /// Resolve file path for a session.
+    /// Includes agent_type subdirectory when configured.
     fn file_path(&self, session_id: &str) -> PathBuf {
-        self.entry_dir.join(format!("{}.jsonl", session_id))
+        match &self.agent_type {
+            Some(agent) => self.entry_dir.join(agent).join(format!("{}.jsonl", session_id)),
+            None => self.entry_dir.join(format!("{}.jsonl", session_id)),
+        }
     }
 
     fn ensure_dir(&self) -> std::io::Result<()> {
-        fs::create_dir_all(&self.entry_dir)
+        let dir = match &self.agent_type {
+            Some(agent) => self.entry_dir.join(agent),
+            None => self.entry_dir.clone(),
+        };
+        fs::create_dir_all(&dir)
     }
 
     fn append_line(&self, session_id: &str, line: &str) -> std::io::Result<()> {
@@ -168,10 +194,14 @@ pub struct SessionSummary {
 }
 
 impl FileSessionEntryStore {
-    /// Scan `{entry_dir}/*.jsonl` and return session summaries.
+    /// Scan `{entry_dir}/{agent_type}/*.jsonl` and return session summaries.
     pub fn list_sessions(&self) -> std::io::Result<Vec<SessionSummary>> {
         let mut summaries = Vec::new();
-        let dir = match std::fs::read_dir(&self.entry_dir) {
+        let scan_dir: PathBuf = match &self.agent_type {
+            Some(agent) => self.entry_dir.join(agent),
+            None => self.entry_dir.clone(),
+        };
+        let dir = match std::fs::read_dir(&scan_dir) {
             Ok(d) => d,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(summaries),
             Err(e) => return Err(e),
@@ -495,5 +525,69 @@ mod entry_tests {
         let store = FileSessionEntryStore::new(temp_dir.path());
         let summaries = store.list_sessions().unwrap();
         assert!(summaries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_file_entry_store_with_agent_type() {
+        let temp_dir = tempdir().unwrap();
+        let store = FileSessionEntryStore::with_agent_type(temp_dir.path(), Some("qa".to_string()));
+
+        let entry = SessionEntry::from_message(
+            SessionMessage::new("test-session".to_string(), Message::user("Hello from QA")),
+        );
+        store.save(entry).await.unwrap();
+
+        let expected_path = temp_dir.path().join("qa").join("test-session.jsonl");
+        assert!(expected_path.exists(), "File should exist at {}/qa/test-session.jsonl", temp_dir.path().display());
+
+        let entries = store.get_entries("test-session").await.unwrap();
+        assert_eq!(entries.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_file_entry_store_agent_type_isolation() {
+        let temp_dir = tempdir().unwrap();
+        let qa_store = FileSessionEntryStore::with_agent_type(temp_dir.path(), Some("qa".to_string()));
+        let coding_store = FileSessionEntryStore::with_agent_type(temp_dir.path(), Some("coding".to_string()));
+
+        qa_store.save(SessionEntry::from_message(
+            SessionMessage::new("shared-session".to_string(), Message::user("from QA")),
+        )).await.unwrap();
+
+        coding_store.save(SessionEntry::from_message(
+            SessionMessage::new("shared-session".to_string(), Message::user("from Coding")),
+        )).await.unwrap();
+
+        // QA store should only see QA entries
+        let qa_entries = qa_store.get_entries("shared-session").await.unwrap();
+        assert_eq!(qa_entries.len(), 1);
+        assert_eq!(qa_entries[0].data.entry_type(), SessionEntryType::Message);
+
+        // Coding store should only see Coding entries
+        let coding_entries = coding_store.get_entries("shared-session").await.unwrap();
+        assert_eq!(coding_entries.len(), 1);
+        assert_eq!(coding_entries[0].data.entry_type(), SessionEntryType::Message);
+
+        // Files should be in different directories
+        assert!(temp_dir.path().join("qa").join("shared-session.jsonl").exists());
+        assert!(temp_dir.path().join("coding").join("shared-session.jsonl").exists());
+    }
+
+    #[tokio::test]
+    async fn test_file_entry_store_no_agent_type_backward_compat() {
+        let temp_dir = tempdir().unwrap();
+        let store = FileSessionEntryStore::new(temp_dir.path());
+
+        let entry = SessionEntry::from_message(
+            SessionMessage::new("test-session".to_string(), Message::user("backward compat")),
+        );
+        store.save(entry).await.unwrap();
+
+        // File should be directly in entry_dir, not in a subdirectory
+        let expected_path = temp_dir.path().join("test-session.jsonl");
+        assert!(expected_path.exists(), "File should exist at original path {}", expected_path.display());
+
+        let entries = store.get_entries("test-session").await.unwrap();
+        assert_eq!(entries.len(), 1);
     }
 }
