@@ -6,7 +6,11 @@ use axum::{
 };
 use axum::extract::ws::{Message, WebSocket};
 use futures::{SinkExt, StreamExt};
+use std::sync::Arc;
 use tracing::{info, warn};
+
+use vol_llm_agent::AgentBuilder;
+use vol_llm_provider::create_provider;
 
 use crate::AppRouterState;
 
@@ -41,6 +45,78 @@ async fn upgrade_agent_ws(
     })
 }
 
+/// Run an agent instance from a definition, broadcasting events to connected WS clients.
+async fn run_agent_instance(
+    agent_def: vol_llm_agent::AgentDef,
+    session: Arc<vol_session::Session>,
+    llm_config: vol_llm_provider::LLMConfig,
+    broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
+    agent_type: String,
+    session_id: String,
+    user_input: String,
+) {
+    // Create LLM client
+    let llm = match create_provider(&llm_config) {
+        Ok(client) => client,
+        Err(e) => {
+            let err = serde_json::json!({
+                "message_type": "agent_error",
+                "error": format!("Failed to create LLM client: {}", e),
+            });
+            let _ = broadcast_tx.send(err);
+            return;
+        }
+    };
+
+    // Build agent from definition
+    let agent = AgentBuilder::new()
+        .with_llm(Arc::from(llm))
+        .with_system_prompt(agent_def.content)
+        .with_session(session)
+        .with_max_iterations(agent_def.max_iterations.unwrap_or(10))
+        .build();
+
+    let agent = match agent {
+        Ok(a) => a,
+        Err(e) => {
+            let err = serde_json::json!({
+                "message_type": "agent_error",
+                "error": format!("Failed to build agent: {}", e),
+            });
+            let _ = broadcast_tx.send(err);
+            return;
+        }
+    };
+
+    info!(
+        agent_type = %agent_type,
+        session_id = %session_id,
+        "Running agent with input: {}",
+        user_input
+    );
+
+    // Run agent and broadcast result
+    match agent.run(&user_input).await {
+        Ok(response) => {
+            let data = serde_json::json!({
+                "message_type": "agent_complete",
+                "content": response.content,
+                "iterations": response.iterations,
+            });
+            let _ = broadcast_tx.send(data);
+        }
+        Err(e) => {
+            let data = serde_json::json!({
+                "message_type": "agent_error",
+                "error": e.to_string(),
+            });
+            let _ = broadcast_tx.send(data);
+        }
+    }
+
+    info!(agent_type = %agent_type, session_id = %session_id, "Agent run finished");
+}
+
 async fn handle_agent_ws(
     ws: WebSocket,
     agent_type: String,
@@ -51,8 +127,8 @@ async fn handle_agent_ws(
     let conn_id = uuid::Uuid::new_v4().to_string();
 
     // Get or create instance with in-memory session for now
-    let entry_store = std::sync::Arc::new(vol_session::InMemoryEntryStore::new());
-    let session = std::sync::Arc::new(vol_session::Session::new(entry_store));
+    let entry_store = Arc::new(vol_session::InMemoryEntryStore::new());
+    let session = Arc::new(vol_session::Session::new(entry_store));
 
     let instance = state
         .instance_registry
@@ -64,6 +140,12 @@ async fn handle_agent_ws(
 
     // Add connection
     state.instance_registry.add_connection(&agent_type, &session_id, conn_id.clone()).await;
+
+    // Get agent definition and LLM config for spawning
+    let agent_def = (*state.agent_loader.get(&agent_type).await.unwrap()).clone();
+    let llm_config = state.llm_config.clone();
+    let session = instance.session.clone();
+    let agent_spawned = Arc::new(tokio::sync::Mutex::new(false));
 
     // Split WebSocket into send/receive halves
     let (mut ws_tx, mut ws_rx) = ws.split();
@@ -99,6 +181,25 @@ async fn handle_agent_ws(
                 if let Ok(input) = serde_json::from_str::<serde_json::Value>(&text) {
                     if let Some(content) = input.get("content").and_then(|v| v.as_str()) {
                         info!(agent_type = %agent_type, session_id = %session_id, "Received user input: {}", content);
+
+                        if !*agent_spawned.lock().await {
+                            *agent_spawned.lock().await = true;
+                            let content = content.to_string();
+                            tokio::spawn({
+                                let agent_def = agent_def.clone();
+                                let llm_config = llm_config.clone();
+                                let broadcast_tx = broadcast_tx.clone();
+                                let session = session.clone();
+                                let agent_type = agent_type.clone();
+                                let session_id = session_id.clone();
+                                async move {
+                                    run_agent_instance(
+                                        agent_def, session, llm_config, broadcast_tx,
+                                        agent_type, session_id, content,
+                                    ).await;
+                                }
+                            });
+                        }
                     }
                 }
             }

@@ -62,6 +62,13 @@ async fn main() -> Result<()> {
     }
     let instance_registry = Arc::new(vol_agent_manager::instance::AgentInstanceRegistry::new());
 
+    let llm_config = vol_llm_provider::LLMConfig::with_env_key(
+        vol_llm_core::LLMProvider::Anthropic,
+        "qwen3.5-plus",
+        "ANTHROPIC_AUTH_TOKEN",
+        "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+    );
+
     let app_state = AppRouterState {
         state_manager: state_manager.clone(),
         metrics: metrics.clone(),
@@ -70,6 +77,7 @@ async fn main() -> Result<()> {
         config: config.clone(),
         instance_registry: instance_registry.clone(),
         agent_loader: agent_loader.clone(),
+        llm_config,
     };
 
     // Build router
