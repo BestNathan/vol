@@ -9,6 +9,7 @@ use task::dispatcher::TaskDispatcher;
 pub mod config;
 pub mod events;
 pub mod health;
+pub mod instance;
 pub mod metrics;
 pub mod state;
 pub mod task;
