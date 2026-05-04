@@ -16,6 +16,7 @@ pub struct WsQuery {
 pub fn create_ws_router() -> Router<AppRouterState> {
     Router::new()
         .route("/ws", get(upgrade_ws))
+        .merge(crate::ws::router::create_agent_ws_router())
 }
 
 async fn upgrade_ws(
