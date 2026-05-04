@@ -3,6 +3,7 @@ import { ConfigProvider } from 'antd';
 import { AppLayout } from './components/AppLayout';
 import { Dashboard } from './pages/Dashboard';
 import { AgentTypes } from './pages/AgentTypes';
+import { Instances } from './pages/Instances';
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/agent-types" element={<AgentTypes />} />
+            <Route path="/instances" element={<Instances />} />
           </Routes>
         </AppLayout>
       </BrowserRouter>
