@@ -1,6 +1,7 @@
 //! Agent definition types for file-based agent discovery.
 
 use std::fmt;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
@@ -58,6 +59,8 @@ pub struct AgentDef {
     pub max_history_messages: Option<usize>,
     /// Markdown body (system prompt)
     pub prompt: String,
+    /// Working directory for skill/agent discovery scope.
+    pub working_dir: Option<PathBuf>,
 }
 
 impl AgentDef {
@@ -76,6 +79,7 @@ impl AgentDef {
             max_iterations: None,
             max_history_messages: None,
             prompt: content_str,
+            working_dir: None,
         }
     }
 
@@ -112,6 +116,12 @@ impl AgentDef {
     /// Set max history messages.
     pub fn with_max_history_messages(mut self, max: usize) -> Self {
         self.max_history_messages = Some(max);
+        self
+    }
+
+    /// Set the working directory for skill discovery scope.
+    pub fn with_working_dir(mut self, dir: PathBuf) -> Self {
+        self.working_dir = Some(dir);
         self
     }
 }
@@ -204,6 +214,9 @@ pub struct AgentFrontmatter {
     /// Optional. Max history messages from session
     #[serde(default)]
     pub max_history_messages: Option<usize>,
+    /// Optional. Working directory root for skill/agent discovery.
+    #[serde(default)]
+    pub working_dir: Option<String>,
 }
 
 impl AgentFrontmatter {
@@ -317,6 +330,7 @@ mod tests {
             max_iterations: None,
             max_turns: None,
             max_history_messages: None,
+            working_dir: None,
         };
         assert_eq!(fm.resolve_type(), "my-agent");
     }
@@ -333,6 +347,7 @@ mod tests {
             max_iterations: None,
             max_turns: None,
             max_history_messages: None,
+            working_dir: None,
         };
         assert_eq!(fm.resolve_type(), "code-reviewer");
     }
@@ -349,6 +364,7 @@ mod tests {
             max_iterations: Some(10),
             max_turns: Some(20),
             max_history_messages: None,
+            working_dir: None,
         };
         assert_eq!(fm.resolve_max_iterations(), Some(10));
     }
@@ -365,6 +381,7 @@ mod tests {
             max_iterations: None,
             max_turns: Some(20),
             max_history_messages: None,
+            working_dir: None,
         };
         assert_eq!(fm.resolve_max_iterations(), Some(20));
     }
@@ -381,7 +398,15 @@ mod tests {
             max_iterations: None,
             max_turns: None,
             max_history_messages: None,
+            working_dir: None,
         };
         assert!(fm.resolve_max_iterations().is_none());
+    }
+
+    #[test]
+    fn test_agent_def_with_working_dir() {
+        let def = AgentDef::new("test", "prompt")
+            .with_working_dir(PathBuf::from("/tmp/project"));
+        assert_eq!(def.working_dir, Some(PathBuf::from("/tmp/project")));
     }
 }
