@@ -59,10 +59,6 @@ impl AgentLoader {
         let mut agents_map = HashMap::new();
 
         for (scope, root_path) in &self.roots {
-            if !root_path.exists() || !root_path.is_dir() {
-                continue;
-            }
-
             let entries = match std::fs::read_dir(root_path) {
                 Ok(e) => e,
                 Err(e) => {
@@ -77,18 +73,10 @@ impl AgentLoader {
                     continue;
                 }
 
-                let content = match std::fs::read_to_string(&file_path) {
-                    Ok(c) => c,
+                let doc = match md_frontmatter::io::from_path::<AgentFrontmatter>(&file_path).await {
+                    Ok(d) => d,
                     Err(e) => {
-                        tracing::warn!(path = %file_path.display(), error = %e, "Failed to read agent file, skipping");
-                        continue;
-                    }
-                };
-
-                let doc = match md_frontmatter::parse::<AgentFrontmatter>(&content) {
-                    Ok(doc) => doc,
-                    Err(e) => {
-                        tracing::warn!(path = %file_path.display(), error = %e, "Failed to parse agent frontmatter, skipping");
+                        tracing::warn!(path = %file_path.display(), error = %e, "Failed to parse agent file, skipping");
                         continue;
                     }
                 };
