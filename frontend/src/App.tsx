@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import { AppLayout } from './components/AppLayout';
 import { Dashboard } from './pages/Dashboard';
+import { AgentTypes } from './pages/AgentTypes';
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
         <AppLayout>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/agent-types" element={<AgentTypes />} />
           </Routes>
         </AppLayout>
       </BrowserRouter>
