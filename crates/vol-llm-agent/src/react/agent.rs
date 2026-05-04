@@ -5,10 +5,8 @@ use super::{
 };
 use crate::react::state::ToolCallRecord;
 use vol_session::{InMemoryEntryStore, Session};
-use std::path::Path;
 use std::sync::Arc;
 use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
-use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::ToolRegistry;
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
@@ -84,55 +82,6 @@ impl LLMClient for DefaultLlm {
     async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
         let (_tx, rx) = tokio::sync::mpsc::channel(10);
         Ok(StreamReceiver::new(rx))
-    }
-}
-
-/// Holds a shared SkillLoader and provides helpers to register skills
-/// into the tool registry and context builder.
-pub struct SkillsConfig {
-    loader: Arc<SkillLoader>,
-}
-
-impl SkillsConfig {
-    /// Create from a working directory. The SkillLoader discovers skills
-    /// lazily on first access (no I/O during construction).
-    pub fn from_workdir(working_dir: &Path) -> Self {
-        Self {
-            loader: Arc::new(SkillLoader::new(Some(working_dir.to_path_buf()))),
-        }
-    }
-
-    /// Register the SkillTool into the tool registry.
-    /// Call this on a mutable reference before wrapping the registry in Arc.
-    pub fn register_tool(&self, registry: &mut ToolRegistry) {
-        registry.register(SkillTool::new(self.loader.clone()));
-    }
-
-    /// Build a new ContextBuilder from an existing one, adding the SkillInjector.
-    pub fn enhance_context_builder(
-        &self,
-        existing: &ContextBuilder,
-    ) -> ContextBuilder {
-        let injector = SkillInjector::new(self.loader.clone());
-        let budget = existing.token_budget();
-        ContextBuilderBuilder::new(budget.total)
-            .head_size(budget.head_size)
-            .tail_size(budget.tail_size)
-            .add_contributors_from(existing)
-            .add_contributor(Box::new(injector))
-            .build()
-    }
-}
-
-impl AgentConfig {
-    /// Enhance this config with skill injection in the context builder.
-    pub fn with_skills(self, working_dir: &Path) -> Self {
-        let skills = SkillsConfig::from_workdir(working_dir);
-        let new_context = skills.enhance_context_builder(&self.context_builder);
-        AgentConfig {
-            context_builder: new_context,
-            ..self
-        }
     }
 }
 
@@ -736,23 +685,5 @@ mod tests {
         assert_eq!(config.def.as_ref().unwrap().name, "test-agent");
         assert_eq!(config.def.as_ref().unwrap().max_iterations, Some(10));
         assert_eq!(config.def.as_ref().unwrap().max_history_messages, Some(50));
-    }
-
-    #[test]
-    fn test_skills_config_register_tool() {
-        let skills = SkillsConfig::from_workdir(Path::new("/tmp/test-project"));
-        let mut registry = ToolRegistry::new();
-        skills.register_tool(&mut registry);
-        let defs = registry.definitions();
-        assert!(defs.iter().any(|d| d.name == "skill"));
-    }
-
-    #[test]
-    fn test_skills_config_enhance_context_builder() {
-        let skills = SkillsConfig::from_workdir(Path::new("/tmp/test-project"));
-        let existing = ContextBuilderBuilder::new(128_000).build();
-        let enhanced = skills.enhance_context_builder(&existing);
-        let names = enhanced.contributor_names();
-        assert!(names.contains(&"skills"));
     }
 }
