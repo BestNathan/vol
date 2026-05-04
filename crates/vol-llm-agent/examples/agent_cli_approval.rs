@@ -273,14 +273,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Build agent with HITL plugin and observability
     let working_dir = std::path::PathBuf::from(".");
 
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(mock_llm)
         .with_tool(MockBtcPriceTool)
         .with_tool(MockEthVolatilityTool)
         .with_plugin(hitl_plugin)
-        .with_agent_id("hitl_demo_agent".to_string())
-        .with_working_dir(working_dir)
-        .with_max_iterations(3)
         .with_system_prompt(
             "你是一个专业的加密货币市场分析师。你有访问市场数据的工具。
             当用户询问价格或波动率时，请使用工具查询数据并提供分析建议。
@@ -288,6 +285,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .to_string(),
         )
         .build()?;
+    let agent = ReActAgent::new(config);
 
     // Example query that will trigger tool calls
     let query = "请查询 BTC 当前价格，并分析 ETH 的隐含波动率是否处于高位？";

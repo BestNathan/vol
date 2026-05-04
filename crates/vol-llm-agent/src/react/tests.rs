@@ -16,12 +16,12 @@ impl LLMClient for DummyLlm {
 }
 
 // ========================
-// builder.rs tests
+// config_builder.rs tests
 // ========================
 
 #[tokio::test]
 async fn test_builder_default() {
-    let builder = AgentBuilder::new();
+    let builder = AgentConfigBuilder::new();
     let result = builder.build();
     // Should fail without LLM
     assert!(result.is_err());
@@ -31,18 +31,15 @@ async fn test_builder_default() {
 async fn test_builder_with_methods() {
     let llm = Arc::new(DummyLlm);
     let tmp_dir = tempfile::tempdir().unwrap();
+    let _tmp_dir = tmp_dir; // kept for future test expansion
     let session = Arc::new(vol_session::Session::new(
         Arc::new(vol_session::InMemoryEntryStore::new()),
     ));
     // Build succeeds with all builder methods chained
-    let result = AgentBuilder::new()
+    let result = AgentConfig::builder()
         .with_llm(llm)
-        .with_max_iterations(15)
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_max_history_messages(50)
         .with_session(session)
-        .with_agent_id("test_agent".to_string())
-        .with_working_dir(tmp_dir.path().to_path_buf())
         .build();
 
     assert!(result.is_ok());
@@ -50,7 +47,7 @@ async fn test_builder_with_methods() {
 
 #[test]
 fn test_build_missing_llm() {
-    let result = AgentBuilder::new().build();
+    let result = AgentConfigBuilder::new().build();
     assert!(result.is_err());
     if let Err(e) = result {
         assert!(e.to_string().contains("LLM") || e.to_string().contains("llm"));
@@ -69,11 +66,12 @@ async fn test_build_with_plugin() {
     }
 
     let llm = Arc::new(DummyLlm);
-    let agent = AgentBuilder::new()
+    let config = AgentConfig::builder()
         .with_llm(llm)
         .with_plugin(DummyPlugin)
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     // Build succeeds with plugin registered
     let _ = agent;
@@ -268,6 +266,7 @@ async fn test_run_interceptor_loop_continue_decision() {
         )),
         Arc::new(vol_llm_tool::ToolRegistry::new()),
         AgentConfig::default(),
+        20,
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(ContinuePlugin)];
@@ -313,6 +312,7 @@ async fn test_run_interceptor_loop_skip_decision() {
         )),
         Arc::new(vol_llm_tool::ToolRegistry::new()),
         AgentConfig::default(),
+        20,
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(SkipPlugin)];
@@ -345,6 +345,7 @@ async fn test_run_interceptor_loop_emit_request() {
         )),
         Arc::new(vol_llm_tool::ToolRegistry::new()),
         AgentConfig::default(),
+        20,
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![];

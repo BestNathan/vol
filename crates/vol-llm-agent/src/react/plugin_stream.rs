@@ -97,8 +97,12 @@ impl From<&super::AgentConfig> for AgentConfigSnapshot {
     fn from(config: &super::AgentConfig) -> Self {
         let contributor_names: Vec<&str> = config.context_builder.contributor_names();
         Self {
-            max_iterations: config.max_iterations,
-            max_history_messages: config.max_history_messages,
+            max_iterations: config.def.as_ref()
+                .and_then(|d| d.max_iterations)
+                .unwrap_or(5),
+            max_history_messages: config.def.as_ref()
+                .and_then(|d| d.max_history_messages)
+                .unwrap_or(20),
             context_builder_summary: contributor_names.join(", "),
         }
     }

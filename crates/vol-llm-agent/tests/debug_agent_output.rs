@@ -6,7 +6,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use vol_llm_agent::ReActAgent;
+use vol_llm_agent::{AgentConfig, ReActAgent};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, LLMProvider, StreamEvent,
     StreamEventData, ToolCall,
@@ -107,13 +107,13 @@ async fn test_agent_produces_output() {
     let mock_llm = SimpleMock;
 
     // Create agent with builder
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(IndexPriceTool::new(None))
-        .with_max_iterations(3)
         .with_system_prompt("You are a test assistant. Use tools to get information.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     println!("\n--- Running agent with user input: 'What is the BTC price?' ---\n");
 

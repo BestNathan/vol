@@ -70,7 +70,7 @@ impl YamlAgentBuilder {
         }
         let context_builder = context_builder_builder.build();
 
-        // 5. Build agent config
+        // 5. Build plugins
         let mut plugin_registry = vol_llm_agent::react::PluginRegistry::new();
         register_plugins_by_name(
             &mut plugin_registry,
@@ -78,20 +78,20 @@ impl YamlAgentBuilder {
             &self.config.working_dir,
         )?;
 
-        let agent_config = AgentConfig {
-            max_iterations: self.config.max_iterations,
-            max_history_messages: self.config.max_history_messages,
-            context_builder,
-            plugin_registry,
-            agent_id: self.config.name.clone(),
-            working_dir: self.config.working_dir.clone(),
-        };
-
         // 6. Create session
         let entry_store = Arc::new(InMemoryEntryStore::new());
         let session = Arc::new(Session::new(entry_store));
 
-        Ok(ReActAgent::new(llm, Arc::new(tool_registry), agent_config, session))
+        let agent_config = AgentConfig::builder()
+            .with_llm(llm)
+            .with_tools(Arc::new(tool_registry))
+            .with_session(session)
+            .with_context_builder(context_builder)
+            .with_plugin_registry(plugin_registry)
+            .build()
+            .map_err(|e| YamlAgentError::Config(format!("Failed to build agent config: {}", e)))?;
+
+        Ok(ReActAgent::new(agent_config))
     }
 
     /// Build combined system prompt: inline string + file contents.

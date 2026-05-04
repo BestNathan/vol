@@ -190,15 +190,15 @@ impl CodingAgent {
     }
 
     /// Build an AgentConfig for a single ReActAgent run.
-    fn build_agent_config(&self) -> AgentConfig {
-        AgentConfig {
-            max_iterations: self.config.max_iterations,
-            max_history_messages: 20,
-            context_builder: self.context_builder.clone(),
-            plugin_registry: self.config.plugin_registry.clone(),
-            agent_id: self.config.agent_id.clone(),
-            working_dir: self.config.working_dir.clone(),
-        }
+    fn build_agent_config(&self, session: Arc<Session>) -> AgentConfig {
+        AgentConfig::builder()
+            .with_llm(self.llm.clone())
+            .with_tools(self.tool_registry.clone())
+            .with_session(session)
+            .with_context_builder(self.context_builder.clone())
+            .with_plugin_registry(self.config.plugin_registry.clone())
+            .build()
+            .expect("AgentConfig builder should not fail")
     }
 
     /// Run a coding task
@@ -212,15 +212,11 @@ impl CodingAgent {
             }
         };
 
-        // Build AgentConfig on-demand
-        let agent_config = self.build_agent_config();
+        let mut react_agent = ReActAgent::new(self.build_agent_config(session));
 
-        let mut react_agent = ReActAgent::new(
-            self.llm.clone(),
-            self.tool_registry.clone(),
-            agent_config,
-            session,
-        );
+        if let Some(ref sandbox) = self.sandbox {
+            react_agent = react_agent.with_sandbox(sandbox.clone());
+        }
 
         if let Some(ref sandbox) = self.sandbox {
             react_agent = react_agent.with_sandbox(sandbox.clone());

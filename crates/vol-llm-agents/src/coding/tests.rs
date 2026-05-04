@@ -451,9 +451,7 @@ async fn test_agent_with_methods() {
         llm: Some(llm),
         ..Default::default()
     };
-    let agent = CodingAgent::new(config).unwrap()
-        .with_agent_id("test_123".to_string());
-    assert_eq!(agent.config().agent_id, "test_123");
+    let agent = CodingAgent::new(config).unwrap();
 }
 
 #[tokio::test]

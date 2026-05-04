@@ -4,55 +4,86 @@ use super::{
     AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext,
 };
 use crate::react::state::ToolCallRecord;
-use vol_session::Session;
-use std::io::IsTerminal;
-use std::path::{Path, PathBuf};
+use vol_session::{InMemoryEntryStore, Session};
+use std::path::Path;
 use std::sync::Arc;
 use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::ToolRegistry;
 use vol_llm_core::{
-    ConversationRequest, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
+    ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
     ToolChoice,
 };
 use vol_llm_tool::ToolContext;
 
-/// Agent configuration
+/// Agent configuration — single source of truth for ReActAgent.
 #[derive(Clone)]
 pub struct AgentConfig {
-    pub max_iterations: u32,
-    pub max_history_messages: usize,
+    // === Declarative definition (optional) ===
+    pub def: Option<crate::agent_def::AgentDef>,
+
+    // === Runtime components ===
+    pub llm: Arc<dyn vol_llm_core::LLMClient>,
+    pub tools: Arc<vol_llm_tool::ToolRegistry>,
+    pub session: Arc<Session>,
+    pub sandbox: Option<SandboxRef>,
+
+    // === Context and plugins ===
     pub context_builder: ContextBuilder,
     pub plugin_registry: PluginRegistry,
-
-    // Observability fields
-    pub agent_id: String,
-    /// Working directory. Log paths derive from `{working_dir}/logs/agents/{agent_id}/`.
-    pub working_dir: PathBuf,
 }
 
-/// Generate a short random agent ID if not provided
-fn generate_agent_id() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
-    format!("agent_{:x}", timestamp % 0xFFFFFF)
+impl AgentConfig {
+    /// Create a new builder for AgentConfig.
+    pub fn builder() -> super::config_builder::AgentConfigBuilder {
+        super::config_builder::AgentConfigBuilder::new()
+    }
+
+    /// Convenience constructor for direct struct creation (backwards-compatible).
+    pub fn new(
+        llm: Arc<dyn vol_llm_core::LLMClient>,
+        tools: Arc<vol_llm_tool::ToolRegistry>,
+        session: Arc<Session>,
+    ) -> Self {
+        Self {
+            def: None,
+            llm,
+            tools,
+            session,
+            sandbox: None,
+            context_builder: ContextBuilderBuilder::new(128_000).build(),
+            plugin_registry: PluginRegistry::new(),
+        }
+    }
 }
 
 impl Default for AgentConfig {
     fn default() -> Self {
-        let context_builder = ContextBuilderBuilder::new(128_000).build();
-
         Self {
-            max_iterations: 5,
-            max_history_messages: 20,
-            context_builder,
+            def: None,
+            llm: Arc::new(DefaultLlm),
+            tools: Arc::new(vol_llm_tool::ToolRegistry::new()),
+            session: Arc::new(Session::new(Arc::new(InMemoryEntryStore::new()))),
+            sandbox: None,
+            context_builder: ContextBuilderBuilder::new(128_000).build(),
             plugin_registry: PluginRegistry::new(),
-            agent_id: generate_agent_id(),
-            working_dir: PathBuf::from("."),
         }
+    }
+}
+
+/// Dummy LLM for Default impl (tests only — will panic if used).
+struct DefaultLlm;
+#[async_trait::async_trait]
+impl LLMClient for DefaultLlm {
+    fn provider(&self) -> vol_llm_core::LLMProvider { vol_llm_core::LLMProvider::Anthropic }
+    fn model(&self) -> &str { "default" }
+    fn supported_params(&self) -> &[vol_llm_core::SupportedParam] { &[] }
+    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+        unimplemented!("DefaultLlm::converse called — AgentConfig::default() is for struct defaults only")
+    }
+    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+        let (_tx, rx) = tokio::sync::mpsc::channel(10);
+        Ok(StreamReceiver::new(rx))
     }
 }
 
@@ -107,42 +138,23 @@ impl AgentConfig {
 
 /// ReAct Agent
 pub struct ReActAgent {
-    llm: Arc<dyn LLMClient>,
-    tools: Arc<vol_llm_tool::ToolRegistry>,
     config: AgentConfig,
-    session: Arc<Session>,
-    sandbox: Option<SandboxRef>,
 }
 
 impl ReActAgent {
-    /// Create agent builder
-    pub fn builder() -> super::AgentBuilder {
-        super::AgentBuilder::new()
-    }
-
-    pub fn new(
-        llm: Arc<dyn LLMClient>,
-        tools: Arc<vol_llm_tool::ToolRegistry>,
-        config: AgentConfig,
-        session: Arc<Session>,
-    ) -> Self {
-        Self {
-            llm,
-            tools,
-            config,
-            session,
-            sandbox: None,
-        }
+    /// Create a new ReActAgent from config.
+    pub fn new(config: AgentConfig) -> Self {
+        Self { config }
     }
 
     /// Set the sandbox for tool execution
     pub fn with_sandbox(mut self, sandbox: SandboxRef) -> Self {
-        self.sandbox = Some(sandbox);
+        self.config.sandbox = Some(sandbox);
         self
     }
 
     /// Create agent with new session
-    pub fn with_new_session(&self, session_id: String) -> Self {
+    pub fn with_new_session(&self, _session_id: String) -> Self {
         use vol_session::InMemoryEntryStore;
 
         let entry_store = Arc::new(InMemoryEntryStore::new());
@@ -150,11 +162,10 @@ impl ReActAgent {
         // Note: session.id is now self-generated; session_id param is ignored for the ID.
         // If the caller needs a specific ID, use Session::resume instead.
         Self {
-            session: new_session,
-            llm: self.llm.clone(),
-            tools: self.tools.clone(),
-            config: self.config.clone(),
-            sandbox: self.sandbox.clone(),
+            config: AgentConfig {
+                session: new_session,
+                ..self.config.clone()
+            },
         }
     }
 
@@ -167,20 +178,45 @@ impl ReActAgent {
     /// - All tool calls made during execution
     /// - Error information if any tool call failed
     pub async fn run(&self, user_input: &str) -> Result<AgentResponse, crate::AgentError> {
-        // === Phase 1: Generate run_id and create RunContext ===
+        // === Phase 1: Generate run_id, compute effective config from def ===
+
+        // Tool filtering from AgentDef
+        let effective_tools = if let Some(def) = &self.config.def {
+            let allowed: Option<Vec<&str>> = def.tools.as_ref()
+                .map(|t| t.iter().map(|s| s.as_str()).collect());
+            let disallowed: Option<Vec<&str>> = def.disallowed_tools.as_ref()
+                .map(|t| t.iter().map(|s| s.as_str()).collect());
+            ToolRegistry::filter(&self.config.tools, allowed.as_deref(), disallowed.as_deref())
+        } else {
+            self.config.tools.clone()
+        };
+
+        // Read max_iterations and max_history from def if set, else use hardcoded defaults
+        let max_iterations = self.config.def.as_ref()
+            .and_then(|d| d.max_iterations)
+            .unwrap_or(5);
+        let max_history_messages = self.config.def.as_ref()
+            .and_then(|d| d.max_history_messages)
+            .unwrap_or(20);
+
+        // Clone config with effective tools
+        let config = AgentConfig {
+            tools: effective_tools.clone(),
+            ..self.config.clone()
+        };
+
         let run_id = uuid::Uuid::new_v4().simple().to_string();
 
-        let tools = self.tools.clone();
-        let config = self.config.clone();
-        let session = self.session.clone();
+        let session = self.config.session.clone();
 
         let (run_ctx, plugin_rx) = RunContext::new(
             run_id.clone(),
             user_input.to_string(),
-            self.session.id.clone(),
+            self.config.session.id.clone(),
             session.clone(),
-            tools,
+            effective_tools,
             config.clone(),
+            max_history_messages,
         );
 
         // Persist user message to session so it's available via SessionContributor.
@@ -202,7 +238,7 @@ impl ReActAgent {
         // (which would clone senders and prevent channel close)
         let listener_event_rx = run_ctx.event_tx.subscribe();
         let listener_handle = spawn_listener_task(
-            self.config.plugin_registry.plugins().to_vec(),
+            config.plugin_registry.plugins().to_vec(),
             run_ctx.clone(),
             listener_event_rx,
         );
@@ -210,7 +246,7 @@ impl ReActAgent {
         // Spawn interceptor loop task - receives from plugin_rx channel
         // When plugin_rx is closed (agent drops run_ctx), interceptor exits
         let interceptor_event_tx = run_ctx.event_tx.clone();
-        let interceptor_plugins = self.config.plugin_registry.plugins().to_vec();
+        let interceptor_plugins = config.plugin_registry.plugins().to_vec();
         let interceptor_ctx = run_ctx.clone();
         let interceptor_handle = tokio::spawn(async move {
             run_interceptor_loop(
@@ -223,11 +259,10 @@ impl ReActAgent {
         });
 
         // === Phase 3: Spawn agent loop task and await it ===
-        let llm = self.llm.clone();
-        let tools = self.tools.clone();
-        let config = self.config.clone();
+        let llm = self.config.llm.clone();
         let user_input = user_input.to_string();
-        let sandbox = self.sandbox.clone();
+        let sandbox = self.config.sandbox.clone();
+        let max_iterations = max_iterations;
 
         let agent_task = tokio::spawn(async move {
             // === Emit and intercept AgentStart ===
@@ -260,10 +295,10 @@ impl ReActAgent {
                 run_ctx.next_iteration();
                 let iteration = run_ctx.current_iteration();
 
-                if iteration > config.max_iterations {
+                if iteration > max_iterations {
                     run_ctx.emit(AgentStreamEvent::max_iterations_reached(
                         iteration,
-                        config.max_iterations,
+                        max_iterations,
                     )).await;
 
                     match run_ctx.intercept(&AgentStreamEvent::iteration_complete(iteration, vec![], None)).await {
@@ -273,17 +308,17 @@ impl ReActAgent {
                             continue;
                         }
                         _ => {
-                            let reason = format!("Max iterations ({}) reached", config.max_iterations);
+                            let reason = format!("Max iterations ({}) reached", max_iterations);
                             run_ctx.emit(AgentStreamEvent::agent_aborted(reason.clone())).await;
                             return Err(crate::AgentError::MaxIterationsReached {
-                                max: config.max_iterations,
+                                max: max_iterations,
                             });
                         }
                     }
                 }
 
                 // Reason phase - call LLM with streaming
-                let tools_defs = tools.definitions();
+                let tools_defs = config.tools.definitions();
 
                 // Get messages from ctx (not local variable)
                 let messages = run_ctx.get_context().await.map_err(|e| crate::AgentError::from(e))?;
@@ -387,7 +422,7 @@ impl ReActAgent {
                             Some(sandbox) => ToolContext::default().with_sandbox(sandbox.clone()),
                             None => ToolContext::default(),
                         };
-                        let result = match tools.execute(call, &tool_ctx).await {
+                        let result = match config.tools.execute(call, &tool_ctx).await {
                             Ok(r) => r,
                             Err(e) => {
                                 let duration_ms = tool_begin.elapsed().as_millis() as u64;
@@ -639,46 +674,68 @@ async fn consume_llm_stream(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vol_llm_core::{ConversationResponse, FinishReason, Message as CoreMessage, StreamReceiver};
+
+    use crate::agent_def::AgentDef;
+    use crate::react::plugin::PluginRegistry;
+    use vol_session::InMemoryEntryStore;
+
+    struct MockLlm;
+    #[async_trait::async_trait]
+    impl LLMClient for MockLlm {
+        fn provider(&self) -> vol_llm_core::LLMProvider {
+            vol_llm_core::LLMProvider::Anthropic
+        }
+        fn model(&self) -> &str {
+            "mock"
+        }
+        fn supported_params(&self) -> &[vol_llm_core::SupportedParam] {
+            &[]
+        }
+        async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+            Ok(ConversationResponse {
+                message: CoreMessage::assistant("mock".to_string()),
+                model: "mock".to_string(),
+                usage: vol_llm_core::TokenUsage::default(),
+                finish_reason: FinishReason::Stop,
+                raw: None,
+            })
+        }
+        async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+            let (_tx, rx) = tokio::sync::mpsc::channel(10);
+            Ok(StreamReceiver::new(rx))
+        }
+    }
+
+    fn make_config() -> AgentConfig {
+        AgentConfig::new(
+            Arc::new(MockLlm),
+            Arc::new(ToolRegistry::new()),
+            Arc::new(Session::new(Arc::new(InMemoryEntryStore::new()))),
+        )
+    }
 
     #[test]
     fn test_agent_config_default() {
-        let config = AgentConfig::default();
-        assert_eq!(config.max_iterations, 5);
-        assert_eq!(config.max_history_messages, 20);
+        let config = make_config();
+        assert!(config.def.is_none());
         assert_eq!(config.plugin_registry.plugins().len(), 0);
     }
 
     #[test]
-    fn test_agent_config_custom() {
-        use vol_llm_context::ContextBuilderBuilder;
-
-        let context_builder = ContextBuilderBuilder::new(64_000).build();
-
-        let config = AgentConfig {
-            max_iterations: 10,
-            max_history_messages: 50,
-            context_builder,
-            plugin_registry: PluginRegistry::new(),
-            agent_id: "custom_agent".to_string(),
-            working_dir: PathBuf::from("/custom/project"),
-        };
-        assert_eq!(config.max_history_messages, 50);
-        assert_eq!(config.agent_id, "custom_agent");
-        assert_eq!(config.working_dir, PathBuf::from("/custom/project"));
-    }
-
-    #[test]
-    fn test_agent_config_with_observability() {
-        use std::path::PathBuf;
-
-        let config = AgentConfig {
-            agent_id: "test_agent".to_string(),
-            working_dir: PathBuf::from("."),
-            ..Default::default()
-        };
-
-        assert_eq!(config.agent_id, "test_agent");
-        assert_eq!(config.working_dir, PathBuf::from("."));
+    fn test_agent_config_with_def() {
+        let def = AgentDef::new("test-agent", "You are a test agent.")
+            .with_type("test-runner")
+            .with_max_iterations(10)
+            .with_max_history_messages(50);
+        let config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_def(def)
+            .build()
+            .unwrap();
+        assert_eq!(config.def.as_ref().unwrap().name, "test-agent");
+        assert_eq!(config.def.as_ref().unwrap().max_iterations, Some(10));
+        assert_eq!(config.def.as_ref().unwrap().max_history_messages, Some(50));
     }
 
     #[test]

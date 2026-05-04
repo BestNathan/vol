@@ -8,8 +8,7 @@ use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision, RunContext};
-use vol_llm_agent::AgentStreamEvent;
-use vol_llm_agent::ReActAgent;
+use vol_llm_agent::{AgentConfig, AgentStreamEvent, ReActAgent};
 use vol_llm_core::{ConversationRequest, ConversationResponse, LLMClient, LLMProvider};
 use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
 
@@ -146,17 +145,17 @@ async fn test_agent_executes_full_react_cycle() {
 
     let mock_llm = SimpleMock::new();
 
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(IndexPriceTool::new(None))
         .with_tool(VolatilityIndexTool::new(None))
         .with_tool(OptionsTool::new(None))
         .with_tool(RvTool::new(None))
         .with_plugin(tool_counter.clone())
-        .with_max_iterations(5)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     agent.run("What is the BTC price?").await.unwrap();
 
@@ -235,16 +234,16 @@ async fn test_agent_max_iterations() {
 
     let mock_llm = LoopMock::new();
 
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(VolatilityIndexTool::new(None))
         .with_tool(IndexPriceTool::new(None))
         .with_tool(OptionsTool::new(None))
         .with_tool(RvTool::new(None))
-        .with_max_iterations(3)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     // Agent should return MaxIterationsReached error when max_iterations is exceeded
     let result = agent.run("Keep querying...").await;
