@@ -157,21 +157,19 @@ impl WikiAgent {
         let entry_store = Arc::new(InMemoryEntryStore::new());
         let session = Arc::new(vol_session::Session::new(entry_store));
 
-        let agent_config = vol_llm_agent::react::AgentConfig {
-            max_iterations: self.config.max_iterations,
-            max_history_messages: 20,
-            context_builder: self.context_builder.clone(),
-            plugin_registry: vol_llm_agent::react::PluginRegistry::new(),
-            agent_id: self.config.agent_id.clone(),
-            working_dir: self.config.working_dir.clone(),
-        };
+        let agent_config = vol_llm_agent::AgentConfig::builder()
+            .with_llm(self.llm.clone())
+            .with_tools(self.tool_registry.clone())
+            .with_session(session)
+            .with_context_builder(self.context_builder.clone())
+            .with_plugin_registry(vol_llm_agent::react::PluginRegistry::new())
+            .with_agent_id(self.config.agent_id.clone())
+            .with_working_dir(self.config.working_dir.clone())
+            .with_max_iterations(self.config.max_iterations)
+            .build()
+            .map_err(|e| WikiAgentError::Config(format!("Failed to build agent config: {}", e)))?;
 
-        let react_agent = ReActAgent::new(
-            self.llm.clone(),
-            self.tool_registry.clone(),
-            agent_config,
-            session,
-        );
+        let react_agent = ReActAgent::new(agent_config);
 
         let response = react_agent
             .run(&prompt)

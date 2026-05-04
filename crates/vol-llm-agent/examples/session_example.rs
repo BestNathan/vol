@@ -52,21 +52,23 @@ async fn main() {
     println!("6. Cloned session for branching: {}", child_session.id);
 
     // 7. Create new session from builder pattern (simulated)
-    println!("\n7. ReActAgent.builder() can be used to create agent with session:");
-    println!("   let agent = ReActAgent::builder()");
+    println!("\n7. AgentConfig.builder() can be used to create agent with session:");
+    println!("   let config = AgentConfig::builder()");
     println!("       .with_llm(llm)");
     println!("       .with_tool(tool)");
     println!("       .with_session(session)");
     println!("       .build()?;");
+    println!("   let agent = ReActAgent::new(config);");
 
     // 8. Demonstrate max_history_messages configuration
     println!("\n8. Configure conversation history limit:");
     println!("   Default history limit: 20 messages");
     println!("\n9. Custom history limit via builder:");
-    println!("   let agent = ReActAgent::builder()");
+    println!("   let config = AgentConfig::builder()");
     println!("       .with_llm(llm)");
     println!("       .with_max_history_messages(50)  // Load up to 50 history messages");
     println!("       .build()?;");
+    println!("   let agent = ReActAgent::new(config);");
 
     println!("\n=== Example Complete ===");
     println!("Session and SessionEntryStore are ready for use with ReActAgent!");

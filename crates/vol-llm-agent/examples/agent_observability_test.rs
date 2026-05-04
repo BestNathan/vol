@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let working_dir = PathBuf::from(".");
 
     // Build agent with observability plugin
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(llm))
         .with_tool(volatility_tool)
         .with_tool(price_tool)
@@ -99,6 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .to_string(),
         )
         .build()?;
+    let agent = ReActAgent::new(config);
 
     println!("  ✓ Agent built with observability plugin");
     println!();

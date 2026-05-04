@@ -6,7 +6,7 @@
 use tokio::sync::broadcast;
 use tracing::{error, info, warn};
 use vol_core::{Alert, NotificationHandler, Result as VolResult};
-use vol_llm_agent::AgentBuilder;
+use vol_llm_agent::ReActAgent;
 use vol_llm_provider::LLMProviderRegistry;
 use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
 use vol_llm_tool::ToolRegistry;
@@ -147,7 +147,7 @@ impl AdviceAgent {
             .ok_or_else(|| format!("Unknown provider: {}", self.config.llm_provider_id))?;
 
         // Create agent with tools using builder
-        let agent = AgentBuilder::new()
+        let config = vol_llm_agent::AgentConfig::builder()
             .with_llm(llm)
             .with_tool(IndexPriceTool::new(None))
             .with_tool(VolatilityIndexTool::new(None))
@@ -157,6 +157,7 @@ impl AdviceAgent {
             .with_system_prompt(system_prompt().to_string())
             .build()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        let agent = vol_llm_agent::ReActAgent::new(config);
 
         // Get threshold from alert type
         let threshold = get_threshold_from_alert(&alert.alert_type);

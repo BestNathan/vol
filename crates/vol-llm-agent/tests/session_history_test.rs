@@ -69,12 +69,13 @@ async fn test_history_limit_applied() {
     }
 
     // Create agent with limit of 10
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(MockLlm))
         .with_session(session.clone())
         .with_max_history_messages(10)
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     // Run agent
 

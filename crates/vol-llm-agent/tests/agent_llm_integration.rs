@@ -9,7 +9,7 @@ use chrono::Local;
 use std::io::Write;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use vol_llm_agent::ReActAgent;
+use vol_llm_agent::{AgentConfig, ReActAgent};
 use vol_llm_core::{LLMClient, LLMProvider, StreamEvent, StreamEventData, ToolDefinition};
 use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
 use vol_llm_tdengine::IndexPriceTool;
@@ -204,7 +204,7 @@ async fn test_agent_with_real_anthropic_api() {
     let mock_llm = IntegrationMock::new();
 
     // Create tool registry
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(IndexPriceTool::new(None))
         .with_max_iterations(5)
@@ -216,6 +216,7 @@ async fn test_agent_with_real_anthropic_api() {
         )
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     println!("\n--- Running agent with user input: 'What is the BTC price?' ---\n");
 

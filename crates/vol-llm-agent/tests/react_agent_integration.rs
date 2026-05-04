@@ -6,7 +6,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use async_trait::async_trait;
-use vol_llm_agent::ReActAgent;
+use vol_llm_agent::{AgentConfig, ReActAgent};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, LLMProvider,
     Message, StreamEvent, StreamEventData,
@@ -77,13 +77,14 @@ async fn test_basic_run_empty_session() {
     let session = make_session_with_messages(0).await;
     let mock = QuickAnswerMock::new("The answer is 42.");
 
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
         .with_system_prompt("You are a test assistant.".to_string())
         .with_max_iterations(5)
         .with_session(session)
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     let response = agent.run("What is 6 * 7?").await.unwrap();
     assert!(!response.content.is_empty());
@@ -95,13 +96,14 @@ async fn test_run_with_session_history() {
     let session = make_session_with_messages(3).await;
     let mock = QuickAnswerMock::new("Continued from previous context.");
 
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
         .with_system_prompt("You are a test assistant.".to_string())
         .with_max_iterations(5)
         .with_session(session)
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     let response = agent.run("Summarize what we discussed.").await.unwrap();
     assert!(!response.content.is_empty());
@@ -146,7 +148,7 @@ async fn test_run_with_large_history_limit() {
         calls: call_count.clone(),
     };
 
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
         .with_system_prompt("You are a test assistant.".to_string())
         .with_max_iterations(5)
@@ -154,6 +156,7 @@ async fn test_run_with_large_history_limit() {
         .with_session(session)
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     let response = agent.run("Continue.").await.unwrap();
     assert!(!response.content.is_empty());

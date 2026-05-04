@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use vol_llm_agent::react::{AgentPlugin, RunContext, PluginDecision};
-use vol_llm_agent::{AgentStreamEvent, ReActAgent};
+use vol_llm_agent::{AgentConfig, AgentStreamEvent, ReActAgent};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, LLMProvider, StreamEvent, StreamEventData,
 };
@@ -127,7 +127,7 @@ async fn test_plugin_interceptor_chain_executes() {
 
     let mock_llm = MockLlm::new("Hello, I am a mock response.".to_string());
 
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_max_iterations(1)
         .with_system_prompt("You are a helpful assistant.".to_string())
@@ -145,6 +145,7 @@ async fn test_plugin_interceptor_chain_executes() {
         ))
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     agent.run("Say hello").await.unwrap();
 
@@ -206,7 +207,7 @@ async fn test_plugin_skip_stops_current_event() {
 
     let mock_llm = MockLlm::new("Hello world.".to_string());
 
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_max_iterations(1)
         .with_system_prompt("You are a helpful assistant.".to_string())
@@ -215,6 +216,7 @@ async fn test_plugin_skip_stops_current_event() {
         })
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     agent.run("Say hello").await.unwrap();
 

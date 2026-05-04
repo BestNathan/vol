@@ -17,6 +17,9 @@ pub enum YamlAgentError {
     #[error("LLM provider '{0}' not found")]
     LlmNotFound(String),
 
+    #[error("Configuration error: {0}")]
+    Config(String),
+
     #[error("YAML parse error: {0}")]
     Yaml(#[from] serde_yaml::Error),
 

@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use vol_llm_agent::ReActAgent;
+use vol_llm_agent::{AgentConfig, ReActAgent};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, LLMProvider, MessageRole, StreamEvent,
     StreamEventData, ToolCall,
@@ -126,13 +126,14 @@ async fn test_tool_results_passed_to_next_iteration() {
     let message_tracker = Arc::new(Mutex::new(Vec::new()));
     let mock_llm = TrackingMock::new(message_tracker.clone());
 
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(vol_llm_tdengine::IndexPriceTool::new(None))
         .with_max_iterations(3)
         .with_system_prompt("You are a test assistant. Use tools to get information.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     agent.run("What is the BTC price?").await.unwrap();
 
@@ -228,13 +229,14 @@ async fn test_message_history_grows_correctly() {
     let message_tracker = Arc::new(Mutex::new(Vec::new()));
     let mock_llm = TrackingMock::new(message_tracker.clone());
 
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(vol_llm_tdengine::IndexPriceTool::new(None))
         .with_max_iterations(3)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     agent.run("What is the BTC price?").await.unwrap();
 

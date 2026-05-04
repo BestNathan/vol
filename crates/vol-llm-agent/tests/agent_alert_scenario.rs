@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use std::io::Write;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use vol_llm_agent::ReActAgent;
+use vol_llm_agent::{AgentConfig, ReActAgent};
 use vol_llm_core::{
     ConversationResponse, FinishReason, LLMClient, LLMProvider, Message, TokenUsage, ToolDefinition,
 };
@@ -485,7 +485,7 @@ async fn test_agent_alert_scenario() {
     let mock_llm = AlertScenarioMock::new(scenario.clone());
 
     // Create agent with builder
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(VolatilityIndexTool::new(None))
         .with_tool(IndexPriceTool::new(None))
@@ -501,6 +501,7 @@ async fn test_agent_alert_scenario() {
         ))
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     // Build user input from alert
     let user_input = format!(

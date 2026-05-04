@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision, RunContext};
-use vol_llm_agent::{AgentStreamEvent, ReActAgent};
+use vol_llm_agent::{AgentConfig, AgentStreamEvent, ReActAgent};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMProvider, Message,
     MessageRole, StreamEvent, StreamEventData, SupportedParam, TokenUsage,
@@ -284,7 +284,7 @@ async fn test_code_agent_market_data_query() {
         calls: tool_calls.clone(),
     };
 
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(VolatilityIndexTool::new(None))
         .with_tool(IndexPriceTool::new(None))
@@ -295,6 +295,7 @@ async fn test_code_agent_market_data_query() {
         .with_plugin(tracker)
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     // Test: Query BTC price
 
@@ -316,8 +317,7 @@ async fn test_code_agent_volatility_query() {
 
     let mock_llm = CodeAgentSimulator::new("claude-sonnet-4-6");
 
-    // Create agent with builder
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(VolatilityIndexTool::new(None))
         .with_tool(IndexPriceTool::new(None))
@@ -327,6 +327,7 @@ async fn test_code_agent_volatility_query() {
         .with_system_prompt("You are a volatility analysis assistant.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     // Test: Query volatility
 
@@ -341,8 +342,7 @@ async fn test_code_agent_multi_turn_conversation() {
 
     let mock_llm = CodeAgentSimulator::new("claude-sonnet-4-6");
 
-    // Create agent with builder
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(VolatilityIndexTool::new(None))
         .with_tool(IndexPriceTool::new(None))
@@ -352,6 +352,7 @@ async fn test_code_agent_multi_turn_conversation() {
         .with_system_prompt("You are a helpful market data assistant.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     // Test: Multi-turn with follow-up
 
@@ -369,8 +370,7 @@ async fn test_code_agent_tool_choice_auto() {
 
     let mock_llm = CodeAgentSimulator::new("claude-sonnet-4-6");
 
-    // Create agent with builder
-    let agent = ReActAgent::builder()
+    let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
         .with_tool(VolatilityIndexTool::new(None))
         .with_tool(IndexPriceTool::new(None))
@@ -380,6 +380,7 @@ async fn test_code_agent_tool_choice_auto() {
         .with_system_prompt("You are a helpful assistant.".to_string())
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     // Test: Simple greeting (may not need tools)
 
