@@ -8,30 +8,28 @@
 //! ┌─────────────────────────────────────────────────────────────┐
 //! │                    ReActAgent                               │
 //! │                                                             │
-//! │  - llm: Arc<dyn LLMClient>                                 │
-//! │  - tools: Arc<ToolRegistry>                                │
-//! │  - config: AgentConfig                                     │
+//! │  config: AgentConfig                                        │
 //! │                                                             │
-//! │  + run(user_input, context) -> AgentStreamReceiver         │
+//! │  + run(user_input) -> AgentResponse                         │
 //! └─────────────────────────────────────────────────────────────┘
 //! ```
 //!
 //! # Usage
 //!
 //! ```rust,no_run
-//! use vol_llm_agent::react::{ReActAgent, AgentBuilder};
+//! use vol_llm_agent::{AgentConfig, ReActAgent};
 //!
-//! // Create agent using builder
-//! // let agent = AgentBuilder::new()
+//! // Create agent using config builder
+//! // let config = AgentConfig::builder()
 //! //     .with_llm(llm)
 //! //     .with_tool(my_tool)
 //! //     .with_max_iterations(5)
 //! //     .build()
 //! //     .unwrap();
+//! // let agent = ReActAgent::new(config);
 //! ```
 
 pub mod agent;
-pub mod builder;
 pub mod config_builder;
 pub mod hitl;
 pub mod plugin;
@@ -43,7 +41,6 @@ pub mod state;
 pub mod stream;
 
 pub use agent::{AgentConfig, ReActAgent, SkillsConfig};
-pub use builder::AgentBuilder;
 pub use config_builder::{AgentConfigBuildError, AgentConfigBuilder};
 pub use hitl::{
     run_cli_approval_loop, spawn_custom_approval_handler, ApprovalChannel, ApprovalHandler,

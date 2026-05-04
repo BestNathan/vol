@@ -16,12 +16,12 @@ impl LLMClient for DummyLlm {
 }
 
 // ========================
-// builder.rs tests
+// config_builder.rs tests
 // ========================
 
 #[tokio::test]
 async fn test_builder_default() {
-    let builder = AgentBuilder::new();
+    let builder = AgentConfigBuilder::new();
     let result = builder.build();
     // Should fail without LLM
     assert!(result.is_err());
@@ -35,7 +35,7 @@ async fn test_builder_with_methods() {
         Arc::new(vol_session::InMemoryEntryStore::new()),
     ));
     // Build succeeds with all builder methods chained
-    let result = AgentBuilder::new()
+    let result = AgentConfig::builder()
         .with_llm(llm)
         .with_max_iterations(15)
         .with_system_prompt("You are a test assistant.".to_string())
@@ -50,7 +50,7 @@ async fn test_builder_with_methods() {
 
 #[test]
 fn test_build_missing_llm() {
-    let result = AgentBuilder::new().build();
+    let result = AgentConfigBuilder::new().build();
     assert!(result.is_err());
     if let Err(e) = result {
         assert!(e.to_string().contains("LLM") || e.to_string().contains("llm"));
@@ -69,11 +69,12 @@ async fn test_build_with_plugin() {
     }
 
     let llm = Arc::new(DummyLlm);
-    let agent = AgentBuilder::new()
+    let config = AgentConfig::builder()
         .with_llm(llm)
         .with_plugin(DummyPlugin)
         .build()
         .unwrap();
+    let agent = ReActAgent::new(config);
 
     // Build succeeds with plugin registered
     let _ = agent;
