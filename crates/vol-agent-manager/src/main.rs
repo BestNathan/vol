@@ -4,7 +4,7 @@ use anyhow::Result;
 use axum::{
     extract::State,
     response::IntoResponse,
-    routing::{get, post},
+    routing::{get, post, delete},
 };
 use axum::response::sse::{Event, Sse};
 use futures::stream::Stream;
@@ -82,6 +82,9 @@ async fn main() -> Result<()> {
         .route("/api/v1/tasks/:id", get(get_task))
         .route("/api/v1/tasks", get(list_tasks))
         .route("/api/v1/events", get(events_handler))
+        .route("/api/v1/agent-types", get(list_agent_types))
+        .route("/api/v1/agent-instances", get(list_agent_instances))
+        .route("/api/v1/agent-instances/:type/:session_id", delete(destroy_agent_instance))
         .with_state(app_state.clone());
 
     // Start health checker in background
@@ -181,4 +184,29 @@ async fn get_task(
 async fn list_tasks(State(state): State<AppRouterState>) -> impl IntoResponse {
     let tasks = state.task_dispatcher.list_tasks().await;
     axum::Json(serde_json::json!({"tasks": tasks}))
+}
+
+async fn list_agent_types(State(state): State<AppRouterState>) -> impl IntoResponse {
+    let metadata = state.agent_loader.list_metadata().await;
+    axum::Json(serde_json::json!({
+        "agent_types": metadata.iter().map(|m| serde_json::json!({
+            "name": m.name,
+            "type": m.r#type,
+            "description": m.description,
+            "scope": format!("{:?}", m.scope),
+        })).collect::<Vec<_>>()
+    }))
+}
+
+async fn list_agent_instances(State(state): State<AppRouterState>) -> impl IntoResponse {
+    let instances = state.instance_registry.list_instances().await;
+    axum::Json(serde_json::json!({ "instances": instances }))
+}
+
+async fn destroy_agent_instance(
+    State(state): State<AppRouterState>,
+    axum::extract::Path((agent_type, session_id)): axum::extract::Path<(String, String)>,
+) -> impl IntoResponse {
+    state.instance_registry.destroy(&agent_type, &session_id).await;
+    (axum::http::StatusCode::NO_CONTENT, ())
 }
