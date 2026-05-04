@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 use std::path::PathBuf;
-use vol_llm_agent::react::SkillsConfig;
 use vol_llm_tool::{ToolRegistry, ToolConfig};
+use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_agent::{ReActAgent, AgentConfig};
 use vol_llm_context::ContextBuilder;
 use vol_session::Session;
@@ -87,15 +87,18 @@ impl CodingAgent {
         let mut tool_registry = ToolRegistry::new();
         Self::register_coding_tools(&mut tool_registry, &config.tool_config);
 
-        let skills = SkillsConfig::from_workdir(&config.working_dir);
-        skills.register_tool(&mut tool_registry);
+        // Register skill tool directly
+        let loader = Arc::new(SkillLoader::new(Some(config.working_dir.clone())));
+        tool_registry.register(SkillTool::new(loader.clone()));
 
-        let base_context = vol_llm_context::ContextBuilderBuilder::new(128_000)
+        // Build context with skill injector
+        let injector = SkillInjector::new(loader);
+        let context_builder = vol_llm_context::ContextBuilderBuilder::new(128_000)
             .add_contributor(Box::new(vol_llm_context::builtin::SimpleContributor::system(
                 "You are an expert coding assistant. Help users understand, modify, and improve their codebase.".to_string(),
             )))
+            .add_contributor(Box::new(injector))
             .build();
-        let context_builder = skills.enhance_context_builder(&base_context);
 
         Ok((Arc::new(tool_registry), context_builder))
     }
