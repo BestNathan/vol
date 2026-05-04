@@ -1,4 +1,4 @@
-//! Integration test: agent file -> AgentLoader -> ReActAgent with LokiPlugin.
+//! Integration test: agent file → AgentLoader → ReActAgent with LokiPlugin.
 //!
 //! Verifies that:
 //! 1. An agent definition file is loaded with correct type
@@ -7,13 +7,13 @@
 
 use std::io::Write;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use tempfile::tempdir;
 use vol_llm_agent::agent_def::AgentScope;
 use vol_llm_agent::agent_loader::AgentLoader;
 use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent, RunContext};
+use vol_llm_context::ContextBuilderBuilder;
 use vol_llm_core::{
-    ConversationRequest, ConversationResponse, LLMClient, LLMProvider,
+    LLMClient, LLMProvider,
     StreamEvent, StreamEventData, StreamReceiver, SupportedParam,
 };
 use vol_llm_observability::loki::{LokiConfig, LokiPlugin};
@@ -23,19 +23,11 @@ use vol_session::{InMemoryEntryStore, Session};
 /// Mock LLM that immediately returns ContentComplete.
 struct MockLlm {
     response: String,
-    call_count: Arc<AtomicUsize>,
 }
 
 impl MockLlm {
     fn new(response: String) -> Self {
-        Self {
-            response,
-            call_count: Arc::new(AtomicUsize::new(0)),
-        }
-    }
-
-    fn call_count(&self) -> usize {
-        self.call_count.load(Ordering::SeqCst)
+        Self { response }
     }
 }
 
@@ -55,17 +47,16 @@ impl LLMClient for MockLlm {
 
     async fn converse(
         &self,
-        _request: ConversationRequest,
-    ) -> vol_llm_core::Result<ConversationResponse> {
+        _request: vol_llm_core::ConversationRequest,
+    ) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
         unimplemented!("Use converse_stream")
     }
 
     async fn converse_stream(
         &self,
-        _request: ConversationRequest,
+        _request: vol_llm_core::ConversationRequest,
     ) -> vol_llm_core::Result<StreamReceiver> {
         use tokio::sync::mpsc;
-        self.call_count.fetch_add(1, Ordering::SeqCst);
         let (tx, rx) = mpsc::channel(10);
         let text = self.response.clone();
         tokio::spawn(async move {
@@ -114,7 +105,7 @@ async fn test_agent_file_loaded_with_loki_plugin() {
     let mut plugin_registry = PluginRegistry::new();
     plugin_registry.register(loki_plugin);
 
-    // 6. Verify LokiPlugin was registered
+    // 4. Verify LokiPlugin was registered
     let loki_registered = plugin_registry.plugins().iter().any(|p| p.id() == "loki");
     assert!(loki_registered, "LokiPlugin should be registered");
 
@@ -130,10 +121,10 @@ async fn test_agent_file_loaded_with_loki_plugin() {
 
     let agent = ReActAgent::new(agent_config);
 
-    // 4. Run the agent
+    // 5. Run the agent
     let response = agent.run("hello").await.expect("agent should complete");
 
-    // 5. Verify agent completed successfully
+    // 6. Verify agent completed successfully
     assert!(response.content.contains("TEST_DONE"));
     assert!(!response.run_id.is_empty());
 
@@ -141,11 +132,7 @@ async fn test_agent_file_loaded_with_loki_plugin() {
     // Build a minimal RunContext to test create_loki_entry
     let session2 = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
     let tools2 = Arc::new(ToolRegistry::new());
-
-    let loki_config2 = LokiConfig::with_url("http://loki:3100".to_string());
-    let loki_plugin2 = LokiPlugin::new(loki_config2);
-    let mut plugin_registry2 = PluginRegistry::new();
-    plugin_registry2.register(loki_plugin2);
+    let context_builder = ContextBuilderBuilder::new(128_000).build();
 
     let agent_config2 = AgentConfig::builder()
         .with_def((*def).clone())
@@ -153,7 +140,8 @@ async fn test_agent_file_loaded_with_loki_plugin() {
         .with_tools(tools2.clone())
         .with_session(session2.clone())
         .with_system_prompt("test".to_string())
-        .with_plugin_registry(plugin_registry2)
+        .with_plugin_registry(PluginRegistry::new())
+        .with_context_builder(context_builder)
         .build()
         .unwrap();
 
