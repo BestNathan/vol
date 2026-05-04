@@ -4,8 +4,10 @@ use super::agent::AgentConfig;
 use super::plugin::PluginRegistry;
 use crate::agent_def::AgentDef;
 use vol_llm_context::ContextBuilderBuilder;
+use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::ToolRegistry;
 use vol_session::{InMemoryEntryStore, Session};
+use std::path::PathBuf;
 use std::sync::Arc;
 use vol_llm_context::ContextContributor;
 use vol_llm_core::SandboxRef;
@@ -22,6 +24,7 @@ pub struct AgentConfigBuilder {
     context_builder: Option<vol_llm_context::ContextBuilder>,
     plugin_registry: PluginRegistry,
     contributors: Vec<Box<dyn ContextContributor>>,
+    working_dir: Option<PathBuf>,
 }
 
 impl AgentConfigBuilder {
@@ -36,11 +39,17 @@ impl AgentConfigBuilder {
             context_builder: None,
             plugin_registry: PluginRegistry::new(),
             contributors: Vec::new(),
+            working_dir: None,
         }
     }
 
     pub fn with_def(mut self, def: AgentDef) -> Self {
         self.def = Some(def);
+        self
+    }
+
+    pub fn with_working_dir(mut self, dir: PathBuf) -> Self {
+        self.working_dir = Some(dir);
         self
     }
 
@@ -100,41 +109,52 @@ impl AgentConfigBuilder {
             .llm
             .ok_or(AgentConfigBuildError::MissingLlm)?;
 
+        // Determine effective working_dir: explicit override > def > None
+        let working_dir = self.working_dir
+            .or_else(|| self.def.as_ref().and_then(|d| d.working_dir.clone()));
+
         // Build tool registry: if tool_registry not set, build from individual tools
-        let tools = match self.tool_registry {
-            Some(registry) => registry,
+        let mut tools = match self.tool_registry {
+            Some(registry) => {
+                Arc::try_unwrap(registry).unwrap_or_else(|arc| (*arc).clone())
+            }
             None => {
                 let mut registry = ToolRegistry::new();
                 for tool in self.tools {
                     registry.register_boxed(tool);
                 }
-                Arc::new(registry)
+                registry
             }
         };
+
+        // Auto-load skills into the tool registry
+        let skill_loader = Arc::new(SkillLoader::new(working_dir.clone()));
+        tools.register(SkillTool::new(skill_loader.clone()));
 
         // Create session if not provided
         let session = self.session.unwrap_or_else(|| {
             Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())))
         });
 
-        // Build context builder
+        // Build context builder, adding SkillInjector
         let context_builder = match self.context_builder {
             Some(cb) => {
-                if self.contributors.is_empty() {
-                    cb
-                } else {
-                    let budget = cb.token_budget();
-                    let mut b = ContextBuilderBuilder::new(budget.total)
-                        .head_size(budget.head_size)
-                        .tail_size(budget.tail_size);
-                    for c in self.contributors {
-                        b = b.add_contributor(c);
-                    }
-                    b.build()
+                let injector = SkillInjector::new(skill_loader);
+                let budget = cb.token_budget();
+                let mut b = ContextBuilderBuilder::new(budget.total)
+                    .head_size(budget.head_size)
+                    .tail_size(budget.tail_size)
+                    .add_contributors_from(&cb)
+                    .add_contributor(Box::new(injector));
+                for c in self.contributors {
+                    b = b.add_contributor(c);
                 }
+                b.build()
             }
             None => {
-                let mut b = ContextBuilderBuilder::new(128_000);
+                let injector = SkillInjector::new(skill_loader);
+                let mut b = ContextBuilderBuilder::new(128_000)
+                    .add_contributor(Box::new(injector));
                 for c in self.contributors {
                     b = b.add_contributor(c);
                 }
@@ -145,7 +165,7 @@ impl AgentConfigBuilder {
         Ok(AgentConfig {
             def: self.def,
             llm,
-            tools,
+            tools: Arc::new(tools),
             session,
             sandbox: self.sandbox,
             context_builder,
