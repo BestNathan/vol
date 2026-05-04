@@ -32,6 +32,7 @@
 
 pub mod agent;
 pub mod builder;
+pub mod config_builder;
 pub mod hitl;
 pub mod plugin;
 pub mod plugin_stream;
@@ -43,6 +44,7 @@ pub mod stream;
 
 pub use agent::{AgentConfig, ReActAgent, SkillsConfig};
 pub use builder::AgentBuilder;
+pub use config_builder::{AgentConfigBuildError, AgentConfigBuilder};
 pub use hitl::{
     run_cli_approval_loop, spawn_custom_approval_handler, ApprovalChannel, ApprovalHandler,
     ApprovalTrigger, BoxedApprovalHandler, HitlConfig, TimeoutBehavior,

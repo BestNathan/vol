@@ -2,11 +2,12 @@
 
 use crate::tool::{ExecutableTool, Tool, ToolContext, ToolResult, ToolSensitivity};
 use std::collections::HashMap;
+use std::sync::Arc;
 use vol_llm_core::{ToolCall, ToolDefinition};
 
 /// Tool registry
 pub struct ToolRegistry {
-    tools: HashMap<String, Box<dyn ExecutableTool>>,
+    tools: HashMap<String, Arc<dyn ExecutableTool>>,
 }
 
 impl ToolRegistry {
@@ -17,12 +18,12 @@ impl ToolRegistry {
     }
 
     pub fn register<T: ExecutableTool + 'static>(&mut self, tool: T) {
-        self.tools.insert(tool.name().to_string(), Box::new(tool));
+        self.tools.insert(tool.name().to_string(), Arc::new(tool));
     }
 
     /// Register a boxed tool
     pub fn register_boxed(&mut self, tool: Box<dyn ExecutableTool>) {
-        self.tools.insert(tool.name().to_string(), tool);
+        self.tools.insert(tool.name().to_string(), Arc::from(tool));
     }
 
     pub fn definitions(&self) -> Vec<ToolDefinition> {
@@ -67,10 +68,119 @@ impl ToolRegistry {
             .map(|t| t.sensitivity(args))
             .unwrap_or(ToolSensitivity::Safe)
     }
+
+    /// Create a filtered registry containing only the allowed tools,
+    /// minus any disallowed tools.
+    pub fn filter(
+        &self,
+        allowed: Option<&[&str]>,
+        disallowed: Option<&[&str]>,
+    ) -> Arc<Self> {
+        let disallowed_set: std::collections::HashSet<&str> = disallowed
+            .map(|d| d.iter().copied().collect())
+            .unwrap_or_default();
+
+        let tools = match allowed {
+            None => self
+                .tools
+                .iter()
+                .filter(|(name, _)| !disallowed_set.contains(name.as_str()))
+                .map(|(name, tool)| (name.clone(), Arc::clone(tool)))
+                .collect(),
+            Some(allow_list) => {
+                let allowed_set: std::collections::HashSet<&str> = allow_list.iter().copied().collect();
+                self.tools
+                    .iter()
+                    .filter(|(name, _)| {
+                        allowed_set.contains(name.as_str())
+                            && !disallowed_set.contains(name.as_str())
+                    })
+                    .map(|(name, tool)| (name.clone(), Arc::clone(tool)))
+                    .collect()
+            }
+        };
+
+        Arc::new(Self { tools })
+    }
 }
 
 impl Default for ToolRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use crate::tool::{ExecutableTool, ToolResultType, ToolSensitivity};
+
+    struct DummyTool {
+        name: &'static str,
+    }
+    impl DummyTool {
+        fn new(name: &'static str) -> Self {
+            Self { name }
+        }
+    }
+    #[async_trait]
+    impl ExecutableTool for DummyTool {
+        fn name(&self) -> &'static str { self.name }
+        fn description(&self) -> &'static str { "dummy" }
+        fn parameters(&self) -> serde_json::Value { serde_json::json!({}) }
+        fn sensitivity(&self, _args: &serde_json::Value) -> ToolSensitivity { ToolSensitivity::Safe }
+        async fn execute(&self, _args: &serde_json::Value, _context: &ToolContext) -> ToolResultType<ToolResult> {
+            Ok(ToolResult::success("ok"))
+        }
+    }
+
+    #[test]
+    fn test_filter_no_filters_keeps_all() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("tool_a"));
+        registry.register(DummyTool::new("tool_b"));
+        let filtered = registry.filter(None, None);
+        assert_eq!(filtered.tool_names().len(), 2);
+    }
+
+    #[test]
+    fn test_filter_allowed_keeps_only_allowed() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("tool_a"));
+        registry.register(DummyTool::new("tool_b"));
+        let filtered = registry.filter(Some(&["tool_a"]), None);
+        assert_eq!(filtered.tool_names().len(), 1);
+        assert!(filtered.tool_names().contains(&"tool_a"));
+    }
+
+    #[test]
+    fn test_filter_disallowed_removes() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("tool_a"));
+        registry.register(DummyTool::new("tool_b"));
+        let filtered = registry.filter(None, Some(&["tool_a"]));
+        assert_eq!(filtered.tool_names().len(), 1);
+        assert!(filtered.tool_names().contains(&"tool_b"));
+    }
+
+    #[test]
+    fn test_filter_allowed_and_disallowed() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("tool_a"));
+        registry.register(DummyTool::new("tool_b"));
+        registry.register(DummyTool::new("tool_c"));
+        let filtered = registry.filter(Some(&["tool_a", "tool_b"]), Some(&["tool_b"]));
+        assert_eq!(filtered.tool_names().len(), 1);
+        assert!(filtered.tool_names().contains(&"tool_a"));
+    }
+
+    #[test]
+    fn test_filter_unknown_tool_silently_ignored() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("tool_a"));
+        let filtered = registry.filter(Some(&["tool_a", "nonexistent"]), None);
+        assert_eq!(filtered.tool_names().len(), 1);
+        assert!(filtered.tool_names().contains(&"tool_a"));
     }
 }

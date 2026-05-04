@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::Deserialize;
-use vol_llm_context::{builtin::SimpleContributor, ContextBuilderBuilder};
+use vol_llm_context::ContextBuilder;
 use vol_llm_core::LLMClient;
 use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity};
 use vol_llm_tool::ToolRegistry;
@@ -171,21 +171,21 @@ impl ExecutableTool for AgentTool {
         let max_iterations = def.max_iterations.unwrap_or(5);
         let tools = self.build_tool_registry(&def);
 
-        let agent_config = AgentConfig {
-            max_iterations,
-            max_history_messages: 20,
-            context_builder: ContextBuilderBuilder::new(128_000)
-                .add_contributor(Box::new(SimpleContributor::system(system_prompt)))
-                .build(),
-            plugin_registry: PluginRegistry::new(),
-            agent_id: format!("{}-{}", self.agent_path.as_str(), def.name),
-            working_dir: self.working_dir.clone(),
-        };
-
         let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
 
-        let sub_agent =
-            crate::react::ReActAgent::new(self.llm.clone(), tools, agent_config, session);
+        let agent_config = AgentConfig::builder()
+            .with_def((*def).clone())
+            .with_llm(self.llm.clone())
+            .with_tools(tools)
+            .with_session(session)
+            .with_max_iterations(max_iterations)
+            .with_system_prompt(system_prompt)
+            .with_plugin_registry(PluginRegistry::new())
+            .with_working_dir(self.working_dir.clone())
+            .build()
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to build agent config: {}", e)))?;
+
+        let sub_agent = crate::react::ReActAgent::new(agent_config);
 
         let response = sub_agent.run(&params.prompt).await.map_err(|e| {
             ToolError::ExecutionFailed(format!("Sub-agent failed: {}", e))

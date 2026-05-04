@@ -1,4 +1,4 @@
-//! Agent builder.
+//! Agent builder (deprecated — use AgentConfig::builder() instead).
 
 use super::agent::{AgentConfig, ReActAgent};
 use super::plugin::AgentPlugin;
@@ -8,13 +8,17 @@ use vol_llm_context::{ContextBuilderBuilder, ContextContributor};
 use vol_llm_core::LLMClient;
 use vol_llm_tool::{ExecutableTool, ToolRegistry};
 
-/// Agent builder
+/// Agent builder (deprecated — use AgentConfig::builder() instead).
 pub struct AgentBuilder {
     llm: Option<Arc<dyn LLMClient>>,
     tools: Vec<Box<dyn ExecutableTool>>,
-    config: AgentConfig,
+    max_iterations: u32,
+    max_history_messages: usize,
+    agent_id: Option<String>,
+    working_dir: Option<std::path::PathBuf>,
     session: Option<Arc<Session>>,
     contributors: Vec<Box<dyn ContextContributor>>,
+    plugin_registry: super::PluginRegistry,
 }
 
 impl AgentBuilder {
@@ -22,9 +26,13 @@ impl AgentBuilder {
         Self {
             llm: None,
             tools: Vec::new(),
-            config: AgentConfig::default(),
+            max_iterations: 5,
+            max_history_messages: 20,
+            agent_id: None,
+            working_dir: None,
             session: None,
             contributors: Vec::new(),
+            plugin_registry: super::PluginRegistry::new(),
         }
     }
 
@@ -39,19 +47,18 @@ impl AgentBuilder {
     }
 
     pub fn with_max_iterations(mut self, max: u32) -> Self {
-        self.config.max_iterations = max;
+        self.max_iterations = max;
         self
     }
 
     pub fn with_system_prompt(mut self, prompt: String) -> Self {
         use vol_llm_context::builtin::SimpleContributor;
-
         self.contributors.push(Box::new(SimpleContributor::system(prompt)));
         self
     }
 
     pub fn with_max_history_messages(mut self, max: usize) -> Self {
-        self.config.max_history_messages = max;
+        self.max_history_messages = max;
         self
     }
 
@@ -66,22 +73,22 @@ impl AgentBuilder {
     }
 
     pub fn with_plugin<P: AgentPlugin + 'static>(mut self, plugin: P) -> Self {
-        self.config.plugin_registry.register(plugin);
+        self.plugin_registry.register(plugin);
         self
     }
 
     pub fn with_plugin_registry(mut self, registry: super::PluginRegistry) -> Self {
-        self.config.plugin_registry = registry;
+        self.plugin_registry = registry;
         self
     }
 
     pub fn with_agent_id(mut self, agent_id: String) -> Self {
-        self.config.agent_id = agent_id;
+        self.agent_id = Some(agent_id);
         self
     }
 
     pub fn with_working_dir(mut self, path: std::path::PathBuf) -> Self {
-        self.config.working_dir = path;
+        self.working_dir = Some(path);
         self
     }
 
@@ -93,33 +100,30 @@ impl AgentBuilder {
             registry.register_boxed(tool);
         }
 
-        // Create session if not provided
         let session = self.session.unwrap_or_else(|| {
             let entry_store = Arc::new(InMemoryEntryStore::new());
             Arc::new(Session::new(entry_store))
         });
 
-        // Build ContextBuilder: start from config defaults, add stored contributors
-        let token_budget = self.config.context_builder.token_budget().total;
-        let head_size = self.config.context_builder.token_budget().head_size;
-        let tail_size = self.config.context_builder.token_budget().tail_size;
-
-        let mut builder = ContextBuilderBuilder::new(token_budget)
-            .head_size(head_size)
-            .tail_size(tail_size);
-
+        let token_budget = 128_000;
+        let mut builder = ContextBuilderBuilder::new(token_budget);
         for contributor in self.contributors {
             builder = builder.add_contributor(contributor);
         }
 
-        self.config.context_builder = builder.build();
+        let mut config = AgentConfig::new(llm, Arc::new(registry), session);
+        config.context_builder = builder.build();
+        config.max_iterations = self.max_iterations;
+        config.max_history_messages = self.max_history_messages;
+        config.plugin_registry = self.plugin_registry;
+        if let Some(agent_id) = self.agent_id {
+            config.agent_id = agent_id;
+        }
+        if let Some(working_dir) = self.working_dir {
+            config.working_dir = working_dir;
+        }
 
-        Ok(ReActAgent::new(
-            llm,
-            Arc::new(registry),
-            self.config,
-            session,
-        ))
+        Ok(ReActAgent::new(config))
     }
 }
 
