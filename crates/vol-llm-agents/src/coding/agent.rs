@@ -356,6 +356,18 @@ impl CodingAgentBuilder {
         self
     }
 
+    /// Register LokiPlugin to send agent events to Loki.
+    ///
+    /// Reads the Loki URL from the `LOKI_URL` environment variable.
+    /// If not set, this is a no-op (no plugin is registered).
+    pub fn with_loki(mut self) -> Self {
+        if let Some(config) = vol_llm_observability::loki::LokiConfig::from_env() {
+            let plugin = vol_llm_observability::loki::LokiPlugin::new(config, "coding");
+            self.config.plugin_registry.register(plugin);
+        }
+        self
+    }
+
     /// Set the shared session for conversation history.
     pub fn session(mut self, session: Arc<vol_session::Session>) -> Self {
         self.config.session = Some(session);

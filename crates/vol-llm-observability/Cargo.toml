@@ -10,6 +10,7 @@ tokio = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
 chrono = { workspace = true }
+reqwest = { workspace = true }
 tempfile = "3"
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-agent = { path = "../vol-llm-agent" }

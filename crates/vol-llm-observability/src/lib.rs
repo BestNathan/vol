@@ -5,6 +5,7 @@
 
 pub mod plugin;
 pub mod run_log;
+pub mod loki;
 
 pub use plugin::LoggerPlugin;
 pub use run_log::{LogEntry, append_log};
