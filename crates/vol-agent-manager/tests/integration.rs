@@ -10,7 +10,7 @@ use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::http::{Request, Response, StatusCode};
 use axum::response::IntoResponse;
-use axum::routing::{get, post};
+use axum::routing::{get, post, delete};
 use axum::Router;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
@@ -19,6 +19,7 @@ use vol_agent_manager::events::EventBus;
 use vol_agent_manager::metrics::collector::MetricsCollector;
 use vol_agent_manager::state::manager::AgentStateManager;
 use vol_agent_manager::state::models::{AgentState, AgentStatus, HostInfo};
+use vol_agent_manager::instance::AgentInstanceRegistry;
 use vol_agent_manager::task::dispatcher::TaskDispatcher;
 use vol_agent_manager::ws::protocol::WsMessage;
 use vol_agent_manager::AppRouterState;
@@ -32,6 +33,14 @@ fn make_app_state() -> (Arc<AgentStateManager>, Arc<MetricsCollector>, Arc<Event
     let metrics = Arc::new(MetricsCollector::new());
     let event_bus = Arc::new(EventBus::new());
     let task_dispatcher = Arc::new(TaskDispatcher::new());
+    let instance_registry = Arc::new(AgentInstanceRegistry::new());
+    let agent_loader = Arc::new(vol_llm_agent::AgentLoader::new_empty());
+    let llm_config = vol_llm_provider::LLMConfig::with_env_key(
+        vol_llm_core::LLMProvider::Anthropic,
+        "qwen3.5-plus",
+        "ANTHROPIC_AUTH_TOKEN",
+        "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+    );
     let config = ManagerConfig::default();
 
     let app_state = AppRouterState {
@@ -40,6 +49,9 @@ fn make_app_state() -> (Arc<AgentStateManager>, Arc<MetricsCollector>, Arc<Event
         event_bus: event_bus.clone(),
         task_dispatcher: task_dispatcher.clone(),
         config,
+        instance_registry,
+        agent_loader,
+        llm_config,
     };
     (state_manager, metrics, event_bus, task_dispatcher, app_state)
 }
@@ -504,4 +516,111 @@ async fn test_multiple_agents_list() {
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(parsed["agents"].as_array().unwrap().len(), 3);
+}
+
+// ---------------------------------------------------------------------------
+// Tests: Agent WS routing and new REST API (agent-loader integration)
+// ---------------------------------------------------------------------------
+
+/// Build a test app with agent-loader-backed routes.
+async fn build_test_app() -> Router {
+    use axum::extract::State;
+
+    let state_manager = Arc::new(AgentStateManager::new());
+    let metrics = Arc::new(MetricsCollector::new());
+    let event_bus = Arc::new(EventBus::new());
+    let task_dispatcher = Arc::new(TaskDispatcher::new());
+    let instance_registry = Arc::new(AgentInstanceRegistry::new());
+    let agent_loader = Arc::new(vol_llm_agent::AgentLoader::new_empty());
+    let llm_config = vol_llm_provider::LLMConfig::with_env_key(
+        vol_llm_core::LLMProvider::Anthropic,
+        "qwen3.5-plus",
+        "ANTHROPIC_AUTH_TOKEN",
+        "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+    );
+    let config = ManagerConfig::default();
+
+    let app_state = AppRouterState {
+        state_manager,
+        metrics,
+        event_bus,
+        task_dispatcher,
+        config,
+        instance_registry,
+        agent_loader,
+        llm_config,
+    };
+
+    // Only include routes we can test (lib-based handlers)
+    vol_agent_manager::ws::server::create_ws_router()
+        .route("/api/v1/agent-types", get(|State(s): State<AppRouterState>| async move {
+            let metadata = s.agent_loader.list_metadata().await;
+            axum::Json(serde_json::json!({
+                "agent_types": metadata.iter().map(|m| serde_json::json!({
+                    "name": m.name,
+                    "type": m.r#type,
+                    "description": m.description,
+                    "scope": format!("{:?}", m.scope),
+                })).collect::<Vec<_>>()
+            }))
+        }))
+        .route("/api/v1/agent-instances", get(|State(s): State<AppRouterState>| async move {
+            let instances = s.instance_registry.list_instances().await;
+            axum::Json(serde_json::json!({ "instances": instances }))
+        }))
+        .route("/api/v1/agent-instances/:type/:session_id", delete(|State(s): State<AppRouterState>, axum::extract::Path((t, s_id)): axum::extract::Path<(String, String)>| async move {
+            s.instance_registry.destroy(&t, &s_id).await;
+            (axum::http::StatusCode::NO_CONTENT, ())
+        }))
+        .with_state(app_state)
+}
+
+#[tokio::test]
+async fn test_agent_ws_router_rejects_non_ws_request() {
+    let app = build_test_app().await;
+
+    // Non-WebSocket HTTP requests to the WS endpoint get 400 (Bad Request)
+    // because axum rejects non-upgrade requests on WS routes.
+    // Unknown agent types would get 404 after a successful WS upgrade.
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/ws/agents/unknown-type/session/test-123")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_list_agent_types_empty() {
+    let app = build_test_app().await;
+
+    let response = app
+        .oneshot(get_request("/api/v1/agent-types"))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["agent_types"], serde_json::json!([]));
+}
+
+#[tokio::test]
+async fn test_list_agent_instances_empty() {
+    let app = build_test_app().await;
+
+    let response = app
+        .oneshot(get_request("/api/v1/agent-instances"))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["instances"], serde_json::json!([]));
 }
