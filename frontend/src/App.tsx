@@ -4,6 +4,7 @@ import { AppLayout } from './components/AppLayout';
 import { Dashboard } from './pages/Dashboard';
 import { AgentTypes } from './pages/AgentTypes';
 import { Instances } from './pages/Instances';
+import { Chat } from './pages/Chat';
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/agent-types" element={<AgentTypes />} />
             <Route path="/instances" element={<Instances />} />
+            <Route path="/chat/:agentType/:sessionId" element={<Chat />} />
           </Routes>
         </AppLayout>
       </BrowserRouter>
