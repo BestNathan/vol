@@ -56,12 +56,20 @@ async fn main() -> Result<()> {
     let event_bus = Arc::new(EventBus::new());
     let task_dispatcher = Arc::new(TaskDispatcher::new());
 
+    let agent_loader = Arc::new(vol_llm_agent::AgentLoader::new(None));
+    if let Err(e) = agent_loader.discover_all().await {
+        tracing::warn!(error = %e, "Failed to discover agent definitions");
+    }
+    let instance_registry = Arc::new(vol_agent_manager::instance::AgentInstanceRegistry::new());
+
     let app_state = AppRouterState {
         state_manager: state_manager.clone(),
         metrics: metrics.clone(),
         event_bus: event_bus.clone(),
         task_dispatcher: task_dispatcher.clone(),
         config: config.clone(),
+        instance_registry: instance_registry.clone(),
+        agent_loader: agent_loader.clone(),
     };
 
     // Build router

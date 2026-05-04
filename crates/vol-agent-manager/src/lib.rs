@@ -23,4 +23,6 @@ pub struct AppRouterState {
     pub event_bus: Arc<EventBus>,
     pub task_dispatcher: Arc<TaskDispatcher>,
     pub config: ManagerConfig,
+    pub instance_registry: Arc<crate::instance::AgentInstanceRegistry>,
+    pub agent_loader: Arc<vol_llm_agent::AgentLoader>,
 }
