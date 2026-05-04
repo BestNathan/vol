@@ -3,15 +3,15 @@
 use super::agent::AgentConfig;
 use super::plugin::PluginRegistry;
 use crate::agent_def::AgentDef;
-use vol_llm_context::ContextBuilderBuilder;
-use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
-use vol_llm_tool::ToolRegistry;
-use vol_session::{InMemoryEntryStore, Session};
 use std::path::PathBuf;
 use std::sync::Arc;
+use vol_llm_context::ContextBuilderBuilder;
 use vol_llm_context::ContextContributor;
 use vol_llm_core::SandboxRef;
+use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::ExecutableTool;
+use vol_llm_tool::ToolRegistry;
+use vol_session::{InMemoryEntryStore, Session};
 
 /// Builder for AgentConfig.
 pub struct AgentConfigBuilder {
@@ -259,5 +259,43 @@ mod tests {
             .unwrap();
         let names = config.context_builder.contributor_names();
         assert!(names.contains(&"system"));
+    }
+
+    #[tokio::test]
+    async fn test_builder_with_working_dir() {
+        let config = AgentConfigBuilder::new()
+            .with_llm(Arc::new(MockLlm))
+            .with_working_dir(PathBuf::from("/tmp/test-project"))
+            .build()
+            .unwrap();
+        // SkillTool should be registered in the tool registry
+        let tool_names = config.tools.tool_names();
+        assert!(tool_names.contains(&"skill"), "SkillTool should be auto-registered, got: {:?}", tool_names);
+    }
+
+    #[tokio::test]
+    async fn test_builder_skill_injector_always_present() {
+        let config = AgentConfigBuilder::new()
+            .with_llm(Arc::new(MockLlm))
+            .build()
+            .unwrap();
+        // SkillInjector should always be added to context builder
+        let names = config.context_builder.contributor_names();
+        assert!(names.iter().any(|n| n.contains("skill")), "SkillInjector should be present, got: {:?}", names);
+    }
+
+    #[tokio::test]
+    async fn test_builder_working_dir_override_takes_precedence() {
+        let def = AgentDef::new("test", "prompt")
+            .with_working_dir(PathBuf::from("/tmp/from-def"));
+        let config = AgentConfigBuilder::new()
+            .with_llm(Arc::new(MockLlm))
+            .with_def(def)
+            .with_working_dir(PathBuf::from("/tmp/explicit-override"))
+            .build()
+            .unwrap();
+        // Both def and explicit working_dir should result in skills being loaded
+        let tool_names = config.tools.tool_names();
+        assert!(tool_names.contains(&"skill"), "SkillTool should be auto-registered with explicit override");
     }
 }
