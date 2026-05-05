@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use axum::extract::Query;
+use axum::http::StatusCode;
 use axum::response::sse::{Event, Sse};
 use axum::response::IntoResponse;
 use axum::routing::post;
@@ -31,16 +32,13 @@ struct StreamQuery {
 ///
 /// This implements the `Connection` trait purely for `ConnectionHolder`
 /// integration. `recv()` always returns `None` since HTTP is request-response.
-#[allow(dead_code)]
 pub struct HttpEventConnection {
     tx: broadcast::Sender<Message>,
-    sender: String,
-    receiver: String,
 }
 
 impl HttpEventConnection {
-    pub fn new(tx: broadcast::Sender<Message>, sender: String, receiver: String) -> Self {
-        Self { tx, sender, receiver }
+    pub fn new(tx: broadcast::Sender<Message>) -> Self {
+        Self { tx }
     }
 }
 
@@ -160,23 +158,25 @@ async fn handle_sse(
     agent_id: String,
     body: HttpRequestBody,
 ) -> axum::response::Response {
+    // Reject if a connection is already active (concurrent SSE requests).
+    if transport.holder.is_connected().await {
+        return error_response(409, "another SSE connection is already active".to_string());
+    }
+
     let req = build_request(&agent_id, &body);
 
     // Create broadcast channel for event capture.
     let (event_tx, mut event_rx) = broadcast::channel::<Message>(100);
 
     // Create and attach HTTP event connection.
-    let conn = HttpEventConnection::new(
-        event_tx,
-        agent_id.clone(),
-        "client".to_string(),
-    );
+    let conn = HttpEventConnection::new(event_tx.clone());
     transport.holder.attach(Arc::new(conn)).await;
 
     // Submit request to dispatcher.
     let rx = match transport.dispatcher.submit(req) {
         Ok(rx) => rx,
         Err(e) => {
+            transport.holder.detach().await;
             return error_response(500, e.to_string());
         }
     };
@@ -212,8 +212,11 @@ async fn handle_sse(
         }
     });
 
+    let holder = transport.holder.clone();
+
     // Merge event stream with done signal.
     let merged_stream = async_stream::stream! {
+        let mut event_tx = Some(event_tx);
         let mut done_fut = done_rx;
 
         loop {
@@ -225,9 +228,8 @@ async fn handle_sse(
                             yield Ok::<_, std::convert::Infallible>(Event::default().data(json));
                         }
                     }
-                    // Continue draining remaining events briefly, then break.
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                    break;
+                    // Drop event_tx so event_rx returns Closed after draining buffer.
+                    event_tx.take();
                 }
                 result = event_rx.recv() => {
                     match result {
@@ -246,6 +248,9 @@ async fn handle_sse(
                 }
             }
         }
+
+        // Detach from ConnectionHolder after stream ends.
+        holder.detach().await;
     };
 
     Sse::new(merged_stream).into_response()
@@ -263,15 +268,11 @@ fn build_request(agent_id: &str, body: &HttpRequestBody) -> AgentRequest {
 }
 
 fn error_response(status: u16, message: String) -> axum::response::Response {
-    use axum::http::StatusCode;
-    use axum::response::IntoResponse;
     let body = serde_json::json!({ "error": message });
     (StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(body)).into_response()
 }
 
 fn run_result_response(run_result: RunResult) -> axum::response::Response {
-    use axum::http::StatusCode;
-    use axum::response::IntoResponse;
     match run_result.response {
         Ok(resp) => {
             let body = serde_json::json!({
