@@ -21,7 +21,7 @@ use vol_agent_manager::state::manager::AgentStateManager;
 use vol_agent_manager::state::models::{AgentState, AgentStatus, HostInfo};
 use vol_agent_manager::instance::AgentInstanceRegistry;
 use vol_agent_manager::task::dispatcher::TaskDispatcher;
-use vol_agent_manager::ws::protocol::WsMessage;
+use vol_llm_agent_channel::Message;
 use vol_agent_manager::AppRouterState;
 
 // ---------------------------------------------------------------------------
@@ -356,45 +356,75 @@ async fn test_metrics_endpoint_returns_prometheus_format() {
 }
 
 // ---------------------------------------------------------------------------
-// Tests: Protocol message roundtrip
+// Tests: Protocol message roundtrip (via vol-llm-agent-channel Message)
 // ---------------------------------------------------------------------------
 
 #[test]
 fn test_protocol_message_roundtrip() {
-    let msg = WsMessage::agent_report(
-        "heartbeat",
-        "agent-1",
-        serde_json::json!({"status": "Idle"}),
-    );
+    let mut metadata = std::collections::HashMap::new();
+    metadata.insert("type".to_string(), serde_json::json!("heartbeat"));
+    let msg = Message::Submit {
+        req_id: "req-1".to_string(),
+        sender: "agent-1".to_string(),
+        receiver: "manager".to_string(),
+        input: serde_json::json!({"status": "Idle"}).to_string(),
+        metadata: Some(metadata),
+    };
     let serialized = serde_json::to_string(&msg).unwrap();
-    let parsed: WsMessage = serde_json::from_str(&serialized).unwrap();
-    assert_eq!(parsed.message_type, "heartbeat");
-    assert_eq!(parsed.agent_id.as_deref(), Some("agent-1"));
+    let parsed: Message = serde_json::from_str(&serialized).unwrap();
+    match parsed {
+        Message::Submit { sender, metadata, .. } => {
+            assert_eq!(sender, "agent-1");
+            let meta = metadata.unwrap();
+            assert_eq!(meta.get("type").and_then(|v| v.as_str()), Some("heartbeat"));
+        }
+        _ => panic!("expected Submit variant"),
+    }
 }
 
 #[test]
 fn test_protocol_control_command() {
-    let msg = WsMessage::control_command(
-        "execute-task",
-        "agent-1",
-        "task-123",
-        serde_json::json!({"cmd": "run"}),
-    );
+    let mut metadata = std::collections::HashMap::new();
+    metadata.insert("type".to_string(), serde_json::json!("execute-task"));
+    metadata.insert("task_id".to_string(), serde_json::json!("task-123"));
+    let msg = Message::Submit {
+        req_id: "req-2".to_string(),
+        sender: "manager".to_string(),
+        receiver: "agent-1".to_string(),
+        input: serde_json::json!({"cmd": "run"}).to_string(),
+        metadata: Some(metadata),
+    };
     let serialized = serde_json::to_string(&msg).unwrap();
-    let parsed: WsMessage = serde_json::from_str(&serialized).unwrap();
-    assert_eq!(parsed.message_type, "execute-task");
-    assert_eq!(parsed.target_agent_id.as_deref(), Some("agent-1"));
-    assert_eq!(parsed.task_id.as_deref(), Some("task-123"));
+    let parsed: Message = serde_json::from_str(&serialized).unwrap();
+    match parsed {
+        Message::Submit { metadata, receiver, .. } => {
+            assert_eq!(receiver, "agent-1");
+            let meta = metadata.unwrap();
+            assert_eq!(meta.get("type").and_then(|v| v.as_str()), Some("execute-task"));
+            assert_eq!(meta.get("task_id").and_then(|v| v.as_str()), Some("task-123"));
+        }
+        _ => panic!("expected Submit variant"),
+    }
 }
 
 #[test]
 fn test_protocol_error_message() {
-    let msg = WsMessage::error("agent-1", "unauthorized");
+    let msg = Message::Error {
+        req_id: Some("req-3".to_string()),
+        sender: "manager".to_string(),
+        receiver: "agent-1".to_string(),
+        message: "unauthorized".to_string(),
+    };
     let serialized = serde_json::to_string(&msg).unwrap();
-    let parsed: WsMessage = serde_json::from_str(&serialized).unwrap();
-    assert_eq!(parsed.message_type, "error");
-    assert_eq!(parsed.agent_id.as_deref(), Some("agent-1"));
-    assert_eq!(parsed.payload["error"], "unauthorized");
+    let parsed: Message = serde_json::from_str(&serialized).unwrap();
+    match parsed {
+        Message::Error { sender, receiver, message, .. } => {
+            assert_eq!(sender, "manager");
+            assert_eq!(receiver, "agent-1");
+            assert_eq!(message, "unauthorized");
+        }
+        _ => panic!("expected Error variant"),
+    }
 }
 
 // ---------------------------------------------------------------------------

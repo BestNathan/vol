@@ -4087,6 +4087,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-stream",
+ "async-trait",
  "axum 0.7.9",
  "chrono",
  "futures",
@@ -4105,6 +4106,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "vol-llm-agent",
+ "vol-llm-agent-channel",
  "vol-llm-core",
  "vol-llm-provider",
  "vol-llm-tools-builtin",
