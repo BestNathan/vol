@@ -34,35 +34,88 @@ Frontend  ←→  vol-agent-manager (control plane)  ←→  vol-llm-agent-chann
 
 ## Design Decisions
 
-### 1. Protocol: Channel types exclusively
+### 1. Unified Message Type
 
-Delete `ws/protocol.rs` entirely from vol-agent-manager. All communication uses `vol-llm-agent-channel`'s protocol types:
+Replace `InboundMessage`/`OutboundMessage` with a single `Message` enum in `vol-llm-agent-channel`. Direction is not encoded in the type name — each message carries `sender` and `receiver` fields that determine routing.
 
-- `InboundMessage` (Submit/Cancel) — the only incoming message type
-- `OutboundMessage` (Connected/Event/Result/Error) — the only outgoing message type
-- Manager concepts (register, heartbeat, metric, task_result) are expressed through `InboundMessage::Submit` with metadata fields
+```rust
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Message {
+    Submit {
+        req_id: String,
+        sender: String,
+        receiver: String,
+        input: String,
+        metadata: Option<HashMap<String, serde_json::Value>>,
+    },
+    Cancel {
+        req_id: String,
+        sender: String,
+        receiver: String,
+    },
+    Connected {
+        sender: String,
+        receiver: String,
+    },
+    Event {
+        sender: String,
+        receiver: String,
+        event: serde_json::Value,
+    },
+    Result {
+        req_id: String,
+        sender: String,
+        receiver: String,
+        result: serde_json::Value,
+    },
+    Error {
+        req_id: Option<String>,
+        sender: String,
+        receiver: String,
+        message: String,
+    },
+}
+```
+
+The same message type can be both received and sent. An agent receiving `Message::Submit` executes the task; the same agent can send a `Message::Submit` to another agent. The `Connection` trait simplifies to `recv() -> Message` and `send(Message)`.
+
+### 2. Protocol: Channel types exclusively
+
+Delete `ws/protocol.rs` entirely from vol-agent-manager. All communication uses `vol-llm-agent-channel`'s unified `Message` type. Manager concepts (register, heartbeat, metric, task_result) are expressed through `Message::Submit` with metadata fields.
 
 No adapter layer — manager adopts channel protocol directly.
 
-### 2. Connection: Use the trait, not ConnectionHolder
+### 3. Connection: Use the trait, not ConnectionHolder
 
 The manager uses `Connection` trait directly for agent communication. `ConnectionHolder` is an `AgentPlugin` designed for `ReActAgent` lifecycle, which does not match the manager's external connection model.
 
+The `Connection` trait is updated to use the unified `Message` type:
+
+```rust
+#[async_trait]
+pub trait Connection: Send + Sync + 'static {
+    fn protocol(&self) -> &str;
+    async fn recv(&mut self) -> Option<Result<Message, ConnectionError>>;
+    async fn send(&self, msg: Message) -> Result<(), ConnectionError>;
+}
+```
+
 The manager's `ws/handler.rs` will:
 - Receive raw axum `WebSocket` from the server
-- Wrap it in a `WsConnection` (from vol-llm-agent-channel)
-- Use `Connection::recv()` to read `InboundMessage`
-- Use `Connection::send_event()` / `Connection::send_result()` to write `OutboundMessage`
+- Wrap it in a `WsConnection` implementing `Connection`
+- Use `Connection::recv()` to read `Message`
+- Use `Connection::send(msg)` to write `Message`
 
-### 3. Routing: Keep ws/server.rs in manager
+### 4. Routing: Keep ws/server.rs in manager
 
 Routing configuration (`/ws` endpoint, query params, auth) remains the manager's responsibility. The server creates the `WsConnection` wrapper and delegates to the handler.
 
-### 4. TaskDispatcher: Keep in manager
+### 5. TaskDispatcher: Keep in manager
 
 `TaskDispatcher` in manager tracks multi-agent task state at the management level. This is a control plane concern, distinct from `AgentDispatcher`'s single-agent request queue (data plane). No redundancy here.
 
-### 5. Frontend gateway: Manager serves as gateway
+### 6. Frontend gateway: Manager serves as gateway
 
 Manager exposes REST API + SSE for frontend consumption. The SSE (`EventBus`) remains in manager's `events/` module. Frontend does not directly interact with channel — all agent data flows through manager.
 
@@ -90,7 +143,14 @@ Manager exposes REST API + SSE for frontend consumption. The SSE (`EventBus`) re
 
 ### vol-llm-agent-channel
 
-No changes expected. The channel crate's API remains stable.
+**Files to modify:**
+- `src/protocol.rs` — replace `InboundMessage`/`OutboundMessage` with unified `Message` enum, add `sender`/`receiver` fields to all variants
+- `src/connection.rs` — update `Connection` trait: `recv() -> Message`, `send(Message)`, remove `send_event()`/`send_result()`
+- `src/dispatcher.rs` — update to use unified `Message`
+- `src/router.rs` — update to use unified `Message`
+- `src/transport/ws.rs` — update WebSocket transport to handle unified `Message`
+- `src/transport/memory.rs` — update memory transport to handle unified `Message`
+- `src/lib.rs` — update public exports
 
 ## Data Flow
 
@@ -101,20 +161,23 @@ Agent                          Manager                           Channel
   │                              │                                 │
   │── WS connect ───────────────►│                                 │
   │                              │── wrap in WsConnection ────────►│
-  │── InboundMessage::Submit ───►│                                 │
-  │   (metadata: type=register)  │                                 │
+  │── Message::Submit ──────────►│                                 │
+  │   (sender=agent,             │                                 │
+  │    metadata: type=register)  │                                 │
   │                              │── parse, register agent ───────►│
   │                              │── update state manager          │
   │                              │── emit SSE event                │
   │                              │                                 │
-  │◄── OutboundMessage::Connected│                                 │
+  │◄── Message::Connected ──────│                                 │
+  │   (sender=manager,           │                                 │
+  │    receiver=agent)           │                                 │
   │                              │                                 │
-  │── InboundMessage::Submit ───►│                                 │
+  │── Message::Submit ──────────►│                                 │
   │   (metadata: type=heartbeat) │                                 │
   │                              │── update heartbeat              │
   │                              │── update metrics                │
   │                              │                                 │
-  │── InboundMessage::Submit ───►│                                 │
+  │── Message::Submit ──────────►│                                 │
   │   (metadata: type=task_result)                                │
   │                              │── complete task in dispatcher   │
   │                              │── emit SSE event                │
@@ -128,13 +191,16 @@ Frontend                       Manager                           Agent
   │                              │                                 │
   │── POST /tasks ──────────────►│                                 │
   │                              │── create task (TaskDispatcher)  │
-  │                              │── InboundMessage::Submit ──────►│
-  │                              │   (task details)                │
+  │                              │── Message::Submit ─────────────►│
+  │                              │   (sender=manager,              │
+  │    receiver=agent,           │                                 │
+  │    task details)             │                                 │
   │                              │                                 │
   │◄── SSE event: task_dispatched│                                 │
   │                              │                                 │
-  │                              │◄── OutboundMessage::Result ────│
-  │                              │                                 │
+  │                              │◄── Message::Result ────────────│
+  │                              │   (sender=agent,               │
+  │    receiver=manager)         │                                 │
   │◄── SSE event: task_completed │                                 │
 ```
 
@@ -143,9 +209,13 @@ Frontend                       Manager                           Agent
 ```
 Agent A                        Channel                         Agent B
   │                              │                                 │
-  │── Connection::send ─────────►│── InboundMessage::Submit ──────►│
+  │── Connection::send ─────────►│── Message::Submit ─────────────►│
+  │   (sender=agent_a,           │    (sender=agent_a,             │
+  │    receiver=agent_b)         │     receiver=agent_b)           │
   │                              │                                 │
-  │                              │◄── OutboundMessage::Result ────│
+  │                              │◄── Message::Result ────────────│
+  │                              │    (sender=agent_b,             │
+  │     receiver=agent_a)       │                                 │
   │◄── Connection::recv ────────│                                 │
 ```
 
@@ -154,27 +224,34 @@ Agent A                        Channel                         Agent B
 ```
 Agent A                        Manager                           Agent B
   │                              │                                 │
-  │── InboundMessage::Submit ───►│                                 │
-  │   (target: agent_b)          │                                 │
+  │── Message::Submit ──────────►│                                 │
+  │   (sender=agent_a,           │                                 │
+  │    receiver=agent_b)         │                                 │
   │                              │── Router lookup agent_b conn ──►│
-  │                              │── forward Submit ──────────────►│
+  │                              │── forward Message::Submit ─────►│
+  │                              │    (sender=agent_a,             │
+  │     receiver=agent_b)        │                                 │
   │                              │                                 │
-  │                              │◄── OutboundMessage::Result ────│
-  │◄── OutboundMessage::Result ──│                                 │
+  │                              │◄── Message::Result ────────────│
+  │                              │    (sender=agent_b,             │
+  │     receiver=agent_a)        │                                 │
+  │◄── Message::Result ──────────│                                 │
+  │   (sender=agent_b,           │                                 │
+  │    receiver=agent_a)         │                                 │
 ```
 
 ## Error Handling
 
 - Connection failures: manager marks agent as `Disconnected` in state, emits SSE event
-- Protocol errors (invalid InboundMessage): manager sends `OutboundMessage::Error`, logs warning
+- Protocol errors (invalid Message): manager sends `Message::Error`, logs warning
 - Task timeouts: `TaskDispatcher` marks task as `Timeout`, emits SSE event
 - Agent crashes: health checker detects stale heartbeat, marks agent unhealthy
 
 ## Testing
 
-- Unit tests: handler parsing of InboundMessage variants, state manager updates
+- Unit tests: handler parsing of Message variants, state manager updates
 - Integration tests: end-to-end agent registration via WebSocket, task dispatch flow
-- No changes to vol-llm-agent-channel's existing tests
+- Channel tests: update existing tests to use unified Message type
 
 ## Open Questions
 
