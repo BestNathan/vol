@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// Direction is determined by `sender` and `receiver` fields, not by the type name.
 /// The same message can be both received and sent on any connection.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Message {
     Submit {

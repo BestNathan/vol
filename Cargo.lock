@@ -4256,6 +4256,7 @@ dependencies = [
 name = "vol-llm-agent-channel"
 version = "0.1.0"
 dependencies = [
+ "async-stream",
  "async-trait",
  "axum 0.7.9",
  "chrono",
