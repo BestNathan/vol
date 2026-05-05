@@ -102,7 +102,7 @@ impl LokiPlugin {
             _ => {
                 // Fallback if serialization fails.
                 let mut map = serde_json::Map::new();
-                map.insert("event".to_string(), json!(event_name(event)));
+                map.insert("event".to_string(), json!(event.event_name()));
                 map.insert("run_id".to_string(), json!(run_id));
                 map.insert("session_id".to_string(), json!(session_id));
                 map.insert("agent_id".to_string(), json!(agent_id));
@@ -118,34 +118,6 @@ impl LokiPlugin {
             timestamp_nanos,
             line,
             labels,
-        }
-    }
-}
-
-fn event_name(event: &AgentStreamEvent) -> String {
-    match event {
-        AgentStreamEvent::AgentStart { .. } => "AgentStart".to_string(),
-        AgentStreamEvent::AgentComplete { .. } => "AgentComplete".to_string(),
-        AgentStreamEvent::AgentAborted { .. } => "AgentAborted".to_string(),
-        AgentStreamEvent::LLMCallStart { .. } => "LLMCallStart".to_string(),
-        AgentStreamEvent::LLMCallComplete { .. } => "LLMCallComplete".to_string(),
-        AgentStreamEvent::LLMCallError { .. } => "LLMCallError".to_string(),
-        AgentStreamEvent::ThinkingStart { .. } => "ThinkingStart".to_string(),
-        AgentStreamEvent::ThinkingComplete { .. } => "ThinkingComplete".to_string(),
-        AgentStreamEvent::ContentStart { .. } => "ContentStart".to_string(),
-        AgentStreamEvent::ContentComplete { .. } => "ContentComplete".to_string(),
-        AgentStreamEvent::ToolCallBegin { .. } => "ToolCallBegin".to_string(),
-        AgentStreamEvent::ToolCallComplete { .. } => "ToolCallComplete".to_string(),
-        AgentStreamEvent::ToolCallError { .. } => "ToolCallError".to_string(),
-        AgentStreamEvent::ToolCallSkipped { .. } => "ToolCallSkipped".to_string(),
-        AgentStreamEvent::IterationComplete { .. } => "IterationComplete".to_string(),
-        AgentStreamEvent::PluginEvent { .. } => "PluginEvent".to_string(),
-        AgentStreamEvent::MaxIterationsReached { .. } => "MaxIterationsReached".to_string(),
-        AgentStreamEvent::IterationContinued { .. } => "IterationContinued".to_string(),
-        AgentStreamEvent::ThinkingDelta { .. }
-        | AgentStreamEvent::ContentDelta { .. }
-        | AgentStreamEvent::ToolCallArgumentDelta { .. } => {
-            unreachable!("delta events are filtered by should_send()")
         }
     }
 }

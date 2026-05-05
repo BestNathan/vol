@@ -290,6 +290,33 @@ impl AgentStreamEvent {
             Self::PluginEvent { timestamp, .. } => *timestamp,
         }
     }
+
+    /// Returns the event variant name as a string, suitable for logging.
+    pub fn event_name(&self) -> &'static str {
+        match self {
+            Self::AgentStart { .. } => "AgentStart",
+            Self::AgentComplete { .. } => "AgentComplete",
+            Self::AgentAborted { .. } => "AgentAborted",
+            Self::MaxIterationsReached { .. } => "MaxIterationsReached",
+            Self::IterationContinued { .. } => "IterationContinued",
+            Self::LLMCallStart { .. } => "LLMCallStart",
+            Self::LLMCallComplete { .. } => "LLMCallComplete",
+            Self::LLMCallError { .. } => "LLMCallError",
+            Self::ThinkingStart { .. } => "ThinkingStart",
+            Self::ThinkingDelta { .. } => "ThinkingDelta",
+            Self::ThinkingComplete { .. } => "ThinkingComplete",
+            Self::ContentStart { .. } => "ContentStart",
+            Self::ContentDelta { .. } => "ContentDelta",
+            Self::ContentComplete { .. } => "ContentComplete",
+            Self::ToolCallBegin { .. } => "ToolCallBegin",
+            Self::ToolCallComplete { .. } => "ToolCallComplete",
+            Self::ToolCallError { .. } => "ToolCallError",
+            Self::ToolCallSkipped { .. } => "ToolCallSkipped",
+            Self::ToolCallArgumentDelta { .. } => "ToolCallArgumentDelta",
+            Self::IterationComplete { .. } => "IterationComplete",
+            Self::PluginEvent { .. } => "PluginEvent",
+        }
+    }
 }
 
 #[cfg(test)]
