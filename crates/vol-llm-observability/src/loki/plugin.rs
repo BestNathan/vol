@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
 use serde_json::{json, Value};
 use vol_llm_core::stream::AgentStreamEvent;
 
@@ -57,7 +56,7 @@ impl LokiPlugin {
         )
     }
 
-    /// Convert an event to a Loki entry.
+    /// Convert an event to a Loki entry with full event serialization.
     pub fn create_loki_entry(event: &AgentStreamEvent, ctx: &RunContext) -> LokiEntry {
         let def = ctx.config.def.as_ref();
         let agent_type = def.map(|d| &d.r#type).map_or("unknown", |v| v.as_str());
@@ -68,38 +67,33 @@ impl LokiPlugin {
         let labels = LokiLabels::new(agent_type, agent_id);
         let mut labels = labels.into_inner();
 
-        // Build the log line as a compact JSON object.
-        let event_name = event_name(event);
-        let data = event_data(event);
-
-        let mut line_map = serde_json::Map::new();
-        line_map.insert("timestamp".to_string(), json!(Utc::now().to_rfc3339()));
-        line_map.insert("event".to_string(), json!(&event_name));
-        line_map.insert("run_id".to_string(), json!(run_id));
-        line_map.insert("session_id".to_string(), json!(session_id));
-        line_map.insert("agent_id".to_string(), json!(agent_id));
-
-        // Include model if available from the event.
+        // Extract model for label if available.
         if let AgentStreamEvent::LLMCallComplete { model, .. } = event {
-            line_map.insert("model".to_string(), json!(model));
             labels.insert("model".to_string(), model.clone());
         }
 
-        // Include tool_name for tool events.
-        if let Some(tool_name) = event_tool_name(event) {
-            line_map.insert("tool_name".to_string(), json!(tool_name));
-        }
-
-        // Merge event data into the line.
-        if let Value::Object(obj) = data {
-            for (k, v) in obj {
-                line_map.insert(k, v);
+        // Serialize the full event to JSON, then merge metadata fields.
+        let line_map = match serde_json::to_value(event) {
+            Ok(Value::Object(mut map)) => {
+                map.insert("run_id".to_string(), json!(run_id));
+                map.insert("session_id".to_string(), json!(session_id));
+                map.insert("agent_id".to_string(), json!(agent_id));
+                map
             }
-        }
+            _ => {
+                // Fallback if serialization fails.
+                let mut map = serde_json::Map::new();
+                map.insert("event".to_string(), json!(event_name(event)));
+                map.insert("run_id".to_string(), json!(run_id));
+                map.insert("session_id".to_string(), json!(session_id));
+                map.insert("agent_id".to_string(), json!(agent_id));
+                map
+            }
+        };
 
         let line = json!(line_map).to_string();
 
-        let timestamp_nanos = Utc::now().timestamp_nanos_opt().unwrap_or(0);
+        let timestamp_nanos = event.timestamp().timestamp_nanos_opt().unwrap_or(0);
 
         LokiEntry {
             timestamp_nanos,
@@ -137,69 +131,6 @@ fn event_name(event: &AgentStreamEvent) -> String {
     }
 }
 
-fn event_data(event: &AgentStreamEvent) -> Value {
-    match event {
-        AgentStreamEvent::AgentStart { input, .. } => json!({ "input": input }),
-        AgentStreamEvent::AgentComplete { response, .. } => json!({ "response": response }),
-        AgentStreamEvent::AgentAborted { reason, .. } => json!({ "reason": reason }),
-        AgentStreamEvent::LLMCallStart { iteration, .. } => json!({ "iteration": iteration }),
-        AgentStreamEvent::LLMCallComplete { model, usage, .. } => json!({ "model": model, "usage": usage }),
-        AgentStreamEvent::LLMCallError { error, .. } => json!({ "error": error }),
-        AgentStreamEvent::ThinkingStart { .. } => json!({}),
-        AgentStreamEvent::ThinkingComplete { thinking, .. } => json!({ "thinking": thinking }),
-        AgentStreamEvent::ContentStart { .. } => json!({}),
-        AgentStreamEvent::ContentComplete { content, .. } => json!({ "content": content }),
-        AgentStreamEvent::ToolCallBegin { tool_call_id, tool_name, arguments, .. } => {
-            json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "arguments": arguments })
-        }
-        AgentStreamEvent::ToolCallComplete { tool_call_id, tool_name, result, duration_ms, .. } => {
-            json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "result": result, "duration_ms": duration_ms })
-        }
-        AgentStreamEvent::ToolCallError { tool_call_id, tool_name, error, duration_ms, .. } => {
-            json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "error": error, "duration_ms": duration_ms })
-        }
-        AgentStreamEvent::ToolCallSkipped { tool_call_id, tool_name, reason, duration_ms, .. } => {
-            json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "reason": reason, "duration_ms": duration_ms })
-        }
-        AgentStreamEvent::IterationComplete { iteration, tool_calls, final_answer, .. } => {
-            let tc: Vec<Value> = tool_calls.iter().map(|tc| {
-                json!({ "id": &tc.id, "name": &tc.name, "arguments": &tc.arguments, "type": &tc.r#type })
-            }).collect();
-            json!({ "iteration": iteration, "tool_calls": tc, "final_answer": final_answer })
-        }
-        AgentStreamEvent::PluginEvent { name, data, .. } => {
-            let mut map = serde_json::Map::new();
-            map.insert("name".to_string(), Value::String(name.clone()));
-            for (k, v) in data {
-                map.insert(k.clone(), v.clone());
-            }
-            Value::Object(map)
-        }
-        AgentStreamEvent::MaxIterationsReached { current_iteration, max_iterations, .. } => {
-            json!({ "current_iteration": current_iteration, "max_iterations": max_iterations })
-        }
-        AgentStreamEvent::IterationContinued { from_iteration, .. } => {
-            json!({ "from_iteration": from_iteration })
-        }
-        AgentStreamEvent::ThinkingDelta { .. }
-        | AgentStreamEvent::ContentDelta { .. }
-        | AgentStreamEvent::ToolCallArgumentDelta { .. } => {
-            unreachable!("delta events are filtered by should_send()")
-        }
-    }
-}
-
-fn event_tool_name(event: &AgentStreamEvent) -> Option<&str> {
-    match event {
-        AgentStreamEvent::ToolCallBegin { tool_name, .. }
-        | AgentStreamEvent::ToolCallComplete { tool_name, .. }
-        | AgentStreamEvent::ToolCallError { tool_name, .. }
-        | AgentStreamEvent::ToolCallSkipped { tool_name, .. }
-        | AgentStreamEvent::ToolCallArgumentDelta { tool_name, .. } => Some(tool_name),
-        _ => None,
-    }
-}
-
 use async_trait::async_trait;
 use vol_llm_agent::react::{AgentPlugin, PluginDecision, RunContext};
 
@@ -229,6 +160,7 @@ impl AgentPlugin for LokiPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Utc;
     use serde_json::Map;
 
     fn make_test_context(run_id: &str, session_id: &str, agent_name: &str, agent_type: &str) -> RunContext {
