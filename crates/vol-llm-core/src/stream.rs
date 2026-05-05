@@ -67,7 +67,7 @@ impl StreamReceiver {
 /// 2. LLM calls are paired: LLMCallStart → LLMCallComplete or LLMCallError
 /// 3. Tool calls are paired: ToolCallBegin → ToolCallComplete or ToolCallError or ToolCallSkipped
 /// 4. Delta sequences are complete: Start → Delta×N → Complete
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum AgentStreamEvent {
     // === Lifecycle (3) ===
     AgentStart {
@@ -262,6 +262,33 @@ impl AgentStreamEvent {
     }
     pub fn plugin_event(name: String, data: serde_json::Map<String, serde_json::Value>) -> Self {
         Self::PluginEvent { timestamp: chrono::Utc::now(), name, data }
+    }
+
+    /// Extract the timestamp from any event variant.
+    pub fn timestamp(&self) -> chrono::DateTime<chrono::Utc> {
+        match self {
+            Self::AgentStart { timestamp, .. } => *timestamp,
+            Self::AgentComplete { timestamp, .. } => *timestamp,
+            Self::AgentAborted { timestamp, .. } => *timestamp,
+            Self::MaxIterationsReached { timestamp, .. } => *timestamp,
+            Self::IterationContinued { timestamp, .. } => *timestamp,
+            Self::LLMCallStart { timestamp, .. } => *timestamp,
+            Self::LLMCallComplete { timestamp, .. } => *timestamp,
+            Self::LLMCallError { timestamp, .. } => *timestamp,
+            Self::ThinkingStart { timestamp, .. } => *timestamp,
+            Self::ThinkingDelta { timestamp, .. } => *timestamp,
+            Self::ThinkingComplete { timestamp, .. } => *timestamp,
+            Self::ContentStart { timestamp, .. } => *timestamp,
+            Self::ContentDelta { timestamp, .. } => *timestamp,
+            Self::ContentComplete { timestamp, .. } => *timestamp,
+            Self::ToolCallBegin { timestamp, .. } => *timestamp,
+            Self::ToolCallComplete { timestamp, .. } => *timestamp,
+            Self::ToolCallError { timestamp, .. } => *timestamp,
+            Self::ToolCallSkipped { timestamp, .. } => *timestamp,
+            Self::ToolCallArgumentDelta { timestamp, .. } => *timestamp,
+            Self::IterationComplete { timestamp, .. } => *timestamp,
+            Self::PluginEvent { timestamp, .. } => *timestamp,
+        }
     }
 }
 
