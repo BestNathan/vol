@@ -25,6 +25,8 @@ vol-session = { path = "../vol-session" }
 vol-llm-provider = { path = "../vol-llm-provider" }
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-tools-builtin = { path = "../vol-llm-tools-builtin" }
+vol-llm-agent-channel = { path = "../vol-llm-agent-channel" }
+async-trait = { workspace = true }
 
 [dev-dependencies]
 tokio-tungstenite = { version = "0.21", features = ["rustls-tls-webpki-roots"] }
