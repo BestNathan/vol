@@ -1255,3 +1255,10 @@ async fn test_agent_with_real_llm() {
 - [ReAct Paper](https://arxiv.org/abs/2210.03629) - Reasoning + Acting in Language Models
 - [Anthropic Tool Use](https://docs.anthropic.com/claude/docs/tool-use)
 - [OpenAI Function Calling](https://platform.openai.com/docs/guides/function-calling)
+
+## 10. Wiki
+
+- [[react-pattern]]: ReAct 循环的实现模式
+- [[agent-plugin-system]]: Agent 插件系统架构
+- [[tool-registry]]: 工具注册和执行框架
+- [[vol-llm-agent-crate]]: ReAct Agent 核心 crate

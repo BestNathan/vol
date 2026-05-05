@@ -535,3 +535,10 @@ scrape_configs:
 
 - [AI Agent - ReAct Agent & Tools 设计](03-agent-tool-design.md)
 - [AI Agent - LLM Client 架构设计](01-llm-client-architecture.md)
+
+### 14.4 Wiki
+
+- [[agent-observability]]: 可观测插件的 wiki 页面
+- [[agent-plugin-system]]: 插件系统架构
+- [[built-in-plugins]]: 内置插件列表
+- [[agent-event-stream]]: 事件流类型

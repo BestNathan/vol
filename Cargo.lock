@@ -4104,6 +4104,11 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "vol-llm-agent",
+ "vol-llm-core",
+ "vol-llm-provider",
+ "vol-llm-tools-builtin",
+ "vol-session",
 ]
 
 [[package]]
@@ -4357,6 +4362,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "vol-llm-agent",
+ "vol-llm-context",
  "vol-llm-core",
  "vol-llm-tool",
  "vol-session",

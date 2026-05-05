@@ -9,7 +9,7 @@ use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use vol_llm_agent::AgentBuilder;
+use vol_llm_agent::{AgentConfig, ReActAgent};
 use vol_llm_provider::create_provider;
 
 use crate::AppRouterState;
@@ -68,20 +68,22 @@ async fn run_agent_instance(
         }
     };
 
-    // Build agent from definition
-    let agent = AgentBuilder::new()
+    // Build agent from definition.
+    // `max_iterations` is read from `AgentDef` inside `ReActAgent::run`.
+    let system_prompt = agent_def.prompt.clone();
+    let agent_config = AgentConfig::builder()
+        .with_def(agent_def)
         .with_llm(Arc::from(llm))
-        .with_system_prompt(agent_def.content)
         .with_session(session)
-        .with_max_iterations(agent_def.max_iterations.unwrap_or(10))
+        .with_system_prompt(system_prompt)
         .build();
 
-    let agent = match agent {
-        Ok(a) => a,
+    let agent = match agent_config {
+        Ok(c) => ReActAgent::new(c),
         Err(e) => {
             let err = serde_json::json!({
                 "message_type": "agent_error",
-                "error": format!("Failed to build agent: {}", e),
+                "error": format!("Failed to build agent config: {}", e),
             });
             let _ = broadcast_tx.send(err);
             return;

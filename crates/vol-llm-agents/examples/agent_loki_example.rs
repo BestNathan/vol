@@ -1,8 +1,9 @@
-//! Example: K8s Ops Agent loaded from file with Loki observability.
+//! Example: K8s Ops Agent loaded from file with Loki observability and built-in tools.
 //!
 //! This example demonstrates:
 //! - Loading an agent definition from a .md file via AgentLoader
-//! - Building a ReActAgent with the loaded AgentDef
+//! - Registering built-in tools (Bash, Read, Write, Edit, Glob, Grep)
+//! - Building a ReActAgent with the loaded AgentDef and tools
 //! - Registering LokiPlugin for remote log shipping
 //! - Running a real task against the Anthropic/DashScope API
 //!
@@ -21,6 +22,7 @@ use vol_llm_agent::agent_loader::AgentLoader;
 use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
 use vol_llm_observability::loki::{LokiConfig, LokiPlugin};
 use vol_llm_provider::{LLMConfig, anthropic::AnthropicProvider};
+use vol_llm_tools_builtin::register_all;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -52,43 +54,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create LLM config for DashScope Anthropic endpoint
     let llm_config = LLMConfig::with_literal_key(
         vol_llm_core::LLMProvider::Anthropic,
-        "qwen3.5-plus",
+        "qwen3.6-plus",
         api_key,
-        "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+        "http://k8s.nhome.local:31693",
     );
 
     // Create Anthropic provider
     let llm = AnthropicProvider::new(&llm_config)
         .map_err(|e| format!("Failed to create Anthropic provider: {}", e))?;
 
-    println!("  ✓ Anthropic provider initialized (qwen3.5-plus via DashScope)");
+    println!("  ✓ Anthropic provider initialized (qwen3.6-plus via DashScope)");
     println!();
 
-    // Step 1: Create the agent definition file in the examples directory
+    // Step 1: Load agent definition from examples/k8s_ops_agent.md
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let agents_dir = manifest_dir.join(".agents").join("agents");
-    std::fs::create_dir_all(&agents_dir)?;
+    let agents_dir = manifest_dir.join("examples").join(".agents");
 
-    let agent_file_path = agents_dir.join("k8s_ops_agent.md");
-    let agent_file_content = r#"---
-name: k8s_ops_agent
-type: k8s_ops_agent
-description: Kubernetes 运维智能体，可以查看和分析 k8s 集群状态
----
-你是一个 Kubernetes 运维智能体。你可以查看和分析 k8s 集群状态，包括：
-- 节点状态和资源使用情况
-- 系统 Pod 的运行状态
-- 集群整体健康状况
-- 常见问题的诊断建议
-
-请根据用户的问题，分析当前集群的运行状况并给出建议。
-"#;
-    std::fs::write(&agent_file_path, agent_file_content)?;
-
-    println!("  ✓ Agent definition written to: {}", agent_file_path.display());
+    println!("  ✓ Agents dir: {}", agents_dir.display());
     println!();
 
-    // Step 2: Load agent via AgentLoader
+    // Step 2: Load via AgentLoader
     let mut loader = AgentLoader::new_empty();
     loader.add_root(AgentScope::Repo, agents_dir.clone());
     loader.discover_all().await?;
@@ -96,15 +81,26 @@ description: Kubernetes 运维智能体，可以查看和分析 k8s 集群状态
     let def = loader
         .get("k8s_ops_agent")
         .await
-        .expect("k8s_ops_agent should be loaded from examples/.agents/agents/");
+        .expect("k8s_ops_agent should be loaded from examples/");
 
     println!("  ✓ Agent loaded via AgentLoader:");
     println!("    - name: {}", def.name);
     println!("    - type: {}", def.r#type);
     println!("    - description: {}", def.description);
+    println!("    - tools: {:?}", def.tools);
     println!();
 
-    // Step 3: Build LokiPlugin
+    // Step 3: Build tool registry with built-in tools
+    let mut tool_registry = vol_llm_tool::ToolRegistry::new();
+    register_all(&mut tool_registry);
+
+    println!("  ✓ Built-in tools registered:");
+    for tool_def in tool_registry.definitions() {
+        println!("    - {}", tool_def.name);
+    }
+    println!();
+
+    // Step 4: Build LokiPlugin
     let loki_config = LokiConfig::with_url(loki_url.clone());
     let loki_plugin = LokiPlugin::new(loki_config);
 
@@ -114,20 +110,21 @@ description: Kubernetes 运维智能体，可以查看和分析 k8s 集群状态
     println!("  ✓ LokiPlugin registered (Loki URL: {})", loki_url);
     println!();
 
-    // Step 4: Build ReActAgent with loaded AgentDef
+    // Step 5: Build ReActAgent with AgentDef + tools
     let agent_config = AgentConfig::builder()
         .with_def((*def).clone())
         .with_llm(Arc::new(llm))
+        .with_tools(Arc::new(tool_registry))
         .with_system_prompt(def.prompt.clone())
         .with_plugin_registry(plugin_registry)
         .build()?;
 
     let agent = ReActAgent::new(agent_config);
 
-    println!("  ✓ ReActAgent built with AgentDef + LokiPlugin");
+    println!("  ✓ ReActAgent built with AgentDef + tools + LokiPlugin");
     println!();
 
-    // Step 5: Run the agent with a k8s cluster status query
+    // Step 6: Run the agent with a k8s cluster status query
     let query = "请获取当前 k8s 集群的节点状态和系统 Pod 的运行状态，分析集群健康状况";
 
     println!("═══════════════════════════════════════════════════════════");
@@ -178,8 +175,8 @@ description: Kubernetes 运维智能体，可以查看和分析 k8s 集群状态
     println!("═══════════════════════════════════════════════════════════");
     println!();
     println!("Features demonstrated:");
-    println!("  ✓ Agent definition loaded from .md file via AgentLoader");
-    println!("  ✓ AgentDef used to configure ReActAgent identity");
+    println!("  ✓ Agent definition loaded from examples/k8s_ops_agent.md via AgentLoader");
+    println!("  ✓ Built-in tools (Bash, Read, Write, Edit, Glob, Grep) registered");
     println!("  ✓ Real Anthropic API calls via DashScope");
     println!("  ✓ LokiPlugin registered for remote log shipping");
     println!("  ✓ Loki labels derived automatically from AgentDef");

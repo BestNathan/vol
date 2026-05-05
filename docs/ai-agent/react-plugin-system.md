@@ -367,3 +367,15 @@ async fn intercept(&self, event: StreamEvent, _ctx: &PluginContext)
 - [API Documentation](https://docs.rs/vol-llm-agent)
 - [Example: CLI Approval](examples/agent_cli_approval.rs)
 - [Integration Tests](tests/plugin_test.rs)
+
+## Wiki
+
+- [[agent-plugin-system]]: 插件系统架构详情
+- [[plugin-actions]]: PluginAction 返回类型
+- [[built-in-plugins]]: 内置插件列表
+- [[agent-event-stream]]: 事件流类型和生命周期
+- [[agent-observability]]: 可观测插件实现
+- [[human-in-the-loop]]: HITL 插件配置
+- [[semantic-caching]]: 语义缓存插件
+- [[retry-with-backoff]]: 重试插件配置
+- [[rate-limiting]]: 速率限制插件

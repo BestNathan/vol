@@ -219,7 +219,7 @@ async fn handle_message(
                     state_manager.update_heartbeat(agent_id).await;
                     let status = serde_json::from_str::<serde_json::Value>(input)
                         .ok()
-                        .and_then(|v| v.get("status").and_then(|s| s.as_str().map(String::from)))
+                        .and_then(|v| v.get("status").and_then(|s| s.as_str()).map(|s| s.to_string()))
                         .unwrap_or_else(|| "Idle".to_string());
                     if status == "Busy" {
                         state_manager.update_status(agent_id, AgentStatus::Busy).await;
@@ -233,7 +233,7 @@ async fn handle_message(
                     metrics.increment_messages("metric", agent_id, &agent_type);
                 }
                 "event" => {
-                    let data: serde_json::Value = serde_json::from_str::<serde_json::Value>(input)
+                    let data = serde_json::from_str::<serde_json::Value>(input)
                         .unwrap_or(serde_json::Value::Null);
                     let event_name = data.get("event_name").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
                     event_bus.emit(ManagerEvent::agent_event(agent_id, &event_name, data));

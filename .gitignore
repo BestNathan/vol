@@ -26,6 +26,10 @@ logs/
 temp/
 temp/.worktrees
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
 # Environment files (sensitive)
 .env
 .env.local
