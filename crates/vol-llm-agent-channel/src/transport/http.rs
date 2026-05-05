@@ -88,7 +88,7 @@ impl HttpTransport {
     /// Build an axum `Router` with a POST endpoint.
     ///
     /// Users can merge this router at any path:
-    /// ```rust
+    /// ```rust,ignore
     /// let app = Router::new()
     ///     .nest("/api/chat", http_transport.into_axum_router());
     /// ```
@@ -292,6 +292,244 @@ fn run_result_response(run_result: RunResult) -> axum::response::Response {
                 "error": e.to_string(),
             });
             (StatusCode::INTERNAL_SERVER_ERROR, Json(body)).into_response()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use http_body_util::BodyExt;
+    use tower::util::ServiceExt;
+    use vol_llm_agent::agent_def::AgentDef;
+    use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
+    use vol_llm_context::ContextBuilderBuilder;
+    use vol_llm_core::{ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMProvider, StreamReceiver, SupportedParam, TokenUsage, Message};
+    use vol_session::{InMemoryEntryStore, Session};
+    use vol_llm_tool::ToolRegistry;
+
+    struct MockLlm;
+    #[async_trait::async_trait]
+    impl LLMClient for MockLlm {
+        fn provider(&self) -> LLMProvider { LLMProvider::Anthropic }
+        fn model(&self) -> &str { "mock" }
+        fn supported_params(&self) -> &[SupportedParam] { &[] }
+        async fn converse(&self, _: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+            Ok(ConversationResponse {
+                message: Message::assistant("mock response".to_string()),
+                model: "mock".to_string(),
+                usage: TokenUsage::default(),
+                finish_reason: FinishReason::Stop,
+                raw: None,
+            })
+        }
+        async fn converse_stream(&self, _: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+            let (_tx, rx) = tokio::sync::mpsc::channel(10);
+            Ok(StreamReceiver::new(rx))
+        }
+    }
+
+    fn make_test_transport() -> HttpTransport {
+        let def = AgentDef::new("test_agent", "You are a test agent.").with_type("test_agent");
+        let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
+        let tools = Arc::new(ToolRegistry::new());
+        let context_builder = ContextBuilderBuilder::new(128_000).build();
+        let config = AgentConfig {
+            def: Some(def),
+            llm: Arc::new(MockLlm),
+            tools,
+            session,
+            sandbox: None,
+            context_builder,
+            plugin_registry: PluginRegistry::new(),
+        };
+        let agent = ReActAgent::new(config);
+        let dispatcher = Arc::new(AgentDispatcher::new(agent));
+        let holder = Arc::new(ConnectionHolder::new("test_agent".to_string(), "client".to_string()));
+        HttpTransport::new(dispatcher, holder, "test_agent")
+    }
+
+    #[tokio::test]
+    async fn test_http_transport_blocking_returns_result() {
+        let transport = make_test_transport();
+        let app = transport.into_axum_router();
+
+        let body = serde_json::json!({ "input": "hello" });
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(json.get("success").and_then(|v| v.as_bool()).unwrap());
+        assert!(json.get("response").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_http_transport_sse_returns_events() {
+        let transport = make_test_transport();
+        let app = transport.into_axum_router();
+
+        let body = serde_json::json!({ "input": "hello" });
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/?stream=true")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let content_type = response.headers().get("content-type").unwrap().to_str().unwrap();
+        assert!(content_type.contains("text/event-stream"));
+    }
+
+    #[tokio::test]
+    async fn test_http_transport_invalid_body_returns_400() {
+        let transport = make_test_transport();
+        let app = transport.into_axum_router();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/")
+                    .header("content-type", "application/json")
+                    .body(Body::from("not json"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_http_transport_empty_input_succeeds() {
+        let transport = make_test_transport();
+        let app = transport.into_axum_router();
+
+        let body = serde_json::json!({ "input": "" });
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(json.get("success").and_then(|v| v.as_bool()).unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_http_transport_concurrent_sse_returns_409() {
+        use std::time::Duration;
+        use tokio::net::TcpListener;
+
+        // Create a transport with a slow LLM so the first SSE request stays active.
+        let def = AgentDef::new("slow_agent", "You are slow.").with_type("slow_agent");
+        let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
+        let tools = Arc::new(ToolRegistry::new());
+        let context_builder = ContextBuilderBuilder::new(128_000).build();
+        let config = AgentConfig {
+            def: Some(def),
+            llm: Arc::new(slow_llm::SlowMockLlm),
+            tools,
+            session,
+            sandbox: None,
+            context_builder,
+            plugin_registry: PluginRegistry::new(),
+        };
+        let agent = ReActAgent::new(config);
+        let dispatcher = Arc::new(AgentDispatcher::new(agent));
+        let holder = Arc::new(ConnectionHolder::new("slow_agent".to_string(), "client".to_string()));
+        let transport = HttpTransport::new(dispatcher, holder, "slow_agent");
+        let app = transport.into_axum_router();
+
+        // Bind to a random port and serve concurrently.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        // Give the server time to start.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let client = reqwest::Client::new();
+
+        let body = serde_json::json!({ "input": "hello" });
+        let url = format!("http://127.0.0.1:{}/?stream=true", port);
+
+        let handle1 = tokio::spawn({
+            let client = client.clone();
+            let url = url.clone();
+            let body = body.clone();
+            async move {
+                client.post(&url).json(&body).send().await
+            }
+        });
+
+        // Give the first request time to attach its connection.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Second SSE request should get 409.
+        let resp2 = client.post(&url).json(&body).send().await.unwrap();
+        assert_eq!(resp2.status(), 409);
+
+        // The first request may still be running (slow LLM takes 5s).
+        // Even if it completed, the key assertion (409 for concurrent) is verified.
+    }
+}
+
+/// A mock LLM that takes 5 seconds to respond, for testing concurrent SSE requests.
+#[cfg(test)]
+mod slow_llm {
+    use super::*;
+    use vol_llm_core::{ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMProvider, StreamReceiver, SupportedParam, TokenUsage, Message};
+
+    pub struct SlowMockLlm;
+    #[async_trait::async_trait]
+    impl LLMClient for SlowMockLlm {
+        fn provider(&self) -> LLMProvider { LLMProvider::Anthropic }
+        fn model(&self) -> &str { "slow-mock" }
+        fn supported_params(&self) -> &[SupportedParam] { &[] }
+        async fn converse(&self, _: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            Ok(ConversationResponse {
+                message: Message::assistant("slow response".to_string()),
+                model: "slow-mock".to_string(),
+                usage: TokenUsage::default(),
+                finish_reason: FinishReason::Stop,
+                raw: None,
+            })
+        }
+        async fn converse_stream(&self, _: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+            let (_tx, rx) = tokio::sync::mpsc::channel(10);
+            Ok(StreamReceiver::new(rx))
         }
     }
 }
