@@ -10,9 +10,9 @@ The two crates have redundant channel-related logic: both define message protoco
 
 1. **Add `vol-llm-agent-channel` as a dependency to `vol-agent-manager`** — establish a unidirectional dependency so the manager reuses the channel crate's abstractions.
 
-2. **Remove duplicate protocol types from `vol-agent-manager`** — delete `ws/protocol.rs` and replace `WsMessage`, `RegisterPayload`, `HeartbeatPayload`, `MetricPayload`, `EventPayload`, `TaskPayload`, `TaskResultPayload` with equivalents from or adapted to `vol-llm-agent-channel`'s `InboundMessage`/`OutboundMessage`.
+2. **Delete `ws/protocol.rs` entirely** — remove all manager-specific message types (`WsMessage`, `RegisterPayload`, `HeartbeatPayload`, `MetricPayload`, `EventPayload`, `TaskPayload`, `TaskResultPayload`, `RegisterAckPayload`, `HostInfo`). All communication uses `vol-llm-agent-channel`'s `InboundMessage` (Submit/Cancel) and `OutboundMessage` (Connected/Event/Result/Error) exclusively. No adapter layer — manager adopts channel protocol directly.
 
-3. **Refactor `ws/handler.rs` to work with the `Connection` trait** — instead of directly manipulating axum `WebSocket`, the handler should use a `WsConnection` adapter that implements the `Connection` trait from vol-llm-agent-channel.
+3. **Refactor `ws/handler.rs` to use channel protocol types** — the handler processes `InboundMessage` and sends `OutboundMessage` via the `Connection` trait from vol-llm-agent-channel. Manager concepts (register, heartbeat, task_result, metric, event) are mapped into the channel's Submit/Event/Result messages.
 
 4. **Keep `ws/server.rs` in vol-agent-manager** — routing configuration remains the manager's responsibility. The server creates the appropriate `Connection` implementation and passes it to the handler.
 
@@ -31,7 +31,7 @@ The two crates have redundant channel-related logic: both define message protoco
 
 **Included:**
 - `Cargo.toml` — add `vol-llm-agent-channel` dependency
-- `ws/protocol.rs` — delete or replace with channel protocol types
+- `ws/protocol.rs` — delete entirely, zero protocol types remain in vol-agent-manager
 - `ws/handler.rs` — refactor to use `Connection` trait
 - `ws/mod.rs` — update module exports
 - `lib.rs` / `main.rs` — update imports and wiring
@@ -44,14 +44,16 @@ The two crates have redundant channel-related logic: both define message protoco
 
 ## Constraints
 
-- The protocol types in `vol-llm-agent-channel` (`InboundMessage` with Submit/Cancel) do not directly match vol-agent-manager's message types (register/heartbeat/metric/event/task_result). A protocol adapter or extension is required.
+- `InboundMessage` (`Submit`/`Cancel`) is the sole message protocol. Manager concepts (register, heartbeat, metric, event, task_result) are expressed through Submit messages with metadata or through existing channel types.
+- The connection lifecycle in vol-agent-manager (auth → register → message loop) maps to: auth check → `OutboundMessage::Connected` → process `InboundMessage` Submit/Cancel.
+- Agent registration is expressed via Submit metadata rather than a separate register message.
 - `vol-llm-agent-channel` depends on `vol-llm-agent` — verify no unwanted transitive dependencies are pulled into vol-agent-manager.
 - The existing WebSocket connection flow (auth → register → message loop) must be preserved.
 
 ## Success Criteria
 
 1. `vol-agent-manager/Cargo.toml` includes `vol-llm-agent-channel` as a dependency.
-2. `ws/protocol.rs` is deleted or reduced to only manager-specific types not covered by channel protocols.
+2. `ws/protocol.rs` is deleted entirely — zero protocol types remain in vol-agent-manager.
 3. `ws/handler.rs` uses `Connection` trait or channel types instead of raw axum `WebSocket`.
 4. `cargo check --workspace` passes with no errors.
 5. `cargo test --workspace` passes with all tests green.
@@ -59,7 +61,7 @@ The two crates have redundant channel-related logic: both define message protoco
 
 ## Edge Cases
 
-- **Protocol mismatch**: `InboundMessage` only has `Submit` and `Cancel` variants. The manager needs register/heartbeat/metric/event/task_result. Options: (a) extend `InboundMessage` in vol-llm-agent-channel, or (b) create a manager-specific adapter type. Decision: create an adapter in vol-agent-manager to avoid modifying channel's core protocol.
+- **All manager message types removed**: `WsMessage`, `RegisterPayload`, `HeartbeatPayload`, `MetricPayload`, `EventPayload`, `TaskPayload`, `TaskResultPayload` are all deleted. Manager uses channel's `InboundMessage` (Submit/Cancel) and `OutboundMessage` (Connected/Event/Result/Error) exclusively.
 - **Connection lifecycle**: `ConnectionHolder` is an `AgentPlugin` designed for `ReActAgent` instances. The manager handles external agent connections, not ReActAgent runs. The `Connection` trait should be used directly, not through `ConnectionHolder`.
 - **OutboundMessage serialization**: `OutboundMessage` only derives `Serialize`, not `Deserialize`. This is intentional (never deserialized), but the manager's handler may need bidirectional parsing for incoming register messages.
 
