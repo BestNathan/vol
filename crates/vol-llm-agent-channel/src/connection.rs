@@ -7,8 +7,7 @@ use tokio::sync::RwLock;
 use vol_llm_agent::react::{AgentPlugin, AgentStreamEvent, PluginId, RunContext};
 
 use crate::error::ConnectionError;
-use crate::protocol::InboundMessage;
-use crate::request::RunResult;
+use crate::protocol::Message;
 
 /// Abstract connection for agent communication.
 /// Implement for each transport protocol.
@@ -17,14 +16,11 @@ pub trait Connection: Send + Sync + 'static {
     /// Protocol identifier (e.g., "ws", "memory").
     fn protocol(&self) -> &str;
 
-    /// Receive the next incoming message from the client.
-    async fn recv(&mut self) -> Option<Result<InboundMessage, ConnectionError>>;
+    /// Receive the next incoming message.
+    async fn recv(&mut self) -> Option<Result<Message, ConnectionError>>;
 
-    /// Send an agent streaming event to the client.
-    async fn send_event(&self, event: &AgentStreamEvent) -> Result<(), ConnectionError>;
-
-    /// Send the final run result to the client.
-    async fn send_result(&self, result: &RunResult) -> Result<(), ConnectionError>;
+    /// Send a message.
+    async fn send(&self, msg: Message) -> Result<(), ConnectionError>;
 }
 
 /// Registered as AgentPlugin on agent creation.
@@ -32,13 +28,17 @@ pub trait Connection: Send + Sync + 'static {
 /// Agent and connection have independent lifecycles.
 pub struct ConnectionHolder {
     connection: Arc<RwLock<Option<Arc<dyn Connection>>>>,
+    sender: String,
+    receiver: String,
 }
 
 impl ConnectionHolder {
     /// Create a new empty holder.
-    pub fn new() -> Self {
+    pub fn new(sender: String, receiver: String) -> Self {
         Self {
             connection: Arc::new(RwLock::new(None)),
+            sender,
+            receiver,
         }
     }
 
@@ -64,12 +64,6 @@ impl ConnectionHolder {
     }
 }
 
-impl Default for ConnectionHolder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[async_trait]
 impl AgentPlugin for ConnectionHolder {
     fn id(&self) -> PluginId {
@@ -82,7 +76,12 @@ impl AgentPlugin for ConnectionHolder {
 
     async fn listen(&self, event: &AgentStreamEvent, _ctx: &RunContext) {
         if let Some(conn) = self.connection.read().await.as_ref() {
-            let _ = conn.send_event(event).await;
+            let event_json = serde_json::to_value(event).unwrap_or(serde_json::Value::Null);
+            let _ = conn.send(Message::Event {
+                sender: self.sender.clone(),
+                receiver: self.receiver.clone(),
+                event: event_json,
+            }).await;
         }
     }
 }
@@ -99,20 +98,19 @@ mod tests {
     #[async_trait]
     impl Connection for MockConnection {
         fn protocol(&self) -> &str { &self.protocol }
-        async fn recv(&mut self) -> Option<Result<InboundMessage, ConnectionError>> { None }
-        async fn send_event(&self, _event: &AgentStreamEvent) -> Result<(), ConnectionError> { Ok(()) }
-        async fn send_result(&self, _result: &RunResult) -> Result<(), ConnectionError> { Ok(()) }
+        async fn recv(&mut self) -> Option<Result<Message, ConnectionError>> { None }
+        async fn send(&self, _msg: Message) -> Result<(), ConnectionError> { Ok(()) }
     }
 
     #[tokio::test]
     async fn test_holder_new_is_empty() {
-        let holder = ConnectionHolder::new();
+        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string());
         assert!(!holder.is_connected().await);
     }
 
     #[tokio::test]
     async fn test_holder_attach() {
-        let holder = ConnectionHolder::new();
+        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string());
         let conn = Arc::new(MockConnection { protocol: "test".to_string() });
 
         holder.attach(conn.clone()).await;
@@ -122,7 +120,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_holder_detach_replaces_connection() {
-        let holder = ConnectionHolder::new();
+        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string());
         let conn1 = Arc::new(MockConnection { protocol: "test1".to_string() });
         let conn2 = Arc::new(MockConnection { protocol: "test2".to_string() });
 
@@ -135,7 +133,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_holder_detach_clears() {
-        let holder = ConnectionHolder::new();
+        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string());
         let conn = Arc::new(MockConnection { protocol: "test".to_string() });
 
         holder.attach(conn).await;
