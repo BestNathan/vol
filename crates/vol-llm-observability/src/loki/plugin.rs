@@ -72,13 +72,32 @@ impl LokiPlugin {
             labels.insert("model".to_string(), model.clone());
         }
 
-        // Serialize the full event to JSON, then merge metadata fields.
+        // Serialize the event, then flatten the externally-tagged enum variant
+        // into a flat object with an "event" key and metadata fields.
         let line_map = match serde_json::to_value(event) {
             Ok(Value::Object(mut map)) => {
-                map.insert("run_id".to_string(), json!(run_id));
-                map.insert("session_id".to_string(), json!(session_id));
-                map.insert("agent_id".to_string(), json!(agent_id));
-                map
+                // Externally-tagged enum: {"VariantName": {fields...}}
+                // Flatten: extract variant fields to top level, add "event" key.
+                if map.len() == 1 {
+                    let (variant, fields) = map.iter().next().unwrap();
+                    let mut flat = serde_json::Map::new();
+                    flat.insert("event".to_string(), json!(variant));
+                    if let Value::Object(fields) = fields {
+                        for (k, v) in fields {
+                            flat.insert(k.clone(), v.clone());
+                        }
+                    }
+                    flat.insert("run_id".to_string(), json!(run_id));
+                    flat.insert("session_id".to_string(), json!(session_id));
+                    flat.insert("agent_id".to_string(), json!(agent_id));
+                    flat
+                } else {
+                    // Already flat or unexpected format, just add metadata.
+                    map.insert("run_id".to_string(), json!(run_id));
+                    map.insert("session_id".to_string(), json!(session_id));
+                    map.insert("agent_id".to_string(), json!(agent_id));
+                    map
+                }
             }
             _ => {
                 // Fallback if serialization fails.
@@ -248,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn test_loki_entry_tool_call() {
+    fn test_loki_entry_tool_call_has_all_fields() {
         let event = AgentStreamEvent::ToolCallBegin {
             timestamp: Utc::now(),
             tool_call_id: "c1".to_string(),
@@ -257,11 +276,17 @@ mod tests {
         };
         let ctx = make_test_context("run-1", "sess-1", "agent-001", "coding");
         let entry = LokiPlugin::create_loki_entry(&event, &ctx);
-        assert!(entry.line.contains("bash"));
-        assert!(entry.line.contains("run-1"));
-        assert!(entry.line.contains("sess-1"));
-        assert!(entry.line.contains("agent-001"));
-        assert!(entry.line.contains("ToolCallBegin"));
+        // Full event serialization includes all fields.
+        let parsed: Value = serde_json::from_str(&entry.line).unwrap();
+        assert_eq!(parsed["event"], "ToolCallBegin");
+        assert_eq!(parsed["tool_call_id"], "c1");
+        assert_eq!(parsed["tool_name"], "bash");
+        assert_eq!(parsed["arguments"], "{}");
+        assert_eq!(parsed["run_id"], "run-1");
+        assert_eq!(parsed["session_id"], "sess-1");
+        assert_eq!(parsed["agent_id"], "agent-001");
+        // Event's own timestamp should be present.
+        assert!(parsed.get("timestamp").is_some());
     }
 
     #[test]
@@ -275,6 +300,9 @@ mod tests {
         let entry = LokiPlugin::create_loki_entry(&event, &ctx);
         assert!(entry.labels.contains_key("model"));
         assert_eq!(entry.labels["model"], "qwen3.5-plus");
+        // Full event serialization includes model in line too.
+        let parsed: Value = serde_json::from_str(&entry.line).unwrap();
+        assert_eq!(parsed["model"], "qwen3.5-plus");
     }
 
     #[test]
@@ -284,8 +312,9 @@ mod tests {
         let event = AgentStreamEvent::plugin_event("my_plugin".to_string(), data);
         let ctx = make_test_context("run-1", "sess-1", "agent-001", "coding");
         let entry = LokiPlugin::create_loki_entry(&event, &ctx);
-        assert!(entry.line.contains("PluginEvent"));
-        assert!(entry.line.contains("my_plugin"));
+        let parsed: Value = serde_json::from_str(&entry.line).unwrap();
+        assert_eq!(parsed["event"], "PluginEvent");
+        assert_eq!(parsed["name"], "my_plugin");
     }
 
     #[test]
@@ -295,7 +324,6 @@ mod tests {
         use vol_session::{InMemoryEntryStore, Session};
         use vol_llm_tool::ToolRegistry;
 
-        // Build context with def = None
         let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
         let tools = Arc::new(ToolRegistry::new());
         let context_builder = ContextBuilderBuilder::new(128_000).build();
@@ -327,5 +355,43 @@ mod tests {
         assert!(entry.labels.contains_key("agent"));
         assert_eq!(entry.labels["agent"], "unknown");
         assert_eq!(entry.labels["agent_id"], "unknown");
+    }
+
+    #[test]
+    fn test_loki_entry_timestamp_uses_event_timestamp() {
+        use chrono::TimeZone;
+        let fixed_ts = Utc.with_ymd_and_hms(2026, 1, 15, 10, 30, 0).unwrap();
+        let event = AgentStreamEvent::AgentStart {
+            timestamp: fixed_ts,
+            input: "test".to_string(),
+        };
+        let ctx = make_test_context("r1", "s1", "a1", "coding");
+        let entry = LokiPlugin::create_loki_entry(&event, &ctx);
+        // The LokiEntry timestamp_nanos should match the event's timestamp.
+        let expected_nanos = fixed_ts.timestamp_nanos_opt().unwrap();
+        assert_eq!(entry.timestamp_nanos, expected_nanos);
+    }
+
+    #[test]
+    fn test_loki_entry_llm_call_start_includes_messages() {
+        use vol_llm_core::{Message, message::{MessageContent, MessageRole}};
+        let event = AgentStreamEvent::LLMCallStart {
+            timestamp: Utc::now(),
+            iteration: 1,
+            messages: vec![Message {
+                role: MessageRole::User,
+                content: Some(MessageContent::Text("hello".to_string())),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+                thinking: None,
+            }],
+        };
+        let ctx = make_test_context("r1", "s1", "a1", "coding");
+        let entry = LokiPlugin::create_loki_entry(&event, &ctx);
+        let parsed: Value = serde_json::from_str(&entry.line).unwrap();
+        // Messages array should be present (previously dropped).
+        assert!(parsed.get("messages").is_some());
+        assert!(parsed["messages"].as_array().unwrap().len() > 0);
     }
 }
