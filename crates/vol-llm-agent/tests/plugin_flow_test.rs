@@ -325,6 +325,7 @@ fn create_test_run_context() -> RunContext {
         Arc::new(ToolRegistry::new()),
         AgentConfig::default(),
         20,
+        "test-model".to_string(),
     );
 
     ctx

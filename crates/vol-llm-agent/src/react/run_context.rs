@@ -41,6 +41,8 @@ pub struct RunContext {
     pub run_id: String,
     pub user_input: String,
     pub session_id: String,
+    /// Model used for this run, from LLM config.
+    pub model: String,
 
     // Mutable state (internal mutability via AtomicU32 and Arc<RwLock>)
     pub iteration: AtomicU32,
@@ -125,6 +127,7 @@ impl RunContext {
         tools: Arc<ToolRegistry>,
         config: AgentConfig,
         max_history_messages: usize,
+        model: String,
     ) -> (Self, mpsc::Receiver<PluginRequest>) {
         let (event_tx, _) = broadcast::channel(1024);
         let (plugin_event_tx, plugin_event_rx) = mpsc::channel(100);
@@ -133,6 +136,7 @@ impl RunContext {
             run_id,
             user_input,
             session_id,
+            model: if model.is_empty() { "unknown".to_string() } else { model },
             iteration: AtomicU32::new(0),
             all_tool_calls: Arc::new(RwLock::new(Vec::new())),
             current_tool_calls: Arc::new(RwLock::new(Vec::new())),
@@ -372,6 +376,7 @@ impl Clone for RunContext {
             run_id: self.run_id.clone(),
             user_input: self.user_input.clone(),
             session_id: self.session_id.clone(),
+            model: self.model.clone(),
             iteration: AtomicU32::new(self.current_iteration()),
             all_tool_calls: self.all_tool_calls.clone(),
             current_tool_calls: self.current_tool_calls.clone(),
@@ -408,6 +413,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
             20,
+            "test-model".to_string(),
         );
         ctx
     }
@@ -514,6 +520,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
             20,
+            "test-model".to_string(),
         );
 
         let messages = ctx.get_context().await.unwrap();
@@ -561,6 +568,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
             10,
+            "test-model".to_string(),
         );
 
         let messages = ctx.get_context().await.unwrap();
@@ -601,6 +609,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
             20,
+            "test-model".to_string(),
         );
 
         // Persist user message to session (simulating what agent.rs does at run start)
@@ -650,6 +659,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
             20,
+            "test-model".to_string(),
         );
 
         // Call get_context multiple times - each builds fresh
@@ -675,6 +685,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
             20,
+            "test-model".to_string(),
         );
 
         ctx.record_reasoning_step("First thought".to_string(), Some(100))
@@ -701,6 +712,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
             20,
+            "test-model".to_string(),
         );
 
         let record = ToolCallRecord {
@@ -729,6 +741,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
             20,
+            "test-model".to_string(),
         );
 
         ctx.set_final_content("Final answer".to_string()).await;
@@ -750,6 +763,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
             20,
+            "test-model".to_string(),
         );
 
         ctx.record_reasoning_step("thought".to_string(), None).await;

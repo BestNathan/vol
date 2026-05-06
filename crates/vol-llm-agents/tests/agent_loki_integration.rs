@@ -153,6 +153,7 @@ async fn test_agent_file_loaded_with_loki_plugin() {
         tools2,
         agent_config2,
         20,
+        "test-model".to_string(),
     );
 
     let event = vol_llm_core::AgentStreamEvent::AgentStart {

@@ -137,6 +137,7 @@ fn create_test_context() -> RunContext {
             agent_id: "test-agent".to_string(),
             ..Default::default()
         },
+        "test-model".to_string(),
     );
     ctx
 }

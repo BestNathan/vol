@@ -217,6 +217,7 @@ impl ReActAgent {
             effective_tools,
             config.clone(),
             max_history_messages,
+            config.llm.model().to_string(),
         );
 
         // Persist user message to session so it's available via SessionContributor.

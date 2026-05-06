@@ -83,6 +83,7 @@ mod tests {
             Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
             20,
+            "test-model".to_string(),
         );
         ctx
     }

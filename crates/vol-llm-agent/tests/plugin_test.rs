@@ -71,6 +71,7 @@ async fn test_run_context_data_storage() {
         Arc::new(ToolRegistry::new()),
         AgentConfig::default(),
         20,
+        "test-model".to_string(),
     );
 
     // Test setting and getting data
