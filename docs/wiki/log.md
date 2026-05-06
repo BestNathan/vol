@@ -1,5 +1,11 @@
 # Change Log
 
+## [2026-05-06] ingest | OTel 0.29 Migration and Log Initialization in vol-monitor
+- Created sources: [[otel-029-log-init]]
+- Updated concepts: [[otel-log-routing]], [[agent-observability]]
+- Cross-references added: 2
+- Changes: tracing_setup.rs migrated from OTel 0.21 to 0.29 APIs — Resource::builder pattern, SdkTracerProvider flattened builder, SpanExporter/LogExporter builder, removed runtime param from batch exporter, global::shutdown replaced with direct provider.shutdown(); added init_otel_logs() function with OpenTelemetryTracingBridge layer; opentelemetry-appender-tracing dependency added
+
 ## [2026-05-06] ingest | LokiPlugin OTel Migration Tasks 3+4
 - Created sources: [[loki-plugin-otel-migration-tasks-3-4]]
 - Created concepts: [[otel-log-routing]]

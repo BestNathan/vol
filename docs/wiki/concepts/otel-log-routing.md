@@ -4,7 +4,7 @@ category: framework
 tags: [otel, tracing, structured-logging, agent-observability]
 created: 2026-05-06
 updated: 2026-05-06
-source_count: 1
+source_count: 2
 ---
 
 # OTel Log Routing via Tracing
@@ -58,9 +58,24 @@ tracing::info!(...) ─────┐
 ## Initialization Flow
 
 1. `vol-monitor` `tracing_setup.rs` initializes the tracing subscriber stack.
-2. `init_otel_logs()` creates `OtlpLogExporter` with gRPC transport.
-3. `LoggerProvider` is configured with `BatchLogProcessor` and resource attributes.
-4. OTel log layer is integrated into the `tracing_subscriber` Registry.
+2. `init_otel_logs()` creates `LogExporter` via `LogExporter::builder().with_tonic()` (OTel 0.29 API).
+3. `SdkLoggerProvider` is configured with resource attributes and `BatchLogProcessor`.
+4. `OpenTelemetryTracingBridge<SdkLoggerProvider, SdkLogger>` is created and integrated into the `tracing_subscriber` Registry.
+5. Trace initialization similarly uses `SdkTracerProvider::builder().with_sampler().with_resource().with_batch_exporter()` (flattened builder, no nested `trace::Config`).
+
+### OTel 0.29 API Migration Notes
+
+The migration from 0.21 to 0.29 involved several breaking changes [[otel-029-log-init]]:
+
+| 0.21 API | 0.29 API |
+|----------|----------|
+| `Resource::new(vec![...])` | `Resource::builder().with_service_name(...).build()` |
+| `TracerProvider::builder().with_config(...)` | `SdkTracerProvider::builder().with_sampler(...).with_resource(...)` |
+| `new_exporter().tonic().build_span_exporter()` | `SpanExporter::builder().with_tonic().build()` |
+| `with_batch_exporter(exporter, runtime::Tokio)` | `with_batch_exporter(exporter)` |
+| `global::shutdown_tracer_provider()` | `provider.shutdown()` on stored instance |
+
+The log layer type `OpenTelemetryTracingBridge` now requires 2 generic parameters (`P` and `L`) instead of 1, reflecting the separation between the provider and logger types.
 
 ## Related Concepts
 
@@ -69,4 +84,5 @@ tracing::info!(...) ─────┐
 - [[agent-event-stream]]: Events being routed to OTel
 - [[built-in-plugins]]: LokiPlugin as a built-in plugin
 - [[loki-plugin-otel-migration-design]]: Design specification
+- [[otel-029-log-init]]: Task 8 implementation — OTel 0.29 API migration and init_otel_logs()
 - [[run-context]]: Holds `model` field for log enrichment

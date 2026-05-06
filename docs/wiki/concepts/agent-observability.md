@@ -58,3 +58,4 @@ High-frequency streaming delta events (`ThinkingDelta`, `ContentDelta`, `ToolCal
 - [[built-in-plugins]]: Its place in the built-in plugin set
 - [[otel-log-routing]]: OTel Collector integration via tracing macros
 - [[loki-plugin-otel-migration-tasks-3-4]]: LokiPlugin rewrite implementation
+- [[otel-029-log-init]]: OTel 0.29 API migration and log layer initialization
