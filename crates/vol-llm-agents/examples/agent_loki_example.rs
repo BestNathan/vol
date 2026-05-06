@@ -4,13 +4,12 @@
 //! - Loading an agent definition from a .md file via AgentLoader
 //! - Registering built-in tools (Bash, Read, Write, Edit, Glob, Grep)
 //! - Building a ReActAgent with the loaded AgentDef and tools
-//! - Registering LokiPlugin for remote log shipping
+//! - Registering LokiPlugin for OTel log shipping via tracing
 //! - Running a real task against the Anthropic/DashScope API
 //!
 //! Run with:
 //! ```bash
 //! export ANTHROPIC_AUTH_TOKEN=your_token_here
-//! export LOKI_URL=http://localhost:3100
 //! cargo run --example agent_loki_example
 //! ```
 
@@ -20,7 +19,7 @@ use std::sync::Arc;
 use vol_llm_agent::agent_def::AgentScope;
 use vol_llm_agent::agent_loader::AgentLoader;
 use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
-use vol_llm_observability::loki::{LokiConfig, LokiPlugin};
+use vol_llm_observability::loki::LokiPlugin;
 use vol_llm_provider::{LLMConfig, anthropic::AnthropicProvider};
 use vol_llm_tools_builtin::register_all;
 
@@ -43,12 +42,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Missing API token"
     })?;
 
-    let loki_url = std::env::var("LOKI_URL")
-        .unwrap_or_else(|_| "http://localhost:3100".to_string());
-
     println!("Configuration:");
     println!("  ✓ ANTHROPIC_AUTH_TOKEN is set");
-    println!("  ✓ LOKI_URL = {}", loki_url);
     println!();
 
     // Create LLM config for DashScope Anthropic endpoint
@@ -101,13 +96,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Step 4: Build LokiPlugin
-    let loki_config = LokiConfig::with_url(loki_url.clone());
-    let loki_plugin = LokiPlugin::new(loki_config);
+    let loki_plugin = LokiPlugin::new();
 
     let mut plugin_registry = PluginRegistry::new();
     plugin_registry.register(loki_plugin);
 
-    println!("  ✓ LokiPlugin registered (Loki URL: {})", loki_url);
+    println!("  ✓ LokiPlugin registered (OTel logs via tracing)");
     println!();
 
     // Step 5: Build ReActAgent with AgentDef + tools
@@ -157,17 +151,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Observability");
     println!("═══════════════════════════════════════════════════════════");
     println!();
-    println!("Loki entries were sent to: {}", loki_url);
-    println!("Loki labels:");
+    println!("Logs are sent to OTel Collector via tracing layer.");
+    println!("Log attributes:");
     println!("  - namespace: agent");
-    println!("  - agent: k8s_ops_agent (from AgentDef.r#type)");
-    println!("  - agent_id: k8s_ops_agent (from AgentDef.name)");
-    println!();
-
-    if loki_url == "http://localhost:3100" {
-        println!("Note: LOKI_URL not set, using default http://localhost:3100");
-        println!("If Loki is not running, HTTP errors will be logged via tracing but the agent still completes.");
-    }
+    println!("  - agent: k8s_ops_agent");
+    println!("  - agent_id: k8s_ops_agent");
+    println!("  - model: qwen3.6-plus");
     println!();
 
     println!("═══════════════════════════════════════════════════════════");
@@ -178,8 +167,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ Agent definition loaded from examples/k8s_ops_agent.md via AgentLoader");
     println!("  ✓ Built-in tools (Bash, Read, Write, Edit, Glob, Grep) registered");
     println!("  ✓ Real Anthropic API calls via DashScope");
-    println!("  ✓ LokiPlugin registered for remote log shipping");
-    println!("  ✓ Loki labels derived automatically from AgentDef");
+    println!("  ✓ LokiPlugin registered for OTel log shipping via tracing");
+    println!("  ✓ Log attributes derived automatically from AgentDef");
     println!();
 
     Ok(())

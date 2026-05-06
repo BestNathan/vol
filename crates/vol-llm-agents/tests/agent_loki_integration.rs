@@ -1,22 +1,20 @@
-//! Integration test: agent file → AgentLoader → ReActAgent with LokiPlugin.
+//! Integration test: agent file -> AgentLoader -> ReActAgent with LokiPlugin.
 //!
 //! Verifies that:
 //! 1. An agent definition file is loaded with correct type
 //! 2. The agent runs successfully with LokiPlugin registered
-//! 3. Loki entries carry correct labels derived from AgentDef
 
 use std::io::Write;
 use std::sync::Arc;
 use tempfile::tempdir;
 use vol_llm_agent::agent_def::AgentScope;
 use vol_llm_agent::agent_loader::AgentLoader;
-use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent, RunContext};
-use vol_llm_context::ContextBuilderBuilder;
+use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
 use vol_llm_core::{
     LLMClient, LLMProvider,
     StreamEvent, StreamEventData, StreamReceiver, SupportedParam,
 };
-use vol_llm_observability::loki::{LokiConfig, LokiPlugin};
+use vol_llm_observability::loki::LokiPlugin;
 use vol_llm_tool::ToolRegistry;
 use vol_session::{InMemoryEntryStore, Session};
 
@@ -99,8 +97,7 @@ async fn test_agent_file_loaded_with_loki_plugin() {
     let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
     let tools = Arc::new(ToolRegistry::new());
 
-    let loki_config = LokiConfig::with_url("http://loki:3100".to_string());
-    let loki_plugin = LokiPlugin::new(loki_config);
+    let loki_plugin = LokiPlugin::new();
 
     let mut plugin_registry = PluginRegistry::new();
     plugin_registry.register(loki_plugin);
@@ -127,44 +124,4 @@ async fn test_agent_file_loaded_with_loki_plugin() {
     // 6. Verify agent completed successfully
     assert!(response.content.contains("TEST_DONE"));
     assert!(!response.run_id.is_empty());
-
-    // 7. Verify Loki labels are derived from AgentDef
-    // Build a minimal RunContext to test create_loki_entry
-    let session2 = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
-    let tools2 = Arc::new(ToolRegistry::new());
-    let context_builder = ContextBuilderBuilder::new(128_000).build();
-
-    let agent_config2 = AgentConfig::builder()
-        .with_def((*def).clone())
-        .with_llm(Arc::new(MockLlm::new("ok".to_string())))
-        .with_tools(tools2.clone())
-        .with_session(session2.clone())
-        .with_system_prompt("test".to_string())
-        .with_plugin_registry(PluginRegistry::new())
-        .with_context_builder(context_builder)
-        .build()
-        .unwrap();
-
-    let (run_ctx, _rx) = RunContext::new(
-        "test-run-id".to_string(),
-        "hello".to_string(),
-        "test-session-id".to_string(),
-        session2,
-        tools2,
-        agent_config2,
-        20,
-        "test-model".to_string(),
-    );
-
-    let event = vol_llm_core::AgentStreamEvent::AgentStart {
-        timestamp: chrono::Utc::now(),
-        input: "hello".to_string(),
-    };
-
-    let entry = LokiPlugin::create_loki_entry(&event, &run_ctx);
-
-    // Verify labels match AgentDef
-    assert_eq!(entry.labels["agent"], "test_agent");
-    assert_eq!(entry.labels["agent_id"], "test_agent");
-    assert_eq!(entry.labels["namespace"], "agent");
 }

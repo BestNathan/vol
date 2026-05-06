@@ -352,16 +352,13 @@ impl CodingAgentBuilder {
         self
     }
 
-    /// Register LokiPlugin to send agent events to Loki.
+    /// Register LokiPlugin to send agent events to OTel via tracing.
     ///
-    /// Agent identity (type, id) is derived from `RunContext.config.def` at runtime.
-    /// Reads the Loki URL from the `LOKI_URL` environment variable.
-    /// If not set, this is a no-op (no plugin is registered).
+    /// LokiPlugin is stateless — no configuration needed. The OTel
+    /// collector endpoint is set via OTEL_EXPORTER_OTLP_ENDPOINT env var.
     pub fn with_loki(mut self) -> Self {
-        if let Some(config) = vol_llm_observability::loki::LokiConfig::from_env() {
-            let plugin = vol_llm_observability::loki::LokiPlugin::new(config);
-            self.config.plugin_registry.register(plugin);
-        }
+        let plugin = vol_llm_observability::loki::LokiPlugin::new();
+        self.config.plugin_registry.register(plugin);
         self
     }
 
