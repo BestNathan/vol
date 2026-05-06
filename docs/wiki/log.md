@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-05-06] ingest | LokiPlugin OTel Migration Tasks 3+4
+- Created sources: [[loki-plugin-otel-migration-tasks-3-4]]
+- Created concepts: [[otel-log-routing]]
+- Updated concepts: [[agent-observability]], [[run-context]], [[built-in-plugins]]
+- Cross-references added: 5
+- Changes: LokiPlugin stateless, uses tracing::info! instead of HTTP POST; RunContext gains model field; 12+ test call sites updated; tempfile dev-dependency added
+
 ## [2026-05-06] ingest | Clarifying Requirements Subagent Review
 - Created sources: [[clarifying-requirements-subagent-review]]
 - Created concepts: [[subagent-review-pattern]], [[clarifying-requirements-workflow]]

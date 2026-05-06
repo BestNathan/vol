@@ -3,22 +3,23 @@ type: concept
 category: framework
 tags: [context, state, run-lifecycle]
 created: 2026-05-04
-updated: 2026-05-04
-source_count: 2
+updated: 2026-05-06
+source_count: 3
 ---
 
 # Run Context
 
 **Category:** Agent run state management
-**Related:** [[session-as-ssot]], [[context-builder]], [[agent-plugin-system]], [[tool-registry]]
+**Related:** [[session-as-ssot]], [[context-builder]], [[agent-plugin-system]], [[tool-registry]], [[otel-log-routing]]
 
 ## Definition
 
-`RunContext` encapsulates all state and resources for a single `ReActAgent::run()` invocation. It provides immutable fields (run_id, user_input, session_id), mutable fields with internal mutability (iteration, tool_calls, data), and resource references (session, tools, config).
+`RunContext` encapsulates all state and resources for a single `ReActAgent::run()` invocation. It provides immutable fields (run_id, user_input, session_id, model), mutable fields with internal mutability (iteration, tool_calls, data), and resource references (session, tools, config).
 
 ## Key Points
 - Replaced the older `PluginContext` — the `AgentPlugin` trait now accepts `&RunContext` directly [[plugin-context-migration]]
-- Immutable fields: `run_id`, `user_input`, `session_id` — fixed at run start [[run-context-plan]]
+- Immutable fields: `run_id`, `user_input`, `session_id`, `model` — fixed at run start [[run-context-plan]]
+- **`model` field**: The LLM model name used for this run, extracted from `config.llm.model()`. Empty string normalized to `"unknown"`. Enables observability plugins to include model identity in logs [[loki-plugin-otel-migration-tasks-3-4]].
 - Mutable fields use `AtomicU32` (iteration) and `Arc<RwLock<>>` (tool_calls, data) for safe sharing across async tasks [[run-context-plan]]
 - Resource references: `session: Arc<Session>`, `tools: Arc<ToolRegistry>`, `config: AgentConfig` [[run-context-plan]]
 - Plugin data storage via typed `get<T>()` / `set<T>()` methods with serde serialization [[run-context-plan]]
@@ -64,3 +65,5 @@ The migration from `PluginContext` to `RunContext` involved:
 - [[plugin-context-migration]]: Migration from PluginContext to RunContext
 - [[tool-registry]]: RunContext holds tools reference
 - [[vol-llm-agent-crate]]: Where RunContext is defined
+- [[otel-log-routing]]: `model` field used in structured log enrichment
+- [[loki-plugin-otel-migration-tasks-3-4]]: Implementation adding `model` field

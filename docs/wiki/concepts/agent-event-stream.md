@@ -3,14 +3,14 @@ type: concept
 category: framework
 tags: [event-stream, lifecycle, agent]
 created: 2026-05-04
-updated: 2026-05-04
-source_count: 1
+updated: 2026-05-06
+source_count: 2
 ---
 
 # Agent Event Stream
 
 **Category:** Event lifecycle
-**Related:** [[react-pattern]], [[agent-plugin-system]], [[agent-observability]]
+**Related:** [[react-pattern]], [[agent-plugin-system]], [[agent-observability]], [[otel-log-routing]]
 
 ## Definition
 
@@ -41,6 +41,7 @@ Events are produced by the Agent Core and consumed by the PluginStream. Each plu
 ## Examples / Applications
 
 - **Observability plugin**: Logs every event to JSONL files
+- **LokiPlugin**: Sends events to OTel via `tracing::info!` (filters out delta events) [[otel-log-routing]]
 - **HITL plugin**: Intercepts `ToolCallBegin` to request approval before proceeding
 - **Retry plugin**: Intercepts errors to decide whether to retry
 
@@ -48,6 +49,7 @@ Events are produced by the Agent Core and consumed by the PluginStream. Each plu
 - [[react-pattern]]: Produces the events
 - [[agent-plugin-system]]: Intercepts the events
 - [[agent-observability]]: Records the events to disk
+- [[otel-log-routing]]: OTel structured log routing via LokiPlugin
 - [[session-as-ssot]]: Events now carry references instead of message copies
 - [[run-context]]: Context available to plugin intercept/listen hooks
 - [[connection-holder]]: Forwards events to active transport connection

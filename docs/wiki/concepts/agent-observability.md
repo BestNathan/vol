@@ -1,28 +1,35 @@
 ---
 type: concept
 category: framework
-tags: [observability, logging, jsonl, tracing]
+tags: [observability, logging, jsonl, tracing, otel]
 created: 2026-05-04
-updated: 2026-05-04
-source_count: 1
+updated: 2026-05-06
+source_count: 2
 ---
 
 # Agent Observability
 
 **Category:** Observability framework
-**Related:** [[agent-plugin-system]], [[agent-event-stream]], [[built-in-plugins]]
+**Related:** [[agent-plugin-system]], [[agent-event-stream]], [[built-in-plugins]], [[otel-log-routing]]
 
 ## Definition
 
-A built-in plugin that provides comprehensive logging of agent execution events in JSONL format to both files and stdout.
+The observability layer provides comprehensive logging of agent execution events through two complementary mechanisms:
+
+1. **Local JSONL logging**: The observability plugin writes events to JSONL files and stdout for local debugging.
+2. **OTel log routing**: LokiPlugin sends events to the OTel Collector via `tracing::info!` macros with structured fields [[loki-plugin-otel-migration-tasks-3-4]].
 
 ## Key Points
 - Dual output: JSONL files (complete) + human-readable stdout [[react-agent-docs]]
 - Agent-centric directory structure: `logs/agents/{agent_id}/{sessions,runs}/` [[react-agent-docs]]
 - Retention policy: session logs 7 days, run logs last 10 [[react-agent-docs]]
 - Non-blocking: logging failures never crash the agent [[react-agent-docs]]
+- OTel integration: structured logs forwarded to OTel Collector via gRPC [[otel-log-routing]]
+- Stateless LokiPlugin: no HTTP, no endpoint, just `tracing::info!` calls [[loki-plugin-otel-migration-tasks-3-4]]
 
 ## How It Works
+
+### Local Logging
 
 The observability plugin runs at priority 10 (early in the chain). It uses a `RunLogLogger` that writes to two locations:
 
@@ -39,7 +46,15 @@ Log format:
 {"timestamp":"2026-04-10T12:34:56.789Z","run_id":"run_abc123","agent_id":"vol_advice","event":"ToolCallBegin","data":{"tool_name":"market_data"}}
 ```
 
+### OTel Log Routing
+
+LokiPlugin (priority 20) emits structured `tracing::info!` calls with fields: `namespace`, `session_id`, `agent_id`, `agent_type`, `run_id`, `model`, `event`. The tracing-subscriber stack routes these through the OTel SDK's `BatchLogProcessor` to the OTel Collector [[otel-log-routing]].
+
+High-frequency streaming delta events (`ThinkingDelta`, `ContentDelta`, `ToolCallArgumentDelta`) are filtered out to reduce noise.
+
 ## Related Concepts
 - [[agent-plugin-system]]: The plugin architecture it implements
 - [[agent-event-stream]]: The events it records
 - [[built-in-plugins]]: Its place in the built-in plugin set
+- [[otel-log-routing]]: OTel Collector integration via tracing macros
+- [[loki-plugin-otel-migration-tasks-3-4]]: LokiPlugin rewrite implementation

@@ -3,14 +3,14 @@ type: concept
 category: framework
 tags: [plugin-system, agent, cross-cutting]
 created: 2026-05-04
-updated: 2026-05-04
-source_count: 1
+updated: 2026-05-06
+source_count: 2
 ---
 
 # Agent Plugin System
 
 **Category:** Extension framework
-**Related:** [[react-pattern]], [[plugin-actions]], [[agent-event-stream]], [[built-in-plugins]]
+**Related:** [[react-pattern]], [[plugin-actions]], [[agent-event-stream]], [[built-in-plugins]], [[otel-log-routing]]
 
 ## Definition
 
@@ -43,7 +43,7 @@ Plugin priority levels:
 |----------|--------|-----------|
 | 5 | [[rate-limiting]] | Execute first, gate access |
 | 10 | [[agent-observability]] | Early logging for debugging |
-| 20 | [[semantic-caching]] | Before expensive operations |
+| 20 | [[semantic-caching]] / [[otel-log-routing]] | Before expensive operations |
 | 25 | [[human-in-the-loop]] | Before tool execution |
 | 30 | [[retry-with-backoff]] | Execute last, after all else fails |
 
@@ -53,14 +53,16 @@ Plugin priority levels:
 - **Caching**: Return cached responses for semantically similar queries
 - **HITL**: Require human approval before executing tools
 - **Observability**: Log all events to JSONL files for audit
+- **LokiPlugin (OTel)**: Stateless plugin emitting `tracing::info!` with structured fields [[otel-log-routing]]
 - **Retry**: Automatically retry failed operations with backoff
 
 ## Related Concepts
 - [[react-pattern]]: The loop that plugins intercept
 - [[plugin-actions]]: Return types that control flow
-- [[built-in-plugins]]: The 5 plugins shipped with the system
+- [[built-in-plugins]]: The plugins shipped with the system
 - [[run-context]]: Context passed to plugin hooks (replaced PluginContext)
 - [[plugin-context-migration]]: Migration from PluginContext to RunContext
+- [[otel-log-routing]]: LokiPlugin structured OTel logging
 - [[vol-llm-agent-crate]]: Where the plugin system is implemented
 - [[connection-holder]]: Transport bridge plugin forwarding events to active connection
 - [[vol-llm-agent-channel-crate]]: Channel crate implementing ConnectionHolder
