@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-05
+Last updated: 2026-05-06
 
 ## Entities
 
@@ -46,6 +46,8 @@ Last updated: 2026-05-05
 | [[connection-trait]] | Connection trait abstracting transport protocols | active | 2026-05-05 |
 | [[connection-holder]] | ConnectionHolder plugin for forwarding agent events | active | 2026-05-05 |
 | [[agent-dispatcher]] | FIFO request queueing for single-agent execution | active | 2026-05-05 |
+| [[subagent-review-pattern]] | Independent subagent review of documents before user gate | active | 2026-05-06 |
+| [[clarifying-requirements-workflow]] | Structured dialogue for turning vague requests into requirements | active | 2026-05-06 |
 
 ## Sources
 
@@ -56,6 +58,7 @@ Last updated: 2026-05-05
 | [[skills-as-react-native]] | Plan: move skill init from CodingAgent into ReActAgent as native capability | active | 2026-05-04 |
 | [[session-ssot-redesign]] | Plan: Session as single source of truth, RunContext simplification | active | 2026-05-04 |
 | [[http-transport-impl]] | HTTP transport implementation with blocking and SSE modes | active | 2026-05-05 |
+| [[clarifying-requirements-subagent-review]] | Subagent review mechanism added to clarifying-requirements skill | active | 2026-05-06 |
 
 ## Analyses
 

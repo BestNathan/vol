@@ -10,7 +10,7 @@ source_count: 2
 # Skill System
 
 **Category:** Agent capability framework
-**Related:** [[context-builder]], [[tool-registry]], [[agent-builder-pattern]], [[skills-as-react-native]]
+**Related:** [[context-builder]], [[tool-registry]], [[agent-builder-pattern]], [[skills-as-react-native]], [[subagent-review-pattern]], [[clarifying-requirements-workflow]]
 
 ## Definition
 

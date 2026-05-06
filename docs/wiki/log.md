@@ -1,5 +1,11 @@
 # Change Log
 
+## [2026-05-06] ingest | Clarifying Requirements Subagent Review
+- Created sources: [[clarifying-requirements-subagent-review]]
+- Created concepts: [[subagent-review-pattern]], [[clarifying-requirements-workflow]]
+- Updated concepts: [[skill-system]], [[human-in-the-loop]]
+- Cross-references added: 4
+
 ## [2026-05-05] update | HTTP Transport improvements and tests
 - Updated concepts: [[http-transport]], [[connection-trait]], [[connection-holder]]
 - Updated entity: [[vol-llm-agent-channel-crate]]

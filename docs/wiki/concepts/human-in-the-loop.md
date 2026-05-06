@@ -10,7 +10,7 @@ source_count: 1
 # Human-in-the-Loop
 
 **Category:** Approval workflow
-**Related:** [[agent-plugin-system]], [[plugin-actions]], [[built-in-plugins]], [[agent-event-stream]]
+**Related:** [[agent-plugin-system]], [[plugin-actions]], [[built-in-plugins]], [[agent-event-stream]], [[subagent-review-pattern]], [[clarifying-requirements-workflow]]
 
 ## Definition
 
