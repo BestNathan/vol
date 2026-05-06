@@ -4,17 +4,19 @@
 //! - Console layer (compact format, colored)
 //! - File layer (JSON format, rolling hourly, 7-day retention)
 //! - Error file layer (ERROR level only)
-//! - OpenTelemetry layer (OTLP gRPC to Jaeger)
+//! - OpenTelemetry trace layer (OTLP gRPC to Jaeger)
+//! - OpenTelemetry log layer (OTLP gRPC)
 //!
 //! Log rotation: Files are rotated hourly to prevent excessive file sizes.
 //! Retention: Log files older than `retention_days` are automatically cleaned up.
 
 use std::sync::OnceLock;
 
-use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
+use opentelemetry::global;
+use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
-    trace::{self, Sampler},
+    trace::{Sampler, SdkTracerProvider},
     Resource,
 };
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
@@ -23,10 +25,60 @@ use tracing_subscriber::{
     Registry,
 };
 
-use vol_config::{LoggingConfig, TracingConfig};
+use vol_config::{LoggingConfig, OpenTelemetryConfig, TracingConfig};
 
 static TRACING_INITIALIZED: OnceLock<()> = OnceLock::new();
-static OTEL_TRACER_PROVIDER: OnceLock<trace::TracerProvider> = OnceLock::new();
+static OTEL_TRACER_PROVIDER: OnceLock<SdkTracerProvider> = OnceLock::new();
+
+/// Initialize OTel log exporter and return a tracing bridge layer.
+pub fn init_otel_logs(
+    config: &OpenTelemetryConfig,
+) -> Result<
+    opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge<
+        opentelemetry_sdk::logs::SdkLoggerProvider,
+        opentelemetry_sdk::logs::SdkLogger,
+    >,
+    Box<dyn std::error::Error + Send + Sync>,
+> {
+    use opentelemetry::KeyValue;
+
+    let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
+        .unwrap_or_else(|_| config.endpoint.clone());
+    let service_name = std::env::var("OTEL_SERVICE_NAME")
+        .unwrap_or_else(|_| config.service_name.clone());
+
+    let resource = Resource::builder()
+        .with_service_name(service_name.clone())
+        .with_attributes([
+            KeyValue::new("service.namespace", config.service_namespace.clone()),
+            KeyValue::new("deployment.environment", config.deployment_environment.clone()),
+        ])
+        .build();
+
+    let exporter = opentelemetry_otlp::LogExporter::builder()
+        .with_tonic()
+        .with_endpoint(&endpoint)
+        .with_timeout(std::time::Duration::from_millis(
+            config.batch.max_export_timeout_millis,
+        ))
+        .build()?;
+
+    let logger_provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder()
+        .with_resource(resource)
+        .with_batch_exporter(exporter)
+        .build();
+
+    let otel_layer =
+        opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(&logger_provider);
+
+    tracing::info!(
+        "OpenTelemetry logs enabled: endpoint={} service={}",
+        endpoint,
+        service_name
+    );
+
+    Ok(otel_layer)
+}
 
 /// Initialize tracing and logging.
 pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -65,7 +117,7 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
         .with_current_span(true)
         .with_writer(file_appender);
 
-    // 3. OpenTelemetry layer (OTLP gRPC to Jaeger)
+    // 3. OpenTelemetry trace layer (OTLP gRPC to Jaeger)
     let endpoint =
         std::env::var("OTEL_ENDPOINT").unwrap_or_else(|_| config.opentelemetry.endpoint.clone());
 
@@ -78,33 +130,32 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
         .unwrap_or(config.opentelemetry.sample_rate);
 
     if config.opentelemetry.enabled && sample_rate > 0.0 {
-        let resource = Resource::new(vec![
-            KeyValue::new("service.name", service_name.clone()),
-            KeyValue::new(
-                "service.namespace",
-                config.opentelemetry.service_namespace.clone(),
-            ),
-            KeyValue::new(
-                "deployment.environment",
-                config.opentelemetry.deployment_environment.clone(),
-            ),
-        ]);
+        let resource = Resource::builder()
+            .with_service_name(service_name.clone())
+            .with_attributes([
+                opentelemetry::KeyValue::new(
+                    "service.namespace",
+                    config.opentelemetry.service_namespace.clone(),
+                ),
+                opentelemetry::KeyValue::new(
+                    "deployment.environment",
+                    config.opentelemetry.deployment_environment.clone(),
+                ),
+            ])
+            .build();
 
-        let exporter = opentelemetry_otlp::new_exporter()
-            .tonic()
+        let exporter = opentelemetry_otlp::SpanExporter::builder()
+            .with_tonic()
             .with_endpoint(&endpoint)
             .with_timeout(std::time::Duration::from_millis(
                 config.opentelemetry.batch.max_export_timeout_millis,
             ))
-            .build_span_exporter()?;
+            .build()?;
 
-        let tracer_provider = trace::TracerProvider::builder()
-            .with_config(
-                trace::Config::default()
-                    .with_sampler(Sampler::AlwaysOn)
-                    .with_resource(resource),
-            )
-            .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+        let tracer_provider = SdkTracerProvider::builder()
+            .with_sampler(Sampler::AlwaysOn)
+            .with_resource(resource)
+            .with_batch_exporter(exporter)
             .build();
 
         let tracer = tracer_provider.tracer(service_name.clone());
@@ -123,12 +174,25 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
             sample_rate
         );
 
+        // 4. OTel log layer (best-effort)
+        let otel_log_layer = match init_otel_logs(&config.opentelemetry) {
+            Ok(layer) => Some(layer),
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    "Failed to initialize OTel logs, falling back to console/file only"
+                );
+                None
+            }
+        };
+
         // Build subscriber with all layers using Registry as base
         let subscriber = Registry::default()
             .with(env_filter)
             .with(console_layer)
             .with(file_layer)
-            .with(otel_layer);
+            .with(otel_layer)
+            .with(otel_log_layer);
 
         // Add error layer if enabled
         if config.logging.error_file {
@@ -150,8 +214,14 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
             subscriber.init();
         }
     } else {
-        // OpenTelemetry disabled - use simple init like original
+        // OpenTelemetry disabled - use simple init
         let error_appender = create_error_appender(&config.logging);
+
+        type OtelLogLayer =
+            opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge<
+                opentelemetry_sdk::logs::SdkLoggerProvider,
+                opentelemetry_sdk::logs::SdkLogger,
+            >;
 
         if config.logging.error_file {
             let error_filter = tracing_subscriber::filter::LevelFilter::ERROR;
@@ -171,12 +241,14 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
                 .with(console_layer)
                 .with(file_layer)
                 .with(error_layer)
+                .with(Option::<OtelLogLayer>::None)
                 .init();
         } else {
             Registry::default()
                 .with(env_filter)
                 .with(console_layer)
                 .with(file_layer)
+                .with(Option::<OtelLogLayer>::None)
                 .init();
         }
 
@@ -217,5 +289,7 @@ fn create_error_appender(config: &LoggingConfig) -> RollingFileAppender {
 
 pub fn shutdown() {
     tracing::info!("Shutting down OpenTelemetry");
-    global::shutdown_tracer_provider();
+    if let Some(provider) = OTEL_TRACER_PROVIDER.get() {
+        let _ = provider.shutdown();
+    }
 }

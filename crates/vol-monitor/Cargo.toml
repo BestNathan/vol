@@ -27,6 +27,7 @@ tracing-opentelemetry = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 opentelemetry-otlp = { workspace = true }
+opentelemetry-appender-tracing = { workspace = true }
 anyhow = { workspace = true }
 reqwest = { workspace = true }
 openlark = { workspace = true }
