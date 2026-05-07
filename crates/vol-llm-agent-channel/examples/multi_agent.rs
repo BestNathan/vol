@@ -84,9 +84,11 @@ async fn main() {
 
     for (id, prompt) in &agents {
         let agent = make_agent(llm.clone(), id, prompt);
-        let dispatcher = Arc::new(AgentDispatcher::new(agent));
         // ConnectionHolder: sender=agent id (outgoing events), receiver=client id (incoming)
+        // NOTE: To forward agent stream events to WebSocket, register holder as a plugin
+        // on the agent before creation. ConnectionHolder does not implement Clone.
         let holder = Arc::new(ConnectionHolder::new(id.to_string(), "client".to_string()));
+        let dispatcher = Arc::new(AgentDispatcher::new(agent));
 
         router.register(id.to_string(), dispatcher.clone()).await;
         dispatchers.insert(id.to_string(), dispatcher);

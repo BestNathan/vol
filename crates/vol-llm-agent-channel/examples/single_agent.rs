@@ -61,8 +61,12 @@ async fn main() {
 
     // Shared primitives
     // ConnectionHolder: sender=agent id (outgoing events), receiver=client id (incoming messages)
-    let dispatcher = Arc::new(AgentDispatcher::new(agent));
+    // NOTE: To forward agent stream events (tool calls, thinking, content) to the WebSocket
+    // connection, register the holder as a plugin on the agent before creation.
+    // ConnectionHolder does not implement Clone; see the channel crate tests for usage patterns.
     let holder = Arc::new(ConnectionHolder::new("my-agent".to_string(), "client".to_string()));
+
+    let dispatcher = Arc::new(AgentDispatcher::new(agent));
 
     // Build routers
     let ws_router = WsServer::new(dispatcher.clone(), holder.clone(), "my-agent").into_axum_router();
