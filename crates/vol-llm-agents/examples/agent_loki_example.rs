@@ -10,6 +10,8 @@
 //! Run with:
 //! ```bash
 //! export ANTHROPIC_AUTH_TOKEN=your_token_here
+//! # Optional: override OTel collector endpoint (default: http://localhost:4317)
+//! export OTEL_EXPORTER_OTLP_ENDPOINT=http://your-collector:4317
 //! cargo run --example agent_loki_example
 //! ```
 
@@ -19,16 +21,17 @@ use std::sync::Arc;
 use vol_llm_agent::agent_def::AgentScope;
 use vol_llm_agent::agent_loader::AgentLoader;
 use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
-use vol_llm_observability::loki::LokiPlugin;
+use vol_llm_observability::{init_otel_logs, loki::LokiPlugin};
 use vol_llm_provider::{LLMConfig, anthropic::AnthropicProvider};
 use vol_llm_tools_builtin::register_all;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .init();
+    // Initialize tracing with OTel log export
+    let otel_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
+        .unwrap_or_else(|_| "http://localhost:4317".to_string());
+    init_otel_logs(&otel_endpoint, "k8s-ops-agent")
+        .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn std::error::Error>)?;
 
     println!("═══════════════════════════════════════════════════════════");
     println!("  K8s Ops Agent — File-Loaded with Loki Observability");
@@ -44,6 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Configuration:");
     println!("  ✓ ANTHROPIC_AUTH_TOKEN is set");
+    println!("  ✓ OTel endpoint: {}", otel_endpoint);
     println!();
 
     // Create LLM config for DashScope Anthropic endpoint
