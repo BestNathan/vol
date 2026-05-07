@@ -19,9 +19,8 @@ use axum::{Json, Router};
 use tokio::net::TcpListener;
 use tracing::info;
 use vol_llm_agent::agent_def::AgentDef;
-use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
+use vol_llm_agent::react::{AgentConfig, ReActAgent};
 use vol_llm_agent_channel::{AgentDispatcher, ConnectionHolder, HttpTransport, WsServer};
-use vol_llm_context::ContextBuilderBuilder;
 use vol_llm_provider::create_provider;
 use vol_llm_tool::ToolRegistry;
 use vol_session::{InMemoryEntryStore, Session};
@@ -56,19 +55,12 @@ async fn main() {
 
     let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
     let tools = Arc::new(ToolRegistry::new());
-    let context_builder = ContextBuilderBuilder::new(128_000).build();
-    let config = AgentConfig {
-        def: Some(def),
-        llm: Arc::from(llm),
-        tools,
-        session,
-        sandbox: None,
-        context_builder,
-        plugin_registry: PluginRegistry::new(),
-    };
+    let mut config = AgentConfig::new(Arc::from(llm), tools, session);
+    config.def = Some(def);
     let agent = ReActAgent::new(config);
 
     // Shared primitives
+    // ConnectionHolder: sender=agent id (outgoing events), receiver=client id (incoming messages)
     let dispatcher = Arc::new(AgentDispatcher::new(agent));
     let holder = Arc::new(ConnectionHolder::new("my-agent".to_string(), "client".to_string()));
 
