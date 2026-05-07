@@ -111,12 +111,12 @@ async fn main() {
         .route("/api/chat/:agent_id", post(chat_handler))
         .with_state(state);
 
-    info!("Starting multi-agent server on 0.0.0.0:3000");
+    info!("Starting multi-agent server on 0.0.0.0:3001");
     info!("  GET   /api/agents");
     info!("  WS    /ws/:agent_id  (e.g. /ws/translator)");
     info!("  POST  /api/chat/:agent_id");
 
-    let listener = TcpListener::bind("0.0.0.0:3000")
+    let listener = TcpListener::bind("0.0.0.0:3001")
         .await
         .expect("failed to bind to 0.0.0.0:3000");
 

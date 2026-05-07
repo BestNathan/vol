@@ -69,6 +69,7 @@ async fn main() {
     let dispatcher = Arc::new(AgentDispatcher::new(agent));
 
     // Build routers
+    // SSE streaming (?stream=true) is handled internally by HttpTransport.
     let ws_router = WsServer::new(dispatcher.clone(), holder.clone(), "my-agent").into_axum_router();
     let http_router = HttpTransport::new(dispatcher, holder, "my-agent").into_axum_router();
 
