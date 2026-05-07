@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-06
+Last updated: 2026-05-07
 
 ## Entities
 
@@ -48,12 +48,15 @@ Last updated: 2026-05-06
 | [[connection-holder]] | ConnectionHolder plugin for forwarding agent events | active | 2026-05-05 |
 | [[agent-dispatcher]] | FIFO request queueing for single-agent execution | active | 2026-05-05 |
 | [[subagent-review-pattern]] | Independent subagent review of documents before user gate | active | 2026-05-06 |
+| [[agent-router]] | Multi-agent routing with per-agent dispatchers | active | 2026-05-07 |
+| [[connection-holder-clone-limitation]] | ConnectionHolder cannot be both plugin and transport reference | active | 2026-05-07 |
 | [[clarifying-requirements-workflow]] | Structured dialogue for turning vague requests into requirements | active | 2026-05-06 |
 
 ## Sources
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[agent-channel-examples]] | WS + HTTP service examples using channel primitives | active | 2026-05-07 |
 | [[react-agent-docs]] | ReAct Agent plugin system documentation and test report | active | 2026-05-04 |
 | [[agent-tool-design]] | AI Agent tool design: Tool trait, registry, built-in tools, ReAct loop | active | 2026-05-04 |
 | [[skills-as-react-native]] | Plan: move skill init from CodingAgent into ReActAgent as native capability | active | 2026-05-04 |

@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-05-07] ingest | Agent Channel WS + HTTP Examples
+- Created sources: [[agent-channel-examples]]
+- Created concepts: [[agent-router]], [[connection-holder-clone-limitation]]
+- Updated entity: [[vol-llm-agent-channel-crate]]
+- Updated concepts: [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[agent-plugin-system]]
+- Cross-references added: 5
+- Changes: Added single_agent.rs (dual WS+HTTP transport on port 3000) and multi_agent.rs (agent router with 3 agents on port 3001); documented ConnectionHolder Clone limitation; code quality review completed
+
 ## [2026-05-06] ingest | OTel 0.29 Migration and Log Initialization in vol-monitor
 - Created sources: [[otel-029-log-init]]
 - Updated concepts: [[otel-log-routing]], [[agent-observability]]

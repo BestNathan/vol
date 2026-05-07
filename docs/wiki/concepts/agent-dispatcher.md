@@ -10,7 +10,7 @@ source_count: 1
 # Agent Dispatcher
 
 **Category:** Request queueing
-**Related:** [[vol-llm-agent-channel-crate]], [[http-transport]], [[react-pattern]]
+**Related:** [[vol-llm-agent-channel-crate]], [[http-transport]], [[react-pattern]], [[agent-router]]
 
 ## Definition
 

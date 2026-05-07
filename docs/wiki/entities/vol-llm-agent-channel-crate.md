@@ -44,3 +44,4 @@ Client → Transport (WS/HTTP/Memory) → Connection → ConnectionHolder (Agent
 - **2026-04**: Initial implementation with WebSocket transport and memory transport
 - **2026-05-05**: HTTP transport added with blocking and SSE modes [[http-transport-impl]]
 - **2026-05-05**: HTTP transport quality improvements — concurrent request protection, clean stream termination, holder detach, and test suite (5 tests) [[http-transport-impl]]
+- **2026-05-07**: Example applications added — `single_agent.rs` (dual transport) and `multi_agent.rs` (agent router) [[agent-channel-examples]]
