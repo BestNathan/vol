@@ -196,11 +196,23 @@ use vol_llm_agent_channel::{AgentDispatcher, AgentRouter, ConnectionHolder};
 2. **Create shared LLM provider** (one provider, three agents)
 3. **Build three ReActAgents** with different `AgentDef` system prompts
 4. **Each agent gets** its own `AgentDispatcher` and `ConnectionHolder`
-5. **Register all in `AgentRouter`**: `router.register("translator", dispatcher1)` etc.
-6. **Custom WS handler** extracts `agent_id` from path, looks up dispatcher from router
-7. **Custom HTTP handler** same pattern — path param → router → dispatcher
-8. **GET `/api/agents`** returns JSON list of registered agent types
-9. **Serve** on `0.0.0.0:3000`
+5. **Register all dispatchers in `AgentRouter`**: `router.register("translator".into(), dispatcher1).await` etc.
+6. **Store holders in a per-agent map** (`HashMap<String, Arc<ConnectionHolder>>`) so WS/HTTP handlers can look up the holder by agent_id
+7. **Custom WS handler** extracts `agent_id` from path, looks up dispatcher and holder, builds `WsConnection`
+8. **Custom HTTP handler** same pattern — path param → agent_id → dispatcher + holder
+9. **GET `/api/agents`** calls `router.list_agents().await` and returns JSON list
+10. **Serve** on `0.0.0.0:3000`
+
+### Agent State Struct (per-agent holder + dispatcher)
+
+```rust
+struct AgentState {
+    dispatcher: Arc<AgentDispatcher>,
+    holder: Arc<ConnectionHolder>,
+}
+```
+
+The examples use `Arc<RwLock<HashMap<String, AgentState>>>` or embed in the axum `State` struct to look up per-agent components by `agent_id` path param.
 
 ### WS Handler for Multi-Agent
 
@@ -210,15 +222,21 @@ async fn handle_agent_ws(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    match state.router.get(&agent_id) {
-        Some((dispatcher, holder)) => {
-            ws.on_upgrade(move |socket| {
-                // Build WsConnection with the specific agent's dispatcher/holder
-                let conn = WsConnection::new(socket, dispatcher, holder, agent_id.clone());
-                conn.run().await
-            })
-        }
-        None => (StatusCode::NOT_FOUND, "agent not found").into_response(),
+    let holders = state.holders.read().await;
+    let dispatchers = state.router.dispatchers.read().await;
+    if let (Some(dispatcher), Some(holder)) = (
+        dispatchers.get(&agent_id),
+        holders.get(&agent_id),
+    ) {
+        let holder = holder.clone();
+        let dispatcher = dispatcher.clone();
+        let aid = agent_id.clone();
+        ws.on_upgrade(move |socket| {
+            let conn = WsConnection::new(socket, dispatcher, holder, aid);
+            conn.run()
+        }).into_response()
+    } else {
+        (StatusCode::NOT_FOUND, "agent not found").into_response()
     }
 }
 ```
