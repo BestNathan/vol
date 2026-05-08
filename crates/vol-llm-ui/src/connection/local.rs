@@ -79,7 +79,7 @@ impl LocalConnection {
         }
     }
 
-    fn clone_for_run(&self) -> Self {
+    pub fn clone_for_run(&self) -> Self {
         Self {
             agent_config: self.agent_config.clone(),
             state: self.state.clone(),

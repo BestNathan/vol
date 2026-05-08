@@ -7,6 +7,10 @@ pub mod connection;
 /// Async hooks for agent interaction.
 pub mod hooks;
 
+// TUI frontend (ratatui).
+#[cfg(feature = "tui")]
+pub mod tui;
+
 // Re-export commonly used types at crate root.
 pub use state::{
     UiState, UiEvent, ConversationEntry, ToolCallEntry, ToolCallStatus,

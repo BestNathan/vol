@@ -36,6 +36,8 @@ anyhow = "1.0"
 # TUI (optional, default feature)
 ratatui = { version = "0.30", default-features = false, features = ["crossterm_0_29"], optional = true }
 crossterm = { version = "0.29", features = ["event-stream"], optional = true }
+futures = { version = "0.3", optional = true }
+uuid = { workspace = true, optional = true }
 
 # Web (optional)
 dioxus = { version = "0.6", features = ["web"], optional = true }
@@ -49,5 +51,5 @@ tempfile = "3"
 
 [features]
 default = ["tui"]
-tui = ["dep:ratatui", "dep:crossterm"]
+tui = ["dep:ratatui", "dep:crossterm", "dep:futures", "dep:uuid"]
 web = ["dep:dioxus"]
