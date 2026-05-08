@@ -4232,10 +4232,12 @@ dependencies = [
  "tokio-tungstenite 0.21.0",
  "tower 0.4.13",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "vol-llm-agent",
  "vol-llm-context",
  "vol-llm-core",
+ "vol-llm-provider",
  "vol-llm-tool",
  "vol-session",
 ]
