@@ -11,7 +11,7 @@ source_count: 1
 
 **Category:** UI abstraction layer
 
-**Related:** [[vol-llm-ui-crate]], [[json-rpc-websocket]], [[connection-trait]], [[tui-frontend-ratatui]], [[dioxus-web-pattern]]
+**Related:** [[vol-llm-ui-crate]], [[json-rpc-websocket]], [[connection-trait]], [[tui-frontend-ratatui]], [[dioxus-web-pattern]], [[jsonrpc-server-handler]]
 
 ## Definition
 

@@ -13,7 +13,7 @@ Last updated: 2026-05-08
 | [[vol-llm-tool-crate]] | Tool definition and registry framework | stable | 2026-05-04 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations | stable | 2026-05-04 |
 | [[vol-session]] | Session message store and entry persistence | active | 2026-05-04 |
-| [[vol-llm-agent-channel-crate]] | Agent communication channel layer with multiple transports | active | 2026-05-05 |
+| [[vol-llm-agent-channel-crate]] | Agent communication channel layer with multiple transports | active | 2026-05-08 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 
@@ -58,6 +58,7 @@ Last updated: 2026-05-08
 | [[dioxus-web-pattern]] | Dioxus 0.6 WASM component architecture and rendering patterns | active | 2026-05-08 |
 | [[remote-agent-connection]] | AgentConnection and FileOperations traits with local/remote implementations | active | 2026-05-08 |
 | [[json-rpc-websocket]] | JSON-RPC 2.0 over WebSocket protocol for remote agent communication | active | 2026-05-08 |
+| [[jsonrpc-server-handler]] | Server-side JsonRpcHandler and JsonRpcContext with 9 JSON-RPC methods | active | 2026-05-08 |
 
 ## Sources
 
@@ -75,6 +76,7 @@ Last updated: 2026-05-08
 | [[tui-frontend-ratatui]] | TUI frontend with ratatui rendering, crossterm event loop, 9 render functions migrated | active | 2026-05-08 |
 | [[remote-connection-impl]] | RemoteConnection with JSON-RPC 2.0 WebSocket for vol-llm-ui | active | 2026-05-08 |
 | [[task-8-dioxus-web-frontend]] | Web frontend with Dioxus 0.6 WASM, signal-based state, 10 components | active | 2026-05-08 |
+| [[task-9-jsonrpc-server]] | JSON-RPC server with 9 methods, JsonRpcHandler/JsonRpcContext, jsonrpsee 0.26 | active | 2026-05-08 |
 
 ## Analyses
 

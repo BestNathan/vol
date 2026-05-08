@@ -4,14 +4,14 @@ category: framework
 tags: [json-rpc, websocket, remote, jsonrpsee]
 created: 2026-05-08
 updated: 2026-05-08
-source_count: 1
+source_count: 2
 ---
 
 # JSON-RPC WebSocket
 
 **Category:** Network protocol
 
-**Related:** [[vol-llm-ui-crate]], [[vol-llm-agent-channel-crate]], [[remote-agent-connection]]
+**Related:** [[vol-llm-ui-crate]], [[vol-llm-agent-channel-crate]], [[remote-agent-connection]], [[jsonrpc-server-handler]]
 
 ## Definition
 
@@ -36,8 +36,16 @@ JSON-RPC 2.0 over WebSocket as the protocol for remote agent communication. The 
 | Direction | Bidirectional | Server-push only | Bidirectional |
 | Protocol | JSON-RPC 2.0 | SSE text/event-stream | mpsc channels |
 | Use Case | Remote agent service | HTTP streaming | Testing |
-| Crate | `vol-llm-ui` (client) | `vol-llm-agent-channel` | `vol-llm-agent-channel` |
+| Crate | `vol-llm-agent-channel` (server), `vol-llm-ui` (client) | `vol-llm-agent-channel` | `vol-llm-agent-channel` |
 | Connection persistence | Per-call | Per-SSE-request | Direct handle |
+
+## Server-Side Architecture
+
+The server side lives in `vol-llm-agent-channel::jsonrpc::handler` [[jsonrpc-server-handler]]:
+- `JsonRpcContext` wraps `Arc<AgentDispatcher>` with `working_dir` and `store_dir` paths
+- `JsonRpcHandler` holds `Mutex<JsonRpcContext>` for thread-safe concurrent access
+- 9 methods registered on `RpcModule::from_arc(handler)` via `jsonrpsee` 0.26 `ServerBuilder`
+- Example binary listens on `0.0.0.0:3001`
 
 ## Auto-Reconnect
 

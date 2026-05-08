@@ -1,16 +1,16 @@
 ---
 type: entity
 category: product
-tags: [crate, agent, transport, rust]
+tags: [crate, agent, transport, rust, json-rpc]
 created: 2026-05-05
-updated: 2026-05-05
-source_count: 1
+updated: 2026-05-08
+source_count: 2
 ---
 
 # vol-llm-agent-channel Crate
 
 **Category:** Rust crate — Agent communication channel layer
-**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]]
+**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-server-handler]]
 
 ## Overview
 
@@ -23,6 +23,8 @@ The `vol-llm-agent-channel` crate provides the communication layer between exter
 - Three transport implementations: `WsServer` (WebSocket), `HttpTransport` (HTTP POST + SSE), `MemoryConnection` (in-memory testing) [[http-transport-impl]]
 - `AgentRouter` provides multi-agent routing (separate from dispatcher) [[vol-llm-agent-crate]]
 - `Message` enum unifies all communication: Submit, Cancel, Connected, Event, Result, Error [[http-transport-impl]]
+- `jsonrpc` module exports `JsonRpcHandler` and `JsonRpcContext` for JSON-RPC 2.0 server [[task-9-jsonrpc-server]]
+- 9 JSON-RPC methods: `agent.submit/cancel/approve`, `file.list/read`, `log.list/read`, `session.list/resume` [[task-9-jsonrpc-server]]
 
 ## Transport Comparison
 
@@ -45,3 +47,4 @@ Client → Transport (WS/HTTP/Memory) → Connection → ConnectionHolder (Agent
 - **2026-05-05**: HTTP transport added with blocking and SSE modes [[http-transport-impl]]
 - **2026-05-05**: HTTP transport quality improvements — concurrent request protection, clean stream termination, holder detach, and test suite (5 tests) [[http-transport-impl]]
 - **2026-05-07**: Example applications added — `single_agent.rs` (dual transport) and `multi_agent.rs` (agent router) [[agent-channel-examples]]
+- **2026-05-08**: `jsonrpc` module added with `JsonRpcHandler`/`JsonRpcContext`, 9 RPC methods, and `jsonrpc_agent_service.rs` example [[task-9-jsonrpc-server]]

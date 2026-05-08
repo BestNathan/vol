@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-05-08] ingest | Task 9: JSON-RPC Server
+- Created sources: [[task-9-jsonrpc-server]]
+- Created concepts: [[jsonrpc-server-handler]]
+- Updated concepts: [[json-rpc-websocket]], [[connection-holder]], [[agent-dispatcher]], [[remote-agent-connection]]
+- Updated entity: [[vol-llm-agent-channel-crate]]
+- Cross-references added: 5
+- Changes: jsonrpc module in vol-llm-agent-channel with JsonRpcHandler and JsonRpcContext; 9 JSON-RPC methods (agent.submit/cancel/approve, file.list/read, log.list/read, session.list/resume); JsonRpcContext wraps AgentDispatcher with working_dir and store_dir paths; example binary uses jsonrpsee 0.26 ServerBuilder with RpcModule::from_arc; list and read operations use std::fs; log and session listing scan store_dir/logs/*.jsonl and store_dir/sessions/*.json; stub implementations for log.read and session.resume return empty results; compiles with cargo check -p vol-llm-agent-channel --all-targets; all 16 existing tests pass
+
 ## [2026-05-08] ingest | Task 8: Dioxus Web Frontend
 - Created sources: [[task-8-dioxus-web-frontend]]
 - Created concepts: [[dioxus-signal-pattern]], [[dioxus-web-pattern]]
