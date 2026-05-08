@@ -59,3 +59,4 @@ Key architectural decisions:
 ## Concepts Covered
 - [[dioxus-signal-pattern]]: Signal-based state management with `Signal<UiState>` via context
 - [[dioxus-web-pattern]]: Dioxus 0.6 WASM component architecture and rendering patterns
+- Final build verification: Web feature compiles alongside TUI, all 39 vol-llm-ui tests pass [[task-10-final-verification]]

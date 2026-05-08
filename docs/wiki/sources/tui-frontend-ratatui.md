@@ -50,3 +50,4 @@ Key architectural decisions:
 ## Notes
 - The plan's original `tui.rs` had `mod render` / `mod input` as local binary modules, but the compiler requires them either in the same directory as the binary or exported from the library. The library export approach was chosen.
 - `ActiveTab` does not implement `Deref`, so the closure in `render_tab_bar` was adjusted to compare by value instead.
+- All 12 input tests and full TUI build verified in [[task-10-final-verification]]

@@ -1,5 +1,10 @@
 # Change Log
 
+## [2026-05-08] ingest | Task 10: Final Verification
+- Created sources: [[task-10-final-verification]]
+- Cross-references added: 4
+- Changes: All 10 tasks completed; 55 tests pass (39 vol-llm-ui + 16 vol-llm-agent-channel); vol-llm-ui compiles with all features (default/tui, web, both); vol-llm-agent-channel compiles with all targets; architecture: shared core (state/events/connections) + TUI (ratatui 0.30, 11 render functions, 12 input tests) + Web (Dioxus 0.6 WASM, 10 components) + JSON-RPC server (jsonrpsee 0.26, 9 methods); both LocalConnection (in-process) and RemoteConnection (JSON-RPC WS with auto-reconnect) implemented and verified
+
 ## [2026-05-08] ingest | Task 9: JSON-RPC Server
 - Created sources: [[task-9-jsonrpc-server]]
 - Created concepts: [[jsonrpc-server-handler]]

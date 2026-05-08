@@ -65,3 +65,7 @@ pub trait FileOperations: Send + Sync {
 ## Design Rationale
 
 The trait separation allows UI frontends (TUI [[ratatui-tui-pattern]], Web [[dioxus-web-pattern]]) to work with any connection mode without knowing implementation details. A single `RemoteConnection` struct implements both traits, making it easy to pass around a unified handle.
+
+## Verification
+
+Both `LocalConnection` and `RemoteConnection` implementations verified in [[task-10-final-verification]] — 55 tests pass, all feature builds compile.

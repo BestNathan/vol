@@ -54,3 +54,4 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-08**: `RemoteConnection` added with JSON-RPC 2.0 over WebSocket [[remote-connection-impl]]
 - **2026-05-08**: TUI frontend added — ratatui rendering, crossterm event loop, 9 render functions migrated from vol-llm-tui [[tui-frontend-ratatui]]
 - **2026-05-08**: Web frontend added — Dioxus 0.6 WASM, 10 components, Signal-based state management [[task-8-dioxus-web-frontend]]
+- **2026-05-08**: Final verification passed — 39 tests, all feature builds (tui, web, both) green [[task-10-final-verification]]

@@ -48,3 +48,4 @@ Client → Transport (WS/HTTP/Memory) → Connection → ConnectionHolder (Agent
 - **2026-05-05**: HTTP transport quality improvements — concurrent request protection, clean stream termination, holder detach, and test suite (5 tests) [[http-transport-impl]]
 - **2026-05-07**: Example applications added — `single_agent.rs` (dual transport) and `multi_agent.rs` (agent router) [[agent-channel-examples]]
 - **2026-05-08**: `jsonrpc` module added with `JsonRpcHandler`/`JsonRpcContext`, 9 RPC methods, and `jsonrpc_agent_service.rs` example [[task-9-jsonrpc-server]]
+- **2026-05-08**: Final verification passed — 16 tests, all targets compile [[task-10-final-verification]]
