@@ -76,3 +76,5 @@ pub trait FileOperations: Send + Sync {
     /// List available sessions.
     async fn list_sessions(&self) -> anyhow::Result<Vec<SessionInfo>>;
 }
+
+pub mod local;
