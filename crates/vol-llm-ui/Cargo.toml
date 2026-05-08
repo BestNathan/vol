@@ -32,7 +32,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 anyhow = "1.0"
-chrono = { workspace = true }
 
 # TUI (optional, default feature)
 ratatui = { version = "0.30", default-features = false, features = ["crossterm_0_29"], optional = true }
@@ -43,6 +42,10 @@ dioxus = { version = "0.6", features = ["web"], optional = true }
 
 # Remote connection (JSON-RPC over WS)
 jsonrpsee = { version = "0.26", features = ["client", "wasm-client", "ws-client"] }
+
+[dev-dependencies]
+chrono = { workspace = true }
+tempfile = "3"
 
 [features]
 default = ["tui"]
