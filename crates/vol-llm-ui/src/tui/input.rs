@@ -38,6 +38,11 @@ pub fn handle_key(key: KeyEvent, state: &mut UiState, input_text: &str) -> Input
 
     // Session dialog
     if state.session_dialog_open {
+        // Ctrl+S closes the session dialog
+        if key.code == KeyCode::Char('s') && key.modifiers == KeyModifiers::CONTROL {
+            state.session_dialog_open = false;
+            return InputAction::None;
+        }
         return handle_session_dialog_key(key, state);
     }
 
@@ -104,8 +109,12 @@ pub fn handle_key(key: KeyEvent, state: &mut UiState, input_text: &str) -> Input
         }
 
         (_, KeyCode::Char('q')) if key.modifiers == KeyModifiers::CONTROL => {
-            if !state.is_running { state.exiting = true; }
-            InputAction::Exit
+            state.exiting = true;
+            if state.is_running {
+                InputAction::None // Agent is running, flag exit but don't quit yet
+            } else {
+                InputAction::Exit
+            }
         }
 
         (_, KeyCode::Char('u')) if key.modifiers == KeyModifiers::CONTROL => {
@@ -166,5 +175,158 @@ fn handle_session_dialog_key(key: KeyEvent, state: &mut UiState) -> InputAction 
             InputAction::None
         }
         _ => InputAction::None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_key(modifiers: KeyModifiers, code: KeyCode) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers,
+            kind: crossterm::event::KeyEventKind::Press,
+            state: crossterm::event::KeyEventState::NONE,
+        }
+    }
+
+    fn make_state() -> UiState {
+        UiState::new("test-session".into(), ".")
+    }
+
+    #[test]
+    fn test_ctrl_q_exits_when_not_running() {
+        let mut state = make_state();
+        let key = make_key(KeyModifiers::CONTROL, KeyCode::Char('q'));
+        let action = handle_key(key, &mut state, "");
+        assert!(state.exiting);
+        assert!(matches!(action, InputAction::Exit));
+    }
+
+    #[test]
+    fn test_ctrl_q_flags_exit_when_running() {
+        let mut state = make_state();
+        state.is_running = true;
+        let key = make_key(KeyModifiers::CONTROL, KeyCode::Char('q'));
+        let action = handle_key(key, &mut state, "");
+        assert!(state.exiting);
+        assert!(matches!(action, InputAction::None));
+    }
+
+    #[test]
+    fn test_enter_sends_when_not_running() {
+        let mut state = make_state();
+        let key = make_key(KeyModifiers::NONE, KeyCode::Enter);
+        let action = handle_key(key, &mut state, "hello");
+        assert!(matches!(action, InputAction::Send(s) if s == "hello"));
+    }
+
+    #[test]
+    fn test_enter_noop_when_running() {
+        let mut state = make_state();
+        state.is_running = true;
+        let key = make_key(KeyModifiers::NONE, KeyCode::Enter);
+        let action = handle_key(key, &mut state, "hello");
+        assert!(matches!(action, InputAction::None));
+    }
+
+    #[test]
+    fn test_enter_noop_on_empty() {
+        let mut state = make_state();
+        let key = make_key(KeyModifiers::NONE, KeyCode::Enter);
+        let action = handle_key(key, &mut state, "   ");
+        assert!(matches!(action, InputAction::None));
+    }
+
+    #[test]
+    fn test_tab_toggles_active_tab() {
+        let mut state = make_state();
+        let initial = state.active_tab.clone();
+        let key = make_key(KeyModifiers::NONE, KeyCode::Tab);
+        handle_key(key, &mut state, "");
+        assert_ne!(state.active_tab, initial);
+    }
+
+    #[test]
+    fn test_approval_key_clears_pending() {
+        let mut state = make_state();
+        state.approval_state.tool_name = Some("bash".into());
+        state.approval_state.reason = Some("reason".into());
+        state.approval_state.arguments = Some("args".into());
+        assert!(state.approval_state.has_pending());
+
+        let key = make_key(KeyModifiers::NONE, KeyCode::Char('a'));
+        handle_key(key, &mut state, "");
+        assert!(!state.approval_state.has_pending());
+    }
+
+    #[test]
+    fn test_session_dialog_esc_closes() {
+        let mut state = make_state();
+        state.session_dialog_open = true;
+        let key = make_key(KeyModifiers::NONE, KeyCode::Esc);
+        handle_key(key, &mut state, "");
+        assert!(!state.session_dialog_open);
+    }
+
+    #[test]
+    fn test_ctrl_s_toggles_session_dialog() {
+        let mut state = make_state();
+        let key = make_key(KeyModifiers::CONTROL, KeyCode::Char('s'));
+        handle_key(key, &mut state, "");
+        assert!(state.session_dialog_open);
+
+        let key = make_key(KeyModifiers::CONTROL, KeyCode::Char('s'));
+        handle_key(key, &mut state, "");
+        assert!(!state.session_dialog_open);
+    }
+
+    #[test]
+    fn test_ctrl_u_toggles_unsafe_mode() {
+        let mut state = make_state();
+        let key = make_key(KeyModifiers::CONTROL, KeyCode::Char('u'));
+        handle_key(key, &mut state, "");
+        assert!(state.unsafe_mode);
+        assert_eq!(state.conversation.len(), 1);
+
+        let key = make_key(KeyModifiers::CONTROL, KeyCode::Char('u'));
+        handle_key(key, &mut state, "");
+        assert!(!state.unsafe_mode);
+        assert_eq!(state.conversation.len(), 2);
+    }
+
+    #[test]
+    fn test_scroll_bounds() {
+        let mut state = make_state();
+        let key = make_key(KeyModifiers::NONE, KeyCode::Up);
+        handle_key(key, &mut state, "");
+        assert_eq!(state.conversation_scroll, 0); // Should not go below 0
+
+        let key = make_key(KeyModifiers::NONE, KeyCode::PageDown);
+        handle_key(key, &mut state, "");
+        assert_eq!(state.conversation_scroll, 10);
+    }
+
+    #[test]
+    fn test_ctrl_1_2_3_4_switch_tabs() {
+        use crate::state::ActiveTab;
+        let mut state = make_state();
+
+        let key = make_key(KeyModifiers::CONTROL, KeyCode::Char('1'));
+        handle_key(key, &mut state, "");
+        assert_eq!(state.active_tab, ActiveTab::Conversation);
+
+        let key = make_key(KeyModifiers::CONTROL, KeyCode::Char('2'));
+        handle_key(key, &mut state, "");
+        assert_eq!(state.active_tab, ActiveTab::Workspace);
+
+        let key = make_key(KeyModifiers::CONTROL, KeyCode::Char('3'));
+        handle_key(key, &mut state, "");
+        assert_eq!(state.active_tab, ActiveTab::Logs);
+
+        let key = make_key(KeyModifiers::CONTROL, KeyCode::Char('4'));
+        handle_key(key, &mut state, "");
+        assert_eq!(state.active_tab, ActiveTab::Skills);
     }
 }
