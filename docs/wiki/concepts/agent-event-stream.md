@@ -4,13 +4,13 @@ category: framework
 tags: [event-stream, lifecycle, agent]
 created: 2026-05-04
 updated: 2026-05-06
-source_count: 2
+source_count: 3
 ---
 
 # Agent Event Stream
 
 **Category:** Event lifecycle
-**Related:** [[react-pattern]], [[agent-plugin-system]], [[agent-observability]], [[otel-log-routing]]
+**Related:** [[react-pattern]], [[agent-plugin-system]], [[agent-observability]], [[otel-log-routing]], [[tui-frontend-ratatui]]
 
 ## Definition
 
@@ -54,3 +54,4 @@ Events are produced by the Agent Core and consumed by the PluginStream. Each plu
 - [[run-context]]: Context available to plugin intercept/listen hooks
 - [[connection-holder]]: Forwards events to active transport connection
 - [[vol-llm-agent-channel-crate]]: Channel layer consuming the event stream
+- [[tui-frontend-ratatui]]: TUI renders events via UiState mutations from EventBuffer

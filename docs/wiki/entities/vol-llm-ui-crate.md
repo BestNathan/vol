@@ -4,14 +4,14 @@ category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
 updated: 2026-05-08
-source_count: 1
+source_count: 2
 ---
 
 # vol-llm-ui Crate
 
 **Category:** Rust crate — Shared UI state model and connection abstraction
 
-**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]]
+**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]]
 
 ## Overview
 
@@ -30,6 +30,9 @@ Both modes implement the same trait interfaces, so TUI (ratatui) and Web (Dioxus
 - `LocalConnection` — in-process agent connection [[remote-connection-impl]]
 - `RemoteConnection` — JSON-RPC WebSocket connection with auto-reconnect [[remote-connection-impl]]
 - Features: `tui` (default, ratatui + crossterm), `web` (Dioxus WASM)
+- TUI binary: `vol-llm-tui` — ratatui 0.30 rendering at 30fps with crossterm event stream [[tui-frontend-ratatui]]
+- TUI modules: `render` (9 panel renderers), `input` (keyboard handling with approval/session support) [[ratatui-tui-pattern]]
+- Event loop: `tokio::select!` with biased mode prioritizing input over render ticks [[ui-event-loop-pattern]]
 
 ## Architecture
 
@@ -46,3 +49,4 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 ## Timeline
 - **2026-05-07**: Crate created with state model, hooks, and `LocalConnection`
 - **2026-05-08**: `RemoteConnection` added with JSON-RPC 2.0 over WebSocket [[remote-connection-impl]]
+- **2026-05-08**: TUI frontend added — ratatui rendering, crossterm event loop, 9 render functions migrated from vol-llm-tui [[tui-frontend-ratatui]]

@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-05-08] ingest | TUI Frontend (ratatui)
+- Created sources: [[tui-frontend-ratatui]]
+- Created concepts: [[ratatui-tui-pattern]], [[ui-event-loop-pattern]]
+- Updated entities: [[vol-llm-ui-crate]]
+- Updated concepts: [[human-in-the-loop]], [[connection-trait]], [[agent-event-stream]], [[remote-agent-connection]]
+- Cross-references added: 6
+- Changes: 9 render functions migrated from vol-llm-tui/ui/ to UiState using ratatui 0.30; crossterm EventStream + tokio::select! event loop at 30fps; approval key handling (A/R/S); session dialog; workspace tree, log viewer, skills panel; futures + uuid added as optional tui deps; LocalConnection::clone_for_run() made public; tui modules exported via lib.rs behind #[cfg(feature = "tui")]
+
 ## [2026-05-08] ingest | RemoteConnection for vol-llm-ui
 - Created sources: [[remote-connection-impl]]
 - Created entities: [[vol-llm-ui-crate]]

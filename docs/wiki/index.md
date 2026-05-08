@@ -6,7 +6,7 @@ Last updated: 2026-05-08
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction | active | 2026-05-08 |
+| [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends | active | 2026-05-08 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate | active | 2026-05-04 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) | active | 2026-05-04 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions | stable | 2026-05-04 |
@@ -52,6 +52,8 @@ Last updated: 2026-05-08
 | [[agent-router]] | Multi-agent routing with per-agent dispatchers | active | 2026-05-07 |
 | [[connection-holder-clone-limitation]] | ConnectionHolder cannot be both plugin and transport reference | active | 2026-05-07 |
 | [[clarifying-requirements-workflow]] | Structured dialogue for turning vague requests into requirements | active | 2026-05-06 |
+| [[ratatui-tui-pattern]] | Layout and widget composition patterns for ratatui 0.30 TUI rendering | active | 2026-05-08 |
+| [[ui-event-loop-pattern]] | crossterm EventStream + tokio::select! multiplexing for async TUI | active | 2026-05-08 |
 | [[remote-agent-connection]] | AgentConnection and FileOperations traits with local/remote implementations | active | 2026-05-08 |
 | [[json-rpc-websocket]] | JSON-RPC 2.0 over WebSocket protocol for remote agent communication | active | 2026-05-08 |
 
@@ -68,6 +70,7 @@ Last updated: 2026-05-08
 | [[clarifying-requirements-subagent-review]] | Subagent review mechanism added to clarifying-requirements skill | active | 2026-05-06 |
 | [[loki-plugin-otel-migration-tasks-3-4]] | LokiPlugin rewritten to use tracing::info! + RunContext model field added | active | 2026-05-06 |
 | [[otel-029-log-init]] | OTel 0.29 API migration and init_otel_logs() implementation in vol-monitor | active | 2026-05-06 |
+| [[tui-frontend-ratatui]] | TUI frontend with ratatui rendering, crossterm event loop, 9 render functions migrated | active | 2026-05-08 |
 | [[remote-connection-impl]] | RemoteConnection with JSON-RPC 2.0 WebSocket for vol-llm-ui | active | 2026-05-08 |
 
 ## Analyses
