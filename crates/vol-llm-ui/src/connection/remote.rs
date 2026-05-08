@@ -18,7 +18,6 @@ use crate::state::UiEvent;
 /// Connection state for tracking.
 struct ConnectionState {
     ws_url: String,
-    request_id: u64,
 }
 
 /// Remote JSON-RPC WebSocket connection to an agent service.
@@ -36,17 +35,9 @@ impl RemoteConnection {
         Self {
             state: RwLock::new(ConnectionState {
                 ws_url: ws_url.to_string(),
-                request_id: 0,
             }),
             connected: Arc::new(AtomicBool::new(false)),
         }
-    }
-
-    #[allow(dead_code)]
-    fn next_request_id(&self) -> u64 {
-        let mut state = self.state.try_write().unwrap();
-        state.request_id += 1;
-        state.request_id
     }
 
     /// Send a JSON-RPC request and wait for the response.
@@ -63,7 +54,7 @@ impl RemoteConnection {
 
         // Connect and send
         let client = WsClientBuilder::default().build(&url).await?;
-        self.connected.store(true, Ordering::Relaxed);
+        self.connected.store(true, Ordering::SeqCst);
 
         let response: T = client.request(method, params).await?;
         Ok(response)
@@ -91,7 +82,7 @@ impl AgentConnection for RemoteConnection {
             while retry <= max_retries {
                 let result = async {
                     let client = WsClientBuilder::default().build(&url).await?;
-                    connected.store(true, Ordering::Relaxed);
+                    connected.store(true, Ordering::SeqCst);
 
                     // Subscribe to agent events via a notification method
                     // The server pushes ui.event notifications
@@ -114,7 +105,7 @@ impl AgentConnection for RemoteConnection {
                 match result {
                     Ok(()) => break,
                     Err(e) => {
-                        connected.store(false, Ordering::Relaxed);
+                        connected.store(false, Ordering::SeqCst);
                         retry += 1;
                         if retry <= max_retries {
                             let delay = std::cmp::min(1000 * 2_u64.pow(retry as u32 - 1), 30000);
@@ -149,7 +140,7 @@ impl AgentConnection for RemoteConnection {
     }
 
     fn is_connected(&self) -> bool {
-        self.connected.load(Ordering::Relaxed)
+        self.connected.load(Ordering::SeqCst)
     }
 }
 
@@ -229,13 +220,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_remote_connection_new() {
-        let conn = RemoteConnection::new("ws://localhost:3000");
-        assert!(!conn.is_connected()); // Not connected until first call
-    }
-
-    #[test]
-    fn test_remote_connection_not_connected() {
+    fn test_remote_connection_new_not_connected() {
         let conn = RemoteConnection::new("ws://localhost:3000");
         assert!(!conn.is_connected());
     }
