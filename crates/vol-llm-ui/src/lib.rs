@@ -13,3 +13,5 @@ pub use state::{
     WorkspaceTree, WorkspaceEntry, ActiveTab, ApprovalState,
     SkillDisplayEntry, LogLine, LogRunSummary, SessionDialogEntry,
 };
+
+pub use connection::{AgentConnection, FileOperations, FileEntry, LogRunInfo, SessionInfo};
