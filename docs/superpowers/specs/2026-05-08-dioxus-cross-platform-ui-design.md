@@ -454,7 +454,7 @@ impl JsonRpcHandler {
 }
 ```
 
-- [ ] **Step: 添加 jsonrpsee 依赖到 Cargo.toml**
+- [ ] **Step: 添加 jsonrpsee 0.26 依赖到 Cargo.toml**
 - [ ] **Step: 创建 jsonrpc/mod.rs + handler.rs**
 - [ ] **Step: 创建 agent-service.rs 示例**
 
@@ -503,7 +503,7 @@ tracing = { workspace = true }
 ratatui = { version = "0.30", default-features = false, features = ["crossterm_0_29"] }
 crossterm = { version = "0.29", features = ["event-stream"] }
 dioxus = { version = "0.6", features = ["web"] }
-jsonrpsee = { version = "0.24", features = ["client", "wasm-client"] }
+jsonrpsee = { version = "0.26", features = ["client", "wasm-client"] }
 anyhow = "1.0"
 ```
 
