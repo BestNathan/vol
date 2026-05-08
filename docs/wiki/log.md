@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-05-08] ingest | RemoteConnection for vol-llm-ui
+- Created sources: [[remote-connection-impl]]
+- Created entities: [[vol-llm-ui-crate]]
+- Created concepts: [[json-rpc-websocket]], [[remote-agent-connection]]
+- Updated concepts: [[connection-holder]], [[connection-trait]]
+- Cross-references added: 4
+- Changes: RemoteConnection implements AgentConnection and FileOperations via JSON-RPC 2.0 over WebSocket (jsonrpsee 0.26); uses ObjectParams for named parameters, ClientT trait for request method; auto-reconnect with exponential backoff (max 5 retries, 1s-30s); methods: agent.submit, agent.approve, agent.cancel, file.list, file.read, log.list, session.list; 3 unit tests all passing
+
 ## [2026-05-07] ingest | Agent Channel WS + HTTP Examples
 - Created sources: [[agent-channel-examples]]
 - Created concepts: [[agent-router]], [[connection-holder-clone-limitation]]

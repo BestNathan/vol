@@ -10,7 +10,7 @@ source_count: 1
 # Connection Trait
 
 **Category:** Transport abstraction
-**Related:** [[vol-llm-agent-channel-crate]], [[http-transport]], [[connection-holder]]
+**Related:** [[vol-llm-agent-channel-crate]], [[http-transport]], [[connection-holder]], [[remote-agent-connection]]
 
 ## Definition
 
