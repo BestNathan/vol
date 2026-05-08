@@ -32,6 +32,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 anyhow = "1.0"
+chrono = { workspace = true }
 
 # TUI (optional, default feature)
 ratatui = { version = "0.30", default-features = false, features = ["crossterm_0_29"], optional = true }

@@ -1,3 +1,9 @@
+mod event_buffer;
+mod workspace;
+
+pub use event_buffer::EventBuffer;
+pub use workspace::scan_workspace;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::time::Instant;
