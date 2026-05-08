@@ -1,3 +1,19 @@
+//! Connection abstraction for agent interaction.
+//!
+//! ## Architecture
+//!
+//! `AgentConnection` abstracts over two implementations:
+//! - `LocalConnection` — in-process ReActAgent, events via EventObserver
+//! - `RemoteConnection` — JSON-RPC WebSocket via jsonrpsee
+//!
+//! `FileOperations` is a separate trait for filesystem/log/session access.
+//! In local mode this is direct filesystem access; in remote mode it goes
+//! through the agent service's JSON-RPC endpoints.
+//!
+//! A single concrete type (e.g., `LocalConnection`) implements **both**
+//! `AgentConnection` and `FileOperations`, so callers can use a single
+//! struct for all operations.
+
 use crate::state::UiEvent;
 use async_trait::async_trait;
 use tokio::sync::mpsc;
@@ -22,7 +38,7 @@ pub trait AgentConnection: Send + Sync {
 }
 
 /// A file or directory entry for workspace browsing.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileEntry {
     pub name: String,
     pub is_dir: bool,
@@ -30,7 +46,7 @@ pub struct FileEntry {
 }
 
 /// Summary of a logged run.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogRunInfo {
     pub run_id: String,
     pub timestamp: String,
@@ -38,7 +54,7 @@ pub struct LogRunInfo {
 }
 
 /// Summary of a saved session.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionInfo {
     pub session_id: String,
     pub entry_count: usize,
