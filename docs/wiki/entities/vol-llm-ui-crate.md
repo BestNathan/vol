@@ -11,7 +11,7 @@ source_count: 2
 
 **Category:** Rust crate — Shared UI state model and connection abstraction
 
-**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]]
+**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]]
 
 ## Overview
 
@@ -33,6 +33,9 @@ Both modes implement the same trait interfaces, so TUI (ratatui) and Web (Dioxus
 - TUI binary: `vol-llm-tui` — ratatui 0.30 rendering at 30fps with crossterm event stream [[tui-frontend-ratatui]]
 - TUI modules: `render` (9 panel renderers), `input` (keyboard handling with approval/session support) [[ratatui-tui-pattern]]
 - Event loop: `tokio::select!` with biased mode prioritizing input over render ticks [[ui-event-loop-pattern]]
+- Web binary: `vol-llm-ui-web` — Dioxus 0.6 WASM with Signal<UiState> context [[dioxus-web-pattern]]
+- Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `SessionDialog`, `ApprovalDialog` [[task-8-dioxus-web-frontend]]
+- Web state: `Signal<UiState>` via `use_context_provider`, `write_silent()` for interior mutability [[dioxus-signal-pattern]]
 
 ## Architecture
 
@@ -50,3 +53,4 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-07**: Crate created with state model, hooks, and `LocalConnection`
 - **2026-05-08**: `RemoteConnection` added with JSON-RPC 2.0 over WebSocket [[remote-connection-impl]]
 - **2026-05-08**: TUI frontend added — ratatui rendering, crossterm event loop, 9 render functions migrated from vol-llm-tui [[tui-frontend-ratatui]]
+- **2026-05-08**: Web frontend added — Dioxus 0.6 WASM, 10 components, Signal-based state management [[task-8-dioxus-web-frontend]]

@@ -11,7 +11,7 @@ source_count: 1
 
 **Category:** UI rendering pattern for terminal applications
 
-**Related:** [[vol-llm-ui-crate]], [[tui-frontend-ratatui]]
+**Related:** [[vol-llm-ui-crate]], [[tui-frontend-ratatui]], [[dioxus-web-pattern]]
 
 ## Definition
 
@@ -58,3 +58,4 @@ Widget conventions:
 ## Related Concepts
 - [[ui-event-loop-pattern]]: The event loop that drives rendering at 30fps
 - [[human-in-the-loop]]: Approval panel rendering within the input area
+- [[dioxus-web-pattern]]: Web frontend counterpart using Dioxus RSX instead of ratatui widgets

@@ -55,3 +55,4 @@ Events are produced by the Agent Core and consumed by the PluginStream. Each plu
 - [[connection-holder]]: Forwards events to active transport connection
 - [[vol-llm-agent-channel-crate]]: Channel layer consuming the event stream
 - [[tui-frontend-ratatui]]: TUI renders events via UiState mutations from EventBuffer
+- [[dioxus-web-pattern]]: Web frontend consumes events via AppState::apply_event(UiEvent) on Signal<UiState>

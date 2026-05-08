@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-05-08] ingest | Task 8: Dioxus Web Frontend
+- Created sources: [[task-8-dioxus-web-frontend]]
+- Created concepts: [[dioxus-signal-pattern]], [[dioxus-web-pattern]]
+- Updated concepts: [[human-in-the-loop]], [[vol-llm-ui-crate]]
+- Cross-references added: 8
+- Changes: Dioxus 0.6 web frontend with WASM compilation; Signal<UiState> via use_context_provider with write_silent() for interior mutability; 10 components (App, StatusBar, ConversationView, ToolsPanel, InputArea, WorkspacePanel, SkillsPanel, LogViewer, SessionDialog, ApprovalDialog); global CSS dark theme; feature gated with #[cfg(feature = "web")]; compiles with cargo check -p vol-llm-ui --features web --bin vol-llm-ui-web; TabBar/TabContent routing pattern; modal dialogs rendered at root level
+
 ## [2026-05-08] ingest | TUI Frontend (ratatui)
 - Created sources: [[tui-frontend-ratatui]]
 - Created concepts: [[ratatui-tui-pattern]], [[ui-event-loop-pattern]]
