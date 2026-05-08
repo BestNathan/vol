@@ -78,3 +78,4 @@ pub trait FileOperations: Send + Sync {
 }
 
 pub mod local;
+pub mod remote;

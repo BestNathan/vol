@@ -16,3 +16,4 @@ pub use state::{
 
 pub use connection::{AgentConnection, FileOperations, FileEntry, LogRunInfo, SessionInfo};
 pub use connection::local::LocalConnection;
+pub use connection::remote::RemoteConnection;
