@@ -273,6 +273,9 @@ impl UiState {
                 self.is_running = false;
             }
             UiEvent::AgentError { message } => {
+                self.flush_pending_content();
+                let elapsed = self.run_start.map(|s| s.elapsed()).unwrap_or_default();
+                self.run_elapsed = elapsed;
                 self.conversation.push(ConversationEntry::Error { message });
                 self.is_running = false;
             }
@@ -353,6 +356,7 @@ impl UiState {
                 });
             }
             UiEvent::IterationContinued { from_iteration } => {
+                self.iteration = from_iteration;
                 self.conversation.push(ConversationEntry::AgentAnswer {
                     text: format!("Continuing from iteration {} (counter reset to 0)", from_iteration),
                 });
@@ -391,12 +395,22 @@ impl UiState {
     }
 
     fn update_tool_call_status(&mut self, tool_name: &str, status: ToolCallStatus, duration_ms: Option<u64>) {
+        // Match the most recent running entry for this tool by sequence (last-written wins).
         for entry in self.tool_calls.iter_mut().rev() {
             if entry.tool_name == tool_name && matches!(entry.status, ToolCallStatus::Running) {
                 entry.status = status;
                 entry.duration_ms = duration_ms;
                 break;
             }
+        }
+    }
+
+    /// Compute current elapsed time (works mid-run and after completion).
+    pub fn elapsed(&self) -> std::time::Duration {
+        if self.is_running {
+            self.run_start.map(|s| s.elapsed()).unwrap_or(self.run_elapsed)
+        } else {
+            self.run_elapsed
         }
     }
 }
