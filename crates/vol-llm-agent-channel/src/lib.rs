@@ -6,6 +6,7 @@
 pub mod connection;
 pub mod dispatcher;
 pub mod error;
+pub mod jsonrpc;
 pub mod protocol;
 pub mod request;
 pub mod router;
