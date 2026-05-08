@@ -41,6 +41,7 @@ uuid = { workspace = true, optional = true }
 
 # Web (optional)
 dioxus = { version = "0.6", features = ["web"], optional = true }
+log = { version = "0.4", optional = true }
 
 # Remote connection (JSON-RPC over WS)
 jsonrpsee = { version = "0.26", features = ["client", "wasm-client", "ws-client"] }
@@ -52,4 +53,4 @@ tempfile = "3"
 [features]
 default = ["tui"]
 tui = ["dep:ratatui", "dep:crossterm", "dep:futures", "dep:uuid"]
-web = ["dep:dioxus"]
+web = ["dep:dioxus", "dep:log"]

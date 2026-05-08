@@ -11,6 +11,10 @@ pub mod hooks;
 #[cfg(feature = "tui")]
 pub mod tui;
 
+// Web frontend (dioxus).
+#[cfg(feature = "web")]
+pub mod web;
+
 // Re-export commonly used types at crate root.
 pub use state::{
     UiState, UiEvent, ConversationEntry, ToolCallEntry, ToolCallStatus,
