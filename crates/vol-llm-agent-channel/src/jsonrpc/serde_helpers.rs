@@ -249,7 +249,7 @@ pub fn serialize_agent_event(event: &AgentStreamEvent) -> (String, serde_json::V
 ///
 /// Produces a string like:
 /// ```json
-/// {"jsonrpc":"2.0","method":"agent/notify","params":{"sub_id":1,"req_id":"...","event_type":"...","data":{...}}}
+/// {"jsonrpc":"2.0","method":"agent.event","params":{"subscription":1,"result":{"req_id":"...","event_type":"...","data":{...}}}}
 /// ```
 pub fn to_jsonrpc_event(
     event: &AgentStreamEvent,
@@ -259,15 +259,23 @@ pub fn to_jsonrpc_event(
     let (event_type, data) = serialize_agent_event(event);
     let envelope = serde_json::json!({
         "jsonrpc": "2.0",
-        "method": "agent/notify",
+        "method": "agent.event",
         "params": {
-            "sub_id": sub_id,
-            "req_id": req_id,
-            "event_type": event_type,
-            "data": data,
+            "subscription": sub_id,
+            "result": {
+                "req_id": req_id,
+                "event_type": event_type,
+                "data": data,
+            },
         },
     });
-    serde_json::to_string(&envelope).unwrap_or_else(|_| "{}".into())
+    match serde_json::to_string(&envelope) {
+        Ok(text) => text,
+        Err(e) => {
+            tracing::error!(%e, "failed to serialize JSON-RPC event envelope");
+            "{}".into()
+        }
+    }
 }
 
 /// Build a JSON-RPC success response.
@@ -405,94 +413,3 @@ pub fn parse_jsonrpc_request(text: &str) -> Result<JsonRpcRequest, String> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_serialize_agent_start() {
-        let event = AgentStreamEvent::agent_start("hello".to_string());
-        let (event_type, data) = serialize_agent_event(&event);
-        assert_eq!(event_type, "agent_start");
-        assert_eq!(data["input"], "hello");
-    }
-
-    #[test]
-    fn test_serialize_thinking_delta() {
-        let event = AgentStreamEvent::thinking_delta("hmm...".to_string());
-        let (event_type, data) = serialize_agent_event(&event);
-        assert_eq!(event_type, "thinking_delta");
-        assert_eq!(data["delta"], "hmm...");
-    }
-
-    #[test]
-    fn test_serialize_tool_call_complete() {
-        let event = AgentStreamEvent::tool_call_complete(
-            "call_1".to_string(),
-            "get_weather".to_string(),
-            "sunny".to_string(),
-            Some(42),
-        );
-        let (event_type, data) = serialize_agent_event(&event);
-        assert_eq!(event_type, "tool_call_complete");
-        assert_eq!(data["tool_name"], "get_weather");
-        assert_eq!(data["result"], "sunny");
-        assert_eq!(data["duration_ms"], 42);
-        assert_eq!(data["tool_call_id"], "call_1");
-    }
-
-    #[test]
-    fn test_parse_jsonrpc_submit() {
-        let text = r#"{"jsonrpc":"2.0","id":1,"method":"agent.submit","params":{"input":"hello world"}}"#;
-        let req = parse_jsonrpc_request(text).unwrap();
-        match req {
-            JsonRpcRequest::AgentSubmit { id, input } => {
-                assert_eq!(id, 1);
-                assert_eq!(input, "hello world");
-            }
-            other => panic!("expected AgentSubmit, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn test_parse_jsonrpc_cancel() {
-        let text = r#"{"jsonrpc":"2.0","id":2,"method":"agent.cancel","params":{"req_id":"abc-123"}}"#;
-        let req = parse_jsonrpc_request(text).unwrap();
-        match req {
-            JsonRpcRequest::AgentCancel { id, req_id } => {
-                assert_eq!(id, 2);
-                assert_eq!(req_id, "abc-123");
-            }
-            other => panic!("expected AgentCancel, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn test_parse_jsonrpc_subscribe() {
-        let text = r#"{"jsonrpc":"2.0","id":3,"method":"agent.subscribe","params":{}}"#;
-        let req = parse_jsonrpc_request(text).unwrap();
-        match req {
-            JsonRpcRequest::AgentSubscribe { id } => {
-                assert_eq!(id, 3);
-            }
-            other => panic!("expected AgentSubscribe, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn test_parse_jsonrpc_file_list() {
-        let text = r#"{"jsonrpc":"2.0","id":4,"method":"file.list","params":{"path":"/tmp"}}"#;
-        let req = parse_jsonrpc_request(text).unwrap();
-        match req {
-            JsonRpcRequest::FileList { id, path } => {
-                assert_eq!(id, 4);
-                assert_eq!(path, "/tmp");
-            }
-            other => panic!("expected FileList, got {other:?}"),
-        }
-    }
-}

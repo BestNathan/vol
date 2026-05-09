@@ -380,7 +380,7 @@ fn test_parse_agent_unsubscribe() {
 }
 
 #[test]
-fn test_parse_agent_appro() {
+fn test_parse_agent_approve() {
     let req = parse_jsonrpc_request(
         r#"{"jsonrpc":"2.0","id":5,"method":"agent.approve","params":{"req_id":"abc","approved":true,"reason":"looks good"}}"#,
     )
@@ -537,8 +537,8 @@ fn test_parse_invalid_jsonrpc_version() {
     )
     .unwrap_err();
     assert!(
-        err.contains("missing") || err.contains("jsonrpc") || err.contains("invalid"),
-        "expected error about invalid jsonrpc, got: {err}"
+        err.contains("missing or invalid jsonrpc field"),
+        "expected exact 'missing or invalid jsonrpc field' error, got: {err}"
     );
 }
 
@@ -585,4 +585,69 @@ fn test_to_jsonrpc_error_null_id() {
     assert_eq!(parsed["jsonrpc"], "2.0");
     assert!(parsed["id"].is_null(), "id should be null when None");
     assert_eq!(parsed["error"]["code"], -32700);
+}
+
+// ---------------------------------------------------------------------------
+// Edge cases
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_parse_agent_submit_empty_input() {
+    let req = parse_jsonrpc_request(
+        r#"{"jsonrpc":"2.0","id":1,"method":"agent.submit","params":{"input":""}}"#,
+    )
+    .expect("should parse empty input");
+    match req {
+        JsonRpcRequest::AgentSubmit { id, input } => {
+            assert_eq!(id, 1);
+            assert_eq!(input, "");
+        }
+        other => panic!("expected AgentSubmit, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_agent_approve_false() {
+    let req = parse_jsonrpc_request(
+        r#"{"jsonrpc":"2.0","id":5,"method":"agent.approve","params":{"req_id":"abc","approved":false,"reason":"not ready"}}"#,
+    )
+    .expect("should parse");
+    match req {
+        JsonRpcRequest::AgentApprove { id, approved, reason, .. } => {
+            assert_eq!(id, 5);
+            assert!(!approved, "approved should be false");
+            assert_eq!(reason, Some("not ready".to_string()));
+        }
+        other => panic!("expected AgentApprove, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_agent_submit_non_string_input() {
+    let err = parse_jsonrpc_request(
+        r#"{"jsonrpc":"2.0","id":1,"method":"agent.submit","params":{"input":123}}"#,
+    )
+    .unwrap_err();
+    assert!(
+        err.contains("input"),
+        "expected error about 'input' field, got: {err}"
+    );
+}
+
+#[test]
+fn test_parse_agent_approve_missing_reason() {
+    // reason is optional — should parse fine without it
+    let req = parse_jsonrpc_request(
+        r#"{"jsonrpc":"2.0","id":5,"method":"agent.approve","params":{"req_id":"abc","approved":true}}"#,
+    )
+    .expect("should parse without reason");
+    match req {
+        JsonRpcRequest::AgentApprove { id, req_id, approved, reason } => {
+            assert_eq!(id, 5);
+            assert_eq!(req_id, "abc");
+            assert!(approved);
+            assert!(reason.is_none());
+        }
+        other => panic!("expected AgentApprove, got {other:?}"),
+    }
 }
