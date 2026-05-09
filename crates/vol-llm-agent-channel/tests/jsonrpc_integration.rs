@@ -328,9 +328,26 @@ fn test_parse_agent_submit() {
     )
     .expect("should parse");
     match req {
-        JsonRpcRequest::AgentSubmit { id, input } => {
+        JsonRpcRequest::AgentSubmit { id, input, target } => {
             assert_eq!(id, 1);
             assert_eq!(input, "hello");
+            assert!(target.is_none());
+        }
+        other => panic!("expected AgentSubmit, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_agent_submit_with_target() {
+    let req = parse_jsonrpc_request(
+        r#"{"jsonrpc":"2.0","id":1,"method":"agent.submit","params":{"input":"hello","target":"agent-b"}}"#,
+    )
+    .expect("should parse");
+    match req {
+        JsonRpcRequest::AgentSubmit { id, input, target } => {
+            assert_eq!(id, 1);
+            assert_eq!(input, "hello");
+            assert_eq!(target, Some("agent-b".to_string()));
         }
         other => panic!("expected AgentSubmit, got {other:?}"),
     }
@@ -598,9 +615,10 @@ fn test_parse_agent_submit_empty_input() {
     )
     .expect("should parse empty input");
     match req {
-        JsonRpcRequest::AgentSubmit { id, input } => {
+        JsonRpcRequest::AgentSubmit { id, input, target } => {
             assert_eq!(id, 1);
             assert_eq!(input, "");
+            assert!(target.is_none());
         }
         other => panic!("expected AgentSubmit, got {other:?}"),
     }

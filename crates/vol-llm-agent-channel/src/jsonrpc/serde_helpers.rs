@@ -31,6 +31,7 @@ pub enum JsonRpcRequest {
     AgentSubmit {
         id: u64,
         input: String,
+        target: Option<String>,
     },
     AgentCancel {
         id: u64,
@@ -339,7 +340,8 @@ pub fn parse_jsonrpc_request(text: &str) -> Result<JsonRpcRequest, String> {
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| "agent.submit: missing 'input'".to_string())?
                 .to_string();
-            Ok(JsonRpcRequest::AgentSubmit { id, input })
+            let target = params.get("target").and_then(|v| v.as_str()).map(|s| s.to_string());
+            Ok(JsonRpcRequest::AgentSubmit { id, input, target })
         }
         "agent.cancel" => {
             let req_id = params

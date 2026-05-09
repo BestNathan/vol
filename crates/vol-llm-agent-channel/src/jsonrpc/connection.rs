@@ -20,7 +20,7 @@ use crate::protocol::Message;
 use crate::request::{AgentRequest, RunResult};
 use crate::router::AgentRouter;
 
-use super::serde_helpers::{parse_jsonrpc_request, to_jsonrpc_error, to_jsonrpc_response, JsonRpcRequest};
+use super::serde_helpers::{parse_jsonrpc_request, to_jsonrpc_error, to_jsonrpc_event, to_jsonrpc_response, JsonRpcRequest};
 
 /// JSON-RPC connection over WebSocket.
 pub struct JsonRpcConnection {
@@ -149,8 +149,8 @@ impl JsonRpcConnection {
 
         // Dispatch to handler based on request type.
         let result: String = match &request {
-            JsonRpcRequest::AgentSubmit { id, input } => {
-                self.handle_submit(*id, input.clone()).await
+            JsonRpcRequest::AgentSubmit { id, input, target } => {
+                self.handle_submit(*id, input.clone(), target.clone()).await
             }
             JsonRpcRequest::AgentCancel { id, req_id } => {
                 self.handle_cancel(*id, req_id.clone()).await
@@ -193,24 +193,18 @@ impl JsonRpcConnection {
     // === Handler methods ===
 
     /// Handle `agent.submit`: submit input to router, return `{ req_id }`.
-    async fn handle_submit(&self, id: u64, input: String) -> String {
-        // Find a target agent — use the first registered one, or default to "agent".
-        let target_id = if let Some(agent_id) = self.holders.keys().next() {
-            agent_id.clone()
-        } else {
-            "agent".to_string()
-        };
+    async fn handle_submit(&self, id: u64, input: String, target: Option<String>) -> String {
+        // Use specified target, or fall back to first registered agent.
+        let target_id = target
+            .filter(|t| self.holders.contains_key(t))
+            .or_else(|| self.holders.keys().next().cloned())
+            .unwrap_or_else(|| "agent".to_string());
 
         let request = AgentRequest::new(&target_id, &input);
         let req_id = request.req_id.clone();
 
-        // Track current request ID for event forwarding.
-        *self.current_req_id.lock().await = req_id.clone();
-
         // Set active holder for this agent.
-        if self.holders.contains_key(&target_id) {
-            *self.active_holder.lock().await = Some(target_id.clone());
-        }
+        *self.active_holder.lock().await = Some(target_id.clone());
 
         // Submit via router.
         let rx = match self.router.send(&target_id, request).await {
@@ -221,6 +215,9 @@ impl JsonRpcConnection {
                 }));
             }
         };
+
+        // Only track current_req_id after successful submit.
+        *self.current_req_id.lock().await = req_id.clone();
 
         // Spawn background task to await result and clear req_id.
         let current_req_id = self.current_req_id.clone();
@@ -367,23 +364,35 @@ impl Connection for JsonRpcConnection {
     async fn send(&self, msg: Message) -> Result<(), ConnectionError> {
         match msg {
             Message::Event { event, .. } => {
-                // Forward agent event as a JSON-RPC subscription notification.
-                // Build the envelope directly since we have a pre-serialized Value.
                 let req_id = self.current_req_id.lock().await.clone();
+                let sub_id = self.subscribers.lock().await.first().copied().unwrap_or(0);
 
-                // Build JSON-RPC event envelope.
-                let envelope = serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "method": "agent.event",
-                    "params": {
-                        "req_id": req_id,
-                        "event_type": "agent_event",
-                        "data": event,
-                    },
-                });
-                let text = serde_json::to_string(&envelope)
-                    .map_err(|e| ConnectionError::WsSendError(e.to_string()))?;
-                self.send_ws_text(&text).await
+                // Try to deserialize the event Value back to AgentStreamEvent
+                match serde_json::from_value::<vol_llm_agent::react::AgentStreamEvent>(event.clone()) {
+                    Ok(agent_event) => {
+                        let text = to_jsonrpc_event(&agent_event, sub_id, &req_id);
+                        self.send_ws_text(&text).await
+                    }
+                    Err(e) => {
+                        tracing::error!(%e, ?event, "failed to deserialize AgentStreamEvent in Connection::send");
+                        // Fallback: send raw event with unknown type
+                        let envelope = serde_json::json!({
+                            "jsonrpc": "2.0",
+                            "method": "agent.event",
+                            "params": {
+                                "subscription": sub_id,
+                                "result": {
+                                    "req_id": req_id,
+                                    "event_type": "unknown",
+                                    "data": event,
+                                },
+                            },
+                        });
+                        let text = serde_json::to_string(&envelope)
+                            .map_err(|e| ConnectionError::WsSendError(e.to_string()))?;
+                        self.send_ws_text(&text).await
+                    }
+                }
             }
             // Connected, Result, Error are sent directly by the run() loop or handlers.
             _ => Ok(()),
