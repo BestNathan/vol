@@ -65,7 +65,7 @@ pub struct JsonRpcConnection {
     ws_rx: SplitStream<WebSocket>,
     router: AgentRouter,
     holders: HashMap<String, Arc<ConnectionHolder>>,
-    current_holder: Option<Arc<ConnectionHolder>>,
+    active_holder: Option<String>,  // agent_id of last submit
     current_req_id: String,
     subscribers: Vec<u64>,
     next_sub_id: u64,
@@ -75,9 +75,11 @@ pub struct JsonRpcConnection {
 ```
 
 - `router` — dispatches `agent.submit` / `agent.cancel` to the correct agent
-- `holders` — map of `agent_id → ConnectionHolder`, used to attach/detach on submit
-- `current_holder` — the holder currently attached to this connection (for event forwarding)
-- `current_req_id` — tracks the active request ID for event tagging
+- `holders` — map of `agent_id → ConnectionHolder`, all registered at startup
+- `active_holder` — tracks which agent was last submitted to (for event tagging), does NOT attach/detach
+- All holders are attached to this connection at startup. Events from any registered agent flow through this connection.
+
+**Multi-agent event model:** A single `JsonRpcConnection` is attached to ALL registered agents' holders at startup. Events from all agents flow through the same WebSocket. The frontend can distinguish events by the `event` payload content. `active_holder` is only metadata — "which agent was last submitted to" — not a mechanism for switching event sources.
 
 **`Connection` trait:**
 - `protocol()` → `"jsonrpc-ws"`
@@ -98,15 +100,15 @@ pub struct JsonRpcConnection {
 **`run()` loop:**
 The connection loop that owns the WebSocket. Handles both `Connection`-level messaging and JSON-RPC-extended methods:
 
-1. On connect: send `Message::Connected`
+1. On connect: attach to all registered holders, send `Message::Connected`
 2. Loop: read WebSocket text frame
    - Parse as JSON-RPC request
-   - If `agent.submit`: look up target agent in `holders`, detach from current holder, attach to target's holder, set `current_req_id`, submit via router
+   - If `agent.submit`: submit via router, set `active_holder` = target agent (metadata only, no holder switching)
    - If `agent.cancel`: cancel via router
    - If `agent.subscribe`/`unsubscribe`: manage subscriber list internally
    - If `file.list`, `file.read`, `session.list`, `session.resume`, `log.list`, `log.read`: handle internally (file I/O, no agent involvement)
    - If `agent.approve`: return stub response
-3. On disconnect: detach from current holder
+3. On disconnect: detach from all holders
 
 **JSON-RPC serialization helpers:**
 ```rust
@@ -147,13 +149,7 @@ impl JsonRpcServer {
 }
 ```
 
-The server builds an `AgentRouter` from the provided dispatchers and keeps a map of `agent_id → ConnectionHolder`. When a client connects, the connection receives the router (for request dispatching) and the holder map (for attaching to the correct agent's event stream on `agent.submit`).
-
-The WebSocket upgrade handler:
-1. Creates `JsonRpcConnection` with the router and holder map
-2. On first `agent.submit`: attaches to the target agent's holder
-3. On subsequent `agent.submit` to a different agent: detaches from old holder, attaches to new one
-4. On disconnect: detaches from current holder
+The server builds an `AgentRouter` from the provided dispatchers and keeps a map of `agent_id → ConnectionHolder`. When a client connects, the `JsonRpcConnection` attaches to ALL holders at startup — events from all registered agents flow through the same WebSocket. No attach/detach switching needed.
 
 #### EventBridgePlugin — deleted
 
@@ -182,16 +178,11 @@ Agent emits AgentStreamEvent
 Frontend sends JSON-RPC request
   → JsonRpcConnection.recv() parses JSON-RPC
   → If agent.submit(target="agent-a") → router routes to agent-a's dispatcher
-  → JsonRpcConnection attaches to agent-a's ConnectionHolder
+  → active_holder = "agent-a" (metadata only)
   → agent-a's events flow back through Connection.send() → JSON-RPC envelope
 ```
 
-#### Multi-Agent Switching (inbound)
-
-```
-Client submits to agent-a → attached to holder-a → receives agent-a events
-Client submits to agent-b → detaches from holder-a, attaches to holder-b → receives agent-b events
-```
+All registered agents' events flow through the same connection. The frontend receives events from all agents and can filter/distinguish them client-side.
 
 #### File/Session Operations (inbound, JSON-RPC-only)
 
@@ -206,7 +197,7 @@ Frontend sends file.list JSON-RPC request
 
 - **Parse errors**: Invalid JSON-RPC → send JSON-RPC error response `{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"}}`
 - **Unknown methods**: → JSON-RPC error `{"code":-32601,"message":"Method not found"}`
-- **Connection errors**: WebSocket disconnect → `holder.detach()`, loop exits
+- **Connection errors**: WebSocket disconnect → detach from all holders, loop exits
 - **Agent errors**: `Message::Error` returned through JSON-RPC error response
 - **File I/O errors**: Return as JSON-RPC error response with the OS error message
 
@@ -216,14 +207,14 @@ Frontend sends file.list JSON-RPC request
 2. **Empty req_id**: Current `EventBridgePlugin` skips events when `req_id` is empty. `JsonRpcConnection` tracks the current request ID during submit processing, same behavior.
 3. **Concurrent submits**: The router dispatches to the correct agent's dispatcher, which handles FIFO per-agent.
 4. **WebSocket ping/pong**: Handled in `recv()` by skipping to next frame (same as `WsConnection`).
-5. **Agent switching mid-run**: If a client submits to agent-b while agent-a is still running, the connection detaches from holder-a and attaches to holder-b. Events from agent-a's ongoing run are lost on this connection (agent-a's holder still forwards, but this connection is no longer attached).
+5. **All agents' events flow through one connection**: Since all holders are attached at startup, events from all registered agents arrive on the same WebSocket. The frontend is responsible for distinguishing/filtering. This is intentional — no attach/detach churn, and the frontend already has the agent context.
 6. **Unknown agent in submit**: Returns JSON-RPC error "Agent not found: {agent_id}".
 
 ## File Change Summary
 
 | File | Action | Responsibility |
 |------|--------|----------------|
-| `src/jsonrpc/connection.rs` | **Create** | `JsonRpcConnection` struct, `Connection` impl, `run()` loop, JSON-RPC serialization, multi-agent holder switching |
+| `src/jsonrpc/connection.rs` | **Create** | `JsonRpcConnection` struct, `Connection` impl, `run()` loop, JSON-RPC serialization, attach to all holders at startup |
 | `src/jsonrpc/server.rs` | **Create** | `JsonRpcServer`, `AgentRegistration`, router building, axum router |
 | `src/jsonrpc/handler.rs` | **Delete** | Replaced by connection.rs + server.rs |
 | `src/jsonrpc/mod.rs` | **Modify** | Export new modules, remove old |
