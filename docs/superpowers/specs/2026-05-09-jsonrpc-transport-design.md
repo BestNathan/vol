@@ -20,7 +20,8 @@ The JSON-RPC handler (`jsonrpc/handler.rs`) maintains its own `JsonRpcHandler`, 
 2. `ConnectionHolder` becomes the **single** event bridge — `EventBridgePlugin` is deleted
 3. JSON-RPC wire format is preserved — web frontend sees no change
 4. File/session/log operations remain available as JSON-RPC extensions, handled within the connection's `run()` loop
-5. Multi-agent can reuse `JsonRpcConnection` with different sender/receiver IDs
+5. Multi-agent can reuse `JsonRpcConnection` — router dispatches to the correct agent
+6. Server accepts a `Vec<(agent_id, dispatcher, holder)>` at startup, builds the router internally
 
 ## Non-Goals
 
@@ -62,13 +63,21 @@ Implements `Connection`. Wraps a WebSocket, translates between `Message` and JSO
 pub struct JsonRpcConnection {
     ws_tx: Arc<Mutex<SplitSink<WebSocket, WsMessage>>>,
     ws_rx: SplitStream<WebSocket>,
-    holder: Arc<ConnectionHolder>,
-    dispatcher: Arc<AgentDispatcher>,
-    agent_id: String,
-    subscribers: Vec<u64>,  // JSON-RPC subscription IDs
+    router: AgentRouter,
+    holders: HashMap<String, Arc<ConnectionHolder>>,
+    current_holder: Option<Arc<ConnectionHolder>>,
+    current_req_id: String,
+    subscribers: Vec<u64>,
     next_sub_id: u64,
+    working_dir: String,
+    store_dir: String,
 }
 ```
+
+- `router` — dispatches `agent.submit` / `agent.cancel` to the correct agent
+- `holders` — map of `agent_id → ConnectionHolder`, used to attach/detach on submit
+- `current_holder` — the holder currently attached to this connection (for event forwarding)
+- `current_req_id` — tracks the active request ID for event tagging
 
 **`Connection` trait:**
 - `protocol()` → `"jsonrpc-ws"`
@@ -89,14 +98,15 @@ pub struct JsonRpcConnection {
 **`run()` loop:**
 The connection loop that owns the WebSocket. Handles both `Connection`-level messaging and JSON-RPC-extended methods:
 
-1. On connect: send `Message::Connected`, attach to holder
+1. On connect: send `Message::Connected`
 2. Loop: read WebSocket text frame
    - Parse as JSON-RPC request
-   - If `agent.submit` or `agent.cancel`: use `Connection.recv()` path → the dispatcher processes it via the `Message` system
+   - If `agent.submit`: look up target agent in `holders`, detach from current holder, attach to target's holder, set `current_req_id`, submit via router
+   - If `agent.cancel`: cancel via router
    - If `agent.subscribe`/`unsubscribe`: manage subscriber list internally
    - If `file.list`, `file.read`, `session.list`, `session.resume`, `log.list`, `log.read`: handle internally (file I/O, no agent involvement)
    - If `agent.approve`: return stub response
-3. On disconnect: detach from holder
+3. On disconnect: detach from current holder
 
 **JSON-RPC serialization helpers:**
 ```rust
@@ -108,26 +118,44 @@ The `serialize_agent_event` function from the current `handler.rs` moves here.
 
 #### `JsonRpcServer` (new file: `src/jsonrpc/server.rs`)
 
-Like `WsServer`. Manages JSON-RPC connections, provides axum router.
+Manages multiple agents, provides axum router. Takes a list of `(agent_id, dispatcher, holder)` tuples at startup and builds the internal `AgentRouter`.
 
 ```rust
+pub struct AgentRegistration {
+    pub agent_id: String,
+    pub dispatcher: Arc<AgentDispatcher>,
+    pub holder: Arc<ConnectionHolder>,
+}
+
 pub struct JsonRpcServer {
-    dispatcher: Arc<AgentDispatcher>,
-    holder: Arc<ConnectionHolder>,
-    agent_id: String,
+    router: AgentRouter,
+    holders: HashMap<String, Arc<ConnectionHolder>>,
     working_dir: String,
     store_dir: String,
 }
 
 impl JsonRpcServer {
-    pub fn new(dispatcher, holder, agent_id, working_dir, store_dir) -> Self;
+    /// Register multiple agents at startup.
+    pub fn new(
+        agents: Vec<AgentRegistration>,
+        working_dir: String,
+        store_dir: String,
+    ) -> Self;
+
+    /// Build axum Router with the JSON-RPC WebSocket endpoint.
     pub fn into_axum_router(self) -> Router;
 }
 ```
 
-The WebSocket upgrade handler creates a `JsonRpcConnection`, attaches it to the holder, and runs the connection loop.
+The server builds an `AgentRouter` from the provided dispatchers and keeps a map of `agent_id → ConnectionHolder`. When a client connects, the connection receives the router (for request dispatching) and the holder map (for attaching to the correct agent's event stream on `agent.submit`).
 
-#### `EventBridgePlugin` — deleted
+The WebSocket upgrade handler:
+1. Creates `JsonRpcConnection` with the router and holder map
+2. On first `agent.submit`: attaches to the target agent's holder
+3. On subsequent `agent.submit` to a different agent: detaches from old holder, attaches to new one
+4. On disconnect: detaches from current holder
+
+#### EventBridgePlugin — deleted
 
 No longer needed. `ConnectionHolder` already does this job via the `Connection` trait. The `broadcast::Sender<AgentEvent>` field on `JsonRpcContext` is removed. The `current_req_id` mutex is removed.
 
@@ -153,9 +181,16 @@ Agent emits AgentStreamEvent
 ```
 Frontend sends JSON-RPC request
   → JsonRpcConnection.recv() parses JSON-RPC
-  → If agent.submit → converts to Message::Submit
-  → ConnectionHolder/Dispatcher processes the Message
-  → Response comes back through Connection.send()
+  → If agent.submit(target="agent-a") → router routes to agent-a's dispatcher
+  → JsonRpcConnection attaches to agent-a's ConnectionHolder
+  → agent-a's events flow back through Connection.send() → JSON-RPC envelope
+```
+
+#### Multi-Agent Switching (inbound)
+
+```
+Client submits to agent-a → attached to holder-a → receives agent-a events
+Client submits to agent-b → detaches from holder-a, attaches to holder-b → receives agent-b events
 ```
 
 #### File/Session Operations (inbound, JSON-RPC-only)
@@ -179,21 +214,24 @@ Frontend sends file.list JSON-RPC request
 
 1. **Multiple subscribers**: JSON-RPC supports multiple subscriptions on one connection. `subscribers` vec tracks them. Events are sent once per connection (not per subscriber ID) — the sub ID is just included in the params.
 2. **Empty req_id**: Current `EventBridgePlugin` skips events when `req_id` is empty. `JsonRpcConnection` tracks the current request ID during submit processing, same behavior.
-3. **Concurrent submits**: The dispatcher already handles FIFO. JSON-RPC just adds request ID correlation.
+3. **Concurrent submits**: The router dispatches to the correct agent's dispatcher, which handles FIFO per-agent.
 4. **WebSocket ping/pong**: Handled in `recv()` by skipping to next frame (same as `WsConnection`).
+5. **Agent switching mid-run**: If a client submits to agent-b while agent-a is still running, the connection detaches from holder-a and attaches to holder-b. Events from agent-a's ongoing run are lost on this connection (agent-a's holder still forwards, but this connection is no longer attached).
+6. **Unknown agent in submit**: Returns JSON-RPC error "Agent not found: {agent_id}".
 
 ## File Change Summary
 
 | File | Action | Responsibility |
 |------|--------|----------------|
-| `src/jsonrpc/connection.rs` | **Create** | `JsonRpcConnection` struct, `Connection` impl, `run()` loop, JSON-RPC serialization |
-| `src/jsonrpc/server.rs` | **Create** | `JsonRpcServer` struct, axum router, WS upgrade handler |
+| `src/jsonrpc/connection.rs` | **Create** | `JsonRpcConnection` struct, `Connection` impl, `run()` loop, JSON-RPC serialization, multi-agent holder switching |
+| `src/jsonrpc/server.rs` | **Create** | `JsonRpcServer`, `AgentRegistration`, router building, axum router |
 | `src/jsonrpc/handler.rs` | **Delete** | Replaced by connection.rs + server.rs |
 | `src/jsonrpc/mod.rs` | **Modify** | Export new modules, remove old |
 | `src/lib.rs` | **Modify** | Update public exports if needed |
 | `src/transport/ws.rs` | **No change** | Continues working as-is |
 | `src/connection.rs` | **No change** | Trait and holder unchanged |
-| `vol-llm-ui/src/bin/web_server.rs` (or equivalent) | **Modify** | Use `JsonRpcServer` instead of current setup |
+| `src/router.rs` | **No change** | Already supports multi-agent dispatch |
+| `vol-llm-ui/src/bin/web_server.rs` (or equivalent) | **Modify** | Use `JsonRpcServer::new(vec![AgentRegistration {..}])` instead of current setup |
 | `vol-llm-ui/src/web/client.rs` | **No change** | Frontend unchanged |
 
 ## Success Criteria
