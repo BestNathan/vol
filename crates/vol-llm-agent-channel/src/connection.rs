@@ -26,6 +26,7 @@ pub trait Connection: Send + Sync + 'static {
 /// Registered as AgentPlugin on agent creation.
 /// Holds at most one active connection at a time.
 /// Agent and connection have independent lifecycles.
+#[derive(Clone)]
 pub struct ConnectionHolder {
     connection: Arc<RwLock<Option<Arc<dyn Connection>>>>,
     sender: String,
