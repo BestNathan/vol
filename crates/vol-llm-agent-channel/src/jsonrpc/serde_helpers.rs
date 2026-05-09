@@ -83,7 +83,7 @@ pub enum JsonRpcRequest {
 
 /// Map an `AgentStreamEvent` to a `(event_type, data)` tuple suitable for
 /// wire serialization.  The event_type strings and JSON payloads must stay
-/// in sync with the existing `EventBridgePlugin` output.
+/// in sync with the existing `AgentStreamEvent` variants.
 pub fn serialize_agent_event(event: &AgentStreamEvent) -> (String, serde_json::Value) {
     match event {
         AgentStreamEvent::AgentStart { input, .. } => (
