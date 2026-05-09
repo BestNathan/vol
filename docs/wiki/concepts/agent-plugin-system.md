@@ -10,7 +10,7 @@ source_count: 2
 # Agent Plugin System
 
 **Category:** Extension framework
-**Related:** [[react-pattern]], [[plugin-actions]], [[agent-event-stream]], [[built-in-plugins]], [[otel-log-routing]], [[connection-holder-clone-limitation]]
+**Related:** [[react-pattern]], [[plugin-actions]], [[agent-event-stream]], [[built-in-plugins]], [[otel-log-routing]], [[connection-holder-clone-limitation]], [[jsonrpc-transport-refactoring]]
 
 ## Definition
 

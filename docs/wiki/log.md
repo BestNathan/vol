@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-05-09] ingest | JSON-RPC Transport Refactoring
+- Created sources: [[jsonrpc-transport-refactoring]]
+- Created concepts: [[jsonrpc-transport]]
+- Updated concepts: [[jsonrpc-server-handler]] (marked deleted), [[connection-holder]], [[connection-trait]], [[agent-plugin-system]]
+- Updated entities: [[vol-llm-agent-channel-crate]]
+- Updated index: new entries, updated summaries
+- Cross-references added: 6
+- Changes: EventBridgePlugin deleted, JsonRpcHandler/JsonRpcContext replaced by JsonRpcConnection implementing Connection trait; JsonRpcServer with Vec<AgentRegistration> multi-agent support; agent.submit gains optional target param; 49 integration tests; wire format preserved
+
 ## [2026-05-09] ingest | Task 5: JSON-RPC Integration Tests
 - Created sources: [[task-5-jsonrpc-integration-tests]]
 - Updated entities: [[vol-llm-agent-channel-crate]]
