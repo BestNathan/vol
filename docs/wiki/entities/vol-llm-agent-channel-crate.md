@@ -3,14 +3,14 @@ type: entity
 category: product
 tags: [crate, agent, transport, rust, json-rpc]
 created: 2026-05-05
-updated: 2026-05-08
-source_count: 2
+updated: 2026-05-09
+source_count: 3
 ---
 
 # vol-llm-agent-channel Crate
 
 **Category:** Rust crate — Agent communication channel layer
-**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-server-handler]]
+**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-server-handler]], [[task-5-jsonrpc-integration-tests]]
 
 ## Overview
 
@@ -49,3 +49,4 @@ Client → Transport (WS/HTTP/Memory) → Connection → ConnectionHolder (Agent
 - **2026-05-07**: Example applications added — `single_agent.rs` (dual transport) and `multi_agent.rs` (agent router) [[agent-channel-examples]]
 - **2026-05-08**: `jsonrpc` module added with `JsonRpcHandler`/`JsonRpcContext`, 9 RPC methods, and `jsonrpc_agent_service.rs` example [[task-9-jsonrpc-server]]
 - **2026-05-08**: Final verification passed — 16 tests, all targets compile [[task-10-final-verification]]
+- **2026-05-09**: JSON-RPC serialization integration tests added — 44 tests covering all AgentStreamEvent variants, all JSON-RPC request methods, and error handling for malformed input [[task-5-jsonrpc-integration-tests]]

@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-08
+Last updated: 2026-05-09
 
 ## Entities
 
@@ -13,7 +13,7 @@ Last updated: 2026-05-08
 | [[vol-llm-tool-crate]] | Tool definition and registry framework | stable | 2026-05-04 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations | stable | 2026-05-04 |
 | [[vol-session]] | Session message store and entry persistence | active | 2026-05-04 |
-| [[vol-llm-agent-channel-crate]] | Agent communication channel layer with multiple transports | active | 2026-05-08 |
+| [[vol-llm-agent-channel-crate]] | Agent communication channel layer with multiple transports and JSON-RPC serialization tests | active | 2026-05-09 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 
@@ -78,6 +78,7 @@ Last updated: 2026-05-08
 | [[task-8-dioxus-web-frontend]] | Web frontend with Dioxus 0.6 WASM, signal-based state, 10 components | active | 2026-05-08 |
 | [[task-9-jsonrpc-server]] | JSON-RPC server with 9 methods, JsonRpcHandler/JsonRpcContext, jsonrpsee 0.26 | active | 2026-05-08 |
 | [[task-10-final-verification]] | Final verification: 10 tasks complete, 55 tests passing, all feature builds verified | complete | 2026-05-08 |
+| [[task-5-jsonrpc-integration-tests]] | 44 integration tests for JSON-RPC serialization, parsing, and error handling | active | 2026-05-09 |
 
 ## Analyses
 

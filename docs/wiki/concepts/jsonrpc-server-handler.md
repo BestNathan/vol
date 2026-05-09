@@ -3,15 +3,15 @@ type: concept
 category: framework
 tags: [json-rpc, server, handler, jsonrpsee, agent, vol-llm-agent-channel]
 created: 2026-05-08
-updated: 2026-05-08
-source_count: 1
+updated: 2026-05-09
+source_count: 2
 ---
 
 # JSON-RPC Server Handler
 
 **Category:** Server-side JSON-RPC architecture
 
-**Related:** [[vol-llm-agent-channel-crate]], [[agent-dispatcher]], [[json-rpc-websocket]], [[remote-agent-connection]], [[task-9-jsonrpc-server]]
+**Related:** [[vol-llm-agent-channel-crate]], [[agent-dispatcher]], [[json-rpc-websocket]], [[remote-agent-connection]], [[task-9-jsonrpc-server]], [[task-5-jsonrpc-integration-tests]]
 
 ## Definition
 

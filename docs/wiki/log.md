@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-05-09] ingest | Task 5: JSON-RPC Integration Tests
+- Created sources: [[task-5-jsonrpc-integration-tests]]
+- Updated entities: [[vol-llm-agent-channel-crate]]
+- Updated concepts: [[json-rpc-websocket]], [[jsonrpc-server-handler]]
+- Cross-references added: 3
+- Changes: 44 integration tests in `tests/jsonrpc_integration.rs` covering all 22 AgentStreamEvent variant serializations, all 13 JSON-RPC request method parsings, event format structure verification, parse-and-respond roundtrip, and 6 error handling tests for malformed input
+
 ## [2026-05-08] ingest | Task 10: Final Verification
 - Created sources: [[task-10-final-verification]]
 - Cross-references added: 4

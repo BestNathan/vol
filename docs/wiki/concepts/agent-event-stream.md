@@ -3,14 +3,14 @@ type: concept
 category: framework
 tags: [event-stream, lifecycle, agent]
 created: 2026-05-04
-updated: 2026-05-06
-source_count: 3
+updated: 2026-05-09
+source_count: 4
 ---
 
 # Agent Event Stream
 
 **Category:** Event lifecycle
-**Related:** [[react-pattern]], [[agent-plugin-system]], [[agent-observability]], [[otel-log-routing]], [[tui-frontend-ratatui]]
+**Related:** [[react-pattern]], [[agent-plugin-system]], [[agent-observability]], [[otel-log-routing]], [[tui-frontend-ratatui]], [[task-5-jsonrpc-integration-tests]]
 
 ## Definition
 
