@@ -1,51 +1,219 @@
 //! Root App component with state management, event loop, and routing.
 
 use dioxus::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::time::Duration;
 
 use crate::state::{ActiveTab, UiEvent, UiState};
+use crate::web::client::{AgentEvent, JsonRpcClient};
 
 use super::approval_dialog::ApprovalDialog;
 use super::conversation::ConversationView;
+use super::file_content::FileContentView;
+use super::file_tree::FileTree;
 use super::input_area::InputArea;
 use super::log_viewer::LogViewer;
 use super::session_dialog::SessionDialog;
 use super::skills::SkillsPanel;
 use super::status_bar::StatusBar;
-use super::tools_panel::ToolsPanel;
-use super::workspace::WorkspacePanel;
+use super::tools_tab::ToolsTabContent;
 
-/// Shared application state provided via context.
-#[derive(Clone, PartialEq)]
-pub struct AppState {
-    pub ui_state: Signal<UiState>,
+/// Derive WebSocket URL from the page's host at runtime.
+fn derive_ws_url() -> String {
+    if let Some(window) = web_sys::window() {
+        let location = window.location();
+        if let Ok(hostname) = location.hostname() {
+            return format!("ws://{}:3001/ws", hostname);
+        }
+    }
+    "ws://localhost:3001".to_string()
 }
 
-impl AppState {
-    /// Apply a UiEvent to the shared state.
-    pub fn apply_event(&self, event: UiEvent) {
-        self.ui_state.write_silent().apply(event);
+/// Shared application state.
+#[derive(Clone)]
+pub struct AppState {
+    pub ui_state: Rc<RefCell<UiState>>,
+    pub version: Signal<u64>,
+    pub active_tab: Signal<ActiveTab>,
+    pub rpc_client: JsonRpcClient,
+}
+
+impl PartialEq for AppState {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.ui_state, &other.ui_state)
     }
 }
 
-/// Root application component.
-///
-/// Provides the UiState signal via context and renders the full layout:
-/// status bar, tools panel, tab bar, tab content, and input area.
+fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
+    let data = &event.data;
+    match event.event_type.as_str() {
+        "agent_start" => Some(UiEvent::AgentStart {
+            input: data.get("input").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        }),
+        "agent_complete" => Some(UiEvent::AgentComplete {
+            response: data.get("response").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        }),
+        "agent_error" => Some(UiEvent::AgentError {
+            message: data.get("message").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        }),
+        "agent_aborted" => Some(UiEvent::AgentAborted {
+            reason: data.get("reason").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        }),
+        "thinking_start" => Some(UiEvent::ThinkingStart),
+        "thinking_delta" => Some(UiEvent::ThinkingDelta {
+            delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        }),
+        "thinking_complete" => Some(UiEvent::ThinkingComplete),
+        "content_start" => Some(UiEvent::ContentStart),
+        "content_delta" => Some(UiEvent::ContentDelta {
+            delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        }),
+        "content_complete" => Some(UiEvent::ContentComplete {
+            content: data.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        }),
+        "tool_call_begin" => Some(UiEvent::ToolCallBegin {
+            tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            arguments: data.get("arguments").map(|v| v.to_string()).unwrap_or_default(),
+        }),
+        "tool_call_argument_delta" => Some(UiEvent::ToolCallArgumentDelta {
+            delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        }),
+        "tool_call_complete" => Some(UiEvent::ToolCallComplete {
+            tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            result: data.get("result").map(|v| v.to_string()).unwrap_or_default(),
+            duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
+        }),
+        "tool_call_error" => Some(UiEvent::ToolCallError {
+            tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            error: data.get("error").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
+        }),
+        "tool_call_skipped" => Some(UiEvent::ToolCallSkipped {
+            tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            reason: data.get("reason").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
+        }),
+        "max_iterations_reached" => Some(UiEvent::MaxIterationsReached {
+            current: data.get("current").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            max: data.get("max").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+        }),
+        "iteration_continued" => Some(UiEvent::IterationContinued {
+            from_iteration: data.get("from_iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+        }),
+        "iteration_complete" => Some(UiEvent::IterationComplete {
+            iteration: data.get("iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            final_answer: data.get("final_answer").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        }),
+        _ => None,
+    }
+}
+
+fn bump_ver(mut ver: Signal<u64>) {
+    let v = *ver.peek();
+    ver.set(v.wrapping_add(1));
+}
+
 #[component]
 pub fn App() -> Element {
-    // Initialize UiState with defaults
-    let ui_state = use_signal(|| UiState::new("web-session".into(), "/workspace"));
+    let ws_url = derive_ws_url();
+    let ui_state: Rc<RefCell<UiState>> = Rc::new(RefCell::new(
+        UiState::new("web-session".into(), "/workspace", &ws_url)
+    ));
+    let version = use_signal(|| 0u64);
+    let active_tab = use_signal(|| ActiveTab::Conversation);
+    let client = JsonRpcClient::new(&ws_url);
+    let rpc_client = client.clone();
 
-    // Provide state to all child components
-    use_context_provider(|| AppState { ui_state });
+    // Wire connection state changes into UiState
+    // Uses try_borrow_mut to avoid panics if called during render
+    {
+        let ui = ui_state.clone();
+        let ver = version;
+        let client_ws = client.clone();
+        client.on_state_change(move |state| {
+            match state {
+                crate::web::client::ConnectionState::Connected => {
+                    if let Ok(mut s) = ui.try_borrow_mut() {
+                        s.ws_connected = true;
+                        s.ws_last_error = None;
+                    }
+                    // Fetch workspace from server via file.list
+                    let ui_ws = ui.clone();
+                    let ver_cb = ver;
+                    client_ws.file_list(".", move |result| {
+                        if let Ok(entries) = result {
+                            if let Ok(mut s) = ui_ws.try_borrow_mut() {
+                                s.workspace.root = ".".to_string();
+                                s.workspace.entries.clear();
+                                for entry in &entries {
+                                    let indent = entry.name.chars().filter(|&c| c == '/').count();
+                                    s.workspace.entries.push(crate::state::WorkspaceEntry {
+                                        path: entry.name.clone(),
+                                        is_dir: entry.is_dir,
+                                        modified: false,
+                                        indent,
+                                    });
+                                }
+                            }
+                            bump_ver(ver_cb);
+                        }
+                    });
+                }
+                crate::web::client::ConnectionState::Connecting => {
+                    if let Ok(mut s) = ui.try_borrow_mut() {
+                        s.ws_connected = false;
+                    }
+                }
+                crate::web::client::ConnectionState::Disconnected => {
+                    if let Ok(mut s) = ui.try_borrow_mut() {
+                        s.ws_connected = false;
+                        s.ws_last_error = Some("Disconnected from server".to_string());
+                    }
+                }
+            }
+            bump_ver(ver);
+        });
+    }
+
+    // Event loop: receive server events and apply to UiState
+    {
+        let ui = ui_state.clone();
+        let ver = version;
+        let client2 = client.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            loop {
+                match client2.next_event().await {
+                    Some(event) => {
+                        if let Some(ui_event) = agent_event_to_ui(&event) {
+                            ui.borrow_mut().apply(ui_event);
+                            bump_ver(ver);
+                        }
+                    }
+                    None => {
+                        log::warn!("Event stream closed");
+                        ui.borrow_mut().ws_connected = false;
+                        ui.borrow_mut().ws_last_error = Some("Event stream closed".to_string());
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    use_context_provider(|| AppState {
+        ui_state,
+        version,
+        active_tab,
+        rpc_client,
+    });
 
     rsx! {
         style { {GLOBAL_CSS} }
         div { class: "app-container",
             StatusBar {}
             div { class: "main-layout",
-                ToolsPanel {}
+                FileTree {}
                 div { class: "right-panel",
                     TabBar {}
                     TabContent {}
@@ -58,47 +226,55 @@ pub fn App() -> Element {
     }
 }
 
-/// Tab bar component showing Conversation | Workspace | Skills | Logs.
+/// Tab bar component.
 #[component]
 fn TabBar() -> Element {
     let state: AppState = use_context();
 
     rsx! {
         div { class: "tab-bar",
-            TabButton { state: state.clone(), tab: ActiveTab::Conversation, label: "Conversation" }
-            TabButton { state: state.clone(), tab: ActiveTab::Workspace, label: "Workspace" }
-            TabButton { state: state.clone(), tab: ActiveTab::Skills, label: "Skills" }
-            TabButton { state: state.clone(), tab: ActiveTab::Logs, label: "Logs" }
+            TabButton { state: state.clone(), tab: ActiveTab::Conversation, label: "💬 Conversation" }
+            TabButton { state: state.clone(), tab: ActiveTab::Tools, label: "🔧 Tools" }
+            TabButton { state: state.clone(), tab: ActiveTab::Skills, label: "🎯 Skills" }
+            TabButton { state: state.clone(), tab: ActiveTab::Logs, label: "📋 Logs" }
         }
     }
 }
 
 #[component]
 fn TabButton(state: AppState, tab: ActiveTab, label: String) -> Element {
-    let active = state.ui_state.peek().active_tab == tab;
+    let current_tab = state.active_tab.read();
+    let active = *current_tab == tab;
     let tab_class = if active { "tab active" } else { "tab" };
-    let mut state_clone = state.clone();
 
+    let mut active_tab_signal = state.active_tab;
+    let ui = state.ui_state.clone();
+    let ver = state.version;
     rsx! {
         button {
             class: tab_class,
             onclick: move |_| {
-                state_clone.ui_state.write_silent().active_tab = tab;
+                active_tab_signal.set(tab);
+                if let Ok(mut s) = ui.try_borrow_mut() {
+                    s.active_tab = tab;
+                }
+                bump_ver(ver);
             },
             "{label}"
         }
     }
 }
 
-/// Tab content router -- renders the panel for the currently active tab.
+/// Tab content router.
 #[component]
 fn TabContent() -> Element {
     let state: AppState = use_context();
-    let active = state.ui_state.peek().active_tab;
+    let active = *state.active_tab.read();
 
     match active {
         ActiveTab::Conversation => rsx! { ConversationView {} },
-        ActiveTab::Workspace => rsx! { WorkspacePanel {} },
+        ActiveTab::Tools => rsx! { ToolsTabContent {} },
+        ActiveTab::Workspace => rsx! { FileContentView {} },
         ActiveTab::Skills => rsx! { SkillsPanel {} },
         ActiveTab::Logs => rsx! { LogViewer {} },
     }
@@ -130,28 +306,51 @@ pub fn status_class(status: crate::state::ToolCallStatus) -> &'static str {
     }
 }
 
-// === Global CSS ===
-
 const GLOBAL_CSS: &str = r#"
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; color: #e0e0e0; background: #1a1a2e; }
-.app-container { display: flex; flex-direction: column; height: 100vh; width: 100vw; overflow: hidden; }
-.status-bar { display: flex; align-items: center; padding: 4px 12px; background: #2d2d44; color: #e0e0e0; font-size: 12px; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+.app-container { display: flex; flex-direction: column; height: 100dvh; width: 100vw; overflow: hidden; }
+.status-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 12px; background: #2d2d44; color: #e0e0e0; font-size: 12px; font-family: monospace; flex-shrink: 0; }
+.status-left { display: flex; align-items: center; gap: 6px; overflow: hidden; flex-wrap: nowrap; }
+.status-right { display: flex; align-items: center; flex-shrink: 0; }
+.status-item { white-space: nowrap; }
+.status-divider { color: #555; user-select: none; }
+.status-badge { padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; }
+.badge-running { background: #3a3a20; color: #f0c040; }
+.badge-idle { background: #203a20; color: #80c080; }
+.badge-unsafe { background: #3a2020; color: #ff4040; }
+.badge-exiting { background: #3a2020; color: #ff8080; }
+.conn-indicator { display: flex; align-items: center; gap: 4px; margin-right: 4px; }
+.conn-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.conn-dot-connected { box-shadow: 0 0 4px #40c040; }
+.conn-dot-connecting { animation: conn-pulse 1.5s ease-in-out infinite; }
+.conn-dot-error { animation: conn-blink 1s ease-in-out infinite; }
+.conn-label { font-size: 10px; color: #888; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.build-info { display: flex; align-items: center; font-size: 11px; color: #888; flex-shrink: 0; }
+.build-label { color: #666; }
+.build-version { color: #a0a0c0; font-weight: bold; }
+.build-separator { color: #555; margin: 0 2px; }
+.build-time { color: #666; }
+@keyframes conn-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes conn-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 .status-running { color: #f0c040; }
 .status-idle { color: #80c080; }
 .unsafe-mode { color: #ff4040; font-weight: bold; }
 .main-layout { display: flex; flex: 1; overflow: hidden; }
-.tools-panel { width: 30%; min-width: 200px; max-width: 400px; border-right: 1px solid #333355; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
-.tools-panel-header { padding: 6px 10px; background: #252540; border-bottom: 1px solid #333355; font-weight: bold; font-size: 12px; color: #80a0ff; flex-shrink: 0; }
-.tools-panel-list { flex: 1; overflow-y: auto; padding: 4px 0; }
-.tool-item { padding: 6px 10px; border-bottom: 1px solid #2a2a44; }
-.tool-item-name { font-weight: bold; font-size: 13px; }
-.tool-item-arg { font-size: 11px; color: #888; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tool-item-status { font-size: 11px; margin-left: 8px; padding: 1px 6px; border-radius: 3px; }
-.status-running { background: #665500; color: #f0c040; }
-.status-success { background: #224422; color: #80c080; }
-.status-error { background: #442222; color: #ff6060; }
-.status-skipped { background: #333333; color: #888; }
+.sidebar { width: 240px; min-width: 180px; border-right: 1px solid #2a2a44; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; background: #16162a; }
+.sidebar-header { padding: 8px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #6a6a9a; border-bottom: 1px solid #2a2a44; flex-shrink: 0; }
+.file-tree { flex: 1; overflow-y: auto; padding: 4px 0; }
+.file-tree-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #666; padding: 20px; text-align: center; font-size: 12px; }
+.file-tree-node { display: flex; align-items: center; padding: 3px 8px 3px 0; cursor: pointer; font-size: 13px; white-space: nowrap; user-select: none; border-radius: 3px; margin: 0 4px; }
+.file-tree-node:hover { background: #2a2a44; }
+.file-tree-dir .file-tree-label { color: #8ab4ff; font-weight: 500; }
+.file-tree-file .file-tree-label { color: #ccc; }
+.file-tree-chevron { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; font-size: 10px; color: #666; transition: transform 0.15s; }
+.file-tree-chevron.collapsed { transform: rotate(-90deg); }
+.file-tree-chevron.hidden { visibility: hidden; }
+.file-tree-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; flex-shrink: 0; margin-right: 4px; font-size: 14px; }
+.file-tree-label { overflow: hidden; text-overflow: ellipsis; }
+.file-tree-children { overflow: hidden; }
 .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .tab-bar { display: flex; background: #252540; border-bottom: 1px solid #333355; flex-shrink: 0; }
 .tab { padding: 6px 16px; background: transparent; border: none; color: #888; cursor: pointer; font-size: 13px; border-bottom: 2px solid transparent; }
@@ -227,4 +426,55 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .approval-tool-name { color: #f0c040; font-weight: bold; font-size: 15px; }
 .approval-reason { color: #ccc; margin: 6px 0; }
 .approval-args { font-family: monospace; font-size: 12px; color: #888; background: #1a1a2e; padding: 6px 8px; border-radius: 4px; margin: 8px 0; max-height: 100px; overflow-y: auto; white-space: pre-wrap; }
+
+/* Tools tab */
+.tools-tab { flex: 1; overflow-y: auto; padding: 8px; }
+.tools-tab-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #666; }
+.tool-call-item { border-bottom: 1px solid #2a2a44; }
+.tool-call-header { display: flex; align-items: center; padding: 8px 10px; cursor: pointer; gap: 8px; }
+.tool-call-header:hover { background: #222240; }
+.tool-call-seq { color: #555; font-size: 11px; min-width: 24px; }
+.tool-call-name { font-weight: 600; font-size: 13px; }
+.tool-call-status { font-size: 11px; padding: 1px 6px; border-radius: 3px; }
+.tool-call-duration { font-size: 11px; color: #888; margin-left: auto; }
+.tool-call-chevron { font-size: 10px; color: #666; margin-left: 4px; }
+.tool-call-detail { padding: 8px 10px 8px 42px; font-size: 12px; font-family: monospace; color: #888; background: #16162a; white-space: pre-wrap; word-break: break-all; }
+.tool-detail-label { color: #6090ff; font-weight: 600; font-family: sans-serif; }
+
+/* File content viewer */
+.file-content-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.file-tab-bar { display: flex; background: #1e1e38; border-bottom: 1px solid #2a2a44; flex-shrink: 0; overflow-x: auto; }
+.file-tab { padding: 4px 8px; font-size: 12px; color: #777; display: flex; align-items: center; gap: 4px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+.file-tab:hover { color: #bbb; background: #222240; }
+.file-tab.active { color: #e0e0e0; background: #1a1a2e; border-bottom-color: #80a0ff; }
+.file-tab-icon { font-size: 13px; }
+.file-tab-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.file-tab-close { font-size: 10px; color: #555; padding: 0 2px; border-radius: 2px; line-height: 1; }
+.file-tab-close:hover { color: #ff6060; background: #3a2020; }
+.file-content { flex: 1; overflow: auto; padding: 12px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; color: #c8c8e0; background: #1a1a2e; white-space: pre; margin: 0; }
+.file-content-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #666; }
+.file-content-error { padding: 12px; color: #ff6060; font-weight: bold; }
+.file-content-loading { display: flex; align-items: center; justify-content: center; height: 100%; color: #888; }
+
+@media (max-width: 1024px) {
+    .sidebar { width: 25%; min-width: 160px; }
+    .tab { padding: 6px 12px; font-size: 12px; }
+}
+@media (max-width: 768px) {
+    .main-layout { flex-direction: column; }
+    .sidebar { width: 100%; max-width: none; height: auto; max-height: 200px; border-right: none; border-bottom: 1px solid #333355; }
+    .tab { padding: 6px 10px; }
+    .modal-content { min-width: auto; width: 90vw; max-width: 500px; }
+}
+@media (max-width: 480px) {
+    .app-container { height: 100dvh; }
+    .status-bar { font-size: 10px; padding: 3px 8px; }
+    .tab-bar { overflow-x: auto; }
+    .tab { padding: 6px 8px; font-size: 11px; white-space: nowrap; }
+    .input-area { padding: 6px 8px; }
+    .input-area button { padding: 6px 12px; font-size: 13px; }
+    .sidebar { width: 100%; max-height: 150px; }
+    .modal-content { padding: 12px; }
+}
 "#;
+
