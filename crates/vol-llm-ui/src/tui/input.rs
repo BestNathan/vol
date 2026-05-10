@@ -192,7 +192,7 @@ mod tests {
     }
 
     fn make_state() -> UiState {
-        UiState::new("test-session".into(), ".")
+        UiState::new("test-session".into(), ".", "local")
     }
 
     #[test]

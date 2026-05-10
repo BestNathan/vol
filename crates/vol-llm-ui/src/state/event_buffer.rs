@@ -171,7 +171,7 @@ mod tests {
     #[test]
     fn test_apply_event_direct() {
         let mut buffer = EventBuffer::new();
-        let mut state = UiState::new("sess-1".into(), ".");
+        let mut state = UiState::new("sess-1".into(), ".", "local");
         buffer.apply_event(UiEvent::AgentStart { input: "hello".into() }, &mut state);
         assert!(state.is_running);
         assert_eq!(state.conversation.len(), 1);
@@ -180,7 +180,7 @@ mod tests {
     #[test]
     fn test_apply_stream_thinking_flow() {
         let mut buffer = EventBuffer::new();
-        let mut state = UiState::new("sess-1".into(), ".");
+        let mut state = UiState::new("sess-1".into(), ".", "local");
 
         buffer.apply_stream(
             &AgentStreamEvent::ThinkingStart {
@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn test_apply_stream_modified_files() {
         let mut buffer = EventBuffer::new();
-        let mut state = UiState::new("sess-1".into(), ".");
+        let mut state = UiState::new("sess-1".into(), ".", "local");
 
         buffer.apply_stream(
             &AgentStreamEvent::ToolCallComplete {
@@ -241,7 +241,7 @@ mod tests {
     #[test]
     fn test_apply_stream_ignores_llm_meta_events() {
         let mut buffer = EventBuffer::new();
-        let mut state = UiState::new("sess-1".into(), ".");
+        let mut state = UiState::new("sess-1".into(), ".", "local");
 
         buffer.apply_stream(
             &AgentStreamEvent::LLMCallStart {
@@ -267,7 +267,7 @@ mod tests {
     #[test]
     fn test_apply_stream_agent_start_and_complete() {
         let mut buffer = EventBuffer::new();
-        let mut state = UiState::new("sess-1".into(), ".");
+        let mut state = UiState::new("sess-1".into(), ".", "local");
 
         buffer.apply_stream(
             &AgentStreamEvent::AgentStart {
@@ -292,7 +292,7 @@ mod tests {
     #[test]
     fn test_apply_stream_tool_call_lifecycle() {
         let mut buffer = EventBuffer::new();
-        let mut state = UiState::new("sess-1".into(), ".");
+        let mut state = UiState::new("sess-1".into(), ".", "local");
 
         buffer.apply_stream(
             &AgentStreamEvent::ToolCallBegin {
@@ -321,7 +321,7 @@ mod tests {
     #[test]
     fn test_apply_stream_max_iterations() {
         let mut buffer = EventBuffer::new();
-        let mut state = UiState::new("sess-1".into(), ".");
+        let mut state = UiState::new("sess-1".into(), ".", "local");
 
         buffer.apply_stream(
             &AgentStreamEvent::MaxIterationsReached {

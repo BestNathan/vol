@@ -1,10 +1,11 @@
 /// Shared state model for all UI frontends.
 pub mod state;
 
-/// Connection abstraction layer (local + remote).
+// TUI-only modules
+#[cfg(feature = "tui")]
 pub mod connection;
 
-/// Async hooks for agent interaction.
+#[cfg(feature = "tui")]
 pub mod hooks;
 
 // TUI frontend (ratatui).
@@ -19,9 +20,12 @@ pub mod web;
 pub use state::{
     UiState, UiEvent, ConversationEntry, ToolCallEntry, ToolCallStatus,
     WorkspaceTree, WorkspaceEntry, ActiveTab, ApprovalState,
-    SkillDisplayEntry, LogLine, LogRunSummary, SessionDialogEntry,
+    SkillDisplayEntry, LogRunSummary, SessionDialogEntry,
 };
 
+#[cfg(feature = "tui")]
 pub use connection::{AgentConnection, FileOperations, FileEntry, LogRunInfo, SessionInfo};
+#[cfg(feature = "tui")]
 pub use connection::local::LocalConnection;
+#[cfg(feature = "tui")]
 pub use connection::remote::RemoteConnection;
