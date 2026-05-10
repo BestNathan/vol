@@ -186,7 +186,9 @@ pub fn App() -> Element {
                 match client2.next_event().await {
                     Some(event) => {
                         if let Some(ui_event) = agent_event_to_ui(&event) {
-                            ui.borrow_mut().apply(ui_event);
+                            if let Ok(mut s) = ui.try_borrow_mut() {
+                                s.apply(ui_event);
+                            }
                             bump_ver(ver);
                         }
                     }
@@ -207,6 +209,10 @@ pub fn App() -> Element {
         active_tab,
         rpc_client,
     });
+
+    // Read version to subscribe to re-renders when state changes.
+    let ver = version.read();
+    let _ = *ver;
 
     rsx! {
         style { {GLOBAL_CSS} }
