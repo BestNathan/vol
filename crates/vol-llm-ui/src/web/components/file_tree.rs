@@ -26,23 +26,11 @@ pub(crate) fn file_icon(is_dir: bool, name: &str) -> &'static str {
     }
 }
 
-/// Render tree nodes recursively.
-fn render_nodes(nodes: &[WorkspaceTreeNode], state: AppState, depth: usize) -> Vec<Element> {
-    nodes
-        .iter()
-        .map(|node| render_node(node, state.clone(), depth))
-        .collect()
-}
-
-fn render_node(node: &WorkspaceTreeNode, state: AppState, depth: usize) -> Element {
+#[component]
+fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
     if node.is_dir {
+        let state: AppState = use_context();
         let collapsed = state.signal.read().collapsed_dirs.contains(&node.path);
-
-        let child_elements = if !collapsed {
-            render_nodes(&node.children, state.clone(), depth + 1)
-        } else {
-            Vec::new()
-        };
 
         let indent_px = depth * 16;
         let chevron_cls = if collapsed {
@@ -153,22 +141,25 @@ fn render_node(node: &WorkspaceTreeNode, state: AppState, depth: usize) -> Eleme
                 }
                 if !collapsed {
                     div { class: "file-tree-children",
-                        {child_elements.into_iter()}
+                        for child in &node.children {
+                            TreeNode { node: child.clone(), depth: depth + 1, key: "{child.path}" }
+                        }
                     }
                 }
             }
         }
     } else {
+        let state: AppState = use_context();
         let indent_px = depth * 16;
 
-        let mut sig = state.signal.clone();
+        let sig = state.signal;
         let rpc = state.rpc_client.clone();
         let mut tab = state.active_tab;
         let file_path = node.path.clone();
         let file_onclick = move |_: Event<MouseData>| {
             let p = file_path.clone();
             let rpc_clone = rpc.clone();
-            let sig_clone = sig.clone();
+            let mut sig = sig.clone();
 
             sig.with_mut(|s| {
                 let existing = s.open_files.iter().position(|f| f.path == p.clone());
@@ -185,7 +176,7 @@ fn render_node(node: &WorkspaceTreeNode, state: AppState, depth: usize) -> Eleme
                         });
                         s.selected_file_tab = Some(new_idx);
 
-                        let mut sig2 = sig_clone.clone();
+                        let mut sig2 = sig.clone();
                         let read_path = p.clone();
                         rpc_clone.file_read(&p, move |result| {
                             sig2.with_mut(|st| {
@@ -233,13 +224,13 @@ pub fn FileTree() -> Element {
         };
     }
 
-    let elements = render_nodes(&workspace.children, state, 0);
-
     rsx! {
         div { class: "sidebar",
             div { class: "sidebar-header", "Explorer" }
             div { class: "file-tree",
-                {elements.into_iter()}
+                for child in &workspace.children {
+                    TreeNode { node: child.clone(), depth: 0, key: "{child.path}" }
+                }
             }
         }
     }
