@@ -1,6 +1,6 @@
-# Build artifacts
+# Build artifacts (keep release binaries for Docker packaging)
 target/
-**/target/
+!target/release/
 
 # Git
 .git/
