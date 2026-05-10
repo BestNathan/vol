@@ -1,15 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: docs-rs-mcp
-  namespace: deribit
+  name: ${MCP_NAME}
+  namespace: mcp
   labels:
-    app: docs-rs-mcp
+    app: ${MCP_NAME}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: docs-rs-mcp
+      app: ${MCP_NAME}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -18,7 +18,7 @@ spec:
   template:
     metadata:
       labels:
-        app: docs-rs-mcp
+        app: ${MCP_NAME}
     spec:
       restartPolicy: Always
       nodeSelector:
@@ -26,8 +26,8 @@ spec:
       imagePullSecrets:
       - name: acr-registry-secret
       containers:
-      - name: docs-rs-mcp
-        image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:docs-rs-mcp
+      - name: ${MCP_NAME}
+        image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:${MCP_NAME}
         imagePullPolicy: Always
         args:
           - "--http"
@@ -51,10 +51,8 @@ spec:
           periodSeconds: 30
           timeoutSeconds: 5
         env:
-        # Logging
         - name: RUST_LOG
           value: "info"
-        # Network (required in restricted environment)
         - name: HTTPS_PROXY
           value: "http://192.168.2.98:8890"
         - name: HTTP_PROXY
@@ -72,13 +70,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: docs-rs-mcp
-  namespace: deribit
+  name: ${MCP_NAME}
+  namespace: mcp
   labels:
-    app: docs-rs-mcp
+    app: ${MCP_NAME}
 spec:
   selector:
-    app: docs-rs-mcp
+    app: ${MCP_NAME}
   ports:
   - port: 8080
     targetPort: 8080

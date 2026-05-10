@@ -1,5 +1,7 @@
 #!/bin/bash
-# k8s/deploy-mcp.sh - Deploy MCP server(s) to Kubernetes
+# k8s/deploy-mcp.sh - Build, push and deploy an MCP server to Kubernetes
+#
+# Usage: ./k8s/deploy-mcp.sh <binary-name> [version]
 
 set -e
 
@@ -10,25 +12,23 @@ VERSION="${2:-latest}"
 
 echo "Deploying $BINARY_NAME ($VERSION)..."
 
-# Build and push Docker image
+# Step 1: Build and push Docker image
 echo "[1/3] Building Docker image..."
 docker build --build-arg BIN_NAME="$BINARY_NAME" \
     -t "$IMAGE_NAME:$BINARY_NAME-$VERSION" \
     -f crates/vol-mcp-servers/Dockerfile .
 docker push "$IMAGE_NAME:$BINARY_NAME-$VERSION"
 
-# Update deployment image tag
-echo "[2/3] Updating deployment manifest..."
-sed -i "s|image: $IMAGE_NAME:$BINARY_NAME:.*|image: $IMAGE_NAME:$BINARY_NAME-$VERSION|" \
-    "$K8S_DIR/deployment-$BINARY_NAME.yaml"
+# Step 2: Render template
+echo "[2/3] Rendering deployment manifest..."
+sed "s/\${MCP_NAME}/$BINARY_NAME/g" "$K8S_DIR/deployment-mcp-template.yaml" | \
+    kubectl apply -f -
 
-# Apply to cluster
-echo "[3/3] Applying Kubernetes manifests..."
-kubectl apply -f "$K8S_DIR/deployment-$BINARY_NAME.yaml"
-
-echo "Waiting for rollout..."
-kubectl -n deribit rollout status deployment/$BINARY_NAME --timeout=120s
+# Step 3: Wait for rollout
+echo "[3/3] Waiting for rollout..."
+kubectl -n mcp rollout status deployment/$BINARY_NAME --timeout=120s
 
 echo "Done. Pod status:"
-kubectl -n deribit get pods -l app="$BINARY_NAME"
-echo "Logs: kubectl -n deribit logs -f deployment/$BINARY_NAME"
+kubectl -n mcp get pods -l app="$BINARY_NAME"
+echo "Logs: kubectl -n mcp logs -f deployment/$BINARY_NAME"
+echo "Service: kubectl -n mcp get svc $BINARY_NAME"
