@@ -11,7 +11,7 @@ source_count: 1
 
 **Category:** UI rendering pattern for terminal applications
 
-**Related:** [[vol-llm-ui-crate]], [[tui-frontend-ratatui]], [[dioxus-web-pattern]]
+**Related:** [[vol-llm-ui-crate]], [[tui-frontend-ratatui]], [[dioxus-web-pattern]], [[workspace-tree-pattern]]
 
 ## Definition
 
@@ -41,7 +41,7 @@ Frame
 
 Each tab content renderer:
 - **Conversation**: Builds styled `Line` vectors from `ConversationEntry` enum with word wrapping, auto-scroll support
-- **Workspace**: Displays directory tree with `[DIR]`/`[FILE]` prefixes and modification indicators
+- **Workspace**: Displays `WorkspaceTreeNode` tree with `[DIR]`/`[FILE]` prefixes, modification indicators, and lazy-loaded directory children via `flatten_tree_for_tui()` [[workspace-tree-pattern]]
 - **Skills**: Columnar layout with name, version, scope, description fields
 - **Logs**: Two-level view — run list or log entries per selected run
 

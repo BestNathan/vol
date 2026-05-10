@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [dioxus, signal, state-management, web, frontend]
 created: 2026-05-08
-updated: 2026-05-10
-source_count: 2
+updated: 2026-05-10 (lazy-load-dir-tree)
+source_count: 3
 ---
 
 # Dioxus Signal Pattern
@@ -23,7 +23,26 @@ Using Dioxus `Signal<T>` with `use_context_provider` to share mutable state acro
 - `use_context_provider` in `App` provides `AppState` to all descendants
 - Child components consume via `use_context::<AppState>()`
 - `write_silent()` mutates without triggering reactive subscriptions -- appropriate when the component will re-render anyway on the next frame
-- `peek()` reads current value without creating a reactive subscription -- used in closure bodies where `&mut self` would otherwise be required
+- `with_mut(|s| ...)` mutates state and auto-triggers re-renders — used for tree mutations in `FileTree` [[workspace-tree-pattern]]
+
+## Borrow Checker Pattern with with_mut
+
+When mutating state via `Signal::with_mut()` and then making an async callback, the callback must be called OUTSIDE `with_mut` to avoid borrow checker conflicts:
+
+```rust
+// Return a value from with_mut, then use it after the borrow ends
+let was_collapsed = sig.with_mut(|s| {
+    if s.collapsed_dirs.contains(&p) { false } else { true }
+});
+// Now sig is no longer borrowed — safe to move into closure
+if was_collapsed {
+    rpc.file_list(&path, move |result| {
+        sig.with_mut(|s| { /* populate children */ });
+    });
+}
+```
+
+This pattern is used in `FileTree` directory expand handlers [[workspace-tree-pattern]].
 - `AppState::apply_event(UiEvent)` centralizes all mutations: `self.ui_state.write_silent().apply(event)`
 
 ## How It Works

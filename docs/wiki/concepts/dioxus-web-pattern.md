@@ -3,14 +3,14 @@ type: concept
 category: pattern
 tags: [dioxus, web, frontend, component, wasm]
 created: 2026-05-08
-updated: 2026-05-10
-source_count: 2
+updated: 2026-05-10 (lazy-load-dir-tree)
+source_count: 3
 ---
 
 # Dioxus Web Pattern
 
 **Category:** Web frontend architecture
-**Related:** [[vol-llm-ui-crate]], [[dioxus-signal-pattern]], [[ratatui-tui-pattern]], [[human-in-the-loop]]
+**Related:** [[vol-llm-ui-crate]], [[dioxus-signal-pattern]], [[ratatui-tui-pattern]], [[human-in-the-loop]], [[workspace-tree-pattern]]
 
 ## Definition
 
@@ -20,7 +20,7 @@ Component architecture for a browser-based UI built with Dioxus 0.6, compiled to
 
 - Dioxus 0.6 via `dioxus::launch(App)` in binary entry point
 - Feature gated: `#[cfg(feature = "web")]` in `lib.rs`, binary requires `--features web`
-- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `SessionDialog`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView`
+- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `SessionDialog`, `ApprovalDialog`, `FileTree`, `TreeNode`, `ToolsTabContent`, `FileContentView`
 - Global CSS embedded as `const GLOBAL_CSS: &str`, injected via `<style>` element
 - Dark theme with flexbox layout: status bar (top), tools panel (left), tab content (right), input area (bottom)
 - Tab routing: `TabContent` matches on `ActiveTab` enum to render the active panel
@@ -45,6 +45,10 @@ App
 ├── SessionDialog      (modal overlay)
 └── ApprovalDialog     (modal overlay)
 ```
+
+## FileTree Component
+
+The `FileTree` component renders a `WorkspaceTreeNode` tree in the left sidebar. Each node is a reactive `#[component] TreeNode` — not a plain function — enabling Dioxus reactivity when children are populated via `Signal::with_mut()`. Directories fetch children on-demand via JSON-RPC `file.list`, with a refresh button (⟳) for re-fetching. See [[workspace-tree-pattern]] for the full pattern.
 
 ## Build Command
 
@@ -81,3 +85,5 @@ Both frontends share `UiState` / `UiEvent` / `ActiveTab` types and the same conn
 - [[human-in-the-loop]]: Approval dialog component implements HITL workflow
 - [[vol-llm-ui-crate]]: Shared crate defining state types and connection traits
 - [[file-tab-pattern]]: Tabbed file viewer rendered in Workspace tab
+- [[workspace-tree-pattern]]: WorkspaceTreeNode tree structure and lazy-loading pattern
+- [[lazy-load-dir-tree]]: Source documenting the directory tree implementation

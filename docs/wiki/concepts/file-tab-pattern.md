@@ -10,7 +10,7 @@ source_count: 1
 # File Tab Pattern
 
 **Category:** Dioxus component pattern
-**Related:** [[dioxus-web-pattern]], [[dioxus-signal-pattern]], [[vol-llm-ui-crate]]
+**Related:** [[dioxus-web-pattern]], [[dioxus-signal-pattern]], [[vol-llm-ui-crate]], [[workspace-tree-pattern]]
 
 ## Definition
 
@@ -58,3 +58,5 @@ When a tab is closed:
 - [[dioxus-web-pattern]]: Parent component architecture
 - [[dioxus-signal-pattern]]: State management and version bumping
 - [[vol-llm-ui-crate]]: `OpenFileTab` struct definition
+- [[workspace-tree-pattern]]: File tree that opens files into tabs
+- [[lazy-load-dir-tree]]: Source documenting the tree implementation

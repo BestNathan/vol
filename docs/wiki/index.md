@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-10
+Last updated: 2026-05-10 (lazy-load-dir-tree)
 
 ## Entities
 
@@ -61,6 +61,7 @@ Last updated: 2026-05-10
 | [[jsonrpc-transport]] | JSON-RPC 2.0 over WebSocket implementing the Connection trait | active | 2026-05-09 |
 | [[jsonrpc-server-handler]] | Historical JSON-RPC handler architecture — deleted, replaced by jsonrpc-transport | stale | 2026-05-09 |
 | [[file-tab-pattern]] | Tabbed file viewer with non-component render function pattern for Dioxus | active | 2026-05-10 |
+| [[workspace-tree-pattern]] | Recursive WorkspaceTreeNode tree with lazy-loaded directory children via JSON-RPC file.list | active | 2026-05-10 |
 
 ## Sources
 
@@ -83,6 +84,7 @@ Last updated: 2026-05-10
 | [[jsonrpc-transport-refactoring]] | Refactoring: EventBridgePlugin deleted, JsonRpcConnection implements Connection trait | active | 2026-05-09 |
 | [[task-5-jsonrpc-integration-tests]] | 44 integration tests for JSON-RPC serialization, parsing, and error handling | active | 2026-05-09 |
 | [[task-5-file-content-view]] | FileContentView component: file tab bar with content preview, error/loading states, non-component tab rendering | active | 2026-05-10 |
+| [[lazy-load-dir-tree]] | Lazy-loading directory tree: WorkspaceTreeNode replaces flat entries, on-demand fetch via file.list, refresh button | active | 2026-05-10 |
 
 ## Analyses
 

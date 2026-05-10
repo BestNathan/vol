@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-05-10] ingest | Lazy-Loading Directory Tree
+- Created sources: [[lazy-load-dir-tree]]
+- Created concepts: [[workspace-tree-pattern]]
+- Updated entities: [[vol-llm-ui-crate]]
+- Updated concepts: [[dioxus-signal-pattern]], [[dioxus-web-pattern]]
+- Updated index: new entries for workspace-tree-pattern and lazy-load-dir-tree
+- Cross-references added: 5
+- Changes: WorkspaceTree/WorkspaceEntry replaced with WorkspaceTreeNode tree; directories fetch children on-demand via JSON-RPC file.list on expand; every expand re-fetches fresh data; refresh button on each directory; TreeNode is a reactive Dioxus #[component] (not plain function); Signal::with_mut() for tree mutations; borrow checker pattern: return value from with_mut before making async callback; TUI rendering updated with flatten_tree_for_tui helper; 42 tests passing
+
 ## [2026-05-10] ingest | Task 5: FileContentView Component
 - Created sources: [[task-5-file-content-view]]
 - Created concepts: [[file-tab-pattern]]
