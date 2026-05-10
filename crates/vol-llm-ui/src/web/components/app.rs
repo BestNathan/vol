@@ -122,23 +122,21 @@ pub fn App() -> Element {
     ));
     let version = use_signal(|| 0u64);
     let active_tab = use_signal(|| ActiveTab::Conversation);
-    let client = JsonRpcClient::new(&ws_url);
-    let rpc_client = client.clone();
+    // Create client once via use_hook so it survives re-renders.
+    let client = use_hook(|| {
+        let c = JsonRpcClient::new(&ws_url);
 
-    // Wire connection state changes into UiState
-    // Uses try_borrow_mut to avoid panics if called during render
-    {
+        // Wire connection state changes into UiState
         let ui = ui_state.clone();
         let ver = version;
-        let client_ws = client.clone();
-        client.on_state_change(move |state| {
+        let client_ws = c.clone();
+        c.on_state_change(move |state| {
             match state {
                 crate::web::client::ConnectionState::Connected => {
                     if let Ok(mut s) = ui.try_borrow_mut() {
                         s.ws_connected = true;
                         s.ws_last_error = None;
                     }
-                    // Fetch workspace from server via file.list
                     let ui_ws = ui.clone();
                     let ver_cb = ver;
                     client_ws.file_list(".", move |result| {
@@ -174,40 +172,40 @@ pub fn App() -> Element {
             }
             bump_ver(ver);
         });
-    }
 
-    // Event loop: receive server events and apply to UiState
-    {
-        let ui = ui_state.clone();
-        let ver = version;
-        let client2 = client.clone();
+        // Event loop: receive server events and apply to UiState
+        let ui_ev = ui_state.clone();
+        let ver_ev = version;
+        let client_ev = c.clone();
         wasm_bindgen_futures::spawn_local(async move {
             loop {
-                match client2.next_event().await {
+                match client_ev.next_event().await {
                     Some(event) => {
                         if let Some(ui_event) = agent_event_to_ui(&event) {
-                            if let Ok(mut s) = ui.try_borrow_mut() {
+                            if let Ok(mut s) = ui_ev.try_borrow_mut() {
                                 s.apply(ui_event);
                             }
-                            bump_ver(ver);
+                            bump_ver(ver_ev);
                         }
                     }
                     None => {
                         log::warn!("Event stream closed");
-                        ui.borrow_mut().ws_connected = false;
-                        ui.borrow_mut().ws_last_error = Some("Event stream closed".to_string());
+                        ui_ev.borrow_mut().ws_connected = false;
+                        ui_ev.borrow_mut().ws_last_error = Some("Event stream closed".to_string());
                         break;
                     }
                 }
             }
         });
-    }
+
+        c
+    });
 
     use_context_provider(|| AppState {
         ui_state,
         version,
         active_tab,
-        rpc_client,
+        rpc_client: client.clone(),
     });
 
     // Read version to subscribe to re-renders when state changes.
