@@ -57,7 +57,7 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
                 }
             });
 
-            if was_collapsed {
+            if !was_collapsed {
                 let p_str = p.clone();
                 rpc_clone.file_list(&p_str, move |result| {
                     let mut sig2 = sig.clone();
