@@ -54,7 +54,7 @@ fn build_tree_at(entries: &[crate::state::WorkspaceEntry], prefix: &str) -> Vec<
         };
 
         let first = relative.split('/').next().unwrap_or("");
-        if relative.contains('/') {
+        if entry.is_dir || relative.contains('/') {
             let full = if prefix.is_empty() {
                 first.to_string()
             } else {
@@ -145,7 +145,7 @@ fn render_node(node: FileTreeNode, state: AppState, depth: usize) -> Element {
             let file_onclick = move |_: Event<MouseData>| {
                 let p = file_path.clone();
                 let rpc_clone = rpc.clone();
-                let mut sig_clone = sig.clone();
+                let sig_clone = sig.clone();
 
                 sig.with_mut(|s| {
                     let existing = s.open_files.iter().position(|f| f.path == p.clone());
