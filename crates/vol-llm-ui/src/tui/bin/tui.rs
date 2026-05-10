@@ -101,7 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 state.is_running = true;
                                 let conn = connection.clone();
                                 let state_clone = ui_state.clone();
-                                let render_tx_clone = render_tx.clone();
+                                let render_tx = render_tx.clone();
                                 tokio::spawn(async move {
                                     match conn.submit(text).await {
                                         Ok(rx) => {
@@ -113,14 +113,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             let mut s = state_clone.write().await;
                                             s.is_running = false;
                                             drop(s);
-                                            let _ = render_tx_clone.try_send(());
+                                            let _ = render_tx.try_send(());
                                         }
                                         Err(e) => {
                                             let mut s = state_clone.write().await;
                                             s.is_running = false;
                                             s.last_error = Some(format!("{}", e));
                                             drop(s);
-                                            let _ = render_tx_clone.try_send(());
+                                            let _ = render_tx.try_send(());
                                         }
                                     }
                                 });
@@ -133,7 +133,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Trigger render after input handling
                         let _ = render_tx.try_send(());
                     }
-                    Some(Ok(Event::Resize(_, _))) => {}
+                    Some(Ok(Event::Resize(_, _))) => {
+                        let _ = render_tx.try_send(());
+                    }
                     _ => {}
                 }
             }
