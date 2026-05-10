@@ -137,17 +137,18 @@ pub fn App() -> Element {
             client_ws.file_list(".", move |result| {
                 if let Ok(entries) = result {
                     sig_cb.with_mut(|state| {
-                        state.workspace.root = ".".to_string();
-                        state.workspace.entries.clear();
+                        state.workspace.children.clear();
                         for entry in &entries {
-                            let indent = entry.name.chars().filter(|&c| c == '/').count();
-                            state.workspace.entries.push(crate::state::WorkspaceEntry {
+                            state.workspace.children.push(crate::state::WorkspaceTreeNode {
+                                name: entry.name.clone(),
                                 path: entry.name.clone(),
                                 is_dir: entry.is_dir,
-                                modified: false,
-                                indent,
+                                loaded: true,
+                                load_error: false,
+                                children: Vec::new(),
                             });
                         }
+                        state.workspace.loaded = true;
                     });
                 }
             });
