@@ -1,10 +1,10 @@
 # Change Log
 
-## [2026-05-10] update | vol-mcp-servers Docker Packaging
+## [2026-05-10] update | vol-mcp-servers Docker Packaging — Alpine Multi-Stage
 - Created sources: [[vol-mcp-servers-dockerfile]]
 - Created entity: [[vol-mcp-servers-crate]] (Docker section)
 - Updated concepts: [[docs-rs-mcp-impl]]
-- Changes: Single-stage Ubuntu Dockerfile added for packaging vol-mcp-servers binaries; ENV BIN_NAME + ENTRYPOINT shell pattern enables ARG-based binary selection; ~95MB image size; ACR registry target
+- Changes: Multi-stage Alpine 3.21 Dockerfile — builder stage with Rust toolchain + rsproxy mirror (.cargo/config.toml), runtime stage ~30MB; apk uses mirrors.aliyun.com; ENV BIN_NAME + ENTRYPOINT shell pattern enables ARG-based binary selection; ACR registry target
 
 ## [2026-05-10] ingest | docs-rs MCP Server Implementation
 - Created sources: [[docs-rs-mcp-impl]]

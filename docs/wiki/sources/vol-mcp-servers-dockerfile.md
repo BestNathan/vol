@@ -1,7 +1,7 @@
 ---
 type: source
 category: implementation
-tags: [docker, mcp, vol-mcp-servers, alpine, ubuntu]
+tags: [docker, mcp, vol-mcp-servers, alpine, multi-stage]
 created: 2026-05-10
 updated: 2026-05-10
 ---
@@ -13,15 +13,30 @@ updated: 2026-05-10
 
 ## Overview
 
-Added Dockerfile to package vol-mcp-servers binaries into minimal Docker images for deployment to ACR (Alibaba Cloud Container Registry).
+Added multi-stage Alpine Dockerfile to package vol-mcp-servers binaries into minimal (~30MB) Docker images for deployment to ACR (Alibaba Cloud Container Registry).
 
 ## Key Decisions
 
-### Single-Stage Ubuntu Build
+### Multi-Stage Alpine Build
 
-Originally spec'd as two-stage Alpine multi-stage build. Implementation changed to single-stage Ubuntu due to:
-1. **Network restrictions**: Docker build environment cannot reach crates.io or Alpine package repos, making multi-stage cargo build impossible
-2. **glibc incompatibility**: Host-compiled binary is dynamically linked against glibc. Alpine uses musl libc, causing `not found` errors at runtime
+Two-stage build:
+1. **Builder**: `alpine:3.21` with Rust toolchain, compiles binary from source
+2. **Runtime**: Minimal `alpine:3.21` with only the compiled binary
+
+### China Mirror Configuration
+
+Two mirror sources configured to handle network restrictions:
+
+1. **Alpine packages (apk)**: `mirrors.aliyun.com` replaces `dl-cdn.alpinelinux.org` in `/etc/apk/repositories`
+2. **Rust crates**: `.cargo/config.toml` copied into builder, which contains rsproxy.cn mirror for crates.io
+
+```toml
+# .cargo/config.toml
+[source.crates-io]
+replace-with = 'rsproxy-sparse'
+[source.rsproxy-sparse]
+registry = "sparse+https://rsproxy.cn/index/"
+```
 
 ### ENTRYPOINT Pattern
 
@@ -41,8 +56,9 @@ Registry: `crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vo
 
 ## Files
 
-- `crates/vol-mcp-servers/Dockerfile` — single-stage Ubuntu packaging
+- `crates/vol-mcp-servers/Dockerfile` — multi-stage Alpine packaging
 - `.dockerignore` — excludes .git, target (except release), docs, k8s
+- `.cargo/config.toml` — rsproxy mirror configuration (copied into builder)
 
 ## Build Command
 

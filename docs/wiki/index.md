@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-10 (Docker)
+Last updated: 2026-05-10 (Alpine Multi-Stage)
 
 ## Entities
 

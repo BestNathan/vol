@@ -43,7 +43,8 @@ CLI (--http / default stdio) → transport::run_server()
 
 ## Docker Packaging
 
-- Single Dockerfile packages any binary via `--build-arg BIN_NAME=<name>`
-- Base: `ubuntu:24.04` (glibc compatibility with host-compiled binary)
-- Image size: ~95MB
+- Multi-stage Alpine 3.21 Dockerfile packages any binary via `--build-arg BIN_NAME=<name>`
+- Builder stage: Rust toolchain + rsproxy mirror (via `.cargo/config.toml`)
+- Runtime stage: ~30MB Alpine image
 - Registry: `crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:<name>`
+- Alibaba mirrors: apk → `mirrors.aliyun.com`, crates.io → `rsproxy.cn`
