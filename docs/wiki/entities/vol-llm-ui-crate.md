@@ -3,15 +3,15 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-08
-source_count: 2
+updated: 2026-05-10
+source_count: 3
 ---
 
 # vol-llm-ui Crate
 
 **Category:** Rust crate — Shared UI state model and connection abstraction
 
-**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]]
+**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]]
 
 ## Overview
 
@@ -34,7 +34,7 @@ Both modes implement the same trait interfaces, so TUI (ratatui) and Web (Dioxus
 - TUI modules: `render` (9 panel renderers), `input` (keyboard handling with approval/session support) [[ratatui-tui-pattern]]
 - Event loop: `tokio::select!` with biased mode prioritizing input over render ticks [[ui-event-loop-pattern]]
 - Web binary: `vol-llm-ui-web` — Dioxus 0.6 WASM with Signal<UiState> context [[dioxus-web-pattern]]
-- Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `SessionDialog`, `ApprovalDialog` [[task-8-dioxus-web-frontend]]
+- Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `SessionDialog`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView` [[task-8-dioxus-web-frontend]], [[task-5-file-content-view]]
 - Web state: `Signal<UiState>` via `use_context_provider`, `write_silent()` for interior mutability [[dioxus-signal-pattern]]
 
 ## Architecture
@@ -55,3 +55,4 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-08**: TUI frontend added — ratatui rendering, crossterm event loop, 9 render functions migrated from vol-llm-tui [[tui-frontend-ratatui]]
 - **2026-05-08**: Web frontend added — Dioxus 0.6 WASM, 10 components, Signal-based state management [[task-8-dioxus-web-frontend]]
 - **2026-05-08**: Final verification passed — 39 tests, all feature builds (tui, web, both) green [[task-10-final-verification]]
+- **2026-05-10**: `FileContentView` added — file tab bar with content preview, `OpenFileTab` state, `render_tab` non-component pattern [[task-5-file-content-view]]

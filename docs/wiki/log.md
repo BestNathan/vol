@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-05-10] ingest | Task 5: FileContentView Component
+- Created sources: [[task-5-file-content-view]]
+- Created concepts: [[file-tab-pattern]]
+- Updated concepts: [[dioxus-web-pattern]], [[dioxus-signal-pattern]]
+- Updated entities: [[vol-llm-ui-crate]]
+- Cross-references added: 5
+- Changes: `FileContentView` component with file tab bar showing open files with icons, names, close buttons; content area displays loaded content (`<pre>`), error, or loading state; `render_tab` uses plain function (not `#[component]`) to avoid `PartialEq` derive on `OpenFileTab` props; `bump_version()` helper extracted; `file_icon` made `pub(crate)`; WASM build compiles with only pre-existing `ActiveTab::Tools` error (Task 6)
+
 ## [2026-05-09] ingest | JSON-RPC Transport Refactoring
 - Created sources: [[jsonrpc-transport-refactoring]]
 - Created concepts: [[jsonrpc-transport]]

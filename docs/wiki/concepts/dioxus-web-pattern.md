@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [dioxus, web, frontend, component, wasm]
 created: 2026-05-08
-updated: 2026-05-08
-source_count: 1
+updated: 2026-05-10
+source_count: 2
 ---
 
 # Dioxus Web Pattern
@@ -20,7 +20,7 @@ Component architecture for a browser-based UI built with Dioxus 0.6, compiled to
 
 - Dioxus 0.6 via `dioxus::launch(App)` in binary entry point
 - Feature gated: `#[cfg(feature = "web")]` in `lib.rs`, binary requires `--features web`
-- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `SessionDialog`, `ApprovalDialog`
+- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `SessionDialog`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView`
 - Global CSS embedded as `const GLOBAL_CSS: &str`, injected via `<style>` element
 - Dark theme with flexbox layout: status bar (top), tools panel (left), tab content (right), input area (bottom)
 - Tab routing: `TabContent` matches on `ActiveTab` enum to render the active panel
@@ -80,3 +80,4 @@ Both frontends share `UiState` / `UiEvent` / `ActiveTab` types and the same conn
 - [[ratatui-tui-pattern]]: Terminal frontend counterpart
 - [[human-in-the-loop]]: Approval dialog component implements HITL workflow
 - [[vol-llm-ui-crate]]: Shared crate defining state types and connection traits
+- [[file-tab-pattern]]: Tabbed file viewer rendered in Workspace tab

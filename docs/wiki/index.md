@@ -1,12 +1,12 @@
 # Wiki Index
 
-Last updated: 2026-05-09
+Last updated: 2026-05-10
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends | active | 2026-05-08 |
+| [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs | active | 2026-05-10 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate | active | 2026-05-04 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) | active | 2026-05-04 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions | stable | 2026-05-04 |
@@ -60,6 +60,7 @@ Last updated: 2026-05-09
 | [[json-rpc-websocket]] | JSON-RPC 2.0 over WebSocket protocol for remote agent communication | active | 2026-05-08 |
 | [[jsonrpc-transport]] | JSON-RPC 2.0 over WebSocket implementing the Connection trait | active | 2026-05-09 |
 | [[jsonrpc-server-handler]] | Historical JSON-RPC handler architecture — deleted, replaced by jsonrpc-transport | stale | 2026-05-09 |
+| [[file-tab-pattern]] | Tabbed file viewer with non-component render function pattern for Dioxus | active | 2026-05-10 |
 
 ## Sources
 
@@ -81,6 +82,7 @@ Last updated: 2026-05-09
 | [[task-10-final-verification]] | Final verification: 10 tasks complete, 55 tests passing, all feature builds verified | complete | 2026-05-08 |
 | [[jsonrpc-transport-refactoring]] | Refactoring: EventBridgePlugin deleted, JsonRpcConnection implements Connection trait | active | 2026-05-09 |
 | [[task-5-jsonrpc-integration-tests]] | 44 integration tests for JSON-RPC serialization, parsing, and error handling | active | 2026-05-09 |
+| [[task-5-file-content-view]] | FileContentView component: file tab bar with content preview, error/loading states, non-component tab rendering | active | 2026-05-10 |
 
 ## Analyses
 

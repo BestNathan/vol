@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [dioxus, signal, state-management, web, frontend]
 created: 2026-05-08
-updated: 2026-05-08
-source_count: 1
+updated: 2026-05-10
+source_count: 2
 ---
 
 # Dioxus Signal Pattern
@@ -65,3 +65,4 @@ The TUI frontend uses `Arc<Mutex<UiState>>` for shared state, with explicit lock
 - [[dioxus-web-pattern]]: Component architecture built on top of this state pattern
 - [[agent-event-stream]]: `UiEvent` derived from agent stream events
 - [[vol-llm-ui-crate]]: Crate defining `UiState` and `UiEvent`
+- [[file-tab-pattern]]: Uses `bump_version()` helper and `peek()/set()` pattern for tab interactions
