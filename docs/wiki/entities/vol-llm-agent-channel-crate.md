@@ -3,14 +3,14 @@ type: entity
 category: product
 tags: [crate, agent, transport, rust]
 created: 2026-05-05
-updated: 2026-05-05
+updated: 2026-05-10
 source_count: 1
 ---
 
 # vol-llm-agent-channel Crate
 
 **Category:** Rust crate — Agent communication channel layer
-**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]]
+**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[vol-mcp-servers-crate]]
 
 ## Overview
 

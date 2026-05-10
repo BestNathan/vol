@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-07
+Last updated: 2026-05-10
 
 ## Entities
 
@@ -15,6 +15,7 @@ Last updated: 2026-05-07
 | [[vol-llm-agent-channel-crate]] | Agent communication channel layer with multiple transports | active | 2026-05-05 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
+| [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support | active | 2026-05-10 |
 
 ## Concepts
 
@@ -51,6 +52,9 @@ Last updated: 2026-05-07
 | [[agent-router]] | Multi-agent routing with per-agent dispatchers | active | 2026-05-07 |
 | [[connection-holder-clone-limitation]] | ConnectionHolder cannot be both plugin and transport reference | active | 2026-05-07 |
 | [[clarifying-requirements-workflow]] | Structured dialogue for turning vague requests into requirements | active | 2026-05-06 |
+| [[mcp-transport-pattern]] | Multi-transport startup pattern for MCP servers (stdio, HTTP/SSE) | active | 2026-05-10 |
+| [[docs-rs-tools]] | Four MCP tools exposing docs.rs/crates.io documentation | active | 2026-05-10 |
+| [[rmcp-sdk]] | Rust SDK for Model Context Protocol — macros, transports, service | active | 2026-05-10 |
 
 ## Sources
 
@@ -65,6 +69,7 @@ Last updated: 2026-05-07
 | [[clarifying-requirements-subagent-review]] | Subagent review mechanism added to clarifying-requirements skill | active | 2026-05-06 |
 | [[loki-plugin-otel-migration-tasks-3-4]] | LokiPlugin rewritten to use tracing::info! + RunContext model field added | active | 2026-05-06 |
 | [[otel-029-log-init]] | OTel 0.29 API migration and init_otel_logs() implementation in vol-monitor | active | 2026-05-06 |
+| [[docs-rs-mcp-impl]] | vol-mcp-servers crate with docs-rs-mcp binary, 4 tools, stdio+HTTP/SSE | active | 2026-05-10 |
 
 ## Analyses
 

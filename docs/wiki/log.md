@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-05-10] ingest | docs-rs MCP Server Implementation
+- Created sources: [[docs-rs-mcp-impl]]
+- Created entities: [[vol-mcp-servers-crate]]
+- Created concepts: [[mcp-transport-pattern]], [[docs-rs-tools]], [[rmcp-sdk]]
+- Updated entity: [[vol-llm-agent-channel-crate]]
+- Cross-references added: 5+
+- Changes: vol-mcp-servers crate created with docs-rs-mcp binary; 4 MCP tools (search_crates, readme, get_item, search_in_crate) ported from TypeScript reference using rmcp 1.6.0; stdio (default) and HTTP/SSE transports via --http flag; StreamableHttpService with LocalSessionManager for session mgmt; HTML parsing via scraper + html2md; both transports verified working
+
 ## [2026-05-07] ingest | Agent Channel WS + HTTP Examples
 - Created sources: [[agent-channel-examples]]
 - Created concepts: [[agent-router]], [[connection-holder-clone-limitation]]

@@ -3,14 +3,14 @@ type: concept
 category: framework
 tags: [http, transport, sse, axum]
 created: 2026-05-05
-updated: 2026-05-05
+updated: 2026-05-10
 source_count: 1
 ---
 
 # HTTP Transport
 
 **Category:** Network transport
-**Related:** [[vol-llm-agent-channel-crate]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[agent-channel-examples]]
+**Related:** [[vol-llm-agent-channel-crate]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[agent-channel-examples]], [[mcp-transport-pattern]]
 
 ## Definition
 
