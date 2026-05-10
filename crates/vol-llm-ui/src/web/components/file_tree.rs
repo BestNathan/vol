@@ -161,11 +161,12 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
             let rpc_clone = rpc.clone();
             let mut sig = sig.clone();
 
-            sig.with_mut(|s| {
-                let existing = s.open_files.iter().position(|f| f.path == p.clone());
+            let is_new_file = sig.with_mut(|s| {
+                let existing = s.open_files.iter().position(|f| f.path == p);
                 match existing {
                     Some(idx) => {
                         s.selected_file_tab = Some(idx);
+                        false
                     }
                     None => {
                         let new_idx = s.open_files.len();
@@ -175,22 +176,24 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
                             error: None,
                         });
                         s.selected_file_tab = Some(new_idx);
-
-                        let mut sig2 = sig.clone();
-                        let read_path = p.clone();
-                        rpc_clone.file_read(&p, move |result| {
-                            sig2.with_mut(|st| {
-                                if let Some(idx) = st.open_files.iter().position(|f| f.path == read_path) {
-                                    match result {
-                                        Ok(c) => { st.open_files[idx].content = Some(c); }
-                                        Err(e) => { st.open_files[idx].error = Some(e); }
-                                    }
-                                }
-                            });
-                        });
+                        true
                     }
                 }
             });
+
+            if is_new_file {
+                let p2 = p.clone();
+                rpc_clone.file_read(&p, move |result| {
+                    sig.with_mut(|st| {
+                        if let Some(idx) = st.open_files.iter().position(|f| f.path == p2) {
+                            match result {
+                                Ok(c) => { st.open_files[idx].content = Some(c); }
+                                Err(e) => { st.open_files[idx].error = Some(e); }
+                            }
+                        }
+                    });
+                });
+            }
             tab.set(ActiveTab::Workspace);
         };
 
