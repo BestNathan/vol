@@ -319,6 +319,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .file-tree-node:hover { background: #2a2a44; }
 .file-tree-node:active { background: #3a3a54; }
 .file-tree-dir:hover { background: #1a2a3a; }
+.file-tree-refresh { font-size: 10px; color: #666; margin-left: 4px; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
+.file-tree-node:hover .file-tree-refresh { opacity: 1; }
+.file-tree-refresh:hover { color: #aaa; }
 .file-tree-dir .file-tree-label { color: #8ab4ff; font-weight: 500; }
 .file-tree-file .file-tree-label { color: #ccc; }
 .file-tree-chevron { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; font-size: 10px; color: #666; transition: transform 0.15s; }

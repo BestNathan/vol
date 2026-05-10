@@ -92,6 +92,47 @@ fn render_node(node: &WorkspaceTreeNode, state: AppState, depth: usize) -> Eleme
             });
         };
 
+        let mut refresh_sig = state.signal;
+        let refresh_path = node.path.clone();
+        let refresh_rpc = state.rpc_client.clone();
+        let refresh_onclick = move |e: Event<MouseData>| {
+            e.stop_propagation();
+            let p = refresh_path.clone();
+            let rpc_clone = refresh_rpc.clone();
+            let mut sig = refresh_sig.clone();
+            sig.with_mut(|s| {
+                if let Some(nd) = s.workspace.find_child_mut(&p) {
+                    nd.children.clear();
+                    nd.loaded = false;
+                    nd.load_error = false;
+                }
+                let p2 = p.clone();
+                rpc_clone.file_list(&p2, move |result| {
+                    let mut sig2 = sig.clone();
+                    match result {
+                        Ok(entries) => {
+                            let flat_entries: Vec<(String, bool)> = entries
+                                .into_iter()
+                                .map(|e| (e.name, e.is_dir))
+                                .collect();
+                            sig2.with_mut(|s2| {
+                                s2.workspace.replace_dir_children(&p2, flat_entries);
+                            });
+                        }
+                        Err(_) => {
+                            sig2.with_mut(|s2| {
+                                if let Some(nd) = s2.workspace.find_child_mut(&p2) {
+                                    nd.children.clear();
+                                    nd.loaded = true;
+                                    nd.load_error = true;
+                                }
+                            });
+                        }
+                    }
+                });
+            });
+        };
+
         rsx! {
             div {
                 div {
@@ -101,6 +142,7 @@ fn render_node(node: &WorkspaceTreeNode, state: AppState, depth: usize) -> Eleme
                     span { class: "{chevron_cls}", "\u{25be}" }
                     span { class: "file-tree-icon", "{file_icon(true, &node.name)}" }
                     span { class: "file-tree-label dir", "{node.name}" }
+                    span { class: "file-tree-refresh", onclick: refresh_onclick, "\u{21bb}" }
                 }
                 if !collapsed {
                     div { class: "file-tree-children",
