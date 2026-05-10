@@ -52,8 +52,7 @@ impl Default for DocsRsClient {
     fn default() -> Self { Self::new() }
 }
 
-#[allow(dead_code)]
-async fn fetch_docs_rs_page(url: &str, client: &reqwest::Client) -> anyhow::Result<String> {
+pub(crate) async fn fetch_docs_rs_page(url: &str, client: &reqwest::Client) -> anyhow::Result<String> {
     let resp = client.get(url).send().await?;
     if !resp.status().is_success() {
         anyhow::bail!("Failed to fetch {}: HTTP {}", url, resp.status());
