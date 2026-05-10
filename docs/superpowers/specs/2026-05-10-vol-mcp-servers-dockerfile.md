@@ -30,10 +30,14 @@
 - Entrypoint: `/usr/local/bin/${BIN_NAME}`
 - Default CMD: `--http 0.0.0.0:8080`
 
-### Build Command
+### Build and Push Command
 
 ```bash
-docker build --build-arg BIN_NAME=docs-rs-mcp -t vol-mcp-servers:docs-rs .
+REGISTRY=crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common
+BIN_NAME=docs-rs-mcp
+docker build --build-arg BIN_NAME=$BIN_NAME \
+  -t $REGISTRY/vol-monitor:$BIN_NAME .
+docker push $REGISTRY/vol-monitor:$BIN_NAME
 ```
 
 ### Expected Image Size
