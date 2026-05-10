@@ -4,7 +4,6 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 use crossterm::{
     execute,
@@ -14,7 +13,7 @@ use crossterm::{
 use futures::StreamExt;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use vol_llm_agents::coding::CodingAgentConfig;
 use vol_llm_ui::AgentConnection;
 use vol_llm_ui::LocalConnection;
@@ -41,9 +40,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create shared state
     let session_id = uuid::Uuid::new_v4().to_string();
-    let ui_state = Arc::new(Mutex::new(UiState::new(
+    let (render_tx, mut render_rx) = tokio::sync::mpsc::channel(64);
+    let ui_state = Arc::new(RwLock::new(UiState::new(
         session_id,
         working_dir.to_string_lossy().as_ref(),
+        "local",
     )));
 
     // Build agent config
@@ -54,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Create connection (observer updates state directly)
-    let connection = LocalConnection::new(agent_config, ui_state.clone());
+    let connection = LocalConnection::new(agent_config, ui_state.clone(), render_tx.clone());
     let connection = Arc::new(connection);
 
     // Setup terminal
@@ -73,7 +74,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.clear()?;
 
     // Main loop state
-    let mut render_interval = tokio::time::interval(Duration::from_millis(33));
     let mut events = EventStream::new();
     let mut input_buf = String::new();
 
@@ -81,12 +81,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::select! {
             biased;
 
+            // Render — highest priority
+            _ = render_rx.recv() => {
+                let state = ui_state.read().await;
+                terminal.draw(|f| render_ui(f, &state))?;
+            }
+
             // Input
             maybe_event = events.next() => {
                 match maybe_event {
                     Some(Ok(Event::Key(key))) => {
-                        // Lock state for key handling
-                        let mut state = ui_state.lock().await;
+                        let mut state = ui_state.write().await;
                         let action = handle_key(key, &mut state, &input_buf);
 
                         match action {
@@ -94,29 +99,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             InputAction::Send(text) => {
                                 input_buf.clear();
                                 state.is_running = true;
-                                // Submit to agent -- state is updated by the
-                                // LocalEventObserver internally.
                                 let conn = connection.clone();
                                 let state_clone = ui_state.clone();
+                                let render_tx_clone = render_tx.clone();
                                 tokio::spawn(async move {
                                     match conn.submit(text).await {
                                         Ok(rx) => {
                                             let mut rx = rx;
-                                            // Wait for terminal event (AgentComplete/Error).
-                                            // Intermediate events already applied by observer.
                                             while let Some(_event) = rx.recv().await {
-                                                // Observer handles state mutations; terminal
-                                                // events also arrive here but are already
-                                                // applied by the observer.
+                                                // Events applied by observer
                                             }
                                             // Ensure is_running is cleared
-                                            let mut s = state_clone.lock().await;
+                                            let mut s = state_clone.write().await;
                                             s.is_running = false;
+                                            drop(s);
+                                            let _ = render_tx_clone.try_send(());
                                         }
                                         Err(e) => {
-                                            let mut s = state_clone.lock().await;
+                                            let mut s = state_clone.write().await;
                                             s.is_running = false;
                                             s.last_error = Some(format!("{}", e));
+                                            drop(s);
+                                            let _ = render_tx_clone.try_send(());
                                         }
                                     }
                                 });
@@ -126,16 +130,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                             InputAction::None => {}
                         }
+                        // Trigger render after input handling
+                        let _ = render_tx.try_send(());
                     }
                     Some(Ok(Event::Resize(_, _))) => {}
                     _ => {}
                 }
-            }
-
-            // Render
-            _ = render_interval.tick() => {
-                let state = ui_state.lock().await;
-                terminal.draw(|f| render_ui(f, &state))?;
             }
         }
     }

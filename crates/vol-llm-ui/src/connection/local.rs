@@ -19,18 +19,20 @@ use crate::UiEvent;
 /// `UiState` mutations via `EventBuffer`.
 pub struct LocalConnection {
     agent_config: CodingAgentConfig,
-    state: Arc<tokio::sync::Mutex<UiState>>,
+    state: Arc<tokio::sync::RwLock<UiState>>,
     connected: Arc<AtomicBool>,
     cancelled: Arc<AtomicBool>,
+    render_tx: tokio::sync::mpsc::Sender<()>,
 }
 
 impl LocalConnection {
-    pub fn new(config: CodingAgentConfig, state: Arc<tokio::sync::Mutex<UiState>>) -> Self {
+    pub fn new(config: CodingAgentConfig, state: Arc<tokio::sync::RwLock<UiState>>, render_tx: tokio::sync::mpsc::Sender<()>) -> Self {
         Self {
             agent_config: config,
             state,
             connected: Arc::new(AtomicBool::new(true)),
             cancelled: Arc::new(AtomicBool::new(false)),
+            render_tx,
         }
     }
 
@@ -40,6 +42,7 @@ impl LocalConnection {
         let observer = Arc::new(LocalEventObserver {
             state: state.clone(),
             event_tx: tx.clone(),
+            render_tx: self.render_tx.clone(),
         });
 
         let config = self.agent_config.clone();
@@ -85,6 +88,7 @@ impl LocalConnection {
             state: self.state.clone(),
             connected: self.connected.clone(),
             cancelled: Arc::new(AtomicBool::new(false)),
+            render_tx: self.render_tx.clone(),
         }
     }
 }
@@ -112,14 +116,14 @@ impl AgentConnection for LocalConnection {
         approved: bool,
         _reason: Option<String>,
     ) -> anyhow::Result<()> {
-        let mut state = self.state.lock().await;
+        let mut state = self.state.write().await;
         state.approval_state.response = Some((approved, None));
         Ok(())
     }
 
     async fn cancel(&self, _req_id: String) -> anyhow::Result<()> {
         self.cancelled.store(true, Ordering::Relaxed);
-        let mut state = self.state.lock().await;
+        let mut state = self.state.write().await;
         state.is_running = false;
         Ok(())
     }
@@ -174,16 +178,19 @@ impl FileOperations for LocalConnection {
 
 /// Observer that converts AgentStreamEvent into UiState mutations.
 struct LocalEventObserver {
-    state: Arc<tokio::sync::Mutex<UiState>>,
+    state: Arc<tokio::sync::RwLock<UiState>>,
     event_tx: mpsc::Sender<UiEvent>,
+    render_tx: mpsc::Sender<()>,
 }
 
 #[async_trait]
 impl EventObserver for LocalEventObserver {
     async fn on_event(&self, event: &AgentStreamEvent) -> Result<(), ObserverError> {
         let mut buffer = EventBuffer::new();
-        let mut state = self.state.lock().await;
+        let mut state = self.state.write().await;
         buffer.apply_stream(event, &mut state);
+        drop(state);
+        let _ = self.render_tx.try_send(());
         Ok(())
     }
 
@@ -198,12 +205,14 @@ mod tests {
     use vol_llm_agents::coding::CodingAgentConfig;
 
     fn make_connection() -> LocalConnection {
-        let state = Arc::new(tokio::sync::Mutex::new(UiState::new(
+        let (render_tx, _render_rx) = tokio::sync::mpsc::channel(64);
+        let state = Arc::new(tokio::sync::RwLock::new(UiState::new(
             "test-session".into(),
             ".",
+            "local",
         )));
         let config = CodingAgentConfig::default();
-        LocalConnection::new(config, state)
+        LocalConnection::new(config, state, render_tx)
     }
 
     #[tokio::test]
