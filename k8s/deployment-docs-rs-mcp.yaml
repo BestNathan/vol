@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docs-rs-mcp
+  namespace: deribit
+  labels:
+    app: docs-rs-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docs-rs-mcp
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: docs-rs-mcp
+    spec:
+      restartPolicy: Always
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      imagePullSecrets:
+      - name: acr-registry-secret
+      containers:
+      - name: docs-rs-mcp
+        image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:docs-rs-mcp
+        imagePullPolicy: Always
+        args:
+          - "--http"
+          - "0.0.0.0:8080"
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+        env:
+        # Logging
+        - name: RUST_LOG
+          value: "info"
+        # Network (required in restricted environment)
+        - name: HTTPS_PROXY
+          value: "http://192.168.2.98:8890"
+        - name: HTTP_PROXY
+          value: "http://192.168.2.98:8890"
+        - name: NO_PROXY
+          value: "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,kubernetes.default.svc,.svc.cluster.local,docs.rs,crates.io"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: docs-rs-mcp
+  namespace: deribit
+  labels:
+    app: docs-rs-mcp
+spec:
+  selector:
+    app: docs-rs-mcp
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  type: ClusterIP
