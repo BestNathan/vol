@@ -9,6 +9,7 @@ pub mod session_dialog;
 pub mod skills;
 pub mod status_bar;
 pub mod tools_panel;
+pub mod tools_tab;
 pub mod file_tree;
 pub mod workspace;
 
@@ -22,4 +23,5 @@ pub use session_dialog::SessionDialog;
 pub use skills::SkillsPanel;
 pub use status_bar::StatusBar;
 pub use tools_panel::ToolsPanel;
+pub use tools_tab::ToolsTabContent;
 pub use workspace::WorkspacePanel;
