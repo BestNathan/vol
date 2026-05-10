@@ -1,16 +1,31 @@
-//! Workspace file tree browser.
+//! Workspace panel showing the file tree (legacy flat view).
 
 use dioxus::prelude::*;
 
 use crate::web::components::app::AppState;
 
+/// Flatten a WorkspaceTreeNode tree into (name, is_dir, indent) tuples.
+fn flatten_tree(node: &crate::state::WorkspaceTreeNode, indent: usize) -> Vec<(String, bool, usize)> {
+    let mut result = Vec::new();
+    for child in &node.children {
+        result.push((child.name.clone(), child.is_dir, indent));
+        if child.is_dir {
+            result.extend(flatten_tree(child, indent + 1));
+        }
+    }
+    result
+}
+
 /// Workspace panel showing the file tree.
 #[component]
 pub fn WorkspacePanel() -> Element {
     let state: AppState = use_context();
-    let count = state.signal.read().workspace.entries.len();
+    let (entries, loaded) = {
+        let ui = state.signal.read();
+        (flatten_tree(&ui.workspace, 0), ui.workspace.loaded)
+    };
 
-    if count == 0 {
+    if entries.is_empty() && !loaded {
         return rsx! {
             div { class: "workspace-panel",
                 div { class: "workspace-empty", "Workspace directory empty or unavailable" }
@@ -18,10 +33,12 @@ pub fn WorkspacePanel() -> Element {
         };
     }
 
-    let items = (0..count).map(|index| {
-        let s = state.clone();
+    let items = entries.iter().enumerate().map(|(index, (name, is_dir, indent))| {
+        let n = name.clone();
+        let d = *is_dir;
+        let i = *indent;
         rsx! {
-            WorkspaceItem { index, state: s }
+            WorkspaceItem { name: n, is_dir: d, indent: i, key: "{index}" }
         }
     }).collect::<Vec<_>>();
 
@@ -33,35 +50,16 @@ pub fn WorkspacePanel() -> Element {
 }
 
 #[component]
-fn WorkspaceItem(state: AppState, index: usize) -> Element {
-    let (is_dir, name, indent, modified) = {
-        let ui = state.signal.read();
-        match ui.workspace.entries.get(index) {
-            Some(e) => (
-                e.is_dir,
-                e.path.split('/').last().unwrap_or(&e.path).to_string(),
-                e.indent,
-                e.modified,
-            ),
-            None => return rsx! {},
-        }
-    };
-
+fn WorkspaceItem(name: String, is_dir: bool, indent: usize) -> Element {
     if is_dir {
         let display = format!("{}[DIR] {}", "  ".repeat(indent), name);
         rsx! {
             div { class: "workspace-entry workspace-dir", "{display}" }
         }
     } else {
-        let mod_marker = if modified { " M" } else { "" };
-        let display = format!("{}[FILE] {}{}", "  ".repeat(indent), name, mod_marker);
-        let cls = if modified {
-            "workspace-entry workspace-file-modified"
-        } else {
-            "workspace-entry workspace-file"
-        };
+        let display = format!("{}[FILE] {}", "  ".repeat(indent), name);
         rsx! {
-            div { class: cls, "{display}" }
+            div { class: "workspace-entry workspace-file", "{display}" }
         }
     }
 }
