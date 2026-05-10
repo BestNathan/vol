@@ -1,4 +1,7 @@
-pub async fn get_readme(client: &reqwest::Client, params: &super::ReadMeParams) -> Result<String, String> {
+pub async fn get_readme(
+    client: &reqwest::Client,
+    params: &super::ReadMeParams,
+) -> Result<String, String> {
     let version = params.version.as_deref().unwrap_or("latest");
     let url = format!(
         "https://docs.rs/{}/{}/{}",

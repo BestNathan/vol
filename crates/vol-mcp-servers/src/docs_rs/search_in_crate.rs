@@ -84,7 +84,11 @@ pub async fn search_in_crate(
     }
 
     // Deduplicate by (name, type)
-    results.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()).then(a.1.cmp(&b.1)));
+    results.sort_by(|a, b| {
+        a.0.to_lowercase()
+            .cmp(&b.0.to_lowercase())
+            .then(a.1.cmp(&b.1))
+    });
     results.dedup_by(|a, b| a.0.to_lowercase() == b.0.to_lowercase() && a.1 == b.1);
 
     if results.is_empty() {

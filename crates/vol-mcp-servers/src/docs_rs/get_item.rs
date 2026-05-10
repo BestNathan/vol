@@ -1,13 +1,13 @@
-pub async fn get_item(client: &reqwest::Client, params: &super::GetItemParams) -> Result<String, String> {
+pub async fn get_item(
+    client: &reqwest::Client,
+    params: &super::GetItemParams,
+) -> Result<String, String> {
     let version = params.version.as_deref().unwrap_or("latest");
 
     let url = if params.item_type == "module" {
         // Module: replace :: with / and append /index.html
         let path = params.item_path.replace("::", "/");
-        format!(
-            "https://docs.rs/{}/{}/{}",
-            params.crate_name, version, path
-        )
+        format!("https://docs.rs/{}/{}/{}", params.crate_name, version, path)
     } else {
         // Other items: split path, last segment is item_name, rest is module_path
         let segments: Vec<&str> = params.item_path.split("::").collect();

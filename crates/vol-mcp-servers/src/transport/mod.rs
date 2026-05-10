@@ -29,7 +29,11 @@ impl TransportArgs {
     }
 }
 
-pub async fn run_server<S>(mode: TransportMode, server: S, ct: CancellationToken) -> anyhow::Result<()>
+pub async fn run_server<S>(
+    mode: TransportMode,
+    server: S,
+    ct: CancellationToken,
+) -> anyhow::Result<()>
 where
     S: rmcp::Service<rmcp::RoleServer> + Clone + Send + Sync + 'static,
 {
