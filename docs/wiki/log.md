@@ -14,6 +14,75 @@
 - Cross-references added: 5+
 - Changes: vol-mcp-servers crate created with docs-rs-mcp binary; 4 MCP tools (search_crates, readme, get_item, search_in_crate) ported from TypeScript reference using rmcp 1.6.0; stdio (default) and HTTP/SSE transports via --http flag; StreamableHttpService with LocalSessionManager for session mgmt; HTML parsing via scraper + html2md; both transports verified working
 
+## [2026-05-10] ingest | Lazy-Loading Directory Tree
+- Created sources: [[lazy-load-dir-tree]]
+- Created concepts: [[workspace-tree-pattern]]
+- Updated entities: [[vol-llm-ui-crate]]
+- Updated concepts: [[dioxus-signal-pattern]], [[dioxus-web-pattern]]
+- Updated index: new entries for workspace-tree-pattern and lazy-load-dir-tree
+- Cross-references added: 5
+- Changes: WorkspaceTree/WorkspaceEntry replaced with WorkspaceTreeNode tree; directories fetch children on-demand via JSON-RPC file.list on expand; every expand re-fetches fresh data; refresh button on each directory; TreeNode is a reactive Dioxus #[component] (not plain function); Signal::with_mut() for tree mutations; borrow checker pattern: return value from with_mut before making async callback; TUI rendering updated with flatten_tree_for_tui helper; 42 tests passing
+
+## [2026-05-10] ingest | Task 5: FileContentView Component
+- Created sources: [[task-5-file-content-view]]
+- Created concepts: [[file-tab-pattern]]
+- Updated concepts: [[dioxus-web-pattern]], [[dioxus-signal-pattern]]
+- Updated entities: [[vol-llm-ui-crate]]
+- Cross-references added: 5
+- Changes: `FileContentView` component with file tab bar showing open files with icons, names, close buttons; content area displays loaded content (`<pre>`), error, or loading state; `render_tab` uses plain function (not `#[component]`) to avoid `PartialEq` derive on `OpenFileTab` props; `bump_version()` helper extracted; `file_icon` made `pub(crate)`; WASM build compiles with only pre-existing `ActiveTab::Tools` error (Task 6)
+
+## [2026-05-09] ingest | JSON-RPC Transport Refactoring
+- Created sources: [[jsonrpc-transport-refactoring]]
+- Created concepts: [[jsonrpc-transport]]
+- Updated concepts: [[jsonrpc-server-handler]] (marked deleted), [[connection-holder]], [[connection-trait]], [[agent-plugin-system]]
+- Updated entities: [[vol-llm-agent-channel-crate]]
+- Updated index: new entries, updated summaries
+- Cross-references added: 6
+- Changes: EventBridgePlugin deleted, JsonRpcHandler/JsonRpcContext replaced by JsonRpcConnection implementing Connection trait; JsonRpcServer with Vec<AgentRegistration> multi-agent support; agent.submit gains optional target param; 49 integration tests; wire format preserved
+
+## [2026-05-09] ingest | Task 5: JSON-RPC Integration Tests
+- Created sources: [[task-5-jsonrpc-integration-tests]]
+- Updated entities: [[vol-llm-agent-channel-crate]]
+- Updated concepts: [[json-rpc-websocket]], [[jsonrpc-server-handler]]
+- Cross-references added: 3
+- Changes: 44 integration tests in `tests/jsonrpc_integration.rs` covering all 22 AgentStreamEvent variant serializations, all 13 JSON-RPC request method parsings, event format structure verification, parse-and-respond roundtrip, and 6 error handling tests for malformed input
+
+## [2026-05-08] ingest | Task 10: Final Verification
+- Created sources: [[task-10-final-verification]]
+- Cross-references added: 4
+- Changes: All 10 tasks completed; 55 tests pass (39 vol-llm-ui + 16 vol-llm-agent-channel); vol-llm-ui compiles with all features (default/tui, web, both); vol-llm-agent-channel compiles with all targets; architecture: shared core (state/events/connections) + TUI (ratatui 0.30, 11 render functions, 12 input tests) + Web (Dioxus 0.6 WASM, 10 components) + JSON-RPC server (jsonrpsee 0.26, 9 methods); both LocalConnection (in-process) and RemoteConnection (JSON-RPC WS with auto-reconnect) implemented and verified
+
+## [2026-05-08] ingest | Task 9: JSON-RPC Server
+- Created sources: [[task-9-jsonrpc-server]]
+- Created concepts: [[jsonrpc-server-handler]]
+- Updated concepts: [[json-rpc-websocket]], [[connection-holder]], [[agent-dispatcher]], [[remote-agent-connection]]
+- Updated entity: [[vol-llm-agent-channel-crate]]
+- Cross-references added: 5
+- Changes: jsonrpc module in vol-llm-agent-channel with JsonRpcHandler and JsonRpcContext; 9 JSON-RPC methods (agent.submit/cancel/approve, file.list/read, log.list/read, session.list/resume); JsonRpcContext wraps AgentDispatcher with working_dir and store_dir paths; example binary uses jsonrpsee 0.26 ServerBuilder with RpcModule::from_arc; list and read operations use std::fs; log and session listing scan store_dir/logs/*.jsonl and store_dir/sessions/*.json; stub implementations for log.read and session.resume return empty results; compiles with cargo check -p vol-llm-agent-channel --all-targets; all 16 existing tests pass
+
+## [2026-05-08] ingest | Task 8: Dioxus Web Frontend
+- Created sources: [[task-8-dioxus-web-frontend]]
+- Created concepts: [[dioxus-signal-pattern]], [[dioxus-web-pattern]]
+- Updated concepts: [[human-in-the-loop]], [[vol-llm-ui-crate]]
+- Cross-references added: 8
+- Changes: Dioxus 0.6 web frontend with WASM compilation; Signal<UiState> via use_context_provider with write_silent() for interior mutability; 10 components (App, StatusBar, ConversationView, ToolsPanel, InputArea, WorkspacePanel, SkillsPanel, LogViewer, SessionDialog, ApprovalDialog); global CSS dark theme; feature gated with #[cfg(feature = "web")]; compiles with cargo check -p vol-llm-ui --features web --bin vol-llm-ui-web; TabBar/TabContent routing pattern; modal dialogs rendered at root level
+
+## [2026-05-08] ingest | TUI Frontend (ratatui)
+- Created sources: [[tui-frontend-ratatui]]
+- Created concepts: [[ratatui-tui-pattern]], [[ui-event-loop-pattern]]
+- Updated entities: [[vol-llm-ui-crate]]
+- Updated concepts: [[human-in-the-loop]], [[connection-trait]], [[agent-event-stream]], [[remote-agent-connection]]
+- Cross-references added: 6
+- Changes: 9 render functions migrated from vol-llm-tui/ui/ to UiState using ratatui 0.30; crossterm EventStream + tokio::select! event loop at 30fps; approval key handling (A/R/S); session dialog; workspace tree, log viewer, skills panel; futures + uuid added as optional tui deps; LocalConnection::clone_for_run() made public; tui modules exported via lib.rs behind #[cfg(feature = "tui")]
+
+## [2026-05-08] ingest | RemoteConnection for vol-llm-ui
+- Created sources: [[remote-connection-impl]]
+- Created entities: [[vol-llm-ui-crate]]
+- Created concepts: [[json-rpc-websocket]], [[remote-agent-connection]]
+- Updated concepts: [[connection-holder]], [[connection-trait]]
+- Cross-references added: 4
+- Changes: RemoteConnection implements AgentConnection and FileOperations via JSON-RPC 2.0 over WebSocket (jsonrpsee 0.26); uses ObjectParams for named parameters, ClientT trait for request method; auto-reconnect with exponential backoff (max 5 retries, 1s-30s); methods: agent.submit, agent.approve, agent.cancel, file.list, file.read, log.list, session.list; 3 unit tests all passing
+
 ## [2026-05-07] ingest | Agent Channel WS + HTTP Examples
 - Created sources: [[agent-channel-examples]]
 - Created concepts: [[agent-router]], [[connection-holder-clone-limitation]]

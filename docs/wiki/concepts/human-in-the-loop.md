@@ -4,7 +4,7 @@ category: pattern
 tags: [human-in-the-loop, approval, workflow]
 created: 2026-05-04
 updated: 2026-05-04
-source_count: 1
+source_count: 2
 ---
 
 # Human-in-the-Loop
@@ -19,6 +19,8 @@ A plugin that requires human approval before executing tool calls or continuing 
 ## Key Points
 - Configurable triggers: tool execution or iteration continuation [[react-agent-docs]]
 - Supports specific tool targeting or all-tools approval [[react-agent-docs]]
+- TUI frontend renders approval panel with A/R/S key handling [[tui-frontend-ratatui]]
+- Web frontend renders ApprovalDialog modal component with approve/reject/stop buttons [[dioxus-web-pattern]]
 - Timeout handling with configurable behavior (reject, stop, continue) [[react-agent-docs]]
 - Two approval channels: CLI (terminal prompts) and HTTP (remote callbacks) [[react-agent-docs]]
 

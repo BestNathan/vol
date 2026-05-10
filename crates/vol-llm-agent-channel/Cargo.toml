@@ -16,6 +16,8 @@ axum = { workspace = true }
 futures = "0.3"
 tokio-tungstenite = { workspace = true }
 chrono = { workspace = true }
+jsonrpsee = { version = "0.26", features = ["server"] }
+jsonrpsee-server = "0.26"
 async-stream = "0.3"
 
 [dev-dependencies]
