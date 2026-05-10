@@ -27,7 +27,7 @@ pub async fn search_crates(
     client: &reqwest::Client,
     params: &SearchCratesParams,
 ) -> Result<String, String> {
-    let per_page = params.per_page.unwrap_or(10).min(100).max(1);
+    let per_page = params.per_page.unwrap_or(10).clamp(1, 100);
     let sort = params.sort.as_deref().unwrap_or("relevance");
 
     let resp = client
@@ -46,10 +46,7 @@ pub async fn search_crates(
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        return Err(format!(
-            "crates.io API returned error {}: {}",
-            status, body
-        ));
+        return Err(format!("crates.io API returned error {}: {}", status, body));
     }
 
     let body: CratesIoResponse = resp
