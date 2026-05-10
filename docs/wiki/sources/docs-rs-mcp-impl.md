@@ -81,3 +81,20 @@ All other deps (`reqwest`, `tokio`, `serde`, `axum`, `tower`) from workspace.
 - HTTP endpoint returns valid MCP initialize response with `{"capabilities":{"tools":{}}}`
 - `cargo clippy` passes with `-D warnings`
 - `cargo fmt` applied
+
+## Docker Packaging
+
+### Single-Stage Ubuntu Image
+
+Binary is built on the host first (`cargo build --release --bin $BIN_NAME -p vol-mcp-servers`), then packaged into a Docker image:
+
+```bash
+docker build --build-arg BIN_NAME=docs-rs-mcp \
+  -t vol-monitor:docs-rs-mcp -f crates/vol-mcp-servers/Dockerfile .
+```
+
+- Base: `ubuntu:24.04` (glibc compatible with host-compiled binary)
+- Single-stage build (multi-stage Alpine blocked by network restrictions in build environment)
+- Image size: ~95MB (Ubuntu base 78MB + binary ~17MB)
+- `ENV BIN_NAME` + `ENTRYPOINT ["/bin/sh", "-c", "..."]` pattern enables ARG-based binary selection
+- Default CMD: `--http 0.0.0.0:8080`, EXPOSE 8080

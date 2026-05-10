@@ -1,7 +1,7 @@
 ---
 type: entity
 category: product
-tags: [crate, mcp, transport, rust]
+tags: [crate, mcp, transport, rust, docker]
 created: 2026-05-10
 updated: 2026-05-10
 source_count: 1
@@ -39,3 +39,11 @@ CLI (--http / default stdio) → transport::run_server()
 
 ## Timeline
 - **2026-05-10**: Crate created with docs-rs-mcp server supporting stdio and HTTP/SSE transports [[docs-rs-mcp-impl]]
+- **2026-05-10**: Docker packaging added — single-stage Ubuntu image with ARG-based binary selection [[vol-mcp-servers-dockerfile]]
+
+## Docker Packaging
+
+- Single Dockerfile packages any binary via `--build-arg BIN_NAME=<name>`
+- Base: `ubuntu:24.04` (glibc compatibility with host-compiled binary)
+- Image size: ~95MB
+- Registry: `crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:<name>`

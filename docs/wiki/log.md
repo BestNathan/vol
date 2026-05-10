@@ -1,5 +1,11 @@
 # Change Log
 
+## [2026-05-10] update | vol-mcp-servers Docker Packaging
+- Created sources: [[vol-mcp-servers-dockerfile]]
+- Created entity: [[vol-mcp-servers-crate]] (Docker section)
+- Updated concepts: [[docs-rs-mcp-impl]]
+- Changes: Single-stage Ubuntu Dockerfile added for packaging vol-mcp-servers binaries; ENV BIN_NAME + ENTRYPOINT shell pattern enables ARG-based binary selection; ~95MB image size; ACR registry target
+
 ## [2026-05-10] ingest | docs-rs MCP Server Implementation
 - Created sources: [[docs-rs-mcp-impl]]
 - Created entities: [[vol-mcp-servers-crate]]
