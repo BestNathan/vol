@@ -1,8 +1,6 @@
 //! Root App component with state management, event loop, and routing.
 
 use dioxus::prelude::*;
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::time::Duration;
 
 use crate::state::{ActiveTab, UiEvent, UiState};
@@ -33,15 +31,14 @@ fn derive_ws_url() -> String {
 /// Shared application state.
 #[derive(Clone)]
 pub struct AppState {
-    pub ui_state: Rc<RefCell<UiState>>,
-    pub version: Signal<u64>,
+    pub signal: Signal<UiState>,
     pub active_tab: Signal<ActiveTab>,
     pub rpc_client: JsonRpcClient,
 }
 
 impl PartialEq for AppState {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.ui_state, &other.ui_state)
+    fn eq(&self, _other: &Self) -> bool {
+        true
     }
 }
 
@@ -109,89 +106,70 @@ fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
     }
 }
 
-fn bump_ver(mut ver: Signal<u64>) {
-    let v = *ver.peek();
-    ver.set(v.wrapping_add(1));
-}
-
 #[component]
 pub fn App() -> Element {
     let ws_url = derive_ws_url();
-    let ui_state: Rc<RefCell<UiState>> = Rc::new(RefCell::new(
-        UiState::new("web-session".into(), "/workspace", &ws_url)
-    ));
-    let version = use_signal(|| 0u64);
+    let signal = use_signal(|| UiState::new("web-session".into(), "/workspace", &ws_url));
     let active_tab = use_signal(|| ActiveTab::Conversation);
     // Create client once via use_hook so it survives re-renders.
     let client = use_hook(|| {
         let c = JsonRpcClient::new(&ws_url);
 
         // Wire connection state changes into UiState
-        let ui = ui_state.clone();
-        let ver = version;
+        let sig = signal.clone();
         let client_ws = c.clone();
-        c.on_state_change(move |state| {
-            match state {
+        c.on_state_change(move |cs| {
+            let mut s = sig.clone();
+            s.with_mut(|state| match cs {
                 crate::web::client::ConnectionState::Connected => {
-                    if let Ok(mut s) = ui.try_borrow_mut() {
-                        s.ws_connected = true;
-                        s.ws_last_error = None;
-                    }
-                    let ui_ws = ui.clone();
-                    let ver_cb = ver;
-                    client_ws.file_list(".", move |result| {
-                        if let Ok(entries) = result {
-                            if let Ok(mut s) = ui_ws.try_borrow_mut() {
-                                s.workspace.root = ".".to_string();
-                                s.workspace.entries.clear();
-                                for entry in &entries {
-                                    let indent = entry.name.chars().filter(|&c| c == '/').count();
-                                    s.workspace.entries.push(crate::state::WorkspaceEntry {
-                                        path: entry.name.clone(),
-                                        is_dir: entry.is_dir,
-                                        modified: false,
-                                        indent,
-                                    });
-                                }
-                            }
-                            bump_ver(ver_cb);
+                    state.ws_connected = true;
+                    state.ws_last_error = None;
+                }
+                crate::web::client::ConnectionState::Connecting => {
+                    state.ws_connected = false;
+                }
+                crate::web::client::ConnectionState::Disconnected => {
+                    state.ws_connected = false;
+                    state.ws_last_error = Some("Disconnected from server".to_string());
+                }
+            });
+            let mut sig_cb = sig.clone();
+            client_ws.file_list(".", move |result| {
+                if let Ok(entries) = result {
+                    sig_cb.with_mut(|state| {
+                        state.workspace.root = ".".to_string();
+                        state.workspace.entries.clear();
+                        for entry in &entries {
+                            let indent = entry.name.chars().filter(|&c| c == '/').count();
+                            state.workspace.entries.push(crate::state::WorkspaceEntry {
+                                path: entry.name.clone(),
+                                is_dir: entry.is_dir,
+                                modified: false,
+                                indent,
+                            });
                         }
                     });
                 }
-                crate::web::client::ConnectionState::Connecting => {
-                    if let Ok(mut s) = ui.try_borrow_mut() {
-                        s.ws_connected = false;
-                    }
-                }
-                crate::web::client::ConnectionState::Disconnected => {
-                    if let Ok(mut s) = ui.try_borrow_mut() {
-                        s.ws_connected = false;
-                        s.ws_last_error = Some("Disconnected from server".to_string());
-                    }
-                }
-            }
-            bump_ver(ver);
+            });
         });
 
         // Event loop: receive server events and apply to UiState
-        let ui_ev = ui_state.clone();
-        let ver_ev = version;
+        let mut sig_ev = signal.clone();
         let client_ev = c.clone();
         wasm_bindgen_futures::spawn_local(async move {
             loop {
                 match client_ev.next_event().await {
                     Some(event) => {
                         if let Some(ui_event) = agent_event_to_ui(&event) {
-                            if let Ok(mut s) = ui_ev.try_borrow_mut() {
-                                s.apply(ui_event);
-                            }
-                            bump_ver(ver_ev);
+                            sig_ev.with_mut(|s| s.apply(ui_event));
                         }
                     }
                     None => {
                         log::warn!("Event stream closed");
-                        ui_ev.borrow_mut().ws_connected = false;
-                        ui_ev.borrow_mut().ws_last_error = Some("Event stream closed".to_string());
+                        sig_ev.with_mut(|s| {
+                            s.ws_connected = false;
+                            s.ws_last_error = Some("Event stream closed".to_string());
+                        });
                         break;
                     }
                 }
@@ -202,15 +180,10 @@ pub fn App() -> Element {
     });
 
     use_context_provider(|| AppState {
-        ui_state,
-        version,
+        signal,
         active_tab,
         rpc_client: client.clone(),
     });
-
-    // Read version to subscribe to re-renders when state changes.
-    let ver = version.read();
-    let _ = *ver;
 
     rsx! {
         style { {GLOBAL_CSS} }
@@ -252,17 +225,13 @@ fn TabButton(state: AppState, tab: ActiveTab, label: String) -> Element {
     let tab_class = if active { "tab active" } else { "tab" };
 
     let mut active_tab_signal = state.active_tab;
-    let ui = state.ui_state.clone();
-    let ver = state.version;
+    let mut ui_signal = state.signal;
     rsx! {
         button {
             class: tab_class,
             onclick: move |_| {
                 active_tab_signal.set(tab);
-                if let Ok(mut s) = ui.try_borrow_mut() {
-                    s.active_tab = tab;
-                }
-                bump_ver(ver);
+                ui_signal.with_mut(|s| s.active_tab = tab);
             },
             "{label}"
         }

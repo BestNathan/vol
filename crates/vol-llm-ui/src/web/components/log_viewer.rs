@@ -11,7 +11,7 @@ use crate::web::components::app::AppState;
 pub fn LogViewer() -> Element {
     let state: AppState = use_context();
     let (selected_run, entries, run_logs) = {
-        let ui = state.ui_state.peek();
+        let ui = state.signal.read();
         (
             ui.log_viewer_selected_run.clone(),
             ui.log_viewer_entries.len(),
@@ -50,12 +50,9 @@ fn render_run_list(count: usize, state: AppState) -> Element {
 
 #[component]
 fn LogRunItem(state: AppState, index: usize) -> Element {
-    let run = {
-        let ui = state.ui_state.peek();
-        match ui.log_viewer_run_logs.get(index) {
-            Some(e) => e.clone(),
-            None => return rsx! {},
-        }
+    let run = state.signal.read().log_viewer_run_logs.get(index).cloned();
+    let Some(run) = run else {
+        return rsx! {};
     };
 
     let short_id = if run.run_id.len() > 12 {
@@ -100,12 +97,9 @@ fn render_log_entries(run_id: &str, count: usize, state: AppState) -> Element {
 
 #[component]
 fn LogEntryItem(state: AppState, index: usize) -> Element {
-    let entry = {
-        let ui = state.ui_state.peek();
-        match ui.log_viewer_entries.get(index) {
-            Some(e) => e.clone(),
-            None => return rsx! {},
-        }
+    let entry = state.signal.read().log_viewer_entries.get(index).cloned();
+    let Some(entry) = entry else {
+        return rsx! {};
     };
 
     let color = match entry.event_type.as_str() {

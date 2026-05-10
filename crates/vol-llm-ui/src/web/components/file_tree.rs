@@ -78,11 +78,6 @@ fn build_tree_at(entries: &[crate::state::WorkspaceEntry], prefix: &str) -> Vec<
     result
 }
 
-fn bump_version(ver: &mut Signal<u64>) {
-    let v = *ver.peek();
-    ver.set(v.wrapping_add(1));
-}
-
 /// Render tree nodes recursively.
 fn render_nodes(nodes: Vec<FileTreeNode>, state: AppState, depth: usize) -> Vec<Element> {
     nodes
@@ -94,7 +89,7 @@ fn render_nodes(nodes: Vec<FileTreeNode>, state: AppState, depth: usize) -> Vec<
 fn render_node(node: FileTreeNode, state: AppState, depth: usize) -> Element {
     match node {
         FileTreeNode::Dir { name, path, children } => {
-            let collapsed = state.ui_state.borrow().collapsed_dirs.contains(&path);
+            let collapsed = state.signal.read().collapsed_dirs.contains(&path);
 
             let child_elements = if !collapsed {
                 render_nodes(children, state.clone(), depth + 1)
@@ -109,19 +104,17 @@ fn render_node(node: FileTreeNode, state: AppState, depth: usize) -> Element {
                 "file-tree-chevron"
             };
 
-            let ui = state.ui_state.clone();
-            let mut ver = state.version;
+            let mut dir_sig = state.signal;
             let dir_path = path.clone();
             let dir_onclick = move |_: Event<MouseData>| {
                 let p = dir_path.clone();
-                if let Ok(mut s) = ui.try_borrow_mut() {
+                dir_sig.with_mut(|s| {
                     if s.collapsed_dirs.contains(&p) {
                         s.collapsed_dirs.remove(&p);
                     } else {
                         s.collapsed_dirs.insert(p);
                     }
-                }
-                bump_version(&mut ver);
+                });
             };
 
             rsx! {
@@ -145,19 +138,17 @@ fn render_node(node: FileTreeNode, state: AppState, depth: usize) -> Element {
         FileTreeNode::File { name, path } => {
             let indent_px = depth * 16;
 
-            let ui = state.ui_state.clone();
-            let mut ver = state.version;
+            let mut sig = state.signal.clone();
             let rpc = state.rpc_client.clone();
             let mut tab = state.active_tab;
             let file_path = path.clone();
             let file_onclick = move |_: Event<MouseData>| {
                 let p = file_path.clone();
                 let rpc_clone = rpc.clone();
-                let ui_clone = ui.clone();
-                let ver_clone = ver.clone();
+                let mut sig_clone = sig.clone();
 
-                if let Ok(mut s) = ui.try_borrow_mut() {
-                    let existing = s.open_files.iter().position(|f| f.path == p);
+                sig.with_mut(|s| {
+                    let existing = s.open_files.iter().position(|f| f.path == p.clone());
                     match existing {
                         Some(idx) => {
                             s.selected_file_tab = Some(idx);
@@ -171,25 +162,22 @@ fn render_node(node: FileTreeNode, state: AppState, depth: usize) -> Element {
                             });
                             s.selected_file_tab = Some(new_idx);
 
-                            let ui2 = ui_clone.clone();
-                            let mut ver2 = ver_clone.clone();
+                            let mut sig2 = sig_clone.clone();
                             let read_path = p.clone();
                             rpc_clone.file_read(&p, move |result| {
-                                if let Ok(mut st) = ui2.try_borrow_mut() {
+                                sig2.with_mut(|st| {
                                     if let Some(idx) = st.open_files.iter().position(|f| f.path == read_path) {
                                         match result {
                                             Ok(c) => { st.open_files[idx].content = Some(c); }
                                             Err(e) => { st.open_files[idx].error = Some(e); }
                                         }
                                     }
-                                }
-                                bump_version(&mut ver2);
+                                });
                             });
                         }
                     }
-                }
+                });
                 tab.set(ActiveTab::Workspace);
-                bump_version(&mut ver);
             };
 
             rsx! {
@@ -211,7 +199,7 @@ fn render_node(node: FileTreeNode, state: AppState, depth: usize) -> Element {
 pub fn FileTree() -> Element {
     let state: AppState = use_context();
     let tree = {
-        let ui = state.ui_state.borrow();
+        let ui = state.signal.read();
         build_tree(&ui.workspace.entries)
     };
 

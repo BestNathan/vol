@@ -8,7 +8,7 @@ use crate::web::components::app::{AppState, status_class, status_label};
 #[component]
 pub fn ToolsTabContent() -> Element {
     let state: AppState = use_context();
-    let count = state.ui_state.borrow().tool_calls.len();
+    let count = state.signal.read().tool_calls.len();
 
     if count == 0 {
         return rsx! {
@@ -34,7 +34,7 @@ pub fn ToolsTabContent() -> Element {
 #[component]
 fn ToolCallItem(index: usize, state: AppState) -> Element {
     let (seq, tool_name, arg_preview, status, duration_ms) = {
-        let ui = state.ui_state.borrow();
+        let ui = state.signal.read();
         match ui.tool_calls.get(index) {
             Some(e) => (
                 e.sequence,
@@ -47,7 +47,7 @@ fn ToolCallItem(index: usize, state: AppState) -> Element {
         }
     };
 
-    let is_expanded = state.ui_state.borrow().expanded_tool_calls.contains(&index);
+    let is_expanded = state.signal.read().expanded_tool_calls.contains(&index);
     let scls = status_class(status.clone());
     let label = status_label(status);
     let dur = duration_ms.map(|ms| format!("{ms}ms")).unwrap_or_default();
@@ -57,18 +57,15 @@ fn ToolCallItem(index: usize, state: AppState) -> Element {
             div {
                 class: "tool-call-header",
                 onclick: move |_: Event<MouseData>| {
-                    let ui = state.ui_state.clone();
-                    let mut ver = state.version;
+                    let mut sig = state.signal;
                     let idx = index;
-                    if let Ok(mut s) = ui.try_borrow_mut() {
+                    sig.with_mut(|s| {
                         if s.expanded_tool_calls.contains(&idx) {
                             s.expanded_tool_calls.remove(&idx);
                         } else {
                             s.expanded_tool_calls.insert(idx);
                         }
-                    }
-                    let v = (*ver.peek()).wrapping_add(1);
-                    ver.set(v);
+                    });
                 },
                 span { class: "tool-call-seq", "{seq}." }
                 span { class: "tool-call-name", "[{tool_name}]" }

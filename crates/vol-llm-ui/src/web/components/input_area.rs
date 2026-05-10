@@ -2,30 +2,31 @@
 
 use dioxus::prelude::*;
 
-use crate::state::UiEvent;
 use crate::web::components::app::AppState;
 
-/// Input area with text field and send button.
-///
-/// When the agent is running, the input is disabled.
-/// On submit (Enter or button click), it sends an `AgentStart` event.
 #[component]
 pub fn InputArea() -> Element {
     let state: AppState = use_context();
-    let mut input_text = use_signal(|| String::new());
-    let is_running = state.ui_state.peek().is_running;
-    let has_approval = state.ui_state.peek().approval_state.has_pending();
+    let is_running = state.signal.read().is_running;
+    let has_approval = state.signal.read().approval_state.has_pending();
 
-    let state_clone = state.clone();
+    let mut input_text = use_signal(|| String::new());
+
+    let client = state.rpc_client.clone();
     let on_submit = move |_| {
         let text = input_text.peek().clone();
         let text = text.trim().to_string();
         if text.is_empty() {
             return;
         }
-        state_clone.apply_event(UiEvent::AgentStart { input: text.clone() });
+
+        // Submit via JSON-RPC WebSocket — server will push AgentStart via subscription
+        match client.submit(&text) {
+            Ok(req_id) => log::info!("Submitted via JSON-RPC: {}", req_id),
+            Err(e) => log::error!("Failed to submit via JSON-RPC: {}", e),
+        }
+
         input_text.set(String::new());
-        log::info!("Submitted: {}", text);
     };
 
     let on_input = move |evt: Event<FormData>| {
@@ -58,7 +59,7 @@ pub fn InputArea() -> Element {
                 div {
                     div { class: "input-row",
                         textarea {
-                            value: "{input_text}",
+                            value: input_text(),
                             oninput: on_input,
                             disabled: is_running,
                             placeholder: "Type a message to the agent...",

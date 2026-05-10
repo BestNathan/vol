@@ -8,7 +8,7 @@ use crate::web::components::app::AppState;
 #[component]
 pub fn SkillsPanel() -> Element {
     let state: AppState = use_context();
-    let count = state.ui_state.peek().skills.len();
+    let count = state.signal.read().skills.len();
 
     if count == 0 {
         return rsx! {
@@ -39,12 +39,9 @@ pub fn SkillsPanel() -> Element {
 
 #[component]
 fn SkillRow(state: AppState, index: usize) -> Element {
-    let skill = {
-        let ui = state.ui_state.peek();
-        match ui.skills.get(index) {
-            Some(e) => e.clone(),
-            None => return rsx! {},
-        }
+    let skill = state.signal.read().skills.get(index).cloned();
+    let Some(skill) = skill else {
+        return rsx! {};
     };
 
     let scope_color = match skill.scope.as_str() {

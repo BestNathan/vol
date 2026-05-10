@@ -8,7 +8,7 @@ use crate::web::components::app::AppState;
 #[component]
 pub fn WorkspacePanel() -> Element {
     let state: AppState = use_context();
-    let count = state.ui_state.peek().workspace.entries.len();
+    let count = state.signal.read().workspace.entries.len();
 
     if count == 0 {
         return rsx! {
@@ -35,7 +35,7 @@ pub fn WorkspacePanel() -> Element {
 #[component]
 fn WorkspaceItem(state: AppState, index: usize) -> Element {
     let (is_dir, name, indent, modified) = {
-        let ui = state.ui_state.peek();
+        let ui = state.signal.read();
         match ui.workspace.entries.get(index) {
             Some(e) => (
                 e.is_dir,

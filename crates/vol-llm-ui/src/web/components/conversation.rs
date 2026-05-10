@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::state::{ConversationEntry, UiState};
+use crate::state::ConversationEntry;
 use crate::web::components::app::AppState;
 
 /// Truncate text to at most `max_lines` lines, each at most `max_chars` chars.
@@ -21,7 +21,7 @@ fn truncate_lines(s: &str, max_lines: usize, max_chars: usize) -> String {
 #[component]
 pub fn ConversationView() -> Element {
     let state: AppState = use_context();
-    let count = state.ui_state.peek().conversation.len();
+    let count = state.signal.read().conversation.len();
 
     if count == 0 {
         return rsx! {
@@ -48,10 +48,7 @@ pub fn ConversationView() -> Element {
 #[component]
 fn MessageEntry(state: AppState, index: usize) -> Element {
     // Clone the entry at this index out of state
-    let entry = {
-        let ui = state.ui_state.peek();
-        ui.conversation.get(index).cloned()
-    };
+    let entry = state.signal.read().conversation.get(index).cloned();
 
     let Some(entry) = entry else {
         return rsx! {};

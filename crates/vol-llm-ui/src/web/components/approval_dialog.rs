@@ -9,32 +9,37 @@ use crate::web::components::app::AppState;
 #[component]
 pub fn ApprovalDialog() -> Element {
     let state: AppState = use_context();
-    let has_pending = state.ui_state.peek().approval_state.has_pending();
+    let has_pending = state.signal.read().approval_state.has_pending();
     if !has_pending {
         return rsx! {};
     }
 
-    let tool_name = state.ui_state.peek().approval_state.tool_name.clone().unwrap_or_default();
-    let reason = state.ui_state.peek().approval_state.reason.clone().unwrap_or_default();
-    let arguments = state.ui_state.peek().approval_state.arguments.clone().unwrap_or_default();
+    let tool_name = state.signal.read().approval_state.tool_name.clone().unwrap_or_default();
+    let reason = state.signal.read().approval_state.reason.clone().unwrap_or_default();
+    let arguments = state.signal.read().approval_state.arguments.clone().unwrap_or_default();
 
-    let state_clone = state.clone();
+    let mut sig_approve = state.signal;
     let on_approve = move |_: Event<MouseData>| {
-        state_clone.apply_event(UiEvent::ApprovalResolved { approved: true });
+        sig_approve.with_mut(|s| {
+            s.apply(UiEvent::ApprovalResolved { approved: true });
+        });
     };
 
-    let state_clone = state.clone();
+    let mut sig_reject = state.signal;
     let on_reject = move |_: Event<MouseData>| {
-        state_clone.apply_event(UiEvent::ApprovalResolved { approved: false });
+        sig_reject.with_mut(|s| {
+            s.apply(UiEvent::ApprovalResolved { approved: false });
+        });
     };
 
-    let mut state_clone = state.clone();
+    let mut sig_stop = state.signal;
     let on_stop = move |_: Event<MouseData>| {
-        state_clone.apply_event(UiEvent::ApprovalResolved { approved: false });
-        let mut s = state_clone.ui_state.write_silent();
-        s.is_running = false;
-        s.conversation.push(ConversationEntry::Error {
-            message: "Agent stopped by user".to_string(),
+        sig_stop.with_mut(|s| {
+            s.apply(UiEvent::ApprovalResolved { approved: false });
+            s.is_running = false;
+            s.conversation.push(ConversationEntry::Error {
+                message: "Agent stopped by user".to_string(),
+            });
         });
     };
 

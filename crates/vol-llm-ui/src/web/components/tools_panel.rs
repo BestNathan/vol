@@ -8,7 +8,7 @@ use crate::web::components::app::{AppState, status_class, status_label};
 #[component]
 pub fn ToolsPanel() -> Element {
     let state: AppState = use_context();
-    let count = state.ui_state.peek().tool_calls.len();
+    let count = state.signal.read().tool_calls.len();
 
     rsx! {
         div { class: "tools-panel",
@@ -29,7 +29,7 @@ pub fn ToolsPanel() -> Element {
 #[component]
 fn ToolItem(state: AppState, index: usize) -> Element {
     let (seq, tool_name, arg_preview, status, duration_ms) = {
-        let ui = state.ui_state.peek();
+        let ui = state.signal.read();
         match ui.tool_calls.get(index) {
             Some(e) => (
                 e.sequence,

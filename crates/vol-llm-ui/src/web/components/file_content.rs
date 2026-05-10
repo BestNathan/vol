@@ -5,17 +5,12 @@ use dioxus::prelude::*;
 use crate::web::components::app::AppState;
 use crate::state::OpenFileTab;
 
-fn bump_version(ver: &mut Signal<u64>) {
-    let v = *ver.peek();
-    ver.set(v.wrapping_add(1));
-}
-
 /// File content viewer showing open file tabs.
 #[component]
 pub fn FileContentView() -> Element {
     let state: AppState = use_context();
     let (open_files, selected) = {
-        let ui = state.ui_state.borrow();
+        let ui = state.signal.read();
         (ui.open_files.clone(), ui.selected_file_tab)
     };
 
@@ -65,31 +60,25 @@ fn render_tab(i: usize, tab: &OpenFileTab, state: AppState) -> Element {
     let path = tab.path.clone();
 
     let is_selected = {
-        let ui = state.ui_state.borrow();
+        let ui = state.signal.read();
         Some(i) == ui.selected_file_tab
     };
     let tab_cls = if is_selected { "file-tab active" } else { "file-tab" };
 
-    let ui = state.ui_state.clone();
-    let mut ver = state.version;
-
+    let mut sig_select = state.signal.clone();
     let select_onclick = {
-        let ui = ui.clone();
-        let mut ver = ver.clone();
         move |_: Event<MouseData>| {
-            if let Ok(mut s) = ui.try_borrow_mut() {
+            sig_select.with_mut(|s| {
                 s.selected_file_tab = Some(i);
-            }
-            bump_version(&mut ver);
+            });
         }
     };
 
     let close_path = path.clone();
+    let mut sig_close = state.signal.clone();
     let close_onclick = move |evt: Event<MouseData>| {
         evt.stop_propagation();
-        let ui = ui.clone();
-        let mut ver = ver.clone();
-        if let Ok(mut s) = ui.try_borrow_mut() {
+        sig_close.with_mut(|s| {
             if let Some(pos) = s.open_files.iter().position(|t| t.path == close_path) {
                 s.open_files.remove(pos);
                 if s.open_files.is_empty() {
@@ -101,8 +90,7 @@ fn render_tab(i: usize, tab: &OpenFileTab, state: AppState) -> Element {
                     s.selected_file_tab = s.selected_file_tab.map(|s| s - 1);
                 }
             }
-        }
-        bump_version(&mut ver);
+        });
     };
 
     rsx! {
