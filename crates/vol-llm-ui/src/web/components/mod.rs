@@ -10,12 +10,14 @@ pub mod skills;
 pub mod status_bar;
 pub mod tools_panel;
 pub mod tools_tab;
+pub mod file_content;
 pub mod file_tree;
 pub mod workspace;
 
 pub use app::App;
 pub use approval_dialog::ApprovalDialog;
 pub use conversation::ConversationView;
+pub use file_content::FileContentView;
 pub use file_tree::FileTree;
 pub use input_area::InputArea;
 pub use log_viewer::LogViewer;

@@ -8,7 +8,7 @@ use crate::state::{ActiveTab, OpenFileTab};
 use crate::web::components::app::AppState;
 
 /// Get the icon for a file extension or directory.
-fn file_icon(is_dir: bool, name: &str) -> &'static str {
+pub(crate) fn file_icon(is_dir: bool, name: &str) -> &'static str {
     if is_dir {
         return "\u{1f4c2}";
     }
