@@ -1,4 +1,5 @@
-# Build: docker build -t crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:docs-rs-mcp \
+# Build: docker build --build-arg BIN_NAME=docs-rs-mcp \
+#   -t crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:docs-rs-mcp \
 #   -f crates/vol-mcp-servers/Dockerfile .
 #
 # Multi-stage Alpine build:
@@ -39,13 +40,18 @@ RUN cargo read-manifest | jq -r '.targets[] | select(.kind[] == "bin") | .src_pa
 
 # ── Full source copy + real build ─────────────────────────────────────────
 COPY crates/vol-mcp-servers .
-RUN cargo build --release --bin docs-rs-mcp
+
+ARG BIN_NAME=__REQUIRED__
+RUN cargo build --release --bin ${BIN_NAME}
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────
 FROM alpine:3.21
 
-COPY --from=builder /app/target/release/docs-rs-mcp /usr/local/bin/docs-rs-mcp
+ARG BIN_NAME=__REQUIRED__
+ENV BIN_NAME=${BIN_NAME}
+
+COPY --from=builder /app/target/release/${BIN_NAME} /usr/local/bin/${BIN_NAME}
 
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/docs-rs-mcp"]
+ENTRYPOINT ["/usr/local/bin/${BIN_NAME}"]
 CMD ["--http", "0.0.0.0:8080"]
