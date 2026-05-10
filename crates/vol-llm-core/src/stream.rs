@@ -67,7 +67,7 @@ impl StreamReceiver {
 /// 2. LLM calls are paired: LLMCallStart → LLMCallComplete or LLMCallError
 /// 3. Tool calls are paired: ToolCallBegin → ToolCallComplete or ToolCallError or ToolCallSkipped
 /// 4. Delta sequences are complete: Start → Delta×N → Complete
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub enum AgentStreamEvent {
     // === Lifecycle (3) ===
     AgentStart {

@@ -316,6 +316,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .file-tree-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #666; padding: 20px; text-align: center; font-size: 12px; }
 .file-tree-node { display: flex; align-items: center; padding: 3px 8px 3px 0; cursor: pointer; font-size: 13px; white-space: nowrap; user-select: none; border-radius: 3px; margin: 0 4px; }
 .file-tree-node:hover { background: #2a2a44; }
+.file-tree-node:active { background: #3a3a54; }
+.file-tree-dir:hover { background: #1a2a3a; }
 .file-tree-dir .file-tree-label { color: #8ab4ff; font-weight: 500; }
 .file-tree-file .file-tree-label { color: #ccc; }
 .file-tree-chevron { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; font-size: 10px; color: #666; transition: transform 0.15s; }

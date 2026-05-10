@@ -69,12 +69,14 @@ fn build_tree_at(entries: &[crate::state::WorkspaceEntry], prefix: &str) -> Vec<
         }
     }
 
-    let mut result = files;
+    let mut result = Vec::new();
+    // Directories first, then files
     for (dir_path, dir_entries) in dirs {
         let name = dir_path.split('/').last().unwrap_or("").to_string();
         let children = build_tree_at(&dir_entries, &dir_path);
         result.push(FileTreeNode::Dir { name, path: dir_path, children });
     }
+    result.extend(files);
     result
 }
 
