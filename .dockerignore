@@ -1,6 +1,15 @@
-# Build artifacts (keep release binaries for Docker packaging)
+# Claude
+.claude/
+
+# Build artifacts
 target/
-!target/release/
+
+# Frontend (node_modules, etc.)
+frontend/
+
+# Temp and logs
+temp/
+logs/
 
 # Git
 .git/

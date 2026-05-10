@@ -1,7 +1,7 @@
 [package]
 name = "vol-mcp-servers"
-version.workspace = true
-edition.workspace = true
+version = "0.1.0"
+edition = "2021"
 
 [[bin]]
 name = "docs-rs-mcp"
@@ -9,17 +9,18 @@ path = "src/bin/docs_rs.rs"
 
 [dependencies]
 rmcp = { version = "1.6", features = ["server", "macros", "schemars", "transport-io", "transport-streamable-http-server", "transport-streamable-http-server-session"] }
-tokio = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-reqwest = { workspace = true }
+tokio = { version = "1.35", features = ["full"] }
+tokio-util = "0.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls", "multipart"] }
 scraper = "0.26"
 html2md = "0.2"
 clap = { version = "4", features = ["derive"] }
-anyhow = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.5", features = ["cors"] }
 axum = { version = "0.7", features = ["query"] }
-tokio-util = { workspace = true }
+http = "1"

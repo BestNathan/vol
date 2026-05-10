@@ -67,3 +67,5 @@ docker build --build-arg BIN_NAME=docs-rs-mcp \
   -t crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:docs-rs-mcp \
   -f crates/vol-mcp-servers/Dockerfile .
 ```
+
+`BIN_NAME` is required — omitting it causes the build to fail immediately (`__REQUIRED__` default).
