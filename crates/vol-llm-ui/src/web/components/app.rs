@@ -147,6 +147,10 @@ pub fn App() -> Element {
                                 load_error: false,
                                 children: Vec::new(),
                             });
+                            // Start all directories collapsed so first click expands + fetches
+                            if entry.is_dir {
+                                state.collapsed_dirs.insert(entry.name.clone());
+                            }
                         }
                         state.workspace.loaded = true;
                     });
