@@ -1,10 +1,8 @@
 //! Left sidebar file tree with collapsible directories.
 
-use std::collections::BTreeMap;
-
 use dioxus::prelude::*;
 
-use crate::state::{ActiveTab, OpenFileTab};
+use crate::state::{ActiveTab, OpenFileTab, WorkspaceTreeNode};
 use crate::web::components::app::AppState;
 
 /// Get the icon for a file extension or directory.
@@ -28,169 +26,142 @@ pub(crate) fn file_icon(is_dir: bool, name: &str) -> &'static str {
     }
 }
 
-/// Tree node computed from flat workspace entries.
-#[derive(Clone, PartialEq)]
-enum FileTreeNode {
-    Dir { name: String, path: String, children: Vec<FileTreeNode> },
-    File { name: String, path: String },
-}
-
-/// Build a tree from flat workspace entries.
-fn build_tree(entries: &[crate::state::WorkspaceEntry]) -> Vec<FileTreeNode> {
-    build_tree_at(entries, "")
-}
-
-fn build_tree_at(entries: &[crate::state::WorkspaceEntry], prefix: &str) -> Vec<FileTreeNode> {
-    let mut files = Vec::new();
-    let mut dirs: BTreeMap<String, Vec<crate::state::WorkspaceEntry>> = BTreeMap::new();
-
-    for entry in entries {
-        let relative = if prefix.is_empty() {
-            entry.path.as_str()
-        } else if entry.path.starts_with(&format!("{}/", prefix)) {
-            &entry.path[prefix.len() + 1..]
-        } else {
-            continue;
-        };
-
-        let first = relative.split('/').next().unwrap_or("");
-        if entry.is_dir || relative.contains('/') {
-            let full = if prefix.is_empty() {
-                first.to_string()
-            } else {
-                format!("{}/{}", prefix, first)
-            };
-            dirs.entry(full).or_default().push(entry.clone());
-        } else {
-            files.push(FileTreeNode::File {
-                name: entry.path.split('/').last().unwrap_or("").to_string(),
-                path: entry.path.clone(),
-            });
-        }
-    }
-
-    let mut result = Vec::new();
-    // Directories first, then files
-    for (dir_path, dir_entries) in dirs {
-        let name = dir_path.split('/').last().unwrap_or("").to_string();
-        let children = build_tree_at(&dir_entries, &dir_path);
-        result.push(FileTreeNode::Dir { name, path: dir_path, children });
-    }
-    result.extend(files);
-    result
-}
-
 /// Render tree nodes recursively.
-fn render_nodes(nodes: Vec<FileTreeNode>, state: AppState, depth: usize) -> Vec<Element> {
+fn render_nodes(nodes: &[WorkspaceTreeNode], state: AppState, depth: usize) -> Vec<Element> {
     nodes
-        .into_iter()
+        .iter()
         .map(|node| render_node(node, state.clone(), depth))
         .collect()
 }
 
-fn render_node(node: FileTreeNode, state: AppState, depth: usize) -> Element {
-    match node {
-        FileTreeNode::Dir { name, path, children } => {
-            let collapsed = state.signal.read().collapsed_dirs.contains(&path);
+fn render_node(node: &WorkspaceTreeNode, state: AppState, depth: usize) -> Element {
+    if node.is_dir {
+        let collapsed = state.signal.read().collapsed_dirs.contains(&node.path);
 
-            let child_elements = if !collapsed {
-                render_nodes(children, state.clone(), depth + 1)
-            } else {
-                Vec::new()
-            };
+        let child_elements = if !collapsed {
+            render_nodes(&node.children, state.clone(), depth + 1)
+        } else {
+            Vec::new()
+        };
 
-            let indent_px = depth * 16;
-            let chevron_cls = if collapsed {
-                "file-tree-chevron collapsed"
-            } else {
-                "file-tree-chevron"
-            };
+        let indent_px = depth * 16;
+        let chevron_cls = if collapsed {
+            "file-tree-chevron collapsed"
+        } else {
+            "file-tree-chevron"
+        };
 
-            let mut dir_sig = state.signal;
-            let dir_path = path.clone();
-            let dir_onclick = move |_: Event<MouseData>| {
-                let p = dir_path.clone();
-                dir_sig.with_mut(|s| {
-                    if s.collapsed_dirs.contains(&p) {
-                        s.collapsed_dirs.remove(&p);
-                    } else {
-                        s.collapsed_dirs.insert(p);
-                    }
-                });
-            };
+        let mut dir_sig = state.signal;
+        let dir_path = node.path.clone();
+        let rpc = state.rpc_client.clone();
+        let dir_onclick = move |_: Event<MouseData>| {
+            let p = dir_path.clone();
+            let rpc_clone = rpc.clone();
+            let mut sig = dir_sig.clone();
 
-            rsx! {
-                div {
-                    div {
-                        class: "file-tree-node file-tree-dir",
-                        style: format!("padding-left: {}px;", indent_px),
-                        onclick: dir_onclick,
-                        span { class: "{chevron_cls}", "\u{25be}" }
-                        span { class: "file-tree-icon", "{file_icon(true, &name)}" }
-                        span { class: "file-tree-label dir", "{name}" }
-                    }
-                    if !collapsed {
-                        div { class: "file-tree-children",
-                            {child_elements.into_iter()}
+            sig.with_mut(|s| {
+                if s.collapsed_dirs.contains(&p) {
+                    s.collapsed_dirs.remove(&p);
+                } else {
+                    s.collapsed_dirs.insert(p.clone());
+                    let p2 = p.clone();
+                    rpc_clone.file_list(&p2, move |result| {
+                        let mut sig2 = sig.clone();
+                        match result {
+                            Ok(entries) => {
+                                let flat_entries: Vec<(String, bool)> = entries
+                                    .into_iter()
+                                    .map(|e| (e.name, e.is_dir))
+                                    .collect();
+                                sig2.with_mut(|s2| {
+                                    s2.workspace.replace_dir_children(&p2, flat_entries);
+                                });
+                            }
+                            Err(_) => {
+                                sig2.with_mut(|s2| {
+                                    if let Some(nd) = s2.workspace.find_child_mut(&p2) {
+                                        nd.children.clear();
+                                        nd.loaded = true;
+                                        nd.load_error = true;
+                                    }
+                                });
+                            }
                         }
+                    });
+                }
+            });
+        };
+
+        rsx! {
+            div {
+                div {
+                    class: "file-tree-node file-tree-dir",
+                    style: format!("padding-left: {}px;", indent_px),
+                    onclick: dir_onclick,
+                    span { class: "{chevron_cls}", "\u{25be}" }
+                    span { class: "file-tree-icon", "{file_icon(true, &node.name)}" }
+                    span { class: "file-tree-label dir", "{node.name}" }
+                }
+                if !collapsed {
+                    div { class: "file-tree-children",
+                        {child_elements.into_iter()}
                     }
                 }
             }
         }
-        FileTreeNode::File { name, path } => {
-            let indent_px = depth * 16;
+    } else {
+        let indent_px = depth * 16;
 
-            let mut sig = state.signal.clone();
-            let rpc = state.rpc_client.clone();
-            let mut tab = state.active_tab;
-            let file_path = path.clone();
-            let file_onclick = move |_: Event<MouseData>| {
-                let p = file_path.clone();
-                let rpc_clone = rpc.clone();
-                let sig_clone = sig.clone();
+        let mut sig = state.signal.clone();
+        let rpc = state.rpc_client.clone();
+        let mut tab = state.active_tab;
+        let file_path = node.path.clone();
+        let file_onclick = move |_: Event<MouseData>| {
+            let p = file_path.clone();
+            let rpc_clone = rpc.clone();
+            let sig_clone = sig.clone();
 
-                sig.with_mut(|s| {
-                    let existing = s.open_files.iter().position(|f| f.path == p.clone());
-                    match existing {
-                        Some(idx) => {
-                            s.selected_file_tab = Some(idx);
-                        }
-                        None => {
-                            let new_idx = s.open_files.len();
-                            s.open_files.push(OpenFileTab {
-                                path: p.clone(),
-                                content: None,
-                                error: None,
-                            });
-                            s.selected_file_tab = Some(new_idx);
-
-                            let mut sig2 = sig_clone.clone();
-                            let read_path = p.clone();
-                            rpc_clone.file_read(&p, move |result| {
-                                sig2.with_mut(|st| {
-                                    if let Some(idx) = st.open_files.iter().position(|f| f.path == read_path) {
-                                        match result {
-                                            Ok(c) => { st.open_files[idx].content = Some(c); }
-                                            Err(e) => { st.open_files[idx].error = Some(e); }
-                                        }
-                                    }
-                                });
-                            });
-                        }
+            sig.with_mut(|s| {
+                let existing = s.open_files.iter().position(|f| f.path == p.clone());
+                match existing {
+                    Some(idx) => {
+                        s.selected_file_tab = Some(idx);
                     }
-                });
-                tab.set(ActiveTab::Workspace);
-            };
+                    None => {
+                        let new_idx = s.open_files.len();
+                        s.open_files.push(OpenFileTab {
+                            path: p.clone(),
+                            content: None,
+                            error: None,
+                        });
+                        s.selected_file_tab = Some(new_idx);
 
-            rsx! {
-                div {
-                    class: "file-tree-node file-tree-file",
-                    style: format!("padding-left: {}px;", indent_px),
-                    onclick: file_onclick,
-                    span { class: "file-tree-chevron hidden", "\u{25be}" }
-                    span { class: "file-tree-icon", "{file_icon(false, &name)}" }
-                    span { class: "file-tree-label file", "{name}" }
+                        let mut sig2 = sig_clone.clone();
+                        let read_path = p.clone();
+                        rpc_clone.file_read(&p, move |result| {
+                            sig2.with_mut(|st| {
+                                if let Some(idx) = st.open_files.iter().position(|f| f.path == read_path) {
+                                    match result {
+                                        Ok(c) => { st.open_files[idx].content = Some(c); }
+                                        Err(e) => { st.open_files[idx].error = Some(e); }
+                                    }
+                                }
+                            });
+                        });
+                    }
                 }
+            });
+            tab.set(ActiveTab::Workspace);
+        };
+
+        rsx! {
+            div {
+                class: "file-tree-node file-tree-file",
+                style: format!("padding-left: {}px;", indent_px),
+                onclick: file_onclick,
+                span { class: "file-tree-chevron hidden", "\u{25be}" }
+                span { class: "file-tree-icon", "{file_icon(false, &node.name)}" }
+                span { class: "file-tree-label file", "{node.name}" }
             }
         }
     }
@@ -200,12 +171,9 @@ fn render_node(node: FileTreeNode, state: AppState, depth: usize) -> Element {
 #[component]
 pub fn FileTree() -> Element {
     let state: AppState = use_context();
-    let tree = {
-        let ui = state.signal.read();
-        build_tree(&ui.workspace.entries)
-    };
+    let workspace = state.signal.read().workspace.clone();
 
-    if tree.is_empty() {
+    if workspace.children.is_empty() && !workspace.loaded {
         return rsx! {
             div { class: "sidebar",
                 div { class: "sidebar-header", "Explorer" }
@@ -216,7 +184,7 @@ pub fn FileTree() -> Element {
         };
     }
 
-    let elements = render_nodes(tree, state, 0);
+    let elements = render_nodes(&workspace.children, state, 0);
 
     rsx! {
         div { class: "sidebar",
