@@ -389,38 +389,43 @@ fn render_approval_panel(frame: &mut Frame, area: Rect, state: &UiState) {
 
 // === Workspace Panel ========================================================
 
+fn flatten_tree_for_tui(node: &crate::state::WorkspaceTreeNode, indent: usize) -> Vec<(String, bool, usize)> {
+    let mut result = Vec::new();
+    for child in &node.children {
+        result.push((child.name.clone(), child.is_dir, indent));
+        if child.is_dir {
+            result.extend(flatten_tree_for_tui(child, indent + 1));
+        }
+    }
+    result
+}
+
 fn render_workspace(frame: &mut Frame, area: Rect, state: &UiState) {
     let block = Block::default().borders(Borders::ALL).title(" Workspace ");
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    if state.workspace.children.is_empty() {
+    if state.workspace.children.is_empty() && !state.workspace.loaded {
         let empty = Paragraph::new("Workspace directory empty or unavailable")
             .style(Style::default().fg(Color::DarkGray));
         frame.render_widget(empty, inner);
         return;
     }
 
-    fn flatten_tree(node: &crate::state::WorkspaceTreeNode, depth: usize, lines: &mut Vec<Line>) {
-        let indent = "  ".repeat(depth);
-        let prefix = if node.is_dir {
-            format!("{}[DIR] {}", indent, node.name)
+    let entries = flatten_tree_for_tui(&state.workspace, 0);
+    let lines: Vec<Line> = entries.iter().map(|(name, is_dir, indent)| {
+        let prefix = if *is_dir {
+            format!("{}[DIR] {}", "  ".repeat(*indent), name)
         } else {
-            format!("{}[FILE] {}", indent, node.name)
+            format!("{}[FILE] {}", "  ".repeat(*indent), name)
         };
-        let style = if node.is_dir {
+        let style = if *is_dir {
             Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::White)
         };
-        lines.push(Line::from(vec![Span::styled(prefix, style)]));
-        for child in &node.children {
-            flatten_tree(child, depth + 1, lines);
-        }
-    }
-
-    let mut lines: Vec<Line> = Vec::new();
-    flatten_tree(&state.workspace, 0, &mut lines);
+        Line::from(vec![Span::styled(prefix, style)])
+    }).collect();
 
     let paragraph = Paragraph::new(Text::from(lines)).scroll((state.workspace_scroll, 0));
     frame.render_widget(paragraph, inner);
