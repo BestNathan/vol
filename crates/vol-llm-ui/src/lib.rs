@@ -19,7 +19,7 @@ pub mod web;
 // Re-export commonly used types at crate root.
 pub use state::{
     UiState, UiEvent, ConversationEntry, ToolCallEntry, ToolCallStatus,
-    WorkspaceTree, WorkspaceEntry, ActiveTab, ApprovalState,
+    WorkspaceTreeNode, ActiveTab, ApprovalState,
     SkillDisplayEntry, LogRunSummary, SessionDialogEntry,
 };
 

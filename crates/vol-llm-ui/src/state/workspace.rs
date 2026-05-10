@@ -1,36 +1,41 @@
-use crate::state::{WorkspaceTree, WorkspaceEntry};
+use crate::state::WorkspaceTreeNode;
 use std::fs;
 use std::path::Path;
 
-/// Scan a directory and build a WorkspaceTree.
-///
-/// Ignores hidden files/directories (starting with '.') and common
-/// non-source directories (.git, node_modules, target, .cargo).
-pub fn scan_workspace(root: &str) -> WorkspaceTree {
+/// Scan a directory and build a WorkspaceTreeNode tree.
+pub fn scan_workspace(root: &str) -> WorkspaceTreeNode {
     let path = Path::new(root);
-    let mut entries = Vec::new();
+    let name = path.file_name()
+        .unwrap_or(std::ffi::OsStr::new(root))
+        .to_string_lossy()
+        .to_string();
 
     if !path.is_dir() {
-        return WorkspaceTree {
-            root: root.to_string(),
-            entries,
-        };
+        return WorkspaceTreeNode::root(name, root.to_string());
     }
 
-    scan_dir(path, path, 0, &mut entries);
-
-    WorkspaceTree {
-        root: root.to_string(),
-        entries,
-    }
+    scan_dir(path, path, &name)
 }
 
-fn scan_dir(base: &Path, dir: &Path, indent: usize, entries: &mut Vec<WorkspaceEntry>) {
+fn scan_dir(base: &Path, dir: &Path, dir_name: &str) -> WorkspaceTreeNode {
     let ignored = [".git", "node_modules", "target", ".cargo", "__pycache__", ".venv"];
+    let rel = dir.strip_prefix(base).unwrap_or(dir);
+    let path_str = rel.to_string_lossy().to_string();
 
-    let Ok(read_dir) = fs::read_dir(dir) else { return };
+    let mut children = Vec::new();
 
-    let mut dir_entries: Vec<_> = read_dir
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return WorkspaceTreeNode {
+            name: dir_name.to_string(),
+            path: path_str,
+            is_dir: true,
+            loaded: true,
+            load_error: false,
+            children,
+        };
+    };
+
+    let mut entries: Vec<_> = read_dir
         .filter_map(|e| e.ok())
         .filter(|e| {
             let name = e.file_name();
@@ -39,49 +44,43 @@ fn scan_dir(base: &Path, dir: &Path, indent: usize, entries: &mut Vec<WorkspaceE
         })
         .collect();
 
-    // Sort: directories first, then by name
-    dir_entries.sort_by_key(|e| {
+    entries.sort_by_key(|e| {
         let is_dir = e.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
         let name = e.file_name();
         (!is_dir, name)
     });
 
-    for entry in dir_entries {
+    for entry in entries {
         let Ok(file_type) = entry.file_type() else { continue };
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
+        let name = entry.file_name().to_string_lossy().to_string();
 
         if file_type.is_dir() {
-            if ignored.contains(&name_str.as_ref()) {
+            if ignored.contains(&name.as_str()) {
                 continue;
             }
-            let rel = entry
-                .path()
-                .strip_prefix(base)
-                .unwrap_or(entry.path().as_path())
-                .to_string_lossy()
-                .to_string();
-            entries.push(WorkspaceEntry {
-                path: rel.clone(),
-                is_dir: true,
-                modified: false,
-                indent,
-            });
-            scan_dir(base, &entry.path(), indent + 1, entries);
+            let child = scan_dir(base, &entry.path(), &name);
+            children.push(child);
         } else {
-            let rel = entry
-                .path()
-                .strip_prefix(base)
-                .unwrap_or(entry.path().as_path())
-                .to_string_lossy()
-                .to_string();
-            entries.push(WorkspaceEntry {
-                path: rel,
+            let full_path = entry.path();
+            let child_rel = full_path.strip_prefix(base).unwrap_or(&full_path);
+            children.push(WorkspaceTreeNode {
+                name,
+                path: child_rel.to_string_lossy().to_string(),
                 is_dir: false,
-                modified: false,
-                indent,
+                loaded: false,
+                load_error: false,
+                children: vec![],
             });
         }
+    }
+
+    WorkspaceTreeNode {
+        name: dir_name.to_string(),
+        path: path_str,
+        is_dir: true,
+        loaded: true,
+        load_error: false,
+        children,
     }
 }
 
@@ -92,8 +91,8 @@ mod tests {
     #[test]
     fn test_scan_nonexistent_directory() {
         let tree = scan_workspace("/tmp/vol-llm-ui-test-nonexistent-12345");
-        assert_eq!(tree.root, "/tmp/vol-llm-ui-test-nonexistent-12345");
-        assert!(tree.entries.is_empty());
+        assert!(tree.is_dir);
+        assert!(tree.children.is_empty());
     }
 
     #[test]
@@ -101,7 +100,7 @@ mod tests {
         let dir = std::env::temp_dir().join("vol-llm-ui-scan-test");
         let _ = fs::create_dir_all(&dir);
         let tree = scan_workspace(dir.to_str().unwrap());
-        assert!(tree.entries.is_empty());
+        assert!(tree.children.is_empty());
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -113,26 +112,23 @@ mod tests {
         let _ = fs::create_dir(dir.join("src"));
         let _ = fs::write(dir.join("README.md"), "hello");
         let _ = fs::write(dir.join("src").join("main.rs"), "fn main() {}");
-        // Hidden file should be ignored
         let _ = fs::write(dir.join(".hidden"), "secret");
-        // .git directory should be ignored
         let _ = fs::create_dir(dir.join(".git"));
-        // target directory should be ignored
         let _ = fs::create_dir(dir.join("target"));
 
         let tree = scan_workspace(dir.to_str().unwrap());
 
-        // Should have README.md and src (and src/main.rs)
-        let names: Vec<_> = tree.entries.iter().map(|e| e.path.as_str()).collect();
-        assert!(names.contains(&"README.md"));
-        assert!(names.contains(&"src"));
-        assert!(names.contains(&"src/main.rs"));
+        let names: Vec<_> = tree.children.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.iter().any(|n| *n == "README.md"));
+        assert!(names.iter().any(|n| *n == "src"));
 
-        // Verify hidden/target entries are NOT present
-        for entry in &tree.entries {
-            assert!(!entry.path.contains(".git"));
-            assert!(!entry.path.contains("target"));
-            assert!(!entry.path.contains(".hidden"));
+        let src = tree.children.iter().find(|c| c.name == "src").unwrap();
+        assert!(src.children.iter().any(|c| c.name == "main.rs"));
+
+        for child in &tree.children {
+            assert!(!child.path.contains(".git"));
+            assert!(!child.path.contains("target"));
+            assert!(!child.path.contains(".hidden"));
         }
 
         let _ = fs::remove_dir_all(&dir);

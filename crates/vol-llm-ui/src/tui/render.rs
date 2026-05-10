@@ -394,31 +394,33 @@ fn render_workspace(frame: &mut Frame, area: Rect, state: &UiState) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    if state.workspace.entries.is_empty() {
+    if state.workspace.children.is_empty() {
         let empty = Paragraph::new("Workspace directory empty or unavailable")
             .style(Style::default().fg(Color::DarkGray));
         frame.render_widget(empty, inner);
         return;
     }
 
-    let lines: Vec<Line> = state.workspace.entries.iter().map(|entry| {
-        let indent = "  ".repeat(entry.indent);
-        let name = entry.path.split('/').last().unwrap_or(&entry.path);
-        let prefix = if entry.is_dir {
-            format!("{}[DIR] {}", indent, name)
+    fn flatten_tree(node: &crate::state::WorkspaceTreeNode, depth: usize, lines: &mut Vec<Line>) {
+        let indent = "  ".repeat(depth);
+        let prefix = if node.is_dir {
+            format!("{}[DIR] {}", indent, node.name)
         } else {
-            let modified = if entry.modified { " M" } else { "" };
-            format!("{}[FILE] {}{}", indent, name, modified)
+            format!("{}[FILE] {}", indent, node.name)
         };
-        let style = if entry.is_dir {
+        let style = if node.is_dir {
             Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)
-        } else if entry.modified {
-            Style::default().fg(Color::Yellow)
         } else {
             Style::default().fg(Color::White)
         };
-        Line::from(vec![Span::styled(prefix, style)])
-    }).collect();
+        lines.push(Line::from(vec![Span::styled(prefix, style)]));
+        for child in &node.children {
+            flatten_tree(child, depth + 1, lines);
+        }
+    }
+
+    let mut lines: Vec<Line> = Vec::new();
+    flatten_tree(&state.workspace, 0, &mut lines);
 
     let paragraph = Paragraph::new(Text::from(lines)).scroll((state.workspace_scroll, 0));
     frame.render_widget(paragraph, inner);

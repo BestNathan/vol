@@ -83,18 +83,59 @@ pub enum ConversationEntry {
     Error { message: String },
 }
 
+/// A node in the workspace directory tree.
 #[derive(Debug, Clone)]
-pub struct WorkspaceTree {
-    pub root: String,
-    pub entries: Vec<WorkspaceEntry>,
-}
-
-#[derive(Debug, Clone)]
-pub struct WorkspaceEntry {
+pub struct WorkspaceTreeNode {
+    pub name: String,
     pub path: String,
     pub is_dir: bool,
-    pub modified: bool,
-    pub indent: usize,
+    pub loaded: bool,
+    pub load_error: bool,
+    pub children: Vec<WorkspaceTreeNode>,
+}
+
+impl WorkspaceTreeNode {
+    pub fn root(name: String, path: String) -> Self {
+        Self {
+            name,
+            path,
+            is_dir: true,
+            loaded: false,
+            load_error: false,
+            children: Vec::new(),
+        }
+    }
+
+    pub fn find_child_mut(&mut self, path: &str) -> Option<&mut Self> {
+        if self.path == path { return Some(self); }
+        for child in &mut self.children {
+            if let Some(found) = child.find_child_mut(path) { return Some(found); }
+        }
+        None
+    }
+
+    pub fn replace_dir_children(&mut self, dir_path: &str, entries: Vec<(String, bool)>) {
+        if let Some(node) = self.find_child_mut(dir_path) {
+            node.children.clear();
+            for (name, is_dir) in entries {
+                let child_path = if dir_path == "." || dir_path.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{}/{}", dir_path, name)
+                };
+                node.children.push(WorkspaceTreeNode {
+                    name,
+                    path: child_path,
+                    is_dir,
+                    loaded: true,
+                    load_error: false,
+                    children: Vec::new(),
+                });
+            }
+            node.loaded = true;
+            node.load_error = false;
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -195,7 +236,7 @@ pub struct UiState {
     pub exiting: bool,
     pub conversation: Vec<ConversationEntry>,
     pub tool_calls: Vec<ToolCallEntry>,
-    pub workspace: WorkspaceTree,
+    pub workspace: WorkspaceTreeNode,
     pub modified_files: HashSet<String>,
     pub active_tab: ActiveTab,
     pub conversation_scroll: u16,
@@ -236,10 +277,7 @@ impl UiState {
             exiting: false,
             conversation: Vec::new(),
             tool_calls: Vec::new(),
-            workspace: WorkspaceTree {
-                root: working_dir.to_string(),
-                entries: Vec::new(),
-            },
+            workspace: WorkspaceTreeNode::root(working_dir.to_string(), ".".into()),
             modified_files: HashSet::new(),
             active_tab: ActiveTab::Conversation,
             conversation_scroll: 0,
@@ -621,5 +659,72 @@ mod tests {
         // Non-JSON or parse failure
         let preview = extract_arg_preview("not json");
         assert_eq!(preview, "");
+    }
+
+    #[test]
+    fn test_workspace_tree_node_structure() {
+        let mut root = WorkspaceTreeNode::root("root".into(), ".".into());
+        root.children.push(WorkspaceTreeNode {
+            name: "src".into(),
+            path: "src".into(),
+            is_dir: true,
+            loaded: true,
+            load_error: false,
+            children: vec![
+                WorkspaceTreeNode {
+                    name: "main.rs".into(),
+                    path: "src/main.rs".into(),
+                    is_dir: false,
+                    loaded: false,
+                    load_error: false,
+                    children: vec![],
+                },
+            ],
+        });
+        assert_eq!(root.children.len(), 1);
+        assert!(root.children[0].is_dir);
+        assert_eq!(root.children[0].children[0].name, "main.rs");
+    }
+
+    #[test]
+    fn test_find_child_mut() {
+        let mut root = WorkspaceTreeNode::root("root".into(), ".".into());
+        root.children.push(WorkspaceTreeNode {
+            name: "src".into(),
+            path: "src".into(),
+            is_dir: true,
+            loaded: false,
+            load_error: false,
+            children: vec![],
+        });
+        let found = root.find_child_mut("src");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().name, "src");
+        let not_found = root.find_child_mut("nonexistent");
+        assert!(not_found.is_none());
+    }
+
+    #[test]
+    fn test_replace_dir_children() {
+        let mut root = WorkspaceTreeNode::root("root".into(), ".".into());
+        root.children.push(WorkspaceTreeNode {
+            name: "src".into(),
+            path: "src".into(),
+            is_dir: true,
+            loaded: false,
+            load_error: false,
+            children: vec![],
+        });
+        root.replace_dir_children("src", vec![
+            ("main.rs".into(), false),
+            ("lib.rs".into(), false),
+            ("utils".into(), true),
+        ]);
+        let src = root.find_child_mut("src").unwrap();
+        assert_eq!(src.children.len(), 3);
+        assert!(src.loaded);
+        assert_eq!(src.children[0].name, "main.rs");
+        assert_eq!(src.children[0].path, "src/main.rs");
+        assert_eq!(src.children[2].path, "src/utils");
     }
 }
