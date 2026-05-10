@@ -1,11 +1,19 @@
-mod event_buffer;
 mod workspace;
 
-pub use event_buffer::EventBuffer;
 pub use workspace::scan_workspace;
+
+#[cfg(feature = "tui")]
+mod event_buffer;
+
+#[cfg(feature = "tui")]
+pub use event_buffer::EventBuffer;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+use web_time::Instant;
+#[cfg(feature = "tui")]
 use std::time::Instant;
 
 // === Unified Event Type ======================================================
@@ -97,13 +105,21 @@ pub struct SkillDisplayEntry {
     pub description: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct OpenFileTab {
+    pub path: String,
+    pub content: Option<String>,
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ActiveTab { Conversation, Workspace, Skills, Logs }
+pub enum ActiveTab { Conversation, Tools, Workspace, Skills, Logs }
 
 impl ActiveTab {
     pub fn toggle(self) -> Self {
         match self {
-            ActiveTab::Conversation => ActiveTab::Workspace,
+            ActiveTab::Conversation => ActiveTab::Tools,
+            ActiveTab::Tools => ActiveTab::Workspace,
             ActiveTab::Workspace => ActiveTab::Skills,
             ActiveTab::Skills => ActiveTab::Logs,
             ActiveTab::Logs => ActiveTab::Conversation,
@@ -198,10 +214,17 @@ pub struct UiState {
     pub skills: Vec<SkillDisplayEntry>,
     pub unsafe_mode: bool,
     pub last_error: Option<String>,
+    pub ws_url: String,
+    pub ws_connected: bool,
+    pub ws_last_error: Option<String>,
+    pub open_files: Vec<OpenFileTab>,
+    pub selected_file_tab: Option<usize>,
+    pub collapsed_dirs: HashSet<String>,
+    pub expanded_tool_calls: HashSet<usize>,
 }
 
 impl UiState {
-    pub fn new(session_id: String, working_dir: &str) -> Self {
+    pub fn new(session_id: String, working_dir: &str, url: &str) -> Self {
         Self {
             session_id,
             run_count: 0,
@@ -235,6 +258,13 @@ impl UiState {
             skills: Vec::new(),
             unsafe_mode: false,
             last_error: None,
+            ws_url: url.to_string(),
+            ws_connected: false,
+            ws_last_error: None,
+            open_files: Vec::new(),
+            selected_file_tab: None,
+            collapsed_dirs: HashSet::new(),
+            expanded_tool_calls: HashSet::new(),
         }
     }
 
@@ -491,7 +521,7 @@ mod tests {
 
     #[test]
     fn test_ui_state_new_initializes() {
-        let state = UiState::new("test-session".into(), "/tmp/test");
+        let state = UiState::new("test-session".into(), "/tmp/test", "ws://localhost:3001/ws");
         assert_eq!(state.session_id, "test-session");
         assert_eq!(state.run_count, 0);
         assert!(state.conversation.is_empty());
@@ -501,7 +531,7 @@ mod tests {
 
     #[test]
     fn test_ui_state_apply_agent_start() {
-        let mut state = UiState::new("sess-1".into(), ".");
+        let mut state = UiState::new("sess-1".into(), ".", "local");
         state.apply(UiEvent::AgentStart { input: "fix the bug".into() });
         assert!(state.is_running);
         assert_eq!(state.run_count, 1);
@@ -514,7 +544,7 @@ mod tests {
 
     #[test]
     fn test_ui_state_apply_thinking_deltas() {
-        let mut state = UiState::new("sess-1".into(), ".");
+        let mut state = UiState::new("sess-1".into(), ".", "local");
         state.apply(UiEvent::ThinkingStart);
         state.apply(UiEvent::ThinkingDelta { delta: "Let me ".into() });
         state.apply(UiEvent::ThinkingDelta { delta: "think...".into() });
@@ -528,7 +558,7 @@ mod tests {
 
     #[test]
     fn test_ui_state_apply_tool_call_lifecycle() {
-        let mut state = UiState::new("sess-1".into(), ".");
+        let mut state = UiState::new("sess-1".into(), ".", "local");
         state.apply(UiEvent::ToolCallBegin {
             tool_name: "bash".into(),
             arguments: r#"{"command":"ls"}"#.into(),
@@ -551,7 +581,7 @@ mod tests {
 
     #[test]
     fn test_ui_state_approval_flow() {
-        let mut state = UiState::new("sess-1".into(), ".");
+        let mut state = UiState::new("sess-1".into(), ".", "local");
         state.apply(UiEvent::ApprovalRequest {
             tool_name: "write".into(),
             reason: "modifying file".into(),
@@ -567,7 +597,8 @@ mod tests {
     #[test]
     fn test_active_tab_toggle() {
         use ActiveTab::*;
-        assert_eq!(Conversation.toggle(), Workspace);
+        assert_eq!(Conversation.toggle(), Tools);
+        assert_eq!(Tools.toggle(), Workspace);
         assert_eq!(Workspace.toggle(), Skills);
         assert_eq!(Skills.toggle(), Logs);
         assert_eq!(Logs.toggle(), Conversation);

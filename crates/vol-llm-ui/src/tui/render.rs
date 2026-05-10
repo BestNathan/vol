@@ -56,6 +56,7 @@ fn render_right_panel(frame: &mut Frame, area: Rect, state: &UiState) {
 
     match state.active_tab {
         ActiveTab::Conversation => render_conversation(frame, chunks[1], state),
+        ActiveTab::Tools => render_tools_panel(frame, chunks[1], state),
         ActiveTab::Workspace => render_workspace(frame, chunks[1], state),
         ActiveTab::Logs => render_log_viewer(frame, chunks[1], state),
         ActiveTab::Skills => render_skills(frame, chunks[1], state),
@@ -104,6 +105,8 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &UiState) {
     let tabs = Line::from(vec![
         Span::raw(" "),
         Span::styled(" Conversation ", style(ActiveTab::Conversation)),
+        Span::raw(" "),
+        Span::styled(" Tools ", style(ActiveTab::Tools)),
         Span::raw(" "),
         Span::styled(" Workspace ", style(ActiveTab::Workspace)),
         Span::raw(" "),
