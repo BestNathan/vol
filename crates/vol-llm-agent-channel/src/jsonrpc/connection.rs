@@ -185,6 +185,9 @@ impl JsonRpcConnection {
             JsonRpcRequest::AgentList { id } => {
                 self.handle_agent_list(*id).await
             }
+            JsonRpcRequest::SessionEntries { id, session_id } => {
+                self.handle_session_entries(*id, session_id.clone()).await
+            }
             JsonRpcRequest::Unknown { id, method } => {
                 return self.send_ws_text(&to_jsonrpc_error(*id, -32601, format!("Method not found: {method}"))).await;
             }
@@ -331,6 +334,14 @@ impl JsonRpcConnection {
             })
         }).collect();
         to_jsonrpc_response(id, serde_json::json!({ "agents": agents }))
+    }
+
+    /// Handle `session.entries`: return entries for a session.
+    async fn handle_session_entries(&self, id: u64, session_id: String) -> String {
+        to_jsonrpc_response(id, serde_json::json!({
+            "session_id": session_id,
+            "entries": [],
+        }))
     }
 
     /// Background task: process agent run result.
