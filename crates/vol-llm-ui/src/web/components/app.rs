@@ -342,6 +342,7 @@ fn TabContent() -> Element {
         ActiveTab::Workspace => rsx! { FileContentView {} },
         ActiveTab::Skills => rsx! { SkillsPanel {} },
         ActiveTab::Logs => rsx! { LogViewer {} },
+        ActiveTab::Agents => rsx! { div { "Agents panel (coming soon)" } },
     }
 }
 

@@ -201,7 +201,7 @@ pub struct OpenFileTab {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ActiveTab { Conversation, Tools, Workspace, Skills, Logs }
+pub enum ActiveTab { Conversation, Tools, Workspace, Skills, Logs, Agents }
 
 impl ActiveTab {
     pub fn toggle(self) -> Self {
@@ -210,7 +210,8 @@ impl ActiveTab {
             ActiveTab::Tools => ActiveTab::Workspace,
             ActiveTab::Workspace => ActiveTab::Skills,
             ActiveTab::Skills => ActiveTab::Logs,
-            ActiveTab::Logs => ActiveTab::Conversation,
+            ActiveTab::Logs => ActiveTab::Agents,
+            ActiveTab::Agents => ActiveTab::Conversation,
         }
     }
 }
@@ -468,6 +469,34 @@ pub struct LogViewerState {
 impl LogViewerState {
     pub fn new() -> Self {
         Self { selected_run: None, entries: Vec::new(), scroll: 0, auto_scroll: true, run_logs: Vec::new() }
+    }
+}
+
+/// A single agent entry returned by agent.list RPC.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentListEntry {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub description: String,
+    pub scope: String,
+}
+
+/// Local state for AgentsPanel.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct AgentsState {
+    pub agents: Vec<AgentListEntry>,
+    pub expanded: HashSet<usize>,
+    pub loading: bool,
+    pub error: Option<String>,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl AgentsState {
+    pub fn new() -> Self {
+        Self { agents: Vec::new(), expanded: HashSet::new(), loading: false, error: None }
     }
 }
 
@@ -930,7 +959,8 @@ mod tests {
         assert_eq!(Tools.toggle(), Workspace);
         assert_eq!(Workspace.toggle(), Skills);
         assert_eq!(Skills.toggle(), Logs);
-        assert_eq!(Logs.toggle(), Conversation);
+        assert_eq!(Logs.toggle(), Agents);
+        assert_eq!(Agents.toggle(), Conversation);
     }
 
     #[test]
