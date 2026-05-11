@@ -183,7 +183,7 @@ impl JsonRpcConnection {
                 self.handle_session_resume(*id, session_id.clone()).await
             }
             JsonRpcRequest::AgentList { id } => {
-                return self.send_ws_text(&to_jsonrpc_error(Some(*id), -32601, "Method not yet implemented: agent.list".into())).await;
+                self.handle_agent_list(*id).await
             }
             JsonRpcRequest::Unknown { id, method } => {
                 return self.send_ws_text(&to_jsonrpc_error(*id, -32601, format!("Method not found: {method}"))).await;
@@ -317,6 +317,20 @@ impl JsonRpcConnection {
             "session_id": session_id,
             "entry_count": 0,
         }))
+    }
+
+    /// Handle `agent.list`: return metadata for all registered agents.
+    async fn handle_agent_list(&self, id: u64) -> String {
+        let agents: Vec<serde_json::Value> = self.holders.keys().map(|k| {
+            serde_json::json!({
+                "id": k,
+                "name": k,
+                "type": k,
+                "description": "Code assistant",
+                "scope": "Server",
+            })
+        }).collect();
+        to_jsonrpc_response(id, serde_json::json!({ "agents": agents }))
     }
 
     /// Background task: process agent run result.
