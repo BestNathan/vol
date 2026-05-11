@@ -6,10 +6,12 @@ use crate::agent_def::AgentDef;
 use vol_llm_context::ContextBuilderBuilder;
 use vol_llm_tool::ToolRegistry;
 use vol_session::{InMemoryEntryStore, Session};
+use std::path::Path;
 use std::sync::Arc;
 use vol_llm_context::ContextContributor;
 use vol_llm_core::SandboxRef;
 use vol_llm_tool::ExecutableTool;
+use vol_llm_mcp::{McpConfig, McpSession};
 
 /// Builder for AgentConfig.
 pub struct AgentConfigBuilder {
@@ -22,6 +24,7 @@ pub struct AgentConfigBuilder {
     context_builder: Option<vol_llm_context::ContextBuilder>,
     plugin_registry: PluginRegistry,
     contributors: Vec<Box<dyn ContextContributor>>,
+    mcp_session: Option<Arc<McpSession>>,
 }
 
 impl AgentConfigBuilder {
@@ -36,6 +39,7 @@ impl AgentConfigBuilder {
             context_builder: None,
             plugin_registry: PluginRegistry::new(),
             contributors: Vec::new(),
+            mcp_session: None,
         }
     }
 
@@ -95,6 +99,52 @@ impl AgentConfigBuilder {
         self
     }
 
+    /// Load MCP server configuration and connect all servers.
+    ///
+    /// Searches for .mcp.json (project-level) and ~/.mcp.json (user-level),
+    /// merges them, connects all servers, and registers their tools.
+    /// If no config files exist or they are empty, the agent runs without MCP tools.
+    pub async fn with_mcp_from_config(mut self, working_dir: Option<&Path>) -> Self {
+        let config = match McpConfig::load(working_dir) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("MCP config load error: {}", e);
+                return self;
+            }
+        };
+
+        if config.servers().is_empty() {
+            return self;
+        }
+
+        let session = Arc::new(McpSession::connect(config.servers().to_vec()).await);
+
+        // Register MCP tools into the tool registry
+        let tool_registry = match self.tool_registry.take() {
+            Some(registry) => {
+                let mut reg = match Arc::try_unwrap(registry) {
+                    Ok(r) => r,
+                    Err(arc) => (*arc).clone(),
+                };
+                reg.register_from_mcp(session.clone()).await;
+                Arc::new(reg)
+            }
+            None => {
+                let mut registry = ToolRegistry::new();
+                let tools = std::mem::take(&mut self.tools);
+                for tool in tools {
+                    registry.register_boxed(tool);
+                }
+                registry.register_from_mcp(session.clone()).await;
+                Arc::new(registry)
+            }
+        };
+        self.tool_registry = Some(tool_registry);
+        self.mcp_session = Some(session);
+
+        self
+    }
+
     pub fn build(self) -> Result<AgentConfig, AgentConfigBuildError> {
         let llm = self
             .llm
@@ -150,6 +200,7 @@ impl AgentConfigBuilder {
             sandbox: self.sandbox,
             context_builder,
             plugin_registry: self.plugin_registry,
+            mcp_session: self.mcp_session,
         })
     }
 }

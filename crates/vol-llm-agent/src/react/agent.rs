@@ -10,6 +10,7 @@ use std::sync::Arc;
 use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::ToolRegistry;
+use vol_llm_mcp::McpSession;
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
     ToolChoice,
@@ -31,6 +32,9 @@ pub struct AgentConfig {
     // === Context and plugins ===
     pub context_builder: ContextBuilder,
     pub plugin_registry: PluginRegistry,
+
+    // === MCP session ===
+    pub mcp_session: Option<Arc<McpSession>>,
 }
 
 impl AgentConfig {
@@ -53,6 +57,7 @@ impl AgentConfig {
             sandbox: None,
             context_builder: ContextBuilderBuilder::new(128_000).build(),
             plugin_registry: PluginRegistry::new(),
+            mcp_session: None,
         }
     }
 }
@@ -67,6 +72,7 @@ impl Default for AgentConfig {
             sandbox: None,
             context_builder: ContextBuilderBuilder::new(128_000).build(),
             plugin_registry: PluginRegistry::new(),
+            mcp_session: None,
         }
     }
 }
