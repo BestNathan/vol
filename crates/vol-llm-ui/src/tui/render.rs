@@ -6,7 +6,7 @@
 // AppState to UiState.
 
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
@@ -60,6 +60,7 @@ fn render_right_panel(frame: &mut Frame, area: Rect, state: &UiState) {
         ActiveTab::Workspace => render_workspace(frame, chunks[1], state),
         ActiveTab::Logs => render_log_viewer(frame, chunks[1], state),
         ActiveTab::Skills => render_skills(frame, chunks[1], state),
+        ActiveTab::Agents => render_agents_panel(frame, chunks[1], state),
     }
 
     render_input_area(frame, chunks[2], state);
@@ -113,6 +114,8 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &UiState) {
         Span::styled(" Skills ", style(ActiveTab::Skills)),
         Span::raw(" "),
         Span::styled(" Logs ", style(ActiveTab::Logs)),
+        Span::raw(" "),
+        Span::styled(" Agents ", style(ActiveTab::Agents)),
         Span::raw(" "),
     ]);
 
@@ -524,6 +527,17 @@ fn render_skills(frame: &mut Frame, area: Rect, state: &UiState) {
     }).collect();
 
     frame.render_widget(Paragraph::new(Text::from(lines)), inner);
+}
+
+fn render_agents_panel(frame: &mut Frame, area: Rect, state: &UiState) {
+    let block = Block::default().borders(Borders::ALL).title(" Agents ");
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let placeholder = Paragraph::new("Agents panel — use the web UI to browse agents")
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center);
+    frame.render_widget(placeholder, inner);
 }
 
 fn pad_or_truncate(s: &str, width: usize) -> String {
