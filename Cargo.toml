@@ -35,6 +35,7 @@ members = [
     "crates/vol-agent-manager",
     "crates/md-frontmatter",
     "crates/vol-mcp-servers",
+    "crates/vol-llm-mcp",
 ]
 
 [workspace.package]
@@ -128,4 +129,5 @@ vol-llm-wiki = { path = "crates/vol-llm-wiki" }
 md-frontmatter = { path = "crates/md-frontmatter" }
 vol-llm-agent-channel = { path = "crates/vol-llm-agent-channel" }
 vol-mcp-servers = { path = "crates/vol-mcp-servers" }
+vol-llm-mcp = { path = "crates/vol-llm-mcp" }
 dirs = "5.0"

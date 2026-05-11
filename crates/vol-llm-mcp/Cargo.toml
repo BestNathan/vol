@@ -1,0 +1,17 @@
+[package]
+name = "vol-llm-mcp"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rmcp = { version = "1.6", features = ["client", "transport-io"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tokio-util = "0.7"
+dirs = "5.0"
+
+[dev-dependencies]
+tempfile = "3"
