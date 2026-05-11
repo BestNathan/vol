@@ -7,6 +7,8 @@
 
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::io::ErrorKind;
+use std::path::Path;
 
 use crate::error::McpError;
 
@@ -27,7 +29,7 @@ struct RawServerConfig {
 }
 
 /// Parsed server configuration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct McpServerConfig {
     pub name: String,
     pub command: String,
@@ -59,17 +61,18 @@ impl McpConfig {
     }
 }
 
-fn load_project_config(working_dir: Option<&std::path::Path>) -> Result<Option<RawMcpConfig>, McpError> {
-    let dir = working_dir.map(|p| p.to_path_buf()).or_else(|| std::env::current_dir().ok());
-    let Some(dir) = dir else { return Ok(None) };
-    let path = dir.join(".mcp.json");
-    if !path.exists() {
-        return Ok(None);
-    }
-    let content = std::fs::read_to_string(&path).map_err(|e| McpError::ConfigParse {
-        path: path.display().to_string(),
-        detail: e.to_string(),
-    })?;
+/// Read and parse a `.mcp.json` file, returning `None` if it doesn't exist.
+fn read_config(path: &Path) -> Result<Option<RawMcpConfig>, McpError> {
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(e) => {
+            return Err(McpError::ConfigParse {
+                path: path.display().to_string(),
+                detail: e.to_string(),
+            })
+        }
+    };
     let config: RawMcpConfig = serde_json::from_str(&content).map_err(|e| McpError::ConfigParse {
         path: path.display().to_string(),
         detail: e.to_string(),
@@ -77,21 +80,15 @@ fn load_project_config(working_dir: Option<&std::path::Path>) -> Result<Option<R
     Ok(Some(config))
 }
 
+fn load_project_config(working_dir: Option<&Path>) -> Result<Option<RawMcpConfig>, McpError> {
+    let dir = working_dir.map(|p| p.to_path_buf()).or_else(|| std::env::current_dir().ok());
+    let Some(dir) = dir else { return Ok(None) };
+    read_config(&dir.join(".mcp.json"))
+}
+
 fn load_user_config() -> Result<Option<RawMcpConfig>, McpError> {
     let Some(home) = dirs::home_dir() else { return Ok(None) };
-    let path = home.join(".mcp.json");
-    if !path.exists() {
-        return Ok(None);
-    }
-    let content = std::fs::read_to_string(&path).map_err(|e| McpError::ConfigParse {
-        path: path.display().to_string(),
-        detail: e.to_string(),
-    })?;
-    let config: RawMcpConfig = serde_json::from_str(&content).map_err(|e| McpError::ConfigParse {
-        path: path.display().to_string(),
-        detail: e.to_string(),
-    })?;
-    Ok(Some(config))
+    read_config(&home.join(".mcp.json"))
 }
 
 fn merge_configs(
