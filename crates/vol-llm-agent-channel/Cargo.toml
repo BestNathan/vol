@@ -19,6 +19,7 @@ chrono = { workspace = true }
 jsonrpsee = { version = "0.26", features = ["server"] }
 jsonrpsee-server = "0.26"
 async-stream = "0.3"
+vol-session = { path = "../vol-session" }
 
 [dev-dependencies]
 tempfile = "3"
