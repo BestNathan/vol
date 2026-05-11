@@ -102,6 +102,36 @@ impl ToolRegistry {
 
         Arc::new(Self { tools })
     }
+
+    /// Discover and register all MCP tools from an McpSession.
+    ///
+    /// Iterates all connected servers, discovers their tools,
+    /// creates McpTool wrappers, and registers them.
+    pub async fn register_from_mcp(&mut self, session: Arc<vol_llm_mcp::McpSession>) {
+        use crate::mcp_tool::McpTool;
+
+        let tools = session.list_all_tools();
+        for (server, tool_info) in tools {
+            let mcp_tool = McpTool::new(
+                session.clone(),
+                &server,
+                &tool_info.name,
+                tool_info.description.as_deref().unwrap_or("MCP tool"),
+                tool_info.input_schema.unwrap_or_else(|| {
+                    serde_json::json!({ "type": "object", "properties": {} })
+                }),
+            );
+            self.register_boxed(Box::new(mcp_tool));
+        }
+    }
+}
+
+impl Clone for ToolRegistry {
+    fn clone(&self) -> Self {
+        Self {
+            tools: self.tools.clone(),
+        }
+    }
 }
 
 impl Default for ToolRegistry {
