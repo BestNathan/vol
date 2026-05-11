@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-05-11] ingest | Split Signal State — EventBus Architecture
+- Created sources: [[split-signal-state]]
+- Created concepts: [[event-bus-pattern]]
+- Updated concepts: [[dioxus-signal-pattern]], [[dioxus-web-pattern]]
+- Updated entities: [[vol-llm-ui-crate]]
+- Updated index: new entries for event-bus-pattern and split-signal-state
+- Cross-references added: 6
+- Changes: Centralized Signal<UiState> replaced with EventBus + UiEventKind routing + per-component local signals; SubscriptionSet with Drop impl for auto-cleanup; shared GlobalState/ApprovalUiState signals via use_context_provider; AppState simplified to EventBus + JsonRpcClient + Signal<ActiveTab>; EventHandler changed from Fn+Send+Sync to Fn+'static; ConversationEntry gained PartialEq; 43 tests passing; web + TUI builds both green
+
 ## [2026-05-10] update | vol-mcp-servers Docker Packaging — Alpine Multi-Stage
 - Created sources: [[vol-mcp-servers-dockerfile]]
 - Created entity: [[vol-mcp-servers-crate]] (Docker section)

@@ -11,7 +11,7 @@ source_count: 3
 
 **Category:** Network protocol
 
-**Related:** [[vol-llm-ui-crate]], [[vol-llm-agent-channel-crate]], [[remote-agent-connection]], [[jsonrpc-server-handler]], [[task-5-jsonrpc-integration-tests]], [[lazy-load-dir-tree]]
+**Related:** [[vol-llm-ui-crate]], [[vol-llm-agent-channel-crate]], [[remote-agent-connection]], [[jsonrpc-server-handler]], [[task-5-jsonrpc-integration-tests]], [[lazy-load-dir-tree]], [[event-bus-pattern]]
 
 ## Definition
 
@@ -54,3 +54,9 @@ The `submit()` method implements exponential backoff on failure:
 - Delay: `min(1000 * 2^(retry-1), 30000)` milliseconds
 - Range: 1s, 2s, 4s, 8s, 16s (capped at 30s)
 - After all retries fail, sends `UiEvent::AgentError` to the receiver
+
+## Related Concepts
+- [[remote-agent-connection]]: RemoteConnection trait this protocol implements
+- [[jsonrpc-server-handler]]: Server-side JSON-RPC handler architecture
+- [[event-bus-pattern]]: Web frontend routes received events through EventBus with UiEventKind
+- [[split-signal-state]]: Source documenting the EventBus refactoring

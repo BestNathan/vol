@@ -3,15 +3,15 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-10 (lazy-load-dir-tree)
-source_count: 3
+updated: 2026-05-11 (split-signal-state)
+source_count: 4
 ---
 
 # vol-llm-ui Crate
 
-**Category:** Rust crate — Shared UI state model and connection abstraction
+**Category:** Rust crate — Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs
 
-**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]]
+**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]]
 
 ## Overview
 
@@ -33,9 +33,11 @@ Both modes implement the same trait interfaces, so TUI (ratatui) and Web (Dioxus
 - TUI binary: `vol-llm-tui` — ratatui 0.30 rendering at 30fps with crossterm event stream [[tui-frontend-ratatui]]
 - TUI modules: `render` (9 panel renderers), `input` (keyboard handling with approval/session support) [[ratatui-tui-pattern]]
 - Event loop: `tokio::select!` with biased mode prioritizing input over render ticks [[ui-event-loop-pattern]]
-- Web binary: `vol-llm-ui-web` — Dioxus 0.6 WASM with Signal<UiState> context [[dioxus-web-pattern]]
-- Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `SessionDialog`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView`, `TreeNode` [[task-8-dioxus-web-frontend]], [[task-5-file-content-view]], [[lazy-load-dir-tree]]
-- Web state: `Signal<UiState>` via `use_context_provider`, `write_silent()` for interior mutability, `with_mut()` for tree mutations [[dioxus-signal-pattern]]
+- Web binary: `vol-llm-ui-web` — Dioxus 0.6 WASM with per-component signals + EventBus [[dioxus-web-pattern]]
+- Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `SessionDialog`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView`, `TreeNode`, `TabBar`, `TabContent` [[task-8-dioxus-web-frontend]], [[task-5-file-content-view]], [[lazy-load-dir-tree]]
+- Web state: `EventBus` with `UiEventKind` routing, per-component local `Signal<T>`, shared `Signal<GlobalState>` / `Signal<ApprovalUiState>` via `use_context_provider` [[dioxus-signal-pattern]], [[event-bus-pattern]], [[split-signal-state]]
+- `SubscriptionSet` with `Drop` impl for automatic cleanup on component unmount [[event-bus-pattern]]
+- `EventHandler` type: `Box<dyn Fn(&UiEvent) + 'static>` — no `Send + Sync` bounds for WASM [[split-signal-state]]
 - Workspace: `WorkspaceTreeNode` tree with lazy-loaded directory children via JSON-RPC `file.list` [[workspace-tree-pattern]]
 
 ## Architecture
@@ -56,5 +58,7 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-08**: TUI frontend added — ratatui rendering, crossterm event loop, 9 render functions migrated from vol-llm-tui [[tui-frontend-ratatui]]
 - **2026-05-08**: Web frontend added — Dioxus 0.6 WASM, 10 components, Signal-based state management [[task-8-dioxus-web-frontend]]
 - **2026-05-08**: Final verification passed — 39 tests, all feature builds (tui, web, both) green [[task-10-final-verification]]
+- **2026-05-10**: Lazy-loading directory tree — `WorkspaceTreeNode` replaces flat entries, directories fetch children on-demand via `file.list`, every expand re-fetches fresh data, refresh button on each directory, `TreeNode` reactive component pattern [[lazy-load-dir-tree]]
 - **2026-05-10**: `FileContentView` added — file tab bar with content preview, `OpenFileTab` state, `render_tab` non-component pattern [[task-5-file-content-view]]
 - **2026-05-10**: Lazy-loading directory tree — `WorkspaceTreeNode` replaces flat entries, directories fetch children on-demand via `file.list`, every expand re-fetches fresh data, refresh button on each directory, `TreeNode` reactive component pattern [[lazy-load-dir-tree]]
+- **2026-05-11**: Split signal state refactor — centralized `Signal<UiState>` replaced with per-component local signals + `EventBus` with `UiEventKind` routing; `SubscriptionSet` auto-cleanup via `Drop`; shared `GlobalState`/`ApprovalUiState` signals for cross-component reads; `AppState` simplified to `EventBus` + `JsonRpcClient` + `Signal<ActiveTab>`; 43 tests passing [[split-signal-state]]

@@ -20,7 +20,7 @@ A plugin that requires human approval before executing tool calls or continuing 
 - Configurable triggers: tool execution or iteration continuation [[react-agent-docs]]
 - Supports specific tool targeting or all-tools approval [[react-agent-docs]]
 - TUI frontend renders approval panel with A/R/S key handling [[tui-frontend-ratatui]]
-- Web frontend renders ApprovalDialog modal component with approve/reject/stop buttons [[dioxus-web-pattern]]
+- Web frontend renders ApprovalDialog modal component — reads shared `Signal<ApprovalUiState>` via `use_context` [[dioxus-web-pattern]], [[split-signal-state]]
 - Timeout handling with configurable behavior (reject, stop, continue) [[react-agent-docs]]
 - Two approval channels: CLI (terminal prompts) and HTTP (remote callbacks) [[react-agent-docs]]
 
