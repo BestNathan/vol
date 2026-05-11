@@ -3,14 +3,14 @@ type: concept
 category: pattern
 tags: [dioxus, web, frontend, component, wasm]
 created: 2026-05-08
-updated: 2026-05-11 (split-signal-state)
-source_count: 4
+updated: 2026-05-11 (task-6-sessions-tab-wiring)
+source_count: 5
 ---
 
 # Dioxus Web Pattern
 
 **Category:** Web frontend architecture
-**Related:** [[vol-llm-ui-crate]], [[dioxus-signal-pattern]], [[ratatui-tui-pattern]], [[human-in-the-loop]], [[workspace-tree-pattern]], [[event-bus-pattern]]
+**Related:** [[vol-llm-ui-crate]], [[dioxus-signal-pattern]], [[ratatui-tui-pattern]], [[human-in-the-loop]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]]
 
 ## Definition
 
@@ -20,7 +20,7 @@ Component architecture for a browser-based UI built with Dioxus 0.6, compiled to
 
 - Dioxus 0.6 via `dioxus::launch(App)` in binary entry point
 - Feature gated: `#[cfg(feature = "web")]` in `lib.rs`, binary requires `--features web`
-- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `SessionDialog`, `ApprovalDialog`, `FileTree`, `TreeNode`, `ToolsTabContent`, `FileContentView`, `TabBar`, `TabContent`
+- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `TreeNode`, `ToolsTabContent`, `FileContentView`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`
 - Global CSS embedded as `const GLOBAL_CSS: &str`, injected via `<style>` element
 - Dark theme with flexbox layout: status bar (top), tools panel (left), tab content (right), input area (bottom)
 - Tab routing: `TabContent` matches on `ActiveTab` enum to render the active panel
@@ -45,6 +45,8 @@ pub struct AppState {
 `App()` also creates and provides via `use_context_provider`:
 - `Signal<GlobalState>` — shared run/session/connection info
 - `Signal<ApprovalUiState>` — shared HITL approval state
+- `Signal<AgentsState>` — agents panel state
+- `Signal<SessionsState>` — sessions panel state [[sessions-ui-pattern]]
 
 Components that need shared state read these via `use_context::<Signal<T>>()`. Components that own local state create their own `Signal<T>` via `use_signal`.
 
@@ -64,14 +66,15 @@ App
 ├── main-layout
 │   ├── ToolsPanel     (tool call history, left sidebar)
 │   └── right-panel
-│       ├── TabBar     (Conversation | Workspace | Skills | Logs)
+│       ├── TabBar     (Conversation | Sessions | Workspace | Skills | Logs | Agents)
 │       ├── TabContent (routed by ActiveTab)
 │       │   ├── ConversationView
+│       │   ├── SessionsPanel
 │       │   ├── WorkspacePanel
 │       │   ├── SkillsPanel
-│       │   └── LogViewer
+│       │   ├── LogViewer
+│       │   └── AgentsPanel
 │       └── InputArea  (text input + send button)
-├── SessionDialog      (modal overlay)
 └── ApprovalDialog     (modal overlay)
 ```
 
@@ -118,3 +121,5 @@ Both frontends share `UiState` / `UiEvent` / `ActiveTab` types and the same conn
 - [[workspace-tree-pattern]]: WorkspaceTreeNode tree structure and lazy-loading pattern
 - [[lazy-load-dir-tree]]: Source documenting the directory tree implementation
 - [[split-signal-state]]: Source documenting the EventBus refactoring
+- [[task-6-sessions-tab-wiring]]: Source documenting Sessions tab wiring, SessionDialog removal, checkpoint CSS
+- [[sessions-ui-pattern]]: Session browsing as a dedicated tab with SessionsState signal management

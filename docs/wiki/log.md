@@ -1,6 +1,13 @@
 # Change Log
 
-## [2026-05-11] ingest | Docs-RS MCP Integration Example
+## [2026-05-11] ingest | Task 6: Wire Sessions Tab into App Component
+- Created sources: [[task-6-sessions-tab-wiring]]
+- Created concepts: [[sessions-ui-pattern]]
+- Updated entities: [[vol-llm-ui-crate]]
+- Updated concepts: [[dioxus-web-pattern]]
+- Updated index: new entries for sessions-ui-pattern and task-6-sessions-tab-wiring
+- Cross-references added: 5
+- Changes: Sessions tab wired into App component — SessionsState signal created and provided via context, SessionsPanel replaces SessionDialog in web UI, Sessions tab button added to TabBar, placeholder replaced with SessionsPanel in TabContent, 9 CSS classes added for sessions panel and checkpoint rendering, msg-checkpoint CSS added for EntryCheckpoint display in conversation view
 - Created sources: [[docs-rs-mcp-example]]
 - Created concepts: [[mcp-example-pattern]]
 - Updated entities: [[vol-llm-agents-crate]]

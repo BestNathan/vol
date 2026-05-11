@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-11 (docs-rs-mcp-example)
+Last updated: 2026-05-11 (task-6-sessions-tab-wiring)
 
 ## Entities
 
@@ -70,6 +70,7 @@ Last updated: 2026-05-11 (docs-rs-mcp-example)
 | [[event-bus-pattern]] | EventBus with UiEventKind routing, SubscriptionSet auto-cleanup, per-component local signals | active | 2026-05-11 |
 | [[mcp-client-integration]] | Bridging MCP server tools into ExecutableTool trait — McpTool, McpSession, AgentConfigBuilder integration | active | 2026-05-11 |
 | [[mcp-example-pattern]] | Pattern for runnable example files demonstrating MCP integration with ReActAgent | active | 2026-05-11 |
+| [[sessions-ui-pattern]] | Tab-based session browsing with SessionsState signal, SessionsPanel component, checkpoint CSS | active | 2026-05-11 |
 
 ## Sources
 
@@ -98,6 +99,7 @@ Last updated: 2026-05-11 (docs-rs-mcp-example)
 | [[split-signal-state]] | Split Signal state: centralized Signal<UiState> replaced with EventBus + per-component local signals | active | 2026-05-11 |
 | [[react-agent-mcp-integration]] | ReAct Agent MCP client integration: vol-llm-mcp crate, McpTool, with_mcp_from_config builder method | active | 2026-05-11 |
 | [[docs-rs-mcp-example]] | Runnable example: ReActAgent connecting to docs-rs MCP server via with_mcp_from_config() | active | 2026-05-11 |
+| [[task-6-sessions-tab-wiring]] | Sessions tab wired into App: SessionsState signal, SessionsPanel, TabBar, CSS, checkpoint rendering | active | 2026-05-11 |
 
 ## Analyses
 

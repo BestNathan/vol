@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [dioxus, signal, state-management, web, frontend]
 created: 2026-05-08
-updated: 2026-05-11 (split-signal-state)
-source_count: 4
+updated: 2026-05-11 (task-6-sessions-tab-wiring)
+source_count: 5
 ---
 
 # Dioxus Signal Pattern
@@ -93,3 +93,5 @@ The TUI frontend uses `Arc<Mutex<UiState>>` for shared state, with explicit lock
 - [[agent-event-stream]]: `UiEvent` derived from agent stream events
 - [[vol-llm-ui-crate]]: Crate defining `UiState` and `UiEvent`
 - [[split-signal-state]]: Source documenting the full refactoring
+- [[sessions-ui-pattern]]: SessionsPanel uses Signal<SessionsState> via context provider pattern
+- [[task-6-sessions-tab-wiring]]: Source documenting SessionsState signal wiring
