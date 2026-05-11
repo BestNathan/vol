@@ -291,4 +291,17 @@ mod tests {
         let names = config.context_builder.contributor_names();
         assert!(names.contains(&"system"));
     }
+
+    #[tokio::test]
+    async fn test_builder_with_mcp_from_config_no_config() {
+        // With no .mcp.json files present, with_mcp_from_config should be a no-op
+        // and the builder should still produce a valid AgentConfig.
+        let config = AgentConfigBuilder::new()
+            .with_llm(Arc::new(MockLlm))
+            .with_mcp_from_config(None)
+            .await
+            .build()
+            .unwrap();
+        assert!(config.def.is_none());
+    }
 }
