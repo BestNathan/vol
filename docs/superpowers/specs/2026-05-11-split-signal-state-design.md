@@ -4,9 +4,9 @@
 
 **Goal:** Replace centralized `Signal<UiState>` with per-component local signals + typed event bus. Each component owns its own state, subscribes to specific `UiEvent` variants it cares about, and handles them via a local reducer.
 
-**Architecture:** `EventBus` with per-event-type subscriber routing. Components call `subscribe(event_type, handler)` to register for exact event types only. Subscription is managed via `use_effect`-style hook — component mounts registers, unmount cleans up. WS publishes events to the bus — only matching handlers fire.
+**Architecture:** `EventBus` with per-event-type subscriber routing. Components call `subscribe(event_type, handler)` to register for exact event types only. Subscriptions are managed via Dioxus `use_effect` + `use_drop` — mount registers, unmount cleans up. WS publishes events to the bus — only matching handlers fire.
 
-**Tech Stack:** Dioxus `use_signal`, `use_hook`, `use_context`, typed EventBus with `HashMap<UiEventKind, Vec<Handler>>`, `Arc<Mutex>` subscriber registry, JSON-RPC WebSocket event loop.
+**Tech Stack:** Dioxus `use_signal`, `use_effect`, `use_drop`, `use_coroutine`, `use_context`, typed EventBus with `HashMap<UiEventKind, Vec<Handler>>`, `Arc<Mutex>` subscriber registry, JSON-RPC WebSocket event loop.
 
 ---
 
@@ -545,53 +545,56 @@ impl HasReducer<ApprovalState> for ApprovalDialog {
 
 Other components (LogViewer, SkillsPanel, SessionDialog, FileContentView, InputArea) follow the same pattern — define their state struct + implement `HasReducer`.
 
-## 4. Component Subscription Pattern — `use_effect`
+## 4. Component Subscription Pattern — Dioxus Hooks
 
-### 4.1 `use_effect` Helper
+### 4.1 Dioxus Hook Mapping
 
-Like React's `useEffect`: runs on mount, returns a cleanup function called on unmount.
+Dioxus provides native hooks that map directly to React patterns. Use them directly — no wrapper needed.
+
+| Dioxus Hook | React Equivalent | Purpose |
+|---|---|---|
+| `use_effect(move \|\| { ... })` | `useEffect(f)` | Side effect after render, auto dependency tracking |
+| `use_effect(move \|\| { ...; Box::new(clean) })` | `useEffect(f, [])` + cleanup | Mount + unmount lifecycle |
+| `use_future(move \|\| async {})` | `useEffect(async, [])` | Async on mount (fetch, connect) |
+| `use_coroutine(\|mut rx\| async move {})` | `useEffect` + channel | Controllable async (WS loop, heartbeat) |
+| `use_drop(move \|\| { ... })` | cleanup in `useEffect` | Unmount cleanup only |
+
+For subscription lifecycle, use **`use_drop`** — simplest fit. Register subscriptions during signal creation via `use_hook`, clean up via `use_drop`:
 
 ```rust
-/// Dioxus use_effect: run setup on mount, cleanup on unmount.
-/// The returned value is kept alive and dropped when the component unmounts.
-pub fn use_effect<T: 'static>(setup: impl FnOnce() -> T) {
-    use_hook(move || {
-        let guard = setup();
-        // Dioxus use_hook keeps the returned value alive until unmount.
-        // When the component unmounts, guard is dropped, triggering cleanup.
-        guard
+use dioxus::prelude::*;
+
+// Register subscriptions on mount
+use_hook(|| {
+    let app_state: AppState = use_context();
+    let signal = /* the signal we just created */;
+    let mut set = SubscriptionSet::new(app_state.event_bus.clone());
+
+    set.subscribe(&app_state.event_bus, UiEventKind::AgentStart, move |event| {
+        signal.with_mut(|s| ConversationReducer::reduce(s, event));
     });
-}
+    // ... more subscriptions ...
+
+    // Store in context for use_drop to access
+    set
+});
+
+// Clean up on unmount
+use_drop(|| {
+    // SubscriptionSet dropped here, all subscriptions cleaned up
+});
 ```
 
-### 4.2 `use_signal_with_effect` — The Main Helper
+### 4.2 `use_signal_with_effect` — Helper
 
-Combines signal creation + typed event subscription. Each component declares exactly which `UiEventKind` variants it cares about:
+Combines signal creation + typed subscription registration + unmount cleanup:
 
 ```rust
 /// Create a local signal and subscribe to specific event kinds.
-/// Like React's useEffect: subscribe on mount, unsubscribe on unmount.
-///
-/// # Example
-/// ```rust
-/// let signal = use_signal_with_effect::<ConversationState>(
-///     || ConversationState { entries: vec![], scroll: 0, auto_scroll: true },
-///     |bus| {
-///         bus.subscribe(UiEventKind::AgentStart, move |event| {
-///             signal.with_mut(|s| ConversationReducer::reduce(s, event));
-///         });
-///         bus.subscribe(UiEventKind::AgentComplete, move |event| {
-///             signal.with_mut(|s| ConversationReducer::reduce(s, event));
-///         });
-///         bus.subscribe(UiEventKind::ThinkingDelta, move |event| {
-///             signal.with_mut(|s| ConversationReducer::reduce(s, event));
-///         });
-///     },
-/// );
-/// ```
+/// Mount: register subscriptions. Unmount: SubscriptionSet dropped, all cleaned up.
 pub fn use_signal_with_effect<T>(
     initial: impl FnOnce() -> T,
-    subscribe: impl FnOnce(&EventBus),
+    subscribe: impl FnOnce(EventBus, Signal<T>) -> SubscriptionSet,
 ) -> Signal<T>
 where
     T: Clone + Send + Sync + 'static,
@@ -599,35 +602,14 @@ where
     let signal = use_signal(initial);
     let app_state: AppState = use_context();
 
-    use_effect(|| {
-        let subs = SubscriptionSet::new();
-        // The subscribe closure receives the bus and registers handlers.
-        // Each registration adds a (kind, id) pair to the SubscriptionSet.
-        subscribe(&app_state.event_bus);
-        subs
+    // Register subscriptions on mount
+    let sub_set = use_hook(|| {
+        subscribe(app_state.event_bus.clone(), signal.clone())
     });
 
-    signal
-}
-```
-
-Wait — the `subscribe` closure needs to register subscriptions into the `SubscriptionSet`, but `SubscriptionSet` is created inside the closure. Let me restructure so the helper manages it:
-
-```rust
-/// Create a local signal and subscribe to specific event kinds.
-/// Subscriptions are registered during use_effect setup, cleaned up on unmount.
-pub fn use_signal_with_effect<T>(
-    initial: impl FnOnce() -> T,
-    subscribe: impl FnOnce(&EventBus, Signal<T>) -> SubscriptionSet,
-) -> Signal<T>
-where
-    T: Clone + Send + Sync + 'static,
-{
-    let signal = use_signal(initial);
-    let app_state: AppState = use_context();
-
-    use_effect(|| {
-        subscribe(&app_state.event_bus, signal.clone())
+    // Clean up on unmount — drop the SubscriptionSet
+    use_drop(move || {
+        drop(sub_set);
     });
 
     signal
@@ -649,7 +631,7 @@ pub fn FileTree() -> Element {
         },
         |bus, _signal| {
             // FileTree doesn't react to WS events — all mutations are user-driven
-            SubscriptionSet::empty(bus.clone())
+            SubscriptionSet::empty(bus)
         },
     );
 
@@ -689,10 +671,10 @@ pub fn StatusBar() -> Element {
             }
         },
         |bus, signal| {
-            let mut set = SubscriptionSet::new(bus.clone());
+            let mut set = SubscriptionSet::new(bus);
 
-            // Only these 3 event types — no broadcast storm
-            set.subscribe(bus, UiEventKind::AgentStart, move |event| {
+            // Only these 4 event types — no broadcast storm
+            set.subscribe(&bus, UiEventKind::AgentStart, move |event| {
                 signal.with_mut(|s| {
                     s.run_count += 1;
                     s.iteration = 0;
@@ -703,7 +685,7 @@ pub fn StatusBar() -> Element {
                 });
             });
 
-            set.subscribe(bus, UiEventKind::AgentComplete, move |event| {
+            set.subscribe(&bus, UiEventKind::AgentComplete, move |event| {
                 signal.with_mut(|s| {
                     if let Some(start) = s.run_start {
                         s.run_elapsed = start.elapsed();
@@ -712,14 +694,14 @@ pub fn StatusBar() -> Element {
                 });
             });
 
-            set.subscribe(bus, UiEventKind::WsConnected, move |event| {
+            set.subscribe(&bus, UiEventKind::WsConnected, move |event| {
                 signal.with_mut(|s| {
                     s.ws_connected = true;
                     s.ws_last_error = None;
                 });
             });
 
-            set.subscribe(bus, UiEventKind::WsDisconnected, move |event| {
+            set.subscribe(&bus, UiEventKind::WsDisconnected, move |event| {
                 signal.with_mut(|s| {
                     s.ws_connected = false;
                     if let UiEvent::WsDisconnected { reason } = event {
@@ -755,9 +737,9 @@ pub fn ConversationView() -> Element {
             auto_scroll: true,
         },
         |bus, signal| {
-            let mut set = SubscriptionSet::new(bus.clone());
+            let mut set = SubscriptionSet::new(bus);
 
-            let kinds = [
+            for kind in [
                 UiEventKind::AgentStart,
                 UiEventKind::AgentComplete,
                 UiEventKind::AgentAborted,
@@ -771,10 +753,8 @@ pub fn ConversationView() -> Element {
                 UiEventKind::MaxIterationsReached,
                 UiEventKind::IterationContinued,
                 UiEventKind::IterationComplete,
-            ];
-
-            for kind in kinds {
-                set.subscribe(bus, kind, {
+            ] {
+                set.subscribe(&bus, kind, {
                     let signal = signal.clone();
                     move |event| {
                         signal.with_mut(|s| {
@@ -825,63 +805,61 @@ impl SubscriptionSet {
 }
 ```
 
-Note: `subscribe` takes `_bus: &EventBus` as a parameter for ergonomic chaining — the actual registration goes through `self.bus` which is the same `Arc<EventBusInner>`.
-
 ## 5. WS Binding
 
-### 5.1 Event Loop — Publish to EventBus
+### 5.1 Event Loop — `use_coroutine` + EventBus
+
+`use_coroutine` is the Dioxus pattern for controllable async (WS loop, heartbeat, reconnect):
 
 ```rust
 #[component]
 pub fn App() -> Element {
     let ws_url = derive_ws_url();
     let event_bus = use_signal(|| EventBus::new());
-    let client = use_hook(|| JsonRpcClient::new(&ws_url));
 
-    // Provide AppState (event_bus + client only)
-    use_context_provider(|| AppState {
-        event_bus: event_bus.with(|eb| eb.clone()),
-        rpc_client: client.clone(),
-    });
+    // WS event loop as coroutine — runs on mount, managed lifecycle
+    use_coroutine(move |mut rx| async move {
+        let client = JsonRpcClient::new(&ws_url).await;
+        let bus = event_bus.with(|eb| eb.clone());
 
-    // WS event loop — publish events to the bus
-    let bus = event_bus.with(|eb| eb.clone());
-    let client_clone = client.clone();
-    use_hook(move || {
-        spawn(async move {
-            loop {
-                match client_ev.next_event().await {
-                    Some(agent_event) => {
-                        if let Some(ui_event) = agent_event_to_ui(&agent_event) {
-                            bus.publish(&ui_event);
-                        }
-                    }
-                    None => {
-                        // Publish a connection-lost event
-                        bus.publish(&UiEvent::AgentError {
-                            message: "Event stream closed".to_string(),
-                        });
-                        break;
+        // Connection state change callback → publish to bus
+        client.on_state_change(move |cs| {
+            let event = match cs {
+                ConnectionState::Connected => UiEvent::WsConnected,
+                ConnectionState::Connecting => UiEvent::WsConnecting,
+                ConnectionState::Disconnected => UiEvent::WsDisconnected { reason: None },
+            };
+            bus.publish(&event);
+        });
+
+        // Event loop
+        loop {
+            // Check for commands from UI (e.g. send messages, cancel)
+            if let Ok(msg) = rx.try_next() {
+                // handle UI command...
+            }
+
+            // Read from WS
+            match client.next_event().await {
+                Some(agent_event) => {
+                    if let Some(ui_event) = agent_event_to_ui(&agent_event) {
+                        bus.publish(&ui_event);
                     }
                 }
+                None => {
+                    bus.publish(&UiEvent::AgentError {
+                        message: "Event stream closed".to_string(),
+                    });
+                    break;
+                }
             }
-        });
+        }
     });
 
-    // Connection state change — publish directly
-    let bus_clone = bus.clone();
-    client.on_state_change(move |cs| {
-        let event = match cs {
-            ConnectionState::Connected => UiEvent::WsConnected,
-            ConnectionState::Connecting => UiEvent::WsConnecting,
-            ConnectionState::Disconnected => UiEvent::WsDisconnected,
-        };
-        bus_clone.publish(&event);
-
-        // Initial workspace load on connect
-        if matches!(cs, ConnectionState::Connected) {
-            // ... fetch workspace tree via rpc_client ...
-        }
+    // Provide AppState (event_bus + we'll create client inside coroutine)
+    use_context_provider(|| AppState {
+        event_bus: event_bus.with(|eb| eb.clone()),
+        rpc_client: JsonRpcClient::placeholder(), // replaced by coroutine
     });
 
     rsx! {
@@ -965,29 +943,27 @@ pub fn FileTree() -> Element {
 ```rust
 #[component]
 pub fn StatusBar() -> Element {
+    let ws_url = use_context::<AppState>().rpc_client.url().to_string();
     let signal = use_signal_with_effect(
-        || {
-            let app_state: AppState = use_context();
-            GlobalState {
-                session_id: "web-session".into(),
-                run_count: 0,
-                iteration: 0,
-                tool_call_count: 0,
-                run_start: None,
-                run_elapsed: Duration::ZERO,
-                is_running: false,
-                exiting: false,
-                ws_url: app_state.rpc_client.url().to_string(),
-                ws_connected: false,
-                ws_last_error: None,
-                unsafe_mode: false,
-                active_tab: ActiveTab::Conversation,
-            }
+        || GlobalState {
+            session_id: "web-session".into(),
+            run_count: 0,
+            iteration: 0,
+            tool_call_count: 0,
+            run_start: None,
+            run_elapsed: Duration::ZERO,
+            is_running: false,
+            exiting: false,
+            ws_url,
+            ws_connected: false,
+            ws_last_error: None,
+            unsafe_mode: false,
+            active_tab: ActiveTab::Conversation,
         },
         |bus, signal| {
             let mut set = SubscriptionSet::new(bus.clone());
 
-            set.subscribe(bus, UiEventKind::AgentStart, move |event| {
+            set.subscribe(&bus, UiEventKind::AgentStart, move |event| {
                 signal.with_mut(|s| {
                     s.run_count += 1;
                     s.iteration = 0;
@@ -997,20 +973,20 @@ pub fn StatusBar() -> Element {
                 });
             });
 
-            set.subscribe(bus, UiEventKind::AgentComplete, move |event| {
+            set.subscribe(&bus, UiEventKind::AgentComplete, move |event| {
                 signal.with_mut(|s| {
                     s.is_running = false;
                 });
             });
 
-            set.subscribe(bus, UiEventKind::WsConnected, move |event| {
+            set.subscribe(&bus, UiEventKind::WsConnected, move |event| {
                 signal.with_mut(|s| {
                     s.ws_connected = true;
                     s.ws_last_error = None;
                 });
             });
 
-            set.subscribe(bus, UiEventKind::WsDisconnected, move |event| {
+            set.subscribe(&bus, UiEventKind::WsDisconnected, move |event| {
                 signal.with_mut(|s| {
                     s.ws_connected = false;
                 });
@@ -1089,16 +1065,13 @@ pub fn ConversationView() -> Element {
 ```
 App component mounts
     │
-    ├─ EventBus::new()
-    ├─ JsonRpcClient::new(url)
-    ├─ use_context_provider(|| AppState { event_bus, rpc_client })
-    │
-    ├─ WS event loop spawns
+    ├─ use_signal(|| EventBus::new())
+    ├─ use_coroutine → WS event loop + client lifecycle
     │   └─ loop: next_event() → agent_event_to_ui() → bus.publish(ui_event)
     │       └─ publish routes by UiEventKind → only matching handlers fire
+    │   └─ on_state_change → publishes UiEvent::WsConnected/WsDisconnected
     │
-    ├─ on_state_change callback registered
-    │   └─ publishes UiEvent::WsConnected / WsDisconnected
+    ├─ use_context_provider(|| AppState { event_bus, rpc_client })
     │
     └─ Child components mount — each calls use_signal_with_effect(...)
         ├─ FileTree: signal + empty subscription (user-driven only)
@@ -1108,8 +1081,7 @@ App component mounts
         ├─ ApprovalDialog: signal + subscribes 2 UiEventKind types
         └─ ... each component declares its own event types
             │
-            └─ Each component returns a SubscriptionSet
-               → dropped on unmount → all subscriptions cleaned up
+            └─ use_drop → on unmount, SubscriptionSet dropped → all cleaned up
 ```
 
 ## 8. File Impact
@@ -1117,7 +1089,7 @@ App component mounts
 | File | Change |
 |------|--------|
 | `src/state/mod.rs` | Add `EventBus`, `SubscriptionSet`, `UiEventKind`, `HasReducer<T>` trait. Add `UiEvent::kind()` method. Add per-component state structs. Keep `UiEvent` enum unchanged. Keep `UiState` for TUI behind `#[cfg(feature = "tui")]`. Remove old `UiState::apply()` method. |
-| `src/web/components/app.rs` | Create `EventBus`, provide via context. WS event loop calls `bus.publish(ui_event)`. Remove `AppState` signal fields. `AppState` = `EventBus` + `JsonRpcClient` only. Add `use_signal_with_effect` helper. Add `use_effect` helper. |
+| `src/web/components/app.rs` | Create `EventBus`, provide via context. Use `use_coroutine` for WS event loop + client lifecycle. Add `use_signal_with_effect` helper. Remove `AppState` signal fields. |
 | `src/web/components/file_tree.rs` | Use `use_signal_with_effect`. No WS event subscriptions (user-driven). |
 | `src/web/components/conversation.rs` | Use `use_signal_with_effect` with 12 `UiEventKind` types. Implement `HasReducer`. |
 | `src/web/components/tools_panel.rs` | Use `use_signal_with_effect` with 4 `UiEventKind` types (ToolCall*). Implement `HasReducer`. |
@@ -1132,11 +1104,11 @@ App component mounts
 
 ## 9. Error Handling
 
+- `use_coroutine` manages the WS lifecycle — auto-cleanup on unmount, no leaked connections
 - If a reducer returns `false` (unhandled), the event is silently ignored for that component
-- EventBus `publish()` only invokes handlers subscribed to that specific `UiEventKind` — no broadcast storm, no wasted cycles
-- Per-kind subscriber list means `publish()` is O(matching subscribers) not O(all subscribers)
+- EventBus `publish()` only invokes handlers subscribed to that specific `UiEventKind` — O(matching) not O(all)
 - If a subscriber panics, it does NOT block other subscribers (use `catch_unwind` if needed)
-- `SubscriptionSet` `Drop` guarantees cleanup on component unmount
+- `SubscriptionSet` `Drop` (via `use_drop`) guarantees cleanup on component unmount
 - WS disconnection publishes `WsDisconnected` event — components handle via their reducer
 
 ## 10. Backward Compatibility
