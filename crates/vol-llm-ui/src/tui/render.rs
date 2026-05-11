@@ -61,6 +61,7 @@ fn render_right_panel(frame: &mut Frame, area: Rect, state: &UiState) {
         ActiveTab::Logs => render_log_viewer(frame, chunks[1], state),
         ActiveTab::Skills => render_skills(frame, chunks[1], state),
         ActiveTab::Agents => render_agents_panel(frame, chunks[1], state),
+        ActiveTab::Sessions => render_sessions_panel(frame, chunks[1], state),
     }
 
     render_input_area(frame, chunks[2], state);
@@ -106,6 +107,8 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &UiState) {
     let tabs = Line::from(vec![
         Span::raw(" "),
         Span::styled(" Conversation ", style(ActiveTab::Conversation)),
+        Span::raw(" "),
+        Span::styled(" Sessions ", style(ActiveTab::Sessions)),
         Span::raw(" "),
         Span::styled(" Tools ", style(ActiveTab::Tools)),
         Span::raw(" "),
@@ -275,6 +278,14 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                 lines.push(Line::from(vec![
                     Span::styled(format!("Error: {}", message),
                         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                ]));
+            }
+            ConversationEntry::EntryCheckpoint { reason, note, created_at } => {
+                let label = format!("[Checkpoint: {}] {}", created_at, reason);
+                let label = note.as_ref().map(|n| format!("{} ({})", label, n)).unwrap_or(label);
+                lines.push(Line::from(vec![
+                    Span::styled(label,
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::DIM)),
                 ]));
             }
         }
@@ -538,6 +549,20 @@ fn render_agents_panel(frame: &mut Frame, area: Rect, state: &UiState) {
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center);
     frame.render_widget(placeholder, inner);
+}
+
+fn render_sessions_panel(frame: &mut Frame, area: Rect, _state: &UiState) {
+    let block = Block::default()
+        .title("Sessions")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::DarkGray));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let text = Text::raw("No sessions (TUI)");
+    let paragraph = Paragraph::new(text)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(paragraph, inner);
 }
 
 fn pad_or_truncate(s: &str, width: usize) -> String {
