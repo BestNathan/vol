@@ -36,6 +36,17 @@ pub struct FileEntry {
     pub size: u64,
 }
 
+/// Agent metadata entry returned by agent.list.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentListEntry {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub description: String,
+    pub scope: String,
+}
+
 /// Connection state.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionState {
@@ -269,6 +280,39 @@ impl JsonRpcClient {
                 cb(Err(error.to_string()));
             } else {
                 cb(Err("no content in response".to_string()));
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// List all registered agents on the server. Returns entries via callback.
+    pub fn agent_list(&self, cb: impl FnOnce(Result<Vec<AgentListEntry>, String>) + 'static) {
+        let id = self.alloc_id();
+
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "agent.list",
+            "params": {},
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("agents").and_then(|v| v.as_array()) {
+                Some(agents) => {
+                    let parsed: Vec<AgentListEntry> = agents.iter()
+                        .filter_map(|e| serde_json::from_value(e.clone()).ok())
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no agents in response".to_string())),
             }
         });
         self.inner.pending.borrow_mut().insert(id, cb);
