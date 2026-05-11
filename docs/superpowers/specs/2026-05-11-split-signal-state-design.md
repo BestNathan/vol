@@ -1,12 +1,12 @@
-# Component-Split Signal State Architecture
+# Component-Split Signal State Architecture (Pub-Sub)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the single `Signal<UiState>` with per-component Signals so each component only re-renders when its own state changes.
+**Goal:** Replace centralized `Signal<UiState>` with per-component local signals + pub-sub event bus. Each component owns its own state, subscribes to WS events it cares about, and handles them via a local reducer.
 
-**Architecture:** Trait-based `Reducer<T>` pattern. Each domain defines its own `Reducer` that handles a subset of `UiEvent` variants. The WS event loop calls `reducer.reduce(signal, event)`. Cross-domain events (like `agent_start`) call multiple reducers in sequence.
+**Architecture:** `EventBus` (publish-subscribe) at `AppState` level. Components create `use_signal` locally, subscribe to event types on mount with a reducer callback, unsubscribe on unmount. WS publishes events to the bus — no global state container, no centralized dispatch loop.
 
-**Tech Stack:** Dioxus `Signal<T>`, `use_context_provider`, trait-based Reducer pattern, JSON-RPC event loop.
+**Tech Stack:** Dioxus `use_signal`, `use_hook`, `use_context`, EventBus pub-sub pattern, `Arc<Mutex>` subscriber registry, JSON-RPC WebSocket event loop.
 
 ---
 
@@ -15,141 +15,129 @@
 ```
 WebSocket (JsonRpcClient)
     │
-    ├─ on_state_change callback ──→ Signal<GlobalState>
-    │
     └─ next_event() loop ──→ AgentEvent
                                │
                                ▼
-                    agent_event_to_ui() → UiEvent
+                     agent_event_to_ui() → UiEvent
                                │
                                ▼
-              ┌────────────────┼────────────────┐
-              ▼                ▼                ▼
-        Reducer<T>        Reducer<T>       Reducer<T>
-        (Conversation)    (Tool)           (Approval)
-              │                │                │
-              ▼                ▼                ▼
-        Signal<Conv>      Signal<Tool>     Signal<Approval>
-              │                │                │
-              ▼                ▼                ▼
-        ConversationView  ToolsPanel       ApprovalDialog
+                        EventBus.publish()
+                               │
+              ┌────────────────┼────────────────┬──────────────┐
+              ▼                ▼                ▼              ▼
+        FileTree          Conversation     ToolsPanel    StatusBar
+        .reduce()         .reduce()        .reduce()     .reduce()
+              │                │                │              │
+              ▼                ▼                ▼              ▼
+        use_signal        use_signal       use_signal    use_signal
+        <Workspace>       <Conversation>   <Tools>       <Global>
+              │                │                │              │
+              ▼                ▼                ▼              ▼
+        FileTree UI       ConversationUI   ToolsPanelUI  StatusBarUI
 ```
 
 Key principles:
-- Each component owns exactly **one** `Signal<T>` it reads from
-- Each `UiEvent` variant maps to **one** reducer (except cross-domain events)
-- Cross-domain events (e.g. `agent_start`) touch multiple signals sequentially — no locking needed since Dioxus `with_mut` is synchronous
-- WS connection state changes go directly to `GlobalState`
+- **No global state container** — each component calls `use_signal(|| MyState { ... })` locally
+- **Pub-sub event routing** — `EventBus.publish(event)` broadcasts to all subscribers
+- **Component owns its reducer** — `struct FileTree; impl HasReducer<WorkspaceState> for FileTree { ... }`
+- **Auto-unsubscribe on unmount** — `use_hook` creates `Subscription` guard, drops on unmount
+- **No AppState state fields** — `AppState` only holds `EventBus` + `JsonRpcClient`
 
-## 2. State Definitions
+## 2. EventBus
 
-### 2.1 GlobalState (StatusBar, InputArea, TabBar)
+### 2.1 Core Types
 
 ```rust
-pub struct GlobalState {
-    pub session_id: String,
-    pub run_count: u32,
-    pub iteration: u32,
-    pub tool_call_count: u32,
-    pub run_start: Option<Instant>,
-    pub run_elapsed: std::time::Duration,
-    pub is_running: bool,
-    pub exiting: bool,
-    pub ws_url: String,
-    pub ws_connected: bool,
-    pub ws_last_error: Option<String>,
-    pub unsafe_mode: bool,
-    pub active_tab: ActiveTab,
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+
+/// Unique subscription ID.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SubscriptionId(u64);
+
+/// A live subscription — drops to unsubscribe.
+pub struct Subscription {
+    id: SubscriptionId,
+    bus: Arc<EventBusInner>,
+}
+
+impl Drop for Subscription {
+    fn drop(&mut self) {
+        self.bus.unsubscribe(self.id);
+    }
 }
 ```
 
-### 2.2 WorkspaceState (FileTree, FileContentView)
+### 2.2 EventBus Implementation
 
 ```rust
-pub struct WorkspaceState {
-    pub workspace: WorkspaceTreeNode,
-    pub modified_files: HashSet<String>,
-    pub open_files: Vec<OpenFileTab>,
-    pub selected_file_tab: Option<usize>,
-    pub collapsed_dirs: HashSet<String>,
-    pub workspace_scroll: u16,
+type Handler = Box<dyn Fn(&UiEvent) + Send + Sync>;
+
+struct Subscriber {
+    id: SubscriptionId,
+    handler: Handler,
+}
+
+struct EventBusInner {
+    next_id: AtomicU64,
+    subscribers: Mutex<Vec<Subscriber>>,
+}
+
+#[derive(Clone)]
+pub struct EventBus {
+    inner: Arc<EventBusInner>,
+}
+
+impl EventBus {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(EventBusInner {
+                next_id: AtomicU64::new(0),
+                subscribers: Mutex::new(Vec::new()),
+            }),
+        }
+    }
+
+    /// Subscribe to all events. Returns a Subscription guard that unsubscribes on drop.
+    pub fn subscribe<F>(&self, handler: F) -> Subscription
+    where
+        F: Fn(&UiEvent) + Send + Sync + 'static,
+    {
+        let id = SubscriptionId(self.inner.next_id.fetch_add(1, Ordering::Relaxed));
+        let subscriber = Subscriber {
+            id,
+            handler: Box::new(handler),
+        };
+        self.inner.subscribers.lock().unwrap().push(subscriber);
+        Subscription {
+            id,
+            bus: self.inner.clone(),
+        }
+    }
+
+    /// Publish an event to all subscribers.
+    pub fn publish(&self, event: &UiEvent) {
+        let subscribers = self.inner.subscribers.lock().unwrap();
+        for sub in subscribers.iter() {
+            (sub.handler)(event);
+        }
+    }
+}
+
+impl EventBusInner {
+    fn unsubscribe(&self, id: SubscriptionId) {
+        let mut subs = self.subscribers.lock().unwrap();
+        subs.retain(|s| s.id != id);
+    }
 }
 ```
 
-### 2.3 ConversationState (ConversationView)
-
-```rust
-pub struct ConversationState {
-    pub entries: Vec<ConversationEntry>,
-    pub conversation_scroll: u16,
-    pub auto_scroll: bool,
-}
-```
-
-### 2.4 ToolState (ToolsPanel, ToolsTabContent)
-
-```rust
-pub struct ToolState {
-    pub calls: Vec<ToolCallEntry>,
-    pub expanded: HashSet<usize>,
-    pub scroll: u16,
-}
-```
-
-### 2.5 LogState (LogViewer)
-
-```rust
-pub struct LogState {
-    pub selected_run: Option<String>,
-    pub entries: Vec<LogLine>,
-    pub scroll: u16,
-    pub auto_scroll: bool,
-    pub run_logs: Vec<LogRunSummary>,
-}
-```
-
-### 2.6 SkillState (SkillsPanel)
-
-```rust
-pub struct SkillState {
-    pub skills: Vec<SkillDisplayEntry>,
-}
-```
-
-### 2.7 ApprovalState (ApprovalDialog)
-
-```rust
-pub struct ApprovalState {
-    pub tool_name: Option<String>,
-    pub reason: Option<String>,
-    pub arguments: Option<String>,
-    pub response: Option<(bool, Option<String>)>,
-}
-```
-
-### 2.8 SessionState (SessionDialog)
-
-```rust
-pub struct SessionState {
-    pub open: bool,
-    pub sessions: Vec<SessionDialogEntry>,
-    pub selected: usize,
-}
-```
-
-## 3. AppState Container
+### 2.3 AppState (Transport Only, No State)
 
 ```rust
 #[derive(Clone)]
 pub struct AppState {
-    pub global: Signal<GlobalState>,
-    pub workspace: Signal<WorkspaceState>,
-    pub conversation: Signal<ConversationState>,
-    pub tools: Signal<ToolState>,
-    pub logs: Signal<LogState>,
-    pub skills: Signal<SkillState>,
-    pub approval: Signal<ApprovalState>,
-    pub session: Signal<SessionState>,
+    pub event_bus: EventBus,
     pub rpc_client: JsonRpcClient,
 }
 
@@ -158,24 +146,57 @@ impl PartialEq for AppState {
 }
 ```
 
-## 4. Reducer Pattern
+`AppState` no longer holds any `Signal<T>`. It only provides the event bus and RPC client as shared infrastructure.
 
-### 4.1 Trait Definition
+## 3. Reducer Trait
+
+### 3.1 Trait Definition
 
 ```rust
-/// A reducer handles a subset of UiEvent variants for a specific domain.
-pub trait Reducer<T> {
+/// A component that can reduce UiEvent into its local state.
+pub trait HasReducer<T> {
     /// Apply an event to the state. Returns `true` if the event was handled.
     fn reduce(state: &mut T, event: &UiEvent) -> bool;
 }
 ```
 
-### 4.2 Conversation Reducer
+### 3.2 Per-Component Reducer Implementations
 
 ```rust
-pub struct ConversationReducer;
+// --- FileTree ---
+pub struct WorkspaceState {
+    pub workspace: WorkspaceTreeNode,
+    pub modified_files: HashSet<String>,
+    pub open_files: Vec<OpenFileTab>,
+    pub selected_file_tab: Option<usize>,
+    pub collapsed_dirs: HashSet<String>,
+}
 
-impl Reducer<ConversationState> for ConversationReducer {
+pub struct FileTree;
+
+impl HasReducer<WorkspaceState> for FileTree {
+    fn reduce(s: &mut WorkspaceState, event: &UiEvent) -> bool {
+        match event {
+            // FileTree may care about agent file modifications if the server sends them
+            _ => false,
+        }
+    }
+}
+```
+
+Note: WorkspaceState mutations happen primarily via user interaction (clicking files, expanding dirs), not WS events. The reducer is mostly a no-op for workspace.
+
+```rust
+// --- ConversationView ---
+pub struct ConversationState {
+    pub entries: Vec<ConversationEntry>,
+    pub conversation_scroll: u16,
+    pub auto_scroll: bool,
+}
+
+pub struct ConversationView;
+
+impl HasReducer<ConversationState> for ConversationView {
     fn reduce(s: &mut ConversationState, event: &UiEvent) -> bool {
         match event {
             UiEvent::AgentStart { input } => {
@@ -206,7 +227,7 @@ impl Reducer<ConversationState> for ConversationReducer {
                 }
                 true
             }
-            UiEvent::ThinkingComplete => true, // No-op, content already streamed
+            UiEvent::ThinkingComplete => true,
             UiEvent::ContentStart => {
                 s.entries.push(ConversationEntry::ContentStreaming { content: String::new() });
                 true
@@ -250,12 +271,17 @@ impl Reducer<ConversationState> for ConversationReducer {
 }
 ```
 
-### 4.3 Tool Reducer
-
 ```rust
-pub struct ToolReducer;
+// --- ToolsPanel ---
+pub struct ToolState {
+    pub calls: Vec<ToolCallEntry>,
+    pub expanded: HashSet<usize>,
+    pub scroll: u16,
+}
 
-impl Reducer<ToolState> for ToolReducer {
+pub struct ToolsPanel;
+
+impl HasReducer<ToolState> for ToolsPanel {
     fn reduce(s: &mut ToolState, event: &UiEvent) -> bool {
         match event {
             UiEvent::ToolCallBegin { tool_name, arguments } => {
@@ -289,12 +315,27 @@ impl Reducer<ToolState> for ToolReducer {
 }
 ```
 
-### 4.4 Global Reducer
-
 ```rust
-pub struct GlobalReducer;
+// --- StatusBar ---
+pub struct GlobalState {
+    pub session_id: String,
+    pub run_count: u32,
+    pub iteration: u32,
+    pub tool_call_count: u32,
+    pub run_start: Option<Instant>,
+    pub run_elapsed: Duration,
+    pub is_running: bool,
+    pub exiting: bool,
+    pub ws_url: String,
+    pub ws_connected: bool,
+    pub ws_last_error: Option<String>,
+    pub unsafe_mode: bool,
+    pub active_tab: ActiveTab,
+}
 
-impl Reducer<GlobalState> for GlobalReducer {
+pub struct StatusBar;
+
+impl HasReducer<GlobalState> for StatusBar {
     fn reduce(s: &mut GlobalState, event: &UiEvent) -> bool {
         match event {
             UiEvent::AgentStart { .. } => {
@@ -302,7 +343,7 @@ impl Reducer<GlobalState> for GlobalReducer {
                 s.iteration = 0;
                 s.tool_call_count = 0;
                 s.run_start = Some(Instant::now());
-                s.run_elapsed = std::time::Duration::ZERO;
+                s.run_elapsed = Duration::ZERO;
                 s.is_running = true;
                 true
             }
@@ -323,12 +364,18 @@ impl Reducer<GlobalState> for GlobalReducer {
 }
 ```
 
-### 4.5 Approval Reducer
-
 ```rust
-pub struct ApprovalReducer;
+// --- ApprovalDialog ---
+pub struct ApprovalState {
+    pub tool_name: Option<String>,
+    pub reason: Option<String>,
+    pub arguments: Option<String>,
+    pub response: Option<(bool, Option<String>)>,
+}
 
-impl Reducer<ApprovalState> for ApprovalReducer {
+pub struct ApprovalDialog;
+
+impl HasReducer<ApprovalState> for ApprovalDialog {
     fn reduce(s: &mut ApprovalState, event: &UiEvent) -> bool {
         match event {
             UiEvent::ApprovalRequest { tool_name, reason, arguments } => {
@@ -350,145 +397,126 @@ impl Reducer<ApprovalState> for ApprovalReducer {
 }
 ```
 
-### 4.6 Workspace Reducer
+Other components (LogViewer, SkillsPanel, SessionDialog, FileContentView, InputArea) follow the same pattern — define their state struct + implement `HasReducer`.
+
+## 4. Component Subscription Pattern
+
+### 4.1 Generic Subscribe Hook
 
 ```rust
-pub struct WorkspaceReducer;
-
-impl Reducer<WorkspaceState> for WorkspaceReducer {
-    fn reduce(s: &mut WorkspaceState, event: &UiEvent) -> bool {
-        match event {
-            // File modification events from agent (if the server sends them)
-            _ => false, // Workspace state is primarily user-driven, not event-driven
-        }
-    }
-}
-```
-
-Note: WorkspaceState mutations happen via user interaction (clicking files, expanding dirs), not WS events. The reducer exists for completeness but is mostly a no-op.
-
-## 5. WS Binding
-
-### 5.1 Event Parsing
-
-The existing `agent_event_to_ui()` function converts `AgentEvent` → `Option<UiEvent>`:
-
-```rust
-fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
-    let data = &event.data;
-    match event.event_type.as_str() {
-        "agent_start" => Some(UiEvent::AgentStart {
-            input: data.get("input").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        }),
-        // ... all other variants ...
-        _ => None,
-    }
-}
-```
-
-### 5.2 Event Loop with Reducer Routing
-
-```rust
-// In App component's event loop:
-let app_state = AppState { ... }; // All 8 signals + rpc_client
-
-wasm_bindgen_futures::spawn_local(async move {
-    loop {
-        match client_ev.next_event().await {
-            Some(agent_event) => {
-                if let Some(ui_event) = agent_event_to_ui(&agent_event) {
-                    // Route to each reducer sequentially
-                    ConversationReducer::reduce(&mut app_state.conversation, &ui_event);
-                    ToolReducer::reduce(&mut app_state.tools, &ui_event);
-                    GlobalReducer::reduce(&mut app_state.global, &ui_event);
-                    ApprovalReducer::reduce(&mut app_state.approval, &ui_event);
-                    WorkspaceReducer::reduce(&mut app_state.workspace, &ui_event);
-                    LogReducer::reduce(&mut app_state.logs, &ui_event);
-                    SkillReducer::reduce(&mut app_state.skills, &ui_event);
-                    SessionReducer::reduce(&mut app_state.session, &ui_event);
-                }
-            }
-            None => {
-                app_state.global.with_mut(|g| {
-                    g.ws_connected = false;
-                    g.ws_last_error = Some("Event stream closed".to_string());
-                });
-                break;
-            }
-        }
-    }
-});
-```
-
-The reducer `reduce()` method returns `true` if it handled the event. The `Signal::with_mut()` wrapper is handled **inside** each reducer call, so the reducer trait doesn't need to know about signals:
-
-```rust
-// Actual implementation — each reducer wraps in with_mut:
-impl AppState {
-    pub fn dispatch(&self, event: &UiEvent) {
-        self.conversation.with_mut(|s| { ConversationReducer::reduce(s, event); });
-        self.tools.with_mut(|s| { ToolReducer::reduce(s, event); });
-        self.global.with_mut(|s| { GlobalReducer::reduce(s, event); });
-        self.approval.with_mut(|s| { ApprovalReducer::reduce(s, event); });
-        self.workspace.with_mut(|s| { WorkspaceReducer::reduce(s, event); });
-        self.logs.with_mut(|s| { LogReducer::reduce(s, event); });
-        self.skills.with_mut(|s| { SkillReducer::reduce(s, event); });
-        self.session.with_mut(|s| { SessionReducer::reduce(s, event); });
-    }
-}
-```
-
-### 5.3 Connection State Binding
-
-```rust
-c.on_state_change(move |cs| {
-    app_state.global.with_mut(|g| match cs {
-        ConnectionState::Connected => {
-            g.ws_connected = true;
-            g.ws_last_error = None;
-        }
-        ConnectionState::Connecting => {
-            g.ws_connected = false;
-        }
-        ConnectionState::Disconnected => {
-            g.ws_connected = false;
-            g.ws_last_error = Some("Disconnected from server".to_string());
-        }
-    });
-    // Initial workspace load
-    let rpc = app_state.rpc_client.clone();
-    let ws = app_state.workspace.clone();
-    rpc.file_list(".", move |result| {
-        if let Ok(entries) = result {
-            ws.with_mut(|w| {
-                w.workspace.children.clear();
-                for entry in &entries {
-                    w.workspace.children.push(WorkspaceTreeNode { ... });
-                    if entry.is_dir {
-                        w.collapsed_dirs.insert(entry.name.clone());
-                    }
-                }
-                w.workspace.loaded = true;
+/// Subscribe to EventBus events and reduce into the given signal.
+/// Unsubscribes automatically when the component unmounts.
+pub fn use_event_subscription<T, C>(signal: &Signal<T>)
+where
+    T: Clone + Send + Sync + 'static,
+    C: HasReducer<T>,
+{
+    let signal = signal.clone();
+    use_hook(move || {
+        let _sub = signal
+            .with(|_| {
+                // We need access to the EventBus from context
+                let app_state: AppState = use_context();
+                app_state.event_bus.subscribe(move |event| {
+                    signal.with_mut(|state| {
+                        C::reduce(state, event);
+                    });
+                })
             });
-        }
+        // Subscription is dropped when the hook's closure scope ends
+        // — but we want it to live for the component lifetime.
+        // See the correct pattern below.
     });
-});
+}
 ```
 
-## 6. Component Subscription
+### 4.2 Correct Pattern — Store Subscription in Component Hook
 
-Each component reads **only** its relevant signal:
+The `Subscription` guard must be kept alive for the component's lifetime. Use `use_hook` with a `Cell<Option<Subscription>>` or store it directly:
 
 ```rust
-// FileTree — only reads WorkspaceState
 #[component]
 pub fn FileTree() -> Element {
-    let workspace_state: Signal<WorkspaceState> = use_context();
-    let workspace = workspace_state.read();
+    let signal = use_signal(|| WorkspaceState {
+        workspace: WorkspaceTreeNode::root("/workspace".into(), ".".into()),
+        modified_files: HashSet::new(),
+        open_files: Vec::new(),
+        selected_file_tab: None,
+        collapsed_dirs: HashSet::new(),
+    });
 
+    // Subscribe on mount, unsubscribe on unmount
+    use_hook(|| {
+        let signal = signal.clone();
+        let app_state: AppState = use_context();
+        let _subscription = app_state.event_bus.subscribe(move |event| {
+            signal.with_mut(|state| {
+                FileTree::reduce(state, event);
+            });
+        });
+        // Hold subscription in the hook's returned value
+        // Dioxus use_hook keeps the returned value alive until unmount
+        _subscription // This doesn't work — use_hook returns ()
+    });
+
+    // Correct: use use_hook to store the subscription
+    let signal_clone = signal.clone();
+    let _sub: Subscription = use_hook(move || {
+        let app_state: AppState = use_context();
+        app_state.event_bus.subscribe(move |event| {
+            signal_clone.with_mut(|state| {
+                FileTree::reduce(state, event);
+            });
+        })
+    });
+
+    // Rest of component...
+}
+```
+
+### 4.3 Extracted Helper
+
+To avoid repeating the subscription boilerplate:
+
+```rust
+/// Create a signal and subscribe to events for the given component reducer.
+/// Returns the signal. Subscription lives until component unmounts.
+pub fn use_signal_with_reducer<T, C>(initial: impl FnOnce() -> T) -> Signal<T>
+where
+    T: Clone + Send + Sync + 'static,
+    C: HasReducer<T>,
+{
+    let signal = use_signal(initial);
+    let sig = signal.clone();
+    let _sub: Subscription = use_hook(move || {
+        let app_state: AppState = use_context();
+        app_state.event_bus.subscribe(move |event| {
+            sig.with_mut(|state| {
+                C::reduce(state, event);
+            });
+        })
+    });
+    signal
+}
+```
+
+Usage:
+
+```rust
+#[component]
+pub fn FileTree() -> Element {
+    let signal = use_signal_with_reducer::<WorkspaceState, FileTree>(|| WorkspaceState {
+        workspace: WorkspaceTreeNode::root("/workspace".into(), ".".into()),
+        modified_files: HashSet::new(),
+        open_files: Vec::new(),
+        selected_file_tab: None,
+        collapsed_dirs: HashSet::new(),
+    });
+
+    let ws = signal.read();
     rsx! {
         div { class: "sidebar",
-            for child in &workspace.workspace.children {
+            for child in &ws.workspace.children {
                 TreeNode { node: child.clone(), depth: 0, key: "{child.path}" }
             }
         }
@@ -496,47 +524,142 @@ pub fn FileTree() -> Element {
 }
 ```
 
+## 5. WS Binding
+
+### 5.1 Event Loop — Publish to EventBus
+
 ```rust
-// StatusBar — only reads GlobalState
 #[component]
-pub fn StatusBar() -> Element {
-    let global: Signal<GlobalState> = use_context();
-    let g = global.read();
+pub fn App() -> Element {
+    let ws_url = derive_ws_url();
+    let event_bus = use_signal(|| EventBus::new());
+    let client = use_hook(|| JsonRpcClient::new(&ws_url));
+
+    // Provide AppState (event_bus + client only)
+    use_context_provider(|| AppState {
+        event_bus: event_bus.with(|eb| eb.clone()),
+        rpc_client: client.clone(),
+    });
+
+    // WS event loop — publish events to the bus
+    let bus = event_bus.with(|eb| eb.clone());
+    let client_clone = client.clone();
+    use_hook(move || {
+        spawn(async move {
+            loop {
+                match client_ev.next_event().await {
+                    Some(agent_event) => {
+                        if let Some(ui_event) = agent_event_to_ui(&agent_event) {
+                            bus.publish(&ui_event);
+                        }
+                    }
+                    None => {
+                        // Publish a connection-lost event
+                        bus.publish(&UiEvent::AgentError {
+                            message: "Event stream closed".to_string(),
+                        });
+                        break;
+                    }
+                }
+            }
+        });
+    });
+
+    // Connection state change — publish directly
+    let bus_clone = bus.clone();
+    client.on_state_change(move |cs| {
+        let event = match cs {
+            ConnectionState::Connected => UiEvent::WsConnected,
+            ConnectionState::Connecting => UiEvent::WsConnecting,
+            ConnectionState::Disconnected => UiEvent::WsDisconnected,
+        };
+        bus_clone.publish(&event);
+
+        // Initial workspace load on connect
+        if matches!(cs, ConnectionState::Connected) {
+            // ... fetch workspace tree via rpc_client ...
+        }
+    });
 
     rsx! {
-        div { class: "status-bar",
-            span { "{g.is_running}" }
-            span { "{g.ws_connected}" }
+        StatusBar {}
+        ConversationView {}
+        ToolsPanel {}
+        FileTree {}
+        // ...
+    }
+}
+```
+
+### 5.2 Connection State as UiEvent
+
+Add connection state variants to `UiEvent`:
+
+```rust
+pub enum UiEvent {
+    // ... existing variants ...
+
+    /// WebSocket connection state changes.
+    WsConnected,
+    WsConnecting,
+    WsDisconnected { reason: Option<String> },
+}
+```
+
+Components that care about connection state (e.g. StatusBar) handle these in their reducer:
+
+```rust
+impl HasReducer<GlobalState> for StatusBar {
+    fn reduce(s: &mut GlobalState, event: &UiEvent) -> bool {
+        match event {
+            UiEvent::WsConnected => {
+                s.ws_connected = true;
+                s.ws_last_error = None;
+                true
+            }
+            UiEvent::WsDisconnected { reason } => {
+                s.ws_connected = false;
+                s.ws_last_error = reason.clone();
+                true
+            }
+            // ... other events ...
         }
     }
 }
 ```
 
-```rust
-// ConversationView — only reads ConversationState
-#[component]
-pub fn ConversationView() -> Element {
-    let conversation: Signal<ConversationState> = use_context();
-    let entries = conversation.read().entries.clone();
+## 6. Component Examples
 
+### 6.1 FileTree (WorkspaceState)
+
+```rust
+#[component]
+pub fn FileTree() -> Element {
+    let signal = use_signal_with_reducer::<WorkspaceState, FileTree>(|| WorkspaceState {
+        workspace: WorkspaceTreeNode::root("/workspace".into(), ".".into()),
+        modified_files: HashSet::new(),
+        open_files: Vec::new(),
+        selected_file_tab: None,
+        collapsed_dirs: HashSet::new(),
+    });
+
+    let ws = signal.read();
     rsx! {
-        div { class: "conversation",
-            for entry in &entries {
-                // render entry
+        div { class: "sidebar",
+            for child in &ws.workspace.children {
+                TreeNode { node: child.clone(), depth: 0, key: "{child.path}" }
             }
         }
     }
 }
 ```
 
-## 7. AppState Initialization
+### 6.2 StatusBar (GlobalState)
 
 ```rust
 #[component]
-pub fn App() -> Element {
-    let ws_url = derive_ws_url();
-
-    let global = use_signal(|| GlobalState {
+pub fn StatusBar() -> Element {
+    let signal = use_signal_with_reducer::<GlobalState, StatusBar>(|| GlobalState {
         session_id: "web-session".into(),
         run_count: 0,
         iteration: 0,
@@ -545,97 +668,115 @@ pub fn App() -> Element {
         run_elapsed: Duration::ZERO,
         is_running: false,
         exiting: false,
-        ws_url: ws_url.clone(),
+        ws_url: use_context::<AppState>().rpc_client.url().to_string(),
         ws_connected: false,
         ws_last_error: None,
         unsafe_mode: false,
         active_tab: ActiveTab::Conversation,
     });
 
-    let conversation = use_signal(|| ConversationState {
+    let g = signal.read();
+    rsx! {
+        div { class: "status-bar",
+            span { if *g.is_running { "Running" } else { "Idle" } }
+            span { if *g.ws_connected { "Connected" } else { "Disconnected" } }
+            span { "Runs: {g.run_count}" }
+        }
+    }
+}
+```
+
+### 6.3 ConversationView (ConversationState)
+
+```rust
+#[component]
+pub fn ConversationView() -> Element {
+    let signal = use_signal_with_reducer::<ConversationState, ConversationView>(|| ConversationState {
         entries: Vec::new(),
         conversation_scroll: 0,
         auto_scroll: true,
     });
 
-    let tools = use_signal(|| ToolState {
-        calls: Vec::new(),
-        expanded: HashSet::new(),
-        scroll: 0,
-    });
-
-    let workspace = use_signal(|| WorkspaceState {
-        workspace: WorkspaceTreeNode::root("/workspace".into(), ".".into()),
-        modified_files: HashSet::new(),
-        open_files: Vec::new(),
-        selected_file_tab: None,
-        collapsed_dirs: HashSet::new(),
-        workspace_scroll: 0,
-    });
-
-    let logs = use_signal(|| LogState { ... });
-    let skills = use_signal(|| SkillState { ... });
-    let approval = use_signal(|| ApprovalState::new());
-    let session = use_signal(|| SessionState { ... });
-
-    let client = use_hook(|| { ... });
-
-    use_context_provider(|| AppState {
-        global, conversation, tools, workspace, logs, skills, approval, session,
-        rpc_client: client.clone(),
-    });
-
-    // ... WS binding, event loop ...
+    let entries = signal.read().entries.clone();
+    rsx! {
+        div { class: "conversation",
+            for entry in &entries {
+                render_entry(entry)
+            }
+        }
+    }
 }
 ```
 
-## 8. TUI Compatibility
+## 7. Initialization Flow
 
-The TUI uses `Arc<RwLock<UiState>>` and re-renders the entire frame at 30fps. Signal splitting is a Dioxus-specific optimization. Keep `UiState` as a flat struct for TUI.
+```
+App component mounts
+    │
+    ├─ use_signal(|| EventBus::new())
+    ├─ use_hook(|| JsonRpcClient::new(url))
+    ├─ use_context_provider(|| AppState { event_bus, rpc_client })
+    │
+    ├─ WS event loop spawns
+    │   └─ loop: next_event() → agent_event_to_ui() → bus.publish()
+    │
+    ├─ on_state_change callback registered
+    │   └─ publishes WsConnected/WsDisconnected events
+    │
+    └─ Child components mount
+        ├─ FileTree: use_signal_with_reducer → subscribe to bus
+        ├─ ConversationView: use_signal_with_reducer → subscribe to bus
+        ├─ StatusBar: use_signal_with_reducer → subscribe to bus
+        ├─ ToolsPanel: use_signal_with_reducer → subscribe to bus
+        └─ ... each component independently subscribes
+```
+
+## 8. File Impact
+
+| File | Change |
+|------|--------|
+| `src/state/mod.rs` | Add `EventBus`, `Subscription`, `HasReducer<T>` trait. Add per-component state structs. Keep `UiEvent` enum unchanged. Keep `UiState` for TUI behind `#[cfg(feature = "tui")]`. Remove old `UiState::apply()` method. |
+| `src/web/components/app.rs` | Create `EventBus`, provide via context. WS event loop calls `bus.publish()`. Remove `AppState` signal fields. `AppState` = `EventBus` + `JsonRpcClient` only. Add `WsConnected`/`WsDisconnected` to UiEvent. |
+| `src/web/components/file_tree.rs` | Use `use_signal_with_reducer::<WorkspaceState, FileTree>`. Implement `HasReducer`. |
+| `src/web/components/conversation.rs` | Use `use_signal_with_reducer::<ConversationState, ConversationView>`. Implement `HasReducer`. |
+| `src/web/components/tools_panel.rs` | Use `use_signal_with_reducer::<ToolState, ToolsPanel>`. Implement `HasReducer`. |
+| `src/web/components/tools_tab.rs` | Read `Signal<ToolState>` from local signal or parent. |
+| `src/web/components/log_viewer.rs` | Use `use_signal_with_reducer::<LogState, LogViewer>`. Implement `HasReducer`. |
+| `src/web/components/skills.rs` | Use `use_signal_with_reducer::<SkillState, SkillsPanel>`. Implement `HasReducer`. |
+| `src/web/components/approval_dialog.rs` | Use `use_signal_with_reducer::<ApprovalState, ApprovalDialog>`. Implement `HasReducer`. |
+| `src/web/components/session_dialog.rs` | Use `use_signal_with_reducer::<SessionState, SessionDialog>`. Implement `HasReducer`. |
+| `src/web/components/status_bar.rs` | Use `use_signal_with_reducer::<GlobalState, StatusBar>`. Implement `HasReducer`. |
+| `src/web/components/input_area.rs` | Use local signal (no reducer needed — user-driven mutations). |
+| `src/web/components/file_content.rs` | Use local signal (user-driven — file open/close). |
+
+## 9. Error Handling
+
+- If a reducer returns `false` (unhandled), the event is silently ignored for that component — each component only handles what it cares about
+- EventBus `publish()` iterates all subscribers synchronously — no race conditions
+- If a subscriber panics, it does NOT block other subscribers (use `catch_unwind` if needed)
+- Subscription `Drop` guarantees cleanup on component unmount
+- WS disconnection publishes `WsDisconnected` event — components handle via their reducer
+
+## 10. Backward Compatibility
+
+- `UiEvent` enum stays the same — it's the wire format from WS
+- `UiState` kept for TUI behind `#[cfg(feature = "tui")]` with existing `apply()` method
+- Existing tests for `UiEvent` serialization/deserialization remain valid
+- TUI doesn't use EventBus — it uses the existing `Arc<RwLock<UiState>>` pattern
+
+## 11. TUI Compatibility
+
+The TUI re-renders the entire frame at 30fps and doesn't benefit from signal splitting.
 
 ```rust
 #[cfg(feature = "tui")]
 pub struct UiState {
-    // Same fields as the current UiState — flat struct
-    // TUI doesn't benefit from signal splitting since it renders the whole frame
+    // Same fields as current UiState — flat struct
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
-pub use crate::state::split::*; // GlobalState, WorkspaceState, etc.
+pub use crate::state::pubsub::*; // EventBus, HasReducer, per-component state structs
 ```
-
-## 9. File Impact
-
-| File | Change |
-|------|--------|
-| `src/state/mod.rs` | Add feature-gated split state structs + Reducer trait + 8 reducer impls. Keep `UiEvent` enum. Keep all data types. Keep `UiState` for TUI behind `#[cfg(feature = "tui")]`. |
-| `src/web/components/app.rs` | Create 8 signals. Wire `AppState.dispatch()` method. Update `AppState` struct. WS event loop calls `app_state.dispatch(&ui_event)`. |
-| `src/web/components/file_tree.rs` | Read `Signal<WorkspaceState>` from context. |
-| `src/web/components/conversation.rs` | Read `Signal<ConversationState>`. |
-| `src/web/components/tools_panel.rs` | Read `Signal<ToolState>`. |
-| `src/web/components/tools_tab.rs` | Read `Signal<ToolState>`. |
-| `src/web/components/log_viewer.rs` | Read `Signal<LogState>`. |
-| `src/web/components/skills.rs` | Read `Signal<SkillState>`. |
-| `src/web/components/approval_dialog.rs` | Read `Signal<ApprovalState>`. |
-| `src/web/components/session_dialog.rs` | Read `Signal<SessionState>`. |
-| `src/web/components/status_bar.rs` | Read `Signal<GlobalState>`. |
-| `src/web/components/input_area.rs` | Read `Signal<GlobalState>`. |
-| `src/web/components/workspace.rs` | Read `Signal<WorkspaceState>`. |
-| `src/web/components/file_content.rs` | Read `Signal<WorkspaceState>`. |
-
-## 10. Error Handling
-
-- If a reducer returns `false` (unhandled), log a debug message
-- Signal mutations are atomic per `with_mut` call
-- Cross-signal operations are sequential in the dispatch loop — no race conditions
-- WS connection state changes go directly to `GlobalState` without routing through `UiEvent`
-
-## 11. Backward Compatibility
-
-- `UiEvent` enum stays the same — it's the wire format from WS
-- `UiState` kept for TUI behind `#[cfg(feature = "tui")]`
-- All component interfaces stay the same (props, context types)
-- Existing tests for `UiEvent` serialization/deserialization remain valid
 
 ## 12. Verification
 
