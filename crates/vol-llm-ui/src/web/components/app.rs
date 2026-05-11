@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::state::{ActiveTab, ApprovalUiState, AgentsState, ConversationState, EventBus, GlobalState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
+use crate::state::{ActiveTab, ApprovalUiState, AgentsState, ConversationState, EventBus, GlobalState, SessionsState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
 use crate::web::client::{AgentEvent, JsonRpcClient};
 
 use super::agents_panel::AgentsPanel;
@@ -14,7 +14,7 @@ use super::file_content::FileContentView;
 use super::file_tree::FileTree;
 use super::input_area::InputArea;
 use super::log_viewer::LogViewer;
-use super::session_dialog::SessionDialog;
+use super::sessions_panel::SessionsPanel;
 use super::skills::SkillsPanel;
 use super::status_bar::StatusBar;
 use super::tools_tab::ToolsTabContent;
@@ -119,6 +119,7 @@ pub fn App() -> Element {
     let conversation_signal = use_signal(|| ConversationState::new());
     let tool_signal = use_signal(|| ToolState::new());
     let agents_signal = use_signal(|| AgentsState::new());
+    let sessions_signal = use_signal(|| SessionsState::new());
 
     let client = use_hook(|| {
         let c = JsonRpcClient::new(&ws_url);
@@ -283,6 +284,7 @@ pub fn App() -> Element {
     use_context_provider(|| conversation_signal);
     use_context_provider(|| tool_signal);
     use_context_provider(|| agents_signal);
+    use_context_provider(|| sessions_signal);
 
     rsx! {
         style { {GLOBAL_CSS} }
@@ -296,7 +298,6 @@ pub fn App() -> Element {
                     InputArea {}
                 }
             }
-            SessionDialog {}
             ApprovalDialog {}
         }
     }
@@ -310,6 +311,7 @@ fn TabBar() -> Element {
     rsx! {
         div { class: "tab-bar",
             TabButton { state: state.clone(), tab: ActiveTab::Conversation, label: "Conversation" }
+            TabButton { state: state.clone(), tab: ActiveTab::Sessions, label: "Sessions" }
             TabButton { state: state.clone(), tab: ActiveTab::Tools, label: "Tools" }
             TabButton { state: state.clone(), tab: ActiveTab::Workspace, label: "Workspace" }
             TabButton { state: state.clone(), tab: ActiveTab::Skills, label: "Skills" }
@@ -347,6 +349,7 @@ fn TabContent() -> Element {
         ActiveTab::Skills => rsx! { SkillsPanel {} },
         ActiveTab::Logs => rsx! { LogViewer {} },
         ActiveTab::Agents => rsx! { AgentsPanel {} },
+        ActiveTab::Sessions => rsx! { SessionsPanel {} },
     }
 }
 
@@ -569,4 +572,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .agent-detail-row { padding: 2px 0; }
 .agent-detail-label { color: #6090ff; font-weight: 600; }
 .agent-detail-value { color: #ccc; font-family: monospace; }
+/* Sessions panel */
+.sessions-panel { flex: 1; overflow-y: auto; padding: 8px; }
+.sessions-panel-header { padding: 4px 10px 8px; font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+.sessions-panel-loading, .sessions-panel-empty, .sessions-panel-error { display: flex; align-items: center; justify-content: center; height: 100%; color: #666; padding: 20px; text-align: center; }
+.sessions-panel-error { color: #ff6060; }
+.session-item { display: flex; align-items: center; padding: 8px 10px; border-bottom: 1px solid #2a2a44; cursor: pointer; gap: 8px; }
+.session-item:hover { background: #222240; }
+.session-item-id { font-family: monospace; font-size: 13px; color: #e0e0e0; font-weight: 600; min-width: 80px; }
+.session-item-count { font-size: 11px; color: #888; }
+.session-item-age { font-size: 11px; color: #666; margin-left: auto; }
+.msg-checkpoint { background: #2a2a20; border-left: 3px solid #c0a040; color: #aaa; font-size: 12px; font-style: italic; padding: 6px 10px; }
 "#;

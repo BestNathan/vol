@@ -137,5 +137,9 @@ fn MessageEntry(entry: ConversationEntry) -> Element {
             rsx! { div { class: "msg msg-summary", "Done | {iterations} {iw} | {tool_calls} {tw} | {elapsed_ms}ms" } }
         }
         ConversationEntry::Error { message } => { rsx! { div { class: "msg msg-error", "Error: {message}" } } }
+        ConversationEntry::EntryCheckpoint { reason, note, created_at } => {
+            let note_text = note.as_deref().map(|n| format!(" ({n})")).unwrap_or_default();
+            rsx! { div { class: "msg msg-checkpoint", "[Checkpoint {created_at}] {reason}{note_text}" } }
+        }
     }
 }
