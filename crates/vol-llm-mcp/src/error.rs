@@ -2,15 +2,24 @@
 
 use thiserror::Error;
 
-/// Errors that can occur in MCP operations.
-#[derive(Debug, Error)]
+/// Error type for MCP operations.
+#[derive(Error, Debug)]
 pub enum McpError {
-    #[error("configuration error: {0}")]
-    Config(String),
+    #[error("failed to parse config from {path}: {detail}")]
+    ConfigParse { path: String, detail: String },
 
-    #[error("connection error: {0}")]
-    Connection(String),
+    #[error("MCP server '{0}' not found")]
+    ServerNotFound(String),
 
-    #[error("protocol error: {0}")]
-    Protocol(String),
+    #[error("failed to connect to MCP server '{server}': {detail}")]
+    ConnectionFailed { server: String, detail: String },
+
+    #[error("MCP server '{server}' initialization timed out")]
+    InitializeTimeout { server: String },
+
+    #[error("tool call failed on server '{server}', tool '{tool}': {detail}")]
+    ToolCallFailed { server: String, tool: String, detail: String },
+
+    #[error("transport error: {0}")]
+    TransportError(String),
 }
