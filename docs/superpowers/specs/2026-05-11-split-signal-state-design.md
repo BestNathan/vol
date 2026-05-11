@@ -585,34 +585,42 @@ use_drop(|| {
 });
 ```
 
-### 4.2 `use_signal_with_effect` — Helper
+### 4.2 Pattern — `use_signal` + `use_effect` + `use_drop`
 
-Combines signal creation + typed subscription registration + unmount cleanup:
+No custom helper. Direct Dioxus primitives:
 
 ```rust
-/// Create a local signal and subscribe to specific event kinds.
-/// Mount: register subscriptions. Unmount: SubscriptionSet dropped, all cleaned up.
-pub fn use_signal_with_effect<T>(
-    initial: impl FnOnce() -> T,
-    subscribe: impl FnOnce(EventBus, Signal<T>) -> SubscriptionSet,
-) -> Signal<T>
-where
-    T: Clone + Send + Sync + 'static,
-{
-    let signal = use_signal(initial);
+#[component]
+pub fn Component() -> Element {
+    let signal = use_signal(|| MyState { ... });
     let app_state: AppState = use_context();
 
-    // Register subscriptions on mount
-    let sub_set = use_hook(|| {
-        subscribe(app_state.event_bus.clone(), signal.clone())
+    // Register subscriptions on mount, clean up on unmount
+    use_effect(move || {
+        let mut set = SubscriptionSet::new(app_state.event_bus.clone());
+
+        set.subscribe(&app_state.event_bus, UiEventKind::AgentStart, {
+            let signal = signal.clone();
+            move |event| {
+                signal.with_mut(|s| MyReducer::reduce(s, event));
+            }
+        });
+
+        set.subscribe(&app_state.event_bus, UiEventKind::AgentComplete, {
+            let signal = signal.clone();
+            move |event| {
+                signal.with_mut(|s| MyReducer::reduce(s, event));
+            }
+        });
+
+        // Return cleanup — equivalent to useEffect's return
+        Box::new(move || { drop(set); })
     });
 
-    // Clean up on unmount — drop the SubscriptionSet
-    use_drop(move || {
-        drop(sub_set);
-    });
-
-    signal
+    let state = signal.read();
+    rsx! {
+        // render
+    }
 }
 ```
 
@@ -621,19 +629,15 @@ where
 ```rust
 #[component]
 pub fn FileTree() -> Element {
-    let signal = use_signal_with_effect(
-        || WorkspaceState {
-            workspace: WorkspaceTreeNode::root("/workspace".into(), ".".into()),
-            modified_files: HashSet::new(),
-            open_files: Vec::new(),
-            selected_file_tab: None,
-            collapsed_dirs: HashSet::new(),
-        },
-        |bus, _signal| {
-            // FileTree doesn't react to WS events — all mutations are user-driven
-            SubscriptionSet::empty(bus)
-        },
-    );
+    let signal = use_signal(|| WorkspaceState {
+        workspace: WorkspaceTreeNode::root("/workspace".into(), ".".into()),
+        modified_files: HashSet::new(),
+        open_files: Vec::new(),
+        selected_file_tab: None,
+        collapsed_dirs: HashSet::new(),
+    });
+
+    // No WS event subscriptions — all mutations are user-driven
 
     let ws = signal.read();
     rsx! {
@@ -651,30 +655,29 @@ pub fn FileTree() -> Element {
 ```rust
 #[component]
 pub fn StatusBar() -> Element {
-    let signal = use_signal_with_effect(
-        || {
-            let app_state: AppState = use_context();
-            GlobalState {
-                session_id: "web-session".into(),
-                run_count: 0,
-                iteration: 0,
-                tool_call_count: 0,
-                run_start: None,
-                run_elapsed: Duration::ZERO,
-                is_running: false,
-                exiting: false,
-                ws_url: app_state.rpc_client.url().to_string(),
-                ws_connected: false,
-                ws_last_error: None,
-                unsafe_mode: false,
-                active_tab: ActiveTab::Conversation,
-            }
-        },
-        |bus, signal| {
-            let mut set = SubscriptionSet::new(bus);
+    let signal = use_signal(|| GlobalState {
+        session_id: "web-session".into(),
+        run_count: 0,
+        iteration: 0,
+        tool_call_count: 0,
+        run_start: None,
+        run_elapsed: Duration::ZERO,
+        is_running: false,
+        exiting: false,
+        ws_url: use_context::<AppState>().rpc_client.url().to_string(),
+        ws_connected: false,
+        ws_last_error: None,
+        unsafe_mode: false,
+        active_tab: ActiveTab::Conversation,
+    });
 
-            // Only these 4 event types — no broadcast storm
-            set.subscribe(&bus, UiEventKind::AgentStart, move |event| {
+    let app_state: AppState = use_context();
+    use_effect(move || {
+        let mut set = SubscriptionSet::new(app_state.event_bus.clone());
+
+        set.subscribe(&app_state.event_bus, UiEventKind::AgentStart, {
+            let signal = signal.clone();
+            move |event| {
                 signal.with_mut(|s| {
                     s.run_count += 1;
                     s.iteration = 0;
@@ -683,36 +686,39 @@ pub fn StatusBar() -> Element {
                     s.run_elapsed = Duration::ZERO;
                     s.is_running = true;
                 });
-            });
+            }
+        });
 
-            set.subscribe(&bus, UiEventKind::AgentComplete, move |event| {
+        set.subscribe(&app_state.event_bus, UiEventKind::AgentComplete, {
+            let signal = signal.clone();
+            move |event| {
                 signal.with_mut(|s| {
-                    if let Some(start) = s.run_start {
-                        s.run_elapsed = start.elapsed();
-                    }
                     s.is_running = false;
                 });
-            });
+            }
+        });
 
-            set.subscribe(&bus, UiEventKind::WsConnected, move |event| {
+        set.subscribe(&app_state.event_bus, UiEventKind::WsConnected, {
+            let signal = signal.clone();
+            move |event| {
                 signal.with_mut(|s| {
                     s.ws_connected = true;
                     s.ws_last_error = None;
                 });
-            });
+            }
+        });
 
-            set.subscribe(&bus, UiEventKind::WsDisconnected, move |event| {
+        set.subscribe(&app_state.event_bus, UiEventKind::WsDisconnected, {
+            let signal = signal.clone();
+            move |event| {
                 signal.with_mut(|s| {
                     s.ws_connected = false;
-                    if let UiEvent::WsDisconnected { reason } = event {
-                        s.ws_last_error = reason.clone();
-                    }
                 });
-            });
+            }
+        });
 
-            set
-        },
-    );
+        Box::new(move || { drop(set); })
+    });
 
     let g = signal.read();
     rsx! {
@@ -730,43 +736,42 @@ pub fn StatusBar() -> Element {
 ```rust
 #[component]
 pub fn ConversationView() -> Element {
-    let signal = use_signal_with_effect(
-        || ConversationState {
-            entries: Vec::new(),
-            conversation_scroll: 0,
-            auto_scroll: true,
-        },
-        |bus, signal| {
-            let mut set = SubscriptionSet::new(bus);
+    let signal = use_signal(|| ConversationState {
+        entries: Vec::new(),
+        conversation_scroll: 0,
+        auto_scroll: true,
+    });
 
-            for kind in [
-                UiEventKind::AgentStart,
-                UiEventKind::AgentComplete,
-                UiEventKind::AgentAborted,
-                UiEventKind::AgentError,
-                UiEventKind::ThinkingStart,
-                UiEventKind::ThinkingDelta,
-                UiEventKind::ThinkingComplete,
-                UiEventKind::ContentStart,
-                UiEventKind::ContentDelta,
-                UiEventKind::ContentComplete,
-                UiEventKind::MaxIterationsReached,
-                UiEventKind::IterationContinued,
-                UiEventKind::IterationComplete,
-            ] {
-                set.subscribe(&bus, kind, {
-                    let signal = signal.clone();
-                    move |event| {
-                        signal.with_mut(|s| {
-                            ConversationReducer::reduce(s, event);
-                        });
-                    }
-                });
-            }
+    let app_state: AppState = use_context();
+    use_effect(move || {
+        let mut set = SubscriptionSet::new(app_state.event_bus.clone());
 
-            set
-        },
-    );
+        for kind in [
+            UiEventKind::AgentStart,
+            UiEventKind::AgentComplete,
+            UiEventKind::AgentAborted,
+            UiEventKind::AgentError,
+            UiEventKind::ThinkingStart,
+            UiEventKind::ThinkingDelta,
+            UiEventKind::ContentStart,
+            UiEventKind::ContentDelta,
+            UiEventKind::ContentComplete,
+            UiEventKind::MaxIterationsReached,
+            UiEventKind::IterationContinued,
+            UiEventKind::IterationComplete,
+        ] {
+            set.subscribe(&app_state.event_bus, kind, {
+                let signal = signal.clone();
+                move |event| {
+                    signal.with_mut(|s| {
+                        ConversationReducer::reduce(s, event);
+                    });
+                }
+            });
+        }
+
+        Box::new(move || { drop(set); })
+    });
 
     let entries = signal.read().entries.clone();
     rsx! {
@@ -909,154 +914,41 @@ impl HasReducer<GlobalState> for StatusBar {
 }
 ```
 
-## 6. Component Examples
+## 6. Complete Component Example
 
-### 6.1 FileTree (WorkspaceState — no WS events)
-
-```rust
-#[component]
-pub fn FileTree() -> Element {
-    let signal = use_signal_with_effect(
-        || WorkspaceState {
-            workspace: WorkspaceTreeNode::root("/workspace".into(), ".".into()),
-            modified_files: HashSet::new(),
-            open_files: Vec::new(),
-            selected_file_tab: None,
-            collapsed_dirs: HashSet::new(),
-        },
-        |bus, _signal| SubscriptionSet::empty(bus.clone()),
-    );
-
-    let ws = signal.read();
-    rsx! {
-        div { class: "sidebar",
-            for child in &ws.workspace.children {
-                TreeNode { node: child.clone(), depth: 0, key: "{child.path}" }
-            }
-        }
-    }
-}
-```
-
-### 6.2 StatusBar (GlobalState — 4 event types)
+Section 4 already shows the full pattern for FileTree, StatusBar, and ConversationView. Other components follow the same structure:
 
 ```rust
 #[component]
-pub fn StatusBar() -> Element {
-    let ws_url = use_context::<AppState>().rpc_client.url().to_string();
-    let signal = use_signal_with_effect(
-        || GlobalState {
-            session_id: "web-session".into(),
-            run_count: 0,
-            iteration: 0,
-            tool_call_count: 0,
-            run_start: None,
-            run_elapsed: Duration::ZERO,
-            is_running: false,
-            exiting: false,
-            ws_url,
-            ws_connected: false,
-            ws_last_error: None,
-            unsafe_mode: false,
-            active_tab: ActiveTab::Conversation,
-        },
-        |bus, signal| {
-            let mut set = SubscriptionSet::new(bus.clone());
+pub fn ToolsPanel() -> Element {
+    let signal = use_signal(|| ToolState {
+        calls: Vec::new(),
+        expanded: HashSet::new(),
+        scroll: 0,
+    });
 
-            set.subscribe(&bus, UiEventKind::AgentStart, move |event| {
-                signal.with_mut(|s| {
-                    s.run_count += 1;
-                    s.iteration = 0;
-                    s.tool_call_count = 0;
-                    s.run_start = Some(Instant::now());
-                    s.is_running = true;
-                });
+    let app_state: AppState = use_context();
+    use_effect(move || {
+        let mut set = SubscriptionSet::new(app_state.event_bus.clone());
+
+        for kind in [
+            UiEventKind::ToolCallBegin,
+            UiEventKind::ToolCallComplete,
+            UiEventKind::ToolCallError,
+            UiEventKind::ToolCallSkipped,
+        ] {
+            set.subscribe(&app_state.event_bus, kind, {
+                let signal = signal.clone();
+                move |event| {
+                    signal.with_mut(|s| ToolReducer::reduce(s, event));
+                }
             });
-
-            set.subscribe(&bus, UiEventKind::AgentComplete, move |event| {
-                signal.with_mut(|s| {
-                    s.is_running = false;
-                });
-            });
-
-            set.subscribe(&bus, UiEventKind::WsConnected, move |event| {
-                signal.with_mut(|s| {
-                    s.ws_connected = true;
-                    s.ws_last_error = None;
-                });
-            });
-
-            set.subscribe(&bus, UiEventKind::WsDisconnected, move |event| {
-                signal.with_mut(|s| {
-                    s.ws_connected = false;
-                });
-            });
-
-            set
-        },
-    );
-
-    let g = signal.read();
-    rsx! {
-        div { class: "status-bar",
-            span { if *g.is_running { "Running" } else { "Idle" } }
-            span { if *g.ws_connected { "Connected" } else { "Disconnected" } }
-            span { "Runs: {g.run_count}" }
         }
-    }
-}
-```
 
-### 6.3 ConversationView (ConversationState — 13 event types)
+        Box::new(move || { drop(set); })
+    });
 
-```rust
-#[component]
-pub fn ConversationView() -> Element {
-    let signal = use_signal_with_effect(
-        || ConversationState {
-            entries: Vec::new(),
-            conversation_scroll: 0,
-            auto_scroll: true,
-        },
-        |bus, signal| {
-            let mut set = SubscriptionSet::new(bus.clone());
-
-            for kind in [
-                UiEventKind::AgentStart,
-                UiEventKind::AgentComplete,
-                UiEventKind::AgentAborted,
-                UiEventKind::AgentError,
-                UiEventKind::ThinkingStart,
-                UiEventKind::ThinkingDelta,
-                UiEventKind::ContentStart,
-                UiEventKind::ContentDelta,
-                UiEventKind::ContentComplete,
-                UiEventKind::MaxIterationsReached,
-                UiEventKind::IterationContinued,
-                UiEventKind::IterationComplete,
-            ] {
-                set.subscribe(bus, kind, {
-                    let signal = signal.clone();
-                    move |event| {
-                        signal.with_mut(|s| {
-                            ConversationReducer::reduce(s, event);
-                        });
-                    }
-                });
-            }
-
-            set
-        },
-    );
-
-    let entries = signal.read().entries.clone();
-    rsx! {
-        div { class: "conversation",
-            for entry in &entries {
-                render_entry(entry)
-            }
-        }
-    }
+    // render...
 }
 ```
 
@@ -1073,15 +965,10 @@ App component mounts
     │
     ├─ use_context_provider(|| AppState { event_bus, rpc_client })
     │
-    └─ Child components mount — each calls use_signal_with_effect(...)
-        ├─ FileTree: signal + empty subscription (user-driven only)
-        ├─ ConversationView: signal + subscribes 12 UiEventKind types
-        ├─ StatusBar: signal + subscribes 4 UiEventKind types
-        ├─ ToolsPanel: signal + subscribes 4 UiEventKind types (ToolCall*)
-        ├─ ApprovalDialog: signal + subscribes 2 UiEventKind types
-        └─ ... each component declares its own event types
-            │
-            └─ use_drop → on unmount, SubscriptionSet dropped → all cleaned up
+    └─ Child components mount
+        ├─ use_signal(|| MyState { ... })
+        ├─ use_effect → subscribe to specific UiEventKind types
+        └─ use_effect returns Box::new(drop) → cleanup on unmount
 ```
 
 ## 8. File Impact
@@ -1089,16 +976,16 @@ App component mounts
 | File | Change |
 |------|--------|
 | `src/state/mod.rs` | Add `EventBus`, `SubscriptionSet`, `UiEventKind`, `HasReducer<T>` trait. Add `UiEvent::kind()` method. Add per-component state structs. Keep `UiEvent` enum unchanged. Keep `UiState` for TUI behind `#[cfg(feature = "tui")]`. Remove old `UiState::apply()` method. |
-| `src/web/components/app.rs` | Create `EventBus`, provide via context. Use `use_coroutine` for WS event loop + client lifecycle. Add `use_signal_with_effect` helper. Remove `AppState` signal fields. |
-| `src/web/components/file_tree.rs` | Use `use_signal_with_effect`. No WS event subscriptions (user-driven). |
-| `src/web/components/conversation.rs` | Use `use_signal_with_effect` with 12 `UiEventKind` types. Implement `HasReducer`. |
-| `src/web/components/tools_panel.rs` | Use `use_signal_with_effect` with 4 `UiEventKind` types (ToolCall*). Implement `HasReducer`. |
+| `src/web/components/app.rs` | Create `EventBus`, provide via context. Use `use_coroutine` for WS event loop + client lifecycle. Remove `AppState` signal fields. |
+| `src/web/components/file_tree.rs` | Use `use_signal`. No WS event subscriptions (user-driven). |
+| `src/web/components/conversation.rs` | Use `use_signal` + `use_effect` with 12 `UiEventKind` types. Implement `HasReducer`. |
+| `src/web/components/tools_panel.rs` | Use `use_signal` + `use_effect` with 4 `UiEventKind` types (ToolCall*). Implement `HasReducer`. |
 | `src/web/components/tools_tab.rs` | Read local `Signal<ToolState>` or receive from parent. |
-| `src/web/components/log_viewer.rs` | Use `use_signal_with_effect` with relevant `UiEventKind` types. Implement `HasReducer`. |
-| `src/web/components/skills.rs` | Use `use_signal_with_effect`. Implement `HasReducer`. |
-| `src/web/components/approval_dialog.rs` | Use `use_signal_with_effect` with 2 `UiEventKind` types. Implement `HasReducer`. |
-| `src/web/components/session_dialog.rs` | Use `use_signal_with_effect`. Implement `HasReducer`. |
-| `src/web/components/status_bar.rs` | Use `use_signal_with_effect` with 4 `UiEventKind` types. Implement `HasReducer`. |
+| `src/web/components/log_viewer.rs` | Use `use_signal` + `use_effect` with relevant `UiEventKind` types. Implement `HasReducer`. |
+| `src/web/components/skills.rs` | Use `use_signal` + `use_effect`. Implement `HasReducer`. |
+| `src/web/components/approval_dialog.rs` | Use `use_signal` + `use_effect` with 2 `UiEventKind` types. Implement `HasReducer`. |
+| `src/web/components/session_dialog.rs` | Use `use_signal` + `use_effect`. Implement `HasReducer`. |
+| `src/web/components/status_bar.rs` | Use `use_signal` + `use_effect` with 4 `UiEventKind` types. Implement `HasReducer`. |
 | `src/web/components/input_area.rs` | Use local signal (no reducer needed — user-driven mutations). |
 | `src/web/components/file_content.rs` | Use local signal (user-driven — file open/close). |
 
