@@ -47,6 +47,18 @@ pub struct AgentListEntry {
     pub scope: String,
 }
 
+/// Session entry matching the vol-session wire format.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionEntry {
+    pub id: String,
+    pub session_id: String,
+    pub created_at: i64,
+    pub parent_id: Option<String>,
+    #[serde(rename = "type")]
+    pub entry_type: String,
+    pub data: serde_json::Value,
+}
+
 /// Connection state.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionState {
@@ -313,6 +325,77 @@ impl JsonRpcClient {
                     cb(Ok(parsed));
                 }
                 None => cb(Err("no agents in response".to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// List all persisted sessions on the server. Returns entries via callback.
+    pub fn session_list(&self, cb: impl FnOnce(Result<Vec<crate::state::SessionListEntry>, String>) + 'static) {
+        let id = self.alloc_id();
+
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "session.list",
+            "params": {},
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("sessions").and_then(|v| v.as_array()) {
+                Some(sessions) => {
+                    let parsed: Vec<crate::state::SessionListEntry> = sessions.iter()
+                        .filter_map(|s| {
+                            let id = s.get("id").and_then(|v| v.as_str())?.to_string();
+                            let entry_count = s.get("entry_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                            let created_at = s.get("created_at").and_then(|v| v.as_i64())?;
+                            Some(crate::state::SessionListEntry { id, entry_count, created_at })
+                        })
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no sessions in response".to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// Fetch all entries for a specific session. Returns entries via callback.
+    pub fn session_entries(&self, session_id: &str, cb: impl FnOnce(Result<Vec<SessionEntry>, String>) + 'static) {
+        let id = self.alloc_id();
+
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "session.entries",
+            "params": { "session_id": session_id },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("entries").and_then(|v| v.as_array()) {
+                Some(entries) => {
+                    let parsed: Vec<SessionEntry> = entries.iter()
+                        .filter_map(|e| serde_json::from_value(e.clone()).ok())
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no entries in response".to_string())),
             }
         });
         self.inner.pending.borrow_mut().insert(id, cb);
