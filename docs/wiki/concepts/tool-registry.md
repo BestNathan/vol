@@ -10,7 +10,7 @@ source_count: 1
 # Tool Registry
 
 **Category:** Tool management framework
-**Related:** [[react-pattern]], [[agent-plugin-system]], [[vol-llm-tool-crate]]
+**Related:** [[react-pattern]], [[agent-plugin-system]], [[vol-llm-tool-crate]], [[mcp-client-integration]], [[tool-trait]]
 
 ## Definition
 
@@ -23,10 +23,12 @@ A registry that manages tool definitions and executes tool calls during the Act 
 
 ## How It Works
 
-The `ToolRegistry` is a `HashMap<String, Box<dyn Tool>>` that supports:
-1. **Registration**: Tools implement the `Tool` trait and are registered by name
+The `ToolRegistry` is a `HashMap<String, Arc<dyn ExecutableTool>>` that supports:
+1. **Registration**: Tools implement the `ExecutableTool` trait and are registered by name
 2. **Definition export**: `definitions()` returns all tool schemas for LLM function calling
 3. **Execution**: `execute(call, context)` dispatches to the appropriate tool
+4. **MCP registration**: `register_from_mcp(session)` discovers and registers tools from MCP servers [[mcp-client-integration]]
+5. **Clone**: Registry implements `Clone` (cheap Arc reference count bumps)
 
 Tools available in the system:
 | Tool | Purpose | Data Source |

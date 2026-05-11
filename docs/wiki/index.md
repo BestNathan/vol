@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-11 (split-signal-state)
+Last updated: 2026-05-11 (react-agent-mcp-integration)
 
 ## Entities
 
@@ -17,6 +17,7 @@ Last updated: 2026-05-11 (split-signal-state)
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 | [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support | active | 2026-05-10 |
+| [[vol-llm-mcp-crate]] | MCP Client protocol layer for ReAct Agent — config parsing, session management, tool discovery | active | 2026-05-11 |
 
 ## Concepts
 
@@ -67,6 +68,7 @@ Last updated: 2026-05-11 (split-signal-state)
 | [[file-tab-pattern]] | Tabbed file viewer with non-component render function pattern for Dioxus | active | 2026-05-10 |
 | [[workspace-tree-pattern]] | Recursive WorkspaceTreeNode tree with lazy-loaded directory children via JSON-RPC file.list | active | 2026-05-10 |
 | [[event-bus-pattern]] | EventBus with UiEventKind routing, SubscriptionSet auto-cleanup, per-component local signals | active | 2026-05-11 |
+| [[mcp-client-integration]] | Bridging MCP server tools into ExecutableTool trait — McpTool, McpSession, AgentConfigBuilder integration | active | 2026-05-11 |
 
 ## Sources
 
@@ -93,6 +95,7 @@ Last updated: 2026-05-11 (split-signal-state)
 | [[task-5-file-content-view]] | FileContentView component: file tab bar with content preview, error/loading states, non-component tab rendering | active | 2026-05-10 |
 | [[lazy-load-dir-tree]] | Lazy-loading directory tree: WorkspaceTreeNode replaces flat entries, on-demand fetch via file.list, refresh button | active | 2026-05-10 |
 | [[split-signal-state]] | Split Signal state: centralized Signal<UiState> replaced with EventBus + per-component local signals | active | 2026-05-11 |
+| [[react-agent-mcp-integration]] | ReAct Agent MCP client integration: vol-llm-mcp crate, McpTool, with_mcp_from_config builder method | active | 2026-05-11 |
 
 ## Analyses
 

@@ -9,6 +9,16 @@
 - Cross-references added: 6
 - Changes: Centralized Signal<UiState> replaced with EventBus + UiEventKind routing + per-component local signals; SubscriptionSet with Drop impl for auto-cleanup; shared GlobalState/ApprovalUiState signals via use_context_provider; AppState simplified to EventBus + JsonRpcClient + Signal<ActiveTab>; EventHandler changed from Fn+Send+Sync to Fn+'static; ConversationEntry gained PartialEq; 43 tests passing; web + TUI builds both green
 
+## [2026-05-11] ingest | ReAct Agent MCP Integration — vol-llm-mcp Crate
+- Created sources: [[react-agent-mcp-integration]]
+- Created entities: [[vol-llm-mcp-crate]]
+- Created concepts: [[mcp-client-integration]]
+- Updated entities: [[vol-llm-agent-crate]], [[vol-llm-tool-crate]], [[vol-mcp-servers-crate]]
+- Updated concepts: [[tool-registry]], [[agent-builder-pattern]]
+- Updated index: new entries for vol-llm-mcp-crate, mcp-client-integration, react-agent-mcp-integration
+- Cross-references added: 8
+- Changes: New vol-llm-mcp crate (config parsing, McpSession, McpToolInfo); McpTool implements ExecutableTool with name format mcp__{server}_{tool}; ToolRegistry gains register_from_mcp(); AgentConfigBuilder gains with_mcp_from_config(); AgentConfig gains mcp_session field with disconnect in run() cleanup; 142+ tests passing; workspace compiles cleanly
+
 ## [2026-05-10] update | vol-mcp-servers Docker Packaging — Alpine Multi-Stage
 - Created sources: [[vol-mcp-servers-dockerfile]]
 - Created entity: [[vol-mcp-servers-crate]] (Docker section)

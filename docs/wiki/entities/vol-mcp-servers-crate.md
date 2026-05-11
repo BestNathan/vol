@@ -10,7 +10,7 @@ source_count: 1
 # vol-mcp-servers Crate
 
 **Category:** Rust crate — MCP server collection
-**Related:** [[vol-llm-agent-channel-crate]], [[rmcp-sdk]], [[mcp-transport-pattern]], [[docs-rs-tools]]
+**Related:** [[vol-llm-agent-channel-crate]], [[rmcp-sdk]], [[mcp-transport-pattern]], [[docs-rs-tools]], [[vol-llm-mcp-crate]], [[mcp-client-integration]]
 
 ## Overview
 

@@ -10,7 +10,7 @@ source_count: 1
 # Agent Builder Pattern
 
 **Category:** Configuration pattern
-**Related:** [[react-pattern]], [[agent-plugin-system]]
+**Related:** [[react-pattern]], [[agent-plugin-system]], [[mcp-client-integration]], [[vol-llm-mcp-crate]]
 
 ## Definition
 
@@ -46,6 +46,7 @@ The builder accumulates state (LLM, tools, plugins, config) and validates on `bu
 | `with_agent_id()` | Set agent identifier | Auto-generated |
 | `with_max_iterations()` | Set max ReAct cycles | 5 |
 | `with_system_prompt()` | Custom system prompt | Default crypto prompt |
+| `with_mcp_from_config()` | Auto-discover and connect MCP servers | No MCP (continues without) |
 | `with_verbose()` | Enable debug logging | false |
 | `with_log_base_path()` | Set log directory | `logs/agents` |
 

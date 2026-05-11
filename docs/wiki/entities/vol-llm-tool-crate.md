@@ -10,7 +10,7 @@ source_count: 1
 # vol-llm-tool Crate
 
 **Category:** Rust crate — Tool definition and execution framework
-**Related:** [[tool-registry]], [[vol-llm-agent-crate]], [[tdengine]]
+**Related:** [[tool-registry]], [[vol-llm-agent-crate]], [[tdengine]], [[vol-llm-mcp-crate]], [[mcp-client-integration]]
 
 ## Overview
 
