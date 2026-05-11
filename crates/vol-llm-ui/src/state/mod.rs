@@ -55,6 +55,53 @@ pub enum UiEvent {
     // HITL
     ApprovalRequest { tool_name: String, reason: String, arguments: String },
     ApprovalResolved { approved: bool },
+
+    // WebSocket connection state
+    WsConnected,
+    WsConnecting,
+    WsDisconnected { reason: Option<String> },
+}
+
+/// Coarse-grained event type for routing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UiEventKind {
+    AgentStart, AgentComplete, AgentAborted, AgentError,
+    ThinkingStart, ThinkingDelta, ThinkingComplete,
+    ContentStart, ContentDelta, ContentComplete,
+    ToolCallBegin, ToolCallArgumentDelta, ToolCallComplete, ToolCallError, ToolCallSkipped,
+    ApprovalRequest, ApprovalResolved,
+    IterationComplete, IterationContinued, MaxIterationsReached,
+    WsConnected, WsConnecting, WsDisconnected,
+}
+
+impl UiEvent {
+    pub fn kind(&self) -> UiEventKind {
+        match self {
+            UiEvent::AgentStart { .. } => UiEventKind::AgentStart,
+            UiEvent::AgentComplete { .. } => UiEventKind::AgentComplete,
+            UiEvent::AgentAborted { .. } => UiEventKind::AgentAborted,
+            UiEvent::AgentError { .. } => UiEventKind::AgentError,
+            UiEvent::ThinkingStart => UiEventKind::ThinkingStart,
+            UiEvent::ThinkingDelta { .. } => UiEventKind::ThinkingDelta,
+            UiEvent::ThinkingComplete => UiEventKind::ThinkingComplete,
+            UiEvent::ContentStart => UiEventKind::ContentStart,
+            UiEvent::ContentDelta { .. } => UiEventKind::ContentDelta,
+            UiEvent::ContentComplete { .. } => UiEventKind::ContentComplete,
+            UiEvent::ToolCallBegin { .. } => UiEventKind::ToolCallBegin,
+            UiEvent::ToolCallArgumentDelta { .. } => UiEventKind::ToolCallArgumentDelta,
+            UiEvent::ToolCallComplete { .. } => UiEventKind::ToolCallComplete,
+            UiEvent::ToolCallError { .. } => UiEventKind::ToolCallError,
+            UiEvent::ToolCallSkipped { .. } => UiEventKind::ToolCallSkipped,
+            UiEvent::ApprovalRequest { .. } => UiEventKind::ApprovalRequest,
+            UiEvent::ApprovalResolved { .. } => UiEventKind::ApprovalResolved,
+            UiEvent::IterationComplete { .. } => UiEventKind::IterationComplete,
+            UiEvent::IterationContinued { .. } => UiEventKind::IterationContinued,
+            UiEvent::MaxIterationsReached { .. } => UiEventKind::MaxIterationsReached,
+            UiEvent::WsConnected => UiEventKind::WsConnected,
+            UiEvent::WsConnecting => UiEventKind::WsConnecting,
+            UiEvent::WsDisconnected { .. } => UiEventKind::WsDisconnected,
+        }
+    }
 }
 
 // === Display Types ===========================================================
@@ -449,6 +496,9 @@ impl UiState {
             UiEvent::ApprovalResolved { approved: _ } => {
                 self.approval_state.clear();
             }
+            UiEvent::WsConnected | UiEvent::WsConnecting | UiEvent::WsDisconnected { .. } => {
+                // Connection state handled separately via shared GlobalState signal
+            }
         }
 
         // Auto-scroll
@@ -630,6 +680,14 @@ mod tests {
 
         state.apply(UiEvent::ApprovalResolved { approved: true });
         assert!(!state.approval_state.has_pending());
+    }
+
+    #[test]
+    fn test_ui_event_kind_mapping() {
+        assert_eq!(UiEvent::AgentStart { input: "hi".into() }.kind(), UiEventKind::AgentStart);
+        assert_eq!(UiEvent::WsConnected.kind(), UiEventKind::WsConnected);
+        assert_eq!(UiEvent::WsDisconnected { reason: None }.kind(), UiEventKind::WsDisconnected);
+        assert_eq!(UiEvent::ToolCallBegin { tool_name: "x".into(), arguments: "{}".into() }.kind(), UiEventKind::ToolCallBegin);
     }
 
     #[test]
