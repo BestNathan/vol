@@ -182,6 +182,9 @@ impl JsonRpcConnection {
             JsonRpcRequest::SessionResume { id, session_id } => {
                 self.handle_session_resume(*id, session_id.clone()).await
             }
+            JsonRpcRequest::AgentList { id } => {
+                return self.send_ws_text(&to_jsonrpc_error(Some(*id), -32601, "Method not yet implemented: agent.list".into())).await;
+            }
             JsonRpcRequest::Unknown { id, method } => {
                 return self.send_ws_text(&to_jsonrpc_error(*id, -32601, format!("Method not found: {method}"))).await;
             }

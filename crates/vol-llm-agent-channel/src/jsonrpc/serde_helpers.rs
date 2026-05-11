@@ -71,6 +71,9 @@ pub enum JsonRpcRequest {
         id: u64,
         session_id: String,
     },
+    AgentList {
+        id: u64,
+    },
     /// Fallback for unknown/unrecognized methods.
     Unknown {
         id: Option<u64>,
@@ -408,6 +411,7 @@ pub fn parse_jsonrpc_request(text: &str) -> Result<JsonRpcRequest, String> {
                 .to_string();
             Ok(JsonRpcRequest::SessionResume { id, session_id })
         }
+        "agent.list" => Ok(JsonRpcRequest::AgentList { id }),
         _ => Ok(JsonRpcRequest::Unknown {
             id: Some(id),
             method,
