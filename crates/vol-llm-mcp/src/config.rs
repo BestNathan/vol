@@ -16,7 +16,7 @@ use crate::error::McpError;
 #[derive(Debug, Deserialize, Clone)]
 struct RawMcpConfig {
     #[serde(rename = "mcpServers")]
-    mcp_servers: HashMap<String, RawServerConfig>,
+    mcp_servers: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -26,6 +26,22 @@ struct RawServerConfig {
     args: Vec<String>,
     #[serde(default)]
     env: HashMap<String, String>,
+}
+
+/// Try to deserialize a single server entry. Returns None if the entry
+/// lacks a `command` field (e.g. HTTP/SSE transport with `url` instead).
+fn try_parse_server(name: &str, value: &serde_json::Value) -> Option<RawServerConfig> {
+    match serde_json::from_value::<RawServerConfig>(value.clone()) {
+        Ok(cfg) => Some(cfg),
+        Err(e) => {
+            tracing::warn!(
+                "Skipping MCP server '{}' (no command field or invalid format): {}",
+                name,
+                e
+            );
+            None
+        }
+    }
 }
 
 /// Parsed server configuration.
@@ -95,7 +111,7 @@ fn merge_configs(
     project: Option<RawMcpConfig>,
     user: Option<RawMcpConfig>,
 ) -> McpConfig {
-    let mut merged: HashMap<String, RawServerConfig> = HashMap::new();
+    let mut merged: HashMap<String, serde_json::Value> = HashMap::new();
 
     // User-level first (lower priority)
     if let Some(user_cfg) = user {
@@ -111,11 +127,13 @@ fn merge_configs(
 
     let servers = merged
         .into_iter()
-        .map(|(name, raw)| McpServerConfig {
-            name,
-            command: raw.command,
-            args: raw.args,
-            env: raw.env,
+        .filter_map(|(name, value)| {
+            try_parse_server(&name, &value).map(|raw| McpServerConfig {
+                name,
+                command: raw.command,
+                args: raw.args,
+                env: raw.env,
+            })
         })
         .collect();
 
@@ -173,5 +191,38 @@ mod tests {
     fn test_merge_no_config() {
         let merged = merge_configs(None, None);
         assert!(merged.servers.is_empty());
+    }
+
+    #[test]
+    fn test_merge_skips_servers_without_command() {
+        // User config has both stdio and http transport servers
+        let user: RawMcpConfig = serde_json::from_str(
+            r#"{"mcpServers":{
+                "stdio-srv":{"command":"echo","args":["hi"]},
+                "http-srv":{"url":"http://localhost:3000","transport":"sse"}
+            }}"#
+        ).unwrap();
+        let merged = merge_configs(None, Some(user));
+        assert_eq!(merged.servers.len(), 1);
+        assert_eq!(merged.servers[0].name, "stdio-srv");
+    }
+
+    #[test]
+    fn test_merge_mixed_valid_and_invalid() {
+        // Project has stdio server, user has both types
+        let user: RawMcpConfig = serde_json::from_str(
+            r#"{"mcpServers":{
+                "my-srv":{"command":"npx","args":["srv"]},
+                "http-srv":{"url":"http://example.com"}
+            }}"#
+        ).unwrap();
+        let project: RawMcpConfig = serde_json::from_str(
+            r#"{"mcpServers":{"my-srv":{"command":"uv","args":["run","srv.py"]}}}"#
+        ).unwrap();
+
+        let merged = merge_configs(Some(project), Some(user));
+        assert_eq!(merged.servers.len(), 1);
+        assert_eq!(merged.servers[0].name, "my-srv");
+        assert_eq!(merged.servers[0].command, "uv");
     }
 }
