@@ -270,6 +270,148 @@ pub struct LogRunSummary {
     pub last_event_time: String,
 }
 
+// === Per-Component Local State (web only) =====================================
+
+/// Local state for StatusBar — global run/session/connection info.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct GlobalState {
+    pub session_id: String,
+    pub run_count: u32,
+    pub iteration: u32,
+    pub tool_call_count: u32,
+    pub run_start: Option<Instant>,
+    pub run_elapsed: std::time::Duration,
+    pub is_running: bool,
+    pub exiting: bool,
+    pub ws_url: String,
+    pub ws_connected: bool,
+    pub ws_last_error: Option<String>,
+    pub unsafe_mode: bool,
+    pub active_tab: ActiveTab,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl GlobalState {
+    pub fn new(ws_url: String) -> Self {
+        Self {
+            session_id: "web-session".into(), run_count: 0, iteration: 0,
+            tool_call_count: 0, run_start: None, run_elapsed: std::time::Duration::ZERO,
+            is_running: false, exiting: false, ws_url, ws_connected: false,
+            ws_last_error: None, unsafe_mode: false, active_tab: ActiveTab::Conversation,
+        }
+    }
+}
+
+/// Local state for ConversationView.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct ConversationState {
+    pub entries: Vec<ConversationEntry>,
+    pub conversation_scroll: u16,
+    pub auto_scroll: bool,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl ConversationState {
+    pub fn new() -> Self {
+        Self { entries: Vec::new(), conversation_scroll: 0, auto_scroll: true }
+    }
+}
+
+/// Local state for ToolsPanel and ToolsTabContent.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct ToolState {
+    pub calls: Vec<ToolCallEntry>,
+    pub expanded: HashSet<usize>,
+    pub scroll: u16,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl ToolState {
+    pub fn new() -> Self {
+        Self { calls: Vec::new(), expanded: HashSet::new(), scroll: 0 }
+    }
+}
+
+/// Local state for FileTree and FileContentView.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct WorkspaceState {
+    pub workspace: WorkspaceTreeNode,
+    pub modified_files: HashSet<String>,
+    pub open_files: Vec<OpenFileTab>,
+    pub selected_file_tab: Option<usize>,
+    pub collapsed_dirs: HashSet<String>,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl WorkspaceState {
+    pub fn new(working_dir: &str) -> Self {
+        Self {
+            workspace: WorkspaceTreeNode::root(working_dir.to_string(), ".".into()),
+            modified_files: HashSet::new(), open_files: Vec::new(),
+            selected_file_tab: None, collapsed_dirs: HashSet::new(),
+        }
+    }
+}
+
+/// Local state for SkillsPanel.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct SkillsState { pub skills: Vec<SkillDisplayEntry> }
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl SkillsState { pub fn new() -> Self { Self { skills: Vec::new() } } }
+
+/// Local state for LogViewer.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct LogViewerState {
+    pub selected_run: Option<String>, pub entries: Vec<LogLine>,
+    pub scroll: u16, pub auto_scroll: bool, pub run_logs: Vec<LogRunSummary>,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl LogViewerState {
+    pub fn new() -> Self {
+        Self { selected_run: None, entries: Vec::new(), scroll: 0, auto_scroll: true, run_logs: Vec::new() }
+    }
+}
+
+/// Local state for SessionDialog.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct SessionDialogState {
+    pub open: bool, pub sessions: Vec<SessionDialogEntry>, pub selected: usize,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl SessionDialogState {
+    pub fn new() -> Self {
+        Self { open: false, sessions: Vec::new(), selected: 0 }
+    }
+}
+
+/// Shared state for ApprovalDialog (created by App, read via context).
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct ApprovalUiState {
+    pub tool_name: Option<String>, pub reason: Option<String>, pub arguments: Option<String>,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl ApprovalUiState {
+    pub fn new() -> Self {
+        Self { tool_name: None, reason: None, arguments: None }
+    }
+    pub fn has_pending(&self) -> bool { self.tool_name.is_some() }
+    pub fn clear(&mut self) {
+        self.tool_name = None; self.reason = None; self.arguments = None;
+    }
+}
+
 // === UiState =================================================================
 
 pub struct UiState {
