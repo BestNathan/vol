@@ -270,6 +270,89 @@ pub struct LogRunSummary {
     pub last_event_time: String,
 }
 
+// === EventBus (web only) =====================================================
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+use std::collections::HashMap;
+#[cfg(all(feature = "web", not(feature = "tui")))]
+use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(all(feature = "web", not(feature = "tui")))]
+use std::sync::{Arc, Mutex};
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SubscriptionId(u64);
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+type EventHandler = Box<dyn Fn(&UiEvent) + Send + Sync>;
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+struct Subscriber { id: SubscriptionId, handler: EventHandler }
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+struct EventBusInner {
+    next_id: AtomicU64,
+    subscribers: Mutex<HashMap<UiEventKind, Vec<Subscriber>>>,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Clone)]
+pub struct EventBus { inner: Arc<EventBusInner> }
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl EventBus {
+    pub fn new() -> Self {
+        Self { inner: Arc::new(EventBusInner { next_id: AtomicU64::new(0), subscribers: Mutex::new(HashMap::new()) }) }
+    }
+    fn subscribe<F>(&self, kind: UiEventKind, handler: F) -> SubscriptionId
+    where F: Fn(&UiEvent) + Send + Sync + 'static {
+        let id = SubscriptionId(self.inner.next_id.fetch_add(1, Ordering::Relaxed));
+        let mut subs = self.inner.subscribers.lock().unwrap();
+        subs.entry(kind).or_default().push(Subscriber { id, handler: Box::new(handler) });
+        id
+    }
+    pub fn publish(&self, event: &UiEvent) {
+        let kind = event.kind();
+        let subs = self.inner.subscribers.lock().unwrap();
+        if let Some(handlers) = subs.get(&kind) {
+            for sub in handlers { (sub.handler)(event); }
+        }
+    }
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+pub struct SubscriptionSet {
+    ids: Vec<(UiEventKind, SubscriptionId)>,
+    bus: Arc<EventBusInner>,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl SubscriptionSet {
+    pub fn new(bus: EventBus) -> Self {
+        Self { ids: Vec::new(), bus: bus.inner.clone() }
+    }
+    pub fn subscribe<F>(&mut self, _bus: &EventBus, kind: UiEventKind, handler: F)
+    where F: Fn(&UiEvent) + Send + Sync + 'static {
+        let id = self.bus.subscribe(kind, handler);
+        self.ids.push((kind, id));
+    }
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl Drop for SubscriptionSet {
+    fn drop(&mut self) {
+        let mut subs = self.bus.subscribers.lock().unwrap();
+        for (kind, id) in &self.ids {
+            if let Some(list) = subs.get_mut(kind) { list.retain(|s| s.id != *id); }
+        }
+    }
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+pub trait HasReducer<T> {
+    fn reduce(state: &mut T, event: &UiEvent) -> bool;
+}
+
 // === Per-Component Local State (web only) =====================================
 
 /// Local state for StatusBar — global run/session/connection info.
