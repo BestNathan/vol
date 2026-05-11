@@ -218,8 +218,7 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
 /// File tree component.
 #[component]
 pub fn FileTree() -> Element {
-    let ws = use_signal(|| WorkspaceState::new("."));
-    use_context_provider(|| ws);
+    let ws: Signal<WorkspaceState> = use_context();
 
     let app = use_context::<crate::web::components::app::AppState>();
     let global: Signal<GlobalState> = use_context();

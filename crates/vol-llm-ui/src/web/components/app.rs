@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::state::{ActiveTab, ApprovalUiState, EventBus, GlobalState, SubscriptionSet, UiEvent, UiEventKind};
+use crate::state::{ActiveTab, ApprovalUiState, EventBus, GlobalState, SubscriptionSet, UiEvent, UiEventKind, WorkspaceState};
 use crate::web::client::{AgentEvent, JsonRpcClient};
 
 use super::approval_dialog::ApprovalDialog;
@@ -114,6 +114,7 @@ pub fn App() -> Element {
     let active_tab = use_signal(|| ActiveTab::Conversation);
     let global_signal = use_signal(|| GlobalState::new(ws_url.clone()));
     let approval_signal = use_signal(|| ApprovalUiState::new());
+    let workspace_signal = use_signal(|| WorkspaceState::new("."));
 
     let client = use_hook(|| {
         let c = JsonRpcClient::new(&ws_url);
@@ -232,6 +233,7 @@ pub fn App() -> Element {
     });
     use_context_provider(|| global_signal);
     use_context_provider(|| approval_signal);
+    use_context_provider(|| workspace_signal);
 
     rsx! {
         style { {GLOBAL_CSS} }
@@ -478,12 +480,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .file-content-loading { display: flex; align-items: center; justify-content: center; height: 100%; color: #888; }
 
 @media (max-width: 1024px) {
-    .sidebar { width: 25%; min-width: 160px; }
+    .sidebar { width: 33.33%; min-width: 200px; }
     .tab { padding: 6px 12px; font-size: 12px; }
 }
 @media (max-width: 768px) {
-    .main-layout { flex-direction: column; }
-    .sidebar { width: 100%; max-width: none; height: auto; max-height: 200px; border-right: none; border-bottom: 1px solid #333355; }
+    .main-layout { flex-direction: row; }
+    .sidebar { width: 33.33%; min-width: 160px; border-right: 1px solid #333355; border-bottom: none; }
+    .right-panel { flex: 1; min-width: 0; }
     .tab { padding: 6px 10px; }
     .modal-content { min-width: auto; width: 90vw; max-width: 500px; }
 }
@@ -494,7 +497,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     .tab { padding: 6px 8px; font-size: 11px; white-space: nowrap; }
     .input-area { padding: 6px 8px; }
     .input-area button { padding: 6px 12px; font-size: 13px; }
-    .sidebar { width: 100%; max-height: 150px; }
+    .main-layout { flex-direction: row; }
+    .sidebar { width: 40%; min-width: 120px; max-height: none; border-right: 1px solid #333355; border-bottom: none; }
+    .right-panel { flex: 1; min-width: 0; }
     .modal-content { padding: 12px; }
 }
 "#;
