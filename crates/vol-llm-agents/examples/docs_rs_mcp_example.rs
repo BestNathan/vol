@@ -27,11 +27,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- Validate prerequisites ---
 
-    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").map_err(|_| {
-        eprintln!("Error: ANTHROPIC_AUTH_TOKEN environment variable not set");
-        eprintln!("Set it: export ANTHROPIC_AUTH_TOKEN=your_token");
-        "Missing API token"
-    })?;
+    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
+        .expect("ANTHROPIC_AUTH_TOKEN must be set for this example");
     println!("✓ ANTHROPIC_AUTH_TOKEN is set");
 
     let docs_rs_bin = std::env::var("DOCS_RS_MCP_BIN")
@@ -91,9 +88,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|d| d.name.starts_with("mcp__"))
         .collect();
     if mcp_tools.is_empty() {
-        eprintln!("Warning: No MCP tools discovered. Check that docs-rs-mcp binary is available.");
-        eprintln!("Build it: cargo build --bin docs-rs-mcp -p vol-mcp-servers");
-        std::process::exit(1);
+        return Err("No MCP tools discovered. Check that docs-rs-mcp binary is available.
+Build it: cargo build --bin docs-rs-mcp -p vol-mcp-servers"
+            .into());
     }
     println!("✓ Discovered {} MCP tools:", mcp_tools.len());
     for tool in &mcp_tools {
@@ -136,7 +133,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             eprintln!("Agent run failed: {:?}", e);
-            std::process::exit(1);
         }
     }
 
