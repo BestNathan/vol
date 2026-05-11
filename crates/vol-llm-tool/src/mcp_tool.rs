@@ -27,16 +27,18 @@ impl McpTool {
         parameters: serde_json::Value,
     ) -> Self {
         let sanitized = vol_llm_mcp::session::sanitize_name(server_name);
-        let display_name = format!("mcp__{}_{}", sanitized, tool_name);
+        let sanitized_tool = vol_llm_mcp::session::sanitize_name(tool_name);
+        let display_name = format!("mcp__{}_{}", sanitized, sanitized_tool);
 
         // Leak strings to satisfy ExecutableTool::name() -> &'static str
+        // Acceptable because tools are registered once at startup.
         let display_name: &'static str = Box::leak(display_name.into_boxed_str());
         let description: &'static str = Box::leak(description.to_string().into_boxed_str());
 
         Self {
             session,
             server_name: sanitized,
-            tool_name: tool_name.to_string(),
+            tool_name: sanitized_tool,
             display_name,
             description,
             parameters,
