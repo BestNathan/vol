@@ -217,15 +217,16 @@ pub fn FileTree() -> Element {
     use_context_provider(|| ws);
 
     let app = use_context::<crate::web::components::app::AppState>();
+    let global: Signal<GlobalState> = use_context();
 
     // Load root directory on mount — but wait for WebSocket connection first.
     use_hook(move || {
         let rpc = app.rpc_client.clone();
         let sig = ws;
-        let global: Signal<GlobalState> = use_context();
+        let is_connected = global.read().ws_connected;
 
         // If already connected, load immediately.
-        if global.read().ws_connected {
+        if is_connected {
             let rpc_clone = rpc.clone();
             let sig2 = sig.clone();
             rpc_clone.file_list(".", move |result| {
