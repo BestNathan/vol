@@ -594,6 +594,14 @@ impl ReActAgent {
             }
         }
 
+        // Disconnect MCP session
+        if let Some(ref mcp_session) = config.mcp_session {
+            if let Ok(session) = Arc::try_unwrap(mcp_session.clone()) {
+                let mut session = session;
+                session.disconnect().await;
+            }
+        }
+
         agent_result
     }
 }
