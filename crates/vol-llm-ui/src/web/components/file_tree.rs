@@ -161,15 +161,19 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
             let rpc_clone = rpc.clone();
             let mut sig = ws_sig.clone();
 
+            log::info!("FileTree: clicking file: {}", p);
+
             let is_new_file = sig.with_mut(|s| {
                 let existing = s.open_files.iter().position(|f| f.path == p);
                 match existing {
                     Some(idx) => {
+                        log::info!("FileTree: file already open at index {}", idx);
                         s.selected_file_tab = Some(idx);
                         false
                     }
                     None => {
                         let new_idx = s.open_files.len();
+                        log::info!("FileTree: opening new file at index {}", new_idx);
                         s.open_files.push(OpenFileTab {
                             path: p.clone(),
                             content: None,
@@ -184,11 +188,12 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
             if is_new_file {
                 let p2 = p.clone();
                 rpc_clone.file_read(&p, move |result| {
+                    log::info!("FileTree: file_read callback for: {}", p2);
                     sig.with_mut(|st| {
                         if let Some(idx) = st.open_files.iter().position(|f| f.path == p2) {
                             match result {
-                                Ok(c) => { st.open_files[idx].content = Some(c); }
-                                Err(e) => { st.open_files[idx].error = Some(e); }
+                                Ok(c) => { log::info!("FileTree: loaded {} bytes", c.len()); st.open_files[idx].content = Some(c); }
+                                Err(e) => { log::error!("FileTree: read error: {}", e); st.open_files[idx].error = Some(e); }
                             }
                         }
                     });
@@ -225,11 +230,15 @@ pub fn FileTree() -> Element {
         let sig = ws;
         let is_connected = global.read().ws_connected;
 
+        log::info!("FileTree use_hook: ws_connected={}", is_connected);
+
         // If already connected, load immediately.
         if is_connected {
             let rpc_clone = rpc.clone();
             let sig2 = sig.clone();
+            log::info!("FileTree: calling file_list for root");
             rpc_clone.file_list(".", move |result| {
+                log::info!("FileTree: file_list callback result: {:?}", result.as_ref().map(|e| e.len()));
                 let mut sig3 = sig2.clone();
                 match result {
                     Ok(entries) => {
@@ -250,10 +259,12 @@ pub fn FileTree() -> Element {
                 }
             });
         } else {
+            log::info!("FileTree: subscribing to WsConnected event");
             // Subscribe to WsConnected event, then load.
             let bus = app.event_bus.clone();
             let mut set = SubscriptionSet::new(bus.clone());
             set.subscribe(&bus, UiEventKind::WsConnected, move |_e| {
+                log::info!("FileTree: WsConnected event received, calling file_list");
                 let rpc_clone = rpc.clone();
                 let sig2 = sig.clone();
                 rpc_clone.file_list(".", move |result| {

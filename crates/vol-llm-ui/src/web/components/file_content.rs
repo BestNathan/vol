@@ -10,6 +10,7 @@ pub fn FileContentView() -> Element {
     let ws: Signal<WorkspaceState> = use_context();
     let (open_files, selected) = {
         let ui = ws.read();
+        log::info!("FileContentView: rendering with {} open files, selected={:?}", ui.open_files.len(), ui.selected_file_tab);
         (ui.open_files.clone(), ui.selected_file_tab)
     };
 
