@@ -114,14 +114,12 @@ impl AgentPlugin for LokiPlugin {
         let agent_id = def.map(|d| &d.name).map_or("unknown", |v| v.as_str());
 
         tracing::info!(
-            namespace = "agent",
             session_id = ctx.session_id,
             agent_id = agent_id,
             agent_type = agent_type,
+            agent_model = ctx.model,
             run_id = ctx.run_id,
-            model = ctx.model,
-            event = %event_json,
-            "agent_event"
+            "{}", event_json
         );
     }
 }
@@ -162,6 +160,7 @@ mod tests {
             sandbox: None,
             context_builder,
             plugin_registry: PluginRegistry::new(),
+            mcp_session: None,
         };
 
         let (ctx, _rx) = RunContext::new(
@@ -273,6 +272,7 @@ mod tests {
             sandbox: None,
             context_builder,
             plugin_registry: PluginRegistry::new(),
+            mcp_session: None,
         };
 
         let (ctx, _rx) = RunContext::new(

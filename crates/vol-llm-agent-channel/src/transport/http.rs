@@ -344,6 +344,7 @@ mod tests {
             sandbox: None,
             context_builder,
             plugin_registry: PluginRegistry::new(),
+            mcp_session: None,
         };
         let agent = ReActAgent::new(config);
         let dispatcher = Arc::new(AgentDispatcher::new(agent));
@@ -461,6 +462,7 @@ mod tests {
             sandbox: None,
             context_builder,
             plugin_registry: PluginRegistry::new(),
+            mcp_session: None,
         };
         let agent = ReActAgent::new(config);
         let dispatcher = Arc::new(AgentDispatcher::new(agent));
