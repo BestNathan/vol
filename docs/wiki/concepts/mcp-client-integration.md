@@ -74,3 +74,4 @@ New method: `AgentConfigBuilder::with_mcp_from_config(working_dir) -> Self`
 ## Timeline
 
 - **2026-05-11**: MCP client integration implemented — McpTool, register_from_mcp, with_mcp_from_config [[react-agent-mcp-integration]]
+- **2026-05-11**: Runnable example added demonstrating full flow [[docs-rs-mcp-example]]

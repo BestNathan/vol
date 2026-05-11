@@ -41,3 +41,10 @@ Implemented MCP (Model Context Protocol) client integration for the ReAct agent 
 - `Peer<RoleClient>.list_all_tools()` and `Peer<RoleClient>.call_tool()` for tool operations
 - `Box::leak` used for `&'static str` in `McpTool` — acceptable because tools are registered once at startup
 - `Arc::try_unwrap` used for session disconnect — gracefully skips if Arc is shared across runs
+
+## Example
+
+A runnable example demonstrates this integration end-to-end:
+- **File:** `crates/vol-llm-agents/examples/docs_rs_mcp_example.rs` [[docs-rs-mcp-example]]
+- **Run:** `cargo run --example docs_rs_mcp_example -p vol-llm-agents`
+- Connects to docs-rs MCP server, discovers tools, searches for dioxus crate

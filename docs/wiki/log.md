@@ -1,5 +1,15 @@
 # Change Log
 
+## [2026-05-11] ingest | Docs-RS MCP Integration Example
+- Created sources: [[docs-rs-mcp-example]]
+- Created concepts: [[mcp-example-pattern]]
+- Updated entities: [[vol-llm-agents-crate]]
+- Updated concepts: [[mcp-client-integration]], [[agent-builder-pattern]]
+- Updated sources: [[react-agent-mcp-integration]]
+- Updated index: new entries for docs-rs-mcp-example and mcp-example-pattern
+- Cross-references added: 6
+- Changes: Runnable example added to vol-llm-agents demonstrating full MCP integration flow — temp dir with .mcp.json, AgentConfig builder with with_mcp_from_config(), MCP tool discovery inspection, agent execution with docs-rs search, result printing; compiles cleanly with cargo check
+
 ## [2026-05-11] ingest | Split Signal State — EventBus Architecture
 - Created sources: [[split-signal-state]]
 - Created concepts: [[event-bus-pattern]]

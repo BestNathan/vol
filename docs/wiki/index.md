@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-11 (react-agent-mcp-integration)
+Last updated: 2026-05-11 (docs-rs-mcp-example)
 
 ## Entities
 
@@ -8,7 +8,7 @@ Last updated: 2026-05-11 (react-agent-mcp-integration)
 |------|---------|--------|---------|
 | [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs | active | 2026-05-10 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate | active | 2026-05-04 |
-| [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) | active | 2026-05-04 |
+| [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions | stable | 2026-05-04 |
 | [[vol-llm-tool-crate]] | Tool definition and registry framework | stable | 2026-05-04 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations | stable | 2026-05-04 |
@@ -69,6 +69,7 @@ Last updated: 2026-05-11 (react-agent-mcp-integration)
 | [[workspace-tree-pattern]] | Recursive WorkspaceTreeNode tree with lazy-loaded directory children via JSON-RPC file.list | active | 2026-05-10 |
 | [[event-bus-pattern]] | EventBus with UiEventKind routing, SubscriptionSet auto-cleanup, per-component local signals | active | 2026-05-11 |
 | [[mcp-client-integration]] | Bridging MCP server tools into ExecutableTool trait — McpTool, McpSession, AgentConfigBuilder integration | active | 2026-05-11 |
+| [[mcp-example-pattern]] | Pattern for runnable example files demonstrating MCP integration with ReActAgent | active | 2026-05-11 |
 
 ## Sources
 
@@ -96,6 +97,7 @@ Last updated: 2026-05-11 (react-agent-mcp-integration)
 | [[lazy-load-dir-tree]] | Lazy-loading directory tree: WorkspaceTreeNode replaces flat entries, on-demand fetch via file.list, refresh button | active | 2026-05-10 |
 | [[split-signal-state]] | Split Signal state: centralized Signal<UiState> replaced with EventBus + per-component local signals | active | 2026-05-11 |
 | [[react-agent-mcp-integration]] | ReAct Agent MCP client integration: vol-llm-mcp crate, McpTool, with_mcp_from_config builder method | active | 2026-05-11 |
+| [[docs-rs-mcp-example]] | Runnable example: ReActAgent connecting to docs-rs MCP server via with_mcp_from_config() | active | 2026-05-11 |
 
 ## Analyses
 

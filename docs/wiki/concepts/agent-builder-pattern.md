@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [builder, configuration, fluent-api]
 created: 2026-05-04
-updated: 2026-05-04
-source_count: 1
+updated: 2026-05-11
+source_count: 2
 ---
 
 # Agent Builder Pattern
@@ -57,3 +57,7 @@ The builder accumulates state (LLM, tools, plugins, config) and validates on `bu
 - [[skill-system]]: Skills configured via `AgentConfig::with_skills()`
 - [[context-builder]]: ContextBuilder configured and enhanced via builder
 - [[session-as-ssot]]: Session passed into agent config for message storage
+- [[mcp-client-integration]]: MCP tools auto-discovered via `with_mcp_from_config()`
+
+## Examples
+- [[docs-rs-mcp-example]]: Demonstrates `with_mcp_from_config()` with temp directory MCP config
