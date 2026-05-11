@@ -127,6 +127,7 @@ pub enum ConversationEntry {
     ToolResult { tool_name: String, preview: String, success: bool },
     AgentAnswer { text: String },
     RunSummary { iterations: u32, tool_calls: u32, elapsed_ms: u128 },
+    EntryCheckpoint { reason: String, note: Option<String>, created_at: i64 },
     Error { message: String },
 }
 
@@ -201,12 +202,13 @@ pub struct OpenFileTab {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ActiveTab { Conversation, Tools, Workspace, Skills, Logs, Agents }
+pub enum ActiveTab { Conversation, Sessions, Tools, Workspace, Skills, Logs, Agents }
 
 impl ActiveTab {
     pub fn toggle(self) -> Self {
         match self {
-            ActiveTab::Conversation => ActiveTab::Tools,
+            ActiveTab::Conversation => ActiveTab::Sessions,
+            ActiveTab::Sessions => ActiveTab::Tools,
             ActiveTab::Tools => ActiveTab::Workspace,
             ActiveTab::Workspace => ActiveTab::Skills,
             ActiveTab::Skills => ActiveTab::Logs,
@@ -497,6 +499,30 @@ pub struct AgentsState {
 impl AgentsState {
     pub fn new() -> Self {
         Self { agents: Vec::new(), expanded: HashSet::new(), loading: false, error: None }
+    }
+}
+
+/// Session list entry from session.list RPC.
+#[derive(Debug, Clone)]
+pub struct SessionListEntry {
+    pub id: String,
+    pub entry_count: usize,
+    pub created_at: i64,
+}
+
+/// Local state for SessionsPanel.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct SessionsState {
+    pub sessions: Vec<SessionListEntry>,
+    pub loading: bool,
+    pub error: Option<String>,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl SessionsState {
+    pub fn new() -> Self {
+        Self { sessions: Vec::new(), loading: false, error: None }
     }
 }
 
@@ -955,7 +981,8 @@ mod tests {
     #[test]
     fn test_active_tab_toggle() {
         use ActiveTab::*;
-        assert_eq!(Conversation.toggle(), Tools);
+        assert_eq!(Conversation.toggle(), Sessions);
+        assert_eq!(Sessions.toggle(), Tools);
         assert_eq!(Tools.toggle(), Workspace);
         assert_eq!(Workspace.toggle(), Skills);
         assert_eq!(Skills.toggle(), Logs);
