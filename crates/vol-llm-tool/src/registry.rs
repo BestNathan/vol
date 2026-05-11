@@ -107,22 +107,30 @@ impl ToolRegistry {
     ///
     /// Iterates all connected servers, discovers their tools,
     /// creates McpTool wrappers, and registers them.
-    pub async fn register_from_mcp(&mut self, session: Arc<vol_llm_mcp::McpSession>) {
+    /// Returns the number of tools registered.
+    pub async fn register_from_mcp(&mut self, session: Arc<vol_llm_mcp::McpSession>) -> usize {
         use crate::mcp_tool::McpTool;
 
         let tools = session.list_all_tools();
+        let mut count = 0;
         for (server, tool_info) in tools {
+            let description = tool_info.description.as_deref().unwrap_or_else(|| {
+                // Derive a minimal description from the tool name when absent.
+                &tool_info.name
+            });
             let mcp_tool = McpTool::new(
                 session.clone(),
                 &server,
                 &tool_info.name,
-                tool_info.description.as_deref().unwrap_or("MCP tool"),
+                description,
                 tool_info.input_schema.unwrap_or_else(|| {
                     serde_json::json!({ "type": "object", "properties": {} })
                 }),
             );
             self.register_boxed(Box::new(mcp_tool));
+            count += 1;
         }
+        count
     }
 }
 
@@ -212,5 +220,16 @@ mod tests {
         let filtered = registry.filter(Some(&["tool_a", "nonexistent"]), None);
         assert_eq!(filtered.tool_names().len(), 1);
         assert!(filtered.tool_names().contains(&"tool_a"));
+    }
+
+    #[tokio::test]
+    async fn test_register_from_mcp_empty_session() {
+        use vol_llm_mcp::McpSession;
+
+        let session = Arc::new(McpSession::connect(vec![]).await);
+        let mut registry = ToolRegistry::new();
+        let count = registry.register_from_mcp(session).await;
+        assert_eq!(count, 0);
+        assert!(registry.tool_names().is_empty());
     }
 }
