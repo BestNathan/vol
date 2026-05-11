@@ -4,9 +4,10 @@ use dioxus::prelude::*;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::state::{ActiveTab, ApprovalUiState, ConversationState, EventBus, GlobalState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
+use crate::state::{ActiveTab, ApprovalUiState, AgentsState, ConversationState, EventBus, GlobalState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
 use crate::web::client::{AgentEvent, JsonRpcClient};
 
+use super::agents_panel::AgentsPanel;
 use super::approval_dialog::ApprovalDialog;
 use super::conversation::ConversationView;
 use super::file_content::FileContentView;
@@ -117,6 +118,7 @@ pub fn App() -> Element {
     let workspace_signal = use_signal(|| WorkspaceState::new("."));
     let conversation_signal = use_signal(|| ConversationState::new());
     let tool_signal = use_signal(|| ToolState::new());
+    let agents_signal = use_signal(|| AgentsState::new());
 
     let client = use_hook(|| {
         let c = JsonRpcClient::new(&ws_url);
@@ -280,6 +282,7 @@ pub fn App() -> Element {
     use_context_provider(|| workspace_signal);
     use_context_provider(|| conversation_signal);
     use_context_provider(|| tool_signal);
+    use_context_provider(|| agents_signal);
 
     rsx! {
         style { {GLOBAL_CSS} }
@@ -342,7 +345,7 @@ fn TabContent() -> Element {
         ActiveTab::Workspace => rsx! { FileContentView {} },
         ActiveTab::Skills => rsx! { SkillsPanel {} },
         ActiveTab::Logs => rsx! { LogViewer {} },
-        ActiveTab::Agents => rsx! { div { "Agents panel (coming soon)" } },
+        ActiveTab::Agents => rsx! { AgentsPanel {} },
     }
 }
 
@@ -550,4 +553,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     .right-panel { flex: 1; min-width: 0; }
     .modal-content { padding: 12px; }
 }
+/* Agents panel */
+.agents-panel { flex: 1; overflow-y: auto; padding: 8px; }
+.agents-panel-loading, .agents-panel-empty, .agents-panel-error { display: flex; align-items: center; justify-content: center; height: 100%; color: #666; padding: 20px; text-align: center; }
+.agents-panel-error { color: #ff6060; }
+.agent-item { border-bottom: 1px solid #2a2a44; }
+.agent-item-header { display: flex; align-items: center; padding: 8px 10px; cursor: pointer; gap: 8px; }
+.agent-item-header:hover { background: #222240; }
+.agent-item-chevron { font-size: 10px; color: #666; transition: transform 0.15s; }
+.agent-item-name { font-weight: 600; font-size: 13px; color: #e0e0e0; }
+.agent-item-scope { font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: bold; margin-left: auto; }
+.agent-item-desc { font-size: 12px; color: #888; padding: 0 10px 6px 28px; }
+.agent-item-detail { padding: 8px 10px 8px 28px; font-size: 12px; background: #16162a; }
+.agent-detail-row { padding: 2px 0; }
+.agent-detail-label { color: #6090ff; font-weight: 600; }
+.agent-detail-value { color: #ccc; font-family: monospace; }
 "#;
