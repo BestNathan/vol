@@ -1,9 +1,10 @@
 //! Root App component with state management, event loop, and routing.
 
 use dioxus::prelude::*;
+use std::sync::Arc;
 use std::time::Duration;
 
-use crate::state::{ActiveTab, UiEvent, UiState};
+use crate::state::{ActiveTab, ApprovalUiState, EventBus, GlobalState, SubscriptionSet, UiEvent, UiEventKind};
 use crate::web::client::{AgentEvent, JsonRpcClient};
 
 use super::approval_dialog::ApprovalDialog;
@@ -28,12 +29,12 @@ fn derive_ws_url() -> String {
     "ws://localhost:3001".to_string()
 }
 
-/// Shared application state.
+/// Shared application state — no longer holds Signal<UiState>.
 #[derive(Clone)]
 pub struct AppState {
-    pub signal: Signal<UiState>,
-    pub active_tab: Signal<ActiveTab>,
+    pub event_bus: EventBus,
     pub rpc_client: JsonRpcClient,
+    pub active_tab: Signal<ActiveTab>,
 }
 
 impl PartialEq for AppState {
@@ -109,74 +110,36 @@ fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
 #[component]
 pub fn App() -> Element {
     let ws_url = derive_ws_url();
-    let signal = use_signal(|| UiState::new("web-session".into(), "/workspace", &ws_url));
+    let event_bus = use_signal(|| EventBus::new());
     let active_tab = use_signal(|| ActiveTab::Conversation);
-    // Create client once via use_hook so it survives re-renders.
+    let global_signal = use_signal(|| GlobalState::new(ws_url.clone()));
+    let approval_signal = use_signal(|| ApprovalUiState::new());
+
     let client = use_hook(|| {
         let c = JsonRpcClient::new(&ws_url);
-
-        // Wire connection state changes into UiState
-        let sig = signal.clone();
-        let client_ws = c.clone();
+        let bus = event_bus.with(|eb| eb.clone());
+        let global = global_signal.clone();
+        let bus_conn = bus.clone();
+        let global_conn = global.clone();
         c.on_state_change(move |cs| {
-            let mut s = sig.clone();
-            s.with_mut(|state| match cs {
+            let event = match cs {
+                crate::web::client::ConnectionState::Connected => UiEvent::WsConnected,
+                crate::web::client::ConnectionState::Connecting => UiEvent::WsConnecting,
+                crate::web::client::ConnectionState::Disconnected =>
+                    UiEvent::WsDisconnected { reason: Some("Disconnected".to_string()) },
+            };
+            bus_conn.publish(&event);
+            match cs {
                 crate::web::client::ConnectionState::Connected => {
-                    state.ws_connected = true;
-                    state.ws_last_error = None;
+                    global_conn.write_unchecked().ws_connected = true;
+                    global_conn.write_unchecked().ws_last_error = None;
                 }
                 crate::web::client::ConnectionState::Connecting => {
-                    state.ws_connected = false;
+                    global_conn.write_unchecked().ws_connected = false;
                 }
                 crate::web::client::ConnectionState::Disconnected => {
-                    state.ws_connected = false;
-                    state.ws_last_error = Some("Disconnected from server".to_string());
-                }
-            });
-            let mut sig_cb = sig.clone();
-            client_ws.file_list(".", move |result| {
-                if let Ok(entries) = result {
-                    sig_cb.with_mut(|state| {
-                        state.workspace.children.clear();
-                        for entry in &entries {
-                            state.workspace.children.push(crate::state::WorkspaceTreeNode {
-                                name: entry.name.clone(),
-                                path: entry.name.clone(),
-                                is_dir: entry.is_dir,
-                                loaded: true,
-                                load_error: false,
-                                children: Vec::new(),
-                            });
-                            // Start all directories collapsed so first click expands + fetches
-                            if entry.is_dir {
-                                state.collapsed_dirs.insert(entry.name.clone());
-                            }
-                        }
-                        state.workspace.loaded = true;
-                    });
-                }
-            });
-        });
-
-        // Event loop: receive server events and apply to UiState
-        let mut sig_ev = signal.clone();
-        let client_ev = c.clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            loop {
-                match client_ev.next_event().await {
-                    Some(event) => {
-                        if let Some(ui_event) = agent_event_to_ui(&event) {
-                            sig_ev.with_mut(|s| s.apply(ui_event));
-                        }
-                    }
-                    None => {
-                        log::warn!("Event stream closed");
-                        sig_ev.with_mut(|s| {
-                            s.ws_connected = false;
-                            s.ws_last_error = Some("Event stream closed".to_string());
-                        });
-                        break;
-                    }
+                    global_conn.write_unchecked().ws_connected = false;
+                    global_conn.write_unchecked().ws_last_error = Some("Disconnected".to_string());
                 }
             }
         });
@@ -184,11 +147,91 @@ pub fn App() -> Element {
         c
     });
 
-    use_context_provider(|| AppState {
-        signal,
-        active_tab,
-        rpc_client: client.clone(),
+    // EventBus subscriptions for shared signals — stored in hook, cleaned up on Drop
+    use_hook(|| {
+        let bus = event_bus.with(|eb| eb.clone());
+        let mut set = SubscriptionSet::new(bus.clone());
+        let global = global_signal.clone();
+        let approval = approval_signal.clone();
+
+        // GlobalState: agent lifecycle events
+        set.subscribe(&bus, UiEventKind::AgentStart, {
+            let global = global.clone();
+            move |_e| {
+                let mut s = global.write_unchecked();
+                s.run_count += 1; s.iteration = 0; s.tool_call_count = 0;
+                s.run_start = Some(web_time::Instant::now());
+                s.run_elapsed = Duration::ZERO; s.is_running = true;
+            }
+        });
+        for kind in [UiEventKind::AgentComplete, UiEventKind::AgentAborted, UiEventKind::AgentError] {
+            let global = global.clone();
+            set.subscribe(&bus, kind, move |_e| {
+                let mut s = global.write_unchecked();
+                if let Some(start) = s.run_start { s.run_elapsed = start.elapsed(); }
+                s.is_running = false;
+            });
+        }
+        set.subscribe(&bus, UiEventKind::IterationComplete, {
+            let global = global.clone();
+            move |e| {
+                if let UiEvent::IterationComplete { iteration, .. } = e {
+                    global.write_unchecked().iteration = *iteration;
+                }
+            }
+        });
+
+        // ApprovalUiState
+        set.subscribe(&bus, UiEventKind::ApprovalRequest, {
+            let approval = approval.clone();
+            move |e| {
+                if let UiEvent::ApprovalRequest { tool_name, reason, arguments } = e {
+                    let mut s = approval.write_unchecked();
+                    s.tool_name = Some(tool_name.clone());
+                    s.reason = Some(reason.clone());
+                    s.arguments = Some(arguments.clone());
+                }
+            }
+        });
+        set.subscribe(&bus, UiEventKind::ApprovalResolved, {
+            let approval = approval.clone();
+            move |_e| {
+                approval.write_unchecked().clear();
+            }
+        });
+
+        // Return Arc to keep alive until component drops
+        Arc::new(set)
     });
+
+    // WS event loop
+    let bus_ev = event_bus.with(|eb| eb.clone());
+    let client_ev = client.clone();
+    wasm_bindgen_futures::spawn_local(async move {
+        loop {
+            match client_ev.next_event().await {
+                Some(event) => {
+                    if let Some(ui_event) = agent_event_to_ui(&event) {
+                        bus_ev.publish(&ui_event);
+                    }
+                }
+                None => {
+                    log::warn!("Event stream closed");
+                    bus_ev.publish(&UiEvent::AgentError { message: "Event stream closed".to_string() });
+                    bus_ev.publish(&UiEvent::WsDisconnected { reason: Some("Event stream closed".to_string()) });
+                    break;
+                }
+            }
+        }
+    });
+
+    use_context_provider(|| AppState {
+        event_bus: event_bus.with(|eb| eb.clone()),
+        rpc_client: client.clone(),
+        active_tab,
+    });
+    use_context_provider(|| global_signal);
+    use_context_provider(|| approval_signal);
 
     rsx! {
         style { {GLOBAL_CSS} }
@@ -215,10 +258,10 @@ fn TabBar() -> Element {
 
     rsx! {
         div { class: "tab-bar",
-            TabButton { state: state.clone(), tab: ActiveTab::Conversation, label: "💬 Conversation" }
-            TabButton { state: state.clone(), tab: ActiveTab::Tools, label: "🔧 Tools" }
-            TabButton { state: state.clone(), tab: ActiveTab::Skills, label: "🎯 Skills" }
-            TabButton { state: state.clone(), tab: ActiveTab::Logs, label: "📋 Logs" }
+            TabButton { state: state.clone(), tab: ActiveTab::Conversation, label: "Conversation" }
+            TabButton { state: state.clone(), tab: ActiveTab::Tools, label: "Tools" }
+            TabButton { state: state.clone(), tab: ActiveTab::Skills, label: "Skills" }
+            TabButton { state: state.clone(), tab: ActiveTab::Logs, label: "Logs" }
         }
     }
 }
@@ -228,16 +271,11 @@ fn TabButton(state: AppState, tab: ActiveTab, label: String) -> Element {
     let current_tab = state.active_tab.read();
     let active = *current_tab == tab;
     let tab_class = if active { "tab active" } else { "tab" };
-
     let mut active_tab_signal = state.active_tab;
-    let mut ui_signal = state.signal;
     rsx! {
         button {
             class: tab_class,
-            onclick: move |_| {
-                active_tab_signal.set(tab);
-                ui_signal.with_mut(|s| s.active_tab = tab);
-            },
+            onclick: move |_| { active_tab_signal.set(tab); },
             "{label}"
         }
     }
@@ -460,4 +498,3 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     .modal-content { padding: 12px; }
 }
 "#;
-

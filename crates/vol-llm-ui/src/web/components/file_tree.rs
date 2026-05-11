@@ -2,8 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::state::{ActiveTab, OpenFileTab, WorkspaceTreeNode};
-use crate::web::components::app::AppState;
+use crate::state::{ActiveTab, OpenFileTab, WorkspaceState, WorkspaceTreeNode};
 
 /// Get the icon for a file extension or directory.
 pub(crate) fn file_icon(is_dir: bool, name: &str) -> &'static str {
@@ -29,8 +28,8 @@ pub(crate) fn file_icon(is_dir: bool, name: &str) -> &'static str {
 #[component]
 fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
     if node.is_dir {
-        let state: AppState = use_context();
-        let collapsed = state.signal.read().collapsed_dirs.contains(&node.path);
+        let ws: Signal<WorkspaceState> = use_context();
+        let collapsed = ws.read().collapsed_dirs.contains(&node.path);
 
         let indent_px = depth * 16;
         let chevron_cls = if collapsed {
@@ -39,13 +38,13 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
             "file-tree-chevron"
         };
 
-        let dir_sig = state.signal;
+        let dir_ws = ws;
         let dir_path = node.path.clone();
-        let rpc = state.rpc_client.clone();
+        let rpc = use_context::<crate::web::components::app::AppState>().rpc_client.clone();
         let dir_onclick = move |_: Event<MouseData>| {
             let p = dir_path.clone();
             let rpc_clone = rpc.clone();
-            let mut sig = dir_sig.clone();
+            let mut sig = dir_ws.clone();
 
             let was_collapsed = sig.with_mut(|s| {
                 if s.collapsed_dirs.contains(&p) {
@@ -85,14 +84,14 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
             }
         };
 
-        let refresh_sig = state.signal;
+        let refresh_ws = ws;
         let refresh_path = node.path.clone();
-        let refresh_rpc = state.rpc_client.clone();
+        let refresh_rpc = use_context::<crate::web::components::app::AppState>().rpc_client.clone();
         let refresh_onclick = move |e: Event<MouseData>| {
             e.stop_propagation();
             let p = refresh_path.clone();
             let rpc_clone = refresh_rpc.clone();
-            let mut sig = refresh_sig.clone();
+            let mut sig = refresh_ws.clone();
 
             sig.with_mut(|s| {
                 if let Some(nd) = s.workspace.find_child_mut(&p) {
@@ -149,17 +148,18 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
             }
         }
     } else {
-        let state: AppState = use_context();
+        let ws: Signal<WorkspaceState> = use_context();
+        let app: crate::web::components::app::AppState = use_context();
         let indent_px = depth * 16;
 
-        let sig = state.signal;
-        let rpc = state.rpc_client.clone();
-        let mut tab = state.active_tab;
+        let ws_sig = ws;
+        let mut tab = app.active_tab;
+        let rpc = app.rpc_client.clone();
         let file_path = node.path.clone();
         let file_onclick = move |_: Event<MouseData>| {
             let p = file_path.clone();
             let rpc_clone = rpc.clone();
-            let mut sig = sig.clone();
+            let mut sig = ws_sig.clone();
 
             let is_new_file = sig.with_mut(|s| {
                 let existing = s.open_files.iter().position(|f| f.path == p);
@@ -213,8 +213,10 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
 /// File tree component.
 #[component]
 pub fn FileTree() -> Element {
-    let state: AppState = use_context();
-    let workspace = state.signal.read().workspace.clone();
+    let ws = use_signal(|| WorkspaceState::new("."));
+    use_context_provider(|| ws);
+
+    let workspace = ws.read().workspace.clone();
 
     if workspace.children.is_empty() && !workspace.loaded {
         return rsx! {

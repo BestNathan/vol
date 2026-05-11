@@ -2,15 +2,14 @@
 
 use dioxus::prelude::*;
 
-use crate::web::components::app::AppState;
-use crate::state::OpenFileTab;
+use crate::state::{OpenFileTab, WorkspaceState};
 
 /// File content viewer showing open file tabs.
 #[component]
 pub fn FileContentView() -> Element {
-    let state: AppState = use_context();
+    let ws: Signal<WorkspaceState> = use_context();
     let (open_files, selected) = {
-        let ui = state.signal.read();
+        let ui = ws.read();
         (ui.open_files.clone(), ui.selected_file_tab)
     };
 
@@ -25,7 +24,7 @@ pub fn FileContentView() -> Element {
     let tab_elements: Vec<Element> = open_files
         .iter()
         .enumerate()
-        .map(|(i, tab)| render_tab(i, tab, state.clone()))
+        .map(|(i, tab)| render_tab(i, tab, ws))
         .collect();
 
     rsx! {
@@ -54,18 +53,18 @@ pub fn FileContentView() -> Element {
     }
 }
 
-fn render_tab(i: usize, tab: &OpenFileTab, state: AppState) -> Element {
+fn render_tab(i: usize, tab: &OpenFileTab, ws: Signal<WorkspaceState>) -> Element {
     let name = tab.path.split('/').last().unwrap_or(&tab.path).to_string();
     let icon = crate::web::components::file_tree::file_icon(false, &name);
     let path = tab.path.clone();
 
     let is_selected = {
-        let ui = state.signal.read();
+        let ui = ws.read();
         Some(i) == ui.selected_file_tab
     };
     let tab_cls = if is_selected { "file-tab active" } else { "file-tab" };
 
-    let mut sig_select = state.signal.clone();
+    let mut sig_select = ws;
     let select_onclick = {
         move |_: Event<MouseData>| {
             sig_select.with_mut(|s| {
@@ -75,7 +74,7 @@ fn render_tab(i: usize, tab: &OpenFileTab, state: AppState) -> Element {
     };
 
     let close_path = path.clone();
-    let mut sig_close = state.signal.clone();
+    let mut sig_close = ws;
     let close_onclick = move |evt: Event<MouseData>| {
         evt.stop_propagation();
         sig_close.with_mut(|s| {

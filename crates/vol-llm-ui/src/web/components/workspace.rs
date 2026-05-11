@@ -2,10 +2,10 @@
 
 use dioxus::prelude::*;
 
-use crate::web::components::app::AppState;
+use crate::state::{WorkspaceState, WorkspaceTreeNode};
 
 /// Flatten a WorkspaceTreeNode tree into (name, is_dir, indent) tuples.
-fn flatten_tree(node: &crate::state::WorkspaceTreeNode, indent: usize) -> Vec<(String, bool, usize)> {
+fn flatten_tree(node: &WorkspaceTreeNode, indent: usize) -> Vec<(String, bool, usize)> {
     let mut result = Vec::new();
     for child in &node.children {
         result.push((child.name.clone(), child.is_dir, indent));
@@ -19,9 +19,9 @@ fn flatten_tree(node: &crate::state::WorkspaceTreeNode, indent: usize) -> Vec<(S
 /// Workspace panel showing the file tree.
 #[component]
 pub fn WorkspacePanel() -> Element {
-    let state: AppState = use_context();
+    let ws: Signal<WorkspaceState> = use_context();
     let (entries, loaded) = {
-        let ui = state.signal.read();
+        let ui = ws.read();
         (flatten_tree(&ui.workspace, 0), ui.workspace.loaded)
     };
 

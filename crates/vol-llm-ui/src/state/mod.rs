@@ -118,7 +118,7 @@ pub struct ToolCallEntry {
     pub duration_ms: Option<u64>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ConversationEntry {
     UserInput { text: String },
     Thinking { content: String },
@@ -284,7 +284,7 @@ use std::sync::{Arc, Mutex};
 pub struct SubscriptionId(u64);
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
-type EventHandler = Box<dyn Fn(&UiEvent) + Send + Sync>;
+type EventHandler = Box<dyn Fn(&UiEvent) + 'static>;
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
 struct Subscriber { id: SubscriptionId, handler: EventHandler }
@@ -296,6 +296,17 @@ struct EventBusInner {
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
+impl EventBusInner {
+    fn subscribe<F>(&self, kind: UiEventKind, handler: F) -> SubscriptionId
+    where F: Fn(&UiEvent) + 'static {
+        let id = SubscriptionId(self.next_id.fetch_add(1, Ordering::Relaxed));
+        let mut subs = self.subscribers.lock().unwrap();
+        subs.entry(kind).or_default().push(Subscriber { id, handler: Box::new(handler) });
+        id
+    }
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
 #[derive(Clone)]
 pub struct EventBus { inner: Arc<EventBusInner> }
 
@@ -304,12 +315,9 @@ impl EventBus {
     pub fn new() -> Self {
         Self { inner: Arc::new(EventBusInner { next_id: AtomicU64::new(0), subscribers: Mutex::new(HashMap::new()) }) }
     }
-    fn subscribe<F>(&self, kind: UiEventKind, handler: F) -> SubscriptionId
-    where F: Fn(&UiEvent) + Send + Sync + 'static {
-        let id = SubscriptionId(self.inner.next_id.fetch_add(1, Ordering::Relaxed));
-        let mut subs = self.inner.subscribers.lock().unwrap();
-        subs.entry(kind).or_default().push(Subscriber { id, handler: Box::new(handler) });
-        id
+    pub fn subscribe<F>(&self, kind: UiEventKind, handler: F) -> SubscriptionId
+    where F: Fn(&UiEvent) + 'static {
+        self.inner.subscribe(kind, handler)
     }
     pub fn publish(&self, event: &UiEvent) {
         let kind = event.kind();
@@ -332,7 +340,7 @@ impl SubscriptionSet {
         Self { ids: Vec::new(), bus: bus.inner.clone() }
     }
     pub fn subscribe<F>(&mut self, _bus: &EventBus, kind: UiEventKind, handler: F)
-    where F: Fn(&UiEvent) + Send + Sync + 'static {
+    where F: Fn(&UiEvent) + 'static {
         let id = self.bus.subscribe(kind, handler);
         self.ids.push((kind, id));
     }

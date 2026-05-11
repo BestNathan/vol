@@ -53,6 +53,7 @@ type ResponseCallback = Box<dyn FnOnce(serde_json::Value)>;
 /// by the active message handler.
 struct ClientInner {
     ws: web_sys::WebSocket,
+    url: String,
     state: Cell<ConnectionState>,
     event_tx: mpsc::UnboundedSender<AgentEvent>,
     /// Pending response callbacks keyed by request ID.
@@ -76,6 +77,7 @@ impl JsonRpcClient {
 
         let inner = Rc::new(ClientInner {
             ws,
+            url: url.to_string(),
             state: Cell::new(ConnectionState::Connecting),
             event_tx,
             pending: RefCell::new(HashMap::new()),
@@ -149,6 +151,11 @@ impl JsonRpcClient {
     /// Get the current connection state.
     pub fn state(&self) -> ConnectionState {
         self.inner.state.get()
+    }
+
+    /// Get the WebSocket URL this client connected to.
+    pub fn url(&self) -> &str {
+        &self.inner.url
     }
 
     /// Get the next event from the event stream (async).

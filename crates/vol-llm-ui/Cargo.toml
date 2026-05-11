@@ -44,6 +44,7 @@ futures = { version = "0.3", optional = true }
 
 # Web (optional)
 dioxus = { version = "0.6", features = ["web"], optional = true }
+dioxus-signals = { version = "0.6", optional = true }
 log = { version = "0.4", optional = true }
 web-sys = { version = "0.3", features = ["WebSocket", "Window", "Location"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
@@ -75,4 +76,4 @@ tui = [
     "dep:vol-llm-agents", "dep:vol-llm-skill", "dep:vol-llm-observability",
     "dep:vol-session", "dep:jsonrpsee",
 ]
-web = ["dep:dioxus", "dep:log", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:futures-channel", "dep:futures-core", "dep:futures-util", "dep:js-sys", "dep:web-time"]
+web = ["dep:dioxus", "dep:dioxus-signals", "dep:log", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:futures-channel", "dep:futures-core", "dep:futures-util", "dep:js-sys", "dep:web-time"]
