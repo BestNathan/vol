@@ -473,7 +473,7 @@ impl LogViewerState {
 }
 
 /// A single agent entry returned by agent.list RPC.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AgentListEntry {
     pub id: String,
     pub name: String,
@@ -487,7 +487,7 @@ pub struct AgentListEntry {
 #[cfg(all(feature = "web", not(feature = "tui")))]
 #[derive(Debug)]
 pub struct AgentsState {
-    pub agents: Vec<AgentListEntry>,
+    pub agents: Vec<crate::web::client::AgentListEntry>,
     pub expanded: HashSet<usize>,
     pub loading: bool,
     pub error: Option<String>,

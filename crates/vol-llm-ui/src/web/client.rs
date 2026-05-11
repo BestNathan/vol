@@ -37,7 +37,7 @@ pub struct FileEntry {
 }
 
 /// Agent metadata entry returned by agent.list.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AgentListEntry {
     pub id: String,
     pub name: String,

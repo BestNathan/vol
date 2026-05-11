@@ -314,6 +314,7 @@ fn TabBar() -> Element {
             TabButton { state: state.clone(), tab: ActiveTab::Workspace, label: "Workspace" }
             TabButton { state: state.clone(), tab: ActiveTab::Skills, label: "Skills" }
             TabButton { state: state.clone(), tab: ActiveTab::Logs, label: "Logs" }
+            TabButton { state: state.clone(), tab: ActiveTab::Agents, label: "Agents" }
         }
     }
 }
