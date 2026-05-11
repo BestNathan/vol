@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::state::{ActiveTab, OpenFileTab, WorkspaceState, WorkspaceTreeNode};
+use crate::state::{ActiveTab, GlobalState, OpenFileTab, SubscriptionSet, UiEventKind, WorkspaceState, WorkspaceTreeNode};
 
 /// Get the icon for a file extension or directory.
 pub(crate) fn file_icon(is_dir: bool, name: &str) -> &'static str {
@@ -218,30 +218,68 @@ pub fn FileTree() -> Element {
 
     let app = use_context::<crate::web::components::app::AppState>();
 
-    // Load root directory on mount
+    // Load root directory on mount — but wait for WebSocket connection first.
     use_hook(move || {
         let rpc = app.rpc_client.clone();
         let sig = ws;
-        rpc.file_list(".", move |result| {
-            let mut sig2 = sig.clone();
-            match result {
-                Ok(entries) => {
-                    let flat_entries: Vec<(String, bool)> = entries
-                        .into_iter()
-                        .map(|e| (e.name, e.is_dir))
-                        .collect();
-                    sig2.with_mut(|s2| {
-                        s2.workspace.replace_dir_children(".", flat_entries);
-                    });
+        let global: Signal<GlobalState> = use_context();
+
+        // If already connected, load immediately.
+        if global.read().ws_connected {
+            let rpc_clone = rpc.clone();
+            let sig2 = sig.clone();
+            rpc_clone.file_list(".", move |result| {
+                let mut sig3 = sig2.clone();
+                match result {
+                    Ok(entries) => {
+                        let flat_entries: Vec<(String, bool)> = entries
+                            .into_iter()
+                            .map(|e| (e.name, e.is_dir))
+                            .collect();
+                        sig3.with_mut(|s2| {
+                            s2.workspace.replace_dir_children(".", flat_entries);
+                        });
+                    }
+                    Err(_) => {
+                        sig3.with_mut(|s2| {
+                            s2.workspace.loaded = true;
+                            s2.workspace.load_error = true;
+                        });
+                    }
                 }
-                Err(_) => {
-                    sig2.with_mut(|s2| {
-                        s2.workspace.loaded = true;
-                        s2.workspace.load_error = true;
-                    });
-                }
-            }
-        });
+            });
+        } else {
+            // Subscribe to WsConnected event, then load.
+            let bus = app.event_bus.clone();
+            let mut set = SubscriptionSet::new(bus.clone());
+            set.subscribe(&bus, UiEventKind::WsConnected, move |_e| {
+                let rpc_clone = rpc.clone();
+                let sig2 = sig.clone();
+                rpc_clone.file_list(".", move |result| {
+                    let mut sig3 = sig2.clone();
+                    match result {
+                        Ok(entries) => {
+                            let flat_entries: Vec<(String, bool)> = entries
+                                .into_iter()
+                                .map(|e| (e.name, e.is_dir))
+                                .collect();
+                            sig3.with_mut(|s2| {
+                                s2.workspace.replace_dir_children(".", flat_entries);
+                            });
+                        }
+                        Err(_) => {
+                            sig3.with_mut(|s2| {
+                                s2.workspace.loaded = true;
+                                s2.workspace.load_error = true;
+                            });
+                        }
+                    }
+                });
+            });
+            // Keep subscription alive via a static-leaked Arc (Dioxus drops use_hook on unmount).
+            // In practice the page never unmounts, so this is fine.
+            std::mem::forget(Box::new(set));
+        }
     });
 
     let workspace = ws.read().workspace.clone();
