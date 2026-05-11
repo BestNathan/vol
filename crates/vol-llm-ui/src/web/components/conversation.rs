@@ -3,10 +3,8 @@
 use dioxus::prelude::*;
 
 use crate::state::{
-    ConversationEntry, ConversationState, SubscriptionSet,
-    UiEvent, UiEventKind,
+    ConversationEntry, ConversationState, UiEvent,
 };
-use crate::web::components::app::AppState;
 
 fn truncate_lines(s: &str, max_lines: usize, max_chars: usize) -> String {
     let lines: Vec<&str> = s.lines().take(max_lines).collect();
@@ -25,7 +23,7 @@ fn flush_pending_content(entries: &mut Vec<ConversationEntry>) {
     }
 }
 
-fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
+pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
     match event {
         UiEvent::AgentStart { input } => {
             s.entries.push(ConversationEntry::UserInput { text: input.clone() });
@@ -88,30 +86,7 @@ fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
 
 #[component]
 pub fn ConversationView() -> Element {
-    let app_state: AppState = use_context();
-    let signal = use_signal(|| ConversationState::new());
-
-    use_hook(move || {
-        let bus = app_state.event_bus.clone();
-        let mut set = SubscriptionSet::new(bus.clone());
-
-        for kind in [
-            UiEventKind::AgentStart, UiEventKind::AgentComplete, UiEventKind::AgentAborted,
-            UiEventKind::AgentError, UiEventKind::ThinkingStart, UiEventKind::ThinkingDelta,
-            UiEventKind::ThinkingComplete, UiEventKind::ContentStart, UiEventKind::ContentDelta,
-            UiEventKind::ContentComplete, UiEventKind::MaxIterationsReached,
-            UiEventKind::IterationContinued, UiEventKind::IterationComplete,
-        ] {
-            set.subscribe(&bus, kind, {
-                let signal = signal.clone();
-                move |event| {
-                    reduce_conversation(&mut *signal.write_unchecked(), event);
-                }
-            });
-        }
-
-        std::sync::Arc::new(set)
-    });
+    let signal: Signal<ConversationState> = use_context();
 
     let count = signal.read().entries.len();
     if count == 0 {

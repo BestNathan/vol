@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::state::{ActiveTab, ApprovalUiState, EventBus, GlobalState, SubscriptionSet, UiEvent, UiEventKind, WorkspaceState};
+use crate::state::{ActiveTab, ApprovalUiState, ConversationState, EventBus, GlobalState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
 use crate::web::client::{AgentEvent, JsonRpcClient};
 
 use super::approval_dialog::ApprovalDialog;
@@ -115,6 +115,8 @@ pub fn App() -> Element {
     let global_signal = use_signal(|| GlobalState::new(ws_url.clone()));
     let approval_signal = use_signal(|| ApprovalUiState::new());
     let workspace_signal = use_signal(|| WorkspaceState::new("."));
+    let conversation_signal = use_signal(|| ConversationState::new());
+    let tool_signal = use_signal(|| ToolState::new());
 
     let client = use_hook(|| {
         let c = JsonRpcClient::new(&ws_url);
@@ -205,6 +207,48 @@ pub fn App() -> Element {
         Arc::new(set)
     });
 
+    // Conversation event subscriptions — kept at App level so events are never lost
+    use_hook(|| {
+        let bus = event_bus.with(|eb| eb.clone());
+        let mut set = SubscriptionSet::new(bus.clone());
+        let conv = conversation_signal.clone();
+
+        for kind in [
+            UiEventKind::AgentStart, UiEventKind::AgentComplete, UiEventKind::AgentAborted,
+            UiEventKind::AgentError, UiEventKind::ThinkingStart, UiEventKind::ThinkingDelta,
+            UiEventKind::ThinkingComplete, UiEventKind::ContentStart, UiEventKind::ContentDelta,
+            UiEventKind::ContentComplete, UiEventKind::MaxIterationsReached,
+            UiEventKind::IterationContinued, UiEventKind::IterationComplete,
+        ] {
+            set.subscribe(&bus, kind, {
+                let conv = conv.clone();
+                move |event| {
+                    let mut s = conv.write_unchecked();
+                    crate::web::components::conversation::reduce_conversation(&mut s, event);
+                }
+            });
+        }
+        Arc::new(set)
+    });
+
+    // Tool event subscriptions — kept at App level so events are never lost
+    use_hook(|| {
+        let bus = event_bus.with(|eb| eb.clone());
+        let mut set = SubscriptionSet::new(bus.clone());
+        let tool = tool_signal.clone();
+
+        for kind in [UiEventKind::ToolCallBegin, UiEventKind::ToolCallComplete, UiEventKind::ToolCallError, UiEventKind::ToolCallSkipped] {
+            set.subscribe(&bus, kind, {
+                let tool = tool.clone();
+                move |event| {
+                    let mut s = tool.write_unchecked();
+                    crate::web::components::tools_tab::reduce_tool_state(&mut s, event);
+                }
+            });
+        }
+        Arc::new(set)
+    });
+
     // WS event loop
     let bus_ev = event_bus.with(|eb| eb.clone());
     let client_ev = client.clone();
@@ -234,6 +278,8 @@ pub fn App() -> Element {
     use_context_provider(|| global_signal);
     use_context_provider(|| approval_signal);
     use_context_provider(|| workspace_signal);
+    use_context_provider(|| conversation_signal);
+    use_context_provider(|| tool_signal);
 
     rsx! {
         style { {GLOBAL_CSS} }
@@ -262,6 +308,7 @@ fn TabBar() -> Element {
         div { class: "tab-bar",
             TabButton { state: state.clone(), tab: ActiveTab::Conversation, label: "Conversation" }
             TabButton { state: state.clone(), tab: ActiveTab::Tools, label: "Tools" }
+            TabButton { state: state.clone(), tab: ActiveTab::Workspace, label: "Workspace" }
             TabButton { state: state.clone(), tab: ActiveTab::Skills, label: "Skills" }
             TabButton { state: state.clone(), tab: ActiveTab::Logs, label: "Logs" }
         }

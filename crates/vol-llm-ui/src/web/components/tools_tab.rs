@@ -1,8 +1,7 @@
 //! Tools tab with expandable tool call details.
 
 use dioxus::prelude::*;
-use crate::state::{ToolState, ToolCallEntry, ToolCallStatus, UiEvent, UiEventKind, SubscriptionSet};
-use crate::web::components::app::AppState;
+use crate::state::{ToolState, ToolCallEntry, ToolCallStatus, UiEvent};
 
 fn update_status(calls: &mut Vec<ToolCallEntry>, name: &str, status: ToolCallStatus, dur: Option<u64>) {
     for e in calls.iter_mut().rev() {
@@ -24,7 +23,7 @@ fn arg_preview(arguments: &str) -> String {
     String::new()
 }
 
-fn reduce_tool_state(s: &mut ToolState, event: &UiEvent) {
+pub fn reduce_tool_state(s: &mut ToolState, event: &UiEvent) {
     match event {
         UiEvent::ToolCallBegin { tool_name, arguments } => {
             let seq = s.calls.len() as u32 + 1;
@@ -40,22 +39,7 @@ fn reduce_tool_state(s: &mut ToolState, event: &UiEvent) {
 
 #[component]
 pub fn ToolsTabContent() -> Element {
-    let app_state: AppState = use_context();
-    let signal = use_signal(|| ToolState::new());
-
-    use_hook(move || {
-        let bus = app_state.event_bus.clone();
-        let mut set = SubscriptionSet::new(bus.clone());
-        for kind in [UiEventKind::ToolCallBegin, UiEventKind::ToolCallComplete, UiEventKind::ToolCallError, UiEventKind::ToolCallSkipped] {
-            set.subscribe(&bus, kind, {
-                let signal = signal.clone();
-                move |event| {
-                    reduce_tool_state(&mut *signal.write_unchecked(), event);
-                }
-            });
-        }
-        std::sync::Arc::new(set)
-    });
+    let signal: Signal<ToolState> = use_context();
 
     let count = signal.read().calls.len();
     if count == 0 {
