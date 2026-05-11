@@ -216,6 +216,34 @@ pub fn FileTree() -> Element {
     let ws = use_signal(|| WorkspaceState::new("."));
     use_context_provider(|| ws);
 
+    let app = use_context::<crate::web::components::app::AppState>();
+
+    // Load root directory on mount
+    use_hook(move || {
+        let rpc = app.rpc_client.clone();
+        let sig = ws;
+        rpc.file_list(".", move |result| {
+            let mut sig2 = sig.clone();
+            match result {
+                Ok(entries) => {
+                    let flat_entries: Vec<(String, bool)> = entries
+                        .into_iter()
+                        .map(|e| (e.name, e.is_dir))
+                        .collect();
+                    sig2.with_mut(|s2| {
+                        s2.workspace.replace_dir_children(".", flat_entries);
+                    });
+                }
+                Err(_) => {
+                    sig2.with_mut(|s2| {
+                        s2.workspace.loaded = true;
+                        s2.workspace.load_error = true;
+                    });
+                }
+            }
+        });
+    });
+
     let workspace = ws.read().workspace.clone();
 
     if workspace.children.is_empty() && !workspace.loaded {
@@ -223,7 +251,7 @@ pub fn FileTree() -> Element {
             div { class: "sidebar",
                 div { class: "sidebar-header", "Explorer" }
                 div { class: "file-tree",
-                    div { class: "file-tree-empty", "No files loaded" }
+                    div { class: "file-tree-loading", "Loading files..." }
                 }
             }
         };
