@@ -21,7 +21,25 @@ use crate::request::{AgentRequest, RunResult};
 use crate::router::AgentRouter;
 
 use super::serde_helpers::{parse_jsonrpc_request, to_jsonrpc_error, to_jsonrpc_event, to_jsonrpc_response, JsonRpcRequest};
-use vol_session::Session;
+use vol_session::{Session, SessionEntryStore};
+
+/// Format a unix timestamp as a human-readable age string.
+fn format_ts(ts: i64) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let diff = now - ts;
+    if diff < 60 {
+        "just now".into()
+    } else if diff < 3600 {
+        format!("{}m ago", diff / 60)
+    } else if diff < 86400 {
+        format!("{}h ago", diff / 3600)
+    } else {
+        format!("{}d ago", diff / 86400)
+    }
+}
 
 /// JSON-RPC connection over WebSocket.
 pub struct JsonRpcConnection {
@@ -324,7 +342,7 @@ impl JsonRpcConnection {
                         serde_json::json!({
                             "id": s.session_id,
                             "entry_count": s.entry_count,
-                            "created_at": s.created_at,
+                            "created_at": format_ts(s.created_at),
                         })
                     })
                     .collect();
@@ -485,6 +503,7 @@ impl Connection for JsonRpcConnection {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use vol_llm_agent::react::AgentStreamEvent;
 
     #[test]
@@ -503,5 +522,51 @@ mod tests {
         assert_eq!(parsed["params"]["result"]["req_id"], "req-abc-123");
         assert_eq!(parsed["params"]["result"]["event_type"], "agent_start");
         assert_eq!(parsed["params"]["result"]["data"]["input"], "hello world");
+    }
+
+    #[test]
+    fn test_format_ts() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        // Just now (within last minute)
+        let recent = format_ts(now - 30);
+        assert_eq!(recent, "just now");
+
+        // Minutes ago
+        let mins = format_ts(now - 1800); // 30 minutes
+        assert!(mins.contains("m ago"));
+
+        // Hours ago
+        let hrs = format_ts(now - 7200); // 2 hours
+        assert!(hrs.contains("h ago"));
+
+        // Days ago
+        let days = format_ts(now - 172800); // 2 days
+        assert!(days.contains("d ago"));
+    }
+
+    #[test]
+    fn test_session_resume_response_format() {
+        use crate::jsonrpc::serde_helpers::to_jsonrpc_response;
+        let response = to_jsonrpc_response(42, serde_json::json!({
+            "session_id": "test-session",
+            "entry_count": 1,
+            "entries": [serde_json::json!({
+                "id": "e1",
+                "session_id": "test-session",
+                "created_at": 1778553891,
+                "parent_id": null,
+                "type": "message",
+                "data": {"message": {"message": {"role": "user", "content": "hello"}}}
+            })],
+        }));
+        let parsed: serde_json::Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(parsed["id"], 42);
+        assert_eq!(parsed["result"]["session_id"], "test-session");
+        assert_eq!(parsed["result"]["entry_count"], 1);
+        assert_eq!(parsed["result"]["entries"].as_array().unwrap().len(), 1);
     }
 }
