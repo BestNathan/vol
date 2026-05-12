@@ -23,7 +23,11 @@ pub fn StatusBar() -> Element {
     };
     let time_str = format_elapsed(elapsed);
     let status = if gs.is_running { "Running" } else { "Idle" };
-    let badge_cls = if gs.is_running { "status-badge badge-running" } else { "status-badge badge-idle" };
+    let badge_cls = if gs.is_running {
+        "px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#3a3a20] text-[#f0c040]"
+    } else {
+        "px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#203a20] text-[#80c080]"
+    };
     let session_id = gs.session_id.clone();
     let run_count = gs.run_count;
     let iteration = gs.iteration;
@@ -35,32 +39,40 @@ pub fn StatusBar() -> Element {
     let ws_error = gs.ws_last_error.clone();
     drop(gs);
 
-    let status_class = if is_running { "status-bar status-running" } else { "status-bar status-idle" };
+    let status_cls = if is_running {
+        "flex items-center justify-between px-3 py-1 bg-[#2d2d44] text-[#e0e0e0] text-[12px] font-mono flex-shrink-0 text-[#f0c040]"
+    } else {
+        "flex items-center justify-between px-3 py-1 bg-[#2d2d44] text-[#e0e0e0] text-[12px] font-mono flex-shrink-0 text-[#80c080]"
+    };
 
     rsx! {
-        div { class: status_class,
-            div { class: "status-left",
+        div { class: status_cls,
+            div { class: "flex items-center gap-1.5 overflow-hidden flex-nowrap sm:gap-1",
                 ConnectionIndicator { connected: ws_connected, error: ws_error.clone() }
-                span { class: "status-item", "Session: {session_id}" }
-                span { class: "status-divider" }
-                span { class: "status-item", "Run: {run_count}" }
-                span { class: "status-divider" }
-                span { class: "status-item", "Iter: {iteration}" }
-                span { class: "status-divider" }
-                span { class: "status-item", "Tools: {tool_call_count}" }
-                span { class: "status-divider" }
-                span { class: "status-item", "Time: {time_str}" }
-                span { class: "status-divider" }
+                span { class: "whitespace-nowrap", "Session: {session_id}" }
+                span { class: "text-[#555] select-none" }
+                span { class: "whitespace-nowrap", "Run: {run_count}" }
+                span { class: "text-[#555] select-none" }
+                span { class: "whitespace-nowrap", "Iter: {iteration}" }
+                span { class: "text-[#555] select-none" }
+                span { class: "whitespace-nowrap", "Tools: {tool_call_count}" }
+                span { class: "text-[#555] select-none" }
+                span { class: "whitespace-nowrap", "Time: {time_str}" }
+                span { class: "text-[#555] select-none" }
                 span { class: badge_cls, "{status}" }
-                if unsafe_mode { span { class: "status-badge badge-unsafe", "!! UNSAFE" } }
-                if is_exiting { span { class: "status-badge badge-exiting", "QUITTING" } }
+                if unsafe_mode {
+                    span { class: "px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#3a2020] text-[#ff4040]", "!! UNSAFE" }
+                }
+                if is_exiting {
+                    span { class: "px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#3a2020] text-[#ff8080]", "QUITTING" }
+                }
             }
-            div { class: "status-right",
-                span { class: "build-info",
-                    span { class: "build-label", "UI " }
-                    span { class: "build-version", {env!("CARGO_PKG_VERSION")} }
-                    span { class: "build-separator", " | " }
-                    span { class: "build-time", {BUILD_TIME} }
+            div { class: "flex items-center flex-shrink-0",
+                span { class: "flex items-center text-[11px] text-[#888] flex-shrink-0",
+                    span { class: "text-[#666]", "UI " }
+                    span { class: "text-[#a0a0c0] font-bold", {env!("CARGO_PKG_VERSION")} }
+                    span { class: "text-[#555] mx-0.5", " | " }
+                    span { class: "text-[#666]", {BUILD_TIME} }
                 }
             }
         }
@@ -71,23 +83,23 @@ pub fn StatusBar() -> Element {
 fn ConnectionIndicator(connected: bool, error: Option<String>) -> Element {
     if connected {
         rsx! {
-            span { class: "conn-indicator", title: "Connected",
-                span { class: "conn-dot conn-dot-connected", style: "background-color: #40c040;" }
-                span { class: "conn-label", "Connected" }
+            span { class: "flex items-center gap-1 mr-1", title: "Connected",
+                span { class: "w-2 h-2 rounded-full inline-block flex-shrink-0", style: "background-color: #40c040; box-shadow: 0 0 4px #40c040;" }
+                span { class: "text-[10px] text-[#888] max-w-[80px] overflow-hidden text-ellipsis whitespace-nowrap", "Connected" }
             }
         }
     } else if let Some(ref err) = error {
         rsx! {
-            span { class: "conn-indicator", title: "{err}",
-                span { class: "conn-dot conn-dot-error", style: "background-color: #ff4040;" }
-                span { class: "conn-label", "Error" }
+            span { class: "flex items-center gap-1 mr-1", title: "{err}",
+                span { class: "w-2 h-2 rounded-full inline-block flex-shrink-0", style: "background-color: #ff4040; animation: conn-blink 1s ease-in-out infinite;" }
+                span { class: "text-[10px] text-[#888] max-w-[80px] overflow-hidden text-ellipsis whitespace-nowrap", "Error" }
             }
         }
     } else {
         rsx! {
-            span { class: "conn-indicator", title: "Connecting...",
-                span { class: "conn-dot conn-dot-connecting", style: "background-color: #f0c040;" }
-                span { class: "conn-label", "Connecting" }
+            span { class: "flex items-center gap-1 mr-1", title: "Connecting...",
+                span { class: "w-2 h-2 rounded-full inline-block flex-shrink-0 animate-pulse", style: "background-color: #f0c040;" }
+                span { class: "text-[10px] text-[#888] max-w-[80px] overflow-hidden text-ellipsis whitespace-nowrap", "Connecting" }
             }
         }
     }
