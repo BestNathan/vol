@@ -21,8 +21,6 @@ use crate::request::{AgentRequest, RunResult};
 use crate::router::AgentRouter;
 
 use super::serde_helpers::{parse_jsonrpc_request, to_jsonrpc_error, to_jsonrpc_event, to_jsonrpc_response, JsonRpcRequest};
-use vol_session::file_store::FileSessionEntryStore;
-use vol_session::store::SessionEntryStore;
 use vol_session::Session;
 
 /// JSON-RPC connection over WebSocket.
@@ -49,8 +47,8 @@ pub struct JsonRpcConnection {
     working_dir: String,
     /// Store directory for log/session operations.
     store_dir: String,
-    /// File-based session entry store (Arc-wrapped for sharing).
-    entry_store: Arc<FileSessionEntryStore>,
+    /// Session entry store for listing and resuming sessions.
+    session_store: Arc<vol_session::FileSessionEntryStore>,
 }
 
 impl JsonRpcConnection {
@@ -62,6 +60,7 @@ impl JsonRpcConnection {
         holders: HashMap<String, Arc<ConnectionHolder>>,
         working_dir: String,
         store_dir: String,
+        session_store: Arc<vol_session::FileSessionEntryStore>,
     ) -> Self {
         let (tx, rx) = ws.split();
         Self {
@@ -74,7 +73,7 @@ impl JsonRpcConnection {
             current_req_id: Arc::new(tokio::sync::Mutex::new(String::new())),
             subscribers: Arc::new(tokio::sync::Mutex::new(Vec::new())),
             next_sub_id: std::sync::atomic::AtomicU64::new(1),
-            entry_store: Arc::new(FileSessionEntryStore::new(&store_dir)),
+            session_store,
             working_dir,
             store_dir,
         }
@@ -317,7 +316,7 @@ impl JsonRpcConnection {
 
     /// Handle `session.list`: return session summaries from FileSessionEntryStore.
     async fn handle_session_list(&self, id: u64) -> String {
-        match self.entry_store.list_sessions() {
+        match self.session_store.list_sessions() {
             Ok(summaries) => {
                 let sessions: Vec<serde_json::Value> = summaries
                     .into_iter()
@@ -338,7 +337,7 @@ impl JsonRpcConnection {
     /// Handle `session.resume`: resume a session from disk and swap agent session.
     async fn handle_session_resume(&self, id: u64, session_id: String) -> String {
         // Resume session from disk
-        let session = match Session::resume(session_id.clone(), self.entry_store.clone()).await {
+        let session = match Session::resume(session_id.clone(), self.session_store.clone()).await {
             Ok(s) => Arc::new(s),
             Err(e) => {
                 return to_jsonrpc_error(Some(id), -32000, format!("Failed to resume session: {e}"));
@@ -351,7 +350,7 @@ impl JsonRpcConnection {
         }
 
         // Return session info + entries for UI display
-        match self.entry_store.get_entries(&session_id).await {
+        match self.session_store.get_entries(&session_id).await {
             Ok(entries) => {
                 let entry_count = entries.len();
                 let json_entries: Vec<serde_json::Value> = entries
@@ -384,7 +383,7 @@ impl JsonRpcConnection {
 
     /// Handle `session.entries`: return all entries for a session.
     async fn handle_session_entries(&self, id: u64, session_id: String) -> String {
-        match self.entry_store.get_entries(&session_id).await {
+        match self.session_store.get_entries(&session_id).await {
             Ok(entries) => {
                 let json_entries: Vec<serde_json::Value> = entries
                     .into_iter()

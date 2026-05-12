@@ -65,6 +65,7 @@ impl JsonRpcServer {
 }
 
 async fn handle_ws(socket: WebSocket, server: Arc<JsonRpcServer>) {
+    let session_store = Arc::new(vol_session::FileSessionEntryStore::new(&server.store_dir));
     let conn = JsonRpcConnection::new(
         socket,
         server.router.clone(),
@@ -72,6 +73,7 @@ async fn handle_ws(socket: WebSocket, server: Arc<JsonRpcServer>) {
         server.holders.clone(),
         server.working_dir.clone(),
         server.store_dir.clone(),
+        session_store,
     );
     let conn_arc = Arc::new(conn);
     conn_arc.run().await;
