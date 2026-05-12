@@ -15,7 +15,8 @@ use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
 use vol_llm_agent_channel::{AgentDispatcher, AgentRegistration, ConnectionHolder, JsonRpcServer};
 use vol_llm_provider::create_provider;
 use vol_llm_tool::ToolRegistry;
-use vol_session::{InMemoryEntryStore, Session};
+use vol_session::file_store::FileSessionEntryStore;
+use vol_session::Session;
 
 #[tokio::main]
 async fn main() {
@@ -43,7 +44,8 @@ async fn main() {
     )
     .with_type("general-assistant");
 
-    let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
+    let entry_store = Arc::new(FileSessionEntryStore::new("/tmp/vol-llm-store"));
+    let session = Arc::new(Session::new(entry_store));
     let tools = Arc::new(ToolRegistry::new());
     let mut config = AgentConfig::new(Arc::from(llm), tools, session);
     config.def = Some(def);
