@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [dioxus, web, frontend, component, wasm]
 created: 2026-05-08
-updated: 2026-05-11 (task-6-sessions-tab-wiring)
-source_count: 5
+updated: 2026-05-12 (tailwind-css-full-migration)
+source_count: 6
 ---
 
 # Dioxus Web Pattern
@@ -90,7 +90,9 @@ cargo check -p vol-llm-ui --features web --bin vol-llm-ui-web
 
 ## Styling Approach
 
-Global CSS is defined as a const string and rendered inline. This avoids external stylesheet dependencies in the WASM build. The dark theme uses a consistent color palette:
+**As of 2026-05-12**, all components use Tailwind CSS v4 utility classes. The `GLOBAL_CSS` const (~215 lines) has been deleted entirely. Styling is expressed via `class:` attributes in rsx! macros, with Tailwind CLI generating minified CSS from scanned Rust source files. See [[tailwind-css-migration]] for the full migration details.
+
+The dark theme uses a consistent color palette via Tailwind arbitrary values:
 
 - Background: `#1a1a2e`
 - Panels: `#252540`, `#2d2d44`
@@ -123,3 +125,4 @@ Both frontends share `UiState` / `UiEvent` / `ActiveTab` types and the same conn
 - [[split-signal-state]]: Source documenting the EventBus refactoring
 - [[task-6-sessions-tab-wiring]]: Source documenting Sessions tab wiring, SessionDialog removal, checkpoint CSS
 - [[sessions-ui-pattern]]: Session browsing as a dedicated tab with SessionsState signal management
+- [[tailwind-css-migration]]: Systematic migration from global CSS to Tailwind utility classes

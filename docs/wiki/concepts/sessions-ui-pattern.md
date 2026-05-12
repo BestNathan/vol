@@ -57,3 +57,4 @@ SessionsPanel
 - [[dioxus-signal-pattern]]: Signal-based state management used by SessionsPanel
 - [[vol-llm-ui-crate]]: Crate containing state types and components
 - [[session-as-ssot]]: Session as single source of truth for messages
+- [[tailwind-css-full-migration]]: CSS classes migrated to Tailwind v4 utilities

@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-11 (task-6-sessions-tab-wiring)
+Last updated: 2026-05-12 (conversation-tailwind-migration)
 
 ## Entities
 
@@ -71,6 +71,7 @@ Last updated: 2026-05-11 (task-6-sessions-tab-wiring)
 | [[mcp-client-integration]] | Bridging MCP server tools into ExecutableTool trait — McpTool, McpSession, AgentConfigBuilder integration | active | 2026-05-11 |
 | [[mcp-example-pattern]] | Pattern for runnable example files demonstrating MCP integration with ReActAgent | active | 2026-05-11 |
 | [[sessions-ui-pattern]] | Tab-based session browsing with SessionsState signal, SessionsPanel component, checkpoint CSS | active | 2026-05-11 |
+| [[tailwind-css-migration]] | Systematic migration from global CSS to Tailwind utility classes — ALL 16 components complete, GLOBAL_CSS deleted | complete | 2026-05-12 |
 
 ## Sources
 
@@ -100,6 +101,8 @@ Last updated: 2026-05-11 (task-6-sessions-tab-wiring)
 | [[react-agent-mcp-integration]] | ReAct Agent MCP client integration: vol-llm-mcp crate, McpTool, with_mcp_from_config builder method | active | 2026-05-11 |
 | [[docs-rs-mcp-example]] | Runnable example: ReActAgent connecting to docs-rs MCP server via with_mcp_from_config() | active | 2026-05-11 |
 | [[task-6-sessions-tab-wiring]] | Sessions tab wired into App: SessionsState signal, SessionsPanel, TabBar, CSS, checkpoint rendering | active | 2026-05-11 |
+| [[conversation-tailwind-migration]] | conversation.rs migrated from semantic CSS classes to inline Tailwind utilities — all 9 message types updated | active | 2026-05-12 |
+| [[tailwind-css-full-migration]] | Full Tailwind CSS v4 migration — all 16 components, GLOBAL_CSS deleted, build pipeline verified | complete | 2026-05-12 |
 
 ## Analyses
 

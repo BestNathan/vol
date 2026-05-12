@@ -3,7 +3,7 @@ type: concept
 category: pattern
 tags: [dioxus, signal, state-management, web, frontend]
 created: 2026-05-08
-updated: 2026-05-11 (task-6-sessions-tab-wiring)
+updated: 2026-05-12 (conversation-tailwind-migration)
 source_count: 5
 ---
 
@@ -95,3 +95,4 @@ The TUI frontend uses `Arc<Mutex<UiState>>` for shared state, with explicit lock
 - [[split-signal-state]]: Source documenting the full refactoring
 - [[sessions-ui-pattern]]: SessionsPanel uses Signal<SessionsState> via context provider pattern
 - [[task-6-sessions-tab-wiring]]: Source documenting SessionsState signal wiring
+- [[tailwind-css-migration]]: Systematic migration from global CSS to Tailwind utility classes

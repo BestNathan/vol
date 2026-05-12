@@ -1,5 +1,23 @@
 # Change Log
 
+## [2026-05-12] ingest | Full Tailwind CSS Migration — All 16 Components
+- Created sources: [[tailwind-css-full-migration]]
+- Updated concepts: [[tailwind-css-migration]] (marked complete, added infrastructure section, responsive breakpoints)
+- Updated concepts: [[dioxus-web-pattern]] (GLOBAL_CSS deleted, Tailwind v4 active)
+- Updated entities: [[vol-llm-ui-crate]] (timeline updated with full migration completion)
+- Updated index: tailwind-css-migration status → complete, new source entry
+- Cross-references added: 4
+- Changes: All 16 web component files migrated from GLOBAL_CSS (~215 lines, ~100 classes) to Tailwind v4 utility classes; input.css with custom breakpoints/animations; rebuild-web.sh integrates @tailwindcss/cli; 0 old CSS class references remain; Rust wasm32 build passes; full rebuild produces dist with index.html, tailwind.css (59KB), wasm/; responsive breakpoints for sidebar and tab bar
+
+## [2026-05-12] ingest | Conversation.rs Tailwind CSS Migration
+- Created sources: [[conversation-tailwind-migration]]
+- Created concepts: [[tailwind-css-migration]]
+- Updated concepts: [[dioxus-web-pattern]]
+- Updated entities: [[vol-llm-ui-crate]]
+- Updated index: new entries for tailwind-css-migration and conversation-tailwind-migration
+- Cross-references added: 4
+- Changes: conversation.rs migrated from semantic CSS classes (conversation, conversation-empty, msg-*) to inline Tailwind utility classes; container uses flex-1 overflow-y-auto p-2.5; empty state uses flexbox centering; all 9 message types (user input, thinking, streaming, tool call, tool result, agent answer, run summary, error, checkpoint) use Tailwind classes with preserved color palette via arbitrary values; helper functions unchanged
+
 ## [2026-05-11] ingest | Task 6: Wire Sessions Tab into App Component
 - Created sources: [[task-6-sessions-tab-wiring]]
 - Created concepts: [[sessions-ui-pattern]]

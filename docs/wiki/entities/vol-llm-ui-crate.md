@@ -3,15 +3,15 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-11 (task-6-sessions-tab-wiring)
-source_count: 5
+updated: 2026-05-12 (tailwind-css-full-migration)
+source_count: 6
 ---
 
 # vol-llm-ui Crate
 
 **Category:** Rust crate — Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs
 
-**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]]
+**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[tailwind-css-migration]]
 
 ## Overview
 
@@ -63,3 +63,4 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-10**: Lazy-loading directory tree — `WorkspaceTreeNode` replaces flat entries, directories fetch children on-demand via `file.list`, every expand re-fetches fresh data, refresh button on each directory, `TreeNode` reactive component pattern [[lazy-load-dir-tree]]
 - **2026-05-11**: Split signal state refactor — centralized `Signal<UiState>` replaced with per-component local signals + `EventBus` with `UiEventKind` routing; `SubscriptionSet` auto-cleanup via `Drop`; shared `GlobalState`/`ApprovalUiState` signals for cross-component reads; `AppState` simplified to `EventBus` + `JsonRpcClient` + `Signal<ActiveTab>`; 43 tests passing [[split-signal-state]]
 - **2026-05-11**: Sessions tab wired into App — `SessionsState` signal, `SessionsPanel` replaces `SessionDialog`, Sessions tab button in TabBar, checkpoint CSS added [[task-6-sessions-tab-wiring]]
+- **2026-05-12**: Tailwind CSS migration completed — all 16 web component files migrated from `GLOBAL_CSS` to Tailwind v4 utility classes; `GLOBAL_CSS` const (~215 lines) deleted; `input.css` created with custom breakpoints and animations; `rebuild-web.sh` integrates Tailwind CLI; Rust wasm32 build verified; responsive breakpoints added for sidebar and tab bar [[tailwind-css-full-migration]]
