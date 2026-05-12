@@ -27,22 +27,33 @@ pub fn InputArea() -> Element {
     let on_input = move |evt: Event<FormData>| { input_text.set(evt.value()); };
 
     let hint = if is_running {
-        rsx! { span { class: "input-hint-running", " Running... (input disabled) " } }
+        rsx! { span { class: "text-[#f0c040]", " Running... (input disabled) " } }
     } else {
-        rsx! { span { span { class: "input-hint-key", "Enter" } " Send  " span { class: "input-hint-key", "Esc" } " Clear" } }
+        rsx! { span { span { class: "text-[#80a0ff] font-bold", "Enter" } " Send  " span { class: "text-[#80a0ff] font-bold", "Esc" } " Clear" } }
     };
 
     rsx! {
-        div { class: "input-area",
+        div { class: "border-t border-[#333355] p-2.5 bg-[#252540] flex-shrink-0 sm:px-2 sm:py-1.5",
             if has_approval {
-                div { p { class: "input-hint-running", "Tool approval pending in the dialog above." } }
+                div { p { class: "text-[#f0c040]", "Tool approval pending in the dialog above." } }
             } else {
                 div {
-                    div { class: "input-row",
-                        textarea { value: input_text(), oninput: on_input, disabled: is_running, placeholder: "Type a message to the agent...", rows: 2 }
-                        button { onclick: on_submit, disabled: is_running, "Send" }
+                    div { class: "flex gap-2",
+                        textarea {
+                            value: input_text(),
+                            oninput: on_input,
+                            disabled: is_running,
+                            placeholder: "Type a message to the agent...",
+                            rows: 2,
+                            class: "flex-1 bg-[#1a1a2e] text-[#e0e0e0] border border-[#444466] rounded-md px-2 py-1.5 text-[14px] font-sans resize-none min-h-[40px] max-h-[120px] outline-none focus:border-[#80a0ff] disabled:opacity-50"
+                        }
+                        button {
+                            onclick: on_submit,
+                            disabled: is_running,
+                            class: "px-4 py-1.5 bg-[#4060c0] text-[#e0e0e0] rounded-md cursor-pointer text-[14px] self-end hover:bg-[#5070d0] disabled:bg-[#333355] disabled:cursor-not-allowed"
+                        }
                     }
-                    div { class: "input-hint", {hint} }
+                    div { class: "mt-1 text-[11px] text-[#666]", {hint} }
                 }
             }
         }
