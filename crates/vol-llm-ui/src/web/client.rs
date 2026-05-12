@@ -59,6 +59,14 @@ pub struct SessionEntry {
     pub data: serde_json::Value,
 }
 
+/// Response from session.resume RPC.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionResumeResponse {
+    pub session_id: String,
+    pub entry_count: usize,
+    pub entries: Vec<SessionEntry>,
+}
+
 /// Connection state.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionState {
@@ -397,6 +405,39 @@ impl JsonRpcClient {
                 }
                 None => cb(Err("no entries in response".to_string())),
             }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// Resume a session on the server (swaps agent session). Returns response via callback.
+    pub fn session_resume(&self, session_id: &str, cb: impl FnOnce(Result<SessionResumeResponse, String>) + 'static) {
+        let id = self.alloc_id();
+
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "session.resume",
+            "params": { "session_id": session_id },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            let session_id = match result.get("session_id").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => { cb(Err("no session_id in response".to_string())); return; }
+            };
+            let entry_count = result.get("entry_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+            let entries = result.get("entries").and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|e| serde_json::from_value(e.clone()).ok()).collect())
+                .unwrap_or_default();
+            cb(Ok(SessionResumeResponse { session_id, entry_count, entries }));
         });
         self.inner.pending.borrow_mut().insert(id, cb);
     }
