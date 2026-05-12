@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use tokio::sync::{Mutex, Notify, oneshot};
 use vol_llm_agent::ReActAgent;
+use vol_session::Session;
 
 use crate::error::ChannelError;
 use crate::request::{AgentRequest, PendingRequest, RunResult};
@@ -32,7 +33,7 @@ impl DispatcherState {
 /// Each dispatcher spawns one background task that processes requests one at a time.
 #[derive(Clone)]
 pub struct AgentDispatcher {
-    agent: Arc<ReActAgent>,
+    agent: Arc<std::sync::RwLock<Arc<ReActAgent>>>,
     state: Arc<DispatcherState>,
 }
 
@@ -42,7 +43,7 @@ impl AgentDispatcher {
     /// The dispatcher starts a background task that processes queued requests FIFO.
     pub fn new(agent: ReActAgent) -> Self {
         let state = Arc::new(DispatcherState::new());
-        let agent = Arc::new(agent);
+        let agent = Arc::new(std::sync::RwLock::new(Arc::new(agent)));
 
         // Spawn the background execution loop
         tokio::spawn(Self::run_loop(agent.clone(), state.clone()));
@@ -87,6 +88,13 @@ impl AgentDispatcher {
         self.state.queue.lock().await.len()
     }
 
+    /// Atomically replace the agent's session.
+    pub fn swap_session(&self, new_session: Arc<Session>) {
+        let old_agent = self.agent.read().unwrap();
+        let new_agent = Arc::new(old_agent.with_session(new_session));
+        *self.agent.write().unwrap() = new_agent;
+    }
+
     /// Whether the dispatcher is currently executing a request.
     pub fn is_busy(&self) -> bool {
         // The busy lock is held by the run_loop while executing.
@@ -95,7 +103,7 @@ impl AgentDispatcher {
     }
 
     /// Background loop that processes requests FIFO.
-    async fn run_loop(agent: Arc<ReActAgent>, state: Arc<DispatcherState>) {
+    async fn run_loop(agent: Arc<std::sync::RwLock<Arc<ReActAgent>>>, state: Arc<DispatcherState>) {
         loop {
             // Wait for a notification.
             state.notify.notified().await;
@@ -113,6 +121,12 @@ impl AgentDispatcher {
                 // Queue was empty (race between notify and pop_front).
                 // The notify was consumed, wait for the next one.
                 continue;
+            };
+
+            // Read the current agent snapshot.
+            let agent = {
+                let guard = agent.read().unwrap();
+                guard.clone()
             };
 
             // Execute the agent run.
