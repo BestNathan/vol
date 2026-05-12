@@ -91,8 +91,8 @@ pub fn ConversationView() -> Element {
     let count = signal.read().entries.len();
     if count == 0 {
         return rsx! {
-            div { class: "conversation",
-                div { class: "conversation-empty", "No messages yet. Type a query and press Send." }
+            div { class: "flex-1 overflow-y-auto p-2.5",
+                div { class: "flex items-center justify-center h-full text-[#666]", "No messages yet. Type a query and press Send." }
             }
         };
     }
@@ -103,43 +103,48 @@ pub fn ConversationView() -> Element {
         rsx! { MessageEntry { entry } }
     }).collect();
     rsx! {
-        div { class: "conversation", {messages.into_iter()} }
+        div { class: "flex-1 overflow-y-auto p-2.5", {messages.into_iter()} }
     }
 }
 
 #[component]
-fn MessageEntry(entry: ConversationEntry) -> Element {
+#[component]
+pub(crate) fn MessageEntry(entry: ConversationEntry) -> Element {
     match entry {
         ConversationEntry::UserInput { text } => {
-            rsx! { div { class: "msg msg-user", div { class: "msg-user-prefix", ">>> " } {text} } }
+            rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#1a2a44] border-l-[3px] border-[#4080ff]", div { class: "text-[#4080ff] font-bold", ">>> " } {text} } }
         }
         ConversationEntry::Thinking { content } => {
-            rsx! { div { class: "msg msg-thinking", div { class: "msg-thinking-prefix", "Thinking" } div { class: "msg-thinking-content", {content} } } }
+            rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a2a20] border-l-[3px] border-[#c0c040]", div { class: "text-[#c0c040] font-bold", "Thinking" } div { class: "text-[#888] mt-1 pl-1", {content} } } }
         }
         ConversationEntry::ContentStreaming { content } => {
-            if content.is_empty() { rsx! { div { class: "msg msg-streaming", "Generating..." } } }
-            else { rsx! { div { class: "msg msg-streaming", {content} } } }
+            if content.is_empty() { rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#ccc]", "Generating..." } } }
+            else { rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#ccc]", {content} } } }
         }
         ConversationEntry::ToolCall { tool_name, arg_preview } => {
-            rsx! { div { class: "msg msg-tool", div { class: "msg-tool-name", "[{tool_name}]" } if !arg_preview.is_empty() { div { class: "msg-tool-arg", "{arg_preview}" } } } }
+            rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#1a2a3a] border-l-[3px] border-[#4080c0]", div { class: "text-[#4080c0] font-bold", "[{tool_name}]" } if !arg_preview.is_empty() { div { class: "text-[#888] text-[12px] mt-0.5 pl-1", "{arg_preview}" } } } }
         }
         ConversationEntry::ToolResult { tool_name, preview, success } => {
-            let cls = if success { "msg-tool-result" } else { "msg-tool-result-error" };
+            let cls = if success {
+                "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#1a2a1a] border-l-[3px] border-[#40c040]"
+            } else {
+                "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a1a1a] border-l-[3px] border-[#c04040]"
+            };
             let status = if success { "OK" } else { "ERR" };
             let color = if success { "#40c040" } else { "#c04040" };
             let display = truncate_lines(&preview, 6, 90);
-            rsx! { div { class: "msg {cls}", div { span { class: "msg-tool-result-prefix", style: "color: {color};", "[{status}] " } span { style: "color: {color}; font-weight: bold;", "{tool_name}" } } div { class: "msg-tool-result-content", {display} } } }
+            rsx! { div { class: cls, div { span { class: "font-bold", style: "color: {color};", "[{status}] " } span { style: "color: {color}; font-weight: bold;", "{tool_name}" } } div { class: "text-[#888] text-[12px] mt-1 pl-1 max-h-[120px] overflow-y-auto font-mono", {display} } } }
         }
-        ConversationEntry::AgentAnswer { text } => { rsx! { div { class: "msg msg-answer", {text} } } }
+        ConversationEntry::AgentAnswer { text } => { rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#e0e0e0] leading-[1.5]", {text} } } }
         ConversationEntry::RunSummary { iterations, tool_calls, elapsed_ms } => {
             let iw = if iterations == 1 { "iteration" } else { "iterations" };
             let tw = if tool_calls == 1 { "tool call" } else { "tool calls" };
-            rsx! { div { class: "msg msg-summary", "Done | {iterations} {iw} | {tool_calls} {tw} | {elapsed_ms}ms" } }
+            rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#80c080] font-bold py-1.5", "Done | {iterations} {iw} | {tool_calls} {tw} | {elapsed_ms}ms" } }
         }
-        ConversationEntry::Error { message } => { rsx! { div { class: "msg msg-error", "Error: {message}" } } }
+        ConversationEntry::Error { message } => { rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#ff6060] font-bold bg-[#2a1a1a] border-l-[3px] border-[#c04040]", "Error: {message}" } } }
         ConversationEntry::EntryCheckpoint { reason, note, created_at } => {
             let note_text = note.as_deref().map(|n| format!(" ({n})")).unwrap_or_default();
-            rsx! { div { class: "msg msg-checkpoint", "[Checkpoint {created_at}] {reason}{note_text}" } }
+            rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a2a20] border-l-[3px] border-[#c0a040] text-[#aaa] text-[12px] italic", "[Checkpoint {created_at}] {reason}{note_text}" } }
         }
     }
 }
