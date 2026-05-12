@@ -23,6 +23,7 @@ use crate::router::AgentRouter;
 use super::serde_helpers::{parse_jsonrpc_request, to_jsonrpc_error, to_jsonrpc_event, to_jsonrpc_response, JsonRpcRequest};
 use vol_session::file_store::FileSessionEntryStore;
 use vol_session::store::SessionEntryStore;
+use vol_session::Session;
 
 /// JSON-RPC connection over WebSocket.
 pub struct JsonRpcConnection {
@@ -48,8 +49,8 @@ pub struct JsonRpcConnection {
     working_dir: String,
     /// Store directory for log/session operations.
     store_dir: String,
-    /// File-based session entry store.
-    entry_store: FileSessionEntryStore,
+    /// File-based session entry store (Arc-wrapped for sharing).
+    entry_store: Arc<FileSessionEntryStore>,
 }
 
 impl JsonRpcConnection {
@@ -73,7 +74,7 @@ impl JsonRpcConnection {
             current_req_id: Arc::new(tokio::sync::Mutex::new(String::new())),
             subscribers: Arc::new(tokio::sync::Mutex::new(Vec::new())),
             next_sub_id: std::sync::atomic::AtomicU64::new(1),
-            entry_store: FileSessionEntryStore::new(&store_dir),
+            entry_store: Arc::new(FileSessionEntryStore::new(&store_dir)),
             working_dir,
             store_dir,
         }
@@ -334,12 +335,37 @@ impl JsonRpcConnection {
         }
     }
 
-    /// Handle `session.resume`: stub — returns session info.
+    /// Handle `session.resume`: resume a session from disk and swap agent session.
     async fn handle_session_resume(&self, id: u64, session_id: String) -> String {
-        to_jsonrpc_response(id, serde_json::json!({
-            "session_id": session_id,
-            "entry_count": 0,
-        }))
+        // Resume session from disk
+        let session = match Session::resume(session_id.clone(), self.entry_store.clone()).await {
+            Ok(s) => Arc::new(s),
+            Err(e) => {
+                return to_jsonrpc_error(Some(id), -32000, format!("Failed to resume session: {e}"));
+            }
+        };
+
+        // Swap session in all dispatchers
+        for dispatcher in self.dispatchers.values() {
+            dispatcher.swap_session(session.clone());
+        }
+
+        // Return session info + entries for UI display
+        match self.entry_store.get_entries(&session_id).await {
+            Ok(entries) => {
+                let entry_count = entries.len();
+                let json_entries: Vec<serde_json::Value> = entries
+                    .into_iter()
+                    .filter_map(|e| serde_json::to_value(e).ok())
+                    .collect();
+                to_jsonrpc_response(id, serde_json::json!({
+                    "session_id": session_id,
+                    "entry_count": entry_count,
+                    "entries": json_entries,
+                }))
+            }
+            Err(e) => to_jsonrpc_error(Some(id), -32000, format!("Failed to read entries: {e}")),
+        }
     }
 
     /// Handle `agent.list`: return metadata for all registered agents.
