@@ -396,6 +396,12 @@ impl JsonRpcClient {
         }
 
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            if let Some(error) = result.get("error") {
+                let msg = error.get("message").and_then(|m| m.as_str())
+                    .unwrap_or("unknown RPC error");
+                cb(Err(msg.to_string()));
+                return;
+            }
             match result.get("entries").and_then(|v| v.as_array()) {
                 Some(entries) => {
                     let parsed: Vec<SessionEntry> = entries.iter()
@@ -429,6 +435,12 @@ impl JsonRpcClient {
         }
 
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            if let Some(error) = result.get("error") {
+                let msg = error.get("message").and_then(|m| m.as_str())
+                    .unwrap_or("unknown RPC error");
+                cb(Err(msg.to_string()));
+                return;
+            }
             let session_id = match result.get("session_id").and_then(|v| v.as_str()) {
                 Some(s) => s.to_string(),
                 None => { cb(Err("no session_id in response".to_string())); return; }
@@ -461,7 +473,7 @@ impl JsonRpcClient {
                     if let Some(result) = val.get("result") {
                         cb(result.clone());
                     } else if let Some(error) = val.get("error") {
-                        log::error!("RPC error response for id={id}: {}", error);
+                        cb(error.clone());
                     }
                 }
             }
