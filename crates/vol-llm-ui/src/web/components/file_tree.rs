@@ -32,10 +32,10 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
         let collapsed = ws.read().collapsed_dirs.contains(&node.path);
 
         let indent_px = depth * 16;
-        let chevron_cls = if collapsed {
-            "file-tree-chevron collapsed"
+        let chevron_class = if collapsed {
+            "inline-flex items-center justify-center w-4 h-4 flex-shrink-0 text-[10px] text-[#666] transition-transform duration-150 -rotate-90"
         } else {
-            "file-tree-chevron"
+            "inline-flex items-center justify-center w-4 h-4 flex-shrink-0 text-[10px] text-[#666] transition-transform duration-150"
         };
 
         let dir_ws = ws;
@@ -130,16 +130,16 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
         rsx! {
             div {
                 div {
-                    class: "file-tree-node file-tree-dir",
+                    class: "flex items-center py-0.5 pr-2 pl-0 cursor-pointer text-[13px] whitespace-nowrap select-none rounded-[3px] mx-1 hover:bg-[#2a2a44] active:bg-[#3a3a54]",
                     style: format!("padding-left: {}px;", indent_px),
                     onclick: dir_onclick,
-                    span { class: "{chevron_cls}", "\u{25be}" }
-                    span { class: "file-tree-icon", "{file_icon(true, &node.name)}" }
-                    span { class: "file-tree-label dir", "{node.name}" }
-                    span { class: "file-tree-refresh", onclick: refresh_onclick, "\u{21bb}" }
+                    span { class: "{chevron_class}", "\u{25be}" }
+                    span { class: "inline-flex items-center justify-center w-[18px] h-[18px] flex-shrink-0 mr-1 text-[14px]", "{file_icon(true, &node.name)}" }
+                    span { class: "overflow-hidden text-ellipsis text-[#8ab4ff] font-medium", "{node.name}" }
+                    span { class: "text-[10px] text-[#666] ml-1 opacity-0 transition-opacity duration-150 cursor-pointer hover:text-[#aaa]", onclick: refresh_onclick, "\u{21bb}" }
                 }
                 if !collapsed {
-                    div { class: "file-tree-children",
+                    div { class: "overflow-hidden",
                         for child in &node.children {
                             TreeNode { node: child.clone(), depth: depth + 1, key: "{child.path}" }
                         }
@@ -199,12 +199,12 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
 
         rsx! {
             div {
-                class: "file-tree-node file-tree-file",
+                class: "flex items-center py-0.5 pr-2 pl-0 cursor-pointer text-[13px] whitespace-nowrap select-none rounded-[3px] mx-1 hover:bg-[#2a2a44] active:bg-[#3a3a54]",
                 style: format!("padding-left: {}px;", indent_px),
                 onclick: file_onclick,
-                span { class: "file-tree-chevron hidden", "\u{25be}" }
-                span { class: "file-tree-icon", "{file_icon(false, &node.name)}" }
-                span { class: "file-tree-label file", "{node.name}" }
+                span { class: "inline-flex items-center justify-center w-4 h-4 flex-shrink-0 text-[10px] text-[#666] invisible", "\u{25be}" }
+                span { class: "inline-flex items-center justify-center w-[18px] h-[18px] flex-shrink-0 mr-1 text-[14px]", "{file_icon(false, &node.name)}" }
+                span { class: "overflow-hidden text-ellipsis text-[#ccc]", "{node.name}" }
             }
         }
     }
@@ -286,19 +286,19 @@ pub fn FileTree() -> Element {
 
     if workspace.children.is_empty() && !workspace.loaded {
         return rsx! {
-            div { class: "sidebar",
-                div { class: "sidebar-header", "Explorer" }
-                div { class: "file-tree",
-                    div { class: "file-tree-loading", "Loading files..." }
+            div { class: "w-[40%] sm:w-[33.33%] md:w-[33.33%] lg:w-[240px] min-w-[120px] sm:min-w-[160px] md:min-w-[160px] lg:min-w-[180px] border-r border-[#2a2a44] flex flex-col overflow-hidden flex-shrink-0 bg-[#16162a]",
+                div { class: "px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.8px] text-[#6a6a9a] border-b border-[#2a2a44] flex-shrink-0", "Explorer" }
+                div { class: "flex-1 overflow-y-auto py-1",
+                    div { class: "flex items-center justify-center h-full text-[#666] p-5 text-center text-[12px]", "Loading files..." }
                 }
             }
         };
     }
 
     rsx! {
-        div { class: "sidebar",
-            div { class: "sidebar-header", "Explorer" }
-            div { class: "file-tree",
+        div { class: "w-[40%] sm:w-[33.33%] md:w-[33.33%] lg:w-[240px] min-w-[120px] sm:min-w-[160px] md:min-w-[160px] lg:min-w-[180px] border-r border-[#2a2a44] flex flex-col overflow-hidden flex-shrink-0 bg-[#16162a]",
+            div { class: "px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.8px] text-[#6a6a9a] border-b border-[#2a2a44] flex-shrink-0", "Explorer" }
+            div { class: "flex-1 overflow-y-auto py-1",
                 for child in &workspace.children {
                     TreeNode { node: child.clone(), depth: 0, key: "{child.path}" }
                 }
