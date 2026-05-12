@@ -28,9 +28,6 @@ fn arg_preview(arguments: &str) -> String {
 pub fn status_label(s: ToolCallStatus) -> &'static str {
     match s { ToolCallStatus::Running => "...", ToolCallStatus::Success => "OK", ToolCallStatus::Error => "ERR", ToolCallStatus::Skipped => "SKIP" }
 }
-pub fn status_class(s: ToolCallStatus) -> &'static str {
-    match s { ToolCallStatus::Running => "status-running", ToolCallStatus::Success => "status-success", ToolCallStatus::Error => "status-error", ToolCallStatus::Skipped => "status-skipped" }
-}
 
 /// Update ToolState from an EventBus event.
 fn reduce_tool_state(s: &mut ToolState, event: &UiEvent) {
@@ -68,11 +65,11 @@ pub fn ToolsPanel() -> Element {
 
     let count = signal.read().calls.len();
     rsx! {
-        div { class: "tools-panel",
-            div { class: "tools-panel-header", "Tools Called ({count})" }
-            div { class: "tools-panel-list",
+        div { class: "flex-1 overflow-y-auto p-2",
+            div { class: "px-2.5 pt-1 pb-2 text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]", "Tools Called ({count})" }
+            div { class: "font-mono text-[13px]",
                 if count == 0 {
-                    div { style: "padding: 10px; color: #666; text-align: center;", "No tool calls yet" }
+                    div { class: "p-2.5 text-[#666] text-center", "No tool calls yet" }
                 } else {
                     {(0..count).map(|idx| { let s = signal.clone(); rsx! { ToolItem { signal: s, index: idx } } }).collect::<Vec<Element>>().into_iter()}
                 }
@@ -90,13 +87,21 @@ fn ToolItem(signal: Signal<ToolState>, index: usize) -> Element {
             None => return rsx! {},
         }
     };
-    let scls = status_class(status.clone());
+    let scls = match status {
+        ToolCallStatus::Running => "text-[#c0c040]",
+        ToolCallStatus::Success => "text-[#40c040]",
+        ToolCallStatus::Error => "text-[#c04040]",
+        ToolCallStatus::Skipped => "text-[#888]",
+    };
     let label = status_label(status);
     let dur_s = dur.map(|ms| format!(" {}ms", ms)).unwrap_or_default();
     rsx! {
-        div { class: "tool-item",
-            div { span { class: "tool-item-name", "{seq}. [{name}]" } span { class: "tool-item-status {scls}", "{label}" } if !dur_s.is_empty() { span { style: "color: #888; font-size: 11px; margin-left: 6px;", "{dur_s}" } } }
-            if !arg.is_empty() { div { class: "tool-item-arg", "{arg}" } }
+        div { class: "border-b border-[#2a2a44] py-0.5",
+            div {
+                span { class: "font-semibold text-[13px] text-[#e0e0e0]", "{seq}. [{name}]" }
+                span { class: "text-[12px] font-bold ml-2 {scls}", "{label}{dur_s}" }
+            }
+            if !arg.is_empty() { div { class: "text-[12px] text-[#888] mt-0.5 pl-1 font-mono", "{arg}" } }
         }
     }
 }
