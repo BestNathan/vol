@@ -27,8 +27,8 @@ pub fn WorkspacePanel() -> Element {
 
     if entries.is_empty() && !loaded {
         return rsx! {
-            div { class: "workspace-panel",
-                div { class: "workspace-empty", "Workspace directory empty or unavailable" }
+            div { class: "flex-1 overflow-y-auto p-2.5",
+                div { class: "flex items-center justify-center h-full text-[#666]", "Workspace directory empty or unavailable" }
             }
         };
     }
@@ -43,7 +43,7 @@ pub fn WorkspacePanel() -> Element {
     }).collect::<Vec<_>>();
 
     rsx! {
-        div { class: "workspace-panel",
+        div { class: "flex-1 overflow-y-auto p-2.5",
             {items.into_iter()}
         }
     }
@@ -54,12 +54,12 @@ fn WorkspaceItem(name: String, is_dir: bool, indent: usize) -> Element {
     if is_dir {
         let display = format!("{}[DIR] {}", "  ".repeat(indent), name);
         rsx! {
-            div { class: "workspace-entry workspace-dir", "{display}" }
+            div { class: "py-0.5 font-mono text-[13px] text-[#6090ff] font-bold", "{display}" }
         }
     } else {
         let display = format!("{}[FILE] {}", "  ".repeat(indent), name);
         rsx! {
-            div { class: "workspace-entry workspace-file", "{display}" }
+            div { class: "py-0.5 font-mono text-[13px] text-[#e0e0e0]", "{display}" }
         }
     }
 }
