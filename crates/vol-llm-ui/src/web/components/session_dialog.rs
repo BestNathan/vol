@@ -35,17 +35,21 @@ pub fn SessionDialog() -> Element {
     };
 
     let items: Vec<Element> = if sessions.is_empty() {
-        vec![rsx! { div { class: "modal-empty", "No saved sessions found." } }]
+        vec![rsx! { div { class: "text-[#888] py-2.5", "No saved sessions found." } }]
     } else {
         sessions.iter().enumerate().map(|(i, entry)| {
             let is_sel = i == selected;
-            let cls = if is_sel { "modal-session-item selected" } else { "modal-session-item" };
+            let cls = if is_sel {
+                "px-2 py-1.5 border-b border-[#2a2a44] flex items-center gap-2 bg-[#2a2a44]"
+            } else {
+                "px-2 py-1.5 border-b border-[#2a2a44] flex items-center gap-2"
+            };
             let short = if entry.session_id.len() > 10 { format!("{}...", &entry.session_id[..7]) } else { entry.session_id.clone() };
             let mut sig_sel = signal;
             rsx! {
                 div { class: cls, onclick: move |_: Event<MouseData>| { sig_sel.with_mut(|s| s.selected = i); },
-                    span { class: "modal-session-id", "{short}" }
-                    span { class: "modal-session-meta", "{entry.entry_count} entries | {entry.age_label}" }
+                    span { class: "font-mono text-[#e0e0e0] font-bold", "{short}" }
+                    span { class: "text-[#888] text-[12px]", "{entry.entry_count} entries | {entry.age_label}" }
                 }
             }
         }).collect()
@@ -54,15 +58,15 @@ pub fn SessionDialog() -> Element {
     let mut sig_overlay = signal;
     let mut sig_cancel = signal;
     rsx! {
-        div { class: "modal-overlay", onclick: move |_: Event<MouseData>| { sig_overlay.with_mut(|s| s.open = false); },
-            div { class: "modal-content", onclick: |evt: Event<MouseData>| { evt.stop_propagation(); },
-                div { class: "modal-title", "Sessions" }
+        div { class: "fixed inset-0 bg-black/60 flex items-center justify-center z-[100]", onclick: move |_: Event<MouseData>| { sig_overlay.with_mut(|s| s.open = false); },
+            div { class: "bg-[#252540] border border-[#444466] rounded-lg p-4 min-w-[400px] max-w-[600px] max-h-[80vh] overflow-y-auto md:min-w-auto md:w-[90vw] md:max-w-[500px]", onclick: |evt: Event<MouseData>| { evt.stop_propagation(); },
+                div { class: "text-[16px] font-bold text-[#e0e0e0] mb-3 border-b border-[#333355] pb-2", "Sessions" }
                 {items.into_iter()}
-                div { class: "modal-actions",
-                    button { class: "btn-new", onclick: on_new, "New" }
-                    button { class: "btn-resume", onclick: on_resume, "Resume" }
-                    button { class: "btn-delete", onclick: on_delete, "Delete" }
-                    button { class: "btn-cancel", onclick: move |_: Event<MouseData>| { sig_cancel.with_mut(|s| s.open = false); }, "Cancel" }
+                div { class: "mt-3 flex gap-2 pt-2 border-t border-[#333355]",
+                    button { class: "px-3 py-1.5 border-none rounded-md cursor-pointer text-[13px] bg-[#4060c0] text-[#e0e0e0]", onclick: on_new, "New" }
+                    button { class: "px-3 py-1.5 border-none rounded-md cursor-pointer text-[13px] bg-[#408040] text-[#e0e0e0]", onclick: on_resume, "Resume" }
+                    button { class: "px-3 py-1.5 border-none rounded-md cursor-pointer text-[13px] bg-[#804040] text-[#e0e0e0]", onclick: on_delete, "Delete" }
+                    button { class: "px-3 py-1.5 border-none rounded-md cursor-pointer text-[13px] bg-[#555] text-[#e0e0e0]", onclick: move |_: Event<MouseData>| { sig_cancel.with_mut(|s| s.open = false); }, "Cancel" }
                 }
             }
         }
