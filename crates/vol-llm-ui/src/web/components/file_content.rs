@@ -15,7 +15,7 @@ pub fn FileContentView() -> Element {
 
     if open_files.is_empty() {
         return rsx! {
-            div { class: "file-content-empty",
+            div { class: "flex items-center justify-center h-full text-[#666]",
                 "Click a file in the explorer to open it"
             }
         };
@@ -28,8 +28,8 @@ pub fn FileContentView() -> Element {
         .collect();
 
     rsx! {
-        div { class: "file-content-view",
-            div { class: "file-tab-bar",
+        div { class: "flex-1 flex flex-col overflow-hidden",
+            div { class: "flex bg-[#1e1e38] border-b border-[#2a2a44] flex-shrink-0 overflow-x-auto",
                 {tab_elements.into_iter()}
             }
             {if let Some(idx) = selected {
@@ -37,10 +37,10 @@ pub fn FileContentView() -> Element {
                     match (&tab.content, &tab.error) {
                         (Some(content), _) => rsx! { FileContentDisplay { content } },
                         (None, Some(error)) => rsx! {
-                            div { class: "file-content-error", "Error: {error}" }
+                            div { class: "p-3 text-[#ff6060] font-bold", "Error: {error}" }
                         },
                         (None, None) => rsx! {
-                            div { class: "file-content-loading", "Loading..." }
+                            div { class: "flex items-center justify-center h-full text-[#888]", "Loading..." }
                         },
                     }
                 } else {
@@ -62,7 +62,11 @@ fn render_tab(i: usize, tab: &OpenFileTab, ws: Signal<WorkspaceState>) -> Elemen
         let ui = ws.read();
         Some(i) == ui.selected_file_tab
     };
-    let tab_cls = if is_selected { "file-tab active" } else { "file-tab" };
+    let tab_cls = if is_selected {
+        "px-2 py-1 text-[12px] text-[#e0e0e0] bg-[#1a1a2e] flex items-center gap-1 cursor-pointer border-b-2 border-b-[#80a0ff] whitespace-nowrap"
+    } else {
+        "px-2 py-1 text-[12px] text-[#777] flex items-center gap-1 cursor-pointer border-b-2 border-transparent whitespace-nowrap hover:text-[#bbb] hover:bg-[#222240]"
+    };
 
     let mut sig_select = ws;
     let select_onclick = {
@@ -97,10 +101,10 @@ fn render_tab(i: usize, tab: &OpenFileTab, ws: Signal<WorkspaceState>) -> Elemen
             class: tab_cls,
             key: "{path}",
             onclick: select_onclick,
-            span { class: "file-tab-icon", "{icon}" }
-            span { class: "file-tab-name", "{name}" }
+            span { class: "text-[13px]", "{icon}" }
+            span { class: "max-w-[150px] overflow-hidden text-ellipsis", "{name}" }
             span {
-                class: "file-tab-close",
+                class: "text-[10px] text-[#555] px-0.5 rounded-[2px] leading-none hover:text-[#ff6060] hover:bg-[#3a2020]",
                 onclick: close_onclick,
                 "\u{2715}"
             }
@@ -111,7 +115,7 @@ fn render_tab(i: usize, tab: &OpenFileTab, ws: Signal<WorkspaceState>) -> Elemen
 #[component]
 fn FileContentDisplay(content: String) -> Element {
     rsx! {
-        pre { class: "file-content",
+        pre { class: "flex-1 overflow-auto p-3 font-mono text-[12px] leading-[1.6] text-[#c8c8e0] bg-[#1a1a2e] whitespace-pre m-0",
             {content}
         }
     }
