@@ -175,6 +175,16 @@ impl ReActAgent {
         }
     }
 
+    /// Create a new agent with the given session (clones the rest of config).
+    pub fn with_session(&self, session: Arc<Session>) -> Self {
+        Self {
+            config: AgentConfig {
+                session,
+                ..self.config.clone()
+            },
+        }
+    }
+
     /// Run ReAct loop and return the final response.
     ///
     /// All events are emitted via RunContext event bus.
