@@ -43,13 +43,13 @@ pub fn ToolsTabContent() -> Element {
 
     let count = signal.read().calls.len();
     if count == 0 {
-        return rsx! { div { class: "tools-tab", div { class: "tools-tab-empty", "No tool calls yet" } } };
+        return rsx! { div { class: "flex-1 overflow-y-auto p-2", div { class: "flex items-center justify-center h-full text-[#666]", "No tool calls yet" } } };
     }
     let items: Vec<Element> = (0..count).map(|idx| {
         let s = signal.clone();
         rsx! { ToolCallItem { signal: s, index: idx } }
     }).collect();
-    rsx! { div { class: "tools-tab", {items.into_iter()} } }
+    rsx! { div { class: "flex-1 overflow-y-auto p-2", {items.into_iter()} } }
 }
 
 #[component]
@@ -62,12 +62,12 @@ fn ToolCallItem(signal: Signal<ToolState>, index: usize) -> Element {
             None => return rsx! {},
         }
     };
-    let scls = match status { ToolCallStatus::Running => "status-running", ToolCallStatus::Success => "status-success", ToolCallStatus::Error => "status-error", ToolCallStatus::Skipped => "status-skipped" };
+    let scls = match status { ToolCallStatus::Running => "text-[#c0c040]", ToolCallStatus::Success => "text-[#40c040]", ToolCallStatus::Error => "text-[#c04040]", ToolCallStatus::Skipped => "text-[#888]" };
     let label = match status { ToolCallStatus::Running => "...", ToolCallStatus::Success => "OK", ToolCallStatus::Error => "ERR", ToolCallStatus::Skipped => "SKIP" };
     let dur_s = dur.map(|ms| format!("{ms}ms")).unwrap_or_default();
     rsx! {
-        div { class: "tool-call-item",
-            div { class: "tool-call-header",
+        div { class: "border-b border-[#2a2a44]",
+            div { class: "flex items-center px-2.5 py-2 cursor-pointer gap-2 hover:bg-[#222240]",
                 onclick: move |_: Event<MouseData>| {
                     let mut state = signal.write_unchecked();
                     if state.expanded.contains(&index) {
@@ -76,13 +76,20 @@ fn ToolCallItem(signal: Signal<ToolState>, index: usize) -> Element {
                         state.expanded.insert(index);
                     }
                 },
-                span { class: "tool-call-seq", "{seq}." }
-                span { class: "tool-call-name", "[{name}]" }
-                span { class: "tool-call-status {scls}", "{label}" }
-                if !dur_s.is_empty() { span { class: "tool-call-duration", "{dur_s}" } }
-                span { class: "tool-call-chevron", "▾" }
+                span { class: "text-[#555] text-[11px] min-w-[24px]", "{seq}." }
+                span { class: "font-semibold text-[13px]", "[{name}]" }
+                span { class: "text-[11px] px-1.5 py-0.5 rounded-[3px] {scls}", "{label}" }
+                if !dur_s.is_empty() { span { class: "text-[11px] text-[#888] ml-auto", "{dur_s}" } }
+                span { class: "text-[10px] text-[#666] ml-1", "\u{25be}" }
             }
-            if is_expanded { div { class: "tool-call-detail", div { span { class: "tool-detail-label", "Input: " } "{arg}" } } }
+            if is_expanded {
+                div { class: "px-2.5 pb-2 pl-[42px] text-[12px] font-mono text-[#888] bg-[#16162a] whitespace-pre-wrap break-all",
+                    div {
+                        span { class: "text-[#6090ff] font-semibold font-sans", "Input: " }
+                        "{arg}"
+                    }
+                }
+            }
         }
     }
 }
