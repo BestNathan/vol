@@ -30,8 +30,7 @@ echo "=== Processing WASM with wasm-bindgen ==="
 wasm-bindgen \
     --out-dir "$WASM_DIR/wasm" \
     --target web \
-    "$WASM_DIR/vol-llm-ui-web.wasm" \
-    --quiet
+    "$WASM_DIR/vol-llm-ui-web.wasm"
 
 cp -r "$WASM_DIR/wasm/"* "$DIST_DIR/wasm/"
 
