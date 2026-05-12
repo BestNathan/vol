@@ -81,15 +81,85 @@ fn truncate_id(id: &str) -> String {
     }
 }
 
+/// Session item component with view-on-click and resume button.
+#[component]
+fn SessionItem(session_id: String, entry_count: usize, created_at: i64) -> Element {
+    let app: super::app::AppState = use_context();
+    let conversation_signal: Signal<ConversationState> = use_context();
+    let active_tab = app.active_tab;
+    let mut is_resuming = use_signal(|| false);
+
+    rsx! {
+        div {
+            class: "session-item",
+            onclick: {
+                let sid = session_id.clone();
+                let rpc = app.rpc_client.clone();
+                let tab = active_tab;
+                let conv = conversation_signal;
+                move |_: Event<MouseData>| {
+                    let sid = sid.clone();
+                    let rpc = rpc.clone();
+                    let mut tab = tab.clone();
+                    let mut conv = conv.clone();
+
+                    rpc.session_entries(&sid, move |result| {
+                        match result {
+                            Ok(entries) => {
+                                let conv_entries = session_entries_to_conversation(entries);
+                                conv.with_mut(|s| { s.entries = conv_entries; });
+                                tab.set(ActiveTab::Conversation);
+                            }
+                            Err(e) => log::error!("Failed to load session: {}", e),
+                        }
+                    });
+                }
+            },
+            span { class: "session-item-id", "{truncate_id(&session_id)}" }
+            span { class: "session-item-count", "{entry_count} entries" }
+            span { class: "session-item-age", "{format_age(created_at)}" }
+            button {
+                class: "session-resume-btn",
+                onclick: {
+                    let resuming = is_resuming;
+                    let sid = session_id.clone();
+                    let rpc = app.rpc_client.clone();
+                    let tab = active_tab;
+                    let conv = conversation_signal;
+                    move |evt: Event<MouseData>| {
+                        evt.stop_propagation();
+                        let mut resuming = resuming;
+                        let sid = sid.clone();
+                        resuming.set(true);
+                        let rpc = rpc.clone();
+                        let mut tab = tab.clone();
+                        let mut conv = conv.clone();
+
+                        rpc.session_resume(&sid, move |result| {
+                            match result {
+                                Ok(resp) => {
+                                    let conv_entries = session_entries_to_conversation(resp.entries);
+                                    conv.with_mut(|s| { s.entries = conv_entries; });
+                                    tab.set(ActiveTab::Conversation);
+                                }
+                                Err(e) => log::error!("Failed to resume session: {}", e),
+                            }
+                            resuming.set(false);
+                        });
+                    }
+                },
+                if *is_resuming.read() { "Resuming..." } else { "Resume" }
+            }
+        }
+    }
+}
+
 /// Sessions panel component.
 #[component]
 pub fn SessionsPanel() -> Element {
     let app: super::app::AppState = use_context();
     let sessions_signal: Signal<SessionsState> = use_context();
-    let conversation_signal: Signal<ConversationState> = use_context();
-
-    // Clone rpc before use_hook consumes app
-    let rpc_for_clicks = app.rpc_client.clone();
+    let _conversation_signal: Signal<ConversationState> = use_context();
 
     // Load sessions on mount
     use_hook(move || {
@@ -115,9 +185,6 @@ pub fn SessionsPanel() -> Element {
             });
         });
     });
-
-    let conv = conversation_signal;
-    let tab = app.active_tab;
 
     let (sessions, loading, error) = {
         let s = sessions_signal.read();
@@ -149,42 +216,11 @@ pub fn SessionsPanel() -> Element {
     }
 
     let items: Vec<Element> = sessions.iter().map(|session| {
-        let sid = session.id.clone();
-        let count = session.entry_count;
-        let age = format_age(session.created_at);
-        let truncated = truncate_id(&session.id);
-        let rpc = rpc_for_clicks.clone();
-        let conv_local = conv;
-        let tab_local = tab;
-
-        let handler = {
-            move |_: Event<MouseData>| {
-                let mut c = conv_local.clone();
-                let mut t = tab_local.clone();
-                rpc.session_entries(&sid, move |result| {
-                    match result {
-                        Ok(entries) => {
-                            let conv_entries = session_entries_to_conversation(entries);
-                            c.with_mut(|s| {
-                                s.entries = conv_entries;
-                            });
-                            t.set(ActiveTab::Conversation);
-                        }
-                        Err(e) => {
-                            log::error!("Failed to load session entries: {}", e);
-                        }
-                    }
-                });
-            }
-        };
-
         rsx! {
-            div {
-                class: "session-item",
-                onclick: handler,
-                span { class: "session-item-id", "{truncated}" }
-                span { class: "session-item-count", "{count} entries" }
-                span { class: "session-item-age", "{age}" }
+            SessionItem {
+                session_id: session.id.clone(),
+                entry_count: session.entry_count,
+                created_at: session.created_at,
             }
         }
     }).collect();

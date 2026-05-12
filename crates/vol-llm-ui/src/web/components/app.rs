@@ -582,5 +582,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .session-item-id { font-family: monospace; font-size: 13px; color: #e0e0e0; font-weight: 600; min-width: 80px; }
 .session-item-count { font-size: 11px; color: #888; }
 .session-item-age { font-size: 11px; color: #666; margin-left: auto; }
+.session-resume-btn { padding: 3px 10px; background: #408040; color: #e0e0e0; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; margin-left: auto; }
+.session-resume-btn:hover { background: #50a050; }
+.session-resume-btn:disabled { background: #333355; cursor: not-allowed; }
 .msg-checkpoint { background: #2a2a20; border-left: 3px solid #c0a040; color: #aaa; font-size: 12px; font-style: italic; padding: 6px 10px; }
 "#;
