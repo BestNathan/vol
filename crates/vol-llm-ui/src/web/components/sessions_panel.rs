@@ -1,4 +1,4 @@
-//! Sessions panel listing all persisted sessions with load-on-click into Conversation view.
+//! Sessions panel listing all persisted sessions with click-to-view and resume into Conversation view.
 
 use dioxus::prelude::*;
 
@@ -120,6 +120,7 @@ fn SessionItem(session_id: String, entry_count: usize, created_at: i64) -> Eleme
             span { class: "session-item-age", "{format_age(created_at)}" }
             button {
                 class: "session-resume-btn",
+                disabled: *is_resuming.read(),
                 onclick: {
                     let resuming = is_resuming;
                     let sid = session_id.clone();
@@ -129,7 +130,6 @@ fn SessionItem(session_id: String, entry_count: usize, created_at: i64) -> Eleme
                     move |evt: Event<MouseData>| {
                         evt.stop_propagation();
                         let mut resuming = resuming;
-                        let sid = sid.clone();
                         resuming.set(true);
                         let rpc = rpc.clone();
                         let mut tab = tab.clone();
@@ -159,7 +159,6 @@ fn SessionItem(session_id: String, entry_count: usize, created_at: i64) -> Eleme
 pub fn SessionsPanel() -> Element {
     let app: super::app::AppState = use_context();
     let sessions_signal: Signal<SessionsState> = use_context();
-    let _conversation_signal: Signal<ConversationState> = use_context();
 
     // Load sessions on mount
     use_hook(move || {
