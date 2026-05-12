@@ -2,7 +2,8 @@
 
 use dioxus::prelude::*;
 
-use crate::state::{AgentListEntry, AgentsState};
+use crate::state::AgentsState;
+use crate::web::client::AgentListEntry;
 
 /// Agents panel component.
 #[component]
@@ -38,16 +39,16 @@ pub fn AgentsPanel() -> Element {
 
     if loading {
         return rsx! {
-            div { class: "agents-panel",
-                div { class: "agents-panel-loading", "Loading agents..." }
+            div { class: "flex-1 overflow-y-auto p-2",
+                div { class: "flex items-center justify-center h-full text-[#666] p-5 text-center", "Loading agents..." }
             }
         };
     }
 
     if let Some(ref e) = error {
         return rsx! {
-            div { class: "agents-panel",
-                div { class: "agents-panel-error",
+            div { class: "flex-1 overflow-y-auto p-2",
+                div { class: "flex items-center justify-center h-full text-[#ff6060] p-5 text-center",
                     "Error: {e}"
                 }
             }
@@ -56,8 +57,8 @@ pub fn AgentsPanel() -> Element {
 
     if agents.is_empty() {
         return rsx! {
-            div { class: "agents-panel",
-                div { class: "agents-panel-empty", "No agents discovered" }
+            div { class: "flex-1 overflow-y-auto p-2",
+                div { class: "flex items-center justify-center h-full text-[#666] p-5 text-center", "No agents discovered" }
             }
         };
     }
@@ -68,7 +69,7 @@ pub fn AgentsPanel() -> Element {
     }).collect();
 
     rsx! {
-        div { class: "agents-panel",
+        div { class: "flex-1 overflow-y-auto p-2",
             {items.into_iter()}
         }
     }
@@ -84,9 +85,9 @@ fn AgentItem(agent: AgentListEntry, index: usize, is_expanded: bool, agents_sign
     };
 
     rsx! {
-        div { class: "agent-item",
+        div { class: "border-b border-[#2a2a44]",
             div {
-                class: "agent-item-header",
+                class: "flex items-center px-2.5 py-2 cursor-pointer gap-2 hover:bg-[#222240]",
                 onclick: move |_: Event<MouseData>| {
                     agents_signal.with_mut(|s| {
                         if s.expanded.contains(&index) {
@@ -96,28 +97,28 @@ fn AgentItem(agent: AgentListEntry, index: usize, is_expanded: bool, agents_sign
                         }
                     });
                 },
-                span { class: "agent-item-chevron", "\u{25be}" }
-                span { class: "agent-item-name", "{agent.name}" }
+                span { class: "text-[10px] text-[#666] transition-transform duration-150", "\u{25be}" }
+                span { class: "font-semibold text-[13px] text-[#e0e0e0]", "{agent.name}" }
                 span {
-                    class: "agent-item-scope",
+                    class: "text-[10px] px-1.5 py-0.5 rounded-[3px] font-bold ml-auto",
                     style: "background: {scope_color}; color: #1a1a2e;",
                     "{agent.scope}"
                 }
             }
-            div { class: "agent-item-desc", "{agent.description}" }
+            div { class: "text-[12px] text-[#888] px-2.5 pb-1.5 pl-7", "{agent.description}" }
             if is_expanded {
-                div { class: "agent-item-detail",
-                    div { class: "agent-detail-row",
-                        span { class: "agent-detail-label", "ID: " }
-                        span { class: "agent-detail-value", "{agent.id}" }
+                div { class: "px-2.5 pb-2 pl-7 text-[12px] bg-[#16162a]",
+                    div { class: "py-0.5",
+                        span { class: "text-[#6090ff] font-semibold", "ID: " }
+                        span { class: "text-[#ccc] font-mono", "{agent.id}" }
                     }
-                    div { class: "agent-detail-row",
-                        span { class: "agent-detail-label", "Type: " }
-                        span { class: "agent-detail-value", "{agent.type_}" }
+                    div { class: "py-0.5",
+                        span { class: "text-[#6090ff] font-semibold", "Type: " }
+                        span { class: "text-[#ccc] font-mono", "{agent.type_}" }
                     }
-                    div { class: "agent-detail-row",
-                        span { class: "agent-detail-label", "Scope: " }
-                        span { class: "agent-detail-value", "{agent.scope}" }
+                    div { class: "py-0.5",
+                        span { class: "text-[#6090ff] font-semibold", "Scope: " }
+                        span { class: "text-[#ccc] font-mono", "{agent.scope}" }
                     }
                 }
             }
