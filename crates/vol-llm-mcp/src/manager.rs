@@ -177,18 +177,20 @@ impl McpManager {
         let max_retries;
         let backoff_min;
         let backoff_max;
-        {
+        let cancel_token = {
             let mut servers = self.servers.write().await;
             let Some(state) = servers.get_mut(name) else { return };
             state.status = ServerStatus::Connecting;
             state.cancel_token = CancellationToken::new();
+            let ct = state.cancel_token.clone();
             config = state.config.clone();
             max_retries = self.max_retries;
             backoff_min = self.backoff_min;
             backoff_max = self.backoff_max;
-        }
+            ct
+        };
 
-        match Self::connect_single(&config, &CancellationToken::new()).await {
+        match Self::connect_single(&config, &cancel_token).await {
             Ok((service, tools, resources, resource_templates, prompts)) => {
                 let mut servers = self.servers.write().await;
                 if let Some(state) = servers.get_mut(name) {
@@ -236,9 +238,9 @@ impl McpManager {
         let backoff_min = backoff_min;
         let backoff_max = backoff_max;
 
-        let handle = {
-            let name = name.clone();
-            tokio::spawn(async move {
+        // Clone name for the handle-storing spawn
+        let name_for_handle = name.clone();
+        let handle = tokio::spawn(async move {
             loop {
                 let (config, cancel_token, current_retry) = {
                     let mut srv = servers.write().await;
@@ -248,16 +250,11 @@ impl McpManager {
                         state.status = ServerStatus::Error("max retries exceeded".to_string());
                         break;
                     }
-                    // Cancel previous reconnect, create new token
                     state.cancel_token.cancel();
                     state.cancel_token = CancellationToken::new();
                     let config = state.config.clone();
                     (config, state.cancel_token.clone(), state.retry_count)
                 };
-
-                if cancel_token.is_cancelled() {
-                    break;
-                }
 
                 let delay = exponential_backoff(current_retry, backoff_min, backoff_max);
                 tokio::select! {
@@ -285,12 +282,12 @@ impl McpManager {
                             state.cached_prompts = prompts;
                             state.status = ServerStatus::Connected;
                             state.retry_count = 0;
-                            tracing::info!(server = name, "MCP server reconnected");
+                            tracing::info!(server = &name, "MCP server reconnected");
                         }
                         break;
                     }
                     Ok(Err(e)) => {
-                        tracing::warn!(server = name, error = %e, "MCP reconnect failed");
+                        tracing::warn!(server = &name, error = %e, "MCP reconnect failed");
                         let mut srv = servers.write().await;
                         if let Some(state) = srv.get_mut(&name) {
                             state.retry_count += 1;
@@ -298,13 +295,13 @@ impl McpManager {
                             if state.retry_count >= max_retries {
                                 state.clear_caches();
                                 state.status = ServerStatus::Error("max retries exceeded".to_string());
-                                tracing::error!(server = name, retries = state.retry_count, "MCP server max retries exceeded");
+                                tracing::error!(server = &name, retries = state.retry_count, "MCP server max retries exceeded");
                                 break;
                             }
                         }
                     }
                     Err(_) => {
-                        tracing::warn!(server = name, "MCP reconnect timed out");
+                        tracing::warn!(server = &name, "MCP reconnect timed out");
                         let mut srv = servers.write().await;
                         if let Some(state) = srv.get_mut(&name) {
                             state.retry_count += 1;
@@ -318,14 +315,13 @@ impl McpManager {
                     }
                 }
             }
-        })
-        };
+        });
 
-        let name_clone = name.clone();
+        // Store handle
         let servers_clone = self.servers.clone();
         tokio::spawn(async move {
             let mut srv = servers_clone.write().await;
-            if let Some(state) = srv.get_mut(&name_clone) {
+            if let Some(state) = srv.get_mut(&name_for_handle) {
                 state.reconnect_handle = Some(handle);
             }
         });
