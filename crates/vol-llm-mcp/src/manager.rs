@@ -369,16 +369,11 @@ impl McpManager {
         };
 
         let arguments = match args {
-            serde_json::Value::Object(obj) => Some(JsonObject::from_iter(obj)),
-            _ => Some(JsonObject::new()),
+            serde_json::Value::Object(obj) => JsonObject::from_iter(obj),
+            _ => JsonObject::new(),
         };
 
-        let params = match arguments {
-            Some(args) => {
-                CallToolRequestParams::new(tool_name.to_string()).with_arguments(args)
-            }
-            None => CallToolRequestParams::new(tool_name.to_string()),
-        };
+        let params = CallToolRequestParams::new(tool_name.to_string()).with_arguments(arguments);
 
         let result = peer.call_tool(params).await.map_err(|e: rmcp::service::ServiceError| {
             McpError::ToolCallFailed {
@@ -689,7 +684,7 @@ impl McpManager {
         self.connect_server(name).await;
 
         let servers = self.servers.read().await;
-        let state = servers.get(name).unwrap();
+        let state = servers.get(name).ok_or_else(|| McpError::ServerNotFound(name.to_string()))?;
         match &state.status {
             ServerStatus::Connected => Ok(()),
             ServerStatus::Error(e) => Err(McpError::ConnectionFailed {
