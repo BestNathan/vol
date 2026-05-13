@@ -714,4 +714,74 @@ mod tests {
         mgr.connect().await.unwrap();
         assert!(mgr.list_all_tools().await.is_empty());
     }
+
+    #[tokio::test]
+    async fn test_max_retry_exhaustion() {
+        // Use a command that doesn't exist — every connect attempt will fail
+        let config = McpServerConfig {
+            name: "failing-server".to_string(),
+            command: "nonexistent-command-that-will-fail".to_string(),
+            args: vec![],
+            env: std::collections::HashMap::new(),
+        };
+
+        let mgr = McpManager::new(vec![config])
+            .with_max_retries(2)
+            .with_backoff(Duration::from_millis(10), Duration::from_millis(50));
+
+        let _ = mgr.connect().await;
+
+        // Allow some time for background reconnect attempts
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        let status = mgr.server_status_async().await;
+        let failing_status = status.get("failing-server").expect("server should exist");
+
+        // After 2 retries + initial attempt = 3 total attempts, should be in Error state
+        assert!(
+            matches!(failing_status, ServerStatus::Error(msg) if msg.contains("max retries")),
+            "expected max retries error, got: {:?}",
+            failing_status
+        );
+
+        // No tools should be available
+        let tools = mgr.list_all_tools().await;
+        assert!(tools.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_manual_reconnect_after_exhaustion() {
+        let config = McpServerConfig {
+            name: "failing-server".to_string(),
+            command: "nonexistent-command".to_string(),
+            args: vec![],
+            env: std::collections::HashMap::new(),
+        };
+
+        let mgr = McpManager::new(vec![config])
+            .with_max_retries(1)
+            .with_backoff(Duration::from_millis(10), Duration::from_millis(50));
+
+        let _ = mgr.connect().await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Verify exhaustion
+        let status = mgr.server_status_async().await;
+        assert!(
+            matches!(status.get("failing-server"), Some(ServerStatus::Error(msg)) if msg.contains("max retries")),
+            "expected max retries, got: {:?}",
+            status.get("failing-server")
+        );
+
+        // Manual reconnect resets retry counter and attempts again
+        mgr.reconnect("failing-server").await.unwrap_err();
+
+        // Should be in Error state again (command still doesn't exist)
+        let status = mgr.server_status_async().await;
+        assert!(
+            matches!(status.get("failing-server"), Some(ServerStatus::Error(_))),
+            "expected error after reconnect, got: {:?}",
+            status.get("failing-server")
+        );
+    }
 }
