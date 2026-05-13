@@ -8,7 +8,7 @@ created: 2026-05-11
 
 **Date:** 2026-05-11
 **Status:** Implemented
-**Related:** [[vol-llm-mcp-crate]], [[mcp-client-integration]], [[vol-llm-tool-crate]], [[vol-llm-agent-crate]]
+**Related:** [[vol-llm-mcp-crate]], [[mcp-client-integration]], [[mcp-manager-lifecycle]], [[vol-llm-tool-crate]], [[vol-llm-agent-crate]]
 
 ## Summary
 
@@ -41,6 +41,16 @@ Implemented MCP (Model Context Protocol) client integration for the ReAct agent 
 - `Peer<RoleClient>.list_all_tools()` and `Peer<RoleClient>.call_tool()` for tool operations
 - `Box::leak` used for `&'static str` in `McpTool` — acceptable because tools are registered once at startup
 - `Arc::try_unwrap` used for session disconnect — gracefully skips if Arc is shared across runs
+
+## Migration to McpManager (2026-05-13)
+
+`McpSession` was replaced by `McpManager` which adds:
+- Per-server connection state tracking (`Connected`, `Disconnected`, `Connecting`, `Error`)
+- Automatic reconnection with exponential backoff (1s-30s, default 5 max retries)
+- Full MCP protocol support (resources, prompts in addition to tools)
+- Agent-transparent tool discovery — disconnected servers' tools excluded automatically
+
+See [[mcp-manager-impl]] and [[mcp-manager-lifecycle]] for details.
 
 ## Example
 
