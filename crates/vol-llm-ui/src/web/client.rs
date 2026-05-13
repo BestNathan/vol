@@ -100,6 +100,12 @@ pub struct JsonRpcClient {
     next_id: Cell<u64>,
 }
 
+impl PartialEq for JsonRpcClient {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
 impl JsonRpcClient {
     /// Create a new client and connect to the server.
     pub fn new(url: &str) -> Self {

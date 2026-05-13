@@ -342,7 +342,7 @@ impl JsonRpcConnection {
                         serde_json::json!({
                             "id": s.session_id,
                             "entry_count": s.entry_count,
-                            "created_at": format_ts(s.created_at),
+                            "created_at": s.created_at,
                         })
                     })
                     .collect();

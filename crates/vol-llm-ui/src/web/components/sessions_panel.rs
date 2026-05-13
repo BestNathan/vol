@@ -12,9 +12,19 @@ fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<Conversati
         match e.entry_type.as_str() {
             "message" => {
                 let data = &e.data;
-                if let Some(msg) = data.get("message") {
+                if let Some(msg) = data.get("message").and_then(|m| m.get("message")) {
                     if let Some(role) = msg.get("role").and_then(|v| v.as_str()) {
-                        let text = msg.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        // Content can be a string (text messages) or a list of parts (multimodal).
+                        let text = match msg.get("content") {
+                            Some(serde_json::Value::String(s)) => s.clone(),
+                            Some(serde_json::Value::Array(parts)) => {
+                                parts.iter().filter_map(|p| {
+                                    p.get("text").and_then(|v| v.as_str())
+                                        .or_else(|| p.get("type").and_then(|v| v.as_str()))
+                                }).collect::<Vec<_>>().join("\n")
+                            }
+                            _ => String::new(),
+                        };
                         match role {
                             "user" => Some(ConversationEntry::UserInput { text }),
                             "assistant" => Some(ConversationEntry::AgentAnswer { text }),

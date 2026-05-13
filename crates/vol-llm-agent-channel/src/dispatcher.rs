@@ -90,7 +90,7 @@ impl AgentDispatcher {
 
     /// Atomically replace the agent's session.
     pub fn swap_session(&self, new_session: Arc<Session>) {
-        let old_agent = self.agent.read().unwrap();
+        let old_agent = { self.agent.read().unwrap().clone() };
         let new_agent = Arc::new(old_agent.with_session(new_session));
         *self.agent.write().unwrap() = new_agent;
     }
