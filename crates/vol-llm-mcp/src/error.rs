@@ -20,6 +20,15 @@ pub enum McpError {
     #[error("tool call failed on server '{server}', tool '{tool}': {detail}")]
     ToolCallFailed { server: String, tool: String, detail: String },
 
+    #[error("failed to read resource '{uri}' on server '{server}': {detail}")]
+    ResourceReadFailed { server: String, uri: String, detail: String },
+
+    #[error("failed to get prompt '{name}' on server '{server}': {detail}")]
+    PromptGetFailed { server: String, name: String, detail: String },
+
+    #[error("MCP server '{0}' is disconnected")]
+    ServerDisconnected(String),
+
     #[error("transport error: {0}")]
     TransportError(String),
 }
