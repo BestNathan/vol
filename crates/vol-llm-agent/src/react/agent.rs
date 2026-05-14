@@ -11,6 +11,7 @@ use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::ToolRegistry;
 use vol_llm_mcp::McpSession;
+use vol_llm_observability::ObservabilityAgentConfig;
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
     ToolChoice,
@@ -35,6 +36,13 @@ pub struct AgentConfig {
 
     // === MCP session ===
     pub mcp_session: Option<Arc<McpSession>>,
+
+    // Observability fields
+    pub agent_id: String,
+    /// Working directory. Log paths derive from `{working_dir}/logs/agents/{agent_id}/`.
+    pub working_dir: PathBuf,
+    /// Observability plugin configuration.
+    pub observability: Option<ObservabilityAgentConfig>,
 }
 
 impl AgentConfig {
@@ -72,7 +80,11 @@ impl Default for AgentConfig {
             sandbox: None,
             context_builder: ContextBuilderBuilder::new(128_000).build(),
             plugin_registry: PluginRegistry::new(),
+            plugin_registry: PluginRegistry::new(),
             mcp_session: None,
+            agent_id: generate_agent_id(),
+            working_dir: PathBuf::from("."),
+            observability: Some(ObservabilityAgentConfig::default()),
         }
     }
 }
@@ -254,8 +266,30 @@ impl ReActAgent {
         // Note: We create plugin_ctx and subscribe here to avoid cloning RunContext
         // (which would clone senders and prevent channel close)
         let listener_event_rx = run_ctx.event_tx.subscribe();
+
+        // Build plugin list, adding observability plugin if configured
+        let mut plugins = self.config.plugin_registry.plugins().to_vec();
+        if let Some(obs_config) = &config.observability {
+            if super::observability_plugin::ObservabilityAgentPlugin::is_enabled(obs_config) {
+                let agent_type = std::any::type_name::<Self>()
+                    .split("::")
+                    .last()
+                    .unwrap_or("ReActAgent")
+                    .to_string();
+
+                let obs_plugin = super::observability_plugin::ObservabilityAgentPlugin::new(
+                    obs_config,
+                    run_id.clone(),
+                    self.session.id.clone(),
+                    config.agent_id.clone(),
+                    agent_type,
+                );
+                plugins.push(std::sync::Arc::new(obs_plugin));
+            }
+        }
+
         let listener_handle = spawn_listener_task(
-            config.plugin_registry.plugins().to_vec(),
+            plugins,
             run_ctx.clone(),
             listener_event_rx,
         );
@@ -761,6 +795,21 @@ mod tests {
         assert_eq!(config.def.as_ref().unwrap().name, "test-agent");
         assert_eq!(config.def.as_ref().unwrap().max_iterations, Some(10));
         assert_eq!(config.def.as_ref().unwrap().max_history_messages, Some(50));
+    }
+
+    #[test]
+    fn test_agent_config_with_observability() {
+        use vol_llm_observability::ObservabilityAgentConfig;
+
+        let config = AgentConfig {
+            agent_id: "test_agent".to_string(),
+            working_dir: PathBuf::from("."),
+            observability: Some(ObservabilityAgentConfig::default()),
+            ..Default::default()
+        };
+
+        assert_eq!(config.agent_id, "test_agent");
+        assert_eq!(config.working_dir, PathBuf::from("."));
     }
 
     #[test]

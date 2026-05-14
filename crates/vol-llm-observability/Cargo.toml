@@ -7,7 +7,6 @@ edition.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-async-trait = { workspace = true }
 tracing = { workspace = true }
 tracing-appender = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
@@ -16,8 +15,9 @@ opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 opentelemetry-otlp = { workspace = true, features = ["tokio", "grpc-tonic", "logs"] }
 opentelemetry-appender-tracing = { workspace = true }
+tempfile = "3"
+reqwest = { workspace = true }
 vol-llm-core = { path = "../vol-llm-core" }
-vol-llm-agent = { path = "../vol-llm-agent" }
 
 [dev-dependencies]
 tracing-subscriber = "0.3"
@@ -25,3 +25,4 @@ tempfile = "3"
 vol-session = { path = "../vol-session" }
 vol-llm-tool = { path = "../vol-llm-tool" }
 vol-llm-context = { path = "../vol-llm-context" }
+tokio = { workspace = true }

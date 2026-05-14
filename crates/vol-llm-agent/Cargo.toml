@@ -27,6 +27,7 @@ vol-llm-context = { path = "../vol-llm-context" }
 vol-llm-skill = { path = "../vol-llm-skill" }
 vol-llm-mcp = { path = "../vol-llm-mcp" }
 vol-tracing = { path = "../vol-tracing" }
+vol-llm-observability = { path = "../vol-llm-observability" }
 
 # Optional HTTP channel support
 axum = { version = "0.7", optional = true }

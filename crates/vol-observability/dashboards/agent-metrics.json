@@ -1,0 +1,272 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "title": "LLM Latency Trend",
+      "type": "timeseries",
+      "datasource": {
+        "type": "tdengine",
+        "uid": "tdengine-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "sql": "SELECT ts, avg(duration_ms) as p50 FROM llm_call WHERE agent_type = '$agent_type' AND agent_id = '$agent_id' INTERVAL($__interval) ORDER BY ts",
+          "format": "time_series",
+          "refId": "A",
+          "legend": "P50"
+        },
+        {
+          "sql": "SELECT ts, percentile(duration_ms, 95) as p95 FROM llm_call WHERE agent_type = '$agent_type' AND agent_id = '$agent_id' INTERVAL($__interval) ORDER BY ts",
+          "format": "time_series",
+          "refId": "B",
+          "legend": "P95"
+        },
+        {
+          "sql": "SELECT ts, percentile(duration_ms, 99) as p99 FROM llm_call WHERE agent_type = '$agent_type' AND agent_id = '$agent_id' INTERVAL($__interval) ORDER BY ts",
+          "format": "time_series",
+          "refId": "C",
+          "legend": "P99"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "LLM Call Volume",
+      "type": "timeseries",
+      "datasource": {
+        "type": "tdengine",
+        "uid": "tdengine-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "sql": "SELECT ts, count(*) as qps FROM llm_call WHERE agent_type = '$agent_type' AND model = '$agent_id' GROUP BY ts, model INTERVAL($__interval) ORDER BY ts",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Tool Success Rate",
+      "type": "stat",
+      "datasource": {
+        "type": "tdengine",
+        "uid": "tdengine-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "sql": "SELECT tool_name, count(CASE WHEN status = 0 THEN 1 END) * 100.0 / count(*) as success_rate FROM tool_call WHERE agent_type = '$agent_type' GROUP BY tool_name",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 80 },
+              { "color": "green", "value": 95 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Tool Error Top N",
+      "type": "table",
+      "datasource": {
+        "type": "tdengine",
+        "uid": "tdengine-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      },
+      "targets": [
+        {
+          "sql": "SELECT tool_name, count(*) as error_count FROM tool_call WHERE status != 0 AND agent_type = '$agent_type' GROUP BY tool_name ORDER BY error_count DESC LIMIT 10",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Agent Run Success Rate",
+      "type": "stat",
+      "datasource": {
+        "type": "tdengine",
+        "uid": "tdengine-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      },
+      "targets": [
+        {
+          "sql": "SELECT agent_type, count(CASE WHEN status = 0 THEN 1 END) * 100.0 / count(*) as success_rate FROM agent_run GROUP BY agent_type",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 80 },
+              { "color": "green", "value": 95 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Agent Iteration Distribution",
+      "type": "histogram",
+      "datasource": {
+        "type": "tdengine",
+        "uid": "tdengine-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "sql": "SELECT iteration_count FROM agent_run WHERE agent_type = '$agent_type' AND agent_id = '$agent_id'",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Token Consumption Trend",
+      "type": "timeseries",
+      "datasource": {
+        "type": "tdengine",
+        "uid": "tdengine-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "sql": "SELECT ts, sum(total_tokens) as total_tokens, model FROM llm_call WHERE agent_type = '$agent_type' GROUP BY ts, model INTERVAL($__interval) ORDER BY ts",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": [
+    "vol-observability",
+    "agent-metrics"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "agent_type",
+        "type": "query",
+        "datasource": {
+          "type": "tdengine",
+          "uid": "tdengine-ds"
+        },
+        "query": "SELECT DISTINCT agent_type FROM agent_run ORDER BY agent_type",
+        "refresh": 1,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true
+      },
+      {
+        "name": "agent_id",
+        "type": "query",
+        "datasource": {
+          "type": "tdengine",
+          "uid": "tdengine-ds"
+        },
+        "query": "SELECT DISTINCT agent_id FROM agent_run WHERE agent_type IN ($agent_type) ORDER BY agent_id",
+        "refresh": 1,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true
+      },
+      {
+        "name": "session_id",
+        "type": "query",
+        "datasource": {
+          "type": "tdengine",
+          "uid": "tdengine-ds"
+        },
+        "query": "SELECT DISTINCT session_id FROM agent_run WHERE agent_id IN ($agent_id) ORDER BY session_id",
+        "refresh": 1,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "title": "Agent Metrics",
+  "uid": "agent-metrics"
+}

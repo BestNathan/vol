@@ -6,7 +6,7 @@ use chrono::Utc;
 use serde_json::{json, Value};
 use vol_llm_core::stream::AgentStreamEvent;
 
-use crate::run_log::logger::{LogEntry, append_log};
+use crate::run_log::logger::LogEntry;
 
 /// Writes all agent events to JSONL files.
 ///
@@ -179,36 +179,6 @@ fn event_name(event: &AgentStreamEvent) -> String {
     }
 }
 
-use async_trait::async_trait;
-use vol_llm_agent::react::{AgentPlugin, PluginDecision, RunContext};
-
-#[async_trait]
-impl AgentPlugin for LoggerPlugin {
-    fn id(&self) -> String {
-        "logger".to_string()
-    }
-
-    fn priority(&self) -> u32 {
-        10
-    }
-
-    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
-        PluginDecision::Continue
-    }
-
-    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
-        if !Self::should_log(event) {
-            return;
-        }
-        let entry = Self::create_log_entry(event, &ctx.run_id);
-        let path = self.log_path(event, &ctx.run_id);
-        let line = entry.to_json_line();
-        if let Err(e) = append_log(&path, &line).await {
-            tracing::warn!(path = %path.display(), error = %e, "Failed to write log entry");
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,7 +285,6 @@ mod tests {
     fn test_log_entry_all_variants() {
         let temp_dir = TempDir::new().unwrap();
         let plugin = create_test_plugin(&temp_dir);
-        let ctx = create_test_context();
 
         let events = vec![
             AgentStreamEvent::AgentStart {
@@ -407,7 +376,6 @@ mod tests {
             },
         ];
 
-        let _ = &ctx; // suppress unused warning
         for event in events {
             if !LoggerPlugin::should_log(&event) {
                 continue;
@@ -421,41 +389,5 @@ mod tests {
             // Verify JSON serialization works
             assert!(line.contains("run-1"));
         }
-    }
-
-    #[tokio::test]
-    async fn test_listen_writes_log_file() {
-        let temp_dir = TempDir::new().unwrap();
-        let plugin = create_test_plugin(&temp_dir);
-        let ctx = create_test_context();
-
-        let event = AgentStreamEvent::AgentStart {
-            timestamp: Utc::now(),
-            input: "hello".to_string(),
-        };
-        plugin.listen(&event, &ctx).await;
-
-        let log_path = temp_dir.path().join("logs/test-run.jsonl");
-        assert!(log_path.exists());
-        let content = std::fs::read_to_string(&log_path).unwrap();
-        assert!(content.contains("AgentStart"));
-    }
-
-    #[tokio::test]
-    async fn test_listen_writes_plugin_event_log() {
-        let temp_dir = TempDir::new().unwrap();
-        let plugin = create_test_plugin(&temp_dir);
-        let ctx = create_test_context();
-
-        let mut data = Map::new();
-        data.insert("key".to_string(), json!("value"));
-        let event = AgentStreamEvent::plugin_event("my_plugin".to_string(), data);
-        plugin.listen(&event, &ctx).await;
-
-        let log_path = temp_dir.path().join("logs/my_plugin/test-run.jsonl");
-        assert!(log_path.exists());
-        let content = std::fs::read_to_string(&log_path).unwrap();
-        assert!(content.contains("PluginEvent"));
-        assert!(content.contains("my_plugin"));
     }
 }
