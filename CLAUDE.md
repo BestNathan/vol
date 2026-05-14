@@ -39,6 +39,20 @@ index = "https://rsproxy.cn/crates.io-index"
 git-fetch-with-cli = true
 ```
 
+## Development
+
+### Web Frontend
+
+```bash
+dx serve --package vol-llm-ui --bin vol-llm-ui-web --no-default-features --features web --addr 0.0.0.0
+```
+
+### Backend (JSON-RPC Agent Service)
+
+```bash
+ANTHROPIC_AUTH_TOKEN=sk cargo run --example jsonrpc_agent_service -p vol-llm-agent-channel
+```
+
 ## Conventions
 
 - When finished a devlopment task, you **MUST** use skill `wiki-ingest` to add or update project wiki at `docs/wiki`
