@@ -67,6 +67,7 @@ impl ServerState {
 }
 
 /// MCP connection lifecycle manager.
+#[derive(Clone)]
 pub struct McpManager {
     servers: Arc<RwLock<HashMap<String, ServerState>>>,
     max_retries: usize,

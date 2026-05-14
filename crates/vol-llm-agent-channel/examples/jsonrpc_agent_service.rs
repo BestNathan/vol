@@ -13,6 +13,8 @@ use std::sync::Arc;
 use vol_llm_agent::agent_def::AgentDef;
 use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
 use vol_llm_agent_channel::{AgentDispatcher, AgentRegistration, ConnectionHolder, JsonRpcServer};
+use vol_llm_mcp::McpConfig;
+use vol_llm_mcp::McpManager;
 use vol_llm_provider::create_provider;
 use vol_llm_tool::ToolRegistry;
 use vol_session::file_store::FileSessionEntryStore;
@@ -67,6 +69,23 @@ async fn main() {
     // Wrap holder in Arc for the server
     let holder = Arc::new(holder);
 
+    // Create MCP manager and connect
+    let mcp_manager = {
+        let configs = McpConfig::load(Some(std::path::Path::new(".")))
+            .map(|c| c.servers().to_vec())
+            .unwrap_or_else(|e| {
+                tracing::warn!("Failed to load MCP config: {}", e);
+                vec![]
+            });
+        tracing::info!("Loaded {} MCP server configurations", configs.len());
+        let manager = McpManager::new(configs);
+        let manager_for_connect = manager.clone();
+        tokio::spawn(async move {
+            let _ = manager_for_connect.connect().await;
+        });
+        Arc::new(manager)
+    };
+
     // Create JSON-RPC server
     let server = JsonRpcServer::new(
         vec![AgentRegistration {
@@ -76,6 +95,7 @@ async fn main() {
         }],
         ".".to_string(),
         "/tmp/vol-llm-store".to_string(),
+        Some(mcp_manager),
     ).await;
 
     let app = server.into_axum_router();
@@ -90,6 +110,7 @@ async fn main() {
     tracing::info!("           file.list, file.read");
     tracing::info!("           log.list, log.read");
     tracing::info!("           session.list, session.resume");
+    tracing::info!("           mcp.* (list_servers, list_tools, call_tool, etc.)");
 
     axum::serve(listener, app)
         .await
