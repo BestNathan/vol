@@ -34,13 +34,12 @@ pub mod hitl;
 pub mod observability_plugin;
 pub mod plugin;
 pub mod plugin_stream;
-pub mod prompt;
 pub mod response;
 pub mod run_context;
 pub mod state;
 pub mod stream;
 
-pub use agent::{AgentConfig, ReActAgent, SkillsConfig};
+pub use agent::{AgentConfig, ReActAgent};
 pub use config_builder::{AgentConfigBuildError, AgentConfigBuilder};
 pub use hitl::{
     run_cli_approval_loop, spawn_custom_approval_handler, ApprovalChannel, ApprovalHandler,
@@ -50,11 +49,10 @@ pub use plugin::{AgentPlugin, PluginDecision, PluginId, PluginRegistry};
 pub use plugin_stream::{
     create_shortcircuit_stream, create_skip_stream, run_interceptor_loop, spawn_listener_task,
 };
-pub use prompt::{default_system_prompt, SystemPromptBuilder};
+pub use hitl::{ApprovalRequest, ApprovalResponse};
 pub use response::{AgentError, AgentResponse};
 pub use run_context::{PluginRequest, RunContext};
 pub use observability_plugin::{LoggerAgentPlugin, ObservabilityAgentPlugin};
-pub use hitl::{ApprovalRequest, ApprovalResponse};
 pub use state::{ReasoningStep, ToolCallRecord};
 pub use stream::{AgentStreamEvent, AgentStreamReceiver};
 

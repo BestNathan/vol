@@ -78,51 +78,6 @@ async fn test_build_with_plugin() {
 }
 
 // ========================
-// prompt.rs tests
-// ========================
-
-#[test]
-fn test_default_system_prompt_content() {
-    let prompt = prompt::default_system_prompt();
-    // Contains Chinese text for derivatives market risk analyst
-    assert!(prompt.contains("衍生品"));
-    assert!(prompt.contains("风险分析师"));
-    assert!(prompt.contains("工具"));
-}
-
-#[test]
-fn test_system_prompt_builder_with_tools() {
-    let tools = vec![vol_llm_core::ToolDefinition {
-        name: "test_tool".to_string(),
-        description: Some("A test tool".to_string()),
-        parameters: Default::default(),
-    }];
-
-    let prompt = prompt::SystemPromptBuilder::new()
-        .with_tools(&tools)
-        .build();
-
-    // Base prompt content should be present
-    assert!(prompt.contains("衍生品"));
-}
-
-#[test]
-fn test_system_prompt_builder_with_instructions() {
-    let prompt = prompt::SystemPromptBuilder::new()
-        .with_instructions("Custom instructions here")
-        .build();
-
-    assert!(prompt.contains("Custom instructions here"));
-    assert!(prompt.contains("额外指示"));
-}
-
-#[test]
-fn test_system_prompt_builder_default() {
-    let prompt = prompt::SystemPromptBuilder::default().build();
-    assert!(prompt.contains("衍生品"));
-}
-
-// ========================
 // response.rs tests
 // ========================
 
