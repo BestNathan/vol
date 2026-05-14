@@ -17,6 +17,7 @@ use std::rc::Rc;
 use futures_channel::mpsc;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use crate::state::{McpPromptInfo, McpResourceInfo, McpResourceTemplateInfo, McpServerInfo, McpToolInfo};
 use wasm_bindgen::prelude::*;
 
 /// Agent event received from the server subscription.
@@ -456,6 +457,253 @@ impl JsonRpcClient {
                 .map(|arr| arr.iter().filter_map(|e| serde_json::from_value(e.clone()).ok()).collect())
                 .unwrap_or_default();
             cb(Ok(SessionResumeResponse { session_id, entry_count, entries }));
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// List all configured MCP servers.
+    pub fn mcp_list_servers(&self, cb: impl FnOnce(Result<Vec<McpServerInfo>, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "mcp.list_servers",
+            "params": {},
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("servers").and_then(|v| v.as_array()) {
+                Some(servers) => {
+                    let parsed: Vec<McpServerInfo> = servers.iter()
+                        .filter_map(|s| serde_json::from_value(s.clone()).ok())
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no servers in response".to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// List MCP tools across all servers.
+    pub fn mcp_list_tools(&self, server: Option<&str>, cb: impl FnOnce(Result<Vec<McpToolInfo>, String>) + 'static) {
+        let id = self.alloc_id();
+        let mut params = serde_json::Map::new();
+        if let Some(s) = server { params.insert("server".to_string(), serde_json::json!(s)); }
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "mcp.list_tools",
+            "params": params,
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("tools").and_then(|v| v.as_array()) {
+                Some(tools) => {
+                    let parsed: Vec<McpToolInfo> = tools.iter()
+                        .filter_map(|t| serde_json::from_value(t.clone()).ok())
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no tools in response".to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// Call an MCP tool on a specific server.
+    pub fn mcp_call_tool(&self, server: &str, tool_name: &str, arguments: serde_json::Value, cb: impl FnOnce(Result<String, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "mcp.call_tool",
+            "params": { "server": server, "tool_name": tool_name, "arguments": arguments },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            if let Some(error) = result.get("error") {
+                let msg = error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
+                cb(Err(msg.to_string()));
+            } else if let Some(content) = result.get("result").and_then(|v| v.as_str()) {
+                cb(Ok(content.to_string()));
+            } else {
+                cb(Err("no result in response".to_string()));
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// List MCP resources across all servers.
+    pub fn mcp_list_resources(&self, server: Option<&str>, cb: impl FnOnce(Result<Vec<McpResourceInfo>, String>) + 'static) {
+        let id = self.alloc_id();
+        let mut params = serde_json::Map::new();
+        if let Some(s) = server { params.insert("server".to_string(), serde_json::json!(s)); }
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "mcp.list_resources",
+            "params": params,
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("resources").and_then(|v| v.as_array()) {
+                Some(resources) => {
+                    let parsed: Vec<McpResourceInfo> = resources.iter()
+                        .filter_map(|r| serde_json::from_value(r.clone()).ok())
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no resources in response".to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// List MCP resource templates across all servers.
+    pub fn mcp_list_resource_templates(&self, server: Option<&str>, cb: impl FnOnce(Result<Vec<McpResourceTemplateInfo>, String>) + 'static) {
+        let id = self.alloc_id();
+        let mut params = serde_json::Map::new();
+        if let Some(s) = server { params.insert("server".to_string(), serde_json::json!(s)); }
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "mcp.list_resource_templates",
+            "params": params,
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("templates").and_then(|v| v.as_array()) {
+                Some(templates) => {
+                    let parsed: Vec<McpResourceTemplateInfo> = templates.iter()
+                        .filter_map(|t| serde_json::from_value(t.clone()).ok())
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no templates in response".to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// Read an MCP resource by URI.
+    pub fn mcp_read_resource(&self, uri: &str, cb: impl FnOnce(Result<String, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "mcp.read_resource",
+            "params": { "uri": uri },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            if let Some(error) = result.get("error") {
+                let msg = error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
+                cb(Err(msg.to_string()));
+            } else if let Some(content) = result.get("content").and_then(|v| v.as_str()) {
+                cb(Ok(content.to_string()));
+            } else {
+                cb(Err("no content in response".to_string()));
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// List MCP prompts across all servers.
+    pub fn mcp_list_prompts(&self, server: Option<&str>, cb: impl FnOnce(Result<Vec<McpPromptInfo>, String>) + 'static) {
+        let id = self.alloc_id();
+        let mut params = serde_json::Map::new();
+        if let Some(s) = server { params.insert("server".to_string(), serde_json::json!(s)); }
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "mcp.list_prompts",
+            "params": params,
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("prompts").and_then(|v| v.as_array()) {
+                Some(prompts) => {
+                    let parsed: Vec<McpPromptInfo> = prompts.iter()
+                        .filter_map(|p| serde_json::from_value(p.clone()).ok())
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no prompts in response".to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// Reconnect a disconnected MCP server.
+    pub fn mcp_reconnect(&self, server: &str, cb: impl FnOnce(Result<bool, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "mcp.reconnect",
+            "params": { "server": server },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            let success = result.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+            cb(Ok(success));
         });
         self.inner.pending.borrow_mut().insert(id, cb);
     }
