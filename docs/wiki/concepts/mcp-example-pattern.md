@@ -10,7 +10,7 @@ source_count: 1
 # MCP Example Pattern
 
 **Category:** Documentation and integration testing pattern
-**Related:** [[mcp-client-integration]], [[agent-builder-pattern]], [[docs-rs-mcp-example]]
+**Related:** [[mcp-client-integration]], [[mcp-manager-lifecycle]], [[agent-builder-pattern]], [[docs-rs-mcp-example]]
 
 ## Definition
 

@@ -103,15 +103,15 @@ impl ToolRegistry {
         Arc::new(Self { tools })
     }
 
-    /// Discover and register all MCP tools from an McpSession.
+    /// Discover and register all MCP tools from an McpManager.
     ///
-    /// Iterates all connected servers, discovers their tools,
+    /// Queries the manager for tools from all connected servers,
     /// creates McpTool wrappers, and registers them.
     /// Returns the number of tools registered.
-    pub async fn register_from_mcp(&mut self, session: Arc<vol_llm_mcp::McpSession>) -> usize {
+    pub async fn register_from_mcp(&mut self, manager: Arc<vol_llm_mcp::McpManager>) -> usize {
         use crate::mcp_tool::McpTool;
 
-        let tools = session.list_all_tools();
+        let tools = manager.list_all_tools().await;
         let mut count = 0;
         for (server, tool_info) in tools {
             let description = tool_info.description.as_deref().unwrap_or_else(|| {
@@ -119,7 +119,7 @@ impl ToolRegistry {
                 &tool_info.name
             });
             let mcp_tool = McpTool::new(
-                session.clone(),
+                manager.clone(),
                 &server,
                 &tool_info.name,
                 description,
@@ -223,12 +223,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_register_from_mcp_empty_session() {
-        use vol_llm_mcp::McpSession;
+    async fn test_register_from_mcp_empty_manager() {
+        use vol_llm_mcp::McpManager;
 
-        let session = Arc::new(McpSession::connect(vec![]).await);
+        let manager = Arc::new(McpManager::new(vec![]));
+        manager.connect().await.unwrap();
         let mut registry = ToolRegistry::new();
-        let count = registry.register_from_mcp(session).await;
+        let count = registry.register_from_mcp(manager).await;
         assert_eq!(count, 0);
         assert!(registry.tool_names().is_empty());
     }

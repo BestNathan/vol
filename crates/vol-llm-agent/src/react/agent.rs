@@ -7,7 +7,7 @@ use crate::react::state::ToolCallRecord;
 use std::path::PathBuf;
 use std::sync::Arc;
 use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
-use vol_llm_mcp::McpSession;
+use vol_llm_mcp::McpManager;
 use vol_llm_observability::ObservabilityAgentConfig;
 use vol_llm_tool::ToolRegistry;
 use vol_llm_core::{
@@ -33,8 +33,8 @@ pub struct AgentConfig {
     pub context_builder: ContextBuilder,
     pub plugin_registry: PluginRegistry,
 
-    // === MCP session ===
-    pub mcp_session: Option<Arc<McpSession>>,
+    // === MCP ===
+    pub mcp_manager: Option<Arc<McpManager>>,
 
     // Observability fields
     pub agent_id: String,
@@ -64,7 +64,7 @@ impl AgentConfig {
             sandbox: None,
             context_builder: ContextBuilderBuilder::new(128_000).build(),
             plugin_registry: PluginRegistry::new(),
-            mcp_session: None,
+            mcp_manager: None,
             agent_id: generate_agent_id(),
             working_dir: PathBuf::from("."),
             observability: Some(ObservabilityAgentConfig::default()),
@@ -82,7 +82,7 @@ impl Default for AgentConfig {
             sandbox: None,
             context_builder: ContextBuilderBuilder::new(128_000).build(),
             plugin_registry: PluginRegistry::new(),
-            mcp_session: None,
+            mcp_manager: None,
             agent_id: generate_agent_id(),
             working_dir: PathBuf::from("."),
             observability: Some(ObservabilityAgentConfig::default()),
@@ -594,12 +594,9 @@ impl ReActAgent {
             }
         }
 
-        // Disconnect MCP session
-        if let Some(ref mcp_session) = config.mcp_session {
-            if let Ok(session) = Arc::try_unwrap(mcp_session.clone()) {
-                let mut session = session;
-                session.disconnect().await;
-            }
+        // Disconnect MCP manager
+        if let Some(ref mcp_manager) = config.mcp_manager {
+            mcp_manager.disconnect().await.ok();
         }
 
         agent_result

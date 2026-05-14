@@ -48,6 +48,7 @@ This example validates that the entire MCP pipeline works end-to-end: config par
 ## Concepts Covered
 
 - [[mcp-client-integration]]: The example exercises the full MCP client integration flow
+- [[mcp-manager-lifecycle]]: Agent build uses McpManager internally via with_mcp_from_config() for connection lifecycle
 - [[mcp-example-pattern]]: Pattern for demonstrating MCP tool discovery and execution
 - [[docs-rs-tools]]: The example uses docs-rs MCP tools (search_crates, readme)
 - [[agent-builder-pattern]]: Example of fluent builder with `with_mcp_from_config()`

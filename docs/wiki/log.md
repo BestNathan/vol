@@ -1,5 +1,15 @@
 # Change Log
 
+## [2026-05-13] ingest | McpManager Implementation — Connection Lifecycle Manager
+- Created sources: [[mcp-manager-impl]]
+- Created concepts: [[mcp-manager-lifecycle]]
+- Updated concepts: [[mcp-client-integration]] (McpSession → McpManager, async list_all_tools, auto-reconnect)
+- Updated entities: [[vol-llm-mcp-crate]] (added McpManager, ServerStatus, ServerState modules)
+- Updated sources: [[react-agent-mcp-integration]] (added McpManager migration section)
+- Updated index: vol-llm-mcp-crate summary, new concept/source entries
+- Cross-references added: 6
+- Changes: Replaced McpSession with McpManager across vol-llm-mcp, vol-llm-tool, vol-llm-agent crates; added connection state tracking (Connected/Disconnected/Connecting/Error), auto-reconnect with exponential backoff (1s-30s, 5 max retries), full MCP protocol (resources, prompts); 14 tests pass in vol-llm-mcp, 6 in vol-llm-tool, 142 in vol-llm-agent
+
 ## [2026-05-12] ingest | Full Tailwind CSS Migration — All 16 Components
 - Created sources: [[tailwind-css-full-migration]]
 - Updated concepts: [[tailwind-css-migration]] (marked complete, added infrastructure section, responsive breakpoints)

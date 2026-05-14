@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use vol_llm_context::{ContextBuilderBuilder, ContextContributor};
 use vol_llm_core::SandboxRef;
-use vol_llm_mcp::{McpConfig, McpSession};
+use vol_llm_mcp::{McpConfig, McpManager};
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::{ExecutableTool, ToolRegistry};
 use vol_session::{InMemoryEntryStore, Session};
@@ -24,7 +24,7 @@ pub struct AgentConfigBuilder {
     context_builder: Option<vol_llm_context::ContextBuilder>,
     plugin_registry: PluginRegistry,
     contributors: Vec<Box<dyn ContextContributor>>,
-    mcp_session: Option<Arc<McpSession>>,
+    mcp_manager: Option<Arc<McpManager>>,
     working_dir: Option<PathBuf>,
 }
 
@@ -40,7 +40,7 @@ impl AgentConfigBuilder {
             context_builder: None,
             plugin_registry: PluginRegistry::new(),
             contributors: Vec::new(),
-            mcp_session: None,
+            mcp_manager: None,
             working_dir: None,
         }
     }
@@ -124,7 +124,11 @@ impl AgentConfigBuilder {
             return self;
         }
 
-        let session = Arc::new(McpSession::connect(config.servers().to_vec()).await);
+        let manager = Arc::new(McpManager::new(config.servers().to_vec()));
+        if let Err(e) = manager.connect().await {
+            tracing::warn!("MCP manager connect error: {}", e);
+            return self;
+        }
 
         // Register MCP tools into the tool registry
         let tool_registry = match self.tool_registry.take() {
@@ -133,7 +137,7 @@ impl AgentConfigBuilder {
                     Ok(r) => r,
                     Err(arc) => (*arc).clone(),
                 };
-                reg.register_from_mcp(session.clone()).await;
+                reg.register_from_mcp(manager.clone()).await;
                 Arc::new(reg)
             }
             None => {
@@ -142,12 +146,12 @@ impl AgentConfigBuilder {
                 for tool in tools {
                     registry.register_boxed(tool);
                 }
-                registry.register_from_mcp(session.clone()).await;
+                registry.register_from_mcp(manager.clone()).await;
                 Arc::new(registry)
             }
         };
         self.tool_registry = Some(tool_registry);
-        self.mcp_session = Some(session);
+        self.mcp_manager = Some(manager);
 
         self
     }
@@ -218,7 +222,7 @@ impl AgentConfigBuilder {
             sandbox: self.sandbox,
             context_builder,
             plugin_registry: self.plugin_registry,
-            mcp_session: self.mcp_session,
+            mcp_manager: self.mcp_manager,
             agent_id: working_dir
                 .as_ref()
                 .and_then(|d| d.file_name())
