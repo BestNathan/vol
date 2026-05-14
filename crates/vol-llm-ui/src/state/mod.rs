@@ -202,7 +202,7 @@ pub struct OpenFileTab {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ActiveTab { Conversation, Sessions, Tools, Workspace, Skills, Logs, Agents }
+pub enum ActiveTab { Conversation, Sessions, Tools, Workspace, Skills, Mcp, Logs, Agents }
 
 impl ActiveTab {
     pub fn toggle(self) -> Self {
@@ -211,12 +211,17 @@ impl ActiveTab {
             ActiveTab::Sessions => ActiveTab::Tools,
             ActiveTab::Tools => ActiveTab::Workspace,
             ActiveTab::Workspace => ActiveTab::Skills,
-            ActiveTab::Skills => ActiveTab::Logs,
+            ActiveTab::Skills => ActiveTab::Mcp,
+            ActiveTab::Mcp => ActiveTab::Logs,
             ActiveTab::Logs => ActiveTab::Agents,
             ActiveTab::Agents => ActiveTab::Conversation,
         }
     }
 }
+
+/// Sub-tabs within the MCP panel.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum McpSubtab { Servers, Tools, Resources, Prompts }
 
 #[derive(Debug, Clone)]
 pub struct SessionDialogEntry {
@@ -485,6 +490,58 @@ pub struct AgentListEntry {
     pub scope: String,
 }
 
+/// MCP server info returned by mcp.list_servers.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpServerInfo {
+    pub name: String,
+    pub status: String,
+}
+
+/// MCP tool info returned by mcp.list_tools.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpToolInfo {
+    pub server: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub input_schema: Option<serde_json::Value>,
+}
+
+/// MCP resource info returned by mcp.list_resources.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpResourceInfo {
+    pub server: String,
+    pub name: String,
+    pub uri: String,
+    pub mime_type: Option<String>,
+    pub description: Option<String>,
+}
+
+/// MCP resource template info returned by mcp.list_resource_templates.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpResourceTemplateInfo {
+    pub server: String,
+    pub name: String,
+    pub uri_template: String,
+    pub description: Option<String>,
+}
+
+/// MCP prompt info returned by mcp.list_prompts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpPromptInfo {
+    pub server: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub arguments: Option<Vec<McpPromptArgInfo>>,
+}
+
+/// MCP prompt argument definition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpPromptArgInfo {
+    pub name: String,
+    pub description: Option<String>,
+    pub required: bool,
+}
+
 /// Local state for AgentsPanel.
 #[cfg(all(feature = "web", not(feature = "tui")))]
 #[derive(Debug)]
@@ -524,6 +581,78 @@ impl SessionsState {
     pub fn new() -> Self {
         Self { sessions: Vec::new(), loading: false, error: None }
     }
+}
+
+/// MCP server display row with reconnect state.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct McpServerRowState {
+    pub name: String,
+    pub status: String,
+    pub reconnecting: bool,
+}
+
+/// Local state for McpPanel.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct McpState {
+    pub servers: Vec<McpServerInfo>,
+    pub tools: Vec<McpToolInfo>,
+    pub resources: Vec<McpResourceInfo>,
+    pub resource_templates: Vec<McpResourceTemplateInfo>,
+    pub prompts: Vec<McpPromptInfo>,
+    pub loading: bool,
+    pub error: Option<String>,
+    pub active_subtab: McpSubtab,
+    pub tool_call_dialog: Option<McpToolCallState>,
+    pub resource_viewer: Option<McpResourceViewerState>,
+    pub prompt_viewer: Option<McpPromptViewerState>,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl McpState {
+    pub fn new() -> Self {
+        Self {
+            servers: Vec::new(), tools: Vec::new(), resources: Vec::new(),
+            resource_templates: Vec::new(), prompts: Vec::new(),
+            loading: true, error: None, active_subtab: McpSubtab::Servers,
+            tool_call_dialog: None, resource_viewer: None, prompt_viewer: None,
+        }
+    }
+}
+
+/// State for the tool call dialog.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct McpToolCallState {
+    pub server: String,
+    pub tool_name: String,
+    pub arguments_json: String,
+    pub result: Option<String>,
+    pub error: Option<String>,
+    pub loading: bool,
+}
+
+/// State for the resource viewer.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct McpResourceViewerState {
+    pub uri: String,
+    pub content: Option<String>,
+    pub error: Option<String>,
+    pub loading: bool,
+}
+
+/// State for the prompt viewer.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct McpPromptViewerState {
+    pub server: String,
+    pub prompt_name: String,
+    pub args_json: String,
+    pub result: Option<String>,
+    pub error: Option<String>,
+    pub loading: bool,
 }
 
 /// Local state for SessionDialog.
@@ -985,7 +1114,8 @@ mod tests {
         assert_eq!(Sessions.toggle(), Tools);
         assert_eq!(Tools.toggle(), Workspace);
         assert_eq!(Workspace.toggle(), Skills);
-        assert_eq!(Skills.toggle(), Logs);
+        assert_eq!(Skills.toggle(), Mcp);
+        assert_eq!(Mcp.toggle(), Logs);
         assert_eq!(Logs.toggle(), Agents);
         assert_eq!(Agents.toggle(), Conversation);
     }

@@ -352,6 +352,7 @@ fn TabContent() -> Element {
         ActiveTab::Skills => rsx! { SkillsPanel {} },
         ActiveTab::Logs => rsx! { LogViewer {} },
         ActiveTab::Agents => rsx! { AgentsPanel {} },
+        ActiveTab::Mcp => rsx! { div { "MCP panel (coming soon)" } },
         ActiveTab::Sessions => rsx! { SessionsPanel {} },
     }
 }
