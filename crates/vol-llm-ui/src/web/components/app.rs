@@ -14,6 +14,7 @@ use super::file_content::FileContentView;
 use super::file_tree::FileTree;
 use super::input_area::InputArea;
 use super::log_viewer::LogViewer;
+use super::mcp_panel::McpPanel;
 use super::sessions_panel::SessionsPanel;
 use super::skills::SkillsPanel;
 use super::status_bar::StatusBar;
@@ -314,6 +315,7 @@ fn TabBar() -> Element {
             TabButton { state: state.clone(), tab: ActiveTab::Tools, label: "Tools" }
             TabButton { state: state.clone(), tab: ActiveTab::Workspace, label: "Workspace" }
             TabButton { state: state.clone(), tab: ActiveTab::Skills, label: "Skills" }
+            TabButton { state: state.clone(), tab: ActiveTab::Mcp, label: "MCP" }
             TabButton { state: state.clone(), tab: ActiveTab::Logs, label: "Logs" }
             TabButton { state: state.clone(), tab: ActiveTab::Agents, label: "Agents" }
         }
@@ -352,7 +354,7 @@ fn TabContent() -> Element {
         ActiveTab::Skills => rsx! { SkillsPanel {} },
         ActiveTab::Logs => rsx! { LogViewer {} },
         ActiveTab::Agents => rsx! { AgentsPanel {} },
-        ActiveTab::Mcp => rsx! { div { "MCP panel (coming soon)" } },
+        ActiveTab::Mcp => rsx! { McpPanel {} },
         ActiveTab::Sessions => rsx! { SessionsPanel {} },
     }
 }
