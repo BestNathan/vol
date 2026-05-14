@@ -7,6 +7,8 @@ use axum::Router;
 use axum::extract::ws::{WebSocket, WebSocketUpgrade};
 use axum::routing::get;
 
+use vol_llm_mcp::manager::McpManager;
+
 use crate::connection::ConnectionHolder;
 use crate::dispatcher::AgentDispatcher;
 use crate::router::AgentRouter;
@@ -27,6 +29,7 @@ pub struct JsonRpcServer {
     holders: HashMap<String, Arc<ConnectionHolder>>,
     working_dir: String,
     store_dir: String,
+    mcp_manager: Option<Arc<McpManager>>,
 }
 
 impl JsonRpcServer {
@@ -35,6 +38,7 @@ impl JsonRpcServer {
         agents: Vec<AgentRegistration>,
         working_dir: String,
         store_dir: String,
+        mcp_manager: Option<Arc<McpManager>>,
     ) -> Self {
         let router = AgentRouter::new();
         let mut holders = HashMap::new();
@@ -46,7 +50,7 @@ impl JsonRpcServer {
             holders.insert(reg.agent_id, reg.holder);
         }
 
-        Self { router, dispatchers, holders, working_dir, store_dir }
+        Self { router, dispatchers, holders, working_dir, store_dir, mcp_manager }
     }
 
     /// Build axum Router with the JSON-RPC WebSocket endpoint at `/ws`.
@@ -74,6 +78,7 @@ async fn handle_ws(socket: WebSocket, server: Arc<JsonRpcServer>) {
         server.working_dir.clone(),
         server.store_dir.clone(),
         session_store,
+        server.mcp_manager.clone(),
     );
     let conn_arc = Arc::new(conn);
     conn_arc.run().await;

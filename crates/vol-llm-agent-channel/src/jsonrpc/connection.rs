@@ -21,6 +21,7 @@ use crate::request::{AgentRequest, RunResult};
 use crate::router::AgentRouter;
 
 use super::serde_helpers::{parse_jsonrpc_request, to_jsonrpc_error, to_jsonrpc_event, to_jsonrpc_response, JsonRpcRequest};
+use vol_llm_mcp::manager::McpManager;
 use vol_session::{Session, SessionEntryStore};
 
 /// Format a unix timestamp as a human-readable age string.
@@ -67,6 +68,8 @@ pub struct JsonRpcConnection {
     store_dir: String,
     /// Session entry store for listing and resuming sessions.
     session_store: Arc<vol_session::FileSessionEntryStore>,
+    /// MCP manager for tool/resource/prompt operations.
+    mcp_manager: Option<Arc<McpManager>>,
 }
 
 impl JsonRpcConnection {
@@ -79,6 +82,7 @@ impl JsonRpcConnection {
         working_dir: String,
         store_dir: String,
         session_store: Arc<vol_session::FileSessionEntryStore>,
+        mcp_manager: Option<Arc<McpManager>>,
     ) -> Self {
         let (tx, rx) = ws.split();
         Self {
@@ -94,6 +98,7 @@ impl JsonRpcConnection {
             session_store,
             working_dir,
             store_dir,
+            mcp_manager,
         }
     }
 
@@ -211,12 +216,38 @@ impl JsonRpcConnection {
             JsonRpcRequest::SessionEntries { id, session_id } => {
                 self.handle_session_entries(*id, session_id.clone()).await
             }
+            JsonRpcRequest::McpListServers { id } => {
+                self.handle_mcp_list_servers(*id).await
+            }
+            JsonRpcRequest::McpListTools { id, server } => {
+                self.handle_mcp_list_tools(*id, server.clone()).await
+            }
+            JsonRpcRequest::McpCallTool { id, server, tool_name, arguments } => {
+                self.handle_mcp_call_tool(*id, server.clone(), tool_name.clone(), arguments.clone()).await
+            }
+            JsonRpcRequest::McpListResources { id, server } => {
+                self.handle_mcp_list_resources(*id, server.clone()).await
+            }
+            JsonRpcRequest::McpListResourceTemplates { id, server } => {
+                self.handle_mcp_list_resource_templates(*id, server.clone()).await
+            }
+            JsonRpcRequest::McpReadResource { id, uri } => {
+                self.handle_mcp_read_resource(*id, uri.clone()).await
+            }
+            JsonRpcRequest::McpListPrompts { id, server } => {
+                self.handle_mcp_list_prompts(*id, server.clone()).await
+            }
+            JsonRpcRequest::McpGetPrompt { id, name, arguments } => {
+                self.handle_mcp_get_prompt(*id, name.clone(), arguments.clone()).await
+            }
+            JsonRpcRequest::McpReconnect { id, server } => {
+                self.handle_mcp_reconnect(*id, server.clone()).await
+            }
+            JsonRpcRequest::McpServerStatus { id } => {
+                self.handle_mcp_server_status(*id).await
+            }
             JsonRpcRequest::Unknown { id, method } => {
                 return self.send_ws_text(&to_jsonrpc_error(*id, -32601, format!("Method not found: {method}"))).await;
-            }
-            // MCP methods — handlers added in Task 4.
-            _ => {
-                return self.send_ws_text(&to_jsonrpc_error(None, -32601, "Method not yet implemented".into())).await;
             }
         };
 
