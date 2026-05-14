@@ -214,6 +214,10 @@ impl JsonRpcConnection {
             JsonRpcRequest::Unknown { id, method } => {
                 return self.send_ws_text(&to_jsonrpc_error(*id, -32601, format!("Method not found: {method}"))).await;
             }
+            // MCP methods — handlers added in Task 4.
+            _ => {
+                return self.send_ws_text(&to_jsonrpc_error(None, -32601, "Method not yet implemented".into())).await;
+            }
         };
 
         self.send_ws_text(&result).await

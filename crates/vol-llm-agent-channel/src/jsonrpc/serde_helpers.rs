@@ -78,6 +78,47 @@ pub enum JsonRpcRequest {
         id: u64,
         session_id: String,
     },
+    McpListServers {
+        id: u64,
+    },
+    McpListTools {
+        id: u64,
+        server: Option<String>,
+    },
+    McpCallTool {
+        id: u64,
+        server: String,
+        tool_name: String,
+        arguments: serde_json::Value,
+    },
+    McpListResources {
+        id: u64,
+        server: Option<String>,
+    },
+    McpListResourceTemplates {
+        id: u64,
+        server: Option<String>,
+    },
+    McpReadResource {
+        id: u64,
+        uri: String,
+    },
+    McpListPrompts {
+        id: u64,
+        server: Option<String>,
+    },
+    McpGetPrompt {
+        id: u64,
+        name: String,
+        arguments: Option<std::collections::HashMap<String, serde_json::Value>>,
+    },
+    McpReconnect {
+        id: u64,
+        server: String,
+    },
+    McpServerStatus {
+        id: u64,
+    },
     /// Fallback for unknown/unrecognized methods.
     Unknown {
         id: Option<u64>,
@@ -424,6 +465,87 @@ pub fn parse_jsonrpc_request(text: &str) -> Result<JsonRpcRequest, String> {
                 .to_string();
             Ok(JsonRpcRequest::SessionEntries { id, session_id })
         }
+        "mcp.list_servers" => Ok(JsonRpcRequest::McpListServers { id }),
+        "mcp.list_tools" => {
+            let server = params
+                .get("server")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            Ok(JsonRpcRequest::McpListTools { id, server })
+        }
+        "mcp.call_tool" => {
+            let server = params
+                .get("server")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| "mcp.call_tool: missing 'server'".to_string())?
+                .to_string();
+            let tool_name = params
+                .get("tool_name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| "mcp.call_tool: missing 'tool_name'".to_string())?
+                .to_string();
+            let arguments =
+                params.get("arguments").cloned().unwrap_or(serde_json::json!({}));
+            Ok(JsonRpcRequest::McpCallTool {
+                id,
+                server,
+                tool_name,
+                arguments,
+            })
+        }
+        "mcp.list_resources" => {
+            let server = params
+                .get("server")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            Ok(JsonRpcRequest::McpListResources { id, server })
+        }
+        "mcp.list_resource_templates" => {
+            let server = params
+                .get("server")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            Ok(JsonRpcRequest::McpListResourceTemplates { id, server })
+        }
+        "mcp.read_resource" => {
+            let uri = params
+                .get("uri")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| "mcp.read_resource: missing 'uri'".to_string())?
+                .to_string();
+            Ok(JsonRpcRequest::McpReadResource { id, uri })
+        }
+        "mcp.list_prompts" => {
+            let server = params
+                .get("server")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            Ok(JsonRpcRequest::McpListPrompts { id, server })
+        }
+        "mcp.get_prompt" => {
+            let name = params
+                .get("name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| "mcp.get_prompt: missing 'name'".to_string())?
+                .to_string();
+            let arguments = params
+                .get("arguments")
+                .and_then(|v| serde_json::from_value(v.clone()).ok());
+            Ok(JsonRpcRequest::McpGetPrompt {
+                id,
+                name,
+                arguments,
+            })
+        }
+        "mcp.reconnect" => {
+            let server = params
+                .get("server")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| "mcp.reconnect: missing 'server'".to_string())?
+                .to_string();
+            Ok(JsonRpcRequest::McpReconnect { id, server })
+        }
+        "mcp.server_status" => Ok(JsonRpcRequest::McpServerStatus { id }),
         _ => Ok(JsonRpcRequest::Unknown {
             id: Some(id),
             method,
