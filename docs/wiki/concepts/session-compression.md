@@ -17,12 +17,12 @@ source_count: 1
 Two-layer compression for session message history that reduces token usage while preserving semantic meaning. Layer 1: rule-based tool call summarization. Layer 2: LLM-driven conversation summarization.
 
 ## Key Points
-- `ToolCallCompressor`: Rule-based, extracts tool name/args/result (truncated) into summary lines [[session-compressor-plan]]
-- `ConversationCompressor`: LLM-driven, sends dialogue to LLM with summary prompt, returns single user message [[session-compressor-plan]]
-- `SessionCompressor`: Orchestrator that splits messages, delegates to sub-compressors, merges results [[session-compressor-plan]]
-- Keeps last 5 messages untouched (configurable via `KEEP_LAST`) [[session-compressor-plan]]
-- Graceful degradation: if LLM compression fails, includes uncompressed history as fallback [[session-compressor-plan]]
-- Output format: `[tool_summary_msg (system), conv_summary_msg (user)] + recent messages` [[session-compressor-plan]]
+- `ToolCallCompressor`: Rule-based, extracts tool name/args/result (truncated) into summary lines [[session-compression]]
+- `ConversationCompressor`: LLM-driven, sends dialogue to LLM with summary prompt, returns single user message [[session-compression]]
+- `SessionCompressor`: Orchestrator that splits messages, delegates to sub-compressors, merges results [[session-compression]]
+- Keeps last 5 messages untouched (configurable via `KEEP_LAST`) [[session-compression]]
+- Graceful degradation: if LLM compression fails, includes uncompressed history as fallback [[session-compression]]
+- Output format: `[tool_summary_msg (system), conv_summary_msg (user)] + recent messages` [[session-compression]]
 
 ## How It Works
 

@@ -18,12 +18,12 @@ source_count: 3
 
 ## Key Points
 - Replaced the older `PluginContext` — the `AgentPlugin` trait now accepts `&RunContext` directly [[plugin-context-migration]]
-- Immutable fields: `run_id`, `user_input`, `session_id`, `model` — fixed at run start [[run-context-plan]]
+- Immutable fields: `run_id`, `user_input`, `session_id`, `model` — fixed at run start [[run-context]]
 - **`model` field**: The LLM model name used for this run, extracted from `config.llm.model()`. Empty string normalized to `"unknown"`. Enables observability plugins to include model identity in logs [[loki-plugin-otel-migration-tasks-3-4]].
-- Mutable fields use `AtomicU32` (iteration) and `Arc<RwLock<>>` (tool_calls, data) for safe sharing across async tasks [[run-context-plan]]
-- Resource references: `session: Arc<Session>`, `tools: Arc<ToolRegistry>`, `config: AgentConfig` [[run-context-plan]]
-- Plugin data storage via typed `get<T>()` / `set<T>()` methods with serde serialization [[run-context-plan]]
-- Implements `Clone` — shares underlying Arcs, copies immutable fields [[run-context-plan]]
+- Mutable fields use `AtomicU32` (iteration) and `Arc<RwLock<>>` (tool_calls, data) for safe sharing across async tasks [[run-context]]
+- Resource references: `session: Arc<Session>`, `tools: Arc<ToolRegistry>`, `config: AgentConfig` [[run-context]]
+- Plugin data storage via typed `get<T>()` / `set<T>()` methods with serde serialization [[run-context]]
+- Implements `Clone` — shares underlying Arcs, copies immutable fields [[run-context]]
 
 ## How It Works
 

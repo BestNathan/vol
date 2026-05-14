@@ -3,14 +3,14 @@ type: concept
 category: pattern
 tags: [dioxus, web, frontend, component, wasm]
 created: 2026-05-08
-updated: 2026-05-12 (tailwind-css-full-migration)
-source_count: 6
+updated: 2026-05-14 (mcp-state-types)
+source_count: 8
 ---
 
 # Dioxus Web Pattern
 
 **Category:** Web frontend architecture
-**Related:** [[vol-llm-ui-crate]], [[dioxus-signal-pattern]], [[ratatui-tui-pattern]], [[human-in-the-loop]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]]
+**Related:** [[vol-llm-ui-crate]], [[dioxus-signal-pattern]], [[ratatui-tui-pattern]], [[human-in-the-loop]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[mcp-state-types]]
 
 ## Definition
 
@@ -20,7 +20,7 @@ Component architecture for a browser-based UI built with Dioxus 0.6, compiled to
 
 - Dioxus 0.6 via `dioxus::launch(App)` in binary entry point
 - Feature gated: `#[cfg(feature = "web")]` in `lib.rs`, binary requires `--features web`
-- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `TreeNode`, `ToolsTabContent`, `FileContentView`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`
+- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `TreeNode`, `ToolsTabContent`, `FileContentView`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel`, `McpPanel` (placeholder)
 - Global CSS embedded as `const GLOBAL_CSS: &str`, injected via `<style>` element
 - Dark theme with flexbox layout: status bar (top), tools panel (left), tab content (right), input area (bottom)
 - Tab routing: `TabContent` matches on `ActiveTab` enum to render the active panel
@@ -43,7 +43,7 @@ pub struct AppState {
 ```
 
 `App()` also creates and provides via `use_context_provider`:
-- `Signal<GlobalState>` — shared run/session/connection info
+- `Signal<GlobalState>` — shared run/session/connection info, extended with `ConnectionStatus` for connection state tracking [[connection-state-dashboard]]
 - `Signal<ApprovalUiState>` — shared HITL approval state
 - `Signal<AgentsState>` — agents panel state
 - `Signal<SessionsState>` — sessions panel state [[sessions-ui-pattern]]
@@ -62,16 +62,17 @@ All state was centralized in one big signal. Replaced by EventBus pattern [[even
 
 ```
 App
-├── StatusBar          (agent status, duration, mode)
+├── StatusBar          (agent status, duration, mode, ConnectionStatePanel)
 ├── main-layout
 │   ├── ToolsPanel     (tool call history, left sidebar)
 │   └── right-panel
-│       ├── TabBar     (Conversation | Sessions | Workspace | Skills | Logs | Agents)
+│       ├── TabBar     (Conversation | Sessions | Workspace | Skills | Mcp | Logs | Agents)
 │       ├── TabContent (routed by ActiveTab)
 │       │   ├── ConversationView
 │       │   ├── SessionsPanel
 │       │   ├── WorkspacePanel
 │       │   ├── SkillsPanel
+│       │   ├── McpPanel (placeholder)
 │       │   ├── LogViewer
 │       │   └── AgentsPanel
 │       └── InputArea  (text input + send button)
@@ -126,3 +127,5 @@ Both frontends share `UiState` / `UiEvent` / `ActiveTab` types and the same conn
 - [[task-6-sessions-tab-wiring]]: Source documenting Sessions tab wiring, SessionDialog removal, checkpoint CSS
 - [[sessions-ui-pattern]]: Session browsing as a dedicated tab with SessionsState signal management
 - [[tailwind-css-migration]]: Systematic migration from global CSS to Tailwind utility classes
+- [[connection-state-dashboard]]: Real-time connection status display via EventBus subscription
+- [[mcp-state-types]]: State types for MCP server/tool/resource/prompt display in web frontend

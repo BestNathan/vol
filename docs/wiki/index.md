@@ -1,12 +1,12 @@
 # Wiki Index
 
-Last updated: 2026-05-12 (conversation-tailwind-migration)
+Last updated: 2026-05-14 (mcp-state-types)
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs | active | 2026-05-10 |
+| [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs, ConnectionStatePanel connection status dashboard, and MCP state types (McpState, McpSubtab, McpServerInfo, etc.) | active | 2026-05-14 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate | active | 2026-05-04 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions | stable | 2026-05-04 |
@@ -61,18 +61,24 @@ Last updated: 2026-05-12 (conversation-tailwind-migration)
 | [[ratatui-tui-pattern]] | Layout and widget composition patterns for ratatui 0.30 TUI rendering | active | 2026-05-08 |
 | [[ui-event-loop-pattern]] | crossterm EventStream + tokio::select! multiplexing for async TUI | active | 2026-05-08 |
 | [[dioxus-signal-pattern]] | Signal-based state management with Signal<UiState> via Dioxus context | active | 2026-05-08 |
-| [[dioxus-web-pattern]] | Dioxus 0.6 WASM component architecture and rendering patterns | active | 2026-05-08 |
+| [[dioxus-web-pattern]] | Dioxus 0.6 WASM component architecture and rendering patterns, 18 components including ConnectionStatePanel | active | 2026-05-14 |
 | [[remote-agent-connection]] | AgentConnection and FileOperations traits with local/remote implementations | active | 2026-05-08 |
 | [[json-rpc-websocket]] | JSON-RPC 2.0 over WebSocket protocol for remote agent communication | active | 2026-05-08 |
 | [[jsonrpc-transport]] | JSON-RPC 2.0 over WebSocket implementing the Connection trait | active | 2026-05-09 |
 | [[jsonrpc-server-handler]] | Historical JSON-RPC handler architecture — deleted, replaced by jsonrpc-transport | stale | 2026-05-09 |
 | [[file-tab-pattern]] | Tabbed file viewer with non-component render function pattern for Dioxus | active | 2026-05-10 |
 | [[workspace-tree-pattern]] | Recursive WorkspaceTreeNode tree with lazy-loaded directory children via JSON-RPC file.list | active | 2026-05-10 |
-| [[event-bus-pattern]] | EventBus with UiEventKind routing, SubscriptionSet auto-cleanup, per-component local signals | active | 2026-05-11 |
+| [[event-bus-pattern]] | EventBus with UiEventKind routing, SubscriptionSet auto-cleanup, per-component local signals, connection status event handling (WsConnected/WsConnecting/WsDisconnected) | active | 2026-05-14 |
 | [[mcp-client-integration]] | Bridging MCP server tools into ExecutableTool trait — McpTool, McpSession, AgentConfigBuilder integration | active | 2026-05-11 |
 | [[mcp-example-pattern]] | Pattern for runnable example files demonstrating MCP integration with ReActAgent | active | 2026-05-11 |
 | [[sessions-ui-pattern]] | Tab-based session browsing with SessionsState signal, SessionsPanel component, checkpoint CSS | active | 2026-05-11 |
+| [[connection-state-dashboard-pattern]] | ConnectionStatePanel component subscribing to WsConnected/WsConnecting/WsDisconnected via EventBus, rendering color-coded status in StatusBar | active | 2026-05-14 |
 | [[tailwind-css-migration]] | Systematic migration from global CSS to Tailwind utility classes — ALL 16 components complete, GLOBAL_CSS deleted | complete | 2026-05-12 |
+| [[agent-error-handling]] | Hierarchical error types with retryable vs non-retryable classification and exponential backoff | active | 2026-05-14 |
+| [[loki-plugin-otel-migration-design]] | Design spec for migrating LokiPlugin from HTTP POST to OTel SDK via tracing::info! | active | 2026-05-14 |
+| [[loki-raw-event-serialization-design]] | Design spec for flat JSON serialization format of agent events | active | 2026-05-14 |
+| [[otel-dependency-upgrade]] | Workspace dependency upgrade from OTel 0.21 to 0.29 with breaking API changes | active | 2026-05-14 |
+| [[mcp-state-types]] | State types and wire structures for displaying MCP servers, tools, resources, and prompts in the Dioxus web frontend | active | 2026-05-14 |
 
 ## Sources
 
@@ -104,6 +110,7 @@ Last updated: 2026-05-12 (conversation-tailwind-migration)
 | [[docs-rs-mcp-example]] | Runnable example: ReActAgent connecting to docs-rs MCP server via with_mcp_from_config() | active | 2026-05-11 |
 | [[task-6-sessions-tab-wiring]] | Sessions tab wired into App: SessionsState signal, SessionsPanel, TabBar, CSS, checkpoint rendering | active | 2026-05-11 |
 | [[conversation-tailwind-migration]] | conversation.rs migrated from semantic CSS classes to inline Tailwind utilities — all 9 message types updated | active | 2026-05-12 |
+| [[connection-state-dashboard]] | ConnectionStatePanel component: EventBus-driven connection status indicator in StatusBar, color-coded for connected/connecting/disconnected states | active | 2026-05-14 |
 | [[tailwind-css-full-migration]] | Full Tailwind CSS v4 migration — all 16 components, GLOBAL_CSS deleted, build pipeline verified | complete | 2026-05-12 |
 
 ## Analyses

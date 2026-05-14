@@ -72,3 +72,4 @@ ReActAgent
 - [[agent-dispatcher]]: FIFO request queueing, used by JsonRpcServer
 - [[json-rpc-websocket]]: Wire format preserved across refactoring
 - [[agent-event-stream]]: AgentStreamEvent serialization moved to serde_helpers
+- [[jsonrpc-transport]]: Transport layer architecture this refactoring unifies

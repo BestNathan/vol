@@ -17,7 +17,7 @@ source_count: 1
 The `vol-mcp-servers` crate provides standalone MCP (Model Context Protocol) server binaries using the `rmcp` Rust SDK. Each server is an independent binary with multi-transport support (stdio, HTTP/SSE), designed to expose external APIs and documentation as MCP tools for AI assistants.
 
 ## Key Facts
-- Each MCP server is a separate binary via `[[bin]]` entries in Cargo.toml
+- Each MCP server is a separate binary via Cargo.toml `bin` section entries
 - All servers share a unified `transport/` module for stdio and HTTP/SSE startup
 - CLI uses `clap` derive: `--http <addr>` flag switches from stdio to HTTP/SSE transport
 - `rmcp 1.6.0` provides the MCP protocol layer with `#[tool_router(server_handler)]` and `#[tool]` macros

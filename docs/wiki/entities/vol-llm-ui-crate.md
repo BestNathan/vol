@@ -3,15 +3,15 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-12 (tailwind-css-full-migration)
-source_count: 6
+updated: 2026-05-14 (mcp-state-types)
+source_count: 8
 ---
 
 # vol-llm-ui Crate
 
 **Category:** Rust crate — Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs
 
-**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[tailwind-css-migration]]
+**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[tailwind-css-migration]], [[connection-state-dashboard]], [[mcp-state-types]]
 
 ## Overview
 
@@ -34,9 +34,14 @@ Both modes implement the same trait interfaces, so TUI (ratatui) and Web (Dioxus
 - TUI modules: `render` (9 panel renderers), `input` (keyboard handling with approval/session support) [[ratatui-tui-pattern]]
 - Event loop: `tokio::select!` with biased mode prioritizing input over render ticks [[ui-event-loop-pattern]]
 - Web binary: `vol-llm-ui-web` — Dioxus 0.6 WASM with per-component signals + EventBus [[dioxus-web-pattern]]
-- Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView`, `TreeNode`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel` [[task-8-dioxus-web-frontend]], [[task-5-file-content-view]], [[lazy-load-dir-tree]], [[task-6-sessions-tab-wiring]]
+- Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView`, `TreeNode`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel` [[task-8-dioxus-web-frontend]], [[task-5-file-content-view]], [[lazy-load-dir-tree]], [[task-6-sessions-tab-wiring]], [[connection-state-dashboard]]
 - Web state: `EventBus` with `UiEventKind` routing, per-component local `Signal<T>`, shared `Signal<GlobalState>` / `Signal<ApprovalUiState>` via `use_context_provider` [[dioxus-signal-pattern]], [[event-bus-pattern]], [[split-signal-state]]
 - `SubscriptionSet` with `Drop` impl for automatic cleanup on component unmount [[event-bus-pattern]]
+- `ConnectionStatePanel` — real-time connection status indicator in StatusBar, subscribes to WsConnected/WsConnecting/WsDisconnected via EventBus, color-coded (green/yellow/red) [[connection-state-dashboard]]
+- `GlobalState` extended with `ConnectionStatus` field for cross-component connection state reads
+- `ActiveTab` extended with `Mcp` variant (between Skills and Logs), `McpSubtab` enum for server/tools/resources/prompts sub-tabs
+- MCP wire types: `McpServerInfo`, `McpToolInfo`, `McpResourceInfo`, `McpResourceTemplateInfo`, `McpPromptInfo`, `McpPromptArgInfo` — all serializable for JSON-RPC
+- MCP local state: `McpState` (panel state), `McpServerRowState` (display row), `McpToolCallState` (tool call dialog), `McpResourceViewerState`, `McpPromptViewerState`
 - `EventHandler` type: `Box<dyn Fn(&UiEvent) + 'static>` — no `Send + Sync` bounds for WASM [[split-signal-state]]
 - Workspace: `WorkspaceTreeNode` tree with lazy-loaded directory children via JSON-RPC `file.list` [[workspace-tree-pattern]]
 
@@ -64,3 +69,5 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-11**: Split signal state refactor — centralized `Signal<UiState>` replaced with per-component local signals + `EventBus` with `UiEventKind` routing; `SubscriptionSet` auto-cleanup via `Drop`; shared `GlobalState`/`ApprovalUiState` signals for cross-component reads; `AppState` simplified to `EventBus` + `JsonRpcClient` + `Signal<ActiveTab>`; 43 tests passing [[split-signal-state]]
 - **2026-05-11**: Sessions tab wired into App — `SessionsState` signal, `SessionsPanel` replaces `SessionDialog`, Sessions tab button in TabBar, checkpoint CSS added [[task-6-sessions-tab-wiring]]
 - **2026-05-12**: Tailwind CSS migration completed — all 16 web component files migrated from `GLOBAL_CSS` to Tailwind v4 utility classes; `GLOBAL_CSS` const (~215 lines) deleted; `input.css` created with custom breakpoints and animations; `rebuild-web.sh` integrates Tailwind CLI; Rust wasm32 build verified; responsive breakpoints added for sidebar and tab bar [[tailwind-css-full-migration]]
+- **2026-05-14**: `ConnectionStatePanel` added — EventBus subscriber component rendering color-coded WebSocket connection status (green/yellow/red) in StatusBar; listens to WsConnected/WsConnecting/WsDisconnected event kinds from [[remote-connection-impl]]; `GlobalState` extended with `ConnectionStatus`; 3 tests added [[connection-state-dashboard]]
+- **2026-05-14**: `ActiveTab::Mcp` variant added between Skills and Logs; `McpSubtab` enum (Servers, Tools, Resources, Prompts); MCP wire types (`McpServerInfo`, `McpToolInfo`, `McpResourceInfo`, `McpResourceTemplateInfo`, `McpPromptInfo`, `McpPromptArgInfo`) and local state structs (`McpState`, `McpServerRowState`, `McpToolCallState`, `McpResourceViewerState`, `McpPromptViewerState`) added to state module

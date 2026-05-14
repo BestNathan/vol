@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [event-bus, pub-sub, state-management, dioxus, web, frontend]
 created: 2026-05-11
-updated: 2026-05-11
-source_count: 1
+updated: 2026-05-14 (connection-state-dashboard)
+source_count: 2
 ---
 
 # EventBus Pattern
@@ -114,8 +114,13 @@ Benefits:
 - Clear ownership: each component manages its own state lifecycle
 - TUI continues using `Arc<Mutex<UiState>>` unchanged
 
+## Connection Status Events
+
+The `UiEventKind` enum includes `WsConnected`, `WsConnecting`, and `WsDisconnected` variants for tracking WebSocket connection state. [[remote-connection-impl]] publishes these events when the connection state changes. Components like `ConnectionStatePanel` subscribe to these kinds to display real-time connection status indicators. See [[connection-state-dashboard]] for the full pattern.
+
 ## Related Concepts
 - [[dioxus-signal-pattern]]: Per-component signals replacing centralized Signal<UiState>
 - [[dioxus-web-pattern]]: Component architecture updated for EventBus
 - [[split-signal-state]]: Source documenting the full refactoring
 - [[agent-event-stream]]: UiEvent derived from agent stream events
+- [[connection-state-dashboard-pattern]]: Real-time connection status display via EventBus subscription

@@ -1,5 +1,23 @@
 # Change Log
 
+## [2026-05-14] ingest | MCP State Types — ActiveTab::Mcp, McpSubtab, Wire Types, Local State
+- Created concepts: [[mcp-state-types]]
+- Updated entities: [[vol-llm-ui-crate]] (added McpSubtab, MCP wire types, MCP local state structs to Key Facts; added timeline entry)
+- Updated concepts: [[dioxus-web-pattern]] (added McpPanel placeholder to component list and layout diagram)
+- Updated index: vol-llm-ui-crate summary updated, new mcp-state-types concept entry
+- Cross-references added: 7
+- Changes: ActiveTab enum gains Mcp variant between Skills and Logs; McpSubtab enum with Servers/Tools/Resources/Prompts; 6 wire types (McpServerInfo, McpToolInfo, McpResourceInfo, McpResourceTemplateInfo, McpPromptInfo, McpPromptArgInfo) all Serialize+Deserialize; 5 local state structs (McpState with new(), McpServerRowState, McpToolCallState, McpResourceViewerState, McpPromptViewerState) all web-only; TabContent match extended with placeholder; test_active_tab_toggle updated; cargo check passes with web feature
+
+## [2026-05-14] ingest | Connection State Dashboard
+- Created sources: [[connection-state-dashboard]]
+- Created concepts: [[connection-state-dashboard-pattern]]
+- Updated concepts: [[event-bus-pattern]] (added connection status events section, WsConnected/WsConnecting/WsDisconnected)
+- Updated concepts: [[dioxus-web-pattern]] (added ConnectionStatePanel to component list, layout, GlobalState ConnectionStatus)
+- Updated entities: [[vol-llm-ui-crate]] (added ConnectionStatePanel to component list and key facts, timeline entry, GlobalState ConnectionStatus)
+- Updated index: new source entry, new concept entry, updated vol-llm-ui-crate/event-bus-pattern/dioxus-web-pattern summaries and dates
+- Cross-references added: 9
+- Changes: ConnectionStatePanel Dioxus component added to vol-llm-ui web frontend; subscribes to EventBus WsConnected/WsConnecting/WsDisconnected events from RemoteConnection; renders color-coded status indicator (green/yellow/red) in top StatusBar; GlobalState extended with ConnectionStatus; 3 tests added covering connected/disconnected/connecting states
+
 ## [2026-05-13] ingest | McpManager Implementation — Connection Lifecycle Manager
 - Created sources: [[mcp-manager-impl]]
 - Created concepts: [[mcp-manager-lifecycle]]

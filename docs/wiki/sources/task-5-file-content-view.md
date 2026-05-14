@@ -9,7 +9,7 @@ updated: 2026-05-10
 # Task 5: FileContentView Component
 
 **Date:** 2026-05-10
-**Plan:** [[2026-05-10-file-tree-tools-tab]]
+**Plan:** File tree and tools tab implementation plan (2026-05-10)
 
 ## Summary
 
