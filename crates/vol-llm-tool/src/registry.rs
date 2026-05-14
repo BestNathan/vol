@@ -6,7 +6,6 @@ use std::sync::Arc;
 use vol_llm_core::{ToolCall, ToolDefinition};
 
 /// Tool registry
-#[derive(Clone)]
 pub struct ToolRegistry {
     tools: HashMap<String, Arc<dyn ExecutableTool>>,
 }

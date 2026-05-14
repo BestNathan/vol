@@ -26,3 +26,4 @@ vol-session = { path = "../vol-session" }
 vol-llm-tool = { path = "../vol-llm-tool" }
 vol-llm-context = { path = "../vol-llm-context" }
 tokio = { workspace = true }
+vol-llm-agent = { path = "../vol-llm-agent" }

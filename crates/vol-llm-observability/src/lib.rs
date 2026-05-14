@@ -2,13 +2,11 @@
 //!
 //! Provides:
 //! - A `LoggerPlugin` that writes structured run logs as JSONL files
-//! - A `LokiPlugin` that sends agent events to OTel Collector via `tracing::info!`
 //! - An `ObservabilityPlugin` that sends agent events to the observability service
 //! - An `init_otel_logs()` helper to initialize the OTel log layer
 
 pub mod plugin;
 pub mod run_log;
-pub mod loki;
 pub mod otel_init;
 
 pub mod agent_config;

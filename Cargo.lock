@@ -5804,6 +5804,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-test"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6d24790a10a7af737693a3e8f1d03faef7e6ca0cc99aae5066f533766de545"
+dependencies = [
+ "futures-core",
+ "tokio",
+ "tokio-stream",
+]
+
+[[package]]
 name = "tokio-tungstenite"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6524,6 +6535,7 @@ dependencies = [
  "vol-llm-context",
  "vol-llm-core",
  "vol-llm-mcp",
+ "vol-llm-observability",
  "vol-llm-provider",
  "vol-llm-skill",
  "vol-llm-tdengine",
@@ -6661,12 +6673,12 @@ dependencies = [
 name = "vol-llm-observability"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "chrono",
  "opentelemetry",
  "opentelemetry-appender-tracing",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "reqwest 0.11.27",
  "serde",
  "serde_json",
  "tempfile",
@@ -7085,6 +7097,28 @@ dependencies = [
  "vol-core",
  "vol-deribit",
  "vol-tracing",
+]
+
+[[package]]
+name = "vol-observability"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "http-body-util",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-test",
+ "toml",
+ "tower 0.4.13",
+ "tracing",
+ "tracing-subscriber",
+ "vol-config",
+ "vol-llm-core",
+ "vol-tdengine",
 ]
 
 [[package]]

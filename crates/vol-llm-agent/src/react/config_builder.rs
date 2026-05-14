@@ -3,19 +3,14 @@
 use super::agent::AgentConfig;
 use super::plugin::PluginRegistry;
 use crate::agent_def::AgentDef;
-use vol_llm_context::ContextBuilderBuilder;
-use vol_llm_tool::ToolRegistry;
-use vol_session::{InMemoryEntryStore, Session};
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use vol_llm_context::ContextBuilderBuilder;
-use vol_llm_context::ContextContributor;
+use vol_llm_context::{ContextBuilderBuilder, ContextContributor};
 use vol_llm_core::SandboxRef;
-use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
-use vol_llm_tool::ExecutableTool;
 use vol_llm_mcp::{McpConfig, McpSession};
-use vol_llm_tool::ToolRegistry;
+use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
+use vol_llm_tool::{ExecutableTool, ToolRegistry};
 use vol_session::{InMemoryEntryStore, Session};
 
 /// Builder for AgentConfig.

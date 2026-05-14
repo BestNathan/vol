@@ -4,17 +4,18 @@ use super::{
     AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext,
 };
 use crate::react::state::ToolCallRecord;
-use vol_session::{InMemoryEntryStore, Session};
+use std::path::PathBuf;
 use std::sync::Arc;
 use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
-use vol_llm_tool::ToolRegistry;
 use vol_llm_mcp::McpSession;
 use vol_llm_observability::ObservabilityAgentConfig;
+use vol_llm_tool::ToolRegistry;
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
     ToolChoice,
 };
 use vol_llm_tool::ToolContext;
+use vol_session::{InMemoryEntryStore, Session};
 
 /// Agent configuration — single source of truth for ReActAgent.
 #[derive(Clone)]
@@ -87,6 +88,10 @@ impl Default for AgentConfig {
             observability: Some(ObservabilityAgentConfig::default()),
         }
     }
+}
+
+fn generate_agent_id() -> String {
+    format!("agent-{}", uuid::Uuid::new_v4().simple().to_string()[..8].to_string())
 }
 
 /// Dummy LLM for Default impl (tests only — will panic if used).
@@ -231,7 +236,7 @@ impl ReActAgent {
                 let obs_plugin = super::observability_plugin::ObservabilityAgentPlugin::new(
                     obs_config,
                     run_id.clone(),
-                    self.session.id.clone(),
+                    self.config.session.id.clone(),
                     config.agent_id.clone(),
                     agent_type,
                 );

@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 use std::path::PathBuf;
-use vol_llm_tool::{ToolRegistry, ToolConfig};
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
+use vol_llm_tool::{ToolRegistry, ToolConfig};
 use vol_llm_agent::{ReActAgent, AgentConfig};
 use vol_llm_context::ContextBuilder;
 use vol_session::Session;
@@ -360,7 +360,7 @@ impl CodingAgentBuilder {
     /// LokiPlugin is stateless — no configuration needed. The OTel
     /// collector endpoint is set via OTEL_EXPORTER_OTLP_ENDPOINT env var.
     pub fn with_loki(mut self) -> Self {
-        let plugin = vol_llm_observability::loki::LokiPlugin::new();
+        let plugin = vol_llm_agent::react::LokiPlugin::new();
         self.config.plugin_registry.register(plugin);
         self
     }
