@@ -21,7 +21,7 @@ use crate::request::{AgentRequest, RunResult};
 use crate::router::AgentRouter;
 
 use super::serde_helpers::{parse_jsonrpc_request, to_jsonrpc_error, to_jsonrpc_event, to_jsonrpc_response, JsonRpcRequest};
-use vol_llm_mcp::manager::McpManager;
+use vol_llm_mcp::manager::{McpManager, ServerStatus};
 use vol_session::{Session, SessionEntryStore};
 
 /// Format a unix timestamp as a human-readable age string.
@@ -479,6 +479,202 @@ impl JsonRpcConnection {
         tx.send(WsMessage::Text(text.to_string()))
             .await
             .map_err(|e| ConnectionError::WsSendError(e.to_string()))
+    }
+
+    // === MCP handler methods ===
+
+    /// Helper: get the MCP manager or return an error string.
+    fn mcp_manager(&self) -> Result<Arc<McpManager>, String> {
+        self.mcp_manager.clone().ok_or_else(|| "MCP not configured".to_string())
+    }
+
+    /// Convert ServerStatus to a display string.
+    fn server_status_to_str(status: &ServerStatus) -> String {
+        match status {
+            ServerStatus::Connected => "connected".into(),
+            ServerStatus::Disconnected => "disconnected".into(),
+            ServerStatus::Connecting => "connecting".into(),
+            ServerStatus::Error(e) => format!("error: {e}"),
+        }
+    }
+
+    async fn handle_mcp_list_servers(&self, id: u64) -> String {
+        let mgr = match self.mcp_manager() {
+            Ok(m) => m,
+            Err(e) => return to_jsonrpc_error(Some(id), -32000, e),
+        };
+        let status = mgr.server_status_async().await;
+        let servers: Vec<serde_json::Value> = status.iter().map(|(name, s)| {
+            serde_json::json!({
+                "name": name,
+                "status": Self::server_status_to_str(s),
+            })
+        }).collect();
+        to_jsonrpc_response(id, serde_json::json!({ "servers": servers }))
+    }
+
+    async fn handle_mcp_server_status(&self, id: u64) -> String {
+        let mgr = match self.mcp_manager() {
+            Ok(m) => m,
+            Err(e) => return to_jsonrpc_error(Some(id), -32000, e),
+        };
+        let status = mgr.server_status_async().await;
+        let servers: Vec<serde_json::Value> = status.iter().map(|(name, s)| {
+            serde_json::json!({
+                "name": name,
+                "status": Self::server_status_to_str(s),
+            })
+        }).collect();
+        to_jsonrpc_response(id, serde_json::json!({ "servers": servers }))
+    }
+
+    async fn handle_mcp_list_tools(&self, id: u64, server_filter: Option<String>) -> String {
+        let mgr = match self.mcp_manager() {
+            Ok(m) => m,
+            Err(e) => return to_jsonrpc_error(Some(id), -32000, e),
+        };
+        let tools = mgr.list_all_tools().await;
+        let tools_json: Vec<serde_json::Value> = tools.iter()
+            .filter(|(s, _)| server_filter.as_ref().map_or(true, |f| s == f))
+            .map(|(server, tool)| {
+                serde_json::json!({
+                    "server": server,
+                    "name": tool.name,
+                    "description": tool.description,
+                    "input_schema": tool.input_schema,
+                })
+            }).collect();
+        to_jsonrpc_response(id, serde_json::json!({ "tools": tools_json }))
+    }
+
+    async fn handle_mcp_call_tool(&self, id: u64, server: String, tool_name: String, arguments: serde_json::Value) -> String {
+        let mgr = match self.mcp_manager() {
+            Ok(m) => m,
+            Err(e) => return to_jsonrpc_error(Some(id), -32000, e),
+        };
+        match mgr.call_tool(&server, &tool_name, arguments).await {
+            Ok(result) => to_jsonrpc_response(id, serde_json::json!({ "result": result })),
+            Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+        }
+    }
+
+    async fn handle_mcp_list_resources(&self, id: u64, server_filter: Option<String>) -> String {
+        let mgr = match self.mcp_manager() {
+            Ok(m) => m,
+            Err(e) => return to_jsonrpc_error(Some(id), -32000, e),
+        };
+        let resources = mgr.list_all_resources().await;
+        let resources_json: Vec<serde_json::Value> = resources.iter()
+            .filter(|(s, _)| server_filter.as_ref().map_or(true, |f| s == f))
+            .map(|(server, r)| {
+                serde_json::json!({
+                    "server": server,
+                    "name": r.name,
+                    "uri": r.uri,
+                    "mime_type": r.mime_type,
+                    "description": r.description,
+                })
+            }).collect();
+        to_jsonrpc_response(id, serde_json::json!({ "resources": resources_json }))
+    }
+
+    async fn handle_mcp_list_resource_templates(&self, id: u64, server_filter: Option<String>) -> String {
+        let mgr = match self.mcp_manager() {
+            Ok(m) => m,
+            Err(e) => return to_jsonrpc_error(Some(id), -32000, e),
+        };
+        let templates = mgr.list_all_resource_templates().await;
+        let templates_json: Vec<serde_json::Value> = templates.iter()
+            .filter(|(s, _)| server_filter.as_ref().map_or(true, |f| s == f))
+            .map(|(server, t)| {
+                serde_json::json!({
+                    "server": server,
+                    "name": t.name,
+                    "uri_template": t.uri_template,
+                    "description": t.description,
+                })
+            }).collect();
+        to_jsonrpc_response(id, serde_json::json!({ "templates": templates_json }))
+    }
+
+    async fn handle_mcp_read_resource(&self, id: u64, uri: String) -> String {
+        let mgr = match self.mcp_manager() {
+            Ok(m) => m,
+            Err(e) => return to_jsonrpc_error(Some(id), -32000, e),
+        };
+        match mgr.read_resource(&uri).await {
+            Ok(content) => to_jsonrpc_response(id, serde_json::json!({ "content": content })),
+            Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+        }
+    }
+
+    async fn handle_mcp_list_prompts(&self, id: u64, server_filter: Option<String>) -> String {
+        let mgr = match self.mcp_manager() {
+            Ok(m) => m,
+            Err(e) => return to_jsonrpc_error(Some(id), -32000, e),
+        };
+        let prompts = mgr.list_all_prompts().await;
+        let prompts_json: Vec<serde_json::Value> = prompts.iter()
+            .filter(|(s, _)| server_filter.as_ref().map_or(true, |f| s == f))
+            .map(|(server, p)| {
+                let args = p.arguments.as_ref().map(|args| {
+                    args.iter().map(|a| {
+                        serde_json::json!({
+                            "name": a.name,
+                            "description": a.description,
+                            "required": a.required,
+                        })
+                    }).collect::<Vec<_>>()
+                });
+                serde_json::json!({
+                    "server": server,
+                    "name": p.name,
+                    "description": p.description,
+                    "arguments": args,
+                })
+            }).collect();
+        to_jsonrpc_response(id, serde_json::json!({ "prompts": prompts_json }))
+    }
+
+    async fn handle_mcp_get_prompt(&self, id: u64, name: String, arguments: Option<std::collections::HashMap<String, serde_json::Value>>) -> String {
+        let mgr = match self.mcp_manager() {
+            Ok(m) => m,
+            Err(e) => return to_jsonrpc_error(Some(id), -32000, e),
+        };
+        match mgr.get_prompt(&name, arguments).await {
+            Ok((desc, messages)) => {
+                let msgs = messages.iter().map(|m| {
+                    let content = serde_json::to_string(&m.content).unwrap_or_default();
+                    let role = format!("{:?}", m.role);
+                    serde_json::json!({
+                        "role": role,
+                        "content": content,
+                    })
+                }).collect::<Vec<_>>();
+                to_jsonrpc_response(id, serde_json::json!({
+                    "description": desc,
+                    "messages": msgs,
+                }))
+            }
+            Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+        }
+    }
+
+    async fn handle_mcp_reconnect(&self, id: u64, server: String) -> String {
+        let mgr = match self.mcp_manager() {
+            Ok(m) => m,
+            Err(e) => return to_jsonrpc_error(Some(id), -32000, e),
+        };
+        match mgr.reconnect(&server).await {
+            Ok(()) => {
+                let status = mgr.server_status_async().await;
+                let status_str = status.get(&server)
+                    .map(|s| Self::server_status_to_str(s))
+                    .unwrap_or_else(|| "unknown".into());
+                to_jsonrpc_response(id, serde_json::json!({ "success": true, "status": status_str }))
+            }
+            Err(e) => to_jsonrpc_response(id, serde_json::json!({ "success": false, "status": format!("error: {e}") })),
+        }
     }
 }
 
