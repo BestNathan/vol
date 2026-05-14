@@ -491,14 +491,14 @@ pub struct AgentListEntry {
 }
 
 /// MCP server info returned by mcp.list_servers.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpServerInfo {
     pub name: String,
     pub status: String,
 }
 
 /// MCP tool info returned by mcp.list_tools.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpToolInfo {
     pub server: String,
     pub name: String,
@@ -507,7 +507,7 @@ pub struct McpToolInfo {
 }
 
 /// MCP resource info returned by mcp.list_resources.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpResourceInfo {
     pub server: String,
     pub name: String,
@@ -517,7 +517,7 @@ pub struct McpResourceInfo {
 }
 
 /// MCP resource template info returned by mcp.list_resource_templates.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpResourceTemplateInfo {
     pub server: String,
     pub name: String,
@@ -526,7 +526,7 @@ pub struct McpResourceTemplateInfo {
 }
 
 /// MCP prompt info returned by mcp.list_prompts.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpPromptInfo {
     pub server: String,
     pub name: String,
@@ -535,7 +535,7 @@ pub struct McpPromptInfo {
 }
 
 /// MCP prompt argument definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpPromptArgInfo {
     pub name: String,
     pub description: Option<String>,
