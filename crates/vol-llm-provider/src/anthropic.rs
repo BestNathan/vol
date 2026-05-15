@@ -211,6 +211,8 @@ impl LLMClient for AnthropicProvider {
                 "temperature" => request.model_config.temperature.is_some(),
                 "top_p" => request.model_config.top_p.is_some(),
                 "top_k" => request.model_config.top_k.is_some(),
+                // These are set from request below — skip body defaults
+                "system" | "tools" | "messages" | "model" | "stream" | "max_tokens" => true,
                 _ => false,
             };
             if !overridden {
@@ -378,6 +380,8 @@ impl LLMClient for AnthropicProvider {
                 "temperature" => request.model_config.temperature.is_some(),
                 "top_p" => request.model_config.top_p.is_some(),
                 "top_k" => request.model_config.top_k.is_some(),
+                // These are set from request below — skip body defaults
+                "system" | "tools" | "messages" | "model" | "stream" | "max_tokens" => true,
                 _ => false,
             };
             if !overridden {
