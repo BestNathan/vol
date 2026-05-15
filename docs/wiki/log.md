@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-05-15] ingest | OpenaiStreamParser Implementation
+- Created sources: [[openai-stream-parser-impl]]
+- Created concepts: [[streaming-session]]
+- Updated entities: [[vol-llm-provider-crate]] (added OpenaiStreamParser to Key Facts, added module structure table, added timeline entry, source_count -> 2)
+- Updated concepts: [[agent-event-stream]] (added streaming-session reference, source_count -> 5)
+- Updated index: vol-llm-provider-crate summary updated, new streaming-session concept entry, new openai-stream-parser-impl source entry
+- Cross-references added: 4
+- Changes: `crates/vol-llm-provider/src/openai_streaming.rs` created — OpenaiStreamParser implements StreamProtocol trait; parses OpenAI SSE format (`data: {...}`) with `[DONE]` sentinel; supports content deltas, tool call deltas (ToolCallStart + ToolCallDelta for argument fragments), usage metadata, model info, and finish reason mapping; empty content strings skipped to allow tool calls on same chunk; 6 unit tests pass (done sentinel, content delta, tool call delta, usage, finish reason stop, empty/malformed handling); module registered in `lib.rs`
+
 ## [2026-05-15] ingest | MCP Multi-Transport Config — McpTransport Enum (Stdio/Http)
 - Created sources: [[mcp-multi-transport-config]]
 - Updated entities: [[vol-llm-mcp-crate]] (added McpTransport enum section, updated module table, updated timeline, source_count → 3)

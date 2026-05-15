@@ -3,8 +3,8 @@ type: concept
 category: framework
 tags: [event-stream, lifecycle, agent]
 created: 2026-05-04
-updated: 2026-05-09
-source_count: 4
+updated: 2026-05-15
+source_count: 5
 ---
 
 # Agent Event Stream
@@ -58,3 +58,4 @@ Events are produced by the Agent Core and consumed by the PluginStream. Each plu
 - [[dioxus-web-pattern]]: Web frontend consumes events via EventBus with UiEventKind routing [[event-bus-pattern]], [[split-signal-state]]
 - [[event-bus-pattern]]: EventBus routes UiEvent variants by coarse-grained UiEventKind
 - [[split-signal-state]]: Source documenting the EventBus refactoring of web state management
+- [[streaming-session]]: Protocol-abstracted SSE parsing layer — StreamProtocol trait, ParsedEvent enum, StreamingSession accumulator

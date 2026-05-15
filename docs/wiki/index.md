@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-15 (mcp-multi-transport-config)
+Last updated: 2026-05-15 (openai-stream-parser-impl)
 
 ## Entities
 
@@ -11,7 +11,7 @@ Last updated: 2026-05-15 (mcp-multi-transport-config)
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions | stable | 2026-05-04 |
 | [[vol-llm-tool-crate]] | Tool definition and registry framework | stable | 2026-05-04 |
-| [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations | stable | 2026-05-04 |
+| [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with protocol-abstracted SSE streaming parsers (AnthropicProtocol, OpenaiStreamParser) | stable | 2026-05-15 |
 | [[vol-session]] | Session message store and entry persistence | active | 2026-05-04 |
 | [[vol-llm-agent-channel-crate]] | Agent communication channel layer with multiple transports and JSON-RPC Connection implementation | active | 2026-05-09 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
@@ -77,6 +77,7 @@ Last updated: 2026-05-15 (mcp-multi-transport-config)
 | [[agent-error-handling]] | Hierarchical error types with retryable vs non-retryable classification and exponential backoff | active | 2026-05-14 |
 | [[loki-plugin-otel-migration-design]] | Design spec for migrating LokiPlugin from HTTP POST to OTel SDK via tracing::info! | active | 2026-05-14 |
 | [[loki-raw-event-serialization-design]] | Design spec for flat JSON serialization format of agent events | active | 2026-05-14 |
+| [[streaming-session]] | StreamProtocol trait and StreamingSession — protocol-abstracted SSE parsing for Anthropic and OpenAI formats | active | 2026-05-15 |
 | [[otel-dependency-upgrade]] | Workspace dependency upgrade from OTel 0.21 to 0.29 with breaking API changes | active | 2026-05-14 |
 | [[mcp-state-types]] | State types and wire structures for displaying MCP servers, tools, resources, and prompts in the Dioxus web frontend | active | 2026-05-14 |
 
@@ -113,6 +114,7 @@ Last updated: 2026-05-15 (mcp-multi-transport-config)
 | [[connection-state-dashboard]] | ConnectionStatePanel component: EventBus-driven connection status indicator in StatusBar, color-coded for connected/connecting/disconnected states | active | 2026-05-14 |
 | [[tailwind-css-full-migration]] | Full Tailwind CSS v4 migration — all 16 components, GLOBAL_CSS deleted, build pipeline verified | complete | 2026-05-12 |
 | [[mcp-multi-transport-config]] | Design + implementation: McpTransport enum with required type field, serde tagged enum parsing, HTTP via StreamableHttpClientTransport | active | 2026-05-15 |
+| [[openai-stream-parser-impl]] | OpenaiStreamParser implementation — StreamProtocol for OpenAI SSE format with [DONE] sentinel, content/tool deltas, usage, finish reasons | active | 2026-05-15 |
 
 ## Analyses
 
