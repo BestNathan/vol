@@ -1,0 +1,12 @@
+# Anthropic provider via DashScope (China-accessible endpoint)
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+api_key = "${ANTHROPIC_AUTH_TOKEN}"
+base_url = "https://coding.dashscope.aliyuncs.com/apps/anthropic"
+
+[body]
+max_tokens = 8192
+temperature = 0.7
+
+[headers]
+"anthropic-version" = "2023-06-01"

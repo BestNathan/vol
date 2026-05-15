@@ -77,14 +77,6 @@ error_file = true
 [tracing.opentelemetry]
 enabled = false
 
-# LLM Provider 配置 - 使用阿里云 Qwen3.5-plus
-[[llm_providers]]
-id = "anthropic-main"
-provider = "anthropic"
-model = "qwen3.5-plus"
-api_key = "${ANTHROPIC_AUTH_TOKEN}"
-base_url = "https://coding.dashscope.aliyuncs.com/apps/anthropic"
-
 # Agent Advice 配置
 [agent_advice]
 enabled = true
