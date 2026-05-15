@@ -645,7 +645,7 @@ pub struct McpResourceViewerState {
 
 /// State for the prompt viewer.
 #[cfg(all(feature = "web", not(feature = "tui")))]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct McpPromptViewerState {
     pub server: String,
     pub prompt_name: String,

@@ -4,6 +4,9 @@ use dioxus::prelude::*;
 
 use crate::state::{McpState, McpSubtab};
 use crate::web::components::app::AppState;
+use super::mcp_tool_dialog::ToolCallDialog;
+use super::mcp_resource_viewer::ResourceViewer;
+use super::mcp_prompt_viewer::PromptViewer;
 
 #[component]
 pub fn McpPanel() -> Element {
@@ -17,17 +20,21 @@ pub fn McpPanel() -> Element {
 
         rpc_client.mcp_list_servers(move |result| {
             sig.with_mut(|s| match result {
-                Ok(servers) => s.servers = servers,
-                Err(e) => s.error = Some(e),
+                Ok(servers) => {
+                    s.servers = servers;
+                }
+                Err(e) => {
+                    s.error = Some(e);
+                }
             });
             sig.with_mut(|s| s.loading = false);
         });
 
         let rpc_client2 = rpc_client.clone();
-        let mut sig2 = sig;
+        let sig2 = signal;
         rpc_client2.mcp_list_tools(None, move |result| {
             if let Ok(tools) = result {
-                sig2.with_mut(|s| s.tools = tools);
+                sig2.write_unchecked().tools = tools;
             }
         });
 
@@ -76,10 +83,19 @@ pub fn McpPanel() -> Element {
                     }
                     // Sub-tab content
                     match active {
-                        McpSubtab::Servers => rsx! { ServerList { signal, app_state } },
+                        McpSubtab::Servers => rsx! { ServerList { signal, app_state: app_state.clone() } },
                         McpSubtab::Tools => rsx! { ToolList { signal } },
                         McpSubtab::Resources => rsx! { ResourceList { signal } },
                         McpSubtab::Prompts => rsx! { PromptList { signal } },
+                    }
+                    if signal.read().tool_call_dialog.is_some() {
+                        ToolCallDialog { signal, app_state: app_state.clone() }
+                    }
+                    if signal.read().resource_viewer.is_some() {
+                        ResourceViewer { signal, app_state: app_state.clone() }
+                    }
+                    if signal.read().prompt_viewer.is_some() {
+                        PromptViewer { signal, app_state: app_state.clone() }
                     }
                 }
             }
@@ -188,13 +204,14 @@ fn ServerRow(signal: Signal<McpState>, app_state: AppState, server: crate::state
 #[component]
 fn ToolList(signal: Signal<McpState>) -> Element {
     let tools = signal.read().tools.clone();
+    log::info!("ToolList rendering: {} tools", tools.len());
     if tools.is_empty() {
         return rsx! {
             div { class: "text-[#666] text-center p-4 text-[13px]", "No tools available" }
         };
     }
 
-    let mut groups: std::collections::HashMap<String, Vec<_>> = std::collections::HashMap::new();
+    let mut groups: std::collections::BTreeMap<String, Vec<_>> = std::collections::BTreeMap::new();
     for t in &tools {
         groups.entry(t.server.clone()).or_default().push(t.clone());
     }
@@ -260,17 +277,17 @@ fn ResourceList(signal: Signal<McpState>) -> Element {
         };
     }
 
-    let mut resource_groups: std::collections::HashMap<String, Vec<_>> = std::collections::HashMap::new();
+    let mut resource_groups: std::collections::BTreeMap<String, Vec<_>> = std::collections::BTreeMap::new();
     for r in &resources {
         resource_groups.entry(r.server.clone()).or_default().push(r.clone());
     }
 
-    let mut template_groups: std::collections::HashMap<String, Vec<_>> = std::collections::HashMap::new();
+    let mut template_groups: std::collections::BTreeMap<String, Vec<_>> = std::collections::BTreeMap::new();
     for t in &templates {
         template_groups.entry(t.server.clone()).or_default().push(t.clone());
     }
 
-    let all_servers: std::collections::HashSet<String> = resource_groups.keys()
+    let all_servers: std::collections::BTreeSet<String> = resource_groups.keys()
         .chain(template_groups.keys())
         .cloned()
         .collect();
@@ -346,7 +363,7 @@ fn PromptList(signal: Signal<McpState>) -> Element {
         };
     }
 
-    let mut groups: std::collections::HashMap<String, Vec<_>> = std::collections::HashMap::new();
+    let mut groups: std::collections::BTreeMap<String, Vec<_>> = std::collections::BTreeMap::new();
     for p in &prompts {
         groups.entry(p.server.clone()).or_default().push(p.clone());
     }
