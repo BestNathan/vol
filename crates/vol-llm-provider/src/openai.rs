@@ -156,6 +156,12 @@ impl LLMClient for OpenaiProvider {
             SupportedParam::MaxTokens,
             SupportedParam::Temperature,
             SupportedParam::TopP,
+            SupportedParam::TopK,
+            SupportedParam::FrequencyPenalty,
+            SupportedParam::PresencePenalty,
+            SupportedParam::Stop,
+            SupportedParam::Seed,
+            SupportedParam::LogProbs,
             SupportedParam::Tools,
         ]
     }
@@ -183,6 +189,24 @@ impl LLMClient for OpenaiProvider {
         if let Some(top_p) = request.model_config.top_p {
             body["top_p"] = json!(top_p);
         }
+        if let Some(top_k) = request.model_config.top_k {
+            body["top_k"] = json!(top_k);
+        }
+        if let Some(freq) = request.model_config.frequency_penalty {
+            body["frequency_penalty"] = json!(freq);
+        }
+        if let Some(pres) = request.model_config.presence_penalty {
+            body["presence_penalty"] = json!(pres);
+        }
+        if let Some(ref stop) = request.model_config.stop {
+            body["stop"] = json!(stop);
+        }
+        if let Some(seed) = request.model_config.seed {
+            body["seed"] = json!(seed);
+        }
+        if let Some(logprobs) = request.model_config.logprobs {
+            body["logprobs"] = json!(logprobs);
+        }
         if let Some(tools) = request.tools {
             body["tools"] = self.convert_tools(&tools);
         }
@@ -192,7 +216,15 @@ impl LLMClient for OpenaiProvider {
             let overridden = match key.as_str() {
                 "temperature" => request.model_config.temperature.is_some(),
                 "top_p" => request.model_config.top_p.is_some(),
-                "max_tokens" | "tools" | "messages" | "model" | "stream" => true,
+                "top_k" => request.model_config.top_k.is_some(),
+                "frequency_penalty" => request.model_config.frequency_penalty.is_some(),
+                "presence_penalty" => request.model_config.presence_penalty.is_some(),
+                "stop" => request.model_config.stop.is_some(),
+                "seed" => request.model_config.seed.is_some(),
+                "logprobs" => request.model_config.logprobs.is_some(),
+                // Always set from request — skip body defaults
+                "model" | "messages" | "tools" | "tool_choice" | "stream"
+                | "stream_options" | "max_tokens" => true,
                 _ => false,
             };
             if !overridden {
@@ -330,6 +362,24 @@ impl LLMClient for OpenaiProvider {
         if let Some(top_p) = request.model_config.top_p {
             body["top_p"] = json!(top_p);
         }
+        if let Some(top_k) = request.model_config.top_k {
+            body["top_k"] = json!(top_k);
+        }
+        if let Some(freq) = request.model_config.frequency_penalty {
+            body["frequency_penalty"] = json!(freq);
+        }
+        if let Some(pres) = request.model_config.presence_penalty {
+            body["presence_penalty"] = json!(pres);
+        }
+        if let Some(ref stop) = request.model_config.stop {
+            body["stop"] = json!(stop);
+        }
+        if let Some(seed) = request.model_config.seed {
+            body["seed"] = json!(seed);
+        }
+        if let Some(logprobs) = request.model_config.logprobs {
+            body["logprobs"] = json!(logprobs);
+        }
         if let Some(tools) = request.tools {
             body["tools"] = self.convert_tools(&tools);
         }
@@ -339,7 +389,15 @@ impl LLMClient for OpenaiProvider {
             let overridden = match key.as_str() {
                 "temperature" => request.model_config.temperature.is_some(),
                 "top_p" => request.model_config.top_p.is_some(),
-                "max_tokens" | "tools" | "messages" | "model" | "stream" | "stream_options" => true,
+                "top_k" => request.model_config.top_k.is_some(),
+                "frequency_penalty" => request.model_config.frequency_penalty.is_some(),
+                "presence_penalty" => request.model_config.presence_penalty.is_some(),
+                "stop" => request.model_config.stop.is_some(),
+                "seed" => request.model_config.seed.is_some(),
+                "logprobs" => request.model_config.logprobs.is_some(),
+                // Always set from request — skip body defaults
+                "model" | "messages" | "tools" | "tool_choice" | "stream"
+                | "stream_options" | "max_tokens" => true,
                 _ => false,
             };
             if !overridden {
