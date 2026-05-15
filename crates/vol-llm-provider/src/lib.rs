@@ -4,11 +4,13 @@ pub mod anthropic;
 pub mod config;
 pub mod factory;
 pub mod loader;
+pub mod openai;
 pub mod openai_streaming;
 pub mod registry;
 pub mod secret;
 
 pub use anthropic::AnthropicProvider;
+pub use openai::OpenaiProvider;
 pub use openai_streaming::OpenaiStreamParser;
 pub use config::{LLMConfig, ProviderFileConfig};
 pub use factory::create_provider;
