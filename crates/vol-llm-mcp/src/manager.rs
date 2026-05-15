@@ -15,7 +15,7 @@ use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing;
 
-use crate::config::McpServerConfig;
+use crate::config::{McpServerConfig, McpTransport};
 use crate::error::McpError;
 use crate::session::{sanitize_name, McpToolInfo};
 
@@ -104,35 +104,14 @@ impl McpManager {
         config: &McpServerConfig,
         cancel_token: &CancellationToken,
     ) -> Result<(RunningService<RoleClient, ClientInfo>, Vec<Tool>, Vec<Resource>, Vec<ResourceTemplate>, Vec<Prompt>), McpError> {
-        let mut command = Command::new(&config.command);
-        command.args(&config.args);
-        for (key, value) in &config.env {
-            command.env(key, value);
-        }
-        command.stdin(Stdio::piped());
-        command.stdout(Stdio::piped());
-        command.stderr(Stdio::inherit());
-
-        let child = TokioChildProcess::new(command).map_err(|e: std::io::Error| {
-            McpError::ConnectionFailed {
-                server: config.name.clone(),
-                detail: e.to_string(),
+        let service = match &config.transport {
+            McpTransport::Stdio { command, args, env } => {
+                connect_stdio(command, args, env, config, cancel_token).await?
             }
-        })?;
-
-        let client_info = ClientInfo::default();
-        let service = tokio::time::timeout(
-            Duration::from_secs(10),
-            client_info.serve_with_ct(child, cancel_token.clone()),
-        )
-        .await
-        .map_err(|_| McpError::InitializeTimeout {
-            server: config.name.clone(),
-        })?
-        .map_err(|e| McpError::ConnectionFailed {
-            server: config.name.clone(),
-            detail: e.to_string(),
-        })?;
+            McpTransport::Http { url, headers } => {
+                connect_http(url, headers.as_ref(), config, cancel_token).await?
+            }
+        };
 
         let peer = service.peer();
 
@@ -700,6 +679,88 @@ impl McpManager {
     }
 }
 
+async fn connect_stdio(
+    command: &str,
+    args: &[String],
+    env: &HashMap<String, String>,
+    config: &McpServerConfig,
+    cancel_token: &CancellationToken,
+) -> Result<RunningService<RoleClient, ClientInfo>, McpError> {
+    let mut cmd = Command::new(command);
+    cmd.args(args);
+    for (key, value) in env {
+        cmd.env(key, value);
+    }
+    cmd.stdin(Stdio::piped());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::inherit());
+
+    let child = TokioChildProcess::new(cmd).map_err(|e: std::io::Error| {
+        McpError::ConnectionFailed {
+            server: config.name.clone(),
+            detail: e.to_string(),
+        }
+    })?;
+
+    let client_info = ClientInfo::default();
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        client_info.serve_with_ct(child, cancel_token.clone()),
+    )
+    .await
+    .map_err(|_| McpError::InitializeTimeout {
+        server: config.name.clone(),
+    })?
+    .map_err(|e| McpError::ConnectionFailed {
+        server: config.name.clone(),
+        detail: e.to_string(),
+    })
+}
+
+async fn connect_http(
+    url: &str,
+    headers: Option<&HashMap<String, String>>,
+    config: &McpServerConfig,
+    cancel_token: &CancellationToken,
+) -> Result<RunningService<RoleClient, ClientInfo>, McpError> {
+    use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
+
+    let mut transport_config = StreamableHttpClientTransportConfig::with_uri(url);
+
+    if let Some(hdrs) = headers {
+        if !hdrs.is_empty() {
+            let mut http_headers: std::collections::HashMap<http::HeaderName, http::HeaderValue> =
+                std::collections::HashMap::new();
+            for (name, value) in hdrs {
+                if let (Ok(name), Ok(value)) = (
+                    http::HeaderName::from_bytes(name.as_bytes()),
+                    http::HeaderValue::from_str(value),
+                ) {
+                    http_headers.insert(name, value);
+                }
+            }
+            transport_config = transport_config.custom_headers(http_headers);
+        }
+    }
+
+    let transport =
+        rmcp::transport::StreamableHttpClientTransport::from_config(transport_config);
+
+    let client_info = ClientInfo::default();
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        client_info.serve_with_ct(transport, cancel_token.clone()),
+    )
+    .await
+    .map_err(|_| McpError::InitializeTimeout {
+        server: config.name.clone(),
+    })?
+    .map_err(|e| McpError::ConnectionFailed {
+        server: config.name.clone(),
+        detail: e.to_string(),
+    })
+}
+
 fn exponential_backoff(retry_count: usize, min: Duration, max: Duration) -> Duration {
     let delay = min.mul_f64(2f64.powi(retry_count as i32));
     delay.min(max)
@@ -721,9 +782,11 @@ mod tests {
         // Use a command that doesn't exist — every connect attempt will fail
         let config = McpServerConfig {
             name: "failing-server".to_string(),
-            command: "nonexistent-command-that-will-fail".to_string(),
-            args: vec![],
-            env: std::collections::HashMap::new(),
+            transport: McpTransport::Stdio {
+                command: "nonexistent-command-that-will-fail".to_string(),
+                args: vec![],
+                env: std::collections::HashMap::new(),
+            },
         };
 
         let mgr = McpManager::new(vec![config])
@@ -754,9 +817,11 @@ mod tests {
     async fn test_manual_reconnect_after_exhaustion() {
         let config = McpServerConfig {
             name: "failing-server".to_string(),
-            command: "nonexistent-command".to_string(),
-            args: vec![],
-            env: std::collections::HashMap::new(),
+            transport: McpTransport::Stdio {
+                command: "nonexistent-command".to_string(),
+                args: vec![],
+                env: std::collections::HashMap::new(),
+            },
         };
 
         let mgr = McpManager::new(vec![config])

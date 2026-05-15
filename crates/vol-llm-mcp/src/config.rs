@@ -2,7 +2,7 @@
 //!
 //! Follows the Claude Desktop .mcp.json schema:
 //! ```json
-//! { "mcpServers": { "name": { "command": "...", "args": [...], "env": {...} } } }
+//! { "mcpServers": { "name": { "type": "stdio", "command": "...", "args": [...], "env": {...} } } }
 //! ```
 
 use serde::Deserialize;
@@ -12,6 +12,35 @@ use std::path::Path;
 
 use crate::error::McpError;
 
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
+
+/// Transport configuration for an MCP server.
+#[derive(Debug, Clone, PartialEq)]
+pub enum McpTransport {
+    Stdio {
+        command: String,
+        args: Vec<String>,
+        env: HashMap<String, String>,
+    },
+    Http {
+        url: String,
+        headers: Option<HashMap<String, String>>,
+    },
+}
+
+/// Parsed server configuration.
+#[derive(Debug, Clone, PartialEq)]
+pub struct McpServerConfig {
+    pub name: String,
+    pub transport: McpTransport,
+}
+
+// ---------------------------------------------------------------------------
+// Raw deserialization types
+// ---------------------------------------------------------------------------
+
 /// Raw deserialization of .mcp.json
 #[derive(Debug, Deserialize, Clone)]
 struct RawMcpConfig {
@@ -20,7 +49,7 @@ struct RawMcpConfig {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-struct RawServerConfig {
+struct RawStdioConfig {
     command: String,
     #[serde(default)]
     args: Vec<String>,
@@ -28,14 +57,50 @@ struct RawServerConfig {
     env: HashMap<String, String>,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+struct RawHttpConfig {
+    url: String,
+    #[serde(default)]
+    headers: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(tag = "type")]
+enum RawMcpTransport {
+    #[serde(rename = "stdio")]
+    Stdio(RawStdioConfig),
+    #[serde(rename = "http")]
+    Http(RawHttpConfig),
+}
+
+// ---------------------------------------------------------------------------
+// Parsing
+// ---------------------------------------------------------------------------
+
 /// Try to deserialize a single server entry. Returns None if the entry
-/// lacks a `command` field (e.g. HTTP/SSE transport with `url` instead).
-fn try_parse_server(name: &str, value: &serde_json::Value) -> Option<RawServerConfig> {
-    match serde_json::from_value::<RawServerConfig>(value.clone()) {
-        Ok(cfg) => Some(cfg),
+/// lacks a valid `type` field or fails to parse.
+fn try_parse_server(name: &str, value: &serde_json::Value) -> Option<McpServerConfig> {
+    match serde_json::from_value::<RawMcpTransport>(value.clone()) {
+        Ok(raw) => {
+            let transport = match raw {
+                RawMcpTransport::Stdio(cfg) => McpTransport::Stdio {
+                    command: cfg.command,
+                    args: cfg.args,
+                    env: cfg.env,
+                },
+                RawMcpTransport::Http(cfg) => McpTransport::Http {
+                    url: cfg.url,
+                    headers: cfg.headers,
+                },
+            };
+            Some(McpServerConfig {
+                name: name.to_string(),
+                transport,
+            })
+        }
         Err(e) => {
             tracing::warn!(
-                "Skipping MCP server '{}' (no command field or invalid format): {}",
+                "Skipping MCP server '{}' (missing or invalid 'type' field): {}",
                 name,
                 e
             );
@@ -44,14 +109,9 @@ fn try_parse_server(name: &str, value: &serde_json::Value) -> Option<RawServerCo
     }
 }
 
-/// Parsed server configuration.
-#[derive(Debug, Clone, PartialEq)]
-pub struct McpServerConfig {
-    pub name: String,
-    pub command: String,
-    pub args: Vec<String>,
-    pub env: HashMap<String, String>,
-}
+// ---------------------------------------------------------------------------
+// McpConfig
+// ---------------------------------------------------------------------------
 
 /// Parsed and merged MCP configuration.
 #[derive(Debug, Clone)]
@@ -76,6 +136,10 @@ impl McpConfig {
         &self.servers
     }
 }
+
+// ---------------------------------------------------------------------------
+// File I/O and merge
+// ---------------------------------------------------------------------------
 
 /// Read and parse a `.mcp.json` file, returning `None` if it doesn't exist.
 fn read_config(path: &Path) -> Result<Option<RawMcpConfig>, McpError> {
@@ -127,18 +191,15 @@ fn merge_configs(
 
     let servers = merged
         .into_iter()
-        .filter_map(|(name, value)| {
-            try_parse_server(&name, &value).map(|raw| McpServerConfig {
-                name,
-                command: raw.command,
-                args: raw.args,
-                env: raw.env,
-            })
-        })
+        .filter_map(|(name, value)| try_parse_server(&name, &value))
         .collect();
 
     McpConfig { servers }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -147,21 +208,26 @@ mod tests {
     #[test]
     fn test_load_user_config_only() {
         let user: RawMcpConfig = serde_json::from_str(
-            r#"{"mcpServers":{"test":{"command":"echo","args":["hello"]}}}"#
+            r#"{"mcpServers":{"test":{"type":"stdio","command":"echo","args":["hello"]}}}"#
         ).unwrap();
         let merged = merge_configs(None, Some(user));
         assert_eq!(merged.servers.len(), 1);
         assert_eq!(merged.servers[0].name, "test");
-        assert_eq!(merged.servers[0].command, "echo");
+        if let McpTransport::Stdio { command, args, .. } = &merged.servers[0].transport {
+            assert_eq!(command, "echo");
+            assert_eq!(args, &["hello"]);
+        } else {
+            panic!("expected Stdio transport");
+        }
     }
 
     #[test]
     fn test_merge_project_overrides_user() {
         let user: RawMcpConfig = serde_json::from_str(
-            r#"{"mcpServers":{"weather":{"command":"npx","args":["weather-server"]},"github":{"command":"npx","args":["github-server"]}}}"#
+            r#"{"mcpServers":{"weather":{"type":"stdio","command":"npx","args":["weather-server"]},"github":{"type":"stdio","command":"npx","args":["github-server"]}}}"#
         ).unwrap();
         let project: RawMcpConfig = serde_json::from_str(
-            r#"{"mcpServers":{"weather":{"command":"uv","args":["run","weather.py"]}}}"#
+            r#"{"mcpServers":{"weather":{"type":"stdio","command":"uv","args":["run","weather.py"]}}}"#
         ).unwrap();
 
         let merged = merge_configs(Some(project), Some(user));
@@ -169,18 +235,26 @@ mod tests {
 
         // weather should use project-level config
         let weather = merged.servers.iter().find(|s| s.name == "weather").unwrap();
-        assert_eq!(weather.command, "uv");
+        if let McpTransport::Stdio { command, .. } = &weather.transport {
+            assert_eq!(command, "uv");
+        } else {
+            panic!("expected Stdio transport for weather");
+        }
 
         // github should use user-level config
         let github = merged.servers.iter().find(|s| s.name == "github").unwrap();
-        assert_eq!(github.command, "npx");
+        if let McpTransport::Stdio { command, .. } = &github.transport {
+            assert_eq!(command, "npx");
+        } else {
+            panic!("expected Stdio transport for github");
+        }
     }
 
     #[test]
     fn test_merge_empty_user() {
         let user: RawMcpConfig = serde_json::from_str(r#"{"mcpServers":{}}"#).unwrap();
         let project: RawMcpConfig = serde_json::from_str(
-            r#"{"mcpServers":{"test":{"command":"echo"}}}"#
+            r#"{"mcpServers":{"test":{"type":"stdio","command":"echo"}}}"#
         ).unwrap();
         let merged = merge_configs(Some(project), Some(user));
         assert_eq!(merged.servers.len(), 1);
@@ -194,11 +268,11 @@ mod tests {
     }
 
     #[test]
-    fn test_merge_skips_servers_without_command() {
+    fn test_merge_skips_servers_without_type() {
         // User config has both stdio and http transport servers
         let user: RawMcpConfig = serde_json::from_str(
             r#"{"mcpServers":{
-                "stdio-srv":{"command":"echo","args":["hi"]},
+                "stdio-srv":{"type":"stdio","command":"echo","args":["hi"]},
                 "http-srv":{"url":"http://localhost:3000","transport":"sse"}
             }}"#
         ).unwrap();
@@ -212,17 +286,87 @@ mod tests {
         // Project has stdio server, user has both types
         let user: RawMcpConfig = serde_json::from_str(
             r#"{"mcpServers":{
-                "my-srv":{"command":"npx","args":["srv"]},
+                "my-srv":{"type":"stdio","command":"npx","args":["srv"]},
                 "http-srv":{"url":"http://example.com"}
             }}"#
         ).unwrap();
         let project: RawMcpConfig = serde_json::from_str(
-            r#"{"mcpServers":{"my-srv":{"command":"uv","args":["run","srv.py"]}}}"#
+            r#"{"mcpServers":{"my-srv":{"type":"stdio","command":"uv","args":["run","srv.py"]}}}"#
         ).unwrap();
 
         let merged = merge_configs(Some(project), Some(user));
         assert_eq!(merged.servers.len(), 1);
         assert_eq!(merged.servers[0].name, "my-srv");
-        assert_eq!(merged.servers[0].command, "uv");
+        if let McpTransport::Stdio { command, .. } = &merged.servers[0].transport {
+            assert_eq!(command, "uv");
+        } else {
+            panic!("expected Stdio transport");
+        }
+    }
+
+    #[test]
+    fn test_parse_stdio_type() {
+        let value: serde_json::Value = serde_json::from_str(
+            r#"{"type":"stdio","command":"echo","args":["hello"]}"#
+        ).unwrap();
+        let parsed = try_parse_server("test-srv", &value).unwrap();
+        assert!(matches!(parsed.transport, McpTransport::Stdio { .. }));
+        assert_eq!(parsed.name, "test-srv");
+    }
+
+    #[test]
+    fn test_parse_http_type() {
+        let value: serde_json::Value = serde_json::from_str(
+            r#"{"type":"http","url":"http://localhost:3000/mcp"}"#
+        ).unwrap();
+        let parsed = try_parse_server("http-srv", &value).unwrap();
+        assert!(matches!(parsed.transport, McpTransport::Http { .. }));
+        assert_eq!(parsed.name, "http-srv");
+    }
+
+    #[test]
+    fn test_parse_http_with_headers() {
+        let value: serde_json::Value = serde_json::from_str(
+            r#"{"type":"http","url":"http://localhost:3000/mcp","headers":{"Authorization":"Bearer token"}}"#
+        ).unwrap();
+        let parsed = try_parse_server("auth-srv", &value).unwrap();
+        match &parsed.transport {
+            McpTransport::Http { headers, .. } => {
+                assert!(headers.is_some());
+                let h = headers.as_ref().unwrap();
+                assert_eq!(h.get("Authorization").unwrap(), "Bearer token");
+            }
+            _ => panic!("expected Http transport"),
+        }
+    }
+
+    #[test]
+    fn test_missing_type_is_skipped() {
+        let value: serde_json::Value = serde_json::from_str(
+            r#"{"command":"echo"}"#
+        ).unwrap();
+        let result = try_parse_server("no-type-srv", &value);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_unrecognized_type_is_skipped() {
+        let value: serde_json::Value = serde_json::from_str(
+            r#"{"type":"websocket","url":"ws://localhost:3000"}"#
+        ).unwrap();
+        let result = try_parse_server("ws-srv", &value);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_merge_with_mixed_transports() {
+        let user: RawMcpConfig = serde_json::from_str(
+            r#"{"mcpServers":{
+                "stdio-srv":{"type":"stdio","command":"echo","args":["hi"]},
+                "http-srv":{"type":"http","url":"http://localhost:3000"}
+            }}"#
+        ).unwrap();
+        let merged = merge_configs(None, Some(user));
+        assert_eq!(merged.servers.len(), 2);
     }
 }
