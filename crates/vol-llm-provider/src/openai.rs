@@ -611,4 +611,32 @@ mod tests {
         assert_eq!(result[1]["role"], "user");
         assert_eq!(result[2]["role"], "assistant");
     }
+
+    #[test]
+    fn test_body_defaults_merge_in_converse_body() {
+        std::env::set_var("TEST_OPENAI_MERGE", "test-key");
+        let mut body = HashMap::new();
+        body.insert("temperature".to_string(), serde_json::json!(0.9));
+        body.insert("custom_param".to_string(), serde_json::json!("custom_value"));
+
+        let config = LLMConfig::with_env_key(
+            LLMProvider::OpenAI,
+            "gpt-4o",
+            "TEST_OPENAI_MERGE",
+            "https://api.openai.com",
+        )
+        .with_body(body);
+
+        let provider = OpenaiProvider::new(&config).unwrap();
+
+        // Verify body defaults are stored
+        assert_eq!(
+            provider.body_defaults.get("temperature").unwrap(),
+            &serde_json::json!(0.9)
+        );
+        assert_eq!(
+            provider.body_defaults.get("custom_param").unwrap(),
+            &serde_json::json!("custom_value")
+        );
+    }
 }
