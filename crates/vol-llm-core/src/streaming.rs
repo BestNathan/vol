@@ -119,8 +119,19 @@ impl StreamingSession {
             ParsedEvent::ToolCallDelta { delta, .. } => {
                 if let Some(ref mut builder) = self.current_tool_call {
                     builder.arguments.push_str(delta);
+                    let tool_call_id = builder.id.clone().unwrap_or_default();
+                    let tool_name = builder.name.clone().unwrap_or_default();
+                    vec![Ok(StreamEvent {
+                        id: self.next_id(),
+                        data: StreamEventData::ToolCallArgumentDelta {
+                            tool_call_id,
+                            tool_name,
+                            delta: delta.clone(),
+                        },
+                    })]
+                } else {
+                    Vec::new()
                 }
-                Vec::new()
             }
             ParsedEvent::ToolCallComplete(tool_call) => {
                 vec![Ok(StreamEvent {
@@ -403,6 +414,35 @@ mod tests {
         let events = session.apply(&ParsedEvent::ContentDelta("hello".to_string()));
         assert_eq!(events.len(), 1);
         assert_eq!(session.content_buffer, "hello");
+    }
+
+    #[test]
+    fn test_tool_call_argument_delta_emitted() {
+        let mut session = StreamingSession::new();
+        let protocol = AnthropicProtocol;
+
+        let start = r#"data: {"type": "content_block_start", "content_block": {"type": "tool_use", "id": "call_1", "name": "get_weather"}}"#;
+        session.process_sse(&protocol, start);
+
+        let delta = r#"data: {"type": "content_block_delta", "delta": {"partial_json": "{\"city\": \"Beijing\"}"}}"#;
+        let events = session.process_sse(&protocol, delta);
+
+        assert!(!events.is_empty(), "Expected ToolCallArgumentDelta event");
+        if let Ok(StreamEvent {
+            data: StreamEventData::ToolCallArgumentDelta {
+                tool_call_id,
+                tool_name,
+                delta,
+            },
+            ..
+        }) = &events[0]
+        {
+            assert_eq!(tool_call_id, "call_1");
+            assert_eq!(tool_name, "get_weather");
+            assert_eq!(delta, r#"{"city": "Beijing"}"#);
+        } else {
+            panic!("Expected ToolCallArgumentDelta, got: {:?}", events[0]);
+        }
     }
 
     #[test]
