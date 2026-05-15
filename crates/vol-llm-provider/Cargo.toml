@@ -18,3 +18,7 @@ dirs = "5"
 
 [dev-dependencies]
 tempfile = "3"
+
+[[example]]
+name = "provider_toml_chat"
+required-features = []
