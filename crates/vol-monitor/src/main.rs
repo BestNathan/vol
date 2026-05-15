@@ -86,7 +86,8 @@ async fn main() -> Result<()> {
     info!("===========================================");
 
     // Initialize LLM provider registry from .agents/providers/
-    let loader = ProviderLoader::load(None);
+    // Pass current working directory so both project-level and user-level providers are loaded
+    let loader = ProviderLoader::load(std::env::current_dir().ok().as_deref());
     let llm_registry: Option<LLMProviderRegistry> = if !loader.is_empty() {
         info!(
             "Initializing LLM providers: {} loaded from .agents/providers/",
