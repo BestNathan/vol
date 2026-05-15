@@ -1,0 +1,12 @@
+provider = "openai"
+model = "gpt-4o"
+api_key = "${OPENAI_API_KEY}"
+base_url = "https://api.openai.com"
+
+[body]
+max_tokens = 2048
+temperature = 0.7
+
+[headers]
+# Custom headers (optional)
+# X-Custom-Header = "value"
