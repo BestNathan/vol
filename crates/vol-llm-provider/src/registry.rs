@@ -2,6 +2,7 @@
 
 use crate::config::LLMConfig;
 use crate::factory::create_provider;
+use crate::loader::ProviderLoader;
 use std::collections::HashMap;
 use std::sync::Arc;
 use vol_llm_core::{LLMClient, LLMError};
@@ -38,6 +39,18 @@ impl LLMProviderRegistry {
             registry
                 .providers
                 .insert(config.id.clone(), Arc::from(provider));
+        }
+        Ok(registry)
+    }
+
+    /// Create registry from a ProviderLoader
+    pub fn from_loader(loader: &ProviderLoader) -> Result<Self, LLMError> {
+        let mut registry = Self::new();
+        for id in loader.ids() {
+            let file_config = loader.get(id).unwrap();
+            let llm_config = file_config.to_llm_config();
+            let provider = create_provider(&llm_config)?;
+            registry.providers.insert(id.to_string(), Arc::from(provider));
         }
         Ok(registry)
     }
