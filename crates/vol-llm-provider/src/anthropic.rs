@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use futures_util::StreamExt;
 use reqwest::Client;
 use serde_json::json;
+use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing::info;
 use vol_llm_core::*;
@@ -15,6 +16,8 @@ pub struct AnthropicProvider {
     api_key: String,
     model: String,
     base_url: String,
+    body_defaults: HashMap<String, serde_json::Value>,
+    headers: HashMap<String, String>,
 }
 
 impl AnthropicProvider {
@@ -26,6 +29,8 @@ impl AnthropicProvider {
             api_key: config.resolve_api_key()?,
             model: config.model.clone(),
             base_url: config.base_url.clone(),
+            body_defaults: config.body.clone().unwrap_or_default(),
+            headers: config.headers.clone().unwrap_or_default(),
         })
     }
 
@@ -167,7 +172,9 @@ impl LLMClient for AnthropicProvider {
 
     async fn converse(&self, request: ConversationRequest) -> Result<ConversationResponse> {
         // max_tokens is required for Anthropic
-        let max_tokens = request.model_config.max_tokens.unwrap_or(8192);
+        let max_tokens = request.model_config.max_tokens
+            .or_else(|| self.body_defaults.get("max_tokens").and_then(|v| v.as_u64()).map(|v| v as u32))
+            .unwrap_or(8192);
 
         // Convert messages
         let anthropic_messages = self.convert_messages(&request.messages)?;
@@ -195,17 +202,39 @@ impl LLMClient for AnthropicProvider {
             body["tools"] = self.convert_tools(&tools);
         }
 
+        // Apply body defaults (skip max_tokens which is already handled)
+        for (key, value) in &self.body_defaults {
+            if key == "max_tokens" {
+                continue;
+            }
+            let overridden = match key.as_str() {
+                "temperature" => request.model_config.temperature.is_some(),
+                "top_p" => request.model_config.top_p.is_some(),
+                "top_k" => request.model_config.top_k.is_some(),
+                _ => false,
+            };
+            if !overridden {
+                body[key] = value.clone();
+            }
+        }
+
         // Send request
         let url = format!("{}/v1/messages", self.base_url);
 
-        let response = self
+        let mut req = self
             .client
             .post(&url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
             .header("Content-Type", "application/json")
             .header("User-Agent", "claude-code/1.0.0")
-            .json(&body)
+            .json(&body);
+
+        for (key, value) in &self.headers {
+            req = req.header(key, value);
+        }
+
+        let response = req
             .send()
             .await
             .map_err(LLMError::Network)?;
@@ -309,7 +338,9 @@ impl LLMClient for AnthropicProvider {
 
     async fn converse_stream(&self, request: ConversationRequest) -> Result<StreamReceiver> {
         // max_tokens is required for Anthropic
-        let max_tokens = request.model_config.max_tokens.unwrap_or(8192);
+        let max_tokens = request.model_config.max_tokens
+            .or_else(|| self.body_defaults.get("max_tokens").and_then(|v| v.as_u64()).map(|v| v as u32))
+            .unwrap_or(8192);
 
         // Convert messages
         let anthropic_messages = self.convert_messages(&request.messages)?;
@@ -338,17 +369,39 @@ impl LLMClient for AnthropicProvider {
             body["tools"] = self.convert_tools(&tools);
         }
 
+        // Apply body defaults (skip max_tokens which is already handled)
+        for (key, value) in &self.body_defaults {
+            if key == "max_tokens" {
+                continue;
+            }
+            let overridden = match key.as_str() {
+                "temperature" => request.model_config.temperature.is_some(),
+                "top_p" => request.model_config.top_p.is_some(),
+                "top_k" => request.model_config.top_k.is_some(),
+                _ => false,
+            };
+            if !overridden {
+                body[key] = value.clone();
+            }
+        }
+
         // Send request
         let url = format!("{}/v1/messages", self.base_url);
 
-        let response = self
+        let mut req = self
             .client
             .post(&url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
             .header("Content-Type", "application/json")
             .header("User-Agent", "claude-code/1.0.0")
-            .json(&body)
+            .json(&body);
+
+        for (key, value) in &self.headers {
+            req = req.header(key, value);
+        }
+
+        let response = req
             .send()
             .await
             .map_err(LLMError::Network)?;
