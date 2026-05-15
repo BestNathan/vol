@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-14 (mcp-state-types)
+Last updated: 2026-05-15 (mcp-multi-transport-config)
 
 ## Entities
 
@@ -17,7 +17,7 @@ Last updated: 2026-05-14 (mcp-state-types)
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 | [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support | active | 2026-05-10 |
-| [[vol-llm-mcp-crate]] | MCP Client protocol layer for ReAct Agent — config parsing, McpManager lifecycle, tool/resource/prompt discovery | active | 2026-05-13 |
+| [[vol-llm-mcp-crate]] | MCP Client protocol layer for ReAct Agent — config parsing with multi-transport enum (Stdio/Http), McpManager lifecycle, tool/resource/prompt discovery | active | 2026-05-15 |
 
 ## Concepts
 
@@ -54,8 +54,8 @@ Last updated: 2026-05-14 (mcp-state-types)
 | [[agent-router]] | Multi-agent routing with per-agent dispatchers | active | 2026-05-07 |
 | [[connection-holder-clone-limitation]] | ConnectionHolder cannot be both plugin and transport reference | active | 2026-05-07 |
 | [[clarifying-requirements-workflow]] | Structured dialogue for turning vague requests into requirements | active | 2026-05-06 |
-| [[mcp-transport-pattern]] | Multi-transport startup pattern for MCP servers (stdio, HTTP/SSE) | active | 2026-05-10 |
-| [[mcp-manager-lifecycle]] | McpManager connection lifecycle: state tracking, auto-reconnect with backoff, full MCP protocol | active | 2026-05-13 |
+| [[mcp-transport-pattern]] | Multi-transport startup pattern for MCP servers (stdio, HTTP/SSE) — server-side (CLI flags) and client-side (type-field config parsing) | active | 2026-05-15 |
+| [[mcp-manager-lifecycle]] | McpManager connection lifecycle: multi-transport dispatch (Stdio/Http), state tracking, auto-reconnect with backoff, full MCP protocol | active | 2026-05-15 |
 | [[docs-rs-tools]] | Four MCP tools exposing docs.rs/crates.io documentation | active | 2026-05-10 |
 | [[rmcp-sdk]] | Rust SDK for Model Context Protocol — macros, transports, service | active | 2026-05-10 |
 | [[ratatui-tui-pattern]] | Layout and widget composition patterns for ratatui 0.30 TUI rendering | active | 2026-05-08 |
@@ -112,6 +112,7 @@ Last updated: 2026-05-14 (mcp-state-types)
 | [[conversation-tailwind-migration]] | conversation.rs migrated from semantic CSS classes to inline Tailwind utilities — all 9 message types updated | active | 2026-05-12 |
 | [[connection-state-dashboard]] | ConnectionStatePanel component: EventBus-driven connection status indicator in StatusBar, color-coded for connected/connecting/disconnected states | active | 2026-05-14 |
 | [[tailwind-css-full-migration]] | Full Tailwind CSS v4 migration — all 16 components, GLOBAL_CSS deleted, build pipeline verified | complete | 2026-05-12 |
+| [[mcp-multi-transport-config]] | Design + implementation: McpTransport enum with required type field, serde tagged enum parsing, HTTP via StreamableHttpClientTransport | active | 2026-05-15 |
 
 ## Analyses
 

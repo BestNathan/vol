@@ -3,14 +3,14 @@ type: concept
 category: framework
 tags: [mcp, transport, http, sse, stdio, rmcp]
 created: 2026-05-10
-updated: 2026-05-10
-source_count: 1
+updated: 2026-05-15
+source_count: 2
 ---
 
 # MCP Transport Pattern
 
 **Category:** Network transport
-**Related:** [[vol-mcp-servers-crate]], [[rmcp-sdk]], [[docs-rs-tools]], [[vol-llm-agent-channel-crate]]
+**Related:** [[vol-mcp-servers-crate]], [[rmcp-sdk]], [[docs-rs-tools]], [[vol-llm-agent-channel-crate]], [[vol-llm-mcp-crate]]
 
 ## Definition
 
@@ -39,6 +39,19 @@ StreamableHttpService::new(
 - Sessions are stateful by default — each initialize request creates a new session with a UUID
 - Client receives `Mcp-Session-Id` header and must include it on subsequent requests
 - Graceful shutdown via `CancellationToken`
+
+## Client-Side Transport Config
+
+The client-side (`vol-llm-mcp`) matches the server-side transport types via a required `type` field in `.mcp.json`:
+
+| `type` value | Transport | rmcp implementation |
+|--------------|-----------|---------------------|
+| `"stdio"` | Child process stdin/stdout | `TokioChildProcess` |
+| `"http"` | HTTP POST + SSE stream | `StreamableHttpClientTransport` (reqwest) |
+
+Parsing uses serde's internally-tagged enum: `#[serde(tag = "type")]` dispatches to `RawStdioConfig` or `RawHttpConfig`. Missing or unrecognized `type` values are skipped with a warning — no backward compatibility for configs without `type`.
+
+HTTP config supports optional `headers` field (e.g. `{"Authorization": "Bearer token"}`) for auth.
 
 ## Comparison with vol-llm-agent-channel Transports
 

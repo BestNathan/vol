@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-05-15] ingest | MCP Multi-Transport Config — McpTransport Enum (Stdio/Http)
+- Created sources: [[mcp-multi-transport-config]]
+- Updated entities: [[vol-llm-mcp-crate]] (added McpTransport enum section, updated module table, updated timeline, source_count → 3)
+- Updated concepts: [[mcp-transport-pattern]] (added client-side transport config section, source_count → 2)
+- Updated concepts: [[mcp-manager-lifecycle]] (updated connection flow for multi-transport dispatch, updated disconnect section, updated timeline, source_count → 2)
+- Updated index: vol-llm-mcp-crate/mcp-transport-pattern/mcp-manager-lifecycle summaries and dates, new mcp-multi-transport-config source entry
+- Cross-references added: 6
+- Changes: `McpServerConfig` replaced flat fields with `transport: McpTransport` enum; serde internally-tagged enum (`#[serde(tag = "type")]`) parses stdio/http variants; `type` field is required — missing/unrecognized values skip with warning; `manager.rs` dispatches on `McpTransport` — Stdio → TokioChildProcess, Http → StreamableHttpClientTransport (reqwest); `rmcp` dependency gained `transport-streamable-http-client-reqwest` feature; 20 tests pass; full binary builds
+
 ## [2026-05-14] ingest | MCP State Types — ActiveTab::Mcp, McpSubtab, Wire Types, Local State
 - Created concepts: [[mcp-state-types]]
 - Updated entities: [[vol-llm-ui-crate]] (added McpSubtab, MCP wire types, MCP local state structs to Key Facts; added timeline entry)
