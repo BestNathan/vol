@@ -4,7 +4,7 @@ category: pattern
 tags: [streaming, sse, protocol, openai, anthropic, rust]
 created: 2026-05-15
 updated: 2026-05-15
-source_count: 1
+source_count: 2
 ---
 
 # Streaming Session and StreamProtocol
@@ -36,6 +36,12 @@ The `StreamProtocol` trait and `StreamingSession` struct in `vol-llm-core/src/st
 Two protocol implementations exist:
 - `AnthropicProtocol`: parses Anthropic's `type`-field-based SSE format (`message_start`, `content_block_delta`, etc.)
 - `OpenaiStreamParser`: parses OpenAI's `choices[0].delta` format with `[DONE]` sentinel
+
+## Usage in Providers
+
+Both `AnthropicProvider` and `OpenaiProvider` use `StreamingSession` for their `converse_stream()` implementations:
+- `AnthropicProvider` uses `process_anthropic_sse()` (backward compat wrapper for `process_sse(&AnthropicProtocol, line)`)
+- `OpenaiProvider` uses `process_sse(&OpenaiStreamParser, line)` directly
 
 ## Examples
 

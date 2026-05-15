@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-15 (openai-stream-parser-impl)
+Last updated: 2026-05-15 (openai-provider-impl)
 
 ## Entities
 
@@ -11,7 +11,7 @@ Last updated: 2026-05-15 (openai-stream-parser-impl)
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions | stable | 2026-05-04 |
 | [[vol-llm-tool-crate]] | Tool definition and registry framework | stable | 2026-05-04 |
-| [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with protocol-abstracted SSE streaming parsers (AnthropicProtocol, OpenaiStreamParser) | stable | 2026-05-15 |
+| [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with LLMClient trait; protocol-abstracted SSE streaming parsers (AnthropicProtocol, OpenaiStreamParser); factory dispatch and TOML-based config | stable | 2026-05-15 |
 | [[vol-session]] | Session message store and entry persistence | active | 2026-05-04 |
 | [[vol-llm-agent-channel-crate]] | Agent communication channel layer with multiple transports and JSON-RPC Connection implementation | active | 2026-05-09 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
@@ -115,6 +115,7 @@ Last updated: 2026-05-15 (openai-stream-parser-impl)
 | [[tailwind-css-full-migration]] | Full Tailwind CSS v4 migration — all 16 components, GLOBAL_CSS deleted, build pipeline verified | complete | 2026-05-12 |
 | [[mcp-multi-transport-config]] | Design + implementation: McpTransport enum with required type field, serde tagged enum parsing, HTTP via StreamableHttpClientTransport | active | 2026-05-15 |
 | [[openai-stream-parser-impl]] | OpenaiStreamParser implementation — StreamProtocol for OpenAI SSE format with [DONE] sentinel, content/tool deltas, usage, finish reasons | active | 2026-05-15 |
+| [[openai-provider-impl]] | OpenaiProvider implementation — full LLMClient for OpenAI Chat Completions API, message/tool conversion, SSE streaming, factory dispatch | active | 2026-05-15 |
 
 ## Analyses
 

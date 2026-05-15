@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-05-15] ingest | OpenaiProvider Implementation — LLMClient for OpenAI Chat Completions API
+- Created sources: [[openai-provider-impl]]
+- Updated entities: [[vol-llm-provider-crate]] (added OpenaiProvider details to Key Facts, added openai module to module table, added timeline entry, source_count -> 3)
+- Updated concepts: [[streaming-session]] (added Usage in Providers section showing how both providers use StreamingSession, source_count -> 2)
+- Updated index: vol-llm-provider-crate summary updated, new openai-provider-impl source entry, header date updated
+- Cross-references added: 5
+- Changes: `crates/vol-llm-provider/src/openai.rs` created — `OpenaiProvider` implements `LLMClient` trait for OpenAI Chat Completions API; `convert_messages()` maps system/user/assistant/tool roles (system as first message in array); `convert_tools()` wraps tools in OpenAI `{"type":"function","function":{...}}` format; auth via `Authorization: Bearer` header; endpoint `{base_url}/v1/chat/completions`; response parsed from `choices[0].message`; streaming uses `stream_options: {"include_usage": true}` with `OpenaiStreamParser` + `StreamingSession::process_sse()`; `factory.rs` updated to dispatch `LLMProvider::OpenAI`; 6 unit tests pass (user message, system message, tool message, assistant with tools, tool conversion, multiple messages); 37 total lib tests pass
+
 ## [2026-05-15] ingest | OpenaiStreamParser Implementation
 - Created sources: [[openai-stream-parser-impl]]
 - Created concepts: [[streaming-session]]
