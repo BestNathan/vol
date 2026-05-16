@@ -3,7 +3,8 @@ use crate::state::McpState;
 use crate::web::components::app::AppState;
 
 #[component]
-pub fn ResourceViewer(mut signal: Signal<McpState>, app_state: AppState) -> Element {
+pub fn ResourceViewer(mut signal: Signal<McpState>) -> Element {
+    let app_state: AppState = use_context();
     let rpc_client = app_state.rpc_client.clone();
 
     let (uri, content, error, loading) = {

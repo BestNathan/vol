@@ -3,7 +3,8 @@ use crate::state::McpState;
 use crate::web::components::app::AppState;
 
 #[component]
-pub fn PromptViewer(mut signal: Signal<McpState>, app_state: AppState) -> Element {
+pub fn PromptViewer(mut signal: Signal<McpState>) -> Element {
+    let app_state: AppState = use_context();
     let _rpc_client = app_state.rpc_client.clone();
 
     let viewer = {
