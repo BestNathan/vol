@@ -234,12 +234,12 @@ fn ToolCard(mut signal: Signal<McpDialogState>, tool: crate::state::McpToolInfo)
                 button {
                     class: "px-2 py-0.5 bg-[#3a3a55] text-[#aaa] rounded text-[11px] cursor-pointer hover:text-[#e0e0e0]",
                     onclick: move |_| {
-                        web_sys::console::log_1(&format!("ToolCard click: {}/{}", tool.server, tool.name).into());
                         let t = tool.clone();
                         signal.write_unchecked().tool_call_dialog = Some(crate::state::McpToolCallState {
                             server: t.server.clone(),
                             tool_name: t.name.clone(),
                             arguments_json: t.input_schema.as_ref().map(|v| serde_json::to_string_pretty(v).unwrap_or_default()).unwrap_or_else(|| "{}".to_string()),
+                            input_schema: t.input_schema.clone(),
                             result: None,
                             error: None,
                             loading: false,

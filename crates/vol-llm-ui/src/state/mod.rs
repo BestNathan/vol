@@ -633,6 +633,7 @@ pub struct McpToolCallState {
     pub server: String,
     pub tool_name: String,
     pub arguments_json: String,
+    pub input_schema: Option<serde_json::Value>,
     pub result: Option<String>,
     pub error: Option<String>,
     pub loading: bool,
