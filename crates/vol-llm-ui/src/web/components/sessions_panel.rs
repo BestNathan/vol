@@ -6,15 +6,24 @@ use dioxus::prelude::*;
 use crate::state::{ActiveTab, ConversationEntry, ConversationState, SessionsState};
 use crate::web::client::{JsonRpcClient, SessionEntry};
 
+fn truncate_for_log(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len])
+    }
+}
+
 /// Convert raw session entries to ConversationEntry for display.
 fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<ConversationEntry> {
     entries.into_iter().filter_map(|e| {
-        match e.entry_type.as_str() {
+        let entry_type = e.entry_type.clone();
+        let data_debug = serde_json::to_string(&e.data).unwrap_or_default();
+        let result = match e.entry_type.as_str() {
             "message" => {
                 let data = &e.data;
                 if let Some(msg) = data.get("message").and_then(|m| m.get("message")) {
                     if let Some(role) = msg.get("role").and_then(|v| v.as_str()) {
-                        // Content can be a string (text messages) or a list of parts (multimodal).
                         let text = match msg.get("content") {
                             Some(serde_json::Value::String(s)) => s.clone(),
                             Some(serde_json::Value::Array(parts)) => {
@@ -23,7 +32,10 @@ fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<Conversati
                                         .or_else(|| p.get("type").and_then(|v| v.as_str()))
                                 }).collect::<Vec<_>>().join("\n")
                             }
-                            _ => String::new(),
+                            other => {
+                                log::warn!("session entry message content unexpected type: {:?}", other);
+                                String::new()
+                            }
                         };
                         match role {
                             "user" => Some(ConversationEntry::UserInput { text }),
@@ -36,12 +48,17 @@ fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<Conversati
                                     success: true,
                                 })
                             }
-                            _ => None,
+                            _ => {
+                                log::warn!("session entry unknown role: {role}");
+                                None
+                            }
                         }
                     } else {
+                        log::warn!("session entry message missing role, data: {}", truncate_for_log(&data_debug, 200));
                         None
                     }
                 } else {
+                    log::warn!("session entry data missing message wrapper, data: {}", truncate_for_log(&data_debug, 200));
                     None
                 }
             }
@@ -60,8 +77,15 @@ fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<Conversati
                     elapsed_ms: 0,
                 })
             }
-            _ => None,
+            _ => {
+                log::warn!("session entry unknown entry_type: {entry_type}, data: {}", truncate_for_log(&data_debug, 100));
+                None
+            }
+        };
+        if result.is_none() {
+            log::warn!("session entry dropped: type={entry_type}, data_preview={}", truncate_for_log(&data_debug, 100));
         }
+        result
     }).collect()
 }
 
@@ -99,12 +123,14 @@ fn SessionDetailOverlay(
     entries: Signal<Vec<ConversationEntry>>,
     loading: Signal<bool>,
     show: Signal<bool>,
+    had_parse_failure: Signal<bool>,
 ) -> Element {
     if !*show.read() {
         return VNode::empty();
     }
 
     let is_loading = *loading.read();
+    let has_error = *had_parse_failure.read();
     let items: Vec<Element> = entries.read().iter().map(|entry| {
         let e = entry.clone();
         rsx! {
@@ -167,6 +193,13 @@ fn SessionDetailOverlay(
                 }
                 if is_loading {
                     div { class: "flex items-center justify-center flex-1 text-[#666]", "Loading..." }
+                } else if has_error && entries.read().is_empty() {
+                    div { class: "flex-1 flex items-center justify-center flex-col text-[#ff6060] p-5 text-center",
+                        div { class: "text-[14px] font-semibold mb-2", "Failed to parse session entries" }
+                        div { class: "text-[12px] text-[#888]", "Check browser console (F12) for details" }
+                    }
+                } else if entries.read().is_empty() {
+                    div { class: "flex items-center justify-center flex-1 text-[#666]", "No entries" }
                 } else {
                     div { class: "flex-1 overflow-y-auto p-2",
                         {items.into_iter()}
@@ -199,6 +232,7 @@ fn SessionItem(
     let entries = use_signal(|| Vec::<ConversationEntry>::new());
     let mut loading = use_signal(|| false);
     let is_resuming = use_signal(|| false);
+    let had_parse_failure = use_signal(|| false);
 
     // Pre-clone for the view onclick handler.
     let rpc_view = rpc.clone();
@@ -220,10 +254,20 @@ fn SessionItem(
                     let sid = sid_view.clone();
                     let mut ent = entries;
                     let mut ld = loading;
+                    let mut parse_fail = had_parse_failure;
                     rpc.session_entries(&sid, move |result| {
                         match result {
-                            Ok(e) => ent.set(session_entries_to_conversation(e)),
-                            Err(e) => log::error!("Failed to load session entries: {e}"),
+                            Ok(e) => {
+                                let converted = session_entries_to_conversation(e.clone());
+                                if e.len() > 0 && converted.is_empty() {
+                                    parse_fail.set(true);
+                                }
+                                ent.set(converted);
+                            }
+                            Err(e) => {
+                                log::error!("Failed to load session entries: {e}");
+                                parse_fail.set(true);
+                            }
                         }
                         ld.set(false);
                     });
@@ -265,6 +309,7 @@ fn SessionItem(
             entries,
             loading,
             show: show_detail,
+            had_parse_failure,
         }
     }
 }
