@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [dioxus, web, frontend, component, wasm]
 created: 2026-05-08
-updated: 2026-05-16 (schemaform-toolcall-dialog)
-source_count: 10
+updated: 2026-05-16 (skills-panel-content)
+source_count: 11
 ---
 
 # Dioxus Web Pattern
@@ -20,7 +20,7 @@ Component architecture for a browser-based UI built with Dioxus 0.6, compiled to
 
 - Dioxus 0.6 via `dioxus::launch(App)` in binary entry point
 - Feature gated: `#[cfg(feature = "web")]` in `lib.rs`, binary requires `--features web`
-- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `TreeNode`, `ToolsTabContent`, `FileContentView`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel`, `McpPanel` (placeholder), `ToolCallDialog`, `SchemaForm` [[tool-call-dialog-component]], [[schemaform-toolcall-dialog]]
+- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `TreeNode`, `ToolsTabContent`, `FileContentView`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel`, `McpPanel` (placeholder), `ToolCallDialog`, `SchemaForm`, `SkillDetailDialog` [[tool-call-dialog-component]], [[schemaform-toolcall-dialog]], [[skills-panel-content]]
 - Global CSS embedded as `const GLOBAL_CSS: &str`, injected via `<style>` element
 - Dark theme with flexbox layout: status bar (top), tools panel (left), tab content (right), input area (bottom)
 - Tab routing: `TabContent` matches on `ActiveTab` enum to render the active panel
@@ -79,6 +79,7 @@ App
 └── ApprovalDialog     (modal overlay)
 └── ToolCallDialog     (modal overlay, conditional on McpState.tool_call_dialog)
     └── SchemaForm     (auto-generated form fields from JSON Schema)
+└── SkillDetailDialog  (modal overlay, conditional on SkillDialogState.open)
 ```
 
 ## FileTree Component
@@ -134,3 +135,5 @@ Both frontends share `UiState` / `UiEvent` / `ActiveTab` types and the same conn
 - [[tool-call-dialog-component]]: Source documenting the ToolCallDialog modal component
 - [[schemaform-toolcall-dialog]]: Source documenting SchemaForm integration into ToolCallDialog
 - [[schema-form-pattern]]: Pattern for auto-generated form fields from JSON Schema
+- [[skills-panel-content]]: Source documenting SkillsPanel RPC fetch + SkillDetailDialog modal
+- [[skills-panel-json-rpc]]: Pattern for exposing skill discovery via JSON-RPC

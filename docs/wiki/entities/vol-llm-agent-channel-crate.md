@@ -4,13 +4,13 @@ category: product
 tags: [crate, agent, transport, rust, json-rpc]
 created: 2026-05-05
 updated: 2026-05-10
-source_count: 4
+source_count: 5
 ---
 
 # vol-llm-agent-channel Crate
 
 **Category:** Rust crate — Agent communication channel layer
-**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]]
+**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]], [[skill-system]], [[skills-panel-json-rpc]]
 
 ## Overview
 
@@ -23,8 +23,8 @@ The `vol-llm-agent-channel` crate provides the communication layer between exter
 - `AgentDispatcher` provides FIFO request queueing with `submit()` returning oneshot receivers [[http-transport-impl]]
 - `AgentRouter` provides multi-agent request routing via `HashMap<String, AgentDispatcher>` [[agent-router]]
 - `Message` enum unifies all communication: Submit, Cancel, Connected, Event, Result, Error [[http-transport-impl]]
-- `jsonrpc` module: `JsonRpcConnection` implements `Connection` trait, `JsonRpcServer` accepts `Vec<AgentRegistration>` for multi-agent [[jsonrpc-transport]]
-- 12 JSON-RPC methods: `agent.submit` (with optional `target`), `cancel`, `subscribe`, `unsubscribe`, `approve`, `file.list`, `file.read`, `log.list`, `log.read`, `session.list`, `session.resume` [[jsonrpc-transport]]
+- `jsonrpc` module: `JsonRpcConnection` implements `Connection` trait, `JsonRpcServer` accepts `Vec<AgentRegistration>` for multi-agent, optional `Arc<SkillLoader>` for skill discovery [[jsonrpc-transport]], [[skills-panel-json-rpc]]
+- 14 JSON-RPC methods: 12 existing agent/file/log/session methods plus `skill.list`, `skill.get` [[jsonrpc-transport]], [[skills-panel-json-rpc]]
 - 49 integration tests for JSON-RPC serialization and parsing [[task-5-jsonrpc-integration-tests]]
 
 ## Transport Comparison
@@ -65,3 +65,4 @@ Client → Transport (WS/HTTP/JSON-RPC/Memory) → Connection → ConnectionHold
 - **2026-05-05**: HTTP transport quality improvements — concurrent request protection, clean stream termination, holder detach, and test suite (5 tests) [[http-transport-impl]]
 - **2026-05-07**: Example applications added — `single_agent.rs` (dual transport) and `multi_agent.rs` (agent router) [[agent-channel-examples]]
 - **2026-05-09**: JSON-RPC transport refactoring — `JsonRpcConnection` implements `Connection` trait, `EventBridgePlugin` deleted, `JsonRpcServer` with multi-agent support, 49 integration tests [[jsonrpc-transport-refactoring]]
+- **2026-05-16**: `skill.list` and `skill.get` RPC methods added — `JsonRpcServer` gains `Option<Arc<SkillLoader>>`, `handle_skill_list()` returns metadata array, `handle_skill_get()` returns full `SkillDetail` or not-found error; `SkillLoader` wired into `jsonrpc_agent_service.rs` at startup [[skills-panel-json-rpc]]

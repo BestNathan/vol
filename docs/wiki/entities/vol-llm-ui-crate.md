@@ -3,15 +3,15 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-16 (schemaform-toolcall-dialog)
-source_count: 11
+updated: 2026-05-16 (skills-panel-content)
+source_count: 12
 ---
 
 # vol-llm-ui Crate
 
 **Category:** Rust crate — Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs
 
-**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[tailwind-css-migration]], [[connection-state-dashboard]], [[mcp-state-types]]
+**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[tailwind-css-migration]], [[connection-state-dashboard]], [[mcp-state-types]], [[schema-form-pattern]], [[skills-panel-json-rpc]]
 
 ## Overview
 
@@ -34,7 +34,7 @@ Both modes implement the same trait interfaces, so TUI (ratatui) and Web (Dioxus
 - TUI modules: `render` (9 panel renderers), `input` (keyboard handling with approval/session support) [[ratatui-tui-pattern]]
 - Event loop: `tokio::select!` with biased mode prioritizing input over render ticks [[ui-event-loop-pattern]]
 - Web binary: `vol-llm-ui-web` — Dioxus 0.6 WASM with per-component signals + EventBus [[dioxus-web-pattern]]
-- Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView`, `TreeNode`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel`, `McpPanel`, `ToolCallDialog` [[task-8-dioxus-web-frontend]], [[task-5-file-content-view]], [[lazy-load-dir-tree]], [[task-6-sessions-tab-wiring]], [[connection-state-dashboard]], [[tool-call-dialog-component]]
+- Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView`, `TreeNode`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel`, `McpPanel`, `ToolCallDialog`, `SkillDetailDialog` [[task-8-dioxus-web-frontend]], [[task-5-file-content-view]], [[lazy-load-dir-tree]], [[task-6-sessions-tab-wiring]], [[connection-state-dashboard]], [[tool-call-dialog-component]], [[skills-panel-content]]
 - Web state: `EventBus` with `UiEventKind` routing, per-component local `Signal<T>`, shared `Signal<GlobalState>` / `Signal<ApprovalUiState>` via `use_context_provider` [[dioxus-signal-pattern]], [[event-bus-pattern]], [[split-signal-state]]
 - `SubscriptionSet` with `Drop` impl for automatic cleanup on component unmount [[event-bus-pattern]]
 - `ConnectionStatePanel` — real-time connection status indicator in StatusBar, subscribes to WsConnected/WsConnecting/WsDisconnected via EventBus, color-coded (green/yellow/red) [[connection-state-dashboard]]
@@ -74,3 +74,4 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-15**: `ToolCallDialog` component added — modal dialog for invoking MCP tools with editable JSON arguments, JSON validation, async `mcp_call_tool` RPC call, inline result/error display; uses `let Some(...) else { return rsx!{}; }` early-return pattern for optional dialog state [[tool-call-dialog-component]]
 - **2026-05-16**: `McpToolCallState` gained `input_schema: Option<serde_json::Value>` field to carry tool JSON Schema to dialog for future SchemaForm component; debug `console.log` removed from `ToolCard` onclick [[mcp-toolcall-input-schema]]
 - **2026-05-16**: `ToolCallDialog` rewritten to use `SchemaForm` component — raw JSON textarea replaced with auto-generated form fields from tool JSON Schema; form state via `use_signal` with `build_form_defaults()` initialization; `use_effect` re-initializes on schema change [[schemaform-toolcall-dialog]]
+- **2026-05-16**: Skills panel populated — `SkillsState` gained `error` field, `SkillDialogState` / `SkillDetail` types added, `SkillsPanel` fetches skills on mount via `rpc_client.skill_list()` with error/retry UI, row click opens `SkillDetailDialog` modal showing name/version/scope/triggers/content/file_listing; `SkillDetailDialog` rendered at App root level, dialog signal passed via context [[skills-panel-content]]

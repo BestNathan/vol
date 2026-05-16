@@ -1,5 +1,16 @@
 # Change Log
 
+## [2026-05-16] ingest | Skills Panel Content — Backend JSON-RPC + Web UI Detail Dialog
+- Created sources: [[skills-panel-content]]
+- Created concepts: [[skills-panel-json-rpc]]
+- Updated entities: [[vol-llm-agent-channel-crate]] (added skill.list/skill.get RPC methods to Key Facts, timeline entry, source_count -> 5)
+- Updated entities: [[vol-llm-ui-crate]] (added SkillDetailDialog to component list, SkillsPanel rewrite details, timeline entry, source_count -> 12)
+- Updated concepts: [[dioxus-web-pattern]] (added SkillDetailDialog to component list and layout diagram, source_count -> 11)
+- Updated concepts: [[skill-system]] (added web panel reference to Examples, source_count -> 3)
+- Updated index: new skills-panel-content source entry, new skills-panel-json-rpc concept entry, vol-llm-ui-crate/vol-llm-agent-channel-crate summaries updated
+- Cross-references added: 10
+- Changes: Two new JSON-RPC methods (`skill.list`, `skill.get`) added to `vol-llm-agent-channel`; `JsonRpcServer` gains `Option<Arc<SkillLoader>>`; frontend `SkillsPanel` fetches on mount with error/retry, row click opens `SkillDetailDialog` modal showing name/version/scope/triggers/SKILL.md body/file listing; 3 new unit tests, 49 backend tests passing; `cargo check -p vol-llm-ui --no-default-features --features web` passes cleanly
+
 ## [2026-05-16] ingest | Task 3: SchemaForm Integration into ToolCallDialog
 - Created sources: [[schemaform-toolcall-dialog]]
 - Created concepts: [[schema-form-pattern]]

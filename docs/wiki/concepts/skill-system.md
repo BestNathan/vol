@@ -3,14 +3,14 @@ type: concept
 category: framework
 tags: [skills, agent, tool-integration]
 created: 2026-05-04
-updated: 2026-05-04
-source_count: 2
+updated: 2026-05-16
+source_count: 3
 ---
 
 # Skill System
 
 **Category:** Agent capability framework
-**Related:** [[context-builder]], [[tool-registry]], [[agent-builder-pattern]], [[skills-as-react-native]], [[subagent-review-pattern]], [[clarifying-requirements-workflow]]
+**Related:** [[context-builder]], [[tool-registry]], [[agent-builder-pattern]], [[skills-as-react-native]], [[subagent-review-pattern]], [[clarifying-requirements-workflow]], [[skills-panel-json-rpc]]
 
 ## Definition
 
@@ -44,6 +44,7 @@ CodingAgent previously managed skills directly with `SkillLoader`, `SkillInjecto
 - **Coding Agent**: Skills discovered from the project working directory provide coding-specific capabilities (lint, test, refactor skills)
 - **Advice Agent**: Skills provide domain-specific analysis capabilities
 - **Any Agent**: Since skills are native to ReActAgent, any agent type can use them via `AgentConfig::with_skills()`
+- **Web UI Skills Panel**: `SkillLoader` exposed via JSON-RPC (`skill.list`, `skill.get`) for browser-based skill browsing [[skills-panel-json-rpc]]
 
 ## Related Concepts
 - [[context-builder]]: How skills inject context into the prompt
@@ -51,3 +52,4 @@ CodingAgent previously managed skills directly with `SkillLoader`, `SkillInjecto
 - [[agent-builder-pattern]]: Where skills are configured
 - [[skills-as-react-native]]: The migration plan that made skills native
 - [[vol-llm-agent-crate]]: Where SkillsConfig is defined
+- [[skills-panel-json-rpc]]: JSON-RPC pattern exposing skill discovery to web frontend

@@ -1,19 +1,19 @@
 # Wiki Index
 
-Last updated: 2026-05-16 (schemaform-toolcall-dialog)
+Last updated: 2026-05-16 (skills-panel-content)
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs, ConnectionStatePanel connection status dashboard, and MCP state types (McpState, McpSubtab, McpServerInfo, etc.) | active | 2026-05-14 |
+| [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs, ConnectionStatePanel connection status dashboard, MCP state types, and Skills panel with detail dialog | active | 2026-05-16 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate | active | 2026-05-04 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions | stable | 2026-05-04 |
 | [[vol-llm-tool-crate]] | Tool definition and registry framework | stable | 2026-05-04 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with LLMClient trait; protocol-abstracted SSE streaming parsers (AnthropicProtocol, OpenaiStreamParser); factory dispatch and TOML-based config | stable | 2026-05-15 |
 | [[vol-session]] | Session message store and entry persistence | active | 2026-05-04 |
-| [[vol-llm-agent-channel-crate]] | Agent communication channel layer with multiple transports and JSON-RPC Connection implementation | active | 2026-05-09 |
+| [[vol-llm-agent-channel-crate]] | Agent communication channel layer with multiple transports and JSON-RPC Connection implementation, plus skill.list/skill.get RPC methods for skill discovery | active | 2026-05-16 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 | [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support | active | 2026-05-10 |
@@ -81,6 +81,7 @@ Last updated: 2026-05-16 (schemaform-toolcall-dialog)
 | [[otel-dependency-upgrade]] | Workspace dependency upgrade from OTel 0.21 to 0.29 with breaking API changes | active | 2026-05-14 |
 | [[mcp-state-types]] | State types and wire structures for displaying MCP servers, tools, resources, and prompts in the Dioxus web frontend | active | 2026-05-14 |
 | [[schema-form-pattern]] | Auto-generated form fields from JSON Schema — SchemaForm component with type-specific renderers (string, number, boolean, object, enum) | active | 2026-05-16 |
+| [[skills-panel-json-rpc]] | Exposing skill discovery via JSON-RPC — skill.list/skill.get methods with graceful degradation, lazy detail loading | active | 2026-05-16 |
 
 ## Sources
 
@@ -121,6 +122,7 @@ Last updated: 2026-05-16 (schemaform-toolcall-dialog)
 | [[tool-call-dialog-component]] | ToolCallDialog Dioxus component — modal dialog for invoking MCP tools with SchemaForm for structured parameter input, async RPC call, inline result/error display | active | 2026-05-16 |
 | [[schemaform-toolcall-dialog]] | Task 3: SchemaForm integration into ToolCallDialog — replaced raw JSON textarea with auto-generated form from tool JSON Schema | active | 2026-05-16 |
 | [[mcp-toolcall-input-schema]] | Task 1: Added input_schema field to McpToolCallState for SchemaForm support | active | 2026-05-16 |
+| [[skills-panel-content]] | Backend JSON-RPC + web UI detail dialog for browsing discovered skills — skill.list/skill.get RPC, SkillLoader integration, SkillDetailDialog modal | active | 2026-05-16 |
 
 ## Analyses
 
