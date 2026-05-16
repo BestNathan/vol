@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use crate::state::{ActiveTab, ApprovalUiState, AgentsState, ConversationState, EventBus, GlobalState, SessionsState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
 use crate::state::McpDialogState;
+use crate::state::SkillDialogState;
 use crate::web::client::{AgentEvent, JsonRpcClient};
 
 use super::agents_panel::AgentsPanel;
@@ -18,6 +19,7 @@ use super::log_viewer::LogViewer;
 use super::mcp_panel::McpPanel;
 use super::sessions_panel::SessionsPanel;
 use super::skills::SkillsPanel;
+use super::skill_detail_dialog::SkillDetailDialog;
 use super::status_bar::StatusBar;
 use super::tools_tab::ToolsTabContent;
 use super::mcp_tool_dialog::ToolCallDialog;
@@ -126,6 +128,7 @@ pub fn App() -> Element {
     let agents_signal = use_signal(|| AgentsState::new());
     let sessions_signal = use_signal(|| SessionsState::new());
     let mcp_dialog_signal = use_signal(|| McpDialogState::default());
+    let skill_dialog_signal = use_signal(|| SkillDialogState::new());
 
     let client = use_hook(|| {
         let c = JsonRpcClient::new(&ws_url);
@@ -292,6 +295,7 @@ pub fn App() -> Element {
     use_context_provider(|| agents_signal);
     use_context_provider(|| sessions_signal);
     use_context_provider(|| mcp_dialog_signal);
+    use_context_provider(|| skill_dialog_signal);
 
     rsx! {
         // The Stylesheet component inserts a style link into the head of the document
@@ -306,7 +310,7 @@ pub fn App() -> Element {
                     FileTree {}
                     div { class: "flex-1 flex flex-col overflow-hidden",
                         TabBar {}
-                        TabContent {}
+                        TabContent { skill_dialog_signal }
                         InputArea {}
                     }
                 }
@@ -315,6 +319,7 @@ pub fn App() -> Element {
             ToolCallDialog { signal: mcp_dialog_signal }
             ResourceViewer { signal: mcp_dialog_signal }
             PromptViewer { signal: mcp_dialog_signal }
+            SkillDetailDialog { signal: skill_dialog_signal }
         }
     }
 }
@@ -359,7 +364,7 @@ fn TabButton(state: AppState, tab: ActiveTab, label: String) -> Element {
 
 /// Tab content router.
 #[component]
-fn TabContent() -> Element {
+fn TabContent(skill_dialog_signal: Signal<SkillDialogState>) -> Element {
     let state: AppState = use_context();
     let active = *state.active_tab.read();
 
@@ -367,7 +372,7 @@ fn TabContent() -> Element {
         ActiveTab::Conversation => rsx! { ConversationView {} },
         ActiveTab::Tools => rsx! { ToolsTabContent {} },
         ActiveTab::Workspace => rsx! { FileContentView {} },
-        ActiveTab::Skills => rsx! { SkillsPanel {} },
+        ActiveTab::Skills => rsx! { SkillsPanel { dialog_signal: skill_dialog_signal } },
         ActiveTab::Logs => rsx! { LogViewer {} },
         ActiveTab::Agents => rsx! { AgentsPanel {} },
         ActiveTab::Mcp => rsx! { McpPanel {} },
