@@ -246,6 +246,12 @@ impl JsonRpcConnection {
             JsonRpcRequest::McpServerStatus { id } => {
                 self.handle_mcp_server_status(*id).await
             }
+            JsonRpcRequest::SkillList { id } => {
+                return self.send_ws_text(&to_jsonrpc_error(Some(*id), -32601, "skill.list: not yet implemented".into())).await;
+            }
+            JsonRpcRequest::SkillGet { id, name } => {
+                return self.send_ws_text(&to_jsonrpc_error(Some(*id), -32601, format!("skill.get: not yet implemented for {name}"))).await;
+            }
             JsonRpcRequest::Unknown { id, method } => {
                 return self.send_ws_text(&to_jsonrpc_error(*id, -32601, format!("Method not found: {method}"))).await;
             }

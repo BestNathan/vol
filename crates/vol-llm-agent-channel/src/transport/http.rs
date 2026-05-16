@@ -345,6 +345,9 @@ mod tests {
             context_builder,
             plugin_registry: PluginRegistry::new(),
             mcp_manager: None,
+            agent_id: "test_agent".to_string(),
+            working_dir: std::path::PathBuf::from("/tmp"),
+            observability: None,
         };
         let agent = ReActAgent::new(config);
         let dispatcher = Arc::new(AgentDispatcher::new(agent));
@@ -463,6 +466,9 @@ mod tests {
             context_builder,
             plugin_registry: PluginRegistry::new(),
             mcp_manager: None,
+            agent_id: "slow_agent".to_string(),
+            working_dir: std::path::PathBuf::from("/tmp"),
+            observability: None,
         };
         let agent = ReActAgent::new(config);
         let dispatcher = Arc::new(AgentDispatcher::new(agent));

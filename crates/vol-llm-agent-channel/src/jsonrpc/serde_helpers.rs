@@ -119,6 +119,13 @@ pub enum JsonRpcRequest {
     McpServerStatus {
         id: u64,
     },
+    SkillList {
+        id: u64,
+    },
+    SkillGet {
+        id: u64,
+        name: String,
+    },
     /// Fallback for unknown/unrecognized methods.
     Unknown {
         id: Option<u64>,
@@ -546,10 +553,54 @@ pub fn parse_jsonrpc_request(text: &str) -> Result<JsonRpcRequest, String> {
             Ok(JsonRpcRequest::McpReconnect { id, server })
         }
         "mcp.server_status" => Ok(JsonRpcRequest::McpServerStatus { id }),
+        "skill.list" => Ok(JsonRpcRequest::SkillList { id }),
+        "skill.get" => {
+            let name = params
+                .get("name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| "skill.get: missing 'name'".to_string())?
+                .to_string();
+            Ok(JsonRpcRequest::SkillGet { id, name })
+        }
         _ => Ok(JsonRpcRequest::Unknown {
             id: Some(id),
             method,
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_skill_list() {
+        let json = r#"{"jsonrpc":"2.0","id":1,"method":"skill.list","params":{}}"#;
+        let req = parse_jsonrpc_request(json).unwrap();
+        match req {
+            JsonRpcRequest::SkillList { id } => assert_eq!(id, 1),
+            _ => panic!("expected SkillList"),
+        }
+    }
+
+    #[test]
+    fn test_parse_skill_get() {
+        let json = r#"{"jsonrpc":"2.0","id":2,"method":"skill.get","params":{"name":"brainstorming"}}"#;
+        let req = parse_jsonrpc_request(json).unwrap();
+        match req {
+            JsonRpcRequest::SkillGet { id, name } => {
+                assert_eq!(id, 2);
+                assert_eq!(name, "brainstorming");
+            }
+            _ => panic!("expected SkillGet"),
+        }
+    }
+
+    #[test]
+    fn test_parse_skill_get_missing_name() {
+        let json = r#"{"jsonrpc":"2.0","id":3,"method":"skill.get","params":{}}"#;
+        let result = parse_jsonrpc_request(json);
+        assert!(result.is_err(), "should fail without name param");
     }
 }
 
