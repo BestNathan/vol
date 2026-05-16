@@ -1,9 +1,9 @@
 use dioxus::prelude::*;
-use crate::state::McpState;
+use crate::state::McpDialogState;
 use crate::web::components::app::AppState;
 
 #[component]
-pub fn ToolCallDialog(mut signal: Signal<McpState>) -> Element {
+pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
     let app_state: AppState = use_context();
     let rpc_client = app_state.rpc_client.clone();
 

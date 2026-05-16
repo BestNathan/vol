@@ -1,14 +1,14 @@
-//! MCP Panel — displays servers, tools, resources, and prompts.
-
 use dioxus::prelude::*;
 
-use crate::state::{McpState, McpSubtab};
+use crate::state::{McpDialogState, McpState, McpSubtab};
+use crate::web::components::app::AppState;
 
 #[component]
 pub fn McpPanel() -> Element {
-    let rpc_client: crate::web::components::app::AppState = use_context();
-    let rpc_client = rpc_client.rpc_client.clone();
+    let app_state: AppState = use_context();
+    let rpc_client = app_state.rpc_client.clone();
     let signal = use_signal(|| McpState::new());
+    let dialog_signal: Signal<McpDialogState> = use_context();
 
     // Load data on mount
     use_hook(move || {
@@ -79,10 +79,10 @@ pub fn McpPanel() -> Element {
                     }
                     // Sub-tab content
                     match active {
-                        McpSubtab::Servers => rsx! { ServerList { signal } },
-                        McpSubtab::Tools => rsx! { ToolList { signal } },
-                        McpSubtab::Resources => rsx! { ResourceList { signal } },
-                        McpSubtab::Prompts => rsx! { PromptList { signal } },
+                        McpSubtab::Servers => rsx! { ServerList { signal, app_state: app_state.clone() } },
+                        McpSubtab::Tools => rsx! { ToolList { signal, dialog_signal } },
+                        McpSubtab::Resources => rsx! { ResourceList { signal, dialog_signal } },
+                        McpSubtab::Prompts => rsx! { PromptList { signal, dialog_signal } },
                     }
                 }
             }
@@ -108,8 +108,7 @@ fn McpSubtabButton(mut signal: Signal<McpState>, subtab: McpSubtab, label: Strin
 }
 
 #[component]
-fn ServerList(signal: Signal<McpState>) -> Element {
-    let app_state: crate::web::components::app::AppState = use_context();
+fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
     let (servers, error) = {
         let s = signal.read();
         (s.servers.clone(), s.error.clone())
@@ -136,7 +135,7 @@ fn ServerList(signal: Signal<McpState>) -> Element {
 }
 
 #[component]
-fn ServerRow(signal: Signal<McpState>, app_state: crate::web::components::app::AppState, server: crate::state::McpServerInfo) -> Element {
+fn ServerRow(signal: Signal<McpState>, app_state: AppState, server: crate::state::McpServerInfo) -> Element {
     let status_color = match server.status.as_str() {
         "connected" => "#40c040",
         "connecting" => "#f0c040",
@@ -190,7 +189,7 @@ fn ServerRow(signal: Signal<McpState>, app_state: crate::web::components::app::A
 }
 
 #[component]
-fn ToolList(signal: Signal<McpState>) -> Element {
+fn ToolList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>) -> Element {
     let tools = signal.read().tools.clone();
     log::info!("ToolList rendering: {} tools", tools.len());
     if tools.is_empty() {
@@ -211,8 +210,8 @@ fn ToolList(signal: Signal<McpState>) -> Element {
                     div { class: "mb-2",
                         div { class: "text-[12px] text-[#888] font-semibold mb-1", "{server} ({tools.len()} tools)" }
                         {tools.into_iter().map(|t| {
-                            let sig = signal.clone();
-                            rsx! { ToolCard { signal: sig, tool: t } }
+                            let dsig = dialog_signal.clone();
+                            rsx! { ToolCard { signal: dsig, tool: t } }
                         }).collect::<Vec<Element>>().into_iter()}
                     }
                 }
@@ -222,7 +221,7 @@ fn ToolList(signal: Signal<McpState>) -> Element {
 }
 
 #[component]
-fn ToolCard(mut signal: Signal<McpState>, tool: crate::state::McpToolInfo) -> Element {
+fn ToolCard(mut signal: Signal<McpDialogState>, tool: crate::state::McpToolInfo) -> Element {
     rsx! {
         div { class: "bg-[#252540] rounded p-2 mb-1",
             div { class: "flex items-center justify-between",
@@ -253,7 +252,7 @@ fn ToolCard(mut signal: Signal<McpState>, tool: crate::state::McpToolInfo) -> El
 }
 
 #[component]
-fn ResourceList(signal: Signal<McpState>) -> Element {
+fn ResourceList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>) -> Element {
     let resources = signal.read().resources.clone();
     let templates = {
         let s = signal.read();
@@ -283,7 +282,7 @@ fn ResourceList(signal: Signal<McpState>) -> Element {
     rsx! {
         div { class: "font-mono text-[13px]",
             {all_servers.into_iter().map(|server| {
-                let sig = signal.clone();
+                let dsig = dialog_signal.clone();
                 let res = resource_groups.remove(&server).unwrap_or_default();
                 let tmp = template_groups.remove(&server).unwrap_or_default();
                 let total = res.len() + tmp.len();
@@ -291,8 +290,8 @@ fn ResourceList(signal: Signal<McpState>) -> Element {
                     div { class: "mb-2",
                         div { class: "text-[12px] text-[#888] font-semibold mb-1", "{server} ({total} items)" }
                         {res.into_iter().map(|r| {
-                            let sig = sig.clone();
-                            rsx! { ResourceRow { signal: sig, resource: r } }
+                            let dsig = dsig.clone();
+                            rsx! { ResourceRow { signal: dsig, resource: r } }
                         }).collect::<Vec<Element>>().into_iter()}
                         {tmp.into_iter().map(|t| {
                             rsx! { TemplateRow { template: t } }
@@ -305,7 +304,7 @@ fn ResourceList(signal: Signal<McpState>) -> Element {
 }
 
 #[component]
-fn ResourceRow(mut signal: Signal<McpState>, resource: crate::state::McpResourceInfo) -> Element {
+fn ResourceRow(mut signal: Signal<McpDialogState>, resource: crate::state::McpResourceInfo) -> Element {
     rsx! {
         div { class: "flex items-center justify-between py-1 border-b border-[#2a2a44]",
             div { class: "flex-1 min-w-0",
@@ -343,7 +342,7 @@ fn TemplateRow(template: crate::state::McpResourceTemplateInfo) -> Element {
 }
 
 #[component]
-fn PromptList(signal: Signal<McpState>) -> Element {
+fn PromptList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>) -> Element {
     let prompts = signal.read().prompts.clone();
     if prompts.is_empty() {
         return rsx! {
@@ -363,8 +362,8 @@ fn PromptList(signal: Signal<McpState>) -> Element {
                     div { class: "mb-2",
                         div { class: "text-[12px] text-[#888] font-semibold mb-1", "{server} ({prompts.len()} prompts)" }
                         {prompts.into_iter().map(|p| {
-                            let sig = signal.clone();
-                            rsx! { PromptRow { signal: sig, prompt: p } }
+                            let dsig = dialog_signal.clone();
+                            rsx! { PromptRow { signal: dsig, prompt: p } }
                         }).collect::<Vec<Element>>().into_iter()}
                     }
                 }
@@ -374,7 +373,7 @@ fn PromptList(signal: Signal<McpState>) -> Element {
 }
 
 #[component]
-fn PromptRow(mut signal: Signal<McpState>, prompt: crate::state::McpPromptInfo) -> Element {
+fn PromptRow(mut signal: Signal<McpDialogState>, prompt: crate::state::McpPromptInfo) -> Element {
     rsx! {
         div { class: "flex items-center justify-between py-1 border-b border-[#2a2a44]",
             div {

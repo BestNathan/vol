@@ -604,9 +604,6 @@ pub struct McpState {
     pub loading: bool,
     pub error: Option<String>,
     pub active_subtab: McpSubtab,
-    pub tool_call_dialog: Option<McpToolCallState>,
-    pub resource_viewer: Option<McpResourceViewerState>,
-    pub prompt_viewer: Option<McpPromptViewerState>,
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
@@ -616,14 +613,22 @@ impl McpState {
             servers: Vec::new(), tools: Vec::new(), resources: Vec::new(),
             resource_templates: Vec::new(), prompts: Vec::new(),
             loading: true, error: None, active_subtab: McpSubtab::Servers,
-            tool_call_dialog: None, resource_viewer: None, prompt_viewer: None,
         }
     }
 }
 
+/// Dialog state for MCP panel — managed at App level so dialogs render outside overflow containers.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Clone, Debug, Default)]
+pub struct McpDialogState {
+    pub tool_call_dialog: Option<McpToolCallState>,
+    pub resource_viewer: Option<McpResourceViewerState>,
+    pub prompt_viewer: Option<McpPromptViewerState>,
+}
+
 /// State for the tool call dialog.
 #[cfg(all(feature = "web", not(feature = "tui")))]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct McpToolCallState {
     pub server: String,
     pub tool_name: String,
@@ -635,7 +640,7 @@ pub struct McpToolCallState {
 
 /// State for the resource viewer.
 #[cfg(all(feature = "web", not(feature = "tui")))]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct McpResourceViewerState {
     pub uri: String,
     pub content: Option<String>,

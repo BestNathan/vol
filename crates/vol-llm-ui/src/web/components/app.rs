@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::state::{ActiveTab, ApprovalUiState, AgentsState, ConversationState, EventBus, GlobalState, SessionsState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
+use crate::state::McpDialogState;
 use crate::web::client::{AgentEvent, JsonRpcClient};
-use crate::state::McpState;
 
 use super::agents_panel::AgentsPanel;
 use super::approval_dialog::ApprovalDialog;
@@ -125,7 +125,7 @@ pub fn App() -> Element {
     let tool_signal = use_signal(|| ToolState::new());
     let agents_signal = use_signal(|| AgentsState::new());
     let sessions_signal = use_signal(|| SessionsState::new());
-    let mcp_signal = use_signal(|| McpState::new());
+    let mcp_dialog_signal = use_signal(|| McpDialogState::default());
 
     let client = use_hook(|| {
         let c = JsonRpcClient::new(&ws_url);
@@ -291,10 +291,9 @@ pub fn App() -> Element {
     use_context_provider(|| tool_signal);
     use_context_provider(|| agents_signal);
     use_context_provider(|| sessions_signal);
-    use_context_provider(|| mcp_signal);
+    use_context_provider(|| mcp_dialog_signal);
 
     rsx! {
-        document::Stylesheet { href: asset!("/assets/tailwind.css") }
         div { class: "flex flex-col h-[100dvh] w-[100vw] overflow-hidden font-[system-ui] text-[14px] text-[#e0e0e0] bg-[#1a1a2e]",
             StatusBar {}
             div { class: "flex flex-1 overflow-hidden",
@@ -306,14 +305,14 @@ pub fn App() -> Element {
                 }
             }
             ApprovalDialog {}
-            if mcp_signal.read().tool_call_dialog.is_some() {
-                ToolCallDialog { signal: mcp_signal }
+            if mcp_dialog_signal.read().tool_call_dialog.is_some() {
+                ToolCallDialog { signal: mcp_dialog_signal }
             }
-            if mcp_signal.read().resource_viewer.is_some() {
-                ResourceViewer { signal: mcp_signal }
+            if mcp_dialog_signal.read().resource_viewer.is_some() {
+                ResourceViewer { signal: mcp_dialog_signal }
             }
-            if mcp_signal.read().prompt_viewer.is_some() {
-                PromptViewer { signal: mcp_signal }
+            if mcp_dialog_signal.read().prompt_viewer.is_some() {
+                PromptViewer { signal: mcp_dialog_signal }
             }
         }
     }
