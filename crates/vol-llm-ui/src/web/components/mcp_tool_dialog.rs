@@ -45,7 +45,7 @@ pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
 
     rsx! {
         div { class: "fixed inset-0 bg-black/50 flex items-center justify-center z-50",
-            div { class: "bg-[#1a1a2e] border border-[#3a3a55] rounded-lg p-4 w-[500px] max-w-[90vw] max-h-[80vh] flex flex-col",
+            div { class: "bg-[#1a1a2e] border border-[#3a3a55] rounded-lg p-4 w-[650px] max-w-[90vw] max-h-[85vh] flex flex-col",
                 div { class: "flex items-center justify-between mb-3",
                     div { class: "text-[14px] font-semibold text-[#e0e0e0]", "{server} / {tool_name}" }
                     button {
