@@ -19,6 +19,8 @@
 //! ANTHROPIC_AUTH_TOKEN=your-key cargo run --example provider_toml_chat -p vol-llm-provider
 //! ```
 
+use std::env;
+
 use vol_llm_core::ConversationRequest;
 use vol_llm_provider::{LLMProviderRegistry, ProviderLoader};
 
@@ -26,8 +28,7 @@ use vol_llm_provider::{LLMProviderRegistry, ProviderLoader};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load providers from .agents/providers/ (project-level) and
     // ~/.agents/providers/ (user-level)
-    let loader =
-        ProviderLoader::load(std::env::current_dir().ok().as_deref());
+    let loader = ProviderLoader::load(std::env::current_dir().ok().as_deref());
 
     if loader.is_empty() {
         eprintln!("No providers found in .agents/providers/ or ~/.agents/providers/");
@@ -51,12 +52,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = LLMProviderRegistry::from_loader(&loader)?;
 
     // Pick the first provider
-    let provider_id = *loader.ids().first().unwrap();
+    let provider_id = env::var("LLM_PROVIDER_ID").ok()
+        .or_else(|| loader.ids().first().map(|s| s.to_string()))
+        .unwrap();
     let client = registry
-        .get(provider_id)
+        .get(&provider_id)
         .ok_or_else(|| format!("Provider '{}' not found", provider_id))?;
 
-    println!("Using provider: {} (model: {})", provider_id, client.model());
+    println!(
+        "Using provider: {} (model: {})",
+        provider_id,
+        client.model()
+    );
 
     // Build a simple conversation
     let request = ConversationRequest::with_system(
@@ -71,10 +78,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nResponse:");
     println!("  Model: {}", response.model);
     println!("  Finish: {:?}", response.finish_reason);
-    println!("  Tokens: {} in, {} out", response.usage.prompt_tokens, response.usage.completion_tokens);
+    println!(
+        "  Tokens: {} in, {} out",
+        response.usage.prompt_tokens, response.usage.completion_tokens
+    );
     println!();
 
-    let content = response.message.content.as_ref()
+    let content = response
+        .message
+        .content
+        .as_ref()
         .map(|c| c.as_str())
         .unwrap_or("(no content)");
     println!("{}", content);
