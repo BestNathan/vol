@@ -1,7 +1,7 @@
 provider = "openai"
-model = "gpt-4o"
+model = "glm5.1"
 api_key = "${OPENAI_API_KEY}"
-base_url = "https://api.openai.com"
+base_url = "http://k8s.nhome.local:31693"
 
 [body]
 max_tokens = 2048

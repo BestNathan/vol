@@ -1,8 +1,7 @@
-# Anthropic provider via DashScope (China-accessible endpoint)
 provider = "anthropic"
-model = "claude-sonnet-4-6"
+model = "qwen3.6-plus"
 api_key = "${ANTHROPIC_AUTH_TOKEN}"
-base_url = "https://coding.dashscope.aliyuncs.com/apps/anthropic"
+base_url = "http://k8s.nhome.local:31693"
 
 [body]
 max_tokens = 8192
