@@ -71,6 +71,15 @@ fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
             delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
         "thinking_complete" => Some(UiEvent::ThinkingComplete),
+        "llm_call_start" => Some(UiEvent::LlmCallStart {
+            iteration: data.get("iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+        }),
+        "llm_call_complete" => Some(UiEvent::LlmCallComplete {
+            model: data.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        }),
+        "llm_call_error" => Some(UiEvent::LlmCallError {
+            error: data.get("error").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        }),
         "content_start" => Some(UiEvent::ContentStart),
         "content_delta" => Some(UiEvent::ContentDelta {
             delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
@@ -148,6 +157,9 @@ pub fn App() -> Element {
                 crate::web::client::ConnectionState::Connected => {
                     global_conn.write_unchecked().ws_connected = true;
                     global_conn.write_unchecked().ws_last_error = None;
+                    // Reset running state on reconnect — in-flight run's events are lost.
+                    global_conn.write_unchecked().is_running = false;
+                    global_conn.write_unchecked().run_start = None;
                 }
                 crate::web::client::ConnectionState::Connecting => {
                     global_conn.write_unchecked().ws_connected = false;
@@ -155,6 +167,8 @@ pub fn App() -> Element {
                 crate::web::client::ConnectionState::Disconnected => {
                     global_conn.write_unchecked().ws_connected = false;
                     global_conn.write_unchecked().ws_last_error = Some("Disconnected".to_string());
+                    // Reset running state so input is re-enabled after disconnect.
+                    global_conn.write_unchecked().is_running = false;
                 }
             }
         });
@@ -228,7 +242,9 @@ pub fn App() -> Element {
         for kind in [
             UiEventKind::AgentStart, UiEventKind::AgentComplete, UiEventKind::AgentAborted,
             UiEventKind::AgentError, UiEventKind::ThinkingStart, UiEventKind::ThinkingDelta,
-            UiEventKind::ThinkingComplete, UiEventKind::ContentStart, UiEventKind::ContentDelta,
+            UiEventKind::ThinkingComplete, UiEventKind::LlmCallStart, UiEventKind::LlmCallComplete,
+            UiEventKind::LlmCallError,
+            UiEventKind::ContentStart, UiEventKind::ContentDelta,
             UiEventKind::ContentComplete, UiEventKind::MaxIterationsReached,
             UiEventKind::IterationContinued, UiEventKind::IterationComplete,
         ] {

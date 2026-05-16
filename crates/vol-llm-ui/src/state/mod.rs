@@ -35,6 +35,11 @@ pub enum UiEvent {
     ThinkingDelta { delta: String },
     ThinkingComplete,
 
+    // LLM call
+    LlmCallStart { iteration: u32 },
+    LlmCallComplete { model: String },
+    LlmCallError { error: String },
+
     // Content
     ContentStart,
     ContentDelta { delta: String },
@@ -67,6 +72,7 @@ pub enum UiEvent {
 pub enum UiEventKind {
     AgentStart, AgentComplete, AgentAborted, AgentError,
     ThinkingStart, ThinkingDelta, ThinkingComplete,
+    LlmCallStart, LlmCallComplete, LlmCallError,
     ContentStart, ContentDelta, ContentComplete,
     ToolCallBegin, ToolCallArgumentDelta, ToolCallComplete, ToolCallError, ToolCallSkipped,
     ApprovalRequest, ApprovalResolved,
@@ -84,6 +90,9 @@ impl UiEvent {
             UiEvent::ThinkingStart => UiEventKind::ThinkingStart,
             UiEvent::ThinkingDelta { .. } => UiEventKind::ThinkingDelta,
             UiEvent::ThinkingComplete => UiEventKind::ThinkingComplete,
+            UiEvent::LlmCallStart { .. } => UiEventKind::LlmCallStart,
+            UiEvent::LlmCallComplete { .. } => UiEventKind::LlmCallComplete,
+            UiEvent::LlmCallError { .. } => UiEventKind::LlmCallError,
             UiEvent::ContentStart => UiEventKind::ContentStart,
             UiEvent::ContentDelta { .. } => UiEventKind::ContentDelta,
             UiEvent::ContentComplete { .. } => UiEventKind::ContentComplete,
@@ -122,6 +131,7 @@ pub struct ToolCallEntry {
 pub enum ConversationEntry {
     UserInput { text: String },
     Thinking { content: String },
+    LlmCall { iteration: u32, model: String },
     ContentStreaming { content: String },
     ToolCall { tool_name: String, arg_preview: String },
     ToolResult { tool_name: String, preview: String, success: bool },
@@ -868,6 +878,17 @@ impl UiState {
             }
             UiEvent::ThinkingComplete => {
                 // No-op — thinking content already streamed via deltas
+            }
+            UiEvent::LlmCallStart { iteration } => {
+                self.conversation.push(ConversationEntry::LlmCall { iteration, model: String::new() });
+            }
+            UiEvent::LlmCallComplete { model } => {
+                if let Some(ConversationEntry::LlmCall { model: m, .. }) = self.conversation.last_mut() {
+                    *m = model.clone();
+                }
+            }
+            UiEvent::LlmCallError { error } => {
+                self.conversation.push(ConversationEntry::Error { message: format!("LLM error: {error}") });
             }
             UiEvent::ContentStart => {
                 self.conversation.push(ConversationEntry::ContentStreaming { content: String::new() });

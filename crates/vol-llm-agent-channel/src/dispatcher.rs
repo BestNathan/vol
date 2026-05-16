@@ -129,8 +129,22 @@ impl AgentDispatcher {
                 guard.clone()
             };
 
-            // Execute the agent run.
-            let result = agent.run(&pending.request.input).await;
+            // Execute the agent run with a 5-minute timeout to prevent indefinite hangs
+            // (e.g., stuck MCP tool calls, unresponsive LLM).
+            let result = match tokio::time::timeout(
+                std::time::Duration::from_secs(300),
+                agent.run(&pending.request.input),
+            )
+            .await
+            {
+                Ok(r) => r,
+                Err(_) => {
+                    tracing::error!(req_id = %pending.request.req_id, "agent run timed out after 5 minutes");
+                    Err(vol_llm_agent::AgentError::Context(
+                        "Agent run timed out — the run exceeded 5 minutes and was aborted".to_string(),
+                    ))
+                }
+            };
 
             let run_result = RunResult {
                 req_id: pending.request.req_id.clone(),

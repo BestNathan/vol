@@ -50,6 +50,20 @@ pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
                 content.push_str(delta);
             }
         }
+        UiEvent::ThinkingComplete => {
+            // Flush thinking entry.
+        }
+        UiEvent::LlmCallStart { iteration } => {
+            s.entries.push(ConversationEntry::LlmCall { iteration: *iteration, model: String::new() });
+        }
+        UiEvent::LlmCallComplete { model } => {
+            if let Some(ConversationEntry::LlmCall { model: m, .. }) = s.entries.last_mut() {
+                *m = model.clone();
+            }
+        }
+        UiEvent::LlmCallError { error } => {
+            s.entries.push(ConversationEntry::Error { message: format!("LLM error: {error}") });
+        }
         UiEvent::ContentStart => {
             s.entries.push(ConversationEntry::ContentStreaming { content: String::new() });
         }
@@ -116,6 +130,10 @@ pub(crate) fn MessageEntry(entry: ConversationEntry) -> Element {
         }
         ConversationEntry::Thinking { content } => {
             rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a2a20] border-l-[3px] border-[#c0c040]", div { class: "text-[#c0c040] font-bold", "Thinking" } div { class: "text-[#888] mt-1 pl-1", {content} } } }
+        }
+        ConversationEntry::LlmCall { iteration, model } => {
+            let model_label = if model.is_empty() { format!("Calling LLM (iteration {iteration})...") } else { format!("Calling LLM: {model} (iteration {iteration})") };
+            rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a2030] border-l-[3px] border-[#a060c0]", div { class: "text-[#a060c0] font-bold", {model_label} } } }
         }
         ConversationEntry::ContentStreaming { content } => {
             if content.is_empty() { rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#ccc]", "Generating..." } } }
