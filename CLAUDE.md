@@ -43,19 +43,20 @@ git-fetch-with-cli = true
 
 ### Web Frontend
 
-```bash
-dx serve --package vol-llm-ui --bin vol-llm-ui-web --no-default-features --features web --addr 0.0.0.0
-```
+All web development commands use the Makefile. Run `make help` to see available commands:
 
-### Backend (JSON-RPC Agent Service)
-
-```bash
-ANTHROPIC_AUTH_TOKEN=sk cargo run --example jsonrpc_agent_service -p vol-llm-agent-channel
-```
+| Command | Description |
+|---------|-------------|
+| `make web-css` | Build Tailwind CSS |
+| `make web-dev` | Start Dioxus dev server (port 8080) |
+| `make web-backend` | Start backend JSON-RPC agent service |
+| `make web-check` | cargo check (web only) |
+| `make web-build` | Build WASM binary |
+| `make web-clippy` | cargo clippy (web only) |
 
 ## Conventions
 
-- When finished a devlopment task, you **MUST** use skill `wiki-ingest` to add or update project wiki at `docs/wiki`
+- When finished a development task, you **MUST** use skill `wiki-ingest` to add or update project wiki at `docs/wiki`
 
 - When `docs/superpowers/*` add or update docs you **MUST** upload the doc to lark wiki space **7630485291026910436**
 ```bash
