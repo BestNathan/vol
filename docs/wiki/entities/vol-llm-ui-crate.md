@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-16 (mcp-toolcall-input-schema)
-source_count: 10
+updated: 2026-05-16 (schemaform-toolcall-dialog)
+source_count: 11
 ---
 
 # vol-llm-ui Crate
@@ -73,3 +73,4 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-14**: `ActiveTab::Mcp` variant added between Skills and Logs; `McpSubtab` enum (Servers, Tools, Resources, Prompts); MCP wire types (`McpServerInfo`, `McpToolInfo`, `McpResourceInfo`, `McpResourceTemplateInfo`, `McpPromptInfo`, `McpPromptArgInfo`) and local state structs (`McpState`, `McpServerRowState`, `McpToolCallState`, `McpResourceViewerState`, `McpPromptViewerState`) added to state module
 - **2026-05-15**: `ToolCallDialog` component added — modal dialog for invoking MCP tools with editable JSON arguments, JSON validation, async `mcp_call_tool` RPC call, inline result/error display; uses `let Some(...) else { return rsx!{}; }` early-return pattern for optional dialog state [[tool-call-dialog-component]]
 - **2026-05-16**: `McpToolCallState` gained `input_schema: Option<serde_json::Value>` field to carry tool JSON Schema to dialog for future SchemaForm component; debug `console.log` removed from `ToolCard` onclick [[mcp-toolcall-input-schema]]
+- **2026-05-16**: `ToolCallDialog` rewritten to use `SchemaForm` component — raw JSON textarea replaced with auto-generated form fields from tool JSON Schema; form state via `use_signal` with `build_form_defaults()` initialization; `use_effect` re-initializes on schema change [[schemaform-toolcall-dialog]]

@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-16 (mcp-toolcall-input-schema)
+Last updated: 2026-05-16 (schemaform-toolcall-dialog)
 
 ## Entities
 
@@ -80,6 +80,7 @@ Last updated: 2026-05-16 (mcp-toolcall-input-schema)
 | [[streaming-session]] | StreamProtocol trait and StreamingSession — protocol-abstracted SSE parsing for Anthropic and OpenAI formats | active | 2026-05-15 |
 | [[otel-dependency-upgrade]] | Workspace dependency upgrade from OTel 0.21 to 0.29 with breaking API changes | active | 2026-05-14 |
 | [[mcp-state-types]] | State types and wire structures for displaying MCP servers, tools, resources, and prompts in the Dioxus web frontend | active | 2026-05-14 |
+| [[schema-form-pattern]] | Auto-generated form fields from JSON Schema — SchemaForm component with type-specific renderers (string, number, boolean, object, enum) | active | 2026-05-16 |
 
 ## Sources
 
@@ -104,6 +105,7 @@ Last updated: 2026-05-16 (mcp-toolcall-input-schema)
 | [[jsonrpc-transport-refactoring]] | Refactoring: EventBridgePlugin deleted, JsonRpcConnection implements Connection trait | active | 2026-05-09 |
 | [[task-5-jsonrpc-integration-tests]] | 44 integration tests for JSON-RPC serialization, parsing, and error handling | active | 2026-05-09 |
 | [[task-5-file-content-view]] | FileContentView component: file tab bar with content preview, error/loading states, non-component tab rendering | active | 2026-05-10 |
+| [[schemaform-toolcall-dialog]] | Task 3: SchemaForm integration into ToolCallDialog — replaced raw JSON textarea with auto-generated form from tool JSON Schema | active | 2026-05-16 |
 | [[lazy-load-dir-tree]] | Lazy-loading directory tree: WorkspaceTreeNode replaces flat entries, on-demand fetch via file.list, refresh button | active | 2026-05-10 |
 | [[split-signal-state]] | Split Signal state: centralized Signal<UiState> replaced with EventBus + per-component local signals | active | 2026-05-11 |
 | [[react-agent-mcp-integration]] | ReAct Agent MCP client integration: vol-llm-mcp crate, McpTool, McpManager, with_mcp_from_config builder method | active | 2026-05-13 |
@@ -116,7 +118,8 @@ Last updated: 2026-05-16 (mcp-toolcall-input-schema)
 | [[mcp-multi-transport-config]] | Design + implementation: McpTransport enum with required type field, serde tagged enum parsing, HTTP via StreamableHttpClientTransport | active | 2026-05-15 |
 | [[openai-stream-parser-impl]] | OpenaiStreamParser implementation — StreamProtocol for OpenAI SSE format with [DONE] sentinel, content/tool deltas, usage, finish reasons | active | 2026-05-15 |
 | [[openai-provider-impl]] | OpenaiProvider implementation — full LLMClient for OpenAI Chat Completions API, message/tool conversion, SSE streaming, factory dispatch | active | 2026-05-15 |
-| [[tool-call-dialog-component]] | ToolCallDialog Dioxus component — modal dialog for invoking MCP tools with editable JSON arguments, JSON validation, async RPC call, inline result/error display | active | 2026-05-15 |
+| [[tool-call-dialog-component]] | ToolCallDialog Dioxus component — modal dialog for invoking MCP tools with SchemaForm for structured parameter input, async RPC call, inline result/error display | active | 2026-05-16 |
+| [[schemaform-toolcall-dialog]] | Task 3: SchemaForm integration into ToolCallDialog — replaced raw JSON textarea with auto-generated form from tool JSON Schema | active | 2026-05-16 |
 | [[mcp-toolcall-input-schema]] | Task 1: Added input_schema field to McpToolCallState for SchemaForm support | active | 2026-05-16 |
 
 ## Analyses

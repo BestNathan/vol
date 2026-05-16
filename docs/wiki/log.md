@@ -1,5 +1,15 @@
 # Change Log
 
+## [2026-05-16] ingest | Task 3: SchemaForm Integration into ToolCallDialog
+- Created sources: [[schemaform-toolcall-dialog]]
+- Created concepts: [[schema-form-pattern]]
+- Updated sources: [[tool-call-dialog-component]] (updated Key Takeaways, Detailed Summary, Notes for SchemaForm integration)
+- Updated entities: [[vol-llm-ui-crate]] (added timeline entry, source_count -> 11)
+- Updated concepts: [[dioxus-web-pattern]] (added SchemaForm to component list and layout diagram, source_count -> 10)
+- Updated index: new schemaform-toolcall-dialog source entry, new schema-form-pattern concept entry, tool-call-dialog-component summary updated, header date refreshed
+- Cross-references added: 8
+- Changes: `ToolCallDialog` rewritten to use `SchemaForm` instead of raw JSON textarea; `form_value: Signal<serde_json::Value>` holds form state initialized from JSON Schema; `use_effect` re-initializes on schema change; `build_form_defaults()` generates type-appropriate defaults; Call button serializes form and invokes `mcp_call_tool`; `cargo check -p vol-llm-ui --no-default-features --features web` passes cleanly
+
 ## [2026-05-16] ingest | Task 1: Add input_schema Field to McpToolCallState
 - Created sources: [[mcp-toolcall-input-schema]]
 - Updated entities: [[vol-llm-ui-crate]] (added timeline entry for McpToolCallState input_schema field, source_count -> 10)
