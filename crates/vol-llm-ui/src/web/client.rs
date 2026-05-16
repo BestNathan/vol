@@ -68,6 +68,17 @@ pub struct SessionResumeResponse {
     pub entries: Vec<SessionEntry>,
 }
 
+/// Skill metadata returned by skill.list RPC.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillListEntry {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub scope: String,
+    pub description: String,
+    pub triggers: Vec<String>,
+}
+
 /// Connection state.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionState {
@@ -705,6 +716,68 @@ impl JsonRpcClient {
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
             let success = result.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
             cb(Ok(success));
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// List all discovered skills.
+    pub fn skill_list(&self, cb: impl FnOnce(Result<Vec<SkillListEntry>, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "skill.list",
+            "params": {},
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("skills").and_then(|v| v.as_array()) {
+                Some(skills) => {
+                    let parsed: Vec<SkillListEntry> = skills.iter()
+                        .filter_map(|s| serde_json::from_value(s.clone()).ok())
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no skills in response".to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// Get full skill details by name.
+    pub fn skill_get(&self, name: &str, cb: impl FnOnce(Result<crate::state::SkillDetail, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "skill.get",
+            "params": { "name": name },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            if let Some(error) = result.get("error") {
+                let msg = error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
+                cb(Err(msg.to_string()));
+            } else {
+                match serde_json::from_value::<crate::state::SkillDetail>(result) {
+                    Ok(detail) => cb(Ok(detail)),
+                    Err(e) => cb(Err(format!("failed to parse skill: {e}"))),
+                }
+            }
         });
         self.inner.pending.borrow_mut().insert(id, cb);
     }

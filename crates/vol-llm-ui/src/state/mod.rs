@@ -194,6 +194,18 @@ pub struct SkillDisplayEntry {
     pub description: String,
 }
 
+/// Full skill detail returned by skill.get RPC.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillDetail {
+    pub name: String,
+    pub version: String,
+    pub scope: String,
+    pub description: String,
+    pub triggers: Vec<String>,
+    pub content: String,
+    pub file_listing: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct OpenFileTab {
     pub path: String,
@@ -459,10 +471,33 @@ impl WorkspaceState {
 /// Local state for SkillsPanel.
 #[cfg(all(feature = "web", not(feature = "tui")))]
 #[derive(Debug)]
-pub struct SkillsState { pub skills: Vec<SkillDisplayEntry> }
+pub struct SkillsState {
+    pub skills: Vec<SkillDisplayEntry>,
+    pub error: Option<String>,
+}
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
-impl SkillsState { pub fn new() -> Self { Self { skills: Vec::new() } } }
+impl SkillsState {
+    pub fn new() -> Self {
+        Self { skills: Vec::new(), error: None }
+    }
+}
+
+/// Dialog state for viewing a skill's full details.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug, Clone)]
+pub struct SkillDialogState {
+    pub open: bool,
+    pub skill: Option<SkillDetail>,
+    pub loading: bool,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl SkillDialogState {
+    pub fn new() -> Self {
+        Self { open: false, skill: None, loading: false }
+    }
+}
 
 /// Local state for LogViewer.
 #[cfg(all(feature = "web", not(feature = "tui")))]
