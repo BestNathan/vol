@@ -1,40 +1,11 @@
 use dioxus::prelude::*;
 
-/// Build a default `serde_json::Value::Object` from a JSON Schema.
-fn build_defaults(schema: &serde_json::Value) -> serde_json::Value {
-    let mut obj = serde_json::Map::new();
-    let Some(props) = schema.get("properties").and_then(|v| v.as_object()) else {
-        return serde_json::Value::Object(obj);
-    };
-    for (key, prop) in props {
-        let default = if let Some(d) = prop.get("default") {
-            d.clone()
-        } else {
-            match prop.get("type").and_then(|t| t.as_str()) {
-                Some("string") => serde_json::Value::String(String::new()),
-                Some("number") | Some("integer") => serde_json::Value::Number(0.into()),
-                Some("boolean") => serde_json::Value::Bool(false),
-                Some("object") => build_defaults(prop),
-                _ => serde_json::Value::Null,
-            }
-        };
-        obj.insert(key.clone(), default);
-    }
-    serde_json::Value::Object(obj)
-}
-
 /// Renders a form from a JSON Schema.
 ///
 /// `schema` — the JSON Schema object (with `properties` and optional `required`).
 /// `value` — shared signal holding the current form data as `serde_json::Value`.
 #[component]
 pub fn SchemaForm(schema: serde_json::Value, value: Signal<serde_json::Value>) -> Element {
-    let schema_clone = schema.clone();
-    use_hook(move || {
-        let defaults = build_defaults(&schema_clone);
-        value.set(defaults);
-    });
-
     let properties = schema.get("properties").and_then(|v| v.as_object());
     let required: std::collections::HashSet<String> = schema
         .get("required")
