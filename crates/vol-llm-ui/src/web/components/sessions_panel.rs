@@ -22,39 +22,46 @@ fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<Conversati
         let result = match e.entry_type.as_str() {
             "message" => {
                 let data = &e.data;
-                if let Some(msg) = data.get("message").and_then(|m| m.get("message")) {
-                    if let Some(role) = msg.get("role").and_then(|v| v.as_str()) {
-                        let text = match msg.get("content") {
-                            Some(serde_json::Value::String(s)) => s.clone(),
-                            Some(serde_json::Value::Array(parts)) => {
-                                parts.iter().filter_map(|p| {
-                                    p.get("text").and_then(|v| v.as_str())
-                                        .or_else(|| p.get("type").and_then(|v| v.as_str()))
-                                }).collect::<Vec<_>>().join("\n")
+                // data.message is SessionMessage wrapper
+                if let Some(session_msg) = data.get("message").and_then(|m| m.get("message")) {
+                    // session_msg.message is the actual vol_llm_core::Message with role/content
+                    if let Some(msg) = session_msg.get("message") {
+                        if let Some(role) = msg.get("role").and_then(|v| v.as_str()) {
+                            let text = match msg.get("content") {
+                                Some(serde_json::Value::String(s)) => s.clone(),
+                                Some(serde_json::Value::Array(parts)) => {
+                                    parts.iter().filter_map(|p| {
+                                        p.get("text").and_then(|v| v.as_str())
+                                            .or_else(|| p.get("type").and_then(|v| v.as_str()))
+                                    }).collect::<Vec<_>>().join("\n")
+                                }
+                                other => {
+                                    log::warn!("session entry message content unexpected type: {:?}", other);
+                                    String::new()
+                                }
+                            };
+                            match role {
+                                "user" => Some(ConversationEntry::UserInput { text }),
+                                "assistant" => Some(ConversationEntry::AgentAnswer { text }),
+                                "tool" => {
+                                    let tool_name = msg.get("name").and_then(|v| v.as_str()).unwrap_or("tool").to_string();
+                                    Some(ConversationEntry::ToolResult {
+                                        tool_name,
+                                        preview: text,
+                                        success: true,
+                                    })
+                                }
+                                _ => {
+                                    log::warn!("session entry unknown role: {role}");
+                                    None
+                                }
                             }
-                            other => {
-                                log::warn!("session entry message content unexpected type: {:?}", other);
-                                String::new()
-                            }
-                        };
-                        match role {
-                            "user" => Some(ConversationEntry::UserInput { text }),
-                            "assistant" => Some(ConversationEntry::AgentAnswer { text }),
-                            "tool" => {
-                                let tool_name = msg.get("name").and_then(|v| v.as_str()).unwrap_or("tool").to_string();
-                                Some(ConversationEntry::ToolResult {
-                                    tool_name,
-                                    preview: text,
-                                    success: true,
-                                })
-                            }
-                            _ => {
-                                log::warn!("session entry unknown role: {role}");
-                                None
-                            }
+                        } else {
+                            log::warn!("session entry message missing role, data: {}", truncate_for_log(&data_debug, 200));
+                            None
                         }
                     } else {
-                        log::warn!("session entry message missing role, data: {}", truncate_for_log(&data_debug, 200));
+                        log::warn!("session entry data missing inner message, data: {}", truncate_for_log(&data_debug, 200));
                         None
                     }
                 } else {
@@ -63,11 +70,15 @@ fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<Conversati
                 }
             }
             "checkpoint" => {
-                let reason = e.data.get("reason")
+                let reason = e.data.get("checkpoint")
+                    .and_then(|c| c.get("reason"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("Checkpoint")
                     .to_string();
-                let note = e.data.get("note").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let note = e.data.get("checkpoint")
+                    .and_then(|c| c.get("note"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
                 Some(ConversationEntry::EntryCheckpoint { reason, note, created_at: e.created_at })
             }
             "summary" => {
