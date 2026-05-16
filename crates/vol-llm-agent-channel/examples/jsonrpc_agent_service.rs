@@ -16,6 +16,7 @@ use vol_llm_agent_channel::{AgentDispatcher, AgentRegistration, ConnectionHolder
 use vol_llm_mcp::McpConfig;
 use vol_llm_mcp::McpManager;
 use vol_llm_provider::create_provider;
+use vol_llm_skill::SkillLoader;
 use vol_llm_tool::ToolRegistry;
 use vol_session::file_store::FileSessionEntryStore;
 use vol_session::Session;
@@ -86,6 +87,18 @@ async fn main() {
         Arc::new(manager)
     };
 
+    // Create skill loader and discover skills
+    let skill_loader = {
+        let loader = Arc::new(SkillLoader::new(Some(std::path::PathBuf::from("."))));
+        let loader_for_discover = loader.clone();
+        tokio::spawn(async move {
+            if let Err(e) = loader_for_discover.discover_all().await {
+                tracing::warn!("Failed to discover skills: {}", e);
+            }
+        });
+        Some(loader)
+    };
+
     // Create JSON-RPC server
     let server = JsonRpcServer::new(
         vec![AgentRegistration {
@@ -96,6 +109,7 @@ async fn main() {
         ".".to_string(),
         "/tmp/vol-llm-store".to_string(),
         Some(mcp_manager),
+        skill_loader,
     ).await;
 
     let app = server.into_axum_router();
@@ -111,6 +125,7 @@ async fn main() {
     tracing::info!("           log.list, log.read");
     tracing::info!("           session.list, session.resume");
     tracing::info!("           mcp.* (list_servers, list_tools, call_tool, etc.)");
+    tracing::info!("           skill.list, skill.get");
 
     axum::serve(listener, app)
         .await
