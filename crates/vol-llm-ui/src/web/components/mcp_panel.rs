@@ -3,15 +3,11 @@
 use dioxus::prelude::*;
 
 use crate::state::{McpState, McpSubtab};
-use crate::web::components::app::AppState;
-use super::mcp_tool_dialog::ToolCallDialog;
-use super::mcp_resource_viewer::ResourceViewer;
-use super::mcp_prompt_viewer::PromptViewer;
 
 #[component]
 pub fn McpPanel() -> Element {
-    let app_state: AppState = use_context();
-    let rpc_client = app_state.rpc_client.clone();
+    let rpc_client: crate::web::components::app::AppState = use_context();
+    let rpc_client = rpc_client.rpc_client.clone();
     let signal = use_signal(|| McpState::new());
 
     // Load data on mount
@@ -83,19 +79,10 @@ pub fn McpPanel() -> Element {
                     }
                     // Sub-tab content
                     match active {
-                        McpSubtab::Servers => rsx! { ServerList { signal, app_state: app_state.clone() } },
+                        McpSubtab::Servers => rsx! { ServerList { signal } },
                         McpSubtab::Tools => rsx! { ToolList { signal } },
                         McpSubtab::Resources => rsx! { ResourceList { signal } },
                         McpSubtab::Prompts => rsx! { PromptList { signal } },
-                    }
-                    if signal.read().tool_call_dialog.is_some() {
-                        ToolCallDialog { signal, app_state: app_state.clone() }
-                    }
-                    if signal.read().resource_viewer.is_some() {
-                        ResourceViewer { signal, app_state: app_state.clone() }
-                    }
-                    if signal.read().prompt_viewer.is_some() {
-                        PromptViewer { signal, app_state: app_state.clone() }
                     }
                 }
             }
@@ -121,7 +108,8 @@ fn McpSubtabButton(mut signal: Signal<McpState>, subtab: McpSubtab, label: Strin
 }
 
 #[component]
-fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
+fn ServerList(signal: Signal<McpState>) -> Element {
+    let app_state: crate::web::components::app::AppState = use_context();
     let (servers, error) = {
         let s = signal.read();
         (s.servers.clone(), s.error.clone())
@@ -148,7 +136,7 @@ fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
 }
 
 #[component]
-fn ServerRow(signal: Signal<McpState>, app_state: AppState, server: crate::state::McpServerInfo) -> Element {
+fn ServerRow(signal: Signal<McpState>, app_state: crate::web::components::app::AppState, server: crate::state::McpServerInfo) -> Element {
     let status_color = match server.status.as_str() {
         "connected" => "#40c040",
         "connecting" => "#f0c040",
