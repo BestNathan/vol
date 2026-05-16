@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-15 (tool-call-dialog-component)
+Last updated: 2026-05-16 (mcp-toolcall-input-schema)
 
 ## Entities
 
@@ -117,6 +117,7 @@ Last updated: 2026-05-15 (tool-call-dialog-component)
 | [[openai-stream-parser-impl]] | OpenaiStreamParser implementation — StreamProtocol for OpenAI SSE format with [DONE] sentinel, content/tool deltas, usage, finish reasons | active | 2026-05-15 |
 | [[openai-provider-impl]] | OpenaiProvider implementation — full LLMClient for OpenAI Chat Completions API, message/tool conversion, SSE streaming, factory dispatch | active | 2026-05-15 |
 | [[tool-call-dialog-component]] | ToolCallDialog Dioxus component — modal dialog for invoking MCP tools with editable JSON arguments, JSON validation, async RPC call, inline result/error display | active | 2026-05-15 |
+| [[mcp-toolcall-input-schema]] | Task 1: Added input_schema field to McpToolCallState for SchemaForm support | active | 2026-05-16 |
 
 ## Analyses
 

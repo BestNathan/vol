@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [mcp, state, web, ui, dioxus]
 created: 2026-05-14
-updated: 2026-05-15 (tool-call-dialog-component)
-source_count: 2
+updated: 2026-05-16 (mcp-toolcall-input-schema)
+source_count: 3
 ---
 
 # MCP State Types Pattern
@@ -44,7 +44,7 @@ Gated with `#[cfg(all(feature = "web", not(feature = "tui")))]`:
 |------|---------|
 | `McpServerRowState` | Display row with reconnecting flag |
 | `McpState` | Panel state: lists, loading, error, active subtab, dialogs |
-| `McpToolCallState` | Tool call dialog with JSON args, result, error |
+| `McpToolCallState` | Tool call dialog with JSON args, input_schema, result, error |
 | `McpResourceViewerState` | Resource viewer with URI, content, loading state |
 | `McpPromptViewerState` | Prompt viewer with server, args, result, loading state |
 
@@ -77,3 +77,4 @@ ActiveTab::Mcp
 - [[mcp-transport-pattern]]: Multi-transport startup pattern for MCP servers
 - [[event-bus-pattern]]: EventBus routing used for cross-component communication
 - [[tool-call-dialog-component]]: ToolCallDialog component renders McpToolCallState as a modal dialog
+- [[mcp-toolcall-input-schema]]: McpToolCallState gained `input_schema: Option<serde_json::Value>` field for SchemaForm support

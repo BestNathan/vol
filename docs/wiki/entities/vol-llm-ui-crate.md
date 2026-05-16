@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-15 (tool-call-dialog-component)
-source_count: 9
+updated: 2026-05-16 (mcp-toolcall-input-schema)
+source_count: 10
 ---
 
 # vol-llm-ui Crate
@@ -72,3 +72,4 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-14**: `ConnectionStatePanel` added — EventBus subscriber component rendering color-coded WebSocket connection status (green/yellow/red) in StatusBar; listens to WsConnected/WsConnecting/WsDisconnected event kinds from [[remote-connection-impl]]; `GlobalState` extended with `ConnectionStatus`; 3 tests added [[connection-state-dashboard]]
 - **2026-05-14**: `ActiveTab::Mcp` variant added between Skills and Logs; `McpSubtab` enum (Servers, Tools, Resources, Prompts); MCP wire types (`McpServerInfo`, `McpToolInfo`, `McpResourceInfo`, `McpResourceTemplateInfo`, `McpPromptInfo`, `McpPromptArgInfo`) and local state structs (`McpState`, `McpServerRowState`, `McpToolCallState`, `McpResourceViewerState`, `McpPromptViewerState`) added to state module
 - **2026-05-15**: `ToolCallDialog` component added — modal dialog for invoking MCP tools with editable JSON arguments, JSON validation, async `mcp_call_tool` RPC call, inline result/error display; uses `let Some(...) else { return rsx!{}; }` early-return pattern for optional dialog state [[tool-call-dialog-component]]
+- **2026-05-16**: `McpToolCallState` gained `input_schema: Option<serde_json::Value>` field to carry tool JSON Schema to dialog for future SchemaForm component; debug `console.log` removed from `ToolCard` onclick [[mcp-toolcall-input-schema]]

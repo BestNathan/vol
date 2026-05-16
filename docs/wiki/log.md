@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-05-16] ingest | Task 1: Add input_schema Field to McpToolCallState
+- Created sources: [[mcp-toolcall-input-schema]]
+- Updated entities: [[vol-llm-ui-crate]] (added timeline entry for McpToolCallState input_schema field, source_count -> 10)
+- Updated concepts: [[mcp-state-types]] (updated McpToolCallState description, added mcp-toolcall-input-schema to Related Concepts, source_count -> 3)
+- Updated index: new mcp-toolcall-input-schema source entry, last updated date refreshed
+- Cross-references added: 4
+- Changes: `McpToolCallState` gained `input_schema: Option<serde_json::Value>` field in state/mod.rs; `ToolCard` onclick handler in mcp_panel.rs now passes `input_schema: t.input_schema.clone()` into dialog state; debug `web_sys::console::log_1` line removed; `cargo check -p vol-llm-ui --features web` passes cleanly
+
 ## [2026-05-15] ingest | ToolCallDialog Component — MCP Tool Invocation Modal
 - Created sources: [[tool-call-dialog-component]]
 - Updated entities: [[vol-llm-ui-crate]] (added ToolCallDialog to component list, added timeline entry, source_count -> 9)
