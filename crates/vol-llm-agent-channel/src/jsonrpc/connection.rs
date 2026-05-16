@@ -251,10 +251,10 @@ impl JsonRpcConnection {
                 self.handle_mcp_server_status(*id).await
             }
             JsonRpcRequest::SkillList { id } => {
-                return self.send_ws_text(&to_jsonrpc_error(Some(*id), -32601, "skill.list: not yet implemented".into())).await;
+                self.handle_skill_list(*id).await
             }
             JsonRpcRequest::SkillGet { id, name } => {
-                return self.send_ws_text(&to_jsonrpc_error(Some(*id), -32601, format!("skill.get: not yet implemented for {name}"))).await;
+                self.handle_skill_get(*id, name.clone()).await
             }
             JsonRpcRequest::Unknown { id, method } => {
                 return self.send_ws_text(&to_jsonrpc_error(*id, -32601, format!("Method not found: {method}"))).await;
@@ -684,6 +684,44 @@ impl JsonRpcConnection {
                 to_jsonrpc_response(id, serde_json::json!({ "success": true, "status": status_str }))
             }
             Err(e) => to_jsonrpc_response(id, serde_json::json!({ "success": false, "status": format!("error: {e}") })),
+        }
+    }
+
+    // === Skill handler methods ===
+
+    async fn handle_skill_list(&self, id: u64) -> String {
+        let Some(loader) = &self.skill_loader else {
+            return to_jsonrpc_response(id, serde_json::json!({ "skills": [] }));
+        };
+        let metadata = loader.list_metadata().await;
+        let skills: Vec<serde_json::Value> = metadata.iter().map(|m| {
+            serde_json::json!({
+                "id": m.id,
+                "name": m.name,
+                "version": m.version,
+                "scope": m.scope.to_string(),
+                "description": m.description,
+                "triggers": m.triggers,
+            })
+        }).collect();
+        to_jsonrpc_response(id, serde_json::json!({ "skills": skills }))
+    }
+
+    async fn handle_skill_get(&self, id: u64, name: String) -> String {
+        let Some(loader) = &self.skill_loader else {
+            return to_jsonrpc_error(Some(id), -32000, "Skills not configured".to_string());
+        };
+        match loader.get(&name).await {
+            Some(skill) => to_jsonrpc_response(id, serde_json::json!({
+                "name": skill.name,
+                "version": skill.version,
+                "scope": skill.scope.to_string(),
+                "description": skill.description,
+                "triggers": skill.triggers,
+                "content": skill.content,
+                "file_listing": skill.file_listing,
+            })),
+            None => to_jsonrpc_error(Some(id), -32000, format!("Skill '{name}' not found")),
         }
     }
 }
