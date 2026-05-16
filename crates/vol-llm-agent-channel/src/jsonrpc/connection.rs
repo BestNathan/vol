@@ -22,6 +22,7 @@ use crate::router::AgentRouter;
 
 use super::serde_helpers::{parse_jsonrpc_request, to_jsonrpc_error, to_jsonrpc_event, to_jsonrpc_response, JsonRpcRequest};
 use vol_llm_mcp::manager::{McpManager, ServerStatus};
+use vol_llm_skill::SkillLoader;
 use vol_session::{Session, SessionEntryStore};
 
 /// Format a unix timestamp as a human-readable age string.
@@ -70,6 +71,7 @@ pub struct JsonRpcConnection {
     session_store: Arc<vol_session::FileSessionEntryStore>,
     /// MCP manager for tool/resource/prompt operations.
     mcp_manager: Option<Arc<McpManager>>,
+    skill_loader: Option<Arc<SkillLoader>>,
 }
 
 impl JsonRpcConnection {
@@ -83,6 +85,7 @@ impl JsonRpcConnection {
         store_dir: String,
         session_store: Arc<vol_session::FileSessionEntryStore>,
         mcp_manager: Option<Arc<McpManager>>,
+        skill_loader: Option<Arc<SkillLoader>>,
     ) -> Self {
         let (tx, rx) = ws.split();
         Self {
@@ -99,6 +102,7 @@ impl JsonRpcConnection {
             working_dir,
             store_dir,
             mcp_manager,
+            skill_loader,
         }
     }
 
