@@ -1,28 +1,46 @@
 use dioxus::prelude::*;
 use crate::state::McpDialogState;
 use crate::web::components::app::AppState;
+use super::schema_form::SchemaForm;
 
 #[component]
 pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
     let app_state: AppState = use_context();
     let rpc_client = app_state.rpc_client.clone();
 
+    let mut form_value: Signal<serde_json::Value> = use_signal(|| serde_json::Value::Object(serde_json::Map::new()));
+
     let maybe_dialog = {
         let s = signal.read();
-        let has = s.tool_call_dialog.is_some();
-        web_sys::console::log_1(&format!("ToolCallDialog render: has_dialog={has}").into());
         s.tool_call_dialog.as_ref().map(|d| (
             d.server.clone(),
             d.tool_name.clone(),
-            d.arguments_json.clone(),
-            d.result.clone(),
-            d.error.clone(),
-            d.loading,
+            d.input_schema.clone(),
         ))
     };
 
-    let Some((server, tool_name, args, result, error, loading)) = maybe_dialog else {
+    let Some((server, tool_name, input_schema)) = maybe_dialog else {
         return rsx! {};
+    };
+
+    // Re-initialize form when schema changes
+    let input_schema_for_effect = input_schema.clone();
+    use_effect(move || {
+        if let Some(ref schema) = input_schema_for_effect {
+            let defaults = build_form_defaults(schema);
+            form_value.set(defaults);
+        } else {
+            form_value.set(serde_json::Value::Object(serde_json::Map::new()));
+        }
+    });
+
+    let (result, error, loading) = {
+        let s = signal.read();
+        (
+            s.tool_call_dialog.as_ref().and_then(|d| d.result.clone()),
+            s.tool_call_dialog.as_ref().and_then(|d| d.error.clone()),
+            s.tool_call_dialog.as_ref().map(|d| d.loading).unwrap_or(false),
+        )
     };
 
     rsx! {
@@ -36,12 +54,10 @@ pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
                         "x"
                     }
                 }
-                textarea {
-                    class: "w-full h-32 bg-[#252540] border border-[#3a3a55] rounded p-2 text-[12px] text-[#e0e0e0] font-mono resize-none",
-                    value: "{args}",
-                    oninput: move |ev| {
-                        signal.write_unchecked().tool_call_dialog.as_mut().unwrap().arguments_json = ev.value();
-                    },
+                if let Some(ref schema) = input_schema {
+                    SchemaForm { schema: schema.clone(), value: form_value }
+                } else {
+                    div { class: "text-[#888] text-[12px]", "No parameters required" }
                 }
                 if !loading {
                     button {
@@ -49,16 +65,16 @@ pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
                         onclick: move |_| {
                             let s = signal.clone();
                             let client = rpc_client.clone();
-                            let (srv, tool, args) = {
+                            let (srv, tool) = {
                                 let r = s.read();
                                 let d = r.tool_call_dialog.as_ref().unwrap();
-                                (d.server.clone(), d.tool_name.clone(), d.arguments_json.clone())
+                                (d.server.clone(), d.tool_name.clone())
                             };
-                            // Validate JSON first
-                            let parsed: serde_json::Value = match serde_json::from_str(&args) {
+                            let form_json = serde_json::to_string(&*form_value.read()).unwrap_or("{}".to_string());
+                            let parsed: serde_json::Value = match serde_json::from_str(&form_json) {
                                 Ok(v) => v,
                                 Err(e) => {
-                                    s.write_unchecked().tool_call_dialog.as_mut().unwrap().error = Some(format!("Invalid JSON: {e}"));
+                                    s.write_unchecked().tool_call_dialog.as_mut().unwrap().error = Some(format!("Invalid form data: {e}"));
                                     return;
                                 }
                             };
@@ -98,4 +114,26 @@ pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
             }
         }
     }
+}
+
+fn build_form_defaults(schema: &serde_json::Value) -> serde_json::Value {
+    let mut obj = serde_json::Map::new();
+    let Some(props) = schema.get("properties").and_then(|v| v.as_object()) else {
+        return serde_json::Value::Object(obj);
+    };
+    for (key, prop) in props {
+        let default = if let Some(d) = prop.get("default") {
+            d.clone()
+        } else {
+            match prop.get("type").and_then(|t| t.as_str()) {
+                Some("string") => serde_json::Value::String(String::new()),
+                Some("number") | Some("integer") => serde_json::Value::Number(0.into()),
+                Some("boolean") => serde_json::Value::Bool(false),
+                Some("object") => build_form_defaults(prop),
+                _ => serde_json::Value::Null,
+            }
+        };
+        obj.insert(key.clone(), default);
+    }
+    serde_json::Value::Object(obj)
 }
