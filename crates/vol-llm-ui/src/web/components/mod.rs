@@ -19,6 +19,7 @@ pub mod mcp_prompt_viewer;
 pub mod file_content;
 pub mod file_tree;
 pub mod workspace;
+pub mod schema_form;
 
 pub use app::App;
 pub use agents_panel::AgentsPanel;
