@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-05-15] ingest | ToolCallDialog Component — MCP Tool Invocation Modal
+- Created sources: [[tool-call-dialog-component]]
+- Updated entities: [[vol-llm-ui-crate]] (added ToolCallDialog to component list, added timeline entry, source_count -> 9)
+- Updated concepts: [[dioxus-web-pattern]] (added ToolCallDialog to component list and layout diagram, source_count -> 9)
+- Updated concepts: [[mcp-state-types]] (added ToolCallDialog reference to Related Concepts, source_count -> 2)
+- Updated index: new tool-call-dialog-component source entry, Last updated date refreshed
+- Cross-references added: 5
+- Changes: `crates/vol-llm-ui/src/web/components/mcp_tool_dialog.rs` created — `ToolCallDialog` Dioxus component renders a modal dialog when `McpState.tool_call_dialog` is `Some`; displays server/tool name header, editable JSON textarea, Call button that validates JSON and invokes `rpc_client.mcp_call_tool()`; result and error panels shown inline; early-return pattern `let Some(...) else { return rsx!{}; }` used (not `?` operator, since Dioxus 0.6 `Element` is `Result<VNode, RenderError>`); registered in `mod.rs`; compiles cleanly with `--no-default-features --features web`
+
 ## [2026-05-15] ingest | OpenaiProvider Implementation — LLMClient for OpenAI Chat Completions API
 - Created sources: [[openai-provider-impl]]
 - Updated entities: [[vol-llm-provider-crate]] (added OpenaiProvider details to Key Facts, added openai module to module table, added timeline entry, source_count -> 3)

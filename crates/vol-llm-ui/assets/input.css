@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@source "../src/web/components/*.rs";
+
+@theme {
+  --breakpoint-sm: 480px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+
+  --animate-conn-blink: conn-blink 1s ease-in-out infinite;
+}
+
+@keyframes conn-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}

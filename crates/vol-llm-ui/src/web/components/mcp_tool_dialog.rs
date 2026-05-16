@@ -9,6 +9,8 @@ pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
 
     let maybe_dialog = {
         let s = signal.read();
+        let has = s.tool_call_dialog.is_some();
+        web_sys::console::log_1(&format!("ToolCallDialog render: has_dialog={has}").into());
         s.tool_call_dialog.as_ref().map(|d| (
             d.server.clone(),
             d.tool_name.clone(),

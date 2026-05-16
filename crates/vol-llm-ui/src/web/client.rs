@@ -80,9 +80,9 @@ pub enum ConnectionState {
 type ResponseCallback = Box<dyn FnOnce(serde_json::Value)>;
 
 /// Shared client state.
-/// `next_id` and `on_state_change` are separated from the WebSocket so they
-/// can be borrowed independently without conflicting with the WS borrow held
-/// by the active message handler.
+/// `next_id`, `pending` and `on_state_change` are separated from the WebSocket
+/// so they can be borrowed independently without conflicting with the WS borrow
+/// held by the active message handler.
 struct ClientInner {
     ws: web_sys::WebSocket,
     url: String,
@@ -91,6 +91,8 @@ struct ClientInner {
     /// Pending response callbacks keyed by request ID.
     pending: RefCell<HashMap<u64, ResponseCallback>>,
     on_state_change: Cell<Option<Box<dyn Fn(ConnectionState)>>>,
+    /// Next request ID — shared across clones via Rc.
+    next_id: Cell<u64>,
 }
 
 /// WebSocket JSON-RPC client.
@@ -98,7 +100,6 @@ struct ClientInner {
 pub struct JsonRpcClient {
     inner: Rc<ClientInner>,
     event_rx: Rc<RefCell<mpsc::UnboundedReceiver<AgentEvent>>>,
-    next_id: Cell<u64>,
 }
 
 impl PartialEq for JsonRpcClient {
@@ -120,12 +121,12 @@ impl JsonRpcClient {
             event_tx,
             pending: RefCell::new(HashMap::new()),
             on_state_change: Cell::new(None),
+            next_id: Cell::new(1),
         });
 
         let client = Self {
             inner: inner.clone(),
             event_rx: Rc::new(RefCell::new(event_rx)),
-            next_id: Cell::new(1),
         };
 
         // Set up message handler
@@ -171,8 +172,8 @@ impl JsonRpcClient {
 
     /// Allocate a unique request ID.
     fn alloc_id(&self) -> u64 {
-        let id = self.next_id.get();
-        self.next_id.set(id.wrapping_add(1));
+        let id = self.inner.next_id.get();
+        self.inner.next_id.set(id.wrapping_add(1));
         id
     }
 

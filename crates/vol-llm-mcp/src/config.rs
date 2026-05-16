@@ -62,6 +62,12 @@ struct RawHttpConfig {
     url: String,
     #[serde(default)]
     headers: Option<HashMap<String, String>>,
+    /// Accepted but ignored — legacy field, all HTTP uses streamable HTTP.
+    #[serde(default, rename = "transport")]
+    _transport: Option<String>,
+    /// Accepted but ignored — env is stdio-only. Present to avoid parse errors.
+    #[serde(default, rename = "env")]
+    _env: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize, Clone)]

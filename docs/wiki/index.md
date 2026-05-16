@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-15 (openai-provider-impl)
+Last updated: 2026-05-15 (tool-call-dialog-component)
 
 ## Entities
 
@@ -116,6 +116,7 @@ Last updated: 2026-05-15 (openai-provider-impl)
 | [[mcp-multi-transport-config]] | Design + implementation: McpTransport enum with required type field, serde tagged enum parsing, HTTP via StreamableHttpClientTransport | active | 2026-05-15 |
 | [[openai-stream-parser-impl]] | OpenaiStreamParser implementation — StreamProtocol for OpenAI SSE format with [DONE] sentinel, content/tool deltas, usage, finish reasons | active | 2026-05-15 |
 | [[openai-provider-impl]] | OpenaiProvider implementation — full LLMClient for OpenAI Chat Completions API, message/tool conversion, SSE streaming, factory dispatch | active | 2026-05-15 |
+| [[tool-call-dialog-component]] | ToolCallDialog Dioxus component — modal dialog for invoking MCP tools with editable JSON arguments, JSON validation, async RPC call, inline result/error display | active | 2026-05-15 |
 
 ## Analyses
 

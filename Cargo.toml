@@ -133,3 +133,15 @@ vol-mcp-servers = { path = "crates/vol-mcp-servers" }
 vol-llm-mcp = { path = "crates/vol-llm-mcp" }
 dirs = "5.0"
 vol-observability = { path = "crates/vol-observability" }
+
+[profile]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"

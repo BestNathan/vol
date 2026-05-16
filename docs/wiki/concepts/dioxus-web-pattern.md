@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [dioxus, web, frontend, component, wasm]
 created: 2026-05-08
-updated: 2026-05-14 (mcp-state-types)
-source_count: 8
+updated: 2026-05-15 (tool-call-dialog-component)
+source_count: 9
 ---
 
 # Dioxus Web Pattern
@@ -20,7 +20,7 @@ Component architecture for a browser-based UI built with Dioxus 0.6, compiled to
 
 - Dioxus 0.6 via `dioxus::launch(App)` in binary entry point
 - Feature gated: `#[cfg(feature = "web")]` in `lib.rs`, binary requires `--features web`
-- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `TreeNode`, `ToolsTabContent`, `FileContentView`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel`, `McpPanel` (placeholder)
+- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `TreeNode`, `ToolsTabContent`, `FileContentView`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel`, `McpPanel` (placeholder), `ToolCallDialog` [[tool-call-dialog-component]]
 - Global CSS embedded as `const GLOBAL_CSS: &str`, injected via `<style>` element
 - Dark theme with flexbox layout: status bar (top), tools panel (left), tab content (right), input area (bottom)
 - Tab routing: `TabContent` matches on `ActiveTab` enum to render the active panel
@@ -77,6 +77,7 @@ App
 │       │   └── AgentsPanel
 │       └── InputArea  (text input + send button)
 └── ApprovalDialog     (modal overlay)
+└── ToolCallDialog     (modal overlay, conditional on McpState.tool_call_dialog)
 ```
 
 ## FileTree Component
@@ -129,3 +130,4 @@ Both frontends share `UiState` / `UiEvent` / `ActiveTab` types and the same conn
 - [[tailwind-css-migration]]: Systematic migration from global CSS to Tailwind utility classes
 - [[connection-state-dashboard]]: Real-time connection status display via EventBus subscription
 - [[mcp-state-types]]: State types for MCP server/tool/resource/prompt display in web frontend
+- [[tool-call-dialog-component]]: Source documenting the ToolCallDialog modal component

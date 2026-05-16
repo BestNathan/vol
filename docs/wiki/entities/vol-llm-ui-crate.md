@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-14 (mcp-state-types)
-source_count: 8
+updated: 2026-05-15 (tool-call-dialog-component)
+source_count: 9
 ---
 
 # vol-llm-ui Crate
@@ -34,7 +34,7 @@ Both modes implement the same trait interfaces, so TUI (ratatui) and Web (Dioxus
 - TUI modules: `render` (9 panel renderers), `input` (keyboard handling with approval/session support) [[ratatui-tui-pattern]]
 - Event loop: `tokio::select!` with biased mode prioritizing input over render ticks [[ui-event-loop-pattern]]
 - Web binary: `vol-llm-ui-web` — Dioxus 0.6 WASM with per-component signals + EventBus [[dioxus-web-pattern]]
-- Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView`, `TreeNode`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel` [[task-8-dioxus-web-frontend]], [[task-5-file-content-view]], [[lazy-load-dir-tree]], [[task-6-sessions-tab-wiring]], [[connection-state-dashboard]]
+- Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView`, `TreeNode`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel`, `McpPanel`, `ToolCallDialog` [[task-8-dioxus-web-frontend]], [[task-5-file-content-view]], [[lazy-load-dir-tree]], [[task-6-sessions-tab-wiring]], [[connection-state-dashboard]], [[tool-call-dialog-component]]
 - Web state: `EventBus` with `UiEventKind` routing, per-component local `Signal<T>`, shared `Signal<GlobalState>` / `Signal<ApprovalUiState>` via `use_context_provider` [[dioxus-signal-pattern]], [[event-bus-pattern]], [[split-signal-state]]
 - `SubscriptionSet` with `Drop` impl for automatic cleanup on component unmount [[event-bus-pattern]]
 - `ConnectionStatePanel` — real-time connection status indicator in StatusBar, subscribes to WsConnected/WsConnecting/WsDisconnected via EventBus, color-coded (green/yellow/red) [[connection-state-dashboard]]
@@ -71,3 +71,4 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-12**: Tailwind CSS migration completed — all 16 web component files migrated from `GLOBAL_CSS` to Tailwind v4 utility classes; `GLOBAL_CSS` const (~215 lines) deleted; `input.css` created with custom breakpoints and animations; `rebuild-web.sh` integrates Tailwind CLI; Rust wasm32 build verified; responsive breakpoints added for sidebar and tab bar [[tailwind-css-full-migration]]
 - **2026-05-14**: `ConnectionStatePanel` added — EventBus subscriber component rendering color-coded WebSocket connection status (green/yellow/red) in StatusBar; listens to WsConnected/WsConnecting/WsDisconnected event kinds from [[remote-connection-impl]]; `GlobalState` extended with `ConnectionStatus`; 3 tests added [[connection-state-dashboard]]
 - **2026-05-14**: `ActiveTab::Mcp` variant added between Skills and Logs; `McpSubtab` enum (Servers, Tools, Resources, Prompts); MCP wire types (`McpServerInfo`, `McpToolInfo`, `McpResourceInfo`, `McpResourceTemplateInfo`, `McpPromptInfo`, `McpPromptArgInfo`) and local state structs (`McpState`, `McpServerRowState`, `McpToolCallState`, `McpResourceViewerState`, `McpPromptViewerState`) added to state module
+- **2026-05-15**: `ToolCallDialog` component added — modal dialog for invoking MCP tools with editable JSON arguments, JSON validation, async `mcp_call_tool` RPC call, inline result/error display; uses `let Some(...) else { return rsx!{}; }` early-return pattern for optional dialog state [[tool-call-dialog-component]]

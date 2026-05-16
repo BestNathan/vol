@@ -67,8 +67,8 @@ fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<Conversati
 
 /// Format a Unix timestamp as a human-readable age label.
 fn format_age(ts: i64) -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    let now = web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64;
     let diff = (now - ts).max(0);

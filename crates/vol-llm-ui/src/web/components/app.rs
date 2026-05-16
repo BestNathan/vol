@@ -294,26 +294,27 @@ pub fn App() -> Element {
     use_context_provider(|| mcp_dialog_signal);
 
     rsx! {
-        div { class: "flex flex-col h-[100dvh] w-[100vw] overflow-hidden font-[system-ui] text-[14px] text-[#e0e0e0] bg-[#1a1a2e]",
-            StatusBar {}
-            div { class: "flex flex-1 overflow-hidden",
-                FileTree {}
-                div { class: "flex-1 flex flex-col overflow-hidden",
-                    TabBar {}
-                    TabContent {}
-                    InputArea {}
+        // The Stylesheet component inserts a style link into the head of the document
+        document::Stylesheet {
+            // Urls are relative to your Cargo.toml file
+            href: asset!("/assets/tailwind.css")
+        }
+        div { class: "relative h-[100dvh] w-[100vw] font-[system-ui] text-[14px] text-[#e0e0e0] bg-[#1a1a2e]",
+            div { class: "flex flex-col h-full w-full overflow-hidden",
+                StatusBar {}
+                div { class: "flex flex-1 overflow-hidden",
+                    FileTree {}
+                    div { class: "flex-1 flex flex-col overflow-hidden",
+                        TabBar {}
+                        TabContent {}
+                        InputArea {}
+                    }
                 }
             }
             ApprovalDialog {}
-            if mcp_dialog_signal.read().tool_call_dialog.is_some() {
-                ToolCallDialog { signal: mcp_dialog_signal }
-            }
-            if mcp_dialog_signal.read().resource_viewer.is_some() {
-                ResourceViewer { signal: mcp_dialog_signal }
-            }
-            if mcp_dialog_signal.read().prompt_viewer.is_some() {
-                PromptViewer { signal: mcp_dialog_signal }
-            }
+            ToolCallDialog { signal: mcp_dialog_signal }
+            ResourceViewer { signal: mcp_dialog_signal }
+            PromptViewer { signal: mcp_dialog_signal }
         }
     }
 }

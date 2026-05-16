@@ -62,6 +62,7 @@ fn render_right_panel(frame: &mut Frame, area: Rect, state: &UiState) {
         ActiveTab::Skills => render_skills(frame, chunks[1], state),
         ActiveTab::Agents => render_agents_panel(frame, chunks[1], state),
         ActiveTab::Sessions => render_sessions_panel(frame, chunks[1], state),
+        ActiveTab::Mcp => render_mcp(frame, chunks[1], state),
     }
 
     render_input_area(frame, chunks[2], state);
@@ -559,6 +560,20 @@ fn render_sessions_panel(frame: &mut Frame, area: Rect, _state: &UiState) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let text = Text::raw("No sessions (TUI)");
+    let paragraph = Paragraph::new(text)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(paragraph, inner);
+}
+
+fn render_mcp(frame: &mut Frame, area: Rect, _state: &UiState) {
+    let block = Block::default()
+        .title("MCP Servers")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::DarkGray));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let text = Text::raw("MCP tab (TUI)");
     let paragraph = Paragraph::new(text)
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::DarkGray));

@@ -234,6 +234,7 @@ fn ToolCard(mut signal: Signal<McpDialogState>, tool: crate::state::McpToolInfo)
                 button {
                     class: "px-2 py-0.5 bg-[#3a3a55] text-[#aaa] rounded text-[11px] cursor-pointer hover:text-[#e0e0e0]",
                     onclick: move |_| {
+                        web_sys::console::log_1(&format!("ToolCard click: {}/{}", tool.server, tool.name).into());
                         let t = tool.clone();
                         signal.write_unchecked().tool_call_dialog = Some(crate::state::McpToolCallState {
                             server: t.server.clone(),

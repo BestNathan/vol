@@ -743,8 +743,36 @@ async fn connect_http(
         }
     }
 
-    let transport =
-        rmcp::transport::StreamableHttpClientTransport::from_config(transport_config);
+    // Auto-detect proxy from HTTPS_PROXY environment variable.
+    // Only apply proxy for remote HTTPS URLs — skip for HTTP/local addresses
+    // so internal services (e.g. nhome.local) are reachable directly.
+    let proxy_url = if url.starts_with("https://") {
+        std::env::var("HTTPS_PROXY").ok().or_else(|| std::env::var("https_proxy").ok())
+    } else {
+        None
+    };
+
+    let transport = if let Some(ref proxy) = proxy_url {
+        let client = reqwest::Client::builder()
+            .pool_max_idle_per_host(0)
+            .proxy(reqwest::Proxy::https(proxy).map_err(|e| McpError::ConnectionFailed {
+                server: config.name.clone(),
+                detail: format!("invalid proxy URL '{proxy}': {e}"),
+            })?)
+            .build()
+            .map_err(|e| McpError::ConnectionFailed {
+                server: config.name.clone(),
+                detail: format!("failed to build reqwest client with proxy: {e}"),
+            })?;
+        tracing::info!(
+            server = %config.name,
+            proxy = %proxy,
+            "connecting MCP server via HTTPS with proxy"
+        );
+        rmcp::transport::StreamableHttpClientTransport::with_client(client, transport_config)
+    } else {
+        rmcp::transport::StreamableHttpClientTransport::from_config(transport_config)
+    };
 
     let client_info = ClientInfo::default();
     tokio::time::timeout(
