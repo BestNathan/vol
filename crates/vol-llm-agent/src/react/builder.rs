@@ -80,11 +80,6 @@ impl AgentBuilder {
         self
     }
 
-    pub fn with_observability(mut self, config: Option<vol_llm_observability::ObservabilityAgentConfig>) -> Self {
-        self.config.observability = config;
-        self
-    }
-
     pub fn with_working_dir(mut self, path: std::path::PathBuf) -> Self {
         self.config.working_dir = path;
         self

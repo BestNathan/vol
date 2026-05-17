@@ -352,7 +352,7 @@ impl CodingAgentBuilder {
 
     /// Register LoggerPlugin to write JSONL event logs to store_dir/logs/.
     pub fn with_logger(mut self) -> Self {
-        let logger = vol_llm_agent::react::LoggerAgentPlugin::new(self.config.store_dir.clone());
+        let logger = vol_llm_observability::LoggerPlugin::new(self.config.store_dir.clone());
         self.config.plugin_registry.register(logger);
         self
     }
@@ -362,7 +362,7 @@ impl CodingAgentBuilder {
     /// LokiPlugin is stateless — no configuration needed. The OTel
     /// collector endpoint is set via OTEL_EXPORTER_OTLP_ENDPOINT env var.
     pub fn with_loki(mut self) -> Self {
-        let plugin = vol_llm_agent::react::LokiPlugin::new();
+        let plugin = vol_llm_observability::LokiPlugin::new();
         self.config.plugin_registry.register(plugin);
         self
     }

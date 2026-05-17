@@ -31,8 +31,6 @@
 pub mod agent;
 pub mod config_builder;
 pub mod hitl;
-pub mod loki_plugin;
-pub mod observability_plugin;
 pub mod plugin;
 pub mod plugin_stream;
 pub mod response;
@@ -53,8 +51,6 @@ pub use plugin_stream::{
 pub use hitl::{ApprovalRequest, ApprovalResponse};
 pub use response::{AgentError, AgentResponse};
 pub use run_context::{PluginRequest, RunContext};
-pub use observability_plugin::{LoggerAgentPlugin, ObservabilityAgentPlugin};
-pub use loki_plugin::LokiPlugin;
 pub use state::{ReasoningStep, ToolCallRecord};
 pub use stream::{AgentStreamEvent, AgentStreamReceiver};
 

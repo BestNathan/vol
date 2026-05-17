@@ -3,8 +3,8 @@
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
-use super::{AgentPlugin, PluginDecision, RunContext};
-use vol_llm_core::stream::AgentStreamEvent;
+use vol_llm_agent::react::{AgentPlugin, PluginDecision, RunContext};
+use vol_llm_core::AgentStreamEvent;
 
 /// Plugin that sends agent events to OTel via tracing macros.
 ///
@@ -49,7 +49,7 @@ impl LokiPlugin {
                     flat.insert("run_id".to_string(), json!(run_id));
                     flat.insert("session_id".to_string(), json!(session_id));
                     flat.insert("agent_id".to_string(), json!(agent_id));
-                    flat
+                    map
                 } else {
                     map.insert("run_id".to_string(), json!(run_id));
                     map.insert("session_id".to_string(), json!(session_id));

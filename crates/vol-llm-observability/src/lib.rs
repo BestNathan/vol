@@ -19,3 +19,6 @@ pub use otel_init::init_otel_logs;
 
 pub use agent_config::ObservabilityAgentConfig;
 pub use agent_plugin::ObservabilityPlugin;
+
+pub mod loki_plugin;
+pub use loki_plugin::LokiPlugin;

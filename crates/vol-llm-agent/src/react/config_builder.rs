@@ -230,7 +230,6 @@ impl AgentConfigBuilder {
                 .to_string_lossy()
                 .to_string(),
             working_dir: working_dir.unwrap_or_else(|| PathBuf::from(".")),
-            observability: None,
         })
     }
 }

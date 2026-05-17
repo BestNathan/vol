@@ -6740,7 +6740,6 @@ dependencies = [
  "vol-llm-context",
  "vol-llm-core",
  "vol-llm-mcp",
- "vol-llm-observability",
  "vol-llm-provider",
  "vol-llm-skill",
  "vol-llm-tdengine",
@@ -6778,6 +6777,7 @@ dependencies = [
  "vol-llm-core",
  "vol-llm-mcp",
  "vol-llm-provider",
+ "vol-llm-skill",
  "vol-llm-tool",
  "vol-session",
 ]
@@ -6881,6 +6881,7 @@ dependencies = [
 name = "vol-llm-observability"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "opentelemetry",
  "opentelemetry-appender-tracing",

@@ -8,7 +8,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
 use vol_llm_mcp::McpManager;
-use vol_llm_observability::ObservabilityAgentConfig;
 use vol_llm_tool::ToolRegistry;
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
@@ -36,12 +35,10 @@ pub struct AgentConfig {
     // === MCP ===
     pub mcp_manager: Option<Arc<McpManager>>,
 
-    // Observability fields
+    // === Agent identity ===
     pub agent_id: String,
     /// Working directory. Log paths derive from `{working_dir}/logs/agents/{agent_id}/`.
     pub working_dir: PathBuf,
-    /// Observability plugin configuration.
-    pub observability: Option<ObservabilityAgentConfig>,
 }
 
 impl AgentConfig {
@@ -67,7 +64,6 @@ impl AgentConfig {
             mcp_manager: None,
             agent_id: generate_agent_id(),
             working_dir: PathBuf::from("."),
-            observability: Some(ObservabilityAgentConfig::default()),
         }
     }
 }
@@ -85,7 +81,6 @@ impl Default for AgentConfig {
             mcp_manager: None,
             agent_id: generate_agent_id(),
             working_dir: PathBuf::from("."),
-            observability: Some(ObservabilityAgentConfig::default()),
         }
     }
 }
@@ -223,26 +218,8 @@ impl ReActAgent {
         // (which would clone senders and prevent channel close)
         let listener_event_rx = run_ctx.event_tx.subscribe();
 
-        // Build plugin list, adding observability plugin if configured
-        let mut plugins = self.config.plugin_registry.plugins().to_vec();
-        if let Some(obs_config) = &config.observability {
-            if super::observability_plugin::ObservabilityAgentPlugin::is_enabled(obs_config) {
-                let agent_type = std::any::type_name::<Self>()
-                    .split("::")
-                    .last()
-                    .unwrap_or("ReActAgent")
-                    .to_string();
-
-                let obs_plugin = super::observability_plugin::ObservabilityAgentPlugin::new(
-                    obs_config,
-                    run_id.clone(),
-                    self.config.session.id.clone(),
-                    config.agent_id.clone(),
-                    agent_type,
-                );
-                plugins.push(std::sync::Arc::new(obs_plugin));
-            }
-        }
+        // Build plugin list from registry only
+        let plugins = self.config.plugin_registry.plugins().to_vec();
 
         let listener_handle = spawn_listener_task(
             plugins,
@@ -751,13 +728,10 @@ mod tests {
     }
 
     #[test]
-    fn test_agent_config_with_observability() {
-        use vol_llm_observability::ObservabilityAgentConfig;
-
+    fn test_agent_config_fields() {
         let config = AgentConfig {
             agent_id: "test_agent".to_string(),
             working_dir: PathBuf::from("."),
-            observability: Some(ObservabilityAgentConfig::default()),
             ..Default::default()
         };
 

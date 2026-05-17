@@ -21,7 +21,7 @@ use std::sync::Arc;
 use vol_llm_agent::agent_def::AgentScope;
 use vol_llm_agent::agent_loader::AgentLoader;
 use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
-use vol_llm_observability::{init_otel_logs, loki::LokiPlugin};
+use vol_llm_observability::{init_otel_logs, LokiPlugin};
 use vol_llm_provider::{LLMConfig, anthropic::AnthropicProvider};
 use vol_llm_tools_builtin::register_all;
 

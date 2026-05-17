@@ -53,7 +53,6 @@ async fn test_agent_run_single_iteration() {
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_observability(None)
         .build()
         .unwrap();
     let agent = ReActAgent::new(config);
@@ -154,7 +153,6 @@ async fn test_agent_run_multiple_iterations() {
         .with_tool(EchoTool)
         .with_plugin(plugin)
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_observability(None)
         .build()
         .unwrap();
     let agent = ReActAgent::new(config);
@@ -203,7 +201,6 @@ async fn test_agent_run_llm_error_propagates() {
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_observability(None)
         .build()
         .unwrap();
     let agent = ReActAgent::new(config);
@@ -297,7 +294,6 @@ async fn test_agent_run_event_emission() {
         .with_llm(Arc::new(mock))
         .with_plugin(plugin)
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_observability(None)
         .build()
         .unwrap();
     let agent = ReActAgent::new(config);
@@ -392,7 +388,6 @@ async fn test_mock_llm_call_tracking() {
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_observability(None)
         .build()
         .unwrap();
     let agent = ReActAgent::new(config);
@@ -434,7 +429,6 @@ async fn test_plugin_intercept_abort() {
         .with_llm(Arc::new(mock))
         .with_plugin(AbortPlugin)
         .with_system_prompt("You are a test assistant.".to_string())
-        .with_observability(None)
         .build()
         .unwrap();
     let agent = ReActAgent::new(config);

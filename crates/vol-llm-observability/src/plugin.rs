@@ -2,11 +2,14 @@
 
 use std::path::PathBuf;
 
+use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::{json, Value};
+use vol_llm_agent::react::{AgentPlugin, PluginDecision, RunContext};
 use vol_llm_core::stream::AgentStreamEvent;
 
 use crate::run_log::logger::LogEntry;
+use crate::run_log::append_log;
 
 /// Writes all agent events to JSONL files.
 ///
@@ -175,6 +178,33 @@ fn event_name(event: &AgentStreamEvent) -> String {
         | AgentStreamEvent::ContentDelta { .. }
         | AgentStreamEvent::ToolCallArgumentDelta { .. } => {
             unreachable!("delta events should be filtered by should_log()")
+        }
+    }
+}
+
+#[async_trait]
+impl AgentPlugin for LoggerPlugin {
+    fn id(&self) -> String {
+        "logger".to_string()
+    }
+
+    fn priority(&self) -> u32 {
+        10
+    }
+
+    async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
+        PluginDecision::Continue
+    }
+
+    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
+        if !Self::should_log(event) {
+            return;
+        }
+        let entry = Self::create_log_entry(event, &ctx.run_id);
+        let path = self.log_path(event, &ctx.run_id);
+        let line = entry.to_json_line();
+        if let Err(e) = append_log(&path, &line).await {
+            tracing::warn!(path = %path.display(), error = %e, "Failed to write log entry");
         }
     }
 }
