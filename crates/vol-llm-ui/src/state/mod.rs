@@ -214,6 +214,7 @@ pub struct SkillDetail {
     pub triggers: Vec<String>,
     pub content: String,
     pub file_listing: Vec<String>,
+    pub directory: String,
 }
 
 #[derive(Debug, Clone)]

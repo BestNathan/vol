@@ -80,12 +80,18 @@ pub fn SkillDetailDialog(mut signal: Signal<SkillDialogState>) -> Element {
                             div { class: "bg-[#12121e] border border-[#2a2a44] rounded max-h-[30%] overflow-y-auto mb-2",
                                 {detail.file_listing.iter().enumerate().map(|(i, f)| {
                                     let f = f.clone();
+                                    let dir = detail.directory.clone();
                                     let sel = selected_file.clone();
                                     let fc = file_content.clone();
                                     let client = rpc_client.clone();
                                     let name = f.split('/').last().unwrap_or(&f).to_string();
                                     let is_selected = selected_file.read().as_ref() == Some(&f);
                                     let row_bg = if is_selected { "#2a3a4a" } else { "transparent" };
+                                    let abs_path = if dir.is_empty() {
+                                        f.clone()
+                                    } else {
+                                        format!("{dir}/{f}")
+                                    };
                                     rsx! {
                                         div {
                                             key: "{i}",
@@ -95,12 +101,12 @@ pub fn SkillDetailDialog(mut signal: Signal<SkillDialogState>) -> Element {
                                                 let mut sel = sel.clone();
                                                 let mut fc = fc.clone();
                                                 let client = client.clone();
+                                                let full_path = abs_path.clone();
                                                 sel.set(Some(f.clone()));
                                                 fc.set(Some((f.clone(), String::new(), true)));
-                                                let path_for_read = f.clone();
-                                                let path_for_closure = path_for_read.clone();
+                                                let path_for_closure = f.clone();
                                                 let mut sig = fc.clone();
-                                                client.file_read(&path_for_read, move |result| {
+                                                client.file_read(&full_path, move |result| {
                                                     match result {
                                                         Ok(content) => {
                                                             sig.set(Some((path_for_closure.clone(), content, false)));

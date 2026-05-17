@@ -720,6 +720,7 @@ impl JsonRpcConnection {
                 "triggers": skill.triggers,
                 "content": skill.content,
                 "file_listing": skill.file_listing,
+                "directory": skill.directory,
             })),
             None => to_jsonrpc_error(Some(id), -32000, format!("Skill '{name}' not found")),
         }
