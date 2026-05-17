@@ -54,8 +54,6 @@ pub struct RunContext {
     pub session: Arc<Session>,
     pub tools: Arc<ToolRegistry>,
     pub config: AgentConfig,
-    /// Max history messages from session, resolved from def or default.
-    pub max_history_messages: usize,
 
     // Event bus
     pub event_tx: broadcast::Sender<TracedEvent<AgentStreamEvent>>,
@@ -122,12 +120,7 @@ impl RunContext {
     pub fn new(
         run_id: String,
         user_input: String,
-        session_id: String,
-        session: Arc<Session>,
-        tools: Arc<ToolRegistry>,
         config: AgentConfig,
-        max_history_messages: usize,
-        model: String,
     ) -> (Self, mpsc::Receiver<PluginRequest>) {
         let (event_tx, _) = broadcast::channel(1024);
         let (plugin_event_tx, plugin_event_rx) = mpsc::channel(100);
@@ -135,16 +128,15 @@ impl RunContext {
         let ctx = Self {
             run_id,
             user_input,
-            session_id,
-            model: if model.is_empty() { "unknown".to_string() } else { model },
+            session_id: config.session.id.clone(),
+            model: if config.llm.model().is_empty() { "unknown".to_string() } else { config.llm.model().to_string() },
             iteration: AtomicU32::new(0),
             all_tool_calls: Arc::new(RwLock::new(Vec::new())),
             current_tool_calls: Arc::new(RwLock::new(Vec::new())),
             data: Arc::new(RwLock::new(HashMap::new())),
-            session,
-            tools,
+            session: config.session.clone(),
+            tools: config.tools.clone(),
             config,
-            max_history_messages,
             event_tx,
             plugin_event_tx,
             reasoning_chain: Arc::new(RwLock::new(Vec::new())),
@@ -171,6 +163,20 @@ impl RunContext {
     /// Reset the iteration counter to 0 (called after user approves continuation).
     pub fn reset_iteration(&self) {
         self.iteration.store(0, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Get max iterations from AgentDef, defaulting to 5.
+    pub fn max_iterations(&self) -> u32 {
+        self.config.def.as_ref()
+            .and_then(|d| d.max_iterations)
+            .unwrap_or(5)
+    }
+
+    /// Get max history messages from AgentDef, defaulting to 20.
+    pub fn max_history_messages(&self) -> usize {
+        self.config.def.as_ref()
+            .and_then(|d| d.max_history_messages)
+            .unwrap_or(20)
     }
 
     /// Add a message to the session.
@@ -209,7 +215,7 @@ impl RunContext {
         .add_contributors_from(&self.config.context_builder)
         .add_contributor(Box::new(SessionContributor::new(
             Arc::new(tokio::sync::Mutex::new((*self.session).clone())),
-            self.max_history_messages,
+            self.max_history_messages(),
         )))
         .build();
 
@@ -384,7 +390,6 @@ impl Clone for RunContext {
             session: self.session.clone(),
             tools: self.tools.clone(),
             config: self.config.clone(),
-            max_history_messages: self.max_history_messages,
             event_tx: self.event_tx.clone(),
             plugin_event_tx: self.plugin_event_tx.clone(),
             reasoning_chain: self.reasoning_chain.clone(),
@@ -406,14 +411,7 @@ mod tests {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
-            "session-1".to_string(),
-            Arc::new(Session::new(
-                Arc::new(InMemoryEntryStore::new()),
-            )),
-            Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
-            20,
-            "test-model".to_string(),
         );
         ctx
     }
@@ -423,7 +421,7 @@ mod tests {
         let ctx = create_test_context();
         assert_eq!(ctx.run_id, "test-run");
         assert_eq!(ctx.user_input, "test input");
-        assert_eq!(ctx.session_id, "session-1");
+        assert_eq!(ctx.session_id, ctx.session.id);
         assert_eq!(ctx.current_iteration(), 0);
     }
 
@@ -513,14 +511,7 @@ mod tests {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
-            "session-1".to_string(),
-            Arc::new(Session::new(
-                Arc::new(InMemoryEntryStore::new()),
-            )),
-            Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
-            20,
-            "test-model".to_string(),
         );
 
         let messages = ctx.get_context().await.unwrap();
@@ -544,11 +535,6 @@ mod tests {
             .add_contributor(Box::new(SimpleContributor::system("System".to_string())))
             .build();
 
-        let config = AgentConfig {
-            context_builder,
-            ..Default::default()
-        };
-
         let session = Arc::new(Session::new(
             Arc::new(InMemoryEntryStore::new()),
         ));
@@ -560,15 +546,16 @@ mod tests {
         );
         session.add_message(history_msg).await.unwrap();
 
+        let config = AgentConfig {
+            context_builder,
+            session,
+            ..Default::default()
+        };
+
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "new input".to_string(),
-            "session-1".to_string(),
-            session.clone(),
-            Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
-            10,
-            "test-model".to_string(),
         );
 
         let messages = ctx.get_context().await.unwrap();
@@ -592,24 +579,20 @@ mod tests {
             .add_contributor(Box::new(SimpleContributor::system("System".to_string())))
             .build();
 
-        let config = AgentConfig {
-            context_builder,
-            ..Default::default()
-        };
-
         let session = Arc::new(Session::new(
             Arc::new(InMemoryEntryStore::new()),
         ));
 
+        let config = AgentConfig {
+            context_builder,
+            session: session.clone(),
+            ..Default::default()
+        };
+
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "analyze market volatility".to_string(),
-            "session-1".to_string(),
-            session.clone(),
-            Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
-            20,
-            "test-model".to_string(),
         );
 
         // Persist user message to session (simulating what agent.rs does at run start)
@@ -638,11 +621,6 @@ mod tests {
             .add_contributor(Box::new(SimpleContributor::system("System".to_string())))
             .build();
 
-        let config = AgentConfig {
-            context_builder,
-            ..Default::default()
-        };
-
         let session = Arc::new(Session::new(
             Arc::new(InMemoryEntryStore::new()),
         ));
@@ -651,15 +629,16 @@ mod tests {
         let history_msg = SessionMessage::new(session.id.clone(), Message::user("History"));
         session.add_message(history_msg).await.unwrap();
 
+        let config = AgentConfig {
+            context_builder,
+            session,
+            ..Default::default()
+        };
+
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "input".to_string(),
-            "session-1".to_string(),
-            session.clone(),
-            Arc::new(vol_llm_tool::ToolRegistry::new()),
             config,
-            20,
-            "test-model".to_string(),
         );
 
         // Call get_context multiple times - each builds fresh
@@ -678,14 +657,7 @@ mod tests {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
-            "session-1".to_string(),
-            Arc::new(Session::new(
-                Arc::new(InMemoryEntryStore::new()),
-            )),
-            Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
-            20,
-            "test-model".to_string(),
         );
 
         ctx.record_reasoning_step("First thought".to_string(), Some(100))
@@ -705,14 +677,7 @@ mod tests {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test".to_string(),
-            "session-1".to_string(),
-            Arc::new(Session::new(
-                Arc::new(InMemoryEntryStore::new()),
-            )),
-            Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
-            20,
-            "test-model".to_string(),
         );
 
         let record = ToolCallRecord {
@@ -734,14 +699,7 @@ mod tests {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test".to_string(),
-            "session-1".to_string(),
-            Arc::new(Session::new(
-                Arc::new(InMemoryEntryStore::new()),
-            )),
-            Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
-            20,
-            "test-model".to_string(),
         );
 
         ctx.set_final_content("Final answer".to_string()).await;
@@ -756,14 +714,7 @@ mod tests {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test".to_string(),
-            "session-1".to_string(),
-            Arc::new(Session::new(
-                Arc::new(InMemoryEntryStore::new()),
-            )),
-            Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
-            20,
-            "test-model".to_string(),
         );
 
         ctx.record_reasoning_step("thought".to_string(), None).await;
@@ -775,7 +726,7 @@ mod tests {
         assert_eq!(response.reasoning.len(), 1);
         assert_eq!(response.reasoning[0].thinking, "thought");
         assert_eq!(response.run_id, "test-run");
-        assert_eq!(response.session_id, "session-1");
+        assert_eq!(response.session_id, ctx.session.id);
     }
 
     #[tokio::test]

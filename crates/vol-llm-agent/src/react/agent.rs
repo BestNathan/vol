@@ -170,14 +170,6 @@ impl ReActAgent {
             self.config.tools.clone()
         };
 
-        // Read max_iterations and max_history from def if set, else use hardcoded defaults
-        let max_iterations = self.config.def.as_ref()
-            .and_then(|d| d.max_iterations)
-            .unwrap_or(5);
-        let max_history_messages = self.config.def.as_ref()
-            .and_then(|d| d.max_history_messages)
-            .unwrap_or(20);
-
         // Clone config with effective tools
         let config = AgentConfig {
             tools: effective_tools.clone(),
@@ -186,17 +178,10 @@ impl ReActAgent {
 
         let run_id = uuid::Uuid::new_v4().simple().to_string();
 
-        let session = self.config.session.clone();
-
         let (run_ctx, plugin_rx) = RunContext::new(
             run_id.clone(),
             user_input.to_string(),
-            self.config.session.id.clone(),
-            session.clone(),
-            effective_tools,
             config.clone(),
-            max_history_messages,
-            config.llm.model().to_string(),
         );
 
         // Persist user message to session so it's available via SessionContributor.
@@ -246,9 +231,8 @@ impl ReActAgent {
         let llm = self.config.llm.clone();
         let user_input = user_input.to_string();
         let sandbox = self.config.sandbox.clone();
-        let max_iterations = max_iterations;
-
         let agent_task = tokio::spawn(async move {
+            let max_iterations = run_ctx.max_iterations();
             // === Emit and intercept AgentStart ===
             let start_event = AgentStreamEvent::agent_start(user_input.clone());
             run_ctx.emit(start_event.clone()).await;

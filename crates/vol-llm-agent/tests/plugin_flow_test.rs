@@ -12,7 +12,7 @@ use vol_llm_agent::{AgentConfig, AgentStreamEvent, ReActAgent};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, LLMProvider, StreamEvent, StreamEventData,
 };
-use vol_llm_tool::{ToolContext, ToolRegistry};
+use vol_llm_tool::ToolContext;
 
 /// Mock LLM that returns a simple text response
 struct MockLlm {
@@ -313,19 +313,11 @@ async fn test_listener_parallel_execution() {
 
 fn create_test_run_context() -> RunContext {
     use vol_llm_agent::react::{AgentConfig, RunContext};
-    use vol_session::{InMemoryEntryStore, Session};
 
     let (ctx, _plugin_rx) = RunContext::new(
         "test-run".to_string(),
         "test input".to_string(),
-        "session-1".to_string(),
-        Arc::new(Session::new(
-            Arc::new(InMemoryEntryStore::new()),
-        )),
-        Arc::new(ToolRegistry::new()),
         AgentConfig::default(),
-        20,
-        "test-model".to_string(),
     );
 
     ctx

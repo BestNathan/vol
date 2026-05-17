@@ -154,14 +154,7 @@ mod tests {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
-            "session-1".to_string(),
-            Arc::new(Session::new(
-                Arc::new(InMemoryEntryStore::new()),
-            )),
-            Arc::new(vol_llm_tool::ToolRegistry::new()),
             AgentConfig::default(),
-            20,
-            "test-model".to_string(),
         );
         ctx
     }

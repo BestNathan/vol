@@ -118,26 +118,16 @@ async fn test_observer_plugin_forwards_multiple_events() {
 // Helper function to create test RunContext
 fn create_test_context() -> RunContext {
     use vol_llm_agent::react::{AgentConfig, PluginRegistry, RunContext};
-    use vol_session::{InMemoryEntryStore, Session};
-    use vol_llm_tool::ToolRegistry;
 
     let (ctx, _plugin_rx) = RunContext::new(
         "test-run".to_string(),
         "test input".to_string(),
-        "session-1".to_string(),
-        Arc::new(Session::new(
-            Arc::new(InMemoryEntryStore::new()),
-        )),
-        Arc::new(ToolRegistry::new()),
         AgentConfig {
-            max_iterations: 10,
-            max_history_messages: 20,
             context_builder: create_test_context_builder(),
             plugin_registry: PluginRegistry::new(),
             agent_id: "test-agent".to_string(),
             ..Default::default()
         },
-        "test-model".to_string(),
     );
     ctx
 }

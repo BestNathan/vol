@@ -215,14 +215,7 @@ async fn test_run_interceptor_loop_continue_decision() {
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
-        "test".to_string(),
-        Arc::new(vol_session::Session::new(
-            Arc::new(vol_session::InMemoryEntryStore::new()),
-        )),
-        Arc::new(vol_llm_tool::ToolRegistry::new()),
         AgentConfig::default(),
-        20,
-        "test-model".to_string(),
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(ContinuePlugin)];
@@ -262,14 +255,7 @@ async fn test_run_interceptor_loop_skip_decision() {
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
-        "test".to_string(),
-        Arc::new(vol_session::Session::new(
-            Arc::new(vol_session::InMemoryEntryStore::new()),
-        )),
-        Arc::new(vol_llm_tool::ToolRegistry::new()),
         AgentConfig::default(),
-        20,
-        "test-model".to_string(),
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(SkipPlugin)];
@@ -296,14 +282,7 @@ async fn test_run_interceptor_loop_emit_request() {
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
-        "test".to_string(),
-        Arc::new(vol_session::Session::new(
-            Arc::new(vol_session::InMemoryEntryStore::new()),
-        )),
-        Arc::new(vol_llm_tool::ToolRegistry::new()),
         AgentConfig::default(),
-        20,
-        "test-model".to_string(),
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![];
