@@ -199,14 +199,14 @@ impl ReActAgent {
 
         // Spawn listener tasks - one per plugin, subscribing to event broadcast
         let plugins = self.config.plugin_registry.plugins().to_vec();
-        let listener_set = spawn_listener_tasks(
+        let mut listener_set = spawn_listener_tasks(
             plugins,
             run_ctx.clone(),
         );
 
         // Spawn interceptor loop task - receives from plugin_rx channel
         // When plugin_rx is closed (agent drops run_ctx), interceptor exits
-        let interceptor_event_tx = run_ctx.event_tx.clone();
+        let interceptor_event_tx = run_ctx.event_tx.as_ref().unwrap().clone();
         let interceptor_plugins = config.plugin_registry.plugins().to_vec();
         let interceptor_ctx = run_ctx.clone();
         let interceptor_handle = tokio::spawn(async move {
@@ -218,6 +218,12 @@ impl ReActAgent {
             )
             .await;
         });
+
+        // Keep a clone of the event_tx Arc for shutdown.
+        // This is the original sender that will be dropped to close the broadcast.
+        // Agent task moves run_ctx (which also has event_tx), but we need an
+        // external handle to drop AFTER the interceptor exits.
+        let mut shutdown_event_tx = run_ctx.event_tx.clone();
 
         // === Phase 3: Spawn agent loop task and await it ===
         let llm = self.config.llm.clone();
@@ -515,12 +521,20 @@ impl ReActAgent {
             }
         };
 
-        // Wait for interceptor to finish with timeout
+        // Drop the original event_tx sender to close the broadcast channel.
+        // Listener tasks (which only have Arc clones) will see RecvError and exit.
+        shutdown_event_tx.take();
+
+        // Await all listener tasks — they drain buffers and exit naturally
+        while let Some(result) = listener_set.join_next().await {
+            if let Err(e) = result {
+                tracing::warn!(%e, "Listener task panicked");
+            }
+        }
+
+        // Wait for interceptor with short timeout (it uses mpsc, not broadcast)
         let interceptor_result =
             tokio::time::timeout(std::time::Duration::from_secs(5), interceptor_handle).await;
-
-        // Wait for listener tasks to finish with timeout
-        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), listener_set.join_all()).await;
 
         match interceptor_result {
             Ok(Ok(())) => {}

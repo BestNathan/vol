@@ -21,7 +21,7 @@ pub fn spawn_listener_tasks(
 ) -> tokio::task::JoinSet<()> {
     let mut join_set = tokio::task::JoinSet::new();
     for plugin in plugins {
-        let mut event_rx = ctx.event_tx.subscribe();
+        let mut event_rx = ctx.event_tx.as_ref().unwrap().subscribe();
         let plugin = plugin.clone();
         let ctx = ctx.clone();
         join_set.spawn(async move {

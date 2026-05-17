@@ -56,7 +56,7 @@ pub struct RunContext {
     pub config: AgentConfig,
 
     // Event bus
-    pub event_tx: Arc<broadcast::Sender<TracedEvent<AgentStreamEvent>>>,
+    pub event_tx: Option<Arc<broadcast::Sender<TracedEvent<AgentStreamEvent>>>>,
     /// Plugin event channel sender.
     ///
     /// # Important: Receiver is intentionally Dropped in `new()`
@@ -136,7 +136,7 @@ impl RunContext {
             session: config.session.clone(),
             tools: config.tools.clone(),
             config,
-            event_tx,
+            event_tx: Some(event_tx),
             plugin_event_tx,
             reasoning_chain: Arc::new(RwLock::new(Vec::new())),
             tool_call_records: Arc::new(RwLock::new(Vec::new())),
@@ -276,7 +276,7 @@ impl RunContext {
     /// Used by plugins to emit custom events.
     pub async fn emit(&self, event: AgentStreamEvent) {
         let traced_event = TracedEvent::without_span(event);
-        let _ = self.event_tx.send(traced_event);
+        let _ = self.event_tx.as_ref().unwrap().send(traced_event);
     }
 
     /// Intercept an event for plugin processing (blocking, returns decision).
