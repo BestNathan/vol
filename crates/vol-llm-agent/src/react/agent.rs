@@ -195,21 +195,13 @@ impl ReActAgent {
         // === Phase 2: Context is built per-iteration via get_context ===
 
         // === Phase 2.6: Spawn listener and interceptor tasks ===
-        use super::plugin_stream::{run_interceptor_loop, spawn_listener_task};
+        use super::plugin_stream::{run_interceptor_loop, spawn_listener_tasks};
 
-        // Spawn listener task - subscribes to event broadcast channel
-        // Handle stored for graceful shutdown wait
-        // Note: We create plugin_ctx and subscribe here to avoid cloning RunContext
-        // (which would clone senders and prevent channel close)
-        let listener_event_rx = run_ctx.event_tx.subscribe();
-
-        // Build plugin list from registry only
+        // Spawn listener tasks - one per plugin, subscribing to event broadcast
         let plugins = self.config.plugin_registry.plugins().to_vec();
-
-        let listener_handle = spawn_listener_task(
+        let listener_set = spawn_listener_tasks(
             plugins,
             run_ctx.clone(),
-            listener_event_rx,
         );
 
         // Spawn interceptor loop task - receives from plugin_rx channel
@@ -527,9 +519,8 @@ impl ReActAgent {
         let interceptor_result =
             tokio::time::timeout(std::time::Duration::from_secs(5), interceptor_handle).await;
 
-        // Wait for listener to finish with timeout
-        let listener_result =
-            tokio::time::timeout(std::time::Duration::from_secs(5), listener_handle).await;
+        // Wait for listener tasks to finish with timeout
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), listener_set.join_all()).await;
 
         match interceptor_result {
             Ok(Ok(())) => {}
@@ -539,18 +530,6 @@ impl ReActAgent {
             Err(_timeout) => {
                 tracing::warn!(
                     "Interceptor task timeout after 5s - task may be hanging, proceeding anyway"
-                );
-            }
-        }
-
-        match listener_result {
-            Ok(Ok(())) => {}
-            Ok(Err(join_err)) => {
-                tracing::warn!(%join_err, "Listener task panicked");
-            }
-            Err(_timeout) => {
-                tracing::warn!(
-                    "Listener task timeout after 5s - task may be hanging, proceeding anyway"
                 );
             }
         }

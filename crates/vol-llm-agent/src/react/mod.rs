@@ -46,7 +46,7 @@ pub use hitl::{
 };
 pub use plugin::{AgentPlugin, PluginDecision, PluginId, PluginRegistry};
 pub use plugin_stream::{
-    create_shortcircuit_stream, create_skip_stream, run_interceptor_loop, spawn_listener_task,
+    create_shortcircuit_stream, create_skip_stream, run_interceptor_loop, spawn_listener_tasks,
 };
 pub use hitl::{ApprovalRequest, ApprovalResponse};
 pub use response::{AgentError, AgentResponse};
