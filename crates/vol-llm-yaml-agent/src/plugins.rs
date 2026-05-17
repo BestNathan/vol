@@ -5,7 +5,7 @@ use vol_llm_agent::react::PluginRegistry;
 
 /// Register a plugin by name.
 ///
-/// Supported names: logger (writes JSONL to store_dir/logs/), loki (OTel tracing)
+/// Supported names: logger (writes JSONL to store_dir/logs/), loki (OTel tracing), metrics (OTel metrics)
 pub fn register_plugin_by_name(
     registry: &mut PluginRegistry,
     name: &str,
@@ -20,6 +20,10 @@ pub fn register_plugin_by_name(
         }
         "loki" => {
             let plugin = vol_llm_observability::LokiPlugin::new();
+            registry.register(plugin);
+        }
+        "metrics" => {
+            let plugin = vol_llm_observability::MetricsPlugin::new();
             registry.register(plugin);
         }
         _ => return Err(YamlAgentError::UnknownPlugin(name.to_string())),
