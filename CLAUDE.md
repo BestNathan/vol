@@ -67,3 +67,27 @@ lark-cli docs +create \
     --wiki-space "{wiki space id}" \
     --as user
 ```
+
+## Feishu Docs
+
+- When `superpowers` skill writing a doc into `docs/superpowers/*`, you **MUST** upload it to feishu docs with `lark-cli`
+- `docs/superpowers/plans/*`: wiki node id is **TEkkw1W6niuBxQkcvswchOo5nhb**
+- `docs/superpowers/requirement/*`: wiki node id is **PPDZw7LFqiFjMTkAXFocFoO6nce**
+- `docs/superpowers/specs/*`: wiki node id is **Og7twpiPoi0Vbjk2EzvcqX92nsb**
+
+
+```sh
+# lark-cli to upload docs to feishu
+lark-cli docs +create \
+    --title "{title}" \
+    --markdown "$(cat path/to/markdown.md)" \
+    --wiki-node "{wiki node id}"
+
+# lark-cli to update docs to feishu, the token is the last part of url
+# e.g: https://my.feishu.cn/wiki/PPDZw7LFqiFjMTkAXFocFoO6nce => token=**PPDZw7LFqiFjMTkAXFocFoO6nce**
+lark-cli docs +update \
+    --new-title "{title}" \
+    --mode overwrite \
+    --markdown "$(cat path/to/markdown.md)" \
+    --doc "{doc url or token}"
+```
