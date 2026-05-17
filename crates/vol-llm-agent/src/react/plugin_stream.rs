@@ -85,39 +85,6 @@ pub async fn run_interceptor_loop(
     }
 }
 
-/// Configuration snapshot for audit/logging
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AgentConfigSnapshot {
-    pub max_iterations: u32,
-    pub max_history_messages: usize,
-    pub context_builder_summary: String,
-}
-
-impl From<&super::AgentConfig> for AgentConfigSnapshot {
-    fn from(config: &super::AgentConfig) -> Self {
-        let contributor_names: Vec<&str> = config.context_builder.contributor_names();
-        Self {
-            max_iterations: config.def.as_ref()
-                .and_then(|d| d.max_iterations)
-                .unwrap_or(5),
-            max_history_messages: config.def.as_ref()
-                .and_then(|d| d.max_history_messages)
-                .unwrap_or(20),
-            context_builder_summary: contributor_names.join(", "),
-        }
-    }
-}
-
-impl Default for AgentConfigSnapshot {
-    fn default() -> Self {
-        Self {
-            max_iterations: 5,
-            max_history_messages: 20,
-            context_builder_summary: String::new(),
-        }
-    }
-}
-
 /// Create a stream that immediately returns a response (short-circuit)
 pub async fn create_shortcircuit_stream(
     _response: AgentResponse,
