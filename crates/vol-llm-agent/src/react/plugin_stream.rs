@@ -54,7 +54,7 @@ pub fn spawn_listener_task(
 pub async fn run_interceptor_loop(
     mut plugin_rx: mpsc::Receiver<PluginRequest>,
     plugins: Vec<Arc<dyn AgentPlugin>>,
-    event_tx: broadcast::Sender<TracedEvent<AgentStreamEvent>>,
+    event_tx: Arc<broadcast::Sender<TracedEvent<AgentStreamEvent>>>,
     ctx: RunContext,
 ) {
     while let Some(msg) = plugin_rx.recv().await {

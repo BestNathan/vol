@@ -56,7 +56,7 @@ pub struct RunContext {
     pub config: AgentConfig,
 
     // Event bus
-    pub event_tx: broadcast::Sender<TracedEvent<AgentStreamEvent>>,
+    pub event_tx: Arc<broadcast::Sender<TracedEvent<AgentStreamEvent>>>,
     /// Plugin event channel sender.
     ///
     /// # Important: Receiver is intentionally Dropped in `new()`
@@ -91,13 +91,11 @@ pub struct RunContext {
     ///
     /// ## Broadcast Channel Close Sequence
     ///
-    /// The `event_tx` broadcast channel is used as a shutdown signal:
-    /// 1. When `agent_task` completes, it drops its `RunContext` (one sender dropped)
-    /// 2. `interceptor_handle` then exits (plugin_rx closed) and drops its `RunContext`
-    /// 3. `listener_handle` sees `RecvError` (all senders dropped) and exits
-    ///
-    /// This ensures listener tasks have time to complete their `plugin.listen()` calls
-    /// before the agent run is considered complete.
+    /// The `event_tx` is wrapped in `Arc`, so cloning `RunContext` only copies the
+    /// Arc pointer — it does NOT create new broadcast senders. The sender count
+    /// is exactly 1, held by the Arc in the original `RunContext`.
+    /// When this Arc is dropped (via `std::mem::take` in agent.rs), the broadcast
+    /// closes and all listeners see `RecvError`, exiting cleanly.
     pub plugin_event_tx: mpsc::Sender<PluginRequest>,
 
 
@@ -122,7 +120,8 @@ impl RunContext {
         user_input: String,
         config: AgentConfig,
     ) -> (Self, mpsc::Receiver<PluginRequest>) {
-        let (event_tx, _) = broadcast::channel(1024);
+        let (event_tx, _) = broadcast::channel::<TracedEvent<AgentStreamEvent>>(1024);
+        let event_tx = Arc::new(event_tx);
         let (plugin_event_tx, plugin_event_rx) = mpsc::channel(100);
 
         let ctx = Self {

@@ -212,6 +212,7 @@ async fn test_run_interceptor_loop_continue_decision() {
 
     let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
     let (event_tx, _) = tokio::sync::broadcast::channel(10);
+    let event_tx = Arc::new(event_tx);
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
@@ -252,6 +253,7 @@ async fn test_run_interceptor_loop_skip_decision() {
 
     let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
     let (event_tx, _) = tokio::sync::broadcast::channel(10);
+    let event_tx = Arc::new(event_tx);
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
@@ -279,6 +281,7 @@ async fn test_run_interceptor_loop_skip_decision() {
 async fn test_run_interceptor_loop_emit_request() {
     let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
     let (event_tx, mut event_rx) = tokio::sync::broadcast::channel(10);
+    let event_tx = Arc::new(event_tx);
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
