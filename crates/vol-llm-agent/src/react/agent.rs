@@ -209,7 +209,7 @@ impl ReActAgent {
         let interceptor_event_tx = run_ctx.event_tx.as_ref().unwrap().clone();
         let interceptor_plugins = config.plugin_registry.plugins().to_vec();
         let interceptor_ctx = run_ctx.clone();
-        let interceptor_handle = tokio::spawn(async move {
+        let mut interceptor_handle = tokio::spawn(async move {
             run_interceptor_loop(
                 plugin_rx,
                 interceptor_plugins,
@@ -521,30 +521,33 @@ impl ReActAgent {
             }
         };
 
-        // Drop the original event_tx sender to close the broadcast channel.
-        // Listener tasks (which only have Arc clones) will see RecvError and exit.
+        // Abort interceptor so it drops its Arc clones of event_tx.
+        let interceptor_result = tokio::select! {
+            result = &mut interceptor_handle => Ok(result),
+            _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => Err("timeout"),
+        };
+        match interceptor_result {
+            Ok(Ok(())) => {}
+            Ok(Err(join_err)) => {
+                tracing::warn!(%join_err, "Interceptor task panicked");
+            }
+            Err(_) => {
+                tracing::warn!(
+                    "Interceptor task timeout after 5s - aborting to release Arc clones"
+                );
+                interceptor_handle.abort();
+            }
+        }
+
+        // Drop the local event_tx clone to close the broadcast channel.
+        // With the interceptor aborted and agent_task completed, this is the
+        // last remaining sender. Once dropped, all listener tasks see RecvError.
         shutdown_event_tx.take();
 
         // Await all listener tasks — they drain buffers and exit naturally
         while let Some(result) = listener_set.join_next().await {
             if let Err(e) = result {
                 tracing::warn!(%e, "Listener task panicked");
-            }
-        }
-
-        // Wait for interceptor with short timeout (it uses mpsc, not broadcast)
-        let interceptor_result =
-            tokio::time::timeout(std::time::Duration::from_secs(5), interceptor_handle).await;
-
-        match interceptor_result {
-            Ok(Ok(())) => {}
-            Ok(Err(join_err)) => {
-                tracing::warn!(%join_err, "Interceptor task panicked");
-            }
-            Err(_timeout) => {
-                tracing::warn!(
-                    "Interceptor task timeout after 5s - task may be hanging, proceeding anyway"
-                );
             }
         }
 

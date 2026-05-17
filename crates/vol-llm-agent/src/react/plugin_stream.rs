@@ -23,7 +23,10 @@ pub fn spawn_listener_tasks(
     for plugin in plugins {
         let mut event_rx = ctx.event_tx.as_ref().unwrap().subscribe();
         let plugin = plugin.clone();
-        let ctx = ctx.clone();
+        // Clone ctx for plugin.listen(), but drop the event_tx Arc immediately
+        // so this task doesn't keep the broadcast sender alive.
+        let mut ctx = ctx.clone();
+        ctx.event_tx.take();
         join_set.spawn(async move {
             while let Ok(traced_event) = event_rx.recv().await {
                 let event = traced_event.value();
