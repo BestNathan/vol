@@ -3,6 +3,7 @@
 use dioxus::prelude::*;
 use std::sync::Arc;
 use std::time::Duration;
+use gloo_timers::future::TimeoutFuture;
 
 use crate::state::{ActiveTab, ApprovalUiState, AgentsState, ConversationState, EventBus, GlobalState, SessionsState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
 use crate::state::McpDialogState;
@@ -155,20 +156,31 @@ pub fn App() -> Element {
             bus_conn.publish(&event);
             match cs {
                 crate::web::client::ConnectionState::Connected => {
-                    global_conn.write_unchecked().ws_connected = true;
-                    global_conn.write_unchecked().ws_last_error = None;
+                    let mut g = global_conn.write_unchecked();
+                    g.ws_connected = true;
+                    g.ws_last_error = None;
                     // Reset running state on reconnect — in-flight run's events are lost.
-                    global_conn.write_unchecked().is_running = false;
-                    global_conn.write_unchecked().run_start = None;
+                    g.is_running = false;
+                    g.run_start = None;
+                    // Clear reconnect state
+                    g.reconnecting = false;
+                    g.reconnect_attempts = 0;
+                    g.reconnect_maxed = false;
                 }
                 crate::web::client::ConnectionState::Connecting => {
                     global_conn.write_unchecked().ws_connected = false;
                 }
                 crate::web::client::ConnectionState::Disconnected => {
-                    global_conn.write_unchecked().ws_connected = false;
-                    global_conn.write_unchecked().ws_last_error = Some("Disconnected".to_string());
+                    let mut g = global_conn.write_unchecked();
+                    g.ws_connected = false;
+                    g.ws_last_error = Some("Disconnected".to_string());
                     // Reset running state so input is re-enabled after disconnect.
-                    global_conn.write_unchecked().is_running = false;
+                    g.is_running = false;
+                    // Start reconnect loop if not already reconnecting and not maxed
+                    if !g.reconnecting && !g.reconnect_maxed {
+                        g.reconnecting = true;
+                        g.reconnect_attempts = 0;
+                    }
                 }
             }
         });
@@ -294,6 +306,193 @@ pub fn App() -> Element {
                     bus_ev.publish(&UiEvent::WsDisconnected { reason: Some("Event stream closed".to_string()) });
                     break;
                 }
+            }
+        }
+    });
+
+    // Reconnect loop: drives client.reconnect() with exponential backoff
+    let reconn_client = client.clone();
+    let reconn_global = global_signal.clone();
+    let reconn_bus = event_bus.with(|eb| eb.clone());
+    wasm_bindgen_futures::spawn_local(async move {
+        const MAX_ATTEMPTS: u32 = 10;
+        const MIN_DELAY: u64 = 3;
+        const MAX_DELAY: u64 = 30;
+
+        loop {
+            // Wait until reconnecting flag is set
+            loop {
+                {
+                    let g = reconn_global.read();
+                    if g.reconnecting && !g.reconnect_maxed {
+                        break;
+                    }
+                    // If connected (e.g., initial connect), reset
+                    if g.ws_connected {
+                        let mut gw = reconn_global.write_unchecked();
+                        gw.reconnect_attempts = 0;
+                        gw.reconnect_maxed = false;
+                    }
+                }
+                TimeoutFuture::new(200).await;
+            }
+
+            for attempt in 1..=MAX_ATTEMPTS {
+                let delay = (MIN_DELAY * 2u64.pow(attempt - 1)).min(MAX_DELAY);
+
+                // Update state with countdown
+                {
+                    let mut g = reconn_global.write_unchecked();
+                    g.reconnect_attempts = attempt;
+                    g.reconnect_delay_secs = delay as u32;
+                }
+                reconn_bus.publish(&UiEvent::WsReconnecting {
+                    attempt,
+                    delay_secs: delay as u32,
+                });
+
+                // Countdown timer — update delay_secs each second
+                for remaining in (1..=delay).rev() {
+                    {
+                        let mut g = reconn_global.write_unchecked();
+                        g.reconnect_delay_secs = remaining as u32;
+                    }
+                    TimeoutFuture::new(1000).await;
+
+                    // Check if connection was restored externally
+                    if reconn_global.read().ws_connected {
+                        return;
+                    }
+                    // Check if reconnect was cancelled
+                    if !reconn_global.read().reconnecting {
+                        return;
+                    }
+                }
+
+                // Attempt reconnection
+                match reconn_client.reconnect() {
+                    Ok(()) => {
+                        log::info!("Reconnect attempt {attempt} initiated");
+                    }
+                    Err(e) => {
+                        log::warn!("Reconnect attempt {attempt} failed: {e}");
+                    }
+                }
+
+                // Wait up to 5 seconds for the connection to establish
+                for _ in 0..50 {
+                    TimeoutFuture::new(100).await;
+                    if reconn_global.read().ws_connected {
+                        return;
+                    }
+                }
+            }
+
+            // All attempts exhausted
+            {
+                let mut g = reconn_global.write_unchecked();
+                g.reconnecting = false;
+                g.reconnect_maxed = true;
+                g.ws_last_error = Some("Connection lost. Please refresh.".to_string());
+            }
+            reconn_bus.publish(&UiEvent::WsReconnectFailed);
+
+            // Exit the loop — no more reconnect attempts
+            break;
+        }
+    });
+
+    // Session restoration on reconnect success
+    let restore_client = client.clone();
+    let restore_global = global_signal.clone();
+    let restore_conv = conversation_signal.clone();
+    wasm_bindgen_futures::spawn_local(async move {
+        loop {
+            // Wait for reconnection to succeed
+            loop {
+                {
+                    let g = restore_global.read();
+                    // Was reconnecting (attempts > 0), now connected
+                    if g.ws_connected && g.reconnect_attempts > 0 {
+                        break;
+                    }
+                }
+                TimeoutFuture::new(200).await;
+            }
+
+            log::info!("Reconnected — restoring most recent session");
+
+            // Fetch session list
+            let (tx, rx) = futures_channel::oneshot::channel();
+            restore_client.session_list(move |result| {
+                let _ = tx.send(result);
+            });
+            let sessions = match rx.await {
+                Ok(Ok(s)) => s,
+                _ => {
+                    log::warn!("Failed to fetch session list after reconnect");
+                    restore_global.write_unchecked().reconnect_attempts = 0;
+                    continue;
+                }
+            };
+
+            if sessions.is_empty() {
+                log::info!("No persisted sessions — nothing to restore");
+                restore_global.write_unchecked().reconnect_attempts = 0;
+                continue;
+            }
+
+            // Pick the most recent session (already sorted by time from backend)
+            let latest_id = sessions[0].id.clone();
+            log::info!("Restoring session: {latest_id}");
+
+            // Resume the session
+            let (tx2, rx2) = futures_channel::oneshot::channel();
+            restore_client.session_resume(&latest_id, move |result| {
+                let _ = tx2.send(result);
+            });
+            match rx2.await {
+                Ok(Ok(_)) => {
+                    log::info!("Session resumed");
+                }
+                _ => {
+                    log::warn!("Failed to resume session");
+                    restore_global.write_unchecked().reconnect_attempts = 0;
+                    continue;
+                }
+            }
+
+            // Fetch entries and rebuild conversation
+            let (tx3, rx3) = futures_channel::oneshot::channel();
+            restore_client.session_entries(&latest_id, move |result| {
+                let _ = tx3.send(result);
+            });
+            match rx3.await {
+                Ok(Ok(entries)) => {
+                    let conv_entries = crate::web::components::sessions_panel::session_entries_to_conversation(entries);
+                    {
+                        let mut conv = restore_conv.write_unchecked();
+                        conv.entries = conv_entries;
+                        if conv.auto_scroll {
+                            conv.conversation_scroll = 0;
+                        }
+                    }
+                    log::info!("Conversation restored from session");
+                }
+                _ => {
+                    log::warn!("Failed to fetch session entries");
+                }
+            }
+
+            // Reset reconnect state
+            restore_global.write_unchecked().reconnect_attempts = 0;
+
+            // Wait for next disconnect
+            loop {
+                if !restore_global.read().ws_connected {
+                    break;
+                }
+                TimeoutFuture::new(200).await;
             }
         }
     });

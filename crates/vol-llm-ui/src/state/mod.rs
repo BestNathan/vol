@@ -61,10 +61,13 @@ pub enum UiEvent {
     ApprovalRequest { tool_name: String, reason: String, arguments: String },
     ApprovalResolved { approved: bool },
 
-    // WebSocket connection state
+    // Reconnection state
     WsConnected,
     WsConnecting,
     WsDisconnected { reason: Option<String> },
+    WsReconnecting { attempt: u32, delay_secs: u32 },
+    WsReconnectFailed,
+    WsReconnected,
 }
 
 /// Coarse-grained event type for routing.
@@ -78,6 +81,7 @@ pub enum UiEventKind {
     ApprovalRequest, ApprovalResolved,
     IterationComplete, IterationContinued, MaxIterationsReached,
     WsConnected, WsConnecting, WsDisconnected,
+    WsReconnecting, WsReconnectFailed, WsReconnected,
 }
 
 impl UiEvent {
@@ -109,6 +113,9 @@ impl UiEvent {
             UiEvent::WsConnected => UiEventKind::WsConnected,
             UiEvent::WsConnecting => UiEventKind::WsConnecting,
             UiEvent::WsDisconnected { .. } => UiEventKind::WsDisconnected,
+            UiEvent::WsReconnecting { .. } => UiEventKind::WsReconnecting,
+            UiEvent::WsReconnectFailed => UiEventKind::WsReconnectFailed,
+            UiEvent::WsReconnected => UiEventKind::WsReconnected,
         }
     }
 }
@@ -409,6 +416,10 @@ pub struct GlobalState {
     pub ws_url: String,
     pub ws_connected: bool,
     pub ws_last_error: Option<String>,
+    pub reconnecting: bool,
+    pub reconnect_attempts: u32,
+    pub reconnect_delay_secs: u32,
+    pub reconnect_maxed: bool,
     pub unsafe_mode: bool,
     pub active_tab: ActiveTab,
 }
@@ -420,7 +431,10 @@ impl GlobalState {
             session_id: "web-session".into(), run_count: 0, iteration: 0,
             tool_call_count: 0, run_start: None, run_elapsed: std::time::Duration::ZERO,
             is_running: false, exiting: false, ws_url, ws_connected: false,
-            ws_last_error: None, unsafe_mode: false, active_tab: ActiveTab::Conversation,
+            ws_last_error: None,
+            reconnecting: false, reconnect_attempts: 0, reconnect_delay_secs: 0,
+            reconnect_maxed: false,
+            unsafe_mode: false, active_tab: ActiveTab::Conversation,
         }
     }
 }
@@ -976,7 +990,8 @@ impl UiState {
             UiEvent::ApprovalResolved { approved: _ } => {
                 self.approval_state.clear();
             }
-            UiEvent::WsConnected | UiEvent::WsConnecting | UiEvent::WsDisconnected { .. } => {
+            UiEvent::WsConnected | UiEvent::WsConnecting | UiEvent::WsDisconnected { .. }
+            | UiEvent::WsReconnecting { .. } | UiEvent::WsReconnectFailed | UiEvent::WsReconnected => {
                 // Connection state handled separately via shared GlobalState signal
             }
         }

@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [event-bus, pub-sub, state-management, dioxus, web, frontend]
 created: 2026-05-11
-updated: 2026-05-14 (connection-state-dashboard)
-source_count: 2
+updated: 2026-05-17 (frontend-auto-reconnect)
+source_count: 3
 ---
 
 # EventBus Pattern
@@ -39,6 +39,7 @@ pub enum UiEventKind {
     ApprovalRequest, ApprovalResolved,
     IterationComplete, IterationContinued, MaxIterationsReached,
     WsConnected, WsConnecting, WsDisconnected,
+    WsReconnecting { attempt: u32, delay_secs: u32 }, WsReconnectFailed, WsReconnected,
 }
 
 #[derive(Clone)]
@@ -116,7 +117,9 @@ Benefits:
 
 ## Connection Status Events
 
-The `UiEventKind` enum includes `WsConnected`, `WsConnecting`, and `WsDisconnected` variants for tracking WebSocket connection state. [[remote-connection-impl]] publishes these events when the connection state changes. Components like `ConnectionStatePanel` subscribe to these kinds to display real-time connection status indicators. See [[connection-state-dashboard]] for the full pattern.
+The `UiEventKind` enum includes `WsConnected`, `WsConnecting`, `WsDisconnected` variants for tracking WebSocket connection state. [[remote-connection-impl]] publishes these events when the connection state changes. Components like `ConnectionStatePanel` subscribe to these kinds to display real-time connection status indicators. See [[connection-state-dashboard]] for the full pattern.
+
+Extended with `WsReconnecting { attempt, delay_secs }`, `WsReconnectFailed`, and `WsReconnected` variants for the auto-reconnect lifecycle. The reconnect watcher task publishes `WsReconnecting` every second with a countdown timer, and `WsReconnectFailed` when all 10 attempts are exhausted. See [[frontend-auto-reconnect]] for the full pattern.
 
 ## Related Concepts
 - [[dioxus-signal-pattern]]: Per-component signals replacing centralized Signal<UiState>

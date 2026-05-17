@@ -15,7 +15,7 @@ fn truncate_for_log(s: &str, max_len: usize) -> String {
 }
 
 /// Convert raw session entries to ConversationEntry for display.
-fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<ConversationEntry> {
+pub(crate) fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<ConversationEntry> {
     entries.into_iter().filter_map(|e| {
         let entry_type = e.entry_type.clone();
         let data_debug = serde_json::to_string(&e.data).unwrap_or_default();

@@ -45,70 +45,76 @@ pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
 
     rsx! {
         div { class: "fixed inset-0 bg-black/50 flex items-center justify-center z-50",
-            div { class: "bg-[#1a1a2e] border border-[#3a3a55] rounded-lg p-4 w-[60%] max-w-[90vw] max-h-[85vh] flex flex-col",
-                div { class: "flex items-center justify-between mb-3",
-                    div { class: "text-[14px] font-semibold text-[#e0e0e0]", "{server} / {tool_name}" }
+            div {
+                class: "w-[600px] h-[70vh] flex flex-col overflow-hidden bg-[#1a1a2e] border border-[#3a3a55] rounded-lg",
+                onclick: move |evt: Event<MouseData>| { evt.stop_propagation(); },
+                // Header
+                div { class: "flex items-center justify-between flex-shrink-0 px-4 pt-3 pb-2 border-b border-[#3a3a55]",
+                    div { class: "text-[14px] font-semibold text-[#e0e0e0] truncate min-w-0", "{server} / {tool_name}" }
                     button {
-                        class: "text-[#888] hover:text-[#e0e0e0] text-[18px]",
+                        class: "text-[#888] hover:text-[#e0e0e0] text-[18px] flex-shrink-0 ml-2",
                         onclick: move |_| { signal.write_unchecked().tool_call_dialog = None; },
                         "x"
                     }
                 }
-                if let Some(ref schema) = input_schema {
-                    SchemaForm { schema: schema.clone(), value: form_value }
-                } else {
-                    div { class: "text-[#888] text-[12px]", "No parameters required" }
-                }
-                if !loading {
-                    button {
-                        class: "mt-2 px-3 py-1 bg-[#4080ff] text-white rounded text-[13px] cursor-pointer hover:bg-[#5090ff]",
-                        onclick: move |_| {
-                            let s = signal.clone();
-                            let client = rpc_client.clone();
-                            let (srv, tool) = {
-                                let r = s.read();
-                                let d = r.tool_call_dialog.as_ref().unwrap();
-                                (d.server.clone(), d.tool_name.clone())
-                            };
-                            let form_json = serde_json::to_string(&*form_value.read()).unwrap_or("{}".to_string());
-                            let parsed: serde_json::Value = match serde_json::from_str(&form_json) {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    s.write_unchecked().tool_call_dialog.as_mut().unwrap().error = Some(format!("Invalid form data: {e}"));
-                                    return;
-                                }
-                            };
-                            let sig = s;
-                            sig.write_unchecked().tool_call_dialog.as_mut().unwrap().loading = true;
-                            sig.write_unchecked().tool_call_dialog.as_mut().unwrap().error = None;
-                            sig.write_unchecked().tool_call_dialog.as_mut().unwrap().result = None;
-                            client.mcp_call_tool(&srv, &tool, parsed, move |r| {
-                                match r {
-                                    Ok(content) => {
-                                        sig.write_unchecked().tool_call_dialog.as_mut().unwrap().result = Some(content);
-                                    }
+                // Scrollable content area
+                div { class: "flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-2",
+                    if let Some(ref schema) = input_schema {
+                        SchemaForm { schema: schema.clone(), value: form_value }
+                    } else {
+                        div { class: "text-[#888] text-[12px]", "No parameters required" }
+                    }
+                    if !loading {
+                        button {
+                            class: "mt-2 px-3 py-1 bg-[#4080ff] text-white rounded text-[13px] cursor-pointer hover:bg-[#5090ff]",
+                            onclick: move |_| {
+                                let s = signal.clone();
+                                let client = rpc_client.clone();
+                                let (srv, tool) = {
+                                    let r = s.read();
+                                    let d = r.tool_call_dialog.as_ref().unwrap();
+                                    (d.server.clone(), d.tool_name.clone())
+                                };
+                                let form_json = serde_json::to_string(&*form_value.read()).unwrap_or("{}".to_string());
+                                let parsed: serde_json::Value = match serde_json::from_str(&form_json) {
+                                    Ok(v) => v,
                                     Err(e) => {
-                                        sig.write_unchecked().tool_call_dialog.as_mut().unwrap().error = Some(e);
+                                        s.write_unchecked().tool_call_dialog.as_mut().unwrap().error = Some(format!("Invalid form data: {e}"));
+                                        return;
                                     }
-                                }
-                                sig.write_unchecked().tool_call_dialog.as_mut().unwrap().loading = false;
-                            });
-                        },
-                        "Call"
+                                };
+                                let sig = s;
+                                sig.write_unchecked().tool_call_dialog.as_mut().unwrap().loading = true;
+                                sig.write_unchecked().tool_call_dialog.as_mut().unwrap().error = None;
+                                sig.write_unchecked().tool_call_dialog.as_mut().unwrap().result = None;
+                                client.mcp_call_tool(&srv, &tool, parsed, move |r| {
+                                    match r {
+                                        Ok(content) => {
+                                            sig.write_unchecked().tool_call_dialog.as_mut().unwrap().result = Some(content);
+                                        }
+                                        Err(e) => {
+                                            sig.write_unchecked().tool_call_dialog.as_mut().unwrap().error = Some(e);
+                                        }
+                                    }
+                                    sig.write_unchecked().tool_call_dialog.as_mut().unwrap().loading = false;
+                                });
+                            },
+                            "Call"
+                        }
+                    } else {
+                        div { class: "mt-2 text-[#888] text-[13px]", "Calling..." }
                     }
-                } else {
-                    div { class: "mt-2 text-[#888] text-[13px]", "Calling..." }
-                }
-                if let Some(ref result) = result {
-                    div { class: "mt-3 bg-[#1a2a1a] border border-[#40c040] rounded p-2 max-h-48 overflow-y-auto",
-                        div { class: "text-[11px] text-[#40c040] font-semibold mb-1", "Result" }
-                        pre { class: "text-[12px] text-[#e0e0e0] font-mono whitespace-pre-wrap break-all", "{result}" }
+                    if let Some(ref result) = result {
+                        div { class: "bg-[#1a2a1a] border border-[#40c040] rounded p-2",
+                            div { class: "text-[11px] text-[#40c040] font-semibold mb-1", "Result" }
+                            pre { class: "text-[12px] text-[#e0e0e0] font-mono whitespace-pre-wrap break-words overflow-x-auto", "{result}" }
+                        }
                     }
-                }
-                if let Some(ref error) = error {
-                    div { class: "mt-3 bg-[#2a1a1a] border border-[#c04040] rounded p-2",
-                        div { class: "text-[11px] text-[#c04040] font-semibold mb-1", "Error" }
-                        div { class: "text-[12px] text-[#e0e0e0]", "{error}" }
+                    if let Some(ref error) = error {
+                        div { class: "bg-[#2a1a1a] border border-[#c04040] rounded p-2",
+                            div { class: "text-[11px] text-[#c04040] font-semibold mb-1", "Error" }
+                            div { class: "text-[12px] text-[#e0e0e0] break-words", "{error}" }
+                        }
                     }
                 }
             }

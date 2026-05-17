@@ -95,7 +95,7 @@ type ResponseCallback = Box<dyn FnOnce(serde_json::Value)>;
 /// so they can be borrowed independently without conflicting with the WS borrow
 /// held by the active message handler.
 struct ClientInner {
-    ws: web_sys::WebSocket,
+    ws: RefCell<web_sys::WebSocket>,
     url: String,
     state: Cell<ConnectionState>,
     event_tx: mpsc::UnboundedSender<AgentEvent>,
@@ -126,7 +126,7 @@ impl JsonRpcClient {
         let (event_tx, event_rx) = mpsc::unbounded();
 
         let inner = Rc::new(ClientInner {
-            ws,
+            ws: RefCell::new(ws),
             url: url.to_string(),
             state: Cell::new(ConnectionState::Connecting),
             event_tx,
@@ -148,7 +148,7 @@ impl JsonRpcClient {
                 Self::handle_message(&inner_clone, &data);
             }
         }) as Box<dyn FnMut(_)>);
-        inner.ws.set_onmessage(Some(on_msg.as_ref().unchecked_ref()));
+        inner.ws.borrow().set_onmessage(Some(on_msg.as_ref().unchecked_ref()));
         on_msg.forget();
 
         // Set up close handler
@@ -160,7 +160,7 @@ impl JsonRpcClient {
                 inner_clone.on_state_change.set(Some(cb));
             }
         }) as Box<dyn FnMut(_)>);
-        inner.ws.set_onclose(Some(on_close.as_ref().unchecked_ref()));
+        inner.ws.borrow().set_onclose(Some(on_close.as_ref().unchecked_ref()));
         on_close.forget();
 
         // Set up open handler — auto-subscribe to agent events
@@ -175,7 +175,7 @@ impl JsonRpcClient {
             // Auto-subscribe to agent events on connect
             let _ = client_for_open.subscribe();
         }) as Box<dyn FnMut(_)>);
-        inner.ws.set_onopen(Some(on_open.as_ref().unchecked_ref()));
+        inner.ws.borrow().set_onopen(Some(on_open.as_ref().unchecked_ref()));
         on_open.forget();
 
         client
@@ -190,7 +190,7 @@ impl JsonRpcClient {
 
     /// Send a JSON-RPC message without holding any borrows across the send.
     fn send_raw(&self, msg: &str) -> Result<(), String> {
-        self.inner.ws.send_with_str(msg).map_err(|e| format!("send failed: {e:?}"))
+        self.inner.ws.borrow().send_with_str(msg).map_err(|e| format!("send failed: {e:?}"))
     }
 
     /// Set a callback for connection state changes.
@@ -241,6 +241,56 @@ impl JsonRpcClient {
         });
         let json = serde_json::to_string(&msg).map_err(|e| e.to_string())?;
         self.send_raw(&json)?;
+        Ok(())
+    }
+
+    /// Reconnect by creating a new WebSocket and swapping the old one.
+    /// Returns Ok(()) immediately — success is signaled via on_state_change callback.
+    pub fn reconnect(&self) -> Result<(), String> {
+        let new_ws = web_sys::WebSocket::new(&self.inner.url)
+            .map_err(|e| format!("failed to create WebSocket: {e:?}"))?;
+
+        let inner = self.inner.clone();
+        let client = self.clone();
+
+        let inner_msg = inner.clone();
+        let on_msg = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
+            if let Ok(data) = e.data().dyn_into::<js_sys::JsString>() {
+                let data = data.as_string().unwrap();
+                Self::handle_message(&inner_msg, &data);
+            }
+        }) as Box<dyn FnMut(_)>);
+        new_ws.set_onmessage(Some(on_msg.as_ref().unchecked_ref()));
+        on_msg.forget();
+
+        let inner_c = inner.clone();
+        let on_close = Closure::wrap(Box::new(move |_e: web_sys::CloseEvent| {
+            inner_c.state.set(ConnectionState::Disconnected);
+            if let Some(cb) = inner_c.on_state_change.take() {
+                cb(ConnectionState::Disconnected);
+                inner_c.on_state_change.set(Some(cb));
+            }
+        }) as Box<dyn FnMut(_)>);
+        new_ws.set_onclose(Some(on_close.as_ref().unchecked_ref()));
+        on_close.forget();
+
+        let inner_o = inner.clone();
+        let client_o = client.clone();
+        let on_open = Closure::wrap(Box::new(move |_e: web_sys::Event| {
+            inner_o.state.set(ConnectionState::Connected);
+            if let Some(cb) = inner_o.on_state_change.take() {
+                cb(ConnectionState::Connected);
+                inner_o.on_state_change.set(Some(cb));
+            }
+            let _ = client_o.subscribe();
+        }) as Box<dyn FnMut(_)>);
+        new_ws.set_onopen(Some(on_open.as_ref().unchecked_ref()));
+        on_open.forget();
+
+        // Swap WebSocket — old WS is dropped, new one takes over
+        *inner.ws.borrow_mut() = new_ws;
+        inner.state.set(ConnectionState::Connecting);
+
         Ok(())
     }
 

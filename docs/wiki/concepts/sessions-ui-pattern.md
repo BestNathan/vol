@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [dioxus, web, sessions, ui, component]
 created: 2026-05-11
-updated: 2026-05-11 (task-6-sessions-tab-wiring)
-source_count: 1
+updated: 2026-05-17 (frontend-auto-reconnect)
+source_count: 2
 ---
 
 # Sessions UI Pattern
@@ -58,3 +58,4 @@ SessionsPanel
 - [[vol-llm-ui-crate]]: Crate containing state types and components
 - [[session-as-ssot]]: Session as single source of truth for messages
 - [[tailwind-css-full-migration]]: CSS classes migrated to Tailwind v4 utilities
+- [[frontend-auto-reconnect]]: Session restoration reuses `session_entries_to_conversation()` for converting persisted entries to conversation display format

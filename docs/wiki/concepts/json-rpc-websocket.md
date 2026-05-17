@@ -3,15 +3,15 @@ type: concept
 category: framework
 tags: [json-rpc, websocket, remote, jsonrpsee]
 created: 2026-05-08
-updated: 2026-05-10 (lazy-load-dir-tree)
-source_count: 3
+updated: 2026-05-17 (frontend-auto-reconnect)
+source_count: 4
 ---
 
 # JSON-RPC WebSocket
 
 **Category:** Network protocol
 
-**Related:** [[vol-llm-ui-crate]], [[vol-llm-agent-channel-crate]], [[remote-agent-connection]], [[jsonrpc-server-handler]], [[task-5-jsonrpc-integration-tests]], [[lazy-load-dir-tree]], [[event-bus-pattern]]
+**Related:** [[vol-llm-ui-crate]], [[vol-llm-agent-channel-crate]], [[remote-agent-connection]], [[jsonrpc-server-handler]], [[task-5-jsonrpc-integration-tests]], [[lazy-load-dir-tree]], [[event-bus-pattern]], [[frontend-auto-reconnect]]
 
 ## Definition
 
@@ -46,6 +46,10 @@ The server side lives in `vol-llm-agent-channel::jsonrpc::handler` [[jsonrpc-ser
 - `JsonRpcHandler` holds `Mutex<JsonRpcContext>` for thread-safe concurrent access
 - 9 methods registered on `RpcModule::from_arc(handler)` via `jsonrpsee` 0.26 `ServerBuilder`
 - Example binary listens on `0.0.0.0:3001`
+
+## Web Frontend Auto-Reconnect
+
+The Dioxus web frontend `JsonRpcClient` gained auto-reconnect capability. The internal WebSocket is stored in a `RefCell<web_sys::WebSocket>` inside `ClientInner` (shared via `Rc`), enabling runtime swaps. The `reconnect()` method creates a new WebSocket with identical handlers, swaps it in place, and sets state to `Connecting`. A separate `spawn_local` task watches the `GlobalState.reconnecting` flag and drives an exponential backoff loop (3s → 6s → 12s, max 30s, 10 retries). On reconnect success, another task automatically restores the most recent persisted session via `session.list` → `session.resume` → `session.entries`. See [[frontend-auto-reconnect]] for the full pattern.
 
 ## Auto-Reconnect
 

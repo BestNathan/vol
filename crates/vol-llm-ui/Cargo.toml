@@ -46,7 +46,8 @@ futures = { version = "0.3", optional = true }
 dioxus = { version = "0.6", features = ["web", "asset"], optional = true }
 dioxus-signals = { version = "0.6", optional = true }
 log = { version = "0.4", optional = true }
-web-sys = { version = "0.3", features = ["WebSocket", "Window", "Location"], optional = true }
+gloo-timers = { version = "0.3", features = ["futures"], optional = true }
+web-sys = { version = "0.3", features = ["WebSocket", "Window", "Location", "CloseEvent", "Event"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 js-sys = { version = "0.3", optional = true }
@@ -76,4 +77,4 @@ tui = [
     "dep:vol-llm-agents", "dep:vol-llm-skill", "dep:vol-llm-observability",
     "dep:vol-session", "dep:jsonrpsee", "dep:dioxus-primitives",
 ]
-web = ["dep:dioxus", "dep:dioxus-signals", "dep:log", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:futures-channel", "dep:futures-core", "dep:futures-util", "dep:js-sys", "dep:web-time", "dioxus?/asset"]
+web = ["dep:dioxus", "dep:dioxus-signals", "dep:log", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:futures-channel", "dep:futures-core", "dep:futures-util", "dep:js-sys", "dep:web-time", "dep:gloo-timers", "dioxus?/asset"]

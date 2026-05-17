@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-16 (skills-panel-content)
-source_count: 12
+updated: 2026-05-17 (frontend-auto-reconnect)
+source_count: 13
 ---
 
 # vol-llm-ui Crate
@@ -35,10 +35,12 @@ Both modes implement the same trait interfaces, so TUI (ratatui) and Web (Dioxus
 - Event loop: `tokio::select!` with biased mode prioritizing input over render ticks [[ui-event-loop-pattern]]
 - Web binary: `vol-llm-ui-web` — Dioxus 0.6 WASM with per-component signals + EventBus [[dioxus-web-pattern]]
 - Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView`, `TreeNode`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel`, `McpPanel`, `ToolCallDialog`, `SkillDetailDialog` [[task-8-dioxus-web-frontend]], [[task-5-file-content-view]], [[lazy-load-dir-tree]], [[task-6-sessions-tab-wiring]], [[connection-state-dashboard]], [[tool-call-dialog-component]], [[skills-panel-content]]
+- `JsonRpcClient` gains `reconnect()` method — swaps internal WebSocket at runtime while preserving pending callbacks and event channels [[frontend-auto-reconnect]]
 - Web state: `EventBus` with `UiEventKind` routing, per-component local `Signal<T>`, shared `Signal<GlobalState>` / `Signal<ApprovalUiState>` via `use_context_provider` [[dioxus-signal-pattern]], [[event-bus-pattern]], [[split-signal-state]]
 - `SubscriptionSet` with `Drop` impl for automatic cleanup on component unmount [[event-bus-pattern]]
 - `ConnectionStatePanel` — real-time connection status indicator in StatusBar, subscribes to WsConnected/WsConnecting/WsDisconnected via EventBus, color-coded (green/yellow/red) [[connection-state-dashboard]]
 - `GlobalState` extended with `ConnectionStatus` field for cross-component connection state reads
+- `GlobalState` extended with `reconnecting`, `reconnect_attempts`, `reconnect_delay_secs`, `reconnect_maxed` fields for reconnect state [[frontend-auto-reconnect]]
 - `ActiveTab` extended with `Mcp` variant (between Skills and Logs), `McpSubtab` enum for server/tools/resources/prompts sub-tabs
 - MCP wire types: `McpServerInfo`, `McpToolInfo`, `McpResourceInfo`, `McpResourceTemplateInfo`, `McpPromptInfo`, `McpPromptArgInfo` — all serializable for JSON-RPC
 - MCP local state: `McpState` (panel state), `McpServerRowState` (display row), `McpToolCallState` (tool call dialog), `McpResourceViewerState`, `McpPromptViewerState`
@@ -75,3 +77,4 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-16**: `McpToolCallState` gained `input_schema: Option<serde_json::Value>` field to carry tool JSON Schema to dialog for future SchemaForm component; debug `console.log` removed from `ToolCard` onclick [[mcp-toolcall-input-schema]]
 - **2026-05-16**: `ToolCallDialog` rewritten to use `SchemaForm` component — raw JSON textarea replaced with auto-generated form fields from tool JSON Schema; form state via `use_signal` with `build_form_defaults()` initialization; `use_effect` re-initializes on schema change [[schemaform-toolcall-dialog]]
 - **2026-05-16**: Skills panel populated — `SkillsState` gained `error` field, `SkillDialogState` / `SkillDetail` types added, `SkillsPanel` fetches skills on mount via `rpc_client.skill_list()` with error/retry UI, row click opens `SkillDetailDialog` modal showing name/version/scope/triggers/content/file_listing; `SkillDetailDialog` rendered at App root level, dialog signal passed via context [[skills-panel-content]]
+- **2026-05-17**: `JsonRpcClient` gains `reconnect()` method — internal WebSocket swapped via `RefCell<WebSocket>`, auto-subscribe preserved; App spawns two `spawn_local` tasks (reconnect watcher with exponential backoff 3s→30s, 10 max retries; session restoration via session.list→session.resume→session.entries); `GlobalState` gains `reconnecting`/`reconnect_attempts`/`reconnect_delay_secs`/`reconnect_maxed` fields; StatusBar shows "Reconnecting... (Xs)" countdown; `UiEvent` gains `WsReconnecting`/`WsReconnectFailed`/`WsReconnected` variants; `gloo-timers` dependency added [[frontend-auto-reconnect]]

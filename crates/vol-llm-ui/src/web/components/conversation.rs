@@ -29,13 +29,12 @@ pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
             s.entries.push(ConversationEntry::UserInput { text: input.clone() });
             if s.auto_scroll { s.conversation_scroll = 0; }
         }
-        UiEvent::AgentComplete { response } => {
+        UiEvent::AgentComplete { response: _ } => {
             flush_pending_content(&mut s.entries);
             let tc = s.entries.iter().filter(|e| matches!(e, ConversationEntry::ToolCall { .. })).count() as u32;
             s.entries.push(ConversationEntry::RunSummary { iterations: 0, tool_calls: tc, elapsed_ms: 0 });
-            if !response.is_empty() {
-                s.entries.push(ConversationEntry::AgentAnswer { text: response.clone() });
-            }
+            // Content already pushed by ContentComplete → AgentAnswer conversion above.
+            // AgentComplete's response field contains the same content, so skip to avoid duplication.
             if s.auto_scroll { s.conversation_scroll = 0; }
         }
         UiEvent::AgentAborted { reason } | UiEvent::AgentError { message: reason } => {

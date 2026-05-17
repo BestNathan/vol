@@ -43,16 +43,28 @@ git-fetch-with-cli = true
 
 ### Web Frontend
 
+**`vol-llm-ui`** (`crates/vol-llm-ui`) is the web frontend crate. It contains the Dioxus 0.6 WASM app with components, Tailwind CSS, and web-specific state management. All web-related code lives under this crate.
+
+**When developing or running the web frontend**, you must use the web-related Makefile commands — do NOT run generic `cargo build` or `cargo run` commands as they will not compile the WASM binary or serve the frontend.
+
 All web development commands use the Makefile. Run `make help` to see available commands:
 
 | Command | Description |
 |---------|-------------|
-| `make web-css` | Build Tailwind CSS |
+| `make web-css` | Build Tailwind CSS (watch mode) |
 | `make web-dev` | Start Dioxus dev server (port 8080) |
-| `make web-backend` | Start backend JSON-RPC agent service |
+| `make web-backend` | Start backend JSON-RPC agent service (port 3001) |
 | `make web-check` | cargo check (web only) |
 | `make web-build` | Build WASM binary |
 | `make web-clippy` | cargo clippy (web only) |
+
+**Starting web development requires running 3 commands in separate terminals:**
+
+1. `make web-css` — compile Tailwind CSS in watch mode (must stay running)
+2. `make web-dev` — start Dioxus dev server on port 8080
+3. `make web-backend` — start backend JSON-RPC agent service on port 3001
+
+**Important:** `make web-css` must be running before `make web-dev`, otherwise new Tailwind utility classes (e.g., arbitrary values like `w-[600px]`, `h-[70vh]`) won't be compiled into the CSS and won't take effect.
 
 ## Conventions
 

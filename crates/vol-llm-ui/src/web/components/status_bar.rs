@@ -37,6 +37,9 @@ pub fn StatusBar() -> Element {
     let unsafe_mode = gs.unsafe_mode;
     let ws_connected = gs.ws_connected;
     let ws_error = gs.ws_last_error.clone();
+    let reconnecting = gs.reconnecting;
+    let reconnect_delay = gs.reconnect_delay_secs;
+    let reconnect_maxed = gs.reconnect_maxed;
     drop(gs);
 
     let status_cls = if is_running {
@@ -48,7 +51,7 @@ pub fn StatusBar() -> Element {
     rsx! {
         div { class: status_cls,
             div { class: "flex items-center gap-1.5 overflow-hidden flex-nowrap sm:gap-1",
-                ConnectionIndicator { connected: ws_connected, error: ws_error.clone() }
+                ConnectionIndicator { connected: ws_connected, error: ws_error.clone(), reconnecting, reconnect_delay, reconnect_maxed }
                 span { class: "whitespace-nowrap", "Session: {session_id}" }
                 span { class: "text-[#555] select-none" }
                 span { class: "whitespace-nowrap", "Run: {run_count}" }
@@ -80,8 +83,22 @@ pub fn StatusBar() -> Element {
 }
 
 #[component]
-fn ConnectionIndicator(connected: bool, error: Option<String>) -> Element {
-    if connected {
+fn ConnectionIndicator(connected: bool, error: Option<String>, reconnecting: bool, reconnect_delay: u32, reconnect_maxed: bool) -> Element {
+    if reconnect_maxed {
+        rsx! {
+            span { class: "flex items-center gap-1 mr-1", title: "Connection lost. Please refresh.",
+                span { class: "w-2 h-2 rounded-full inline-block flex-shrink-0", style: "background-color: #ff4040;" }
+                span { class: "text-[10px] text-[#ff8080]", "No connection" }
+            }
+        }
+    } else if reconnecting {
+        rsx! {
+            span { class: "flex items-center gap-1 mr-1", title: "Reconnecting...",
+                span { class: "w-2 h-2 rounded-full inline-block flex-shrink-0 animate-pulse", style: "background-color: #f0c040;" }
+                span { class: "text-[10px] text-[#f0c040]", "Reconnecting... ({reconnect_delay}s)" }
+            }
+        }
+    } else if connected {
         rsx! {
             span { class: "flex items-center gap-1 mr-1", title: "Connected",
                 span { class: "w-2 h-2 rounded-full inline-block flex-shrink-0", style: "background-color: #40c040; box-shadow: 0 0 4px #40c040;" }

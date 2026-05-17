@@ -1,5 +1,21 @@
 # Change Log
 
+## [2026-05-17] fix | SkillDetailDialog Sizing and Skill Switching
+- Updated concepts: [[dioxus-web-pattern]] (source_count -> 15)
+- Changes: `SkillDetailDialog` fixed — width reduced to `w-[700px]` with `max-h-[80vh]` outer container, sub-sections given explicit `max-h` limits (`max-h-[200px]` SKILL.md body, `max-h-[150px]` file list, `max-h-[250px]` content preview); `use_effect` resets `selected_file`/`file_content` signals when skill changes so clicking different skills updates content; **`ToolCallDialog` also restructured** to match fixed container pattern — `w-[600px] h-[70vh]` outer container with `flex-shrink-0` header and `flex-1 min-h-0 overflow-y-auto` scrollable content area; WASM build passes cleanly
+
+## [2026-05-17] ingest | Frontend Auto-Reconnect Implementation
+- Created sources: [[frontend-auto-reconnect]]
+- Created concepts: [[frontend-auto-reconnect]]
+- Updated entities: [[vol-llm-ui-crate]] (added reconnect fields to GlobalState, JsonRpcClient.reconnect() method, timeline entry, source_count -> 13)
+- Updated concepts: [[dioxus-web-pattern]] (added spawn_local reconnect/restoration tasks to layout diagram, GlobalState reconnect fields, source_count -> 12)
+- Updated concepts: [[event-bus-pattern]] (added WsReconnecting/WsReconnectFailed/WsReconnected to UiEventKind enum, connection status events section, source_count -> 3)
+- Updated concepts: [[json-rpc-websocket]] (added Web Frontend Auto-Reconnect section describing RefCell WebSocket swap, source_count -> 4)
+- Updated concepts: [[sessions-ui-pattern]] (added frontend-auto-reconnect reference for session restoration reuse, source_count -> 2)
+- Updated index: new frontend-auto-reconnect source/concept entries, vol-llm-ui-crate/dioxus-web-pattern/event-bus-pattern/json-rpc-websocket summaries updated
+- Cross-references added: 14
+- Changes: `JsonRpcClient` gains `reconnect()` method — internal WebSocket stored in `RefCell<WebSocket>` for runtime swap; App spawns two `spawn_local` tasks (reconnect watcher with exponential backoff 3s→30s, 10 max retries with countdown; session restoration via session.list→session.resume→session.entries); `GlobalState` gains `reconnecting`/`reconnect_attempts`/`reconnect_delay_secs`/`reconnect_maxed` fields; StatusBar shows "Reconnecting... (Xs)" countdown via ConnectionIndicator; `UiEvent`/`UiEventKind` gain `WsReconnecting`/`WsReconnectFailed`/`WsReconnected` variants; `gloo-timers` dependency added; `session_entries_to_conversation()` made `pub(crate)`; WASM build and clippy pass cleanly
+
 ## [2026-05-16] ingest | Skills Panel Content — Backend JSON-RPC + Web UI Detail Dialog
 - Created sources: [[skills-panel-content]]
 - Created concepts: [[skills-panel-json-rpc]]

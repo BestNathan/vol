@@ -3,14 +3,14 @@ type: concept
 category: pattern
 tags: [dioxus, web, frontend, component, wasm]
 created: 2026-05-08
-updated: 2026-05-16 (skills-panel-content)
-source_count: 11
+updated: 2026-05-17 (frontend-auto-reconnect)
+source_count: 15
 ---
 
 # Dioxus Web Pattern
 
 **Category:** Web frontend architecture
-**Related:** [[vol-llm-ui-crate]], [[dioxus-signal-pattern]], [[ratatui-tui-pattern]], [[human-in-the-loop]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[mcp-state-types]]
+**Related:** [[vol-llm-ui-crate]], [[dioxus-signal-pattern]], [[ratatui-tui-pattern]], [[human-in-the-loop]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[mcp-state-types]], [[frontend-auto-reconnect]]
 
 ## Definition
 
@@ -21,6 +21,7 @@ Component architecture for a browser-based UI built with Dioxus 0.6, compiled to
 - Dioxus 0.6 via `dioxus::launch(App)` in binary entry point
 - Feature gated: `#[cfg(feature = "web")]` in `lib.rs`, binary requires `--features web`
 - Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `TreeNode`, `ToolsTabContent`, `FileContentView`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel`, `McpPanel` (placeholder), `ToolCallDialog`, `SchemaForm`, `SkillDetailDialog` [[tool-call-dialog-component]], [[schemaform-toolcall-dialog]], [[skills-panel-content]]
+- `App()` spawns multiple `wasm_bindgen_futures::spawn_local` async tasks: WS event loop, reconnect watcher with exponential backoff, session restoration watcher [[frontend-auto-reconnect]]
 - Global CSS embedded as `const GLOBAL_CSS: &str`, injected via `<style>` element
 - Dark theme with flexbox layout: status bar (top), tools panel (left), tab content (right), input area (bottom)
 - Tab routing: `TabContent` matches on `ActiveTab` enum to render the active panel
@@ -43,7 +44,7 @@ pub struct AppState {
 ```
 
 `App()` also creates and provides via `use_context_provider`:
-- `Signal<GlobalState>` — shared run/session/connection info, extended with `ConnectionStatus` for connection state tracking [[connection-state-dashboard]]
+- `Signal<GlobalState>` — shared run/session/connection info, extended with `ConnectionStatus` for connection state tracking [[connection-state-dashboard]], further extended with `reconnecting`/`reconnect_attempts`/`reconnect_delay_secs`/`reconnect_maxed` for reconnect state [[frontend-auto-reconnect]]
 - `Signal<ApprovalUiState>` — shared HITL approval state
 - `Signal<AgentsState>` — agents panel state
 - `Signal<SessionsState>` — sessions panel state [[sessions-ui-pattern]]
@@ -62,7 +63,10 @@ All state was centralized in one big signal. Replaced by EventBus pattern [[even
 
 ```
 App
-├── StatusBar          (agent status, duration, mode, ConnectionStatePanel)
+├── StatusBar          (agent status, duration, mode, ConnectionIndicator with reconnect)
+├── spawn_local: WS event loop
+├── spawn_local: reconnect watcher (exponential backoff, 10 max retries)
+├── spawn_local: session restoration (session.list → session.resume → session.entries)
 ├── main-layout
 │   ├── ToolsPanel     (tool call history, left sidebar)
 │   └── right-panel
@@ -137,3 +141,7 @@ Both frontends share `UiState` / `UiEvent` / `ActiveTab` types and the same conn
 - [[schema-form-pattern]]: Pattern for auto-generated form fields from JSON Schema
 - [[skills-panel-content]]: Source documenting SkillsPanel RPC fetch + SkillDetailDialog modal
 - [[skills-panel-json-rpc]]: Pattern for exposing skill discovery via JSON-RPC
+
+## Dialog Sizing Pattern
+
+Modal dialogs should use a fixed-size outer container (e.g., `w-[800px] h-[80vh] flex flex-col overflow-hidden`) placed inside a backdrop with no padding. The inner content area uses `flex-1 min-h-0 overflow-y-auto` to scroll independently. The header uses `flex-shrink-0` to stay fixed. This prevents long content (descriptions, code blocks) from pushing the dialog beyond the viewport. Use `stop_propagation` on the inner container and `onclick` on the backdrop to enable click-outside-to-close. See [[skills-panel-content]] for the `SkillDetailDialog` implementation and [[tool-call-dialog-component]] for `ToolCallDialog` (`w-[600px] h-[70vh]`).
