@@ -103,7 +103,7 @@ pub struct SkillDialogState {
 }
 ```
 
-Dialog signal managed at `App` level, passed via context to `SkillsPanel` and `SkillDetailDialog`.
+Dialog signal managed at `App` level as a separate `Signal<SkillDialogState>` (not nested inside `McpDialogState`), passed via context to `SkillsPanel` and `SkillDetailDialog`.
 
 ## Error Handling
 
