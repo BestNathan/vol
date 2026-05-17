@@ -279,6 +279,45 @@ impl RunContext {
         let _ = self.event_tx.as_ref().unwrap().send(traced_event);
     }
 
+    /// Get effective (filtered) tool definitions for LLM request.
+    ///
+    /// Filters tools based on AgentDef's `tools` (allowlist) and
+    /// `disallowed_tools` (blocklist). If no def is present, returns all tools.
+    pub fn effective_tools(&self) -> Vec<vol_llm_core::ToolDefinition> {
+        self.effective_registry().definitions()
+    }
+
+    /// Execute a tool by its call specification.
+    ///
+    /// Only executes tools that are in the effective (filtered) set.
+    /// Returns an error if the tool is not in the allowed set.
+    pub async fn execute_tool(
+        &self,
+        call: &vol_llm_core::ToolCall,
+        ctx: &vol_llm_tool::ToolContext,
+    ) -> vol_llm_tool::Result<vol_llm_tool::ToolResult> {
+        self.effective_registry()
+            .execute(call, ctx)
+            .await
+            .map_err(vol_llm_tool::ToolError::ExecutionFailed)
+    }
+
+    /// Build a filtered ToolRegistry based on AgentDef configuration.
+    ///
+    /// Returns a registry containing only the allowed tools, minus any
+    /// disallowed tools. If no def is present, returns the full registry.
+    fn effective_registry(&self) -> Arc<ToolRegistry> {
+        if let Some(def) = &self.config.def {
+            let allowed: Option<Vec<&str>> = def.tools.as_ref()
+                .map(|t| t.iter().map(|s| s.as_str()).collect());
+            let disallowed: Option<Vec<&str>> = def.disallowed_tools.as_ref()
+                .map(|t| t.iter().map(|s| s.as_str()).collect());
+            ToolRegistry::filter(&self.tools, allowed.as_deref(), disallowed.as_deref())
+        } else {
+            self.tools.clone()
+        }
+    }
+
     /// Intercept an event for plugin processing (blocking, returns decision).
     ///
     /// This sends the event to the plugin channel and waits for a decision.

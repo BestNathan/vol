@@ -8,7 +8,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
 use vol_llm_mcp::McpManager;
-use vol_llm_tool::ToolRegistry;
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
     ToolChoice,
@@ -159,29 +158,12 @@ impl ReActAgent {
     pub async fn run(&self, user_input: &str) -> Result<AgentResponse, crate::AgentError> {
         // === Phase 1: Generate run_id, compute effective config from def ===
 
-        // Tool filtering from AgentDef
-        let effective_tools = if let Some(def) = &self.config.def {
-            let allowed: Option<Vec<&str>> = def.tools.as_ref()
-                .map(|t| t.iter().map(|s| s.as_str()).collect());
-            let disallowed: Option<Vec<&str>> = def.disallowed_tools.as_ref()
-                .map(|t| t.iter().map(|s| s.as_str()).collect());
-            ToolRegistry::filter(&self.config.tools, allowed.as_deref(), disallowed.as_deref())
-        } else {
-            self.config.tools.clone()
-        };
-
-        // Clone config with effective tools
-        let config = AgentConfig {
-            tools: effective_tools.clone(),
-            ..self.config.clone()
-        };
-
         let run_id = uuid::Uuid::new_v4().simple().to_string();
 
         let (run_ctx, plugin_rx) = RunContext::new(
             run_id.clone(),
             user_input.to_string(),
-            config.clone(),
+            self.config.clone(),
         );
 
         // Persist user message to session so it's available via SessionContributor.
@@ -207,7 +189,7 @@ impl ReActAgent {
         // Spawn interceptor loop task - receives from plugin_rx channel
         // When plugin_rx is closed (agent drops run_ctx), interceptor exits
         let interceptor_event_tx = run_ctx.event_tx.as_ref().unwrap().clone();
-        let interceptor_plugins = config.plugin_registry.plugins().to_vec();
+        let interceptor_plugins = self.config.plugin_registry.plugins().to_vec();
         let interceptor_ctx = run_ctx.clone();
         let mut interceptor_handle = tokio::spawn(async move {
             run_interceptor_loop(
@@ -284,7 +266,7 @@ impl ReActAgent {
                 }
 
                 // Reason phase - call LLM with streaming
-                let tools_defs = config.tools.definitions();
+                let tools_defs = run_ctx.effective_tools();
 
                 // Get messages from ctx (not local variable)
                 let messages = run_ctx.get_context().await.map_err(|e| crate::AgentError::from(e))?;
@@ -388,7 +370,7 @@ impl ReActAgent {
                             Some(sandbox) => ToolContext::default().with_sandbox(sandbox.clone()),
                             None => ToolContext::default(),
                         };
-                        let result = match config.tools.execute(call, &tool_ctx).await {
+                        let result = match run_ctx.execute_tool(call, &tool_ctx).await {
                             Ok(r) => r,
                             Err(e) => {
                                 let duration_ms = tool_begin.elapsed().as_millis() as u64;
@@ -552,7 +534,7 @@ impl ReActAgent {
         }
 
         // Disconnect MCP manager
-        if let Some(ref mcp_manager) = config.mcp_manager {
+        if let Some(ref mcp_manager) = self.config.mcp_manager {
             mcp_manager.disconnect().await.ok();
         }
 
@@ -647,6 +629,7 @@ mod tests {
 
     use crate::agent_def::AgentDef;
     use crate::react::plugin::PluginRegistry;
+    use vol_llm_tool::ToolRegistry;
     use vol_session::InMemoryEntryStore;
 
     struct MockLlm;
