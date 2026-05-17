@@ -1,7 +1,9 @@
 //! Unit tests for the react module.
 
 use super::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use vol_llm_core::LLMClient;
 use vol_llm_core::{ConversationRequest, ConversationResponse, StreamReceiver, SupportedParam};
 
@@ -332,6 +334,64 @@ fn test_hitl_config_with_triggers() {
 
     assert_eq!(config.triggers.len(), 3);
     assert_eq!(config.timeout_secs, 30);
+}
+
+#[tokio::test]
+async fn test_spawn_listener_tasks_shutdown_on_close() {
+    struct ListenPlugin {
+        count: Arc<AtomicUsize>,
+    }
+    #[async_trait::async_trait]
+    impl plugin::AgentPlugin for ListenPlugin {
+        fn id(&self) -> plugin::PluginId { "listen".to_string() }
+        fn priority(&self) -> u32 { 100 }
+        async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision {
+            plugin::PluginDecision::Continue
+        }
+        async fn listen(&self, _: &AgentStreamEvent, _: &RunContext) {
+            self.count.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    let (mut run_ctx, _rx) = RunContext::new(
+        "test".to_string(),
+        "test".to_string(),
+        AgentConfig::default(),
+    );
+
+    let count1 = Arc::new(AtomicUsize::new(0));
+    let count2 = Arc::new(AtomicUsize::new(0));
+
+    let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![
+        Arc::new(ListenPlugin { count: count1.clone() }),
+        Arc::new(ListenPlugin { count: count2.clone() }),
+    ];
+
+    // Emit an event while listeners are running
+    run_ctx.emit(AgentStreamEvent::agent_start("test".to_string())).await;
+
+    // Spawn listeners
+    let mut listener_set = spawn_listener_tasks(plugins, run_ctx.clone());
+
+    // Emit another event
+    run_ctx.emit(AgentStreamEvent::agent_complete_with_response(serde_json::json!({}))).await;
+
+    // Give listeners a moment to process
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Drop the sender — this closes the broadcast and triggers listener exit
+    run_ctx.event_tx.take();
+
+    // Wait for all listeners to exit
+    while let Some(result) = listener_set.join_next().await {
+        assert!(result.is_ok(), "Listener task should not panic");
+    }
+
+    // Both plugins should have processed events
+    assert!(count1.load(Ordering::SeqCst) > 0,
+        "Plugin 1 should have processed events, got {}", count1.load(Ordering::SeqCst));
+    assert!(count2.load(Ordering::SeqCst) > 0,
+        "Plugin 2 should have processed events, got {}", count2.load(Ordering::SeqCst));
 }
 
 #[test]
