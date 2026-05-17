@@ -214,27 +214,17 @@ mod tests {
     use super::*;
     use serde_json::Map;
     use tempfile::TempDir;
+    use vol_llm_agent::react::AgentConfig;
 
     fn create_test_plugin(temp_dir: &TempDir) -> LoggerPlugin {
         LoggerPlugin::new(temp_dir.path().to_path_buf())
     }
 
     fn create_test_context() -> RunContext {
-        use std::sync::Arc;
-        use vol_llm_agent::react::AgentConfig;
-        use vol_llm_tool::ToolRegistry;
-        use vol_session::{InMemoryEntryStore, Session};
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
-            "session-1".to_string(),
-            Arc::new(Session::new(
-                Arc::new(InMemoryEntryStore::new()),
-            )),
-            Arc::new(ToolRegistry::new()),
             AgentConfig::default(),
-            20,
-            "test-model".to_string(),
         );
         ctx
     }
