@@ -3,6 +3,7 @@
 use dioxus::prelude::*;
 use crate::state::{ApprovalUiState, GlobalState};
 use crate::web::components::app::AppState;
+use web_time::Instant;
 
 #[component]
 pub fn InputArea() -> Element {
@@ -13,23 +14,59 @@ pub fn InputArea() -> Element {
     let has_approval = approval.read().has_pending();
 
     let mut input_text = use_signal(|| String::new());
+    let mut last_esc = use_signal(|| None::<Instant>);
     let client = app_state.rpc_client.clone();
-    let on_submit = move |_| {
-        let text = input_text.peek().clone();
-        let text = text.trim().to_string();
-        if text.is_empty() { return; }
-        match client.submit(&text) {
-            Ok(req_id) => log::info!("Submitted via JSON-RPC: {}", req_id),
-            Err(e) => log::error!("Failed to submit via JSON-RPC: {}", e),
+
+    let mut submit = {
+        let client = client.clone();
+        let mut input_text = input_text.clone();
+        move || {
+            let text = input_text.peek().clone();
+            let text = text.trim().to_string();
+            if text.is_empty() { return; }
+            match client.submit(&text) {
+                Ok(req_id) => log::info!("Submitted via JSON-RPC: {}", req_id),
+                Err(e) => log::error!("Failed to submit via JSON-RPC: {}", e),
+            }
+            input_text.set(String::new());
         }
-        input_text.set(String::new());
     };
+
     let on_input = move |evt: Event<FormData>| { input_text.set(evt.value()); };
+
+    let on_keydown = move |evt: Event<KeyboardData>| {
+        let key = evt.key();
+        let modifiers = evt.modifiers();
+        match key {
+            Key::Enter => {
+                if !modifiers.ctrl() && !modifiers.shift() {
+                    evt.prevent_default();
+                    submit();
+                }
+                // Ctrl+Enter / Shift+Enter → default textarea newline
+            }
+            Key::Escape => {
+                let now = Instant::now();
+                let double = last_esc.read().map_or(false, |t| now.duration_since(t).as_millis() < 500);
+                if double {
+                    input_text.set(String::new());
+                    last_esc.set(None);
+                } else {
+                    last_esc.set(Some(now));
+                }
+            }
+            _ => {}
+        }
+    };
 
     let hint = if is_running {
         rsx! { span { class: "text-[#f0c040]", " Running... (input disabled) " } }
     } else {
-        rsx! { span { span { class: "text-[#80a0ff] font-bold", "Enter" } " Send  " span { class: "text-[#80a0ff] font-bold", "Esc" } " Clear" } }
+        rsx! { span {
+            span { class: "text-[#80a0ff] font-bold", "Enter" } " Send  "
+            span { class: "text-[#80a0ff] font-bold", "Shift+Enter" } " Newline  "
+            span { class: "text-[#80a0ff] font-bold", "Esc×2" } " Clear"
+        } }
     };
 
     rsx! {
@@ -38,20 +75,14 @@ pub fn InputArea() -> Element {
                 div { p { class: "text-[#f0c040]", "Tool approval pending in the dialog above." } }
             } else {
                 div {
-                    div { class: "flex gap-2",
-                        textarea {
-                            value: input_text(),
-                            oninput: on_input,
-                            disabled: is_running,
-                            placeholder: "Type a message to the agent...",
-                            rows: 2,
-                            class: "flex-1 bg-[#1a1a2e] text-[#e0e0e0] border border-[#444466] rounded-md px-2 py-1.5 text-[14px] font-sans resize-none min-h-[40px] max-h-[120px] outline-none focus:border-[#80a0ff] disabled:opacity-50"
-                        }
-                        button {
-                            onclick: on_submit,
-                            disabled: is_running,
-                            class: "px-4 py-1.5 bg-[#4060c0] text-[#e0e0e0] rounded-md cursor-pointer text-[14px] self-end hover:bg-[#5070d0] disabled:bg-[#333355] disabled:cursor-not-allowed"
-                        }
+                    textarea {
+                        oninput: on_input,
+                        onkeydown: on_keydown,
+                        value: input_text(),
+                        disabled: is_running,
+                        placeholder: "Type a message to the agent...",
+                        rows: 2,
+                        class: "w-full bg-[#1a1a2e] text-[#e0e0e0] border border-[#444466] rounded-md px-2 py-1.5 text-[14px] font-sans resize-none min-h-[40px] max-h-[120px] outline-none focus:border-[#80a0ff] disabled:opacity-50"
                     }
                     div { class: "mt-1 text-[11px] text-[#666]", {hint} }
                 }
