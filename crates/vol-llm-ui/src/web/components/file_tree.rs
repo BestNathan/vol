@@ -210,6 +210,18 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
     }
 }
 
+/// Build the outer wrapper classes for the file tree panel.
+/// On desktop (`sm:`): always visible inline sidebar.
+/// On mobile: hidden when closed, fixed overlay when open.
+fn file_tree_outer_class(drawer_open: bool) -> &'static str {
+    if drawer_open {
+        "fixed inset-y-0 left-0 z-50 w-[80vw] max-w-[300px] flex flex-col overflow-hidden border-r border-[#2a2a44] bg-[#16162a]"
+    } else {
+        // Hidden on mobile, visible on desktop with sidebar classes
+        "hidden sm:block sm:w-[33.33%] md:w-[33.33%] lg:w-[240px] sm:min-w-[160px] md:min-w-[160px] lg:min-w-[180px] sm:border-r sm:flex sm:flex-col sm:overflow-hidden sm:flex-shrink-0 sm:bg-[#16162a]"
+    }
+}
+
 /// File tree component.
 #[component]
 pub fn FileTree() -> Element {
@@ -217,6 +229,7 @@ pub fn FileTree() -> Element {
 
     let app = use_context::<crate::web::components::app::AppState>();
     let global: Signal<GlobalState> = use_context();
+    let drawer_open = ws.read().file_tree_drawer_open;
 
     // Load root directory on mount — but wait for WebSocket connection first.
     use_hook(move || {
@@ -286,21 +299,56 @@ pub fn FileTree() -> Element {
 
     if workspace.children.is_empty() && !workspace.loaded {
         return rsx! {
-            div { class: "w-[40%] sm:w-[33.33%] md:w-[33.33%] lg:w-[240px] min-w-[120px] sm:min-w-[160px] md:min-w-[160px] lg:min-w-[180px] border-r border-[#2a2a44] flex flex-col overflow-hidden flex-shrink-0 bg-[#16162a]",
-                div { class: "px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.8px] text-[#6a6a9a] border-b border-[#2a2a44] flex-shrink-0", "Explorer" }
-                div { class: "flex-1 overflow-y-auto py-1",
-                    div { class: "flex items-center justify-center h-full text-[#666] p-5 text-center text-[12px]", "Loading files..." }
+            div { class: "",
+                div { class: "{file_tree_outer_class(drawer_open)}",
+                    div { class: "px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.8px] text-[#6a6a9a] border-b border-[#2a2a44] flex-shrink-0 flex items-center justify-between",
+                        span { "Explorer" }
+                        button {
+                            class: "sm:hidden text-[#888] hover:text-[#e0e0e0] text-[16px] cursor-pointer",
+                            onclick: move |_| {
+                                let mut w = ws.write_unchecked();
+                                w.file_tree_drawer_open = false;
+                            },
+                            "\u{2715}"
+                        }
+                    }
+                    div { class: "flex-1 overflow-y-auto py-1",
+                        div { class: "flex items-center justify-center h-full text-[#666] p-5 text-center text-[12px]", "Loading files..." }
+                    }
                 }
             }
         };
     }
 
     rsx! {
-        div { class: "w-[40%] sm:w-[33.33%] md:w-[33.33%] lg:w-[240px] min-w-[120px] sm:min-w-[160px] md:min-w-[160px] lg:min-w-[180px] border-r border-[#2a2a44] flex flex-col overflow-hidden flex-shrink-0 bg-[#16162a]",
-            div { class: "px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.8px] text-[#6a6a9a] border-b border-[#2a2a44] flex-shrink-0", "Explorer" }
-            div { class: "flex-1 overflow-y-auto py-1",
-                for child in &workspace.children {
-                    TreeNode { node: child.clone(), depth: 0, key: "{child.path}" }
+        div { class: "",
+            // Backdrop — mobile only, rendered as a sibling
+            if drawer_open {
+                div {
+                    class: "sm:hidden fixed inset-0 z-40 bg-black/50",
+                    onclick: move |_| {
+                        let mut w = ws.write_unchecked();
+                        w.file_tree_drawer_open = false;
+                    },
+                }
+            }
+            // Tree panel
+            div { class: "{file_tree_outer_class(drawer_open)}",
+                div { class: "px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.8px] text-[#6a6a9a] border-b border-[#2a2a44] flex-shrink-0 flex items-center justify-between",
+                    span { "Explorer" }
+                    button {
+                        class: "sm:hidden text-[#888] hover:text-[#e0e0e0] text-[16px] cursor-pointer",
+                        onclick: move |_| {
+                            let mut w = ws.write_unchecked();
+                            w.file_tree_drawer_open = false;
+                        },
+                        "\u{2715}"
+                    }
+                }
+                div { class: "flex-1 overflow-y-auto py-1",
+                    for child in &workspace.children {
+                        TreeNode { node: child.clone(), depth: 0, key: "{child.path}" }
+                    }
                 }
             }
         }

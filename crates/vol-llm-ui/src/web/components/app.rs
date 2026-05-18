@@ -521,7 +521,16 @@ pub fn App() -> Element {
         div { class: "relative h-[100dvh] w-[100vw] font-[system-ui] text-[14px] text-[#e0e0e0] bg-[#1a1a2e]",
             div { class: "flex flex-col h-full w-full overflow-hidden",
                 StatusBar {}
-                div { class: "flex flex-1 overflow-hidden",
+                div { class: "flex flex-1 overflow-hidden relative",
+                    // Hamburger button — mobile only
+                    button {
+                        class: "sm:hidden absolute top-1 left-1 z-[60] w-8 h-8 flex items-center justify-center bg-[#252540] border border-[#333355] rounded-md text-[#e0e0e0] text-[18px] cursor-pointer hover:bg-[#2a2a44]",
+                        onclick: move |_| {
+                            let mut w = workspace_signal.write_unchecked();
+                            w.file_tree_drawer_open = true;
+                        },
+                        "\u{2630}"
+                    }
                     FileTree {}
                     div { class: "flex-1 flex flex-col overflow-hidden",
                         TabBar {}

@@ -480,6 +480,7 @@ pub struct WorkspaceState {
     pub open_files: Vec<OpenFileTab>,
     pub selected_file_tab: Option<usize>,
     pub collapsed_dirs: HashSet<String>,
+    pub file_tree_drawer_open: bool,
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
@@ -489,6 +490,7 @@ impl WorkspaceState {
             workspace: WorkspaceTreeNode::root(working_dir.to_string(), ".".into()),
             modified_files: HashSet::new(), open_files: Vec::new(),
             selected_file_tab: None, collapsed_dirs: HashSet::new(),
+            file_tree_drawer_open: false,
         }
     }
 }
