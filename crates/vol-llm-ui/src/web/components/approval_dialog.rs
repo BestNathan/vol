@@ -20,7 +20,7 @@ pub fn ApprovalDialog() -> Element {
 
     rsx! {
         div { class: "fixed inset-0 bg-black/60 flex items-center justify-center z-[100]",
-            div { class: "bg-[#252540] border border-[#444466] rounded-lg p-4 min-w-[400px] max-w-[600px] max-h-[80vh] overflow-y-auto md:min-w-auto md:w-[90vw] md:max-w-[500px]",
+            div { class: "bg-[#252540] border border-[#444466] rounded-lg p-3 sm:p-4 w-[95vw] max-w-[600px] sm:min-w-[400px] sm:w-[90vw] sm:max-w-[500px] max-h-[80vh] overflow-y-auto",
                 div { class: "text-[16px] font-bold text-[#e0e0e0] mb-3 border-b border-[#333355] pb-2", "Tool Approval Required" }
                 div { class: "text-[#f0c040] font-bold text-[15px]", "[!] {tool_name}" }
                 if !reason.is_empty() { div { class: "text-[#ccc] my-1.5", "Reason: {reason}" } }

@@ -35,7 +35,7 @@ pub fn SkillDetailDialog(mut signal: Signal<SkillDialogState>) -> Element {
                 s.skill = None;
             },
             div {
-                class: "w-[700px] max-h-[80vh] flex flex-col overflow-hidden bg-[#1a1a2e] border border-[#3a3a55] rounded-lg",
+                class: "w-[95vw] sm:w-[700px] max-h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden bg-[#1a1a2e] border border-[#3a3a55] rounded-lg",
                 onclick: move |evt: Event<MouseData>| { evt.stop_propagation(); },
                 // Header
                 div { class: "flex items-center justify-between flex-shrink-0 px-4 pt-3 pb-2 border-b border-[#3a3a55]",
