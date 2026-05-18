@@ -104,7 +104,7 @@ pub fn ConversationView() -> Element {
     let count = signal.read().entries.len();
     if count == 0 {
         return rsx! {
-            div { class: "flex-1 overflow-y-auto p-2.5",
+            div { class: "flex-1 overflow-y-auto p-1.5 sm:p-2.5",
                 div { class: "flex items-center justify-center h-full text-[#666]", "No messages yet. Type a query and press Send." }
             }
         };
@@ -116,7 +116,7 @@ pub fn ConversationView() -> Element {
         rsx! { MessageEntry { entry } }
     }).collect();
     rsx! {
-        div { class: "flex-1 overflow-y-auto p-2.5", {messages.into_iter()} }
+        div { class: "flex-1 overflow-y-auto p-1.5 sm:p-2.5", {messages.into_iter()} }
     }
 }
 
@@ -125,43 +125,43 @@ pub fn ConversationView() -> Element {
 pub(crate) fn MessageEntry(entry: ConversationEntry) -> Element {
     match entry {
         ConversationEntry::UserInput { text } => {
-            rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#1a2a44] border-l-[3px] border-[#4080ff]", div { class: "text-[#4080ff] font-bold", ">>> " } {text} } }
+            rsx! { div { class: "mb-1.5 sm:mb-2.5 px-1.5 sm:px-2.5 py-1 sm:py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#1a2a44] border-l-[3px] border-[#4080ff]", div { class: "text-[#4080ff] font-bold", ">>> " } {text} } }
         }
         ConversationEntry::Thinking { content } => {
-            rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a2a20] border-l-[3px] border-[#c0c040]", div { class: "text-[#c0c040] font-bold", "Thinking" } div { class: "text-[#888] mt-1 pl-1", {content} } } }
+            rsx! { div { class: "mb-1.5 sm:mb-2.5 px-1.5 sm:px-2.5 py-1 sm:py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a2a20] border-l-[3px] border-[#c0c040]", div { class: "text-[#c0c040] font-bold", "Thinking" } div { class: "text-[#888] mt-1 pl-1", {content} } } }
         }
         ConversationEntry::LlmCall { iteration, model } => {
             let model_label = if model.is_empty() { format!("Calling LLM (iteration {iteration})...") } else { format!("Calling LLM: {model} (iteration {iteration})") };
-            rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a2030] border-l-[3px] border-[#a060c0]", div { class: "text-[#a060c0] font-bold", {model_label} } } }
+            rsx! { div { class: "mb-1.5 sm:mb-2.5 px-1.5 sm:px-2.5 py-1 sm:py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a2030] border-l-[3px] border-[#a060c0]", div { class: "text-[#a060c0] font-bold", {model_label} } } }
         }
         ConversationEntry::ContentStreaming { content } => {
-            if content.is_empty() { rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#ccc]", "Generating..." } } }
-            else { rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#ccc]", {content} } } }
+            if content.is_empty() { rsx! { div { class: "mb-1.5 sm:mb-2.5 px-1.5 sm:px-2.5 py-1 sm:py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#ccc]", "Generating..." } } }
+            else { rsx! { div { class: "mb-1.5 sm:mb-2.5 px-1.5 sm:px-2.5 py-1 sm:py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#ccc]", {content} } } }
         }
         ConversationEntry::ToolCall { tool_name, arg_preview } => {
-            rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#1a2a3a] border-l-[3px] border-[#4080c0]", div { class: "text-[#4080c0] font-bold", "[{tool_name}]" } if !arg_preview.is_empty() { div { class: "text-[#888] text-[12px] mt-0.5 pl-1", "{arg_preview}" } } } }
+            rsx! { div { class: "mb-1.5 sm:mb-2.5 px-1.5 sm:px-2.5 py-1 sm:py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#1a2a3a] border-l-[3px] border-[#4080c0]", div { class: "text-[#4080c0] font-bold", "[{tool_name}]" } if !arg_preview.is_empty() { div { class: "text-[#888] text-[12px] mt-0.5 pl-1", "{arg_preview}" } } } }
         }
         ConversationEntry::ToolResult { tool_name, preview, success } => {
             let cls = if success {
-                "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#1a2a1a] border-l-[3px] border-[#40c040]"
+                "mb-1.5 sm:mb-2.5 px-1.5 sm:px-2.5 py-1 sm:py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#1a2a1a] border-l-[3px] border-[#40c040]"
             } else {
-                "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a1a1a] border-l-[3px] border-[#c04040]"
+                "mb-1.5 sm:mb-2.5 px-1.5 sm:px-2.5 py-1 sm:py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a1a1a] border-l-[3px] border-[#c04040]"
             };
             let status = if success { "OK" } else { "ERR" };
             let color = if success { "#40c040" } else { "#c04040" };
             let display = truncate_lines(&preview, 6, 90);
             rsx! { div { class: cls, div { span { class: "font-bold", style: "color: {color};", "[{status}] " } span { style: "color: {color}; font-weight: bold;", "{tool_name}" } } div { class: "text-[#888] text-[12px] mt-1 pl-1 max-h-[120px] overflow-y-auto font-mono", {display} } } }
         }
-        ConversationEntry::AgentAnswer { text } => { rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#e0e0e0] leading-[1.5]", {text} } } }
+        ConversationEntry::AgentAnswer { text } => { rsx! { div { class: "mb-1.5 sm:mb-2.5 px-1.5 sm:px-2.5 py-1 sm:py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#e0e0e0] leading-[1.5]", {text} } } }
         ConversationEntry::RunSummary { iterations, tool_calls, elapsed_ms } => {
             let iw = if iterations == 1 { "iteration" } else { "iterations" };
             let tw = if tool_calls == 1 { "tool call" } else { "tool calls" };
-            rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#80c080] font-bold py-1.5", "Done | {iterations} {iw} | {tool_calls} {tw} | {elapsed_ms}ms" } }
+            rsx! { div { class: "mb-1.5 sm:mb-2.5 px-1.5 sm:px-2.5 py-1 sm:py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#80c080] font-bold py-1.5", "Done | {iterations} {iw} | {tool_calls} {tw} | {elapsed_ms}ms" } }
         }
-        ConversationEntry::Error { message } => { rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#ff6060] font-bold bg-[#2a1a1a] border-l-[3px] border-[#c04040]", "Error: {message}" } } }
+        ConversationEntry::Error { message } => { rsx! { div { class: "mb-1.5 sm:mb-2.5 px-1.5 sm:px-2.5 py-1 sm:py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#ff6060] font-bold bg-[#2a1a1a] border-l-[3px] border-[#c04040]", "Error: {message}" } } }
         ConversationEntry::EntryCheckpoint { reason, note, created_at } => {
             let note_text = note.as_deref().map(|n| format!(" ({n})")).unwrap_or_default();
-            rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a2a20] border-l-[3px] border-[#c0a040] text-[#aaa] text-[12px] italic", "[Checkpoint {created_at}] {reason}{note_text}" } }
+            rsx! { div { class: "mb-1.5 sm:mb-2.5 px-1.5 sm:px-2.5 py-1 sm:py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a2a20] border-l-[3px] border-[#c0a040] text-[#aaa] text-[12px] italic", "[Checkpoint {created_at}] {reason}{note_text}" } }
         }
     }
 }
