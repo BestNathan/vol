@@ -1,12 +1,12 @@
 # Wiki Index
 
-Last updated: 2026-05-17 (frontend-auto-reconnect)
+Last updated: 2026-05-18 (mobile-layout-design)
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs, ConnectionStatePanel connection status dashboard, MCP state types, Skills panel with detail dialog, and auto-reconnect with session restoration | active | 2026-05-17 |
+| [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs, ConnectionStatePanel connection status dashboard, MCP state types, Skills panel with detail dialog, auto-reconnect with session restoration, and mobile responsive layout with slide-out file tree drawer | active | 2026-05-18 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate | active | 2026-05-04 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions | stable | 2026-05-04 |
@@ -83,6 +83,7 @@ Last updated: 2026-05-17 (frontend-auto-reconnect)
 | [[schema-form-pattern]] | Auto-generated form fields from JSON Schema — SchemaForm component with type-specific renderers (string, number, boolean, object, enum) | active | 2026-05-16 |
 | [[skills-panel-json-rpc]] | Exposing skill discovery via JSON-RPC — skill.list/skill.get methods with graceful degradation, lazy detail loading | active | 2026-05-16 |
 | [[frontend-auto-reconnect]] | WebSocket auto-reconnect with exponential backoff and session restoration on Dioxus web frontend — 10 max retries, countdown display, automatic conversation rebuild | active | 2026-05-17 |
+| [[drawer-ui-pattern]] | Mobile-first slide-out file tree drawer with backdrop overlay, hamburger toggle, and close button — uses `sm:` breakpoint (640px) | active | 2026-05-18 |
 
 ## Sources
 
@@ -125,6 +126,7 @@ Last updated: 2026-05-17 (frontend-auto-reconnect)
 | [[mcp-toolcall-input-schema]] | Task 1: Added input_schema field to McpToolCallState for SchemaForm support | active | 2026-05-16 |
 | [[skills-panel-content]] | Backend JSON-RPC + web UI detail dialog for browsing discovered skills — skill.list/skill.get RPC, SkillLoader integration, SkillDetailDialog modal | active | 2026-05-16 |
 | [[frontend-auto-reconnect]] | WebSocket auto-reconnect with exponential backoff and session restoration on Dioxus web frontend | active | 2026-05-17 |
+| [[mobile-layout-design]] | Mobile layout support: slide-out file tree drawer, compact status bar, responsive dialogs for phone screens | active | 2026-05-18 |
 
 ## Analyses
 

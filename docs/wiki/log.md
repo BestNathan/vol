@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-05-18] ingest | Mobile Layout Design Implementation
+- Created sources: [[mobile-layout-design]]
+- Created concepts: [[drawer-ui-pattern]]
+- Updated entities: [[vol-llm-ui-crate]] (added `file_tree_drawer_open` to WorkspaceState, `file_tree_outer_class()` function, `DESKTOP_SIDEBAR_CLASSES` constant, timeline entry, source_count -> 14)
+- Updated index: new mobile-layout-design source entry, new drawer-ui-pattern concept entry, vol-llm-ui-crate summary updated with mobile responsive layout
+- Cross-references added: 5
+- Changes: `WorkspaceState` gains `file_tree_drawer_open: bool`; file tree becomes slide-out drawer on mobile with hamburger toggle, backdrop overlay, and close button; StatusBar hides verbose fields (Run/Iter/Tools/Time) on mobile; TabBar uses `flex-nowrap overflow-x-auto` with smaller text; dialogs use `w-[95vw]` on mobile; conversation and input area get tighter padding; Tailwind `sm:` breakpoint (640px) used consistently; 7 commits, code review fixes applied (duplicate #[component] removed, redundant classes deduplicated, DESKTOP_SIDEBAR_CLASSES constant extracted)
+
 ## [2026-05-17] fix | SkillDetailDialog Sizing and Skill Switching
 - Updated concepts: [[dioxus-web-pattern]] (source_count -> 15)
 - Changes: `SkillDetailDialog` fixed — width reduced to `w-[700px]` with `max-h-[80vh]` outer container, sub-sections given explicit `max-h` limits (`max-h-[200px]` SKILL.md body, `max-h-[150px]` file list, `max-h-[250px]` content preview); `use_effect` resets `selected_file`/`file_content` signals when skill changes so clicking different skills updates content; **`ToolCallDialog` also restructured** to match fixed container pattern — `w-[600px] h-[70vh]` outer container with `flex-shrink-0` header and `flex-1 min-h-0 overflow-y-auto` scrollable content area; WASM build passes cleanly

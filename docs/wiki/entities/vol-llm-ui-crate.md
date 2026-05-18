@@ -3,15 +3,15 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-17 (frontend-auto-reconnect)
-source_count: 13
+updated: 2026-05-18 (mobile-layout-design)
+source_count: 14
 ---
 
 # vol-llm-ui Crate
 
 **Category:** Rust crate — Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs
 
-**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[tailwind-css-migration]], [[connection-state-dashboard]], [[mcp-state-types]], [[schema-form-pattern]], [[skills-panel-json-rpc]]
+**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[tailwind-css-migration]], [[connection-state-dashboard]], [[mcp-state-types]], [[schema-form-pattern]], [[skills-panel-json-rpc]], [[drawer-ui-pattern]]
 
 ## Overview
 
@@ -78,3 +78,4 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-16**: `ToolCallDialog` rewritten to use `SchemaForm` component — raw JSON textarea replaced with auto-generated form fields from tool JSON Schema; form state via `use_signal` with `build_form_defaults()` initialization; `use_effect` re-initializes on schema change [[schemaform-toolcall-dialog]]
 - **2026-05-16**: Skills panel populated — `SkillsState` gained `error` field, `SkillDialogState` / `SkillDetail` types added, `SkillsPanel` fetches skills on mount via `rpc_client.skill_list()` with error/retry UI, row click opens `SkillDetailDialog` modal showing name/version/scope/triggers/content/file_listing; `SkillDetailDialog` rendered at App root level, dialog signal passed via context [[skills-panel-content]]
 - **2026-05-17**: `JsonRpcClient` gains `reconnect()` method — internal WebSocket swapped via `RefCell<WebSocket>`, auto-subscribe preserved; App spawns two `spawn_local` tasks (reconnect watcher with exponential backoff 3s→30s, 10 max retries; session restoration via session.list→session.resume→session.entries); `GlobalState` gains `reconnecting`/`reconnect_attempts`/`reconnect_delay_secs`/`reconnect_maxed` fields; StatusBar shows "Reconnecting... (Xs)" countdown; `UiEvent` gains `WsReconnecting`/`WsReconnectFailed`/`WsReconnected` variants; `gloo-timers` dependency added [[frontend-auto-reconnect]]
+- **2026-05-18**: Mobile layout support added — `WorkspaceState` gains `file_tree_drawer_open: bool`; file tree becomes slide-out drawer with backdrop and close button on mobile (`sm:hidden`); StatusBar hides verbose fields; TabBar uses `flex-nowrap overflow-x-auto` with smaller text; dialogs use `w-[95vw]` on mobile; conversation and input area get tighter padding; `file_tree_outer_class()` function and `DESKTOP_SIDEBAR_CLASSES` constant for drawer state management [[mobile-layout-design]]
