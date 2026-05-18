@@ -554,7 +554,7 @@ fn TabBar() -> Element {
     let state: AppState = use_context();
 
     rsx! {
-        div { class: "flex bg-[#252540] border-b border-[#333355] flex-shrink-0 sm:overflow-x-auto",
+        div { class: "flex flex-nowrap bg-[#252540] border-b border-[#333355] flex-shrink-0 sm:overflow-x-auto overflow-x-auto",
             TabButton { state: state.clone(), tab: ActiveTab::Conversation, label: "Conversation" }
             TabButton { state: state.clone(), tab: ActiveTab::Sessions, label: "Sessions" }
             TabButton { state: state.clone(), tab: ActiveTab::Tools, label: "Tools" }
@@ -572,9 +572,9 @@ fn TabButton(state: AppState, tab: ActiveTab, label: String) -> Element {
     let current_tab = state.active_tab.read();
     let active = *current_tab == tab;
     let tab_class = if active {
-        "px-4 py-1.5 bg-[#1a1a2e] text-[#e0e0e0] border-b-2 border-[#80a0ff] cursor-pointer text-[13px]"
+        "px-2 sm:px-4 py-1 sm:py-1.5 bg-[#1a1a2e] text-[#e0e0e0] border-b-2 border-[#80a0ff] cursor-pointer text-[11px] sm:text-[13px] whitespace-nowrap flex-shrink-0"
     } else {
-        "px-4 py-1.5 bg-transparent text-[#888] border-b-2 border-transparent cursor-pointer text-[13px] hover:text-[#ccc] hover:bg-[#2a2a44]"
+        "px-2 sm:px-4 py-1 sm:py-1.5 bg-transparent text-[#888] border-b-2 border-transparent cursor-pointer text-[11px] sm:text-[13px] hover:text-[#ccc] hover:bg-[#2a2a44] whitespace-nowrap flex-shrink-0"
     };
     let mut active_tab_signal = state.active_tab;
     rsx! {
