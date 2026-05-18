@@ -82,11 +82,22 @@ pub fn InputArea() -> Element {
                         disabled: is_running,
                         placeholder: "Type a message to the agent...",
                         rows: 2,
-                        class: "w-full bg-[#1a1a2e] text-[#e0e0e0] border border-[#444466] rounded-md px-2 py-1.5 text-[13px] sm:text-[14px] font-sans resize-none min-h-[40px] max-h-[120px] outline-none focus:border-[#80a0ff] disabled:opacity-50"
+                        class: "w-full bg-[#1a1a2e] text-[#e0e0e0] border border-[#444466] rounded-md px-2 py-1.5 text-[16px] sm:text-[14px] font-sans resize-none min-h-[40px] max-h-[120px] outline-none focus:border-[#80a0ff] disabled:opacity-50"
                     }
                     div { class: "mt-1 text-[10px] sm:text-[11px] text-[#666]", {hint} }
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn textarea_uses_mobile_font_size_that_does_not_trigger_ios_zoom() {
+        let source = include_str!("input_area.rs");
+        let expected = [format!("text-[{}px]", 16), "sm:text-[14px]".to_string()].join(" ");
+
+        assert!(source.contains(&expected));
     }
 }

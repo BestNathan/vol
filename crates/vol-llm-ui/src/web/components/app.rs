@@ -322,17 +322,21 @@ pub fn App() -> Element {
         loop {
             // Wait until reconnecting flag is set
             loop {
-                {
+                let (should_reconnect, should_reset_reconnect_state) = {
                     let g = reconn_global.read();
-                    if g.reconnecting && !g.reconnect_maxed {
-                        break;
-                    }
-                    // If connected (e.g., initial connect), reset
-                    if g.ws_connected {
-                        let mut gw = reconn_global.write_unchecked();
-                        gw.reconnect_attempts = 0;
-                        gw.reconnect_maxed = false;
-                    }
+                    (
+                        g.reconnecting && !g.reconnect_maxed,
+                        g.ws_connected && (g.reconnect_attempts != 0 || g.reconnect_maxed),
+                    )
+                };
+                if should_reconnect {
+                    break;
+                }
+                // If connected (e.g., initial connect), reset after the read guard is dropped.
+                if should_reset_reconnect_state {
+                    let mut gw = reconn_global.write_unchecked();
+                    gw.reconnect_attempts = 0;
+                    gw.reconnect_maxed = false;
                 }
                 TimeoutFuture::new(200).await;
             }
@@ -522,17 +526,8 @@ pub fn App() -> Element {
             div { class: "flex flex-col h-full w-full overflow-hidden",
                 StatusBar {}
                 div { class: "flex flex-1 overflow-hidden relative",
-                    // Hamburger button — mobile only
-                    button {
-                        class: "sm:hidden absolute top-1 left-1 z-[60] w-8 h-8 flex items-center justify-center bg-[#252540] border border-[#333355] rounded-md text-[#e0e0e0] text-[18px] cursor-pointer hover:bg-[#2a2a44]",
-                        onclick: move |_| {
-                            let mut w = workspace_signal.write_unchecked();
-                            w.file_tree_drawer_open = true;
-                        },
-                        "\u{2630}"
-                    }
                     FileTree {}
-                    div { class: "flex-1 flex flex-col overflow-hidden",
+                    div { class: "min-w-0 flex-1 flex flex-col overflow-hidden",
                         TabBar {}
                         TabContent { skill_dialog_signal }
                         InputArea {}
@@ -617,5 +612,36 @@ pub fn status_label(status: crate::state::ToolCallStatus) -> &'static str {
         crate::state::ToolCallStatus::Success => "OK",
         crate::state::ToolCallStatus::Error => "ERR",
         crate::state::ToolCallStatus::Skipped => "SKIP",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn app_layout_does_not_use_a_floating_mobile_file_tree_button() {
+        let source = include_str!("app.rs");
+        let app_level_open_assignment = ["file_tree_drawer_open", "=", "true"].join(" ");
+
+        assert!(!source.contains(&app_level_open_assignment));
+    }
+
+    #[test]
+    fn reconnect_loop_does_not_write_global_state_while_a_read_guard_is_alive() {
+        let source = include_str!("app.rs");
+        let read_pos = source
+            .find("let g = reconn_global.read();")
+            .expect("reconnect loop should read global state");
+        let search_end = (read_pos + 500).min(source.len());
+        let read_scope = &source[read_pos..search_end];
+        let overlapping_write = [
+            "if g.ws_connected {",
+            "let mut gw = reconn_global.write_unchecked();",
+        ];
+
+        assert!(
+            !(read_scope.contains(overlapping_write[0])
+                && read_scope.contains(overlapping_write[1])),
+            "{read_scope}"
+        );
     }
 }

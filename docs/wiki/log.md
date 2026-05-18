@@ -1,5 +1,54 @@
 # Change Log
 
+## [2026-05-18] ingest | FileTree Chevron Glyph Refinement
+- Created sources: [[file-tree-chevron-glyph-refinement]]
+- Updated entities: [[vol-llm-ui-crate]] (greater-than-style FileTree chevron affordance, timeline entry, source_count -> 20)
+- Updated concepts: [[workspace-tree-pattern]] (directory chevron visual state semantics, source_count -> 6)
+- Updated index: refreshed summaries/date and added new source entry
+- Cross-references added: 7
+- Changes: `TreeNode` now renders directory chevrons with `\u{203a}` instead of the old triangle glyph; collapsed state points right and expanded state uses `rotate-90` to point downward while keeping the larger `w-6 h-6 text-[16px]` styling; regression test `directory_chevron_uses_greater_than_style` added; `cargo test -p vol-llm-ui --no-default-features --features web` passed 32/32, `make web-check` passed, and `git diff --check` passed
+
+## [2026-05-18] ingest | FileTree Collapsed State Follow-up Fix
+- Created sources: [[file-tree-collapsed-state-follow-up]]
+- Updated entities: [[vol-llm-ui-crate]] (FileTree collapsed-state helper semantics, larger chevron affordance, timeline entry, source_count -> 19)
+- Updated concepts: [[workspace-tree-pattern]] (web collapse semantics for unloaded empty directories, source_count -> 5)
+- Updated index: refreshed summaries/date and added new source entry
+- Cross-references added: 8
+- Changes: `TreeNode` now uses `directory_is_collapsed()` so unloaded empty directories render collapsed by default; `toggle_directory_for_click()` makes first click on unloaded directories call `file.list` without inserting into `collapsed_dirs`; successful loads remove explicit collapsed state; directory chevrons are enlarged to `w-6 h-6 text-[16px]`; regression tests added; `cargo test -p vol-llm-ui --no-default-features --features web` passed 31/31, `make web-check` passed, and `git diff --check` passed
+
+## [2026-05-18] ingest | FileTree Single-Click Expand Fix
+- Created sources: [[file-tree-single-click-expand-fix]]
+- Updated entities: [[vol-llm-ui-crate]] (WorkspaceTreeNode lazy-loading invariant, timeline entry, source_count -> 18)
+- Updated concepts: [[workspace-tree-pattern]] (child directory loaded-state invariant, source_count -> 4)
+- Updated index: refreshed summaries/dates and added new source entry
+- Cross-references added: 9
+- Changes: `WorkspaceTreeNode::replace_dir_children()` now inserts discovered child directories with `loaded: false` instead of `loaded: true`, while files stay loaded; this fixes FileTree folders requiring two clicks by ensuring the first click on a discovered child directory triggers its own `file.list`; regression test `test_replace_dir_children_keeps_child_dirs_unloaded` added; `cargo test -p vol-llm-ui --no-default-features --features web` passed 27/27 and `make web-check` passed
+
+## [2026-05-18] ingest | Mobile UI Refinements
+- Created sources: [[mobile-ui-refinements]]
+- Updated entities: [[vol-llm-ui-crate]] (mobile refinement timeline entry, source_count -> 17)
+- Updated concepts: [[drawer-ui-pattern]] (drawer/backdrop scoped below StatusBar), [[dioxus-web-pattern]] (mobile input and list patterns), [[tailwind-css-migration]] (new responsive utilities), [[skills-panel-json-rpc]] (mobile cards over same skill list/detail data)
+- Updated index: refreshed summaries/dates and added new source entry
+- Cross-references added: 13
+- Changes: FileTree drawer/backdrop changed from viewport-level `fixed` to main-content `absolute` positioning so StatusBar remains visible; InputArea textarea base font size changed to `text-[16px]` to prevent mobile focus zoom; SkillsPanel now renders mobile `SkillCard` entries with a desktop-only table; Tailwind CSS regenerated; regression tests added for all three behaviors; `cargo test -p vol-llm-ui --no-default-features --features web`, `make web-check`, and `git diff --check` pass
+
+## [2026-05-18] ingest | Mobile File Tree Rail
+- Created sources: [[mobile-file-tree-rail]]
+- Updated entities: [[vol-llm-ui-crate]] (mobile rail timeline entry, source_count -> 16)
+- Updated concepts: [[drawer-ui-pattern]] (rail replaces floating hamburger), [[workspace-tree-pattern]] (mobile rail containment), [[dioxus-web-pattern]] (FileTree owns drawer affordance), [[tailwind-css-migration]] (rail utilities regenerated)
+- Updated sources: [[mobile-layout-design]] (notes now point to the rail refinement that supersedes the original hidden-tree/floating-button closed state)
+- Updated index: refreshed summaries/dates and added new source entry
+- Cross-references added: 14
+- Changes: mobile FileTree closed state now renders an inline `w-10` rail; app-level floating hamburger button removed; right content wrapper uses `min-w-0 flex-1`; FileTree full panel content hides only inside the mobile rail and remains visible at `sm:`; regression tests cover rail visibility and removal of app-owned drawer opening; `make web-css`, `cargo test -p vol-llm-ui --no-default-features --features web`, and `make web-check` pass
+
+## [2026-05-18] ingest | File Tree Sidebar Scroll Fix
+- Created sources: [[file-tree-sidebar-scroll-fix]]
+- Updated entities: [[vol-llm-ui-crate]] (FileTree sidebar scroll fix timeline entry, source_count -> 15)
+- Updated concepts: [[workspace-tree-pattern]] (desktop scroll containment), [[dioxus-web-pattern]] (FileTree bounded flex layout), [[tailwind-css-migration]] (Makefile `web-css` command for regenerated utilities)
+- Updated index: new source entry plus refreshed summaries/dates for vol-llm-ui-crate, workspace-tree-pattern, dioxus-web-pattern, and tailwind-css-migration
+- Cross-references added: 10
+- Changes: `DESKTOP_SIDEBAR_CLASSES` changed from mixed `sm:block`/`sm:flex` to bounded `sm:flex sm:h-full sm:min-h-0 sm:flex-col`; FileTree body containers now use `min-h-0 flex-1 overflow-y-auto`; directory chevron and refresh controls are compact icon affordances with hover styling; Tailwind CSS regenerated with `make web-css`; regression test added for the desktop sidebar layout contract; `make web-check`, `make web-build`, and focused unit test pass
+
 ## [2026-05-18] ingest | Mobile Layout Design Implementation
 - Created sources: [[mobile-layout-design]]
 - Created concepts: [[drawer-ui-pattern]]

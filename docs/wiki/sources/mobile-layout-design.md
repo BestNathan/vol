@@ -13,10 +13,10 @@ tags: [mobile, responsive, dioxus, tailwind, frontend, ui]
 **Link:** docs/superpowers/specs/2026-05-18-mobile-layout-design.md, docs/superpowers/plans/2026-05-18-mobile-layout.md
 
 ## TL;DR
-Added responsive mobile layout support to the Dioxus web frontend so phone screens (<640px) get a full interactive experience with a slide-out file tree drawer, compact status bar, and properly sized touch targets. Desktop layout preserved at `sm:` breakpoint (640px) and above.
+Added responsive mobile layout support to the Dioxus web frontend so phone screens below the project `sm:` breakpoint get a full interactive experience with a slide-out file tree drawer, compact status bar, and properly sized touch targets. Desktop layout is preserved at `sm:` (480px in `assets/input.css`) and above.
 
 ## Key Takeaways
-- File tree becomes a hidden-by-default slide-out drawer on mobile with backdrop overlay and close button
+- File tree becomes a mobile drawer with backdrop overlay and close button; its closed state was later refined from hidden/floating-button to an inline rail by [[mobile-file-tree-rail]]
 - Status bar hides verbose fields (Run, Iter, Tools, Time) on mobile, keeps connection dot + session ID + badge
 - Tab bar uses `flex-nowrap` with horizontal scrolling and smaller text on mobile
 - All dialogs use `w-[95vw]` on mobile to fit within viewport
@@ -27,11 +27,11 @@ Added responsive mobile layout support to the Dioxus web frontend so phone scree
 ## Detailed Summary
 
 ### Architecture
-- `sm:` breakpoint (640px) used as mobile/desktop boundary across all components
+- `sm:` breakpoint (480px in `assets/input.css`) used as mobile/desktop boundary across all components
 - `WorkspaceState` gains `file_tree_drawer_open: bool` signal field
 - File tree drawer: `fixed inset-y-0 left-0 z-50` overlay on mobile, inline sidebar on desktop
 - Backdrop: `fixed inset-0 z-40 bg-black/50` — click to dismiss drawer
-- Hamburger button: `sm:hidden absolute top-1 left-1 z-[60]` — visible only on mobile
+- Original open trigger: app-level `sm:hidden absolute top-1 left-1 z-[60]` hamburger. Superseded by [[mobile-file-tree-rail]], where the trigger is an inline left rail owned by `FileTree`.
 
 ### Component Changes
 - **StatusBar**: Run/Iter/Tools/Time fields get `hidden sm:inline`, build info gets `hidden sm:flex`
@@ -63,5 +63,6 @@ Added responsive mobile layout support to the Dioxus web frontend so phone scree
 
 ## Notes
 - No automated test framework exists for WASM UI — manual testing on phone browser required
-- Future enhancement: `aria-label` on hamburger and close buttons for accessibility
+- The original closed-state design used a hidden mobile tree plus floating hamburger button. This was later refined by [[mobile-file-tree-rail]] so the closed file tree remains as an inline left rail and `App` no longer owns a floating drawer trigger.
+- Future enhancement: `aria-label` on rail and close buttons for accessibility
 - Future enhancement: focus-trap inside drawer when open

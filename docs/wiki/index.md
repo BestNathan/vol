@@ -1,12 +1,12 @@
 # Wiki Index
 
-Last updated: 2026-05-18 (mobile-layout-design)
+Last updated: 2026-05-18 (file-tree-chevron-glyph-refinement)
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs, ConnectionStatePanel connection status dashboard, MCP state types, Skills panel with detail dialog, auto-reconnect with session restoration, and mobile responsive layout with slide-out file tree drawer | active | 2026-05-18 |
+| [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs, ConnectionStatePanel connection status dashboard, MCP state types, Skills panel with detail dialog/mobile cards, auto-reconnect with session restoration, mobile responsive layout, bounded-scroll FileTree sidebar, mobile FileTree rail, and single-click lazy directory expansion with collapsed unloaded directories and greater-than-style chevrons | active | 2026-05-18 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate | active | 2026-05-04 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions | stable | 2026-05-04 |
@@ -61,19 +61,19 @@ Last updated: 2026-05-18 (mobile-layout-design)
 | [[ratatui-tui-pattern]] | Layout and widget composition patterns for ratatui 0.30 TUI rendering | active | 2026-05-08 |
 | [[ui-event-loop-pattern]] | crossterm EventStream + tokio::select! multiplexing for async TUI | active | 2026-05-08 |
 | [[dioxus-signal-pattern]] | Signal-based state management with Signal<UiState> via Dioxus context | active | 2026-05-08 |
-| [[dioxus-web-pattern]] | Dioxus 0.6 WASM component architecture and rendering patterns, 18+ components including auto-reconnect with exponential backoff and session restoration | active | 2026-05-17 |
+| [[dioxus-web-pattern]] | Dioxus 0.6 WASM component architecture and rendering patterns, 18+ components including auto-reconnect, session restoration, bounded FileTree sidebar scrolling, FileTree-owned mobile rail/drawer behavior, mobile-safe input font sizing, and Skills mobile cards | active | 2026-05-18 |
 | [[remote-agent-connection]] | AgentConnection and FileOperations traits with local/remote implementations | active | 2026-05-08 |
 | [[json-rpc-websocket]] | JSON-RPC 2.0 over WebSocket protocol for remote agent communication, with auto-reconnect on web frontend | active | 2026-05-17 |
 | [[jsonrpc-transport]] | JSON-RPC 2.0 over WebSocket implementing the Connection trait | active | 2026-05-09 |
 | [[jsonrpc-server-handler]] | Historical JSON-RPC handler architecture — deleted, replaced by jsonrpc-transport | stale | 2026-05-09 |
 | [[file-tab-pattern]] | Tabbed file viewer with non-component render function pattern for Dioxus | active | 2026-05-10 |
-| [[workspace-tree-pattern]] | Recursive WorkspaceTreeNode tree with lazy-loaded directory children via JSON-RPC file.list | active | 2026-05-10 |
+| [[workspace-tree-pattern]] | Recursive WorkspaceTreeNode tree with lazy-loaded directory children via JSON-RPC file.list, unloaded child directories rendered collapsed until fetched, greater-than-style directory chevrons, bounded desktop sidebar scroll containment, and mobile collapsed rail containment | active | 2026-05-18 |
 | [[event-bus-pattern]] | EventBus with UiEventKind routing, SubscriptionSet auto-cleanup, per-component local signals, connection status event handling (WsConnected/WsConnecting/WsDisconnected/WsReconnecting/WsReconnectFailed/WsReconnected) | active | 2026-05-17 |
 | [[mcp-client-integration]] | Bridging MCP server tools into ExecutableTool trait — McpTool, McpSession, AgentConfigBuilder integration | active | 2026-05-11 |
 | [[mcp-example-pattern]] | Pattern for runnable example files demonstrating MCP integration with ReActAgent | active | 2026-05-11 |
 | [[sessions-ui-pattern]] | Tab-based session browsing with SessionsState signal, SessionsPanel component, checkpoint CSS | active | 2026-05-11 |
 | [[connection-state-dashboard-pattern]] | ConnectionStatePanel component subscribing to WsConnected/WsConnecting/WsDisconnected via EventBus, rendering color-coded status in StatusBar | active | 2026-05-14 |
-| [[tailwind-css-migration]] | Systematic migration from global CSS to Tailwind utility classes — ALL 16 components complete, GLOBAL_CSS deleted | complete | 2026-05-12 |
+| [[tailwind-css-migration]] | Systematic migration from global CSS to Tailwind utility classes — ALL 16 components complete, Makefile `web-css` regenerates checked-in CSS for responsive FileTree, input, and Skills utilities | complete | 2026-05-18 |
 | [[agent-error-handling]] | Hierarchical error types with retryable vs non-retryable classification and exponential backoff | active | 2026-05-14 |
 | [[loki-plugin-otel-migration-design]] | Design spec for migrating LokiPlugin from HTTP POST to OTel SDK via tracing::info! | active | 2026-05-14 |
 | [[loki-raw-event-serialization-design]] | Design spec for flat JSON serialization format of agent events | active | 2026-05-14 |
@@ -81,9 +81,9 @@ Last updated: 2026-05-18 (mobile-layout-design)
 | [[otel-dependency-upgrade]] | Workspace dependency upgrade from OTel 0.21 to 0.29 with breaking API changes | active | 2026-05-14 |
 | [[mcp-state-types]] | State types and wire structures for displaying MCP servers, tools, resources, and prompts in the Dioxus web frontend | active | 2026-05-14 |
 | [[schema-form-pattern]] | Auto-generated form fields from JSON Schema — SchemaForm component with type-specific renderers (string, number, boolean, object, enum) | active | 2026-05-16 |
-| [[skills-panel-json-rpc]] | Exposing skill discovery via JSON-RPC — skill.list/skill.get methods with graceful degradation, lazy detail loading | active | 2026-05-16 |
+| [[skills-panel-json-rpc]] | Exposing skill discovery via JSON-RPC — skill.list/skill.get methods with graceful degradation, lazy detail loading, desktop table and mobile card presentation | active | 2026-05-18 |
 | [[frontend-auto-reconnect]] | WebSocket auto-reconnect with exponential backoff and session restoration on Dioxus web frontend — 10 max retries, countdown display, automatic conversation rebuild | active | 2026-05-17 |
-| [[drawer-ui-pattern]] | Mobile-first slide-out file tree drawer with backdrop overlay, hamburger toggle, and close button — uses `sm:` breakpoint (640px) | active | 2026-05-18 |
+| [[drawer-ui-pattern]] | Mobile file tree drawer pattern with inline collapsed left rail, content-scoped backdrop overlay, and close button — uses project `sm:` breakpoint | active | 2026-05-18 |
 
 ## Sources
 
@@ -127,6 +127,12 @@ Last updated: 2026-05-18 (mobile-layout-design)
 | [[skills-panel-content]] | Backend JSON-RPC + web UI detail dialog for browsing discovered skills — skill.list/skill.get RPC, SkillLoader integration, SkillDetailDialog modal | active | 2026-05-16 |
 | [[frontend-auto-reconnect]] | WebSocket auto-reconnect with exponential backoff and session restoration on Dioxus web frontend | active | 2026-05-17 |
 | [[mobile-layout-design]] | Mobile layout support: slide-out file tree drawer, compact status bar, responsive dialogs for phone screens | active | 2026-05-18 |
+| [[file-tree-sidebar-scroll-fix]] | FileTree desktop sidebar scroll containment and compact directory controls | active | 2026-05-18 |
+| [[mobile-file-tree-rail]] | Mobile FileTree closed-state rail replacing app-level floating hamburger trigger | active | 2026-05-18 |
+| [[mobile-ui-refinements]] | Mobile UI fixes for status-safe FileTree drawer, no-zoom textarea focus, and Skills card layout | active | 2026-05-18 |
+| [[file-tree-single-click-expand-fix]] | FileTree lazy-loading state fix so discovered child directories expand and fetch on first click | active | 2026-05-18 |
+| [[file-tree-collapsed-state-follow-up]] | FileTree UI-state follow-up so unloaded directories start visually collapsed and use a larger chevron | active | 2026-05-18 |
+| [[file-tree-chevron-glyph-refinement]] | FileTree directory expand/collapse chevron changed to a greater-than-style glyph | active | 2026-05-18 |
 
 ## Analyses
 

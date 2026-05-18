@@ -3,14 +3,14 @@ type: concept
 category: pattern
 tags: [dioxus, web, frontend, component, wasm]
 created: 2026-05-08
-updated: 2026-05-17 (frontend-auto-reconnect)
-source_count: 15
+updated: 2026-05-18 (mobile-file-tree-rail)
+source_count: 18
 ---
 
 # Dioxus Web Pattern
 
 **Category:** Web frontend architecture
-**Related:** [[vol-llm-ui-crate]], [[dioxus-signal-pattern]], [[ratatui-tui-pattern]], [[human-in-the-loop]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[mcp-state-types]], [[frontend-auto-reconnect]]
+**Related:** [[vol-llm-ui-crate]], [[dioxus-signal-pattern]], [[ratatui-tui-pattern]], [[human-in-the-loop]], [[workspace-tree-pattern]], [[drawer-ui-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[mcp-state-types]], [[frontend-auto-reconnect]], [[file-tree-sidebar-scroll-fix]], [[mobile-file-tree-rail]], [[mobile-ui-refinements]]
 
 ## Definition
 
@@ -88,7 +88,13 @@ App
 
 ## FileTree Component
 
-The `FileTree` component renders a `WorkspaceTreeNode` tree in the left sidebar. Each node is a reactive `#[component] TreeNode` — not a plain function — enabling Dioxus reactivity when children are populated via `Signal::with_mut()`. Directories fetch children on-demand via JSON-RPC `file.list`, with a refresh button (⟳) for re-fetching. See [[workspace-tree-pattern]] for the full pattern.
+The `FileTree` component renders a `WorkspaceTreeNode` tree in the left sidebar. Each node is a reactive `#[component] TreeNode` — not a plain function — enabling Dioxus reactivity when children are populated via `Signal::with_mut()`. Directories fetch children on-demand via JSON-RPC `file.list`, with a refresh button (⟳) for re-fetching.
+
+`FileTree` also owns its mobile drawer affordance. On mobile closed state it remains in the flex layout as a `w-10` rail; tapping the rail sets `file_tree_drawer_open = true` and opens the drawer/backdrop as `absolute` overlays inside the main content area below `StatusBar`. `App` should only render `FileTree {}` and a `min-w-0 flex-1` content column, not a separate floating drawer button. The desktop sidebar is a bounded flex column (`sm:flex sm:h-full sm:min-h-0`) and its tree body is `min-h-0 flex-1 overflow-y-auto`, so long file trees scroll inside the sidebar. See [[workspace-tree-pattern]], [[drawer-ui-pattern]], [[mobile-file-tree-rail]], [[mobile-ui-refinements]], and [[file-tree-sidebar-scroll-fix]] for the full pattern.
+
+## Mobile Form And List Patterns
+
+Mobile text inputs should use at least `text-[16px]` at the base breakpoint to avoid browser zoom on focus, then may step down at `sm:` for desktop density. Repeated tabular data should use cards on mobile and tables from `sm:` upward. `SkillsPanel` follows this split by rendering `SkillCard` entries in `sm:hidden flex flex-col gap-2` and preserving the table as `hidden sm:table w-full`. See [[mobile-ui-refinements]] and [[skills-panel-json-rpc]].
 
 ## Build Command
 
@@ -130,6 +136,7 @@ Both frontends share `UiState` / `UiEvent` / `ActiveTab` types and the same conn
 - [[file-tab-pattern]]: Tabbed file viewer rendered in Workspace tab
 - [[workspace-tree-pattern]]: WorkspaceTreeNode tree structure and lazy-loading pattern
 - [[lazy-load-dir-tree]]: Source documenting the directory tree implementation
+- [[drawer-ui-pattern]]: Mobile file tree rail/drawer pattern
 - [[split-signal-state]]: Source documenting the EventBus refactoring
 - [[task-6-sessions-tab-wiring]]: Source documenting Sessions tab wiring, SessionDialog removal, checkpoint CSS
 - [[sessions-ui-pattern]]: Session browsing as a dedicated tab with SessionsState signal management
@@ -141,6 +148,9 @@ Both frontends share `UiState` / `UiEvent` / `ActiveTab` types and the same conn
 - [[schema-form-pattern]]: Pattern for auto-generated form fields from JSON Schema
 - [[skills-panel-content]]: Source documenting SkillsPanel RPC fetch + SkillDetailDialog modal
 - [[skills-panel-json-rpc]]: Pattern for exposing skill discovery via JSON-RPC
+- [[file-tree-sidebar-scroll-fix]]: FileTree desktop scroll containment and compact controls
+- [[mobile-file-tree-rail]]: FileTree mobile rail and app-level floating button removal
+- [[mobile-ui-refinements]]: Status-safe drawer positioning, mobile-safe input font size, and Skills mobile cards
 
 ## Dialog Sizing Pattern
 

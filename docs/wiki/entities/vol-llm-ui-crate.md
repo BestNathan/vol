@@ -3,15 +3,15 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-18 (mobile-layout-design)
-source_count: 14
+updated: 2026-05-18 (file-tree-chevron-glyph-refinement)
+source_count: 20
 ---
 
 # vol-llm-ui Crate
 
 **Category:** Rust crate — Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs
 
-**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[tailwind-css-migration]], [[connection-state-dashboard]], [[mcp-state-types]], [[schema-form-pattern]], [[skills-panel-json-rpc]], [[drawer-ui-pattern]]
+**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[tailwind-css-migration]], [[connection-state-dashboard]], [[mcp-state-types]], [[schema-form-pattern]], [[skills-panel-json-rpc]], [[drawer-ui-pattern]], [[file-tree-sidebar-scroll-fix]], [[mobile-file-tree-rail]], [[mobile-ui-refinements]], [[file-tree-single-click-expand-fix]], [[file-tree-collapsed-state-follow-up]], [[file-tree-chevron-glyph-refinement]]
 
 ## Overview
 
@@ -45,7 +45,7 @@ Both modes implement the same trait interfaces, so TUI (ratatui) and Web (Dioxus
 - MCP wire types: `McpServerInfo`, `McpToolInfo`, `McpResourceInfo`, `McpResourceTemplateInfo`, `McpPromptInfo`, `McpPromptArgInfo` — all serializable for JSON-RPC
 - MCP local state: `McpState` (panel state), `McpServerRowState` (display row), `McpToolCallState` (tool call dialog), `McpResourceViewerState`, `McpPromptViewerState`
 - `EventHandler` type: `Box<dyn Fn(&UiEvent) + 'static>` — no `Send + Sync` bounds for WASM [[split-signal-state]]
-- Workspace: `WorkspaceTreeNode` tree with lazy-loaded directory children via JSON-RPC `file.list` [[workspace-tree-pattern]]
+- Workspace: `WorkspaceTreeNode` tree with lazy-loaded directory children via JSON-RPC `file.list`; discovered child directories remain `loaded: false` until their own children are fetched, render visually collapsed while unloaded, first click loads/expands them, and directory controls use a CSS-drawn chevron affordance [[workspace-tree-pattern]], [[file-tree-single-click-expand-fix]], [[file-tree-collapsed-state-follow-up]], [[file-tree-chevron-glyph-refinement]]
 
 ## Architecture
 
@@ -79,3 +79,9 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-16**: Skills panel populated — `SkillsState` gained `error` field, `SkillDialogState` / `SkillDetail` types added, `SkillsPanel` fetches skills on mount via `rpc_client.skill_list()` with error/retry UI, row click opens `SkillDetailDialog` modal showing name/version/scope/triggers/content/file_listing; `SkillDetailDialog` rendered at App root level, dialog signal passed via context [[skills-panel-content]]
 - **2026-05-17**: `JsonRpcClient` gains `reconnect()` method — internal WebSocket swapped via `RefCell<WebSocket>`, auto-subscribe preserved; App spawns two `spawn_local` tasks (reconnect watcher with exponential backoff 3s→30s, 10 max retries; session restoration via session.list→session.resume→session.entries); `GlobalState` gains `reconnecting`/`reconnect_attempts`/`reconnect_delay_secs`/`reconnect_maxed` fields; StatusBar shows "Reconnecting... (Xs)" countdown; `UiEvent` gains `WsReconnecting`/`WsReconnectFailed`/`WsReconnected` variants; `gloo-timers` dependency added [[frontend-auto-reconnect]]
 - **2026-05-18**: Mobile layout support added — `WorkspaceState` gains `file_tree_drawer_open: bool`; file tree becomes slide-out drawer with backdrop and close button on mobile (`sm:hidden`); StatusBar hides verbose fields; TabBar uses `flex-nowrap overflow-x-auto` with smaller text; dialogs use `w-[95vw]` on mobile; conversation and input area get tighter padding; `file_tree_outer_class()` function and `DESKTOP_SIDEBAR_CLASSES` constant for drawer state management [[mobile-layout-design]]
+- **2026-05-18**: FileTree desktop scroll fix — `DESKTOP_SIDEBAR_CLASSES` now uses bounded flex-column layout (`sm:flex sm:h-full sm:min-h-0`) and the tree body uses `min-h-0 flex-1 overflow-y-auto`; directory chevron/refresh controls restyled as compact icon affordances; regression test added [[file-tree-sidebar-scroll-fix]]
+- **2026-05-18**: Mobile FileTree rail refinement — mobile closed state now renders an inline `w-10` rail owned by `FileTree`; `App` no longer renders a floating hamburger button; right-side content uses `min-w-0 flex-1` so tabs reserve the rail width; regression tests added [[mobile-file-tree-rail]]
+- **2026-05-18**: Mobile UI refinements — FileTree drawer/backdrop are scoped below `StatusBar`, `InputArea` textarea uses mobile-safe `text-[16px]`, and `SkillsPanel` renders mobile cards while keeping the desktop table [[mobile-ui-refinements]]
+- **2026-05-18**: FileTree single-click expansion fix — `WorkspaceTreeNode::replace_dir_children()` now inserts discovered child directories with `loaded: false` so their first click loads and expands them instead of first collapsing an empty node; regression test added [[file-tree-single-click-expand-fix]]
+- **2026-05-18**: FileTree collapsed-state follow-up — `TreeNode` now treats unloaded empty directories as visually collapsed, first click loads without inserting into `collapsed_dirs`, and directory chevrons use a larger `w-6 h-6 text-[16px]` affordance [[file-tree-collapsed-state-follow-up]]
+- **2026-05-18**: FileTree chevron glyph refinement — directory expand/collapse control now uses a CSS-drawn chevron, points right when collapsed, and rotates downward when expanded [[file-tree-chevron-glyph-refinement]]

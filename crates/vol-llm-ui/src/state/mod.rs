@@ -192,7 +192,7 @@ impl WorkspaceTreeNode {
                     name,
                     path: child_path,
                     is_dir,
-                    loaded: true,
+                    loaded: !is_dir,
                     load_error: false,
                     children: Vec::new(),
                 });
@@ -1284,5 +1284,23 @@ mod tests {
         assert_eq!(src.children[0].name, "main.rs");
         assert_eq!(src.children[0].path, "src/main.rs");
         assert_eq!(src.children[2].path, "src/utils");
+    }
+
+    #[test]
+    fn test_replace_dir_children_keeps_child_dirs_unloaded() {
+        let mut root = WorkspaceTreeNode::root("root".into(), ".".into());
+        root.children.push(WorkspaceTreeNode {
+            name: "src".into(),
+            path: "src".into(),
+            is_dir: true,
+            loaded: false,
+            load_error: false,
+            children: vec![],
+        });
+
+        root.replace_dir_children("src", vec![("utils".into(), true)]);
+
+        let src = root.find_child_mut("src").unwrap();
+        assert!(!src.children[0].loaded);
     }
 }
