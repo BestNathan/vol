@@ -210,6 +210,9 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
     }
 }
 
+/// CSS classes for the desktop file tree sidebar (mobile: hidden).
+const DESKTOP_SIDEBAR_CLASSES: &str = "hidden sm:block sm:w-[33.33%] md:w-[33.33%] lg:w-[240px] sm:min-w-[160px] md:min-w-[160px] lg:min-w-[180px] sm:border-r sm:flex sm:flex-col sm:overflow-hidden sm:flex-shrink-0 sm:bg-[#16162a]";
+
 /// Build the outer wrapper classes for the file tree panel.
 /// On desktop (`sm:`): always visible inline sidebar.
 /// On mobile: hidden when closed, fixed overlay when open.
@@ -218,7 +221,7 @@ fn file_tree_outer_class(drawer_open: bool) -> &'static str {
         "fixed inset-y-0 left-0 z-50 w-[80vw] max-w-[300px] flex flex-col overflow-hidden border-r border-[#2a2a44] bg-[#16162a]"
     } else {
         // Hidden on mobile, visible on desktop with sidebar classes
-        "hidden sm:block sm:w-[33.33%] md:w-[33.33%] lg:w-[240px] sm:min-w-[160px] md:min-w-[160px] lg:min-w-[180px] sm:border-r sm:flex sm:flex-col sm:overflow-hidden sm:flex-shrink-0 sm:bg-[#16162a]"
+        DESKTOP_SIDEBAR_CLASSES
     }
 }
 

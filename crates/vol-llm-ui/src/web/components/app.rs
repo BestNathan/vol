@@ -554,7 +554,7 @@ fn TabBar() -> Element {
     let state: AppState = use_context();
 
     rsx! {
-        div { class: "flex flex-nowrap bg-[#252540] border-b border-[#333355] flex-shrink-0 sm:overflow-x-auto overflow-x-auto",
+        div { class: "flex flex-nowrap bg-[#252540] border-b border-[#333355] flex-shrink-0 overflow-x-auto",
             TabButton { state: state.clone(), tab: ActiveTab::Conversation, label: "Conversation" }
             TabButton { state: state.clone(), tab: ActiveTab::Sessions, label: "Sessions" }
             TabButton { state: state.clone(), tab: ActiveTab::Tools, label: "Tools" }

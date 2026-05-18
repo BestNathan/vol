@@ -121,7 +121,6 @@ pub fn ConversationView() -> Element {
 }
 
 #[component]
-#[component]
 pub(crate) fn MessageEntry(entry: ConversationEntry) -> Element {
     match entry {
         ConversationEntry::UserInput { text } => {
