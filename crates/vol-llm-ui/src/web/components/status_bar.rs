@@ -53,14 +53,14 @@ pub fn StatusBar() -> Element {
             div { class: "flex items-center gap-1.5 overflow-hidden flex-nowrap sm:gap-1",
                 ConnectionIndicator { connected: ws_connected, error: ws_error.clone(), reconnecting, reconnect_delay, reconnect_maxed }
                 span { class: "whitespace-nowrap", "Session: {session_id}" }
-                span { class: "text-[#555] select-none" }
-                span { class: "whitespace-nowrap", "Run: {run_count}" }
-                span { class: "text-[#555] select-none" }
-                span { class: "whitespace-nowrap", "Iter: {iteration}" }
-                span { class: "text-[#555] select-none" }
-                span { class: "whitespace-nowrap", "Tools: {tool_call_count}" }
-                span { class: "text-[#555] select-none" }
-                span { class: "whitespace-nowrap", "Time: {time_str}" }
+                span { class: "hidden sm:inline text-[#555] select-none" }
+                span { class: "hidden sm:inline whitespace-nowrap", "Run: {run_count}" }
+                span { class: "hidden sm:inline text-[#555] select-none" }
+                span { class: "hidden sm:inline whitespace-nowrap", "Iter: {iteration}" }
+                span { class: "hidden sm:inline text-[#555] select-none" }
+                span { class: "hidden sm:inline whitespace-nowrap", "Tools: {tool_call_count}" }
+                span { class: "hidden sm:inline text-[#555] select-none" }
+                span { class: "hidden sm:inline whitespace-nowrap", "Time: {time_str}" }
                 span { class: "text-[#555] select-none" }
                 span { class: badge_cls, "{status}" }
                 if unsafe_mode {
@@ -70,7 +70,7 @@ pub fn StatusBar() -> Element {
                     span { class: "px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#3a2020] text-[#ff8080]", "QUITTING" }
                 }
             }
-            div { class: "flex items-center flex-shrink-0",
+            div { class: "hidden sm:flex items-center flex-shrink-0",
                 span { class: "flex items-center text-[11px] text-[#888] flex-shrink-0",
                     span { class: "text-[#666]", "UI " }
                     span { class: "text-[#a0a0c0] font-bold", {env!("CARGO_PKG_VERSION")} }
