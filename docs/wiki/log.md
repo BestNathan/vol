@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-05-19] ingest | CLAUDE.md Project Overview
+- Created sources: [[claude-md-project-overview]]
+- Created entities: [[nq-deribit-repository]]
+- Updated index: added repository entity, source entry, and refreshed Last updated marker
+- Cross-references added: 16
+- Changes: `CLAUDE.md` now includes a Project Overview section summarizing the Rust workspace as Deribit volatility monitoring plus LLM agent tooling, with major directory roles for `crates/`, selected crate groups, `docs/`, `frontend/`, `openspec/`, `k8s/`, `scripts/`, and `.cargo/`
+
 ## [2026-05-18] ingest | FileTree Chevron Glyph Refinement
 - Created sources: [[file-tree-chevron-glyph-refinement]]
 - Updated entities: [[vol-llm-ui-crate]] (greater-than-style FileTree chevron affordance, timeline entry, source_count -> 20)

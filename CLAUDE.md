@@ -39,6 +39,31 @@ index = "https://rsproxy.cn/crates.io-index"
 git-fetch-with-cli = true
 ```
 
+## Project Overview
+
+This repository is a Rust Cargo workspace for Deribit volatility monitoring and LLM agent tooling. The original monitoring pipeline is event-driven: configuration feeds data sources, data sources publish through the event bus, alert handlers evaluate market conditions, and notification handlers deliver alerts.
+
+### Main Directories
+
+| Path | Purpose |
+|------|---------|
+| `crates/` | Workspace crates. The `vol-*` crates implement the Deribit volatility monitor, while `vol-llm-*` crates implement LLM providers, agents, tools, memory, skills, MCP, TUI, and web UI layers. |
+| `crates/vol-core` | Core monitoring traits and data models shared by the volatility pipeline. |
+| `crates/vol-config` | Configuration loading and typed settings used by services. |
+| `crates/vol-datasource`, `crates/vol-deribit`, `crates/vol-tdengine` | Market-data ingestion and storage integrations. |
+| `crates/vol-eventbus`, `crates/vol-engine`, `crates/vol-alert`, `crates/vol-notification`, `crates/vol-monitor` | Runtime pipeline: event distribution, monitoring engine, alert rules, notification delivery, and main monitor binary. |
+| `crates/vol-llm-core`, `crates/vol-llm-provider`, `crates/vol-llm-tool`, `crates/vol-llm-agent`, `crates/vol-llm-agents` | LLM abstraction layer, provider implementations, tool registry, ReAct orchestration, and higher-level agent implementations. |
+| `crates/vol-llm-agent-channel`, `crates/vol-llm-mcp`, `crates/vol-mcp-servers` | Agent communication, JSON-RPC/MCP integration, and MCP server implementations. |
+| `crates/vol-llm-ui` | Dioxus 0.6 WASM web frontend. Use the web Makefile commands rather than generic Cargo commands for this crate. |
+| `crates/vol-llm-tui` | Terminal UI frontend for the LLM agent experience. |
+| `crates/vol-agent-manager` | Backend JSON-RPC agent service used by the web frontend. |
+| `docs/` | Architecture, deployment, development notes, migrations, test results, superpowers docs, and the persistent project wiki at `docs/wiki`. |
+| `frontend/` | Supporting frontend assets/source outside the Dioxus crate. |
+| `openspec/` | OpenSpec change/spec artifacts. |
+| `k8s/` | Kubernetes manifests. |
+| `scripts/` | Repository automation scripts. |
+| `.cargo/` | Cargo mirror configuration; Docker Rust builds must copy this config. |
+
 ## Development
 
 ### Web Frontend

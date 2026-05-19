@@ -1,11 +1,12 @@
 # Wiki Index
 
-Last updated: 2026-05-18 (file-tree-chevron-glyph-refinement)
+Last updated: 2026-05-19 (claude-md-project-overview)
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[nq-deribit-repository]] | Rust Cargo workspace combining Deribit volatility monitoring with LLM agent tooling; documents major directories, crate families, docs, OpenSpec, k8s, scripts, and Cargo mirror configuration | active | 2026-05-19 |
 | [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs, ConnectionStatePanel connection status dashboard, MCP state types, Skills panel with detail dialog/mobile cards, auto-reconnect with session restoration, mobile responsive layout, bounded-scroll FileTree sidebar, mobile FileTree rail, and single-click lazy directory expansion with collapsed unloaded directories and greater-than-style chevrons | active | 2026-05-18 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate | active | 2026-05-04 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
@@ -133,6 +134,7 @@ Last updated: 2026-05-18 (file-tree-chevron-glyph-refinement)
 | [[file-tree-single-click-expand-fix]] | FileTree lazy-loading state fix so discovered child directories expand and fetch on first click | active | 2026-05-18 |
 | [[file-tree-collapsed-state-follow-up]] | FileTree UI-state follow-up so unloaded directories start visually collapsed and use a larger chevron | active | 2026-05-18 |
 | [[file-tree-chevron-glyph-refinement]] | FileTree directory expand/collapse chevron changed to a greater-than-style glyph | active | 2026-05-18 |
+| [[claude-md-project-overview]] | CLAUDE.md Project Overview documenting the repository's major directories, crate families, docs, OpenSpec, k8s, scripts, and Cargo mirror configuration | active | 2026-05-19 |
 
 ## Analyses
 
