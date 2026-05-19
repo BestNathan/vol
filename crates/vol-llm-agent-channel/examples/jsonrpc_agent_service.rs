@@ -34,9 +34,9 @@ async fn main() {
     // Create LLM provider
     let llm = create_provider(&vol_llm_provider::LLMConfig::with_env_key(
         vol_llm_core::LLMProvider::Anthropic,
-        "qwen3.6-plus",
+        "coding",
         "ANTHROPIC_AUTH_TOKEN",
-        "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+        "http://192.168.2.162:31693",
     ))
     .expect("failed to create LLM provider \u{2014} set ANTHROPIC_AUTH_TOKEN");
 

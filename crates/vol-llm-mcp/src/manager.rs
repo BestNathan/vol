@@ -108,8 +108,8 @@ impl McpManager {
             McpTransport::Stdio { command, args, env } => {
                 connect_stdio(command, args, env, config, cancel_token).await?
             }
-            McpTransport::Http { url, headers } => {
-                connect_http(url, headers.as_ref(), config, cancel_token).await?
+            McpTransport::Http { url, headers, env } => {
+                connect_http(url, headers.as_ref(), env, config, cancel_token).await?
             }
         };
 
@@ -720,6 +720,7 @@ async fn connect_stdio(
 async fn connect_http(
     url: &str,
     headers: Option<&HashMap<String, String>>,
+    env: &HashMap<String, String>,
     config: &McpServerConfig,
     cancel_token: &CancellationToken,
 ) -> Result<RunningService<RoleClient, ClientInfo>, McpError> {
@@ -747,9 +748,23 @@ async fn connect_http(
     // Only apply proxy for remote HTTPS URLs — skip for HTTP/local addresses
     // so internal services (e.g. nhome.local) are reachable directly.
     let proxy_url = if url.starts_with("https://") {
-        std::env::var("HTTPS_PROXY").ok().or_else(|| std::env::var("https_proxy").ok())
+        env.get("HTTPS_PROXY")
+            .or_else(|| env.get("https_proxy"))
+            .cloned()
+            .or_else(|| std::env::var("HTTPS_PROXY").ok())
+            .or_else(|| std::env::var("https_proxy").ok())
+    } else if url.starts_with("http://") {
+        env.get("HTTP_PROXY")
+            .or_else(|| env.get("http_proxy"))
+            .cloned()
+            .or_else(|| std::env::var("HTTP_PROXY").ok())
+            .or_else(|| std::env::var("http_proxy").ok())
     } else {
-        None
+        env.get("ALL_PROXY")
+            .or_else(|| env.get("all_proxy"))
+            .cloned()
+            .or_else(|| std::env::var("ALL_PROXY").ok())
+            .or_else(|| std::env::var("all_proxy").ok())
     };
 
     let transport = if let Some(ref proxy) = proxy_url {

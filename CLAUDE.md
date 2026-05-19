@@ -66,6 +66,13 @@ All web development commands use the Makefile. Run `make help` to see available 
 
 **Important:** `make web-css` must be running before `make web-dev`, otherwise new Tailwind utility classes (e.g., arbitrary values like `w-[600px]`, `h-[70vh]`) won't be compiled into the CSS and won't take effect.
 
+### Model Service
+
+The model service is available at:
+
+- Base URL: `http://192.168.2.162:31693`
+- Models: `gpt5.5`, `coding`, `qwen3.6-plus`, `glm5.1`
+
 ## Conventions
 
 - When finished a development task, you **MUST** use skill `wiki-ingest` to add or update project wiki at `docs/wiki`

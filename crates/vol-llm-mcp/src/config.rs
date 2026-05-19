@@ -27,6 +27,7 @@ pub enum McpTransport {
     Http {
         url: String,
         headers: Option<HashMap<String, String>>,
+        env: HashMap<String, String>,
     },
 }
 
@@ -65,9 +66,8 @@ struct RawHttpConfig {
     /// Accepted but ignored — legacy field, all HTTP uses streamable HTTP.
     #[serde(default, rename = "transport")]
     _transport: Option<String>,
-    /// Accepted but ignored — env is stdio-only. Present to avoid parse errors.
-    #[serde(default, rename = "env")]
-    _env: Option<HashMap<String, String>>,
+    #[serde(default)]
+    env: HashMap<String, String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -97,6 +97,7 @@ fn try_parse_server(name: &str, value: &serde_json::Value) -> Option<McpServerCo
                 RawMcpTransport::Http(cfg) => McpTransport::Http {
                     url: cfg.url,
                     headers: cfg.headers,
+                    env: cfg.env,
                 },
             };
             Some(McpServerConfig {
@@ -341,6 +342,20 @@ mod tests {
                 assert!(headers.is_some());
                 let h = headers.as_ref().unwrap();
                 assert_eq!(h.get("Authorization").unwrap(), "Bearer token");
+            }
+            _ => panic!("expected Http transport"),
+        }
+    }
+
+    #[test]
+    fn test_parse_http_with_env_proxy() {
+        let value: serde_json::Value = serde_json::from_str(
+            r#"{"type":"http","url":"https://docs.deribit.com/mcp","env":{"HTTPS_PROXY":"http://192.168.2.98:7890"}}"#
+        ).unwrap();
+        let parsed = try_parse_server("deribit", &value).unwrap();
+        match &parsed.transport {
+            McpTransport::Http { env, .. } => {
+                assert_eq!(env.get("HTTPS_PROXY").unwrap(), "http://192.168.2.98:7890");
             }
             _ => panic!("expected Http transport"),
         }
