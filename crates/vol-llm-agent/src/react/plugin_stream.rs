@@ -4,8 +4,7 @@ use super::plugin::{AgentPlugin, PluginDecision};
 use super::run_context::{PluginRequest, RunContext};
 use super::{AgentError, AgentResponse, AgentStreamEvent, AgentStreamReceiver};
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc};
-use vol_tracing::TracedEvent;
+use tokio::sync::mpsc;
 use futures::FutureExt;
 
 /// Spawn one listener task per plugin, each subscribing to the event broadcast
@@ -23,10 +22,7 @@ pub fn spawn_listener_tasks(
     for plugin in plugins {
         let mut event_rx = ctx.event_tx.as_ref().unwrap().subscribe();
         let plugin = plugin.clone();
-        // Clone ctx for plugin.listen(), but drop the event_tx Arc immediately
-        // so this task doesn't keep the broadcast sender alive.
-        let mut ctx = ctx.clone();
-        ctx.event_tx.take();
+        let ctx = ctx.without_event_senders();
         join_set.spawn(async move {
             while let Ok(traced_event) = event_rx.recv().await {
                 let event = traced_event.value();
@@ -38,7 +34,6 @@ pub fn spawn_listener_tasks(
     }
     join_set
 }
-
 /// Run the interceptor loop, processing plugin requests from the channel.
 ///
 /// This function:
@@ -51,7 +46,6 @@ pub fn spawn_listener_tasks(
 pub async fn run_interceptor_loop(
     mut plugin_rx: mpsc::Receiver<PluginRequest>,
     plugins: Vec<Arc<dyn AgentPlugin>>,
-    event_tx: Arc<broadcast::Sender<TracedEvent<AgentStreamEvent>>>,
     ctx: RunContext,
 ) {
     while let Some(msg) = plugin_rx.recv().await {
@@ -75,8 +69,7 @@ pub async fn run_interceptor_loop(
                 let _ = tx.send(decision);
             }
             PluginRequest::Emit { event } => {
-                // Only Emit uses the event_tx sender
-                let _ = event_tx.send(event);
+                ctx.emit_traced(event).await;
             }
         }
     }

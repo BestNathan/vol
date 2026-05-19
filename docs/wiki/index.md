@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-19 (claude-md-project-overview)
+Last updated: 2026-05-19 (react-plugin-event-shutdown)
 
 ## Entities
 
@@ -8,10 +8,10 @@ Last updated: 2026-05-19 (claude-md-project-overview)
 |------|---------|--------|---------|
 | [[nq-deribit-repository]] | Rust Cargo workspace combining Deribit volatility monitoring with LLM agent tooling; documents major directories, crate families, docs, OpenSpec, k8s, scripts, and Cargo mirror configuration | active | 2026-05-19 |
 | [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs, ConnectionStatePanel connection status dashboard, MCP state types, Skills panel with detail dialog/mobile cards, auto-reconnect with session restoration, mobile responsive layout, bounded-scroll FileTree sidebar, mobile FileTree rail, and single-click lazy directory expansion with collapsed unloaded directories and greater-than-style chevrons | active | 2026-05-18 |
-| [[vol-llm-agent-crate]] | ReAct Agent orchestration crate | active | 2026-05-04 |
+| [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with plugin event shutdown using traced emission and drop-driven interceptor/listener completion | active | 2026-05-19 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions | stable | 2026-05-04 |
-| [[vol-llm-tool-crate]] | Tool definition and registry framework | stable | 2026-05-04 |
+| [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager | stable | 2026-05-19 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with LLMClient trait; protocol-abstracted SSE streaming parsers (AnthropicProtocol, OpenaiStreamParser); factory dispatch and TOML-based config | stable | 2026-05-15 |
 | [[vol-session]] | Session message store and entry persistence | active | 2026-05-04 |
 | [[vol-llm-agent-channel-crate]] | Agent communication channel layer with multiple transports and JSON-RPC Connection implementation, plus skill.list/skill.get RPC methods for skill discovery | active | 2026-05-16 |
@@ -135,6 +135,7 @@ Last updated: 2026-05-19 (claude-md-project-overview)
 | [[file-tree-collapsed-state-follow-up]] | FileTree UI-state follow-up so unloaded directories start visually collapsed and use a larger chevron | active | 2026-05-18 |
 | [[file-tree-chevron-glyph-refinement]] | FileTree directory expand/collapse chevron changed to a greater-than-style glyph | active | 2026-05-18 |
 | [[claude-md-project-overview]] | CLAUDE.md Project Overview documenting the repository's major directories, crate families, docs, OpenSpec, k8s, scripts, and Cargo mirror configuration | active | 2026-05-19 |
+| [[react-plugin-event-shutdown]] | ReAct plugin event shutdown refactor: traced emits, optional shared channel senders, drop-driven interceptor/listener completion | active | 2026-05-19 |
 
 ## Analyses
 

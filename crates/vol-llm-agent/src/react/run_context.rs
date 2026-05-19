@@ -92,11 +92,9 @@ pub struct RunContext {
     /// ## Broadcast Channel Close Sequence
     ///
     /// The `event_tx` is wrapped in `Arc`, so cloning `RunContext` only copies the
-    /// Arc pointer — it does NOT create new broadcast senders. The sender count
-    /// is exactly 1, held by the Arc in the original `RunContext`.
-    /// When this Arc is dropped (via `std::mem::take` in agent.rs), the broadcast
-    /// closes and all listeners see `RecvError`, exiting cleanly.
-    pub plugin_event_tx: mpsc::Sender<PluginRequest>,
+    /// Arc pointer. Plugin infrastructure contexts can remove sender handles to
+    /// avoid keeping shutdown channels alive.
+    pub plugin_event_tx: Option<Arc<mpsc::Sender<PluginRequest>>>,
 
 
     // Internal state collection
@@ -137,7 +135,7 @@ impl RunContext {
             tools: config.tools.clone(),
             config,
             event_tx: Some(event_tx),
-            plugin_event_tx,
+            plugin_event_tx: Some(Arc::new(plugin_event_tx)),
             reasoning_chain: Arc::new(RwLock::new(Vec::new())),
             tool_call_records: Arc::new(RwLock::new(Vec::new())),
             final_content: Arc::new(RwLock::new(None)),
@@ -318,6 +316,25 @@ impl RunContext {
         }
     }
 
+    /// Emit a traced event to the event bus (non-blocking, fire-and-forget).
+    pub async fn emit_traced(&self, event: TracedEvent<AgentStreamEvent>) {
+        let _ = self.event_tx.as_ref().unwrap().send(event);
+    }
+
+    /// Return a cloned RunContext with plugin_event_tx set to None.
+    pub fn without_plugin_event_tx(&self) -> Self {
+        let mut ctx = self.clone();
+        ctx.plugin_event_tx = None;
+        ctx
+    }
+
+    /// Return a cloned RunContext without event or plugin request senders.
+    pub fn without_event_senders(&self) -> Self {
+        let mut ctx = self.without_plugin_event_tx();
+        ctx.event_tx = None;
+        ctx
+    }
+
     /// Intercept an event for plugin processing (blocking, returns decision).
     ///
     /// This sends the event to the plugin channel and waits for a decision.
@@ -336,7 +353,11 @@ impl RunContext {
     ) -> Result<PluginDecision, crate::AgentError> {
         let (tx, rx) = oneshot::channel();
         let traced_event = TracedEvent::without_span(event.clone());
-        self.plugin_event_tx
+        let sender = self
+            .plugin_event_tx
+            .as_ref()
+            .ok_or_else(|| crate::AgentError::Context("Plugin channel closed".to_string()))?;
+        sender
             .send(PluginRequest::Intercept {
                 event: traced_event,
                 tx,

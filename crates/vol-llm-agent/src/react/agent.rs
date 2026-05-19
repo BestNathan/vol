@@ -186,25 +186,12 @@ impl ReActAgent {
             run_ctx.clone(),
         );
 
-        // Spawn interceptor loop task - receives from plugin_rx channel
-        // When plugin_rx is closed (agent drops run_ctx), interceptor exits
-        let interceptor_event_tx = run_ctx.event_tx.as_ref().unwrap().clone();
         let interceptor_plugins = self.config.plugin_registry.plugins().to_vec();
-        let interceptor_ctx = run_ctx.clone();
-        let mut interceptor_handle = tokio::spawn(async move {
-            run_interceptor_loop(
-                plugin_rx,
-                interceptor_plugins,
-                interceptor_event_tx,
-                interceptor_ctx,
-            )
-            .await;
+        let interceptor_ctx = run_ctx.without_plugin_event_tx();
+        let interceptor_handle = tokio::spawn(async move {
+            run_interceptor_loop(plugin_rx, interceptor_plugins, interceptor_ctx).await;
         });
 
-        // Keep a clone of the event_tx Arc for shutdown.
-        // This is the original sender that will be dropped to close the broadcast.
-        // Agent task moves run_ctx (which also has event_tx), but we need an
-        // external handle to drop AFTER the interceptor exits.
         let mut shutdown_event_tx = run_ctx.event_tx.clone();
 
         // === Phase 3: Spawn agent loop task and await it ===
@@ -503,30 +490,12 @@ impl ReActAgent {
             }
         };
 
-        // Abort interceptor so it drops its Arc clones of event_tx.
-        let interceptor_result = tokio::select! {
-            result = &mut interceptor_handle => Ok(result),
-            _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => Err("timeout"),
-        };
-        match interceptor_result {
-            Ok(Ok(())) => {}
-            Ok(Err(join_err)) => {
-                tracing::warn!(%join_err, "Interceptor task panicked");
-            }
-            Err(_) => {
-                tracing::warn!(
-                    "Interceptor task timeout after 5s - aborting to release Arc clones"
-                );
-                interceptor_handle.abort();
-            }
+        if let Err(join_err) = interceptor_handle.await {
+            tracing::warn!(%join_err, "Interceptor task panicked");
         }
 
-        // Drop the local event_tx clone to close the broadcast channel.
-        // With the interceptor aborted and agent_task completed, this is the
-        // last remaining sender. Once dropped, all listener tasks see RecvError.
         shutdown_event_tx.take();
 
-        // Await all listener tasks — they drain buffers and exit naturally
         while let Some(result) = listener_set.join_next().await {
             if let Err(e) = result {
                 tracing::warn!(%e, "Listener task panicked");

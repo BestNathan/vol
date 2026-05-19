@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-05-19] ingest | ReAct Plugin Event Shutdown
+- Created sources: [[react-plugin-event-shutdown]]
+- Updated entities: [[vol-llm-agent-crate]] (plugin event shutdown now preserves trace ids and uses drop-driven interceptor/listener completion)
+- Updated entities: [[vol-llm-tool-crate]] (`McpTool` aligned with current `McpManager` registry path)
+- Updated index: vol-llm-agent-crate, vol-llm-tool-crate, react-plugin-event-shutdown
+- Cross-references added: 6
+- Changes: `RunContext` channel senders became optional shared handles; `emit_traced()` forwards existing `TracedEvent` values; `run_interceptor_loop` no longer owns direct `event_tx`; listener contexts drop senders and drain in-flight `plugin.listen()` tasks; MCP tool proxy compile unblock completed.
+
 ## [2026-05-19] ingest | CLAUDE.md Project Overview
 - Created sources: [[claude-md-project-overview]]
 - Created entities: [[nq-deribit-repository]]

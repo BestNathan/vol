@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, tools, rust, registry]
 created: 2026-05-04
-updated: 2026-05-04
-source_count: 1
+updated: 2026-05-19
+source_count: 2
 ---
 
 # vol-llm-tool Crate
@@ -20,7 +20,7 @@ Provides the `Tool` trait, `ToolRegistry`, and execution framework for agent too
 - `Tool` trait: name, description, parameters schema, async execute [[react-agent-docs]]
 - `ToolRegistry`: HashMap-based registration and dispatch [[react-agent-docs]]
 - `ToolContext`: provides alert info, message history, and custom metadata [[react-agent-docs]]
-- `ToolResult`: structured result with content, error, and optional structured data
+- `McpTool` proxies MCP tool execution through `McpManager` in the current manager-based registry flow [[react-plugin-event-shutdown]]
 
 ## Timeline
-- **2026-04**: Tool framework implemented
+- **2026-05-19**: `McpTool` constructor/storage aligned with `McpManager` to match `ToolRegistry::register_from_mcp()` after the manager lifecycle refactor [[react-plugin-event-shutdown]]
