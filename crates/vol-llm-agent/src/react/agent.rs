@@ -250,30 +250,21 @@ impl ReActAgent {
         use super::plugin_stream::{run_interceptor_loop, spawn_listener_task};
 
         // Spawn listener task - subscribes to event broadcast channel
-        // Handle stored for graceful shutdown wait
-        // Note: We create plugin_ctx and subscribe here to avoid cloning RunContext
-        // (which would clone senders and prevent channel close)
-        let listener_event_rx = run_ctx.event_tx.subscribe();
+        let listener_event_rx = run_ctx.event_tx.as_ref().unwrap().subscribe();
+        let listener_ctx = run_ctx.without_event_senders();
         let listener_handle = spawn_listener_task(
             config.plugin_registry.plugins().to_vec(),
-            run_ctx.clone(),
+            listener_ctx,
             listener_event_rx,
         );
 
-        // Spawn interceptor loop task - receives from plugin_rx channel
-        // When plugin_rx is closed (agent drops run_ctx), interceptor exits
-        let interceptor_event_tx = run_ctx.event_tx.clone();
         let interceptor_plugins = config.plugin_registry.plugins().to_vec();
-        let interceptor_ctx = run_ctx.clone();
+        let interceptor_ctx = run_ctx.without_plugin_event_tx();
         let interceptor_handle = tokio::spawn(async move {
-            run_interceptor_loop(
-                plugin_rx,
-                interceptor_plugins,
-                interceptor_event_tx,
-                interceptor_ctx,
-            )
-            .await;
+            run_interceptor_loop(plugin_rx, interceptor_plugins, interceptor_ctx).await;
         });
+
+        let mut shutdown_event_tx = run_ctx.event_tx.clone();
 
         // === Phase 3: Spawn agent loop task and await it ===
         let llm = self.config.llm.clone();
@@ -572,35 +563,16 @@ impl ReActAgent {
             }
         };
 
-        // Wait for interceptor to finish with timeout
-        let interceptor_result =
-            tokio::time::timeout(std::time::Duration::from_secs(5), interceptor_handle).await;
-
-        // Wait for listener to finish with timeout
-        let listener_result =
-            tokio::time::timeout(std::time::Duration::from_secs(5), listener_handle).await;
-
-        match interceptor_result {
-            Ok(Ok(())) => {}
-            Ok(Err(join_err)) => {
-                tracing::warn!(%join_err, "Interceptor task panicked");
-            }
-            Err(_timeout) => {
-                tracing::warn!(
-                    "Interceptor task timeout after 5s - task may be hanging, proceeding anyway"
-                );
-            }
+        if let Err(join_err) = interceptor_handle.await {
+            tracing::warn!(%join_err, "Interceptor task panicked");
         }
 
-        match listener_result {
-            Ok(Ok(())) => {}
-            Ok(Err(join_err)) => {
+        shutdown_event_tx.take();
+
+        match listener_handle.await {
+            Ok(()) => {}
+            Err(join_err) => {
                 tracing::warn!(%join_err, "Listener task panicked");
-            }
-            Err(_timeout) => {
-                tracing::warn!(
-                    "Listener task timeout after 5s - task may be hanging, proceeding anyway"
-                );
             }
         }
 

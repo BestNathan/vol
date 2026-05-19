@@ -58,7 +58,7 @@ pub struct RunContext {
     pub max_history_messages: usize,
 
     // Event bus
-    pub event_tx: broadcast::Sender<TracedEvent<AgentStreamEvent>>,
+    pub event_tx: Option<Arc<broadcast::Sender<TracedEvent<AgentStreamEvent>>>>,
     /// Plugin event channel sender.
     ///
     /// # Important: Receiver is intentionally Dropped in `new()`
@@ -100,7 +100,7 @@ pub struct RunContext {
     ///
     /// This ensures listener tasks have time to complete their `plugin.listen()` calls
     /// before the agent run is considered complete.
-    pub plugin_event_tx: mpsc::Sender<PluginRequest>,
+    pub plugin_event_tx: Option<Arc<mpsc::Sender<PluginRequest>>>,
 
 
     // Internal state collection
@@ -145,8 +145,8 @@ impl RunContext {
             tools,
             config,
             max_history_messages,
-            event_tx,
-            plugin_event_tx,
+            event_tx: Some(Arc::new(event_tx)),
+            plugin_event_tx: Some(Arc::new(plugin_event_tx)),
             reasoning_chain: Arc::new(RwLock::new(Vec::new())),
             tool_call_records: Arc::new(RwLock::new(Vec::new())),
             final_content: Arc::new(RwLock::new(None)),
@@ -271,7 +271,30 @@ impl RunContext {
     /// Used by plugins to emit custom events.
     pub async fn emit(&self, event: AgentStreamEvent) {
         let traced_event = TracedEvent::without_span(event);
-        let _ = self.event_tx.send(traced_event);
+        let _ = self.event_tx.as_ref().unwrap().send(traced_event);
+    }
+
+    /// Emit a traced event to the event bus (non-blocking, fire-and-forget).
+    pub async fn emit_traced(&self, event: TracedEvent<AgentStreamEvent>) {
+        let _ = self.event_tx.as_ref().unwrap().send(event);
+    }
+
+    /// Return a cloned RunContext with plugin_event_tx set to None.
+    ///
+    /// This allows the interceptor loop to run without keeping the plugin
+    /// channel sender alive, enabling clean shutdown when the original
+    /// sender is dropped.
+    pub fn without_plugin_event_tx(&self) -> Self {
+        let mut ctx = self.clone();
+        ctx.plugin_event_tx = None;
+        ctx
+    }
+
+    /// Return a cloned RunContext without event or plugin request senders.
+    pub fn without_event_senders(&self) -> Self {
+        let mut ctx = self.without_plugin_event_tx();
+        ctx.event_tx = None;
+        ctx
     }
 
     /// Intercept an event for plugin processing (blocking, returns decision).
@@ -292,7 +315,11 @@ impl RunContext {
     ) -> Result<PluginDecision, crate::AgentError> {
         let (tx, rx) = oneshot::channel();
         let traced_event = TracedEvent::without_span(event.clone());
-        self.plugin_event_tx
+        let sender = self
+            .plugin_event_tx
+            .as_ref()
+            .ok_or_else(|| crate::AgentError::Context("Plugin channel closed".to_string()))?;
+        sender
             .send(PluginRequest::Intercept {
                 event: traced_event,
                 tx,

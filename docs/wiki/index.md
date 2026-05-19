@@ -1,16 +1,16 @@
 # Wiki Index
 
-Last updated: 2026-05-12 (conversation-tailwind-migration)
+Last updated: 2026-05-19 (react-plugin-event-shutdown)
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
 | [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs | active | 2026-05-10 |
-| [[vol-llm-agent-crate]] | ReAct Agent orchestration crate | active | 2026-05-04 |
+| [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with plugin event shutdown using traced emission and drop-driven interceptor/listener completion | active | 2026-05-19 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions | stable | 2026-05-04 |
-| [[vol-llm-tool-crate]] | Tool definition and registry framework | stable | 2026-05-04 |
+| [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager | stable | 2026-05-19 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations | stable | 2026-05-04 |
 | [[vol-session]] | Session message store and entry persistence | active | 2026-05-04 |
 | [[vol-llm-agent-channel-crate]] | Agent communication channel layer with multiple transports and JSON-RPC Connection implementation | active | 2026-05-09 |
@@ -104,7 +104,7 @@ Last updated: 2026-05-12 (conversation-tailwind-migration)
 | [[docs-rs-mcp-example]] | Runnable example: ReActAgent connecting to docs-rs MCP server via with_mcp_from_config() | active | 2026-05-11 |
 | [[task-6-sessions-tab-wiring]] | Sessions tab wired into App: SessionsState signal, SessionsPanel, TabBar, CSS, checkpoint rendering | active | 2026-05-11 |
 | [[conversation-tailwind-migration]] | conversation.rs migrated from semantic CSS classes to inline Tailwind utilities — all 9 message types updated | active | 2026-05-12 |
-| [[tailwind-css-full-migration]] | Full Tailwind CSS v4 migration — all 16 components, GLOBAL_CSS deleted, build pipeline verified | complete | 2026-05-12 |
+| [[react-plugin-event-shutdown]] | ReAct plugin event shutdown refactor: traced emits, optional shared channel senders, drop-driven interceptor/listener completion | active | 2026-05-19 |
 
 ## Analyses
 

@@ -256,7 +256,6 @@ async fn test_run_interceptor_loop_continue_decision() {
     }
 
     let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
-    let (event_tx, _) = tokio::sync::broadcast::channel(10);
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
@@ -272,7 +271,7 @@ async fn test_run_interceptor_loop_continue_decision() {
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(ContinuePlugin)];
 
-    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx, run_ctx));
+    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, run_ctx.without_plugin_event_tx()));
 
     // Send an intercept request
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
@@ -303,7 +302,6 @@ async fn test_run_interceptor_loop_skip_decision() {
     }
 
     let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
-    let (event_tx, _) = tokio::sync::broadcast::channel(10);
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
@@ -319,7 +317,7 @@ async fn test_run_interceptor_loop_skip_decision() {
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(SkipPlugin)];
 
-    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx.clone(), run_ctx));
+    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, run_ctx.without_plugin_event_tx()));
 
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
     plugin_tx.send(PluginRequest::Intercept {
@@ -335,9 +333,8 @@ async fn test_run_interceptor_loop_skip_decision() {
 }
 
 #[tokio::test]
-async fn test_run_interceptor_loop_emit_request() {
+async fn test_run_interceptor_loop_emit_request_preserves_trace_id() {
     let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
-    let (event_tx, mut event_rx) = tokio::sync::broadcast::channel(10);
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
@@ -350,18 +347,27 @@ async fn test_run_interceptor_loop_emit_request() {
         20,
         "test-model".to_string(),
     );
+    let mut event_rx = run_ctx.event_tx.as_ref().unwrap().subscribe();
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![];
+    let interceptor_ctx = run_ctx.without_plugin_event_tx();
+    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, interceptor_ctx));
 
-    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx, run_ctx));
+    let traced_event = vol_tracing::TracedEvent::with_trace_id(
+        AgentStreamEvent::agent_start("test".to_string()),
+        None,
+        "trace-from-plugin-request".to_string(),
+    );
 
-    // Send an emit request
-    plugin_tx.send(PluginRequest::Emit {
-        event: vol_tracing::TracedEvent::without_span(AgentStreamEvent::agent_start("test".to_string())),
-    }).await.unwrap();
+    plugin_tx
+        .send(PluginRequest::Emit {
+            event: traced_event,
+        })
+        .await
+        .unwrap();
 
-    // Should receive event on broadcast
     let event = event_rx.recv().await.unwrap();
+    assert_eq!(event.trace_id(), "trace-from-plugin-request");
     assert!(matches!(event.value(), AgentStreamEvent::AgentStart { .. }));
 
     drop(plugin_tx);

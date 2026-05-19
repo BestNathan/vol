@@ -8,35 +8,35 @@ use tokio::sync::{broadcast, mpsc};
 use vol_tracing::TracedEvent;
 
 /// Spawn a listener task that subscribes to the event bus and calls
-/// `plugin.listen()` on all events (fire-and-forget, parallel execution).
+/// `plugin.listen()` on all events.
 ///
 /// # Shutdown Behavior
 ///
-/// The listener task exits when the broadcast channel is closed, which happens
-/// when all `RunContext` instances holding senders are dropped. The shutdown
-/// sequence is:
-/// 1. Agent completes → drops its `RunContext` (1 sender dropped)
-/// 2. Interceptor exits (plugin_rx closed) → drops its `RunContext` (1 sender dropped)
-/// 3. Listener sees `RecvError` (all senders dropped) → exits
-///
-/// This ensures all pending `plugin.listen()` calls have time to complete.
+/// The listener task exits when the broadcast channel is closed, then waits for
+/// every in-flight `plugin.listen()` task to finish before returning.
 pub fn spawn_listener_task(
     plugins: Vec<Arc<dyn AgentPlugin>>,
     ctx: RunContext,
     mut event_rx: broadcast::Receiver<TracedEvent<AgentStreamEvent>>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
+        let mut listen_tasks = tokio::task::JoinSet::new();
         while let Ok(traced_event) = event_rx.recv().await {
             let event = traced_event.value();
-            // Fire all listeners in parallel
             for plugin in &plugins {
                 let plugin = plugin.clone();
                 let event = event.clone();
                 let ctx = ctx.clone();
 
-                tokio::spawn(async move {
+                listen_tasks.spawn(async move {
                     plugin.listen(&event, &ctx).await;
                 });
+            }
+        }
+
+        while let Some(result) = listen_tasks.join_next().await {
+            if let Err(join_err) = result {
+                tracing::warn!(%join_err, "Plugin listener task panicked");
             }
         }
     })
@@ -54,7 +54,6 @@ pub fn spawn_listener_task(
 pub async fn run_interceptor_loop(
     mut plugin_rx: mpsc::Receiver<PluginRequest>,
     plugins: Vec<Arc<dyn AgentPlugin>>,
-    event_tx: broadcast::Sender<TracedEvent<AgentStreamEvent>>,
     ctx: RunContext,
 ) {
     while let Some(msg) = plugin_rx.recv().await {
@@ -78,8 +77,7 @@ pub async fn run_interceptor_loop(
                 let _ = tx.send(decision);
             }
             PluginRequest::Emit { event } => {
-                // Only Emit uses the event_tx sender
-                let _ = event_tx.send(event);
+                ctx.emit_traced(event).await;
             }
         }
     }
