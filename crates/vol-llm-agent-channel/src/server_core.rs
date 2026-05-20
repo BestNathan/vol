@@ -11,6 +11,7 @@ use std::sync::Arc;
 use vol_llm_core::LLMClient;
 use vol_llm_mcp::McpConfig;
 use vol_llm_mcp::McpManager;
+use vol_llm_provider::{create_provider, ProviderLoader};
 use vol_llm_skill::SkillLoader;
 use vol_llm_tool::ToolRegistry;
 use vol_session::file_store::FileSessionEntryStore;
@@ -27,6 +28,9 @@ use crate::router::AgentRouter;
 ///
 /// The core owns all shared resources (paths, registries, agent runtime).
 /// Domain handlers hold the specific resources they need (no self-reference).
+///
+/// Given only `working_dir` and `store_dir`, all internal registries are
+/// derived automatically (LLM, MCP, skills, agents, tools, sessions).
 pub struct AgentServerCore {
     // === Paths ===
     working_dir: PathBuf,
@@ -54,14 +58,17 @@ pub struct AgentServerCore {
 }
 
 impl AgentServerCore {
-    /// Create a new core with required paths only.
-    pub fn new(working_dir: impl Into<PathBuf>, store_dir: impl Into<PathBuf>, llm: Arc<dyn LLMClient>) -> AgentServerCoreBuilder {
-        Self::builder(working_dir, store_dir, llm)
+    /// Create a new core from paths only.
+    ///
+    /// All internal registries (LLM, MCP, skills, tools, sessions) are
+    /// derived automatically from working_dir and store_dir.
+    pub async fn new(working_dir: impl Into<PathBuf>, store_dir: impl Into<PathBuf>) -> Result<Self, String> {
+        Self::builder(working_dir, store_dir).build().await
     }
 
     /// Create a builder for optional override.
-    pub fn builder(working_dir: impl Into<PathBuf>, store_dir: impl Into<PathBuf>, llm: Arc<dyn LLMClient>) -> AgentServerCoreBuilder {
-        AgentServerCoreBuilder::new(working_dir.into(), store_dir.into(), llm)
+    pub fn builder(working_dir: impl Into<PathBuf>, store_dir: impl Into<PathBuf>) -> AgentServerCoreBuilder {
+        AgentServerCoreBuilder::new(working_dir.into(), store_dir.into())
     }
 
     // === Path accessors ===
@@ -180,17 +187,16 @@ impl AgentServerCore {
 
 /// Builder for [`AgentServerCore`].
 ///
-/// Only `working_dir`, `store_dir`, and `llm` are required.
-/// All other resources are derived automatically.
+/// Only `working_dir` and `store_dir` are required.
+/// All other resources (LLM, MCP, skills, tools, sessions) are derived automatically.
 pub struct AgentServerCoreBuilder {
     working_dir: PathBuf,
     store_dir: PathBuf,
-    llm: Arc<dyn LLMClient>,
 }
 
 impl AgentServerCoreBuilder {
-    pub fn new(working_dir: PathBuf, store_dir: PathBuf, llm: Arc<dyn LLMClient>) -> Self {
-        Self { working_dir, store_dir, llm }
+    pub fn new(working_dir: PathBuf, store_dir: PathBuf) -> Self {
+        Self { working_dir, store_dir }
     }
 
     /// Build the core. All internal registries are derived from working_dir and store_dir.
@@ -200,6 +206,9 @@ impl AgentServerCoreBuilder {
 
         // Create store directory if it doesn't exist.
         std::fs::create_dir_all(&store_dir).map_err(|e| format!("failed to create store_dir: {e}"))?;
+
+        // Derive LLM client from .agents/providers/*.toml (default: first provider found).
+        let llm = derive_llm_client(&self.working_dir)?;
 
         // Derive MCP manager from .mcp.json in working_dir.
         let mcp_manager = derive_mcp_manager(&self.working_dir);
@@ -232,7 +241,7 @@ impl AgentServerCoreBuilder {
             skill_loader,
             session_store,
             tool_registry,
-            llm: self.llm,
+            llm,
             router,
             holders,
             agent,
@@ -254,12 +263,29 @@ fn derive_mcp_manager(working_dir: &std::path::Path) -> Arc<McpManager> {
             vec![]
         });
     let manager = McpManager::new(configs);
-    // Fire-and-forget connect in background.
     let mgr = manager.clone();
     tokio::spawn(async move {
         let _ = mgr.connect().await;
     });
     Arc::new(manager)
+}
+
+fn derive_llm_client(working_dir: &std::path::Path) -> Result<Arc<dyn LLMClient>, String> {
+    let loader = ProviderLoader::load(Some(working_dir));
+    if loader.is_empty() {
+        return Err("No LLM provider configured in .agents/providers/*.toml".to_string());
+    }
+    // Try each provider, skip ones that fail (e.g., missing env var).
+    let mut errors = Vec::new();
+    for id in loader.ids() {
+        let file_config = loader.get(id).unwrap();
+        let llm_config = file_config.to_llm_config();
+        match create_provider(&llm_config) {
+            Ok(client) => return Ok(Arc::from(client)),
+            Err(e) => errors.push(format!("{}: {}", id, e)),
+        }
+    }
+    Err(format!("No usable LLM provider found. Errors: {}", errors.join("; ")))
 }
 
 fn derive_skill_loader(working_dir: &std::path::Path) -> Arc<SkillLoader> {

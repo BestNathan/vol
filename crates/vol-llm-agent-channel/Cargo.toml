@@ -24,6 +24,7 @@ vol-llm-mcp = { workspace = true }
 vol-llm-skill = { path = "../vol-llm-skill" }
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-tool = { path = "../vol-llm-tool" }
+vol-llm-provider = { path = "../vol-llm-provider" }
 
 [dev-dependencies]
 tempfile = "3"

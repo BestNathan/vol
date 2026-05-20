@@ -11,7 +11,6 @@
 use std::sync::Arc;
 
 use vol_llm_agent::agent_def::AgentDef;
-use vol_llm_provider::create_provider;
 
 use vol_llm_agent_channel::AgentServerCore;
 use vol_llm_agent_channel::JsonRpcServer;
@@ -26,19 +25,11 @@ async fn main() {
         )
         .init();
 
-    // Create LLM provider
-    let llm = create_provider(&vol_llm_provider::LLMConfig::with_env_key(
-        vol_llm_core::LLMProvider::Anthropic,
-        "coding",
-        "ANTHROPIC_AUTH_TOKEN",
-        "http://192.168.2.162:31693",
-    ))
-    .expect("failed to create LLM provider — set ANTHROPIC_AUTH_TOKEN");
-
-    // Build core from working_dir + store_dir only.
-    // MCP config is auto-discovered from .mcp.json, skills from .agents/skills/.
-    let core = AgentServerCore::new(".", "~/.vol", Arc::from(llm))
-        .build()
+    // Build core from paths only.
+    // LLM auto-discovered from .agents/providers/*.toml
+    // MCP auto-discovered from .mcp.json
+    // Skills auto-discovered from .agents/skills/
+    let core = AgentServerCore::new(".", "~/.vol")
         .await
         .expect("failed to build core");
 
