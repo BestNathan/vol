@@ -1,11 +1,25 @@
+use std::sync::Arc;
+
 use crate::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, Operation, Payload, ProtocolError,
 };
+use crate::connection::ConnectionHolder;
+use crate::router::AgentRouter;
 
 /// Handler for agent-domain operations.
-pub struct AgentHandler;
+pub struct AgentHandler {
+    router: AgentRouter,
+    holders: Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<ConnectionHolder>>>>,
+}
 
 impl AgentHandler {
+    pub fn new(
+        router: AgentRouter,
+        holders: Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<ConnectionHolder>>>>,
+    ) -> Self {
+        Self { router, holders }
+    }
+
     pub async fn handle(
         &self,
         operation: AgentOperation,
@@ -72,13 +86,20 @@ impl AgentHandler {
                     }),
                 ),
             ]),
-            (AgentOperation::List, _) => Ok(vec![
-                AgentServerMessage::new_result(
+            (AgentOperation::List, _) => {
+                let agents: Vec<serde_json::Value> = self
+                    .holders
+                    .lock()
+                    .unwrap()
+                    .keys()
+                    .map(|k| serde_json::json!({ "id": k, "name": k }))
+                    .collect();
+                Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Agent(AgentOperation::List),
-                    Payload::Agent(AgentPayload::ListResult { agents: vec![] }),
-                ),
-            ]),
+                    Payload::Agent(AgentPayload::ListResult { agents }),
+                )])
+            }
             (AgentOperation::Event, Payload::Agent(AgentPayload::Event { run_id, event })) => Ok(vec![
                 AgentServerMessage::new_event(
                     message.message_id,

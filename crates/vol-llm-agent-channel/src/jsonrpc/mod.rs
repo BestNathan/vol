@@ -4,4 +4,4 @@ pub mod connection;
 pub mod server;
 pub mod serde_helpers;
 
-pub use server::{AgentRegistration, JsonRpcServer};
+pub use server::JsonRpcServer;

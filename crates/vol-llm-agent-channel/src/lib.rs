@@ -21,10 +21,10 @@ pub use agent_server_protocol::{AgentServerMessage, FileOperation, MessageKind, 
 pub use connection::{Connection, ConnectionHolder};
 pub use dispatcher::AgentDispatcher;
 pub use error::{ChannelError, ConnectionError};
-pub use jsonrpc::{AgentRegistration, JsonRpcServer};
+pub use jsonrpc::JsonRpcServer;
 pub use operation_codec::{decode_payload, method_to_operation};
 pub use protocol::Message;
 pub use request::{AgentRequest, RunResult};
 pub use router::AgentRouter;
-pub use server_core::AgentServerCore;
+pub use server_core::{AgentServerCore, AgentServerCoreBuilder};
 pub use transport::{HttpEventConnection, HttpTransport, MemoryConnection, MemoryHandle, WsConnection, WsServer};

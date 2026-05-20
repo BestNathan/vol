@@ -11,15 +11,13 @@
 use std::sync::Arc;
 
 use vol_llm_agent::agent_def::AgentDef;
-use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
-use vol_llm_agent_channel::{AgentDispatcher, AgentRegistration, ConnectionHolder, JsonRpcServer};
 use vol_llm_mcp::McpConfig;
 use vol_llm_mcp::McpManager;
 use vol_llm_provider::create_provider;
 use vol_llm_skill::SkillLoader;
-use vol_llm_tool::ToolRegistry;
-use vol_session::file_store::FileSessionEntryStore;
-use vol_session::Session;
+
+use vol_llm_agent_channel::AgentServerCore;
+use vol_llm_agent_channel::JsonRpcServer;
 
 #[tokio::main]
 async fn main() {
@@ -38,37 +36,7 @@ async fn main() {
         "ANTHROPIC_AUTH_TOKEN",
         "http://192.168.2.162:31693",
     ))
-    .expect("failed to create LLM provider \u{2014} set ANTHROPIC_AUTH_TOKEN");
-
-    // Build agent
-    let def = AgentDef::new(
-        "general-assistant",
-        "You are a helpful AI assistant. Answer questions concisely.",
-    )
-    .with_type("general-assistant");
-
-    let entry_store = Arc::new(FileSessionEntryStore::new("/tmp/vol-llm-store"));
-    let session = Arc::new(Session::new(entry_store));
-    let tools = Arc::new(ToolRegistry::new());
-    let mut config = AgentConfig::new(Arc::from(llm), tools, session);
-    config.def = Some(def);
-
-    // Create ConnectionHolder as the event bridge plugin.
-    // Pass the holder by value to register() (it wraps in Arc internally),
-    // then clone it (cheap - internal state is Arc-wrapped) for AgentRegistration.
-    let holder = ConnectionHolder::new("agent".to_string(), "client".to_string());
-    let mut plugin_registry = PluginRegistry::new();
-    plugin_registry.register(holder.clone());
-
-    let mut config_with_plugin = config;
-    config_with_plugin.plugin_registry = plugin_registry;
-    let agent = ReActAgent::new(config_with_plugin);
-
-    // Create dispatcher
-    let dispatcher = Arc::new(AgentDispatcher::new(agent));
-
-    // Wrap holder in Arc for the server
-    let holder = Arc::new(holder);
+    .expect("failed to create LLM provider — set ANTHROPIC_AUTH_TOKEN");
 
     // Create MCP manager and connect
     let mcp_manager = {
@@ -99,18 +67,30 @@ async fn main() {
         Some(loader)
     };
 
+    // Build unified core
+    let core = AgentServerCore::builder()
+        .working_dir(".")
+        .store_dir("~/.vol")
+        .llm(Arc::from(llm))
+        .mcp_manager(mcp_manager)
+        .skill_loader(skill_loader.unwrap())
+        .build()
+        .await
+        .expect("failed to build core");
+
+    // Register agent
+    let def = AgentDef::new(
+        "general-assistant",
+        "You are a helpful AI assistant. Answer questions concisely.",
+    )
+    .with_type("general-assistant");
+
+    core.register_agent("general-assistant", def)
+        .await
+        .expect("failed to register agent");
+
     // Create JSON-RPC server
-    let server = JsonRpcServer::new(
-        vec![AgentRegistration {
-            agent_id: "general-assistant".to_string(),
-            dispatcher,
-            holder,
-        }],
-        ".".to_string(),
-        "/tmp/vol-llm-store".to_string(),
-        Some(mcp_manager),
-        skill_loader,
-    ).await;
+    let server = JsonRpcServer::new(Arc::new(core));
 
     let app = server.into_axum_router();
 

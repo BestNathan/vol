@@ -1,9 +1,17 @@
+use std::path::PathBuf;
+
 use crate::agent_server_protocol::{AgentServerMessage, FileOperation, FilePayload, Operation, Payload, ProtocolError};
 
 /// Handler for file-domain operations.
-pub struct FileHandler;
+pub struct FileHandler {
+    working_dir: PathBuf,
+}
 
 impl FileHandler {
+    pub fn new(working_dir: PathBuf) -> Self {
+        Self { working_dir }
+    }
+
     pub async fn handle(
         &self,
         operation: FileOperation,
@@ -11,7 +19,8 @@ impl FileHandler {
     ) -> Result<Vec<AgentServerMessage>, ProtocolError> {
         match (operation, message.payload) {
             (FileOperation::List, Payload::File(FilePayload::List { path })) => {
-                match std::fs::read_dir(&path) {
+                let resolved = self.resolve_path(&path);
+                match std::fs::read_dir(&resolved) {
                     Ok(entries) => {
                         let mut list: Vec<serde_json::Value> = Vec::new();
                         for entry in entries.flatten() {
@@ -48,7 +57,8 @@ impl FileHandler {
                 }
             }
             (FileOperation::Read, Payload::File(FilePayload::Read { path })) => {
-                match std::fs::read_to_string(&path) {
+                let resolved = self.resolve_path(&path);
+                match std::fs::read_to_string(&resolved) {
                     Ok(content) => Ok(vec![AgentServerMessage::new_result(
                         message.message_id,
                         Operation::File(FileOperation::Read),
@@ -71,6 +81,15 @@ impl FileHandler {
             }
             (FileOperation::List, _) => Err(ProtocolError::PayloadDecodeFailed("file.list")),
             (FileOperation::Read, _) => Err(ProtocolError::PayloadDecodeFailed("file.read")),
+        }
+    }
+
+    fn resolve_path(&self, path: &str) -> PathBuf {
+        let p = PathBuf::from(path);
+        if p.is_absolute() {
+            p
+        } else {
+            self.working_dir.join(p)
         }
     }
 }

@@ -8,11 +8,11 @@ use crate::agent_server_protocol::{
 
 /// Handler for session-domain operations.
 pub struct SessionHandler {
-    pub session_store: Arc<vol_session::FileSessionEntryStore>,
+    session_store: Arc<vol_session::file_store::FileSessionEntryStore>,
 }
 
 impl SessionHandler {
-    pub fn new(session_store: Arc<vol_session::FileSessionEntryStore>) -> Self {
+    pub fn new(session_store: Arc<vol_session::file_store::FileSessionEntryStore>) -> Self {
         Self { session_store }
     }
 
