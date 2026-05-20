@@ -1,5 +1,6 @@
-use std::sync::Arc;
+use std::path::PathBuf;
 
+use vol_session::file_store::FileSessionEntryStore;
 use vol_session::SessionEntryStore;
 
 use crate::agent_server_protocol::{
@@ -7,13 +8,20 @@ use crate::agent_server_protocol::{
 };
 
 /// Handler for session-domain operations.
+///
+/// Scans all agent directories under agents_root to aggregate sessions.
 pub struct SessionHandler {
-    session_store: Arc<vol_session::file_store::FileSessionEntryStore>,
+    agents_root: PathBuf,
 }
 
 impl SessionHandler {
-    pub fn new(session_store: Arc<vol_session::file_store::FileSessionEntryStore>) -> Self {
-        Self { session_store }
+    pub fn new(agents_root: PathBuf) -> Self {
+        Self { agents_root }
+    }
+
+    /// Get a session store for a specific agent.
+    fn agent_store(&self, agent_id: &str) -> FileSessionEntryStore {
+        FileSessionEntryStore::new(self.agents_root.join(agent_id).join("sessions"))
     }
 
     pub async fn handle(
@@ -23,36 +31,40 @@ impl SessionHandler {
     ) -> Result<Vec<AgentServerMessage>, ProtocolError> {
         match (operation, message.payload) {
             (SessionOperation::List, Payload::Session(SessionPayload::List)) => {
-                match self.session_store.list_sessions() {
-                    Ok(summaries) => {
-                        let sessions: Vec<serde_json::Value> = summaries
-                            .into_iter()
-                            .map(|s| serde_json::json!({
-                                "id": s.session_id,
-                                "entry_count": s.entry_count,
-                                "created_at": s.created_at,
-                            }))
-                            .collect();
-                        Ok(vec![AgentServerMessage::new_result(
-                            message.message_id,
-                            Operation::Session(SessionOperation::List),
-                            Payload::Session(SessionPayload::ListResult { sessions }),
-                        )])
+                let mut all_sessions: Vec<serde_json::Value> = Vec::new();
+
+                if self.agents_root.is_dir() {
+                    for entry in std::fs::read_dir(&self.agents_root).into_iter().flatten().flatten() {
+                        if entry.path().is_dir() {
+                            if let Some(agent_id) = entry.file_name().to_str() {
+                                let store = self.agent_store(agent_id);
+                                if let Ok(summaries) = store.list_sessions() {
+                                    for s in summaries {
+                                        all_sessions.push(serde_json::json!({
+                                            "agent_id": agent_id,
+                                            "session_id": s.session_id,
+                                            "entry_count": s.entry_count,
+                                            "created_at": s.created_at,
+                                        }));
+                                    }
+                                }
+                            }
+                        }
                     }
-                    Err(e) => Ok(vec![AgentServerMessage::new_error(
-                        message.message_id,
-                        Operation::Session(SessionOperation::List),
-                        crate::agent_server_protocol::ErrorPayload {
-                            code: "session_list_failed".to_string(),
-                            message: format!("Failed to list sessions: {e}"),
-                            detail: None,
-                            terminal: true,
-                        },
-                    )]),
                 }
+
+                Ok(vec![AgentServerMessage::new_result(
+                    message.message_id,
+                    Operation::Session(SessionOperation::List),
+                    Payload::Session(SessionPayload::ListResult { sessions: all_sessions }),
+                )])
             }
-            (SessionOperation::Resume, Payload::Session(SessionPayload::Resume { session_id })) => {
-                match self.session_store.get_entries(&session_id).await {
+            (SessionOperation::Resume, Payload::Session(SessionPayload::Resume { session_id, agent_id })) => {
+                let store = match agent_id {
+                    Some(id) => self.agent_store(&id),
+                    None => self.find_store_for_session(&session_id)?,
+                };
+                match store.get_entries(&session_id).await {
                     Ok(entries) => {
                         let json_entries: Vec<serde_json::Value> = entries
                             .into_iter()
@@ -80,8 +92,12 @@ impl SessionHandler {
                     )]),
                 }
             }
-            (SessionOperation::Entries, Payload::Session(SessionPayload::Entries { session_id })) => {
-                match self.session_store.get_entries(&session_id).await {
+            (SessionOperation::Entries, Payload::Session(SessionPayload::Entries { session_id, agent_id })) => {
+                let store = match agent_id {
+                    Some(id) => self.agent_store(&id),
+                    None => self.find_store_for_session(&session_id)?,
+                };
+                match store.get_entries(&session_id).await {
                     Ok(entries) => {
                         let json_entries: Vec<serde_json::Value> = entries
                             .into_iter()
@@ -109,5 +125,24 @@ impl SessionHandler {
             (SessionOperation::Resume, _) => Err(ProtocolError::PayloadDecodeFailed("session.resume")),
             (SessionOperation::Entries, _) => Err(ProtocolError::PayloadDecodeFailed("session.entries")),
         }
+    }
+
+    /// Find which agent owns a session by scanning all agent dirs.
+    fn find_store_for_session(&self, session_id: &str) -> Result<FileSessionEntryStore, ProtocolError> {
+        if self.agents_root.is_dir() {
+            for entry in std::fs::read_dir(&self.agents_root).into_iter().flatten().flatten() {
+                if entry.path().is_dir() {
+                    if let Some(agent_id) = entry.file_name().to_str() {
+                        let store = self.agent_store(agent_id);
+                        if let Ok(summaries) = store.list_sessions() {
+                            if summaries.iter().any(|s| s.session_id == session_id) {
+                                return Ok(store);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err(ProtocolError::PayloadDecodeFailed("session not found in any agent"))
     }
 }

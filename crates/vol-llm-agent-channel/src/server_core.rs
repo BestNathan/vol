@@ -2,12 +2,13 @@
 //!
 //! `AgentServerCore` is the single source of truth for shared resources.
 //!
-//! store_dir 内部按资源类型和 agent 分层：
+//! store_dir 内部按 agent 分层，所有资源归 agent 所有：
 //! ```text
 //! {store_dir}/
-//!   sessions/          — 会话持久化文件
 //!   agents/
-//!     {agent_id}/      — agent 私有目录（日志、缓存等）
+//!     {agent_id}/
+//!       sessions/      — 该 agent 的会话持久化
+//!       ...            — 日志、缓存等
 //! ```
 
 use std::collections::HashMap;
@@ -73,7 +74,6 @@ pub struct AgentServerCore {
     // === Registries ===
     mcp_manager: Arc<McpManager>,
     skill_loader: Arc<SkillLoader>,
-    session_store: Arc<FileSessionEntryStore>,
     tool_registry: Arc<ToolRegistry>,
 
     // === Agent runtime ===
@@ -125,10 +125,6 @@ impl AgentServerCore {
         &self.skill_loader
     }
 
-    pub fn session_store(&self) -> &Arc<FileSessionEntryStore> {
-        &self.session_store
-    }
-
     pub fn tool_registry(&self) -> &Arc<ToolRegistry> {
         &self.tool_registry
     }
@@ -149,8 +145,7 @@ impl AgentServerCore {
 
     /// Register a new agent with the given id and definition.
     ///
-    /// Agent 私有存储目录在 `{store_dir}/agents/{agent_id}/`，不污染用户工作区。
-    /// 日志等路径自动派生到该私有目录。
+    /// Agent 所有资源归 `{store_dir}/agents/{agent_id}/` 下，不污染用户工作区。
     pub async fn register_agent(
         &self,
         agent_id: impl Into<String>,
@@ -158,21 +153,20 @@ impl AgentServerCore {
     ) -> Result<(), String> {
         let agent_id = agent_id.into();
         let agent_dir = self.store_dir.join("agents").join(&agent_id);
-        std::fs::create_dir_all(&agent_dir).map_err(|e| format!("failed to create agent dir: {e}"))?;
+        let sessions_dir = agent_dir.join("sessions");
+        std::fs::create_dir_all(&sessions_dir).map_err(|e| format!("failed to create agent dirs: {e}"))?;
 
         let llm = self.llm.clone();
         let tools = self.tool_registry.clone();
         let mcp = self.mcp_manager.clone();
 
-        // session_store 指向 {store_dir}/sessions/，按 session 隔离
-        let session_store = Arc::new(FileSessionEntryStore::new(self.store_dir.join("sessions")));
+        let session_store = Arc::new(FileSessionEntryStore::new(&sessions_dir));
         let session = Arc::new(vol_session::Session::new(session_store));
 
         let mut config = vol_llm_agent::react::AgentConfig::new(llm, tools, session);
         config.def = Some(def);
         // AgentConfig.working_dir 控制日志等内部路径 → agent 私有目录
-        config.working_dir = agent_dir;
-        // 用户文件操作的工作区 → 项目的 working_dir
+        config.working_dir = agent_dir.clone();
         config.mcp_manager = Some(mcp);
 
         let holder = ConnectionHolder::new(agent_id.clone(), "client".to_string());
@@ -245,9 +239,8 @@ impl AgentServerCoreBuilder {
         let store_dir = expand_tilde(self.store_dir);
 
         // Create store subdirectories: sessions/ agents/
-        let sessions_dir = store_dir.join("sessions");
-        std::fs::create_dir_all(&sessions_dir).map_err(|e| format!("failed to create sessions dir: {e}"))?;
-        std::fs::create_dir_all(store_dir.join("agents")).map_err(|e| format!("failed to create agents dir: {e}"))?;
+        let agents_root = store_dir.join("agents");
+        std::fs::create_dir_all(&agents_root).map_err(|e| format!("failed to create agents dir: {e}"))?;
 
         // Derive LLM client from .agents/providers/*.toml (default: first provider found).
         let llm = derive_llm_client(&self.working_dir)?;
@@ -258,9 +251,6 @@ impl AgentServerCoreBuilder {
         // Derive skill loader from .agents/skills/ in working_dir.
         let skill_loader = derive_skill_loader(&self.working_dir);
 
-        // Session store lives in {store_dir}/sessions/
-        let session_store = Arc::new(FileSessionEntryStore::new(&sessions_dir));
-
         // Derive tool registry (empty by default, agents populate it).
         let tool_registry = Arc::new(ToolRegistry::new());
 
@@ -270,7 +260,7 @@ impl AgentServerCoreBuilder {
 
         let agent = AgentHandler::new(router.clone(), Arc::clone(&holders));
         let file = FileHandler::new(self.working_dir.clone());
-        let session = SessionHandler::new(session_store.clone());
+        let session = SessionHandler::new(agents_root);
         let mcp = McpHandler::new(Some(mcp_manager.clone()));
         let skill = SkillHandler::new(Some(skill_loader.clone()));
         let log = LogHandler;
@@ -281,7 +271,6 @@ impl AgentServerCoreBuilder {
             store_dir,
             mcp_manager,
             skill_loader,
-            session_store,
             tool_registry,
             llm,
             router,
@@ -358,11 +347,9 @@ impl AgentServerCore {
         use std::sync::Arc;
 
         let store_dir = PathBuf::from("/tmp/vol-llm-agent-channel-test-sessions");
-        let sessions_dir = store_dir.join("sessions");
-        std::fs::create_dir_all(&sessions_dir).ok();
-        std::fs::create_dir_all(store_dir.join("agents")).ok();
+        let agents_root = store_dir.join("agents");
+        std::fs::create_dir_all(&agents_root).ok();
 
-        let session_store = Arc::new(FileSessionEntryStore::new(&sessions_dir));
         let router = AgentRouter::new();
         let holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>> =
             Arc::new(std::sync::Mutex::new(HashMap::new()));
@@ -384,7 +371,7 @@ impl AgentServerCore {
 
         let agent = AgentHandler::new(router.clone(), Arc::clone(&holders));
         let file = FileHandler::new(PathBuf::from("."));
-        let session = SessionHandler::new(session_store.clone());
+        let session = SessionHandler::new(agents_root);
         let mcp = McpHandler::new(None);
         let skill = SkillHandler::new(None);
         let log = LogHandler;
@@ -395,7 +382,6 @@ impl AgentServerCore {
             store_dir,
             mcp_manager: Arc::new(McpManager::new(vec![])),
             skill_loader: Arc::new(SkillLoader::new_empty()),
-            session_store,
             tool_registry: Arc::new(ToolRegistry::new()),
             llm: Arc::new(TestLlm),
             router,

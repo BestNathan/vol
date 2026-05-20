@@ -126,7 +126,8 @@ pub fn decode_payload(operation: Operation, value: serde_json::Value) -> Result<
                 .and_then(|v| v.as_str())
                 .ok_or(ProtocolError::PayloadDecodeFailed("session.resume"))?
                 .to_string();
-            Ok(Payload::Session(SessionPayload::Resume { session_id }))
+            let agent_id = obj.get("agent_id").and_then(|v| v.as_str()).map(ToString::to_string);
+            Ok(Payload::Session(SessionPayload::Resume { session_id, agent_id }))
         }
         Operation::Session(SessionOperation::Entries) => {
             let obj = value.as_object().ok_or(ProtocolError::PayloadDecodeFailed("session.entries"))?;
@@ -135,7 +136,8 @@ pub fn decode_payload(operation: Operation, value: serde_json::Value) -> Result<
                 .and_then(|v| v.as_str())
                 .ok_or(ProtocolError::PayloadDecodeFailed("session.entries"))?
                 .to_string();
-            Ok(Payload::Session(SessionPayload::Entries { session_id }))
+            let agent_id = obj.get("agent_id").and_then(|v| v.as_str()).map(ToString::to_string);
+            Ok(Payload::Session(SessionPayload::Entries { session_id, agent_id }))
         }
         Operation::Mcp(McpOperation::ListServers) => Ok(Payload::Mcp(McpPayload::ListServers)),
         Operation::Mcp(McpOperation::ListTools) => {

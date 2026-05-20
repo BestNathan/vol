@@ -213,9 +213,9 @@ pub enum FilePayload {
 pub enum SessionPayload {
     List,
     ListResult { sessions: Vec<serde_json::Value> },
-    Resume { session_id: String },
+    Resume { session_id: String, agent_id: Option<String> },
     ResumeResult { session_id: String, restored: bool, entries: Vec<serde_json::Value> },
-    Entries { session_id: String },
+    Entries { session_id: String, agent_id: Option<String> },
     EntriesResult { entries: Vec<serde_json::Value> },
 }
 
