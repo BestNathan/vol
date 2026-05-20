@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use vol_llm_skill::SkillLoader;
 
 use crate::agent_server_protocol::{
     AgentServerMessage, Operation, Payload, ProtocolError, SkillOperation, SkillPayload,
 };
+use crate::domain::handler::DomainHandler;
 
 /// Handler for skill-domain operations.
 pub struct SkillHandler {
@@ -15,13 +17,30 @@ impl SkillHandler {
     pub fn new(skill_loader: Option<Arc<SkillLoader>>) -> Self {
         Self { skill_loader }
     }
+}
 
-    pub async fn handle(
+#[async_trait]
+impl DomainHandler for SkillHandler {
+    fn name(&self) -> &str {
+        "skill"
+    }
+
+    fn operations(&self) -> Vec<Operation> {
+        vec![
+            Operation::Skill(SkillOperation::List),
+            Operation::Skill(SkillOperation::Get),
+        ]
+    }
+
+    async fn handle(
         &self,
-        operation: SkillOperation,
         message: AgentServerMessage,
     ) -> Result<Vec<AgentServerMessage>, ProtocolError> {
-        match (operation, message.payload) {
+        let op = match &message.operation {
+            Operation::Skill(op) => op.clone(),
+            _ => return Err(ProtocolError::PayloadDecodeFailed("skill")),
+        };
+        match (op, message.payload) {
             (SkillOperation::List, Payload::Skill(SkillPayload::List)) => {
                 let skills = match &self.skill_loader {
                     Some(loader) => {
