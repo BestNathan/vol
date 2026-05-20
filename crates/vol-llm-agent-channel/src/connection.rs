@@ -17,7 +17,7 @@ pub trait Connection: Send + Sync + 'static {
     fn protocol(&self) -> &str;
 
     /// Receive the next incoming message.
-    async fn recv(&mut self) -> Option<Result<AgentServerMessage, ConnectionError>>;
+    async fn recv(&self) -> Option<Result<AgentServerMessage, ConnectionError>>;
 
     /// Send a message.
     async fn send(&self, msg: AgentServerMessage) -> Result<(), ConnectionError>;
@@ -108,7 +108,7 @@ mod tests {
     #[async_trait]
     impl Connection for MockConnection {
         fn protocol(&self) -> &str { &self.protocol }
-        async fn recv(&mut self) -> Option<Result<AgentServerMessage, ConnectionError>> { None }
+        async fn recv(&self) -> Option<Result<AgentServerMessage, ConnectionError>> { None }
         async fn send(&self, _msg: AgentServerMessage) -> Result<(), ConnectionError> { Ok(()) }
     }
 
