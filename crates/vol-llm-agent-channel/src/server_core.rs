@@ -25,7 +25,6 @@ use vol_session::file_store::FileSessionEntryStore;
 
 use crate::connection::ConnectionHolder;
 use crate::dispatcher::AgentDispatcher;
-use crate::domain::handler::DomainHandler;
 use crate::domain::registry::HandlerRegistry;
 use crate::domain::{
     agent::AgentHandler, file::FileHandler, log::LogHandler,
