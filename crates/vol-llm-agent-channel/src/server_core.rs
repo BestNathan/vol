@@ -214,7 +214,7 @@ impl AgentServerCore {
             Operation::Mcp(op) => self.mcp.handle(op, message).await,
             Operation::Skill(op) => self.skill.handle(op, message).await,
             Operation::Log(_) => self.log.handle(message).await,
-            Operation::System(op) => self.system.handle(op, message).await,
+            Operation::System(_) => self.system.handle(message).await,
         }
     }
 }
