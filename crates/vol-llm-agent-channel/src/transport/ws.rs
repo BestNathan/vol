@@ -154,8 +154,8 @@ fn old_message_to_protocol(msg: Message) -> Result<AgentServerMessage, Connectio
 pub struct WsConnection {
     /// WebSocket text sender (mutex-wrapped for concurrent sends).
     tx: Arc<tokio::sync::Mutex<futures::stream::SplitSink<WebSocket, WsMessage>>>,
-    /// WebSocket text receiver.
-    rx: futures::stream::SplitStream<WebSocket>,
+    /// WebSocket text receiver (mutex-wrapped for &self recv).
+    rx: tokio::sync::Mutex<futures::stream::SplitStream<WebSocket>>,
     /// Dispatcher for executing agent requests.
     dispatcher: Arc<AgentDispatcher>,
     /// Holder this connection is attached to (for detach on close).
@@ -175,7 +175,7 @@ impl WsConnection {
         let (tx, rx) = ws.split();
         Self {
             tx: Arc::new(tokio::sync::Mutex::new(tx)),
-            rx,
+            rx: tokio::sync::Mutex::new(rx),
             dispatcher,
             holder,
             agent_id,
@@ -338,8 +338,11 @@ impl Connection for WsConnection {
         "ws"
     }
 
-    async fn recv(&mut self) -> Option<Result<AgentServerMessage, ConnectionError>> {
-        let msg = self.rx.next().await?;
+    async fn recv(&self) -> Option<Result<AgentServerMessage, ConnectionError>> {
+        let msg = {
+            let mut rx = self.rx.lock().await;
+            rx.next().await?
+        };
         match msg {
             Ok(WsMessage::Text(text)) => {
                 match serde_json::from_str::<AgentServerMessage>(&text) {

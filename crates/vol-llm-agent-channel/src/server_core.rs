@@ -203,6 +203,41 @@ impl AgentServerCore {
     ) -> Result<Vec<crate::agent_server_protocol::AgentServerMessage>, crate::agent_server_protocol::ProtocolError> {
         self.handler_registry.dispatch(message).await
     }
+
+    /// Serve incoming messages from a connection, dispatching each to the handler registry.
+    ///
+    /// Loops `recv() → handle() → send()` until the connection closes or errors.
+    pub async fn serve(&self, conn: impl crate::connection::Connection) {
+        while let Some(result) = conn.recv().await {
+            let responses = match result {
+                Ok(msg) => match self.handle(msg).await {
+                    Ok(resp) => resp,
+                    Err(e) => vec![crate::agent_server_protocol::AgentServerMessage::new_error(
+                        uuid::Uuid::new_v4().to_string(),
+                        crate::agent_server_protocol::Operation::System(
+                            crate::agent_server_protocol::SystemOperation::Connected,
+                        ),
+                        crate::agent_server_protocol::ErrorPayload {
+                            code: "dispatch_error".to_string(),
+                            message: e.to_string(),
+                            detail: None,
+                            terminal: false,
+                        },
+                    )],
+                },
+                Err(e) => {
+                    tracing::warn!(%e, "connection receive error");
+                    break;
+                }
+            };
+            for resp in responses {
+                if let Err(e) = conn.send(resp).await {
+                    tracing::warn!(%e, "connection send error");
+                    return;
+                }
+            }
+        }
+    }
 }
 
 /// Builder for [`AgentServerCore`].

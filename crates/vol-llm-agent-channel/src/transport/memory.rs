@@ -1,7 +1,7 @@
 //! In-memory transport for local testing and inter-process communication.
 
 use async_trait::async_trait;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
 use crate::agent_server_protocol::AgentServerMessage;
 use crate::connection::Connection;
@@ -9,7 +9,7 @@ use crate::error::ConnectionError;
 
 /// In-memory connection for local testing and inter-process communication.
 pub struct MemoryConnection {
-    rx: mpsc::UnboundedReceiver<AgentServerMessage>,
+    rx: Mutex<mpsc::UnboundedReceiver<AgentServerMessage>>,
     tx: mpsc::UnboundedSender<AgentServerMessage>,
 }
 
@@ -23,7 +23,7 @@ impl MemoryConnection {
         let (out_tx, out_rx) = mpsc::unbounded_channel::<AgentServerMessage>();
         (
             Self {
-                rx: in_rx,
+                rx: Mutex::new(in_rx),
                 tx: out_tx,
             },
             MemoryHandle {
@@ -40,8 +40,8 @@ impl Connection for MemoryConnection {
         "memory"
     }
 
-    async fn recv(&mut self) -> Option<Result<AgentServerMessage, ConnectionError>> {
-        self.rx.recv().await.map(Ok)
+    async fn recv(&self) -> Option<Result<AgentServerMessage, ConnectionError>> {
+        self.rx.lock().await.recv().await.map(Ok)
     }
 
     async fn send(&self, msg: AgentServerMessage) -> Result<(), ConnectionError> {

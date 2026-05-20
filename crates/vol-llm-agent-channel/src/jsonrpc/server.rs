@@ -1,4 +1,4 @@
-//! JSON-RPC server managing multiple agent connections.
+//! JSON-RPC server providing a `/ws` WebSocket endpoint.
 
 use std::sync::Arc;
 
@@ -10,18 +10,18 @@ use crate::server_core::AgentServerCore;
 
 use super::connection::JsonRpcConnection;
 
-/// JSON-RPC server managing multiple agents.
+/// JSON-RPC server providing a `/ws` WebSocket endpoint.
 pub struct JsonRpcServer {
     core: Arc<AgentServerCore>,
 }
 
 impl JsonRpcServer {
-    /// Create a new server with the given core.
+    /// Create a new server wrapping the given core.
     pub fn new(core: Arc<AgentServerCore>) -> Self {
         Self { core }
     }
 
-    /// Build axum Router with the JSON-RPC WebSocket endpoint at `/ws`.
+    /// Build an axum `Router` with the JSON-RPC WebSocket endpoint at `/ws`.
     pub fn into_axum_router(self) -> Router {
         let server = Arc::new(self);
 
@@ -37,10 +37,6 @@ impl JsonRpcServer {
 }
 
 async fn handle_ws(socket: WebSocket, server: Arc<JsonRpcServer>) {
-    let conn = JsonRpcConnection::new(
-        socket,
-        server.core.clone(),
-    );
-    let conn_arc = Arc::new(conn);
-    conn_arc.run().await;
+    let conn = JsonRpcConnection::new(socket);
+    server.core.serve(conn).await;
 }

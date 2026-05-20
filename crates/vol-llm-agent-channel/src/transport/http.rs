@@ -48,7 +48,7 @@ impl Connection for HttpEventConnection {
         "http"
     }
 
-    async fn recv(&mut self) -> Option<Result<AgentServerMessage, ConnectionError>> {
+    async fn recv(&self) -> Option<Result<AgentServerMessage, ConnectionError>> {
         // HTTP is request-response; no inbound messages after POST.
         None
     }
