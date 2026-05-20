@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use vol_llm_mcp::manager::McpManager;
 
 use crate::agent_server_protocol::{
     AgentServerMessage, McpOperation, McpPayload, Operation, Payload, ProtocolError,
 };
+use crate::domain::handler::DomainHandler;
 
 /// Handler for MCP-domain operations.
 pub struct McpHandler {
@@ -28,13 +30,38 @@ impl McpHandler {
             vol_llm_mcp::manager::ServerStatus::Error(e) => format!("error: {e}"),
         }
     }
+}
 
-    pub async fn handle(
+#[async_trait]
+impl DomainHandler for McpHandler {
+    fn name(&self) -> &str {
+        "mcp"
+    }
+
+    fn operations(&self) -> Vec<Operation> {
+        vec![
+            Operation::Mcp(McpOperation::ListServers),
+            Operation::Mcp(McpOperation::ListTools),
+            Operation::Mcp(McpOperation::CallTool),
+            Operation::Mcp(McpOperation::ListResources),
+            Operation::Mcp(McpOperation::ListResourceTemplates),
+            Operation::Mcp(McpOperation::ReadResource),
+            Operation::Mcp(McpOperation::ListPrompts),
+            Operation::Mcp(McpOperation::GetPrompt),
+            Operation::Mcp(McpOperation::Reconnect),
+            Operation::Mcp(McpOperation::ServerStatus),
+        ]
+    }
+
+    async fn handle(
         &self,
-        operation: McpOperation,
         message: AgentServerMessage,
     ) -> Result<Vec<AgentServerMessage>, ProtocolError> {
-        match (operation, message.payload) {
+        let op = match &message.operation {
+            Operation::Mcp(op) => op.clone(),
+            _ => return Err(ProtocolError::PayloadDecodeFailed("mcp")),
+        };
+        match (op, message.payload) {
             (McpOperation::ListServers, Payload::Mcp(McpPayload::ListServers)) => {
                 let mgr = self.mgr()?;
                 let status = mgr.server_status_async().await;
