@@ -186,7 +186,7 @@ impl WsConnection {
     ///
     /// This method owns the connection and runs until the client disconnects
     /// or a fatal error occurs. It detaches from the holder before returning.
-    pub async fn run(mut self) {
+    pub async fn run(self) {
         let connected = AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: uuid::Uuid::new_v4().to_string(),

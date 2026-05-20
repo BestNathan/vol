@@ -1,8 +1,7 @@
 //! JSON-RPC WebSocket gateway codec.
 
 use crate::agent_server_protocol::{
-    AgentOperation, AgentPayload, AgentServerMessage, ErrorPayload, FileOperation, FilePayload,
-    MessageKind, Operation, Payload,
+    AgentServerMessage, ErrorPayload, MessageKind, Payload,
 };
 use crate::error::ConnectionError;
 use crate::operation_codec::{decode_payload, method_to_operation};
