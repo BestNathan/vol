@@ -209,7 +209,7 @@ impl AgentServerCore {
         use crate::agent_server_protocol::Operation;
         match message.operation.clone() {
             Operation::Agent(op) => self.agent.handle(op, message).await,
-            Operation::File(op) => self.file.handle(op, message).await,
+            Operation::File(_) => self.file.handle(message).await,
             Operation::Session(op) => self.session.handle(op, message).await,
             Operation::Mcp(op) => self.mcp.handle(op, message).await,
             Operation::Skill(op) => self.skill.handle(op, message).await,

@@ -1,6 +1,11 @@
 use std::path::PathBuf;
 
-use crate::agent_server_protocol::{AgentServerMessage, FileOperation, FilePayload, Operation, Payload, ProtocolError};
+use async_trait::async_trait;
+
+use crate::agent_server_protocol::{
+    AgentServerMessage, FileOperation, FilePayload, Operation, Payload, ProtocolError,
+};
+use crate::domain::handler::DomainHandler;
 
 /// Handler for file-domain operations.
 pub struct FileHandler {
@@ -12,12 +17,38 @@ impl FileHandler {
         Self { working_dir }
     }
 
-    pub async fn handle(
+    fn resolve_path(&self, path: &str) -> PathBuf {
+        let p = PathBuf::from(path);
+        if p.is_absolute() {
+            p
+        } else {
+            self.working_dir.join(p)
+        }
+    }
+}
+
+#[async_trait]
+impl DomainHandler for FileHandler {
+    fn name(&self) -> &str {
+        "file"
+    }
+
+    fn operations(&self) -> Vec<Operation> {
+        vec![
+            Operation::File(FileOperation::List),
+            Operation::File(FileOperation::Read),
+        ]
+    }
+
+    async fn handle(
         &self,
-        operation: FileOperation,
         message: AgentServerMessage,
     ) -> Result<Vec<AgentServerMessage>, ProtocolError> {
-        match (operation, message.payload) {
+        let op = match &message.operation {
+            Operation::File(op) => op.clone(),
+            _ => return Err(ProtocolError::PayloadDecodeFailed("file")),
+        };
+        match (op, message.payload) {
             (FileOperation::List, Payload::File(FilePayload::List { path })) => {
                 let resolved = self.resolve_path(&path);
                 match std::fs::read_dir(&resolved) {
@@ -81,15 +112,6 @@ impl FileHandler {
             }
             (FileOperation::List, _) => Err(ProtocolError::PayloadDecodeFailed("file.list")),
             (FileOperation::Read, _) => Err(ProtocolError::PayloadDecodeFailed("file.read")),
-        }
-    }
-
-    fn resolve_path(&self, path: &str) -> PathBuf {
-        let p = PathBuf::from(path);
-        if p.is_absolute() {
-            p
-        } else {
-            self.working_dir.join(p)
         }
     }
 }
