@@ -26,8 +26,8 @@ use vol_session::file_store::FileSessionEntryStore;
 use crate::connection::ConnectionHolder;
 use crate::dispatcher::AgentDispatcher;
 use crate::domain::{
-    agent::AgentHandler, file::FileHandler, log::LogHandler, mcp::McpHandler,
-    session::SessionHandler, skill::SkillHandler, system::SystemHandler,
+    agent::AgentHandler, file::FileHandler, handler::DomainHandler, log::LogHandler,
+    mcp::McpHandler, session::SessionHandler, skill::SkillHandler, system::SystemHandler,
 };
 use crate::router::AgentRouter;
 
@@ -213,7 +213,7 @@ impl AgentServerCore {
             Operation::Session(op) => self.session.handle(op, message).await,
             Operation::Mcp(op) => self.mcp.handle(op, message).await,
             Operation::Skill(op) => self.skill.handle(op, message).await,
-            Operation::Log(op) => self.log.handle(op, message).await,
+            Operation::Log(_) => self.log.handle(message).await,
             Operation::System(op) => self.system.handle(op, message).await,
         }
     }
