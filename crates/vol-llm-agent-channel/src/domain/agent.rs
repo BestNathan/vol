@@ -8,6 +8,7 @@ use crate::agent_server_protocol::{
 };
 use crate::connection::ConnectionHolder;
 use crate::domain::handler::DomainHandler;
+use crate::request::AgentRequest;
 use crate::router::AgentRouter;
 
 /// Handler for agent-domain operations.
@@ -52,37 +53,70 @@ impl DomainHandler for AgentHandler {
             _ => return Err(ProtocolError::PayloadDecodeFailed("agent")),
         };
         match (op, message.payload) {
-            (AgentOperation::Submit, Payload::Agent(AgentPayload::Submit { .. })) => {
-                let run_id = uuid::Uuid::new_v4().to_string();
-                Ok(vec![
-                    AgentServerMessage::new_ack(
-                        message.message_id.clone(),
-                        Operation::Agent(AgentOperation::Submit),
-                        Payload::Agent(AgentPayload::SubmitAck {
-                            run_id: run_id.clone(),
-                            accepted: true,
-                        }),
-                    ),
-                    AgentServerMessage::new_result(
+            (AgentOperation::Submit, Payload::Agent(AgentPayload::Submit { input, target, metadata: _ })) => {
+                let target_id = {
+                    let holders = self.holders.lock().unwrap();
+                    target
+                        .filter(|t| holders.contains_key(t))
+                        .or_else(|| holders.keys().next().cloned())
+                        .unwrap_or_else(|| "agent".to_string())
+                };
+
+                let request = AgentRequest::new(&target_id, &input);
+                let req_id = request.req_id.clone();
+                let req_id_clone = req_id.clone();
+
+                match self.router.send(&target_id, request).await {
+                    Ok(rx) => {
+                        let router = self.router.clone();
+                        tokio::spawn(async move {
+                            Self::process_run_result(rx, &req_id_clone, &router).await;
+                        });
+
+                        let run_id = uuid::Uuid::new_v4().to_string();
+                        Ok(vec![
+                            AgentServerMessage::new_ack(
+                                message.message_id.clone(),
+                                Operation::Agent(AgentOperation::Submit),
+                                Payload::Agent(AgentPayload::SubmitAck {
+                                    run_id: run_id.clone(),
+                                    accepted: true,
+                                }),
+                            ),
+                            AgentServerMessage::new_result(
+                                message.message_id,
+                                Operation::Agent(AgentOperation::Submit),
+                                Payload::Agent(AgentPayload::SubmitResult {
+                                    run_id,
+                                    response: serde_json::json!({"req_id": req_id}),
+                                }),
+                            ),
+                        ])
+                    }
+                    Err(e) => Ok(vec![AgentServerMessage::new_error(
                         message.message_id,
                         Operation::Agent(AgentOperation::Submit),
-                        Payload::Agent(AgentPayload::SubmitResult {
-                            run_id,
-                            response: serde_json::json!({ "output": "" }),
-                        }),
-                    ),
-                ])
+                        crate::agent_server_protocol::ErrorPayload {
+                            code: "agent_submit_failed".to_string(),
+                            message: e.to_string(),
+                            detail: None,
+                            terminal: true,
+                        },
+                    )]),
+                }
             }
-            (AgentOperation::Cancel, Payload::Agent(AgentPayload::Cancel { run_id })) => Ok(vec![
-                AgentServerMessage::new_result(
+            (AgentOperation::Cancel, Payload::Agent(AgentPayload::Cancel { req_id })) => {
+                let cancelled = self.router.cancel(&req_id).await;
+                let run_id = uuid::Uuid::new_v4().to_string();
+                Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Agent(AgentOperation::Cancel),
                     Payload::Agent(AgentPayload::CancelResult {
                         run_id,
-                        cancelled: false,
+                        cancelled,
                     }),
-                ),
-            ]),
+                )])
+            }
             (AgentOperation::Subscribe, Payload::Agent(AgentPayload::Subscribe { .. })) => Ok(vec![
                 AgentServerMessage::new_result(
                     message.message_id,
@@ -139,6 +173,30 @@ impl DomainHandler for AgentHandler {
             (AgentOperation::Unsubscribe, _) => Err(ProtocolError::PayloadDecodeFailed("agent.unsubscribe")),
             (AgentOperation::Approve, _) => Err(ProtocolError::PayloadDecodeFailed("agent.approve")),
             (AgentOperation::Event, _) => Err(ProtocolError::PayloadDecodeFailed("agent.event")),
+        }
+    }
+}
+
+impl AgentHandler {
+    async fn process_run_result(
+        rx: tokio::sync::oneshot::Receiver<crate::request::RunResult>,
+        req_id: &str,
+        _router: &AgentRouter,
+    ) {
+        match rx.await {
+            Ok(result) => {
+                match &result.response {
+                    Ok(response) => {
+                        tracing::info!(%req_id, run_id = ?result.run_id, iterations = response.iterations, "agent run completed");
+                    }
+                    Err(e) => {
+                        tracing::error!(%req_id, %e, "agent run failed");
+                    }
+                }
+            }
+            Err(_) => {
+                tracing::warn!(%req_id, "agent run receiver dropped (possibly cancelled)");
+            }
         }
     }
 }

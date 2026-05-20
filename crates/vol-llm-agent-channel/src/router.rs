@@ -46,6 +46,16 @@ impl AgentRouter {
         dispatcher.submit(request)
     }
 
+    /// Cancel a request by req_id across all registered dispatchers.
+    pub async fn cancel(&self, req_id: &str) -> bool {
+        for dispatcher in self.dispatchers.read().await.values() {
+            if dispatcher.cancel(req_id).await {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Check if an agent is registered.
     pub async fn has_agent(&self, agent_id: &str) -> bool {
         self.dispatchers.read().await.contains_key(agent_id)

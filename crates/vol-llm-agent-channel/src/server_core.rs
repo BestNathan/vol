@@ -397,7 +397,7 @@ fn expand_tilde(path: PathBuf) -> PathBuf {
 /// Test constructor that provides minimal defaults for all optional fields.
 impl AgentServerCore {
     #[doc(hidden)]
-    pub fn for_test() -> Self {
+    pub async fn for_test() -> Self {
         use std::sync::Arc;
 
         let store_dir = PathBuf::from("/tmp/vol-llm-agent-channel-test-sessions");
@@ -421,6 +421,24 @@ impl AgentServerCore {
                 let (_tx, rx) = tokio::sync::mpsc::channel(1);
                 Ok(vol_llm_core::StreamReceiver::new(rx))
             }
+        }
+
+        // Register a test agent dispatcher so submit flow works.
+        {
+            use crate::dispatcher::AgentDispatcher;
+            use vol_llm_agent::ReActAgent;
+            use vol_llm_agent::react::AgentConfig;
+            use vol_session::Session;
+            use vol_session::InMemoryEntryStore;
+
+            let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
+            let tools: Arc<vol_llm_tool::ToolRegistry> = Arc::new(vol_llm_tool::ToolRegistry::new());
+            let config = AgentConfig::new(Arc::new(TestLlm), tools, session);
+            let agent = ReActAgent::new(config);
+            let dispatcher = Arc::new(AgentDispatcher::new(agent));
+            let holder = Arc::new(ConnectionHolder::new("test_agent".to_string(), "client".to_string()));
+            router.register("test_agent".to_string(), dispatcher).await;
+            holders.lock().unwrap().insert("test_agent".to_string(), holder);
         }
 
         let mut handler_registry = HandlerRegistry::new();

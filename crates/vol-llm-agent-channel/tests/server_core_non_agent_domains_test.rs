@@ -6,7 +6,7 @@ use vol_llm_agent_channel::server_core::AgentServerCore;
 
 #[tokio::test]
 async fn core_dispatches_file_read_to_file_domain() {
-    let core = AgentServerCore::for_test();
+    let core = AgentServerCore::for_test().await;
     let msg = AgentServerMessage::new_command(
         "msg_1",
         Operation::File(FileOperation::Read),
@@ -22,7 +22,7 @@ async fn core_dispatches_file_read_to_file_domain() {
 
 #[tokio::test]
 async fn core_dispatches_skill_get_to_skill_domain() {
-    let core = AgentServerCore::for_test();
+    let core = AgentServerCore::for_test().await;
     let msg = AgentServerMessage::new_command(
         "msg_2",
         Operation::Skill(SkillOperation::Get),
@@ -38,7 +38,7 @@ async fn core_dispatches_skill_get_to_skill_domain() {
 
 #[tokio::test]
 async fn core_dispatches_session_list_to_session_domain() {
-    let core = AgentServerCore::for_test();
+    let core = AgentServerCore::for_test().await;
     let msg = AgentServerMessage::new_command(
         "msg_3",
         Operation::Session(SessionOperation::List),
@@ -52,7 +52,7 @@ async fn core_dispatches_session_list_to_session_domain() {
 
 #[tokio::test]
 async fn core_dispatches_log_list_to_log_domain() {
-    let core = AgentServerCore::for_test();
+    let core = AgentServerCore::for_test().await;
     let msg = AgentServerMessage::new_command(
         "msg_4",
         Operation::Log(LogOperation::List),

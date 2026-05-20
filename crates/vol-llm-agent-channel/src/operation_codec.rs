@@ -52,12 +52,12 @@ pub fn decode_payload(operation: Operation, value: serde_json::Value) -> Result<
         }
         Operation::Agent(AgentOperation::Cancel) => {
             let obj = value.as_object().ok_or(ProtocolError::PayloadDecodeFailed("agent.cancel"))?;
-            let run_id = obj
-                .get("run_id")
+            let req_id = obj
+                .get("req_id")
                 .and_then(|v| v.as_str())
                 .ok_or(ProtocolError::PayloadDecodeFailed("agent.cancel"))?
                 .to_string();
-            Ok(Payload::Agent(AgentPayload::Cancel { run_id }))
+            Ok(Payload::Agent(AgentPayload::Cancel { req_id }))
         }
         Operation::Agent(AgentOperation::Subscribe) => {
             let target = value.as_object().and_then(|o| o.get("target")).and_then(|v| v.as_str()).map(ToString::to_string);

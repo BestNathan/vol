@@ -162,7 +162,7 @@ pub enum AgentPayload {
         response: serde_json::Value,
     },
     Cancel {
-        run_id: String,
+        req_id: String,
     },
     CancelResult {
         run_id: String,

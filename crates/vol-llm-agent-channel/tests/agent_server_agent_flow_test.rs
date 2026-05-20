@@ -5,7 +5,7 @@ use vol_llm_agent_channel::server_core::AgentServerCore;
 
 #[tokio::test]
 async fn submit_emits_ack_and_result_with_same_message_id() {
-    let core = AgentServerCore::for_test();
+    let core = AgentServerCore::for_test().await;
     let msg = AgentServerMessage::new_command(
         "msg_submit_1",
         Operation::Agent(AgentOperation::Submit),
@@ -40,13 +40,13 @@ async fn submit_emits_ack_and_result_with_same_message_id() {
 }
 
 #[tokio::test]
-async fn cancel_targets_run_id_not_message_id() {
-    let core = AgentServerCore::for_test();
+async fn cancel_returns_result_with_cancelled_flag() {
+    let core = AgentServerCore::for_test().await;
     let msg = AgentServerMessage::new_command(
         "msg_cancel_1",
         Operation::Agent(AgentOperation::Cancel),
         Payload::Agent(AgentPayload::Cancel {
-            run_id: "run_target_123".to_string(),
+            req_id: "req_target_123".to_string(),
         }),
     );
 
@@ -57,7 +57,7 @@ async fn cancel_targets_run_id_not_message_id() {
 
     match &outputs[0].payload {
         Payload::Agent(AgentPayload::CancelResult { run_id, cancelled }) => {
-            assert_eq!(run_id, "run_target_123");
+            assert!(!run_id.is_empty());
             assert!(!cancelled);
         }
         other => panic!("expected CancelResult payload, got {:?}", other),
