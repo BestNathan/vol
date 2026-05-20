@@ -1,11 +1,13 @@
 use std::path::PathBuf;
 
+use async_trait::async_trait;
 use vol_session::file_store::FileSessionEntryStore;
 use vol_session::SessionEntryStore;
 
 use crate::agent_server_protocol::{
     AgentServerMessage, Operation, Payload, ProtocolError, SessionOperation, SessionPayload,
 };
+use crate::domain::handler::DomainHandler;
 
 /// Handler for session-domain operations.
 ///
@@ -24,12 +26,49 @@ impl SessionHandler {
         FileSessionEntryStore::new(self.agents_root.join(agent_id).join("sessions"))
     }
 
-    pub async fn handle(
+    /// Find which agent owns a session by scanning all agent dirs.
+    fn find_store_for_session(&self, session_id: &str) -> Result<FileSessionEntryStore, ProtocolError> {
+        if self.agents_root.is_dir() {
+            for entry in std::fs::read_dir(&self.agents_root).into_iter().flatten().flatten() {
+                if entry.path().is_dir() {
+                    if let Some(agent_id) = entry.file_name().to_str() {
+                        let store = self.agent_store(agent_id);
+                        if let Ok(summaries) = store.list_sessions() {
+                            if summaries.iter().any(|s| s.session_id == session_id) {
+                                return Ok(store);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err(ProtocolError::PayloadDecodeFailed("session not found in any agent"))
+    }
+}
+
+#[async_trait]
+impl DomainHandler for SessionHandler {
+    fn name(&self) -> &str {
+        "session"
+    }
+
+    fn operations(&self) -> Vec<Operation> {
+        vec![
+            Operation::Session(SessionOperation::List),
+            Operation::Session(SessionOperation::Resume),
+            Operation::Session(SessionOperation::Entries),
+        ]
+    }
+
+    async fn handle(
         &self,
-        operation: SessionOperation,
         message: AgentServerMessage,
     ) -> Result<Vec<AgentServerMessage>, ProtocolError> {
-        match (operation, message.payload) {
+        let op = match &message.operation {
+            Operation::Session(op) => op.clone(),
+            _ => return Err(ProtocolError::PayloadDecodeFailed("session")),
+        };
+        match (op, message.payload) {
             (SessionOperation::List, Payload::Session(SessionPayload::List)) => {
                 let mut all_sessions: Vec<serde_json::Value> = Vec::new();
 
@@ -125,24 +164,5 @@ impl SessionHandler {
             (SessionOperation::Resume, _) => Err(ProtocolError::PayloadDecodeFailed("session.resume")),
             (SessionOperation::Entries, _) => Err(ProtocolError::PayloadDecodeFailed("session.entries")),
         }
-    }
-
-    /// Find which agent owns a session by scanning all agent dirs.
-    fn find_store_for_session(&self, session_id: &str) -> Result<FileSessionEntryStore, ProtocolError> {
-        if self.agents_root.is_dir() {
-            for entry in std::fs::read_dir(&self.agents_root).into_iter().flatten().flatten() {
-                if entry.path().is_dir() {
-                    if let Some(agent_id) = entry.file_name().to_str() {
-                        let store = self.agent_store(agent_id);
-                        if let Ok(summaries) = store.list_sessions() {
-                            if summaries.iter().any(|s| s.session_id == session_id) {
-                                return Ok(store);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Err(ProtocolError::PayloadDecodeFailed("session not found in any agent"))
     }
 }

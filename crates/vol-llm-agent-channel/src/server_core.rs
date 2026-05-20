@@ -210,7 +210,7 @@ impl AgentServerCore {
         match message.operation.clone() {
             Operation::Agent(op) => self.agent.handle(op, message).await,
             Operation::File(_) => self.file.handle(message).await,
-            Operation::Session(op) => self.session.handle(op, message).await,
+            Operation::Session(_) => self.session.handle(message).await,
             Operation::Mcp(op) => self.mcp.handle(op, message).await,
             Operation::Skill(op) => self.skill.handle(op, message).await,
             Operation::Log(_) => self.log.handle(message).await,
