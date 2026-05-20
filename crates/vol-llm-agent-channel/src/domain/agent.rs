@@ -1,31 +1,57 @@
+use std::collections::HashMap;
 use std::sync::Arc;
+
+use async_trait::async_trait;
 
 use crate::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, Operation, Payload, ProtocolError,
 };
 use crate::connection::ConnectionHolder;
+use crate::domain::handler::DomainHandler;
 use crate::router::AgentRouter;
 
 /// Handler for agent-domain operations.
 pub struct AgentHandler {
     router: AgentRouter,
-    holders: Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<ConnectionHolder>>>>,
+    holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
 }
 
 impl AgentHandler {
     pub fn new(
         router: AgentRouter,
-        holders: Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<ConnectionHolder>>>>,
+        holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
     ) -> Self {
         Self { router, holders }
     }
+}
 
-    pub async fn handle(
+#[async_trait]
+impl DomainHandler for AgentHandler {
+    fn name(&self) -> &str {
+        "agent"
+    }
+
+    fn operations(&self) -> Vec<Operation> {
+        vec![
+            Operation::Agent(AgentOperation::Submit),
+            Operation::Agent(AgentOperation::Cancel),
+            Operation::Agent(AgentOperation::Subscribe),
+            Operation::Agent(AgentOperation::Unsubscribe),
+            Operation::Agent(AgentOperation::Approve),
+            Operation::Agent(AgentOperation::List),
+            Operation::Agent(AgentOperation::Event),
+        ]
+    }
+
+    async fn handle(
         &self,
-        operation: AgentOperation,
         message: AgentServerMessage,
     ) -> Result<Vec<AgentServerMessage>, ProtocolError> {
-        match (operation, message.payload) {
+        let op = match &message.operation {
+            Operation::Agent(op) => op.clone(),
+            _ => return Err(ProtocolError::PayloadDecodeFailed("agent")),
+        };
+        match (op, message.payload) {
             (AgentOperation::Submit, Payload::Agent(AgentPayload::Submit { .. })) => {
                 let run_id = uuid::Uuid::new_v4().to_string();
                 Ok(vec![
@@ -66,16 +92,16 @@ impl AgentHandler {
                     }),
                 ),
             ]),
-            (AgentOperation::Unsubscribe, Payload::Agent(AgentPayload::Unsubscribe { subscription_id })) => Ok(vec![
-                AgentServerMessage::new_result(
+            (AgentOperation::Unsubscribe, Payload::Agent(AgentPayload::Unsubscribe { subscription_id })) => {
+                Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Agent(AgentOperation::Unsubscribe),
                     Payload::Agent(AgentPayload::UnsubscribeResult {
                         subscription_id,
                         removed: true,
                     }),
-                ),
-            ]),
+                )])
+            }
             (AgentOperation::Approve, Payload::Agent(AgentPayload::Approve { run_id, .. })) => Ok(vec![
                 AgentServerMessage::new_result(
                     message.message_id,

@@ -208,7 +208,7 @@ impl AgentServerCore {
     ) -> Result<Vec<crate::agent_server_protocol::AgentServerMessage>, crate::agent_server_protocol::ProtocolError> {
         use crate::agent_server_protocol::Operation;
         match message.operation.clone() {
-            Operation::Agent(op) => self.agent.handle(op, message).await,
+            Operation::Agent(_) => self.agent.handle(message).await,
             Operation::File(_) => self.file.handle(message).await,
             Operation::Session(_) => self.session.handle(message).await,
             Operation::Mcp(_) => self.mcp.handle(message).await,
