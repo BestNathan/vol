@@ -1,16 +1,15 @@
 //! Unified core for the agent server.
 //!
-//! `AgentServerCore` is the single source of truth for shared resources:
-//! - working directory and store directory
-//! - MCP manager, skill loader, session store
-//! - agent router, connection holders, LLM client
-//! - domain handlers that hold the resources they need
+//! `AgentServerCore` is the single source of truth for shared resources.
+//! Given only `working_dir` and `store_dir`, it derives all internal
+//! registries (MCP, skills, agents, tools, sessions) automatically.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use vol_llm_core::LLMClient;
+use vol_llm_mcp::McpConfig;
 use vol_llm_mcp::McpManager;
 use vol_llm_skill::SkillLoader;
 use vol_llm_tool::ToolRegistry;
@@ -34,8 +33,8 @@ pub struct AgentServerCore {
     store_dir: PathBuf,
 
     // === Registries ===
-    mcp_manager: Option<Arc<McpManager>>,
-    skill_loader: Option<Arc<SkillLoader>>,
+    mcp_manager: Arc<McpManager>,
+    skill_loader: Arc<SkillLoader>,
     session_store: Arc<FileSessionEntryStore>,
     tool_registry: Arc<ToolRegistry>,
 
@@ -55,9 +54,14 @@ pub struct AgentServerCore {
 }
 
 impl AgentServerCore {
-    /// Create a new builder.
-    pub fn builder() -> AgentServerCoreBuilder {
-        AgentServerCoreBuilder::new()
+    /// Create a new core with required paths only.
+    pub fn new(working_dir: impl Into<PathBuf>, store_dir: impl Into<PathBuf>, llm: Arc<dyn LLMClient>) -> AgentServerCoreBuilder {
+        Self::builder(working_dir, store_dir, llm)
+    }
+
+    /// Create a builder for optional override.
+    pub fn builder(working_dir: impl Into<PathBuf>, store_dir: impl Into<PathBuf>, llm: Arc<dyn LLMClient>) -> AgentServerCoreBuilder {
+        AgentServerCoreBuilder::new(working_dir.into(), store_dir.into(), llm)
     }
 
     // === Path accessors ===
@@ -72,12 +76,12 @@ impl AgentServerCore {
 
     // === Registry accessors ===
 
-    pub fn mcp_manager(&self) -> Option<&Arc<McpManager>> {
-        self.mcp_manager.as_ref()
+    pub fn mcp_manager(&self) -> &Arc<McpManager> {
+        &self.mcp_manager
     }
 
-    pub fn skill_loader(&self) -> Option<&Arc<SkillLoader>> {
-        self.skill_loader.as_ref()
+    pub fn skill_loader(&self) -> &Arc<SkillLoader> {
+        &self.skill_loader
     }
 
     pub fn session_store(&self) -> &Arc<FileSessionEntryStore> {
@@ -116,14 +120,13 @@ impl AgentServerCore {
         let llm = self.llm.clone();
         let tools = self.tool_registry.clone();
         let session_store = self.session_store.clone();
+        let mcp = self.mcp_manager.clone();
 
         let session = Arc::new(vol_session::Session::new(session_store));
         let mut config = vol_llm_agent::react::AgentConfig::new(llm, tools, session);
         config.def = Some(def);
         config.working_dir = self.working_dir.clone();
-        if let Some(mcp) = &self.mcp_manager {
-            config.mcp_manager = Some(mcp.clone());
-        }
+        config.mcp_manager = Some(mcp);
 
         let holder = ConnectionHolder::new(agent_id.clone(), "client".to_string());
         config.plugin_registry.register(holder.clone());
@@ -140,6 +143,21 @@ impl AgentServerCore {
     /// List all registered agent IDs.
     pub async fn list_agent_ids(&self) -> Vec<String> {
         self.holders.lock().unwrap().keys().cloned().collect()
+    }
+
+    /// Discover and register all agents from .agents/agents/ directories.
+    pub async fn discover_agents(&self) -> Result<(), String> {
+        let loader = vol_llm_agent::AgentLoader::new(Some(self.working_dir.clone()));
+        loader.discover_all().await.map_err(|e| e.to_string())?;
+
+        let agents = loader.list_metadata().await;
+        for meta in agents {
+            if let Some(def) = loader.get(&meta.name).await {
+                let arc_def = Arc::try_unwrap(def).unwrap_or_else(|arc| (*arc).clone());
+                self.register_agent(&meta.name, arc_def).await?;
+            }
+        }
+        Ok(())
     }
 
     /// Handle an inbound `AgentServerMessage` by dispatching to the appropriate domain handler.
@@ -161,103 +179,60 @@ impl AgentServerCore {
 }
 
 /// Builder for [`AgentServerCore`].
+///
+/// Only `working_dir`, `store_dir`, and `llm` are required.
+/// All other resources are derived automatically.
 pub struct AgentServerCoreBuilder {
-    working_dir: Option<PathBuf>,
-    store_dir: Option<PathBuf>,
-    llm: Option<Arc<dyn LLMClient>>,
-    mcp_manager: Option<Arc<McpManager>>,
-    skill_loader: Option<Arc<SkillLoader>>,
-    session_store: Option<Arc<FileSessionEntryStore>>,
-    tool_registry: Option<Arc<ToolRegistry>>,
+    working_dir: PathBuf,
+    store_dir: PathBuf,
+    llm: Arc<dyn LLMClient>,
 }
 
 impl AgentServerCoreBuilder {
-    pub fn new() -> Self {
-        Self {
-            working_dir: None,
-            store_dir: None,
-            llm: None,
-            mcp_manager: None,
-            skill_loader: None,
-            session_store: None,
-            tool_registry: None,
-        }
+    pub fn new(working_dir: PathBuf, store_dir: PathBuf, llm: Arc<dyn LLMClient>) -> Self {
+        Self { working_dir, store_dir, llm }
     }
 
-    pub fn working_dir(mut self, dir: impl Into<PathBuf>) -> Self {
-        self.working_dir = Some(dir.into());
-        self
-    }
-
-    pub fn store_dir(mut self, dir: impl Into<PathBuf>) -> Self {
-        self.store_dir = Some(dir.into());
-        self
-    }
-
-    pub fn llm(mut self, llm: Arc<dyn LLMClient>) -> Self {
-        self.llm = Some(llm);
-        self
-    }
-
-    pub fn mcp_manager(mut self, mcp: Arc<McpManager>) -> Self {
-        self.mcp_manager = Some(mcp);
-        self
-    }
-
-    pub fn skill_loader(mut self, loader: Arc<SkillLoader>) -> Self {
-        self.skill_loader = Some(loader);
-        self
-    }
-
-    pub fn session_store(mut self, store: Arc<FileSessionEntryStore>) -> Self {
-        self.session_store = Some(store);
-        self
-    }
-
-    pub fn tool_registry(mut self, registry: Arc<ToolRegistry>) -> Self {
-        self.tool_registry = Some(registry);
-        self
-    }
-
-    /// Build the core. Returns the core with all domain handlers initialized.
+    /// Build the core. All internal registries are derived from working_dir and store_dir.
     pub async fn build(self) -> Result<AgentServerCore, String> {
-        let working_dir = self.working_dir.unwrap_or_else(|| PathBuf::from("."));
-        let store_dir = self.store_dir.ok_or("store_dir is required")?;
-        let llm = self.llm.ok_or("llm is required")?;
-
         // Expand ~ in store_dir to home directory.
-        let store_dir = expand_tilde(store_dir);
+        let store_dir = expand_tilde(self.store_dir);
 
         // Create store directory if it doesn't exist.
         std::fs::create_dir_all(&store_dir).map_err(|e| format!("failed to create store_dir: {e}"))?;
 
-        let session_store = self.session_store.unwrap_or_else(|| {
-            Arc::new(FileSessionEntryStore::new(&store_dir))
-        });
-        let tool_registry = self.tool_registry.unwrap_or_else(|| {
-            Arc::new(ToolRegistry::new())
-        });
+        // Derive MCP manager from .mcp.json in working_dir.
+        let mcp_manager = derive_mcp_manager(&self.working_dir);
+
+        // Derive skill loader from .agents/skills/ in working_dir.
+        let skill_loader = derive_skill_loader(&self.working_dir);
+
+        // Derive session store from store_dir.
+        let session_store = Arc::new(FileSessionEntryStore::new(&store_dir));
+
+        // Derive tool registry (empty by default, agents populate it).
+        let tool_registry = Arc::new(ToolRegistry::new());
 
         let router = AgentRouter::new();
         let holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>> =
             Arc::new(std::sync::Mutex::new(HashMap::new()));
 
         let agent = AgentHandler::new(router.clone(), Arc::clone(&holders));
-        let file = FileHandler::new(working_dir.clone());
+        let file = FileHandler::new(self.working_dir.clone());
         let session = SessionHandler::new(session_store.clone());
-        let mcp = McpHandler::new(self.mcp_manager.clone());
-        let skill = SkillHandler::new(self.skill_loader.clone());
+        let mcp = McpHandler::new(Some(mcp_manager.clone()));
+        let skill = SkillHandler::new(Some(skill_loader.clone()));
         let log = LogHandler;
         let system = SystemHandler;
 
         Ok(AgentServerCore {
-            working_dir,
+            working_dir: self.working_dir,
             store_dir,
-            mcp_manager: self.mcp_manager,
-            skill_loader: self.skill_loader,
+            mcp_manager,
+            skill_loader,
             session_store,
             tool_registry,
-            llm,
+            llm: self.llm,
             router,
             holders,
             agent,
@@ -271,6 +246,32 @@ impl AgentServerCoreBuilder {
     }
 }
 
+fn derive_mcp_manager(working_dir: &std::path::Path) -> Arc<McpManager> {
+    let configs = McpConfig::load(Some(working_dir))
+        .map(|c| c.servers().to_vec())
+        .unwrap_or_else(|e| {
+            tracing::warn!("Failed to load MCP config, using empty config: {}", e);
+            vec![]
+        });
+    let manager = McpManager::new(configs);
+    // Fire-and-forget connect in background.
+    let mgr = manager.clone();
+    tokio::spawn(async move {
+        let _ = mgr.connect().await;
+    });
+    Arc::new(manager)
+}
+
+fn derive_skill_loader(working_dir: &std::path::Path) -> Arc<SkillLoader> {
+    let loader = Arc::new(SkillLoader::new(Some(working_dir.to_path_buf())));
+    // Fire-and-forget discover in background.
+    let ld = Arc::clone(&loader);
+    tokio::spawn(async move {
+        let _ = ld.discover_all().await;
+    });
+    loader
+}
+
 fn expand_tilde(path: PathBuf) -> PathBuf {
     let s = path.to_string_lossy().to_string();
     if s.starts_with('~') {
@@ -279,12 +280,6 @@ fn expand_tilde(path: PathBuf) -> PathBuf {
         PathBuf::from(format!("{}/{}", home, rest))
     } else {
         path
-    }
-}
-
-impl Default for AgentServerCoreBuilder {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -302,7 +297,6 @@ impl AgentServerCore {
         let holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>> =
             Arc::new(std::sync::Mutex::new(HashMap::new()));
 
-        // Create a dummy LLM for tests (will panic if actually used — tests should mock it).
         struct TestLlm;
         #[async_trait::async_trait]
         impl LLMClient for TestLlm {
@@ -329,8 +323,8 @@ impl AgentServerCore {
         AgentServerCore {
             working_dir: PathBuf::from("."),
             store_dir,
-            mcp_manager: None,
-            skill_loader: None,
+            mcp_manager: Arc::new(McpManager::new(vec![])),
+            skill_loader: Arc::new(SkillLoader::new_empty()),
             session_store,
             tool_registry: Arc::new(ToolRegistry::new()),
             llm: Arc::new(TestLlm),

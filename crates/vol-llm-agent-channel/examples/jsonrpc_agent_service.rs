@@ -11,10 +11,7 @@
 use std::sync::Arc;
 
 use vol_llm_agent::agent_def::AgentDef;
-use vol_llm_mcp::McpConfig;
-use vol_llm_mcp::McpManager;
 use vol_llm_provider::create_provider;
-use vol_llm_skill::SkillLoader;
 
 use vol_llm_agent_channel::AgentServerCore;
 use vol_llm_agent_channel::JsonRpcServer;
@@ -38,47 +35,14 @@ async fn main() {
     ))
     .expect("failed to create LLM provider — set ANTHROPIC_AUTH_TOKEN");
 
-    // Create MCP manager and connect
-    let mcp_manager = {
-        let configs = McpConfig::load(Some(std::path::Path::new(".")))
-            .map(|c| c.servers().to_vec())
-            .unwrap_or_else(|e| {
-                tracing::warn!("Failed to load MCP config: {}", e);
-                vec![]
-            });
-        tracing::info!("Loaded {} MCP server configurations", configs.len());
-        let manager = McpManager::new(configs);
-        let manager_for_connect = manager.clone();
-        tokio::spawn(async move {
-            let _ = manager_for_connect.connect().await;
-        });
-        Arc::new(manager)
-    };
-
-    // Create skill loader and discover skills
-    let skill_loader = {
-        let loader = Arc::new(SkillLoader::new(Some(std::path::PathBuf::from("."))));
-        let loader_for_discover = loader.clone();
-        tokio::spawn(async move {
-            if let Err(e) = loader_for_discover.discover_all().await {
-                tracing::warn!("Failed to discover skills: {}", e);
-            }
-        });
-        Some(loader)
-    };
-
-    // Build unified core
-    let core = AgentServerCore::builder()
-        .working_dir(".")
-        .store_dir("~/.vol")
-        .llm(Arc::from(llm))
-        .mcp_manager(mcp_manager)
-        .skill_loader(skill_loader.unwrap())
+    // Build core from working_dir + store_dir only.
+    // MCP config is auto-discovered from .mcp.json, skills from .agents/skills/.
+    let core = AgentServerCore::new(".", "~/.vol", Arc::from(llm))
         .build()
         .await
         .expect("failed to build core");
 
-    // Register agent
+    // Register default agent.
     let def = AgentDef::new(
         "general-assistant",
         "You are a helpful AI assistant. Answer questions concisely.",
