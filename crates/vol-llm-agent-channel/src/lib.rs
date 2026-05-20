@@ -26,5 +26,7 @@ pub use operation_codec::{decode_payload, method_to_operation};
 pub use protocol::Message;
 pub use request::{AgentRequest, RunResult};
 pub use router::AgentRouter;
+pub use domain::handler::DomainHandler;
+pub use domain::registry::HandlerRegistry;
 pub use server_core::AgentServerCore;
 pub use transport::{HttpEventConnection, HttpTransport, MemoryConnection, MemoryHandle, WsConnection, WsServer};
