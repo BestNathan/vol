@@ -3,14 +3,14 @@
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 
+use crate::agent_server_protocol::AgentServerMessage;
 use crate::connection::Connection;
 use crate::error::ConnectionError;
-use crate::protocol::Message;
 
 /// In-memory connection for local testing and inter-process communication.
 pub struct MemoryConnection {
-    rx: mpsc::UnboundedReceiver<Message>,
-    tx: mpsc::UnboundedSender<Message>,
+    rx: mpsc::UnboundedReceiver<AgentServerMessage>,
+    tx: mpsc::UnboundedSender<AgentServerMessage>,
 }
 
 impl MemoryConnection {
@@ -19,8 +19,8 @@ impl MemoryConnection {
     /// The `MemoryConnection` side implements `Connection`.
     /// The `MemoryHandle` side is used by tests to send messages and receive output.
     pub fn new() -> (Self, MemoryHandle) {
-        let (in_tx, in_rx) = mpsc::unbounded_channel::<Message>();
-        let (out_tx, out_rx) = mpsc::unbounded_channel::<Message>();
+        let (in_tx, in_rx) = mpsc::unbounded_channel::<AgentServerMessage>();
+        let (out_tx, out_rx) = mpsc::unbounded_channel::<AgentServerMessage>();
         (
             Self {
                 rx: in_rx,
@@ -40,11 +40,11 @@ impl Connection for MemoryConnection {
         "memory"
     }
 
-    async fn recv(&mut self) -> Option<Result<Message, ConnectionError>> {
+    async fn recv(&mut self) -> Option<Result<AgentServerMessage, ConnectionError>> {
         self.rx.recv().await.map(Ok)
     }
 
-    async fn send(&self, msg: Message) -> Result<(), ConnectionError> {
+    async fn send(&self, msg: AgentServerMessage) -> Result<(), ConnectionError> {
         self.tx
             .send(msg)
             .map_err(|e| ConnectionError::ChannelError(e.to_string()))
@@ -55,18 +55,18 @@ impl Connection for MemoryConnection {
 ///
 /// Send inbound messages to the connection, receive outbound messages.
 pub struct MemoryHandle {
-    tx: mpsc::UnboundedSender<Message>,
-    rx: mpsc::UnboundedReceiver<Message>,
+    tx: mpsc::UnboundedSender<AgentServerMessage>,
+    rx: mpsc::UnboundedReceiver<AgentServerMessage>,
 }
 
 impl MemoryHandle {
     /// Send an inbound message to the connection.
-    pub fn send(&self, msg: Message) -> Result<(), &'static str> {
+    pub fn send(&self, msg: AgentServerMessage) -> Result<(), &'static str> {
         self.tx.send(msg).map_err(|_| "connection closed")
     }
 
     /// Receive the next outbound message.
-    pub async fn recv(&mut self) -> Option<Message> {
+    pub async fn recv(&mut self) -> Option<AgentServerMessage> {
         self.rx.recv().await
     }
 }

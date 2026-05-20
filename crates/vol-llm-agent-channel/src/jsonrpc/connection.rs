@@ -13,12 +13,14 @@ use axum::extract::ws::{Message as WsMessage, WebSocket};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 
+use crate::agent_server_protocol::{AgentOperation, AgentPayload, AgentServerMessage, ErrorPayload, MessageKind, Operation, Payload};
 use crate::connection::{Connection, ConnectionHolder};
 use crate::dispatcher::AgentDispatcher;
 use crate::error::ConnectionError;
 use crate::protocol::Message;
 use crate::request::{AgentRequest, RunResult};
 use crate::router::AgentRouter;
+use crate::server_core::AgentServerCore;
 
 use super::serde_helpers::{parse_jsonrpc_request, to_jsonrpc_error, to_jsonrpc_event, to_jsonrpc_response, JsonRpcRequest};
 use vol_llm_mcp::manager::{McpManager, ServerStatus};
@@ -72,6 +74,7 @@ pub struct JsonRpcConnection {
     /// MCP manager for tool/resource/prompt operations.
     mcp_manager: Option<Arc<McpManager>>,
     skill_loader: Option<Arc<SkillLoader>>,
+    core: AgentServerCore,
 }
 
 impl JsonRpcConnection {
@@ -103,6 +106,7 @@ impl JsonRpcConnection {
             store_dir,
             mcp_manager,
             skill_loader,
+            core: AgentServerCore::for_test(),
         }
     }
 
@@ -334,66 +338,115 @@ impl JsonRpcConnection {
 
     /// Handle `file.list`: list directory contents.
     async fn handle_file_list(&self, id: u64, path: String) -> String {
-        match std::fs::read_dir(&path) {
-            Ok(entries) => {
-                let mut list: Vec<serde_json::Value> = Vec::new();
-                for entry in entries.flatten() {
-                    let name = entry.file_name().to_string_lossy().to_string();
-                    let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
-                    let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
-                    list.push(serde_json::json!({
-                        "name": name,
-                        "is_dir": is_dir,
-                        "size": size,
-                    }));
+        let msg = crate::gateway::jsonrpc_ws::decode_jsonrpc_frame(
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "method": "file.list",
+                "params": {"path": path},
+            }).to_string(),
+        );
+        match msg {
+            Ok(protocol_msg) => {
+                match self.core.handle(protocol_msg).await {
+                    Ok(outputs) => {
+                        let result = outputs.into_iter().next().unwrap();
+                        match crate::gateway::jsonrpc_ws::encode_jsonrpc_message(result) {
+                            Ok(s) => s,
+                            Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+                        }
+                    }
+                    Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
                 }
-                // Sort: directories first, then by name.
-                list.sort_by(|a, b| {
-                    let a_dir = a["is_dir"].as_bool().unwrap_or(false);
-                    let b_dir = b["is_dir"].as_bool().unwrap_or(false);
-                    b_dir.cmp(&a_dir).then_with(|| a["name"].as_str().cmp(&b["name"].as_str()))
-                });
-                to_jsonrpc_response(id, serde_json::json!({ "entries": list }))
             }
-            Err(e) => to_jsonrpc_error(Some(id), -32000, format!("Failed to read directory: {e}")),
+            Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
         }
     }
 
     /// Handle `file.read`: read file contents.
     async fn handle_file_read(&self, id: u64, path: String) -> String {
-        match std::fs::read_to_string(&path) {
-            Ok(content) => to_jsonrpc_response(id, serde_json::json!({ "content": content })),
-            Err(e) => to_jsonrpc_error(Some(id), -32000, format!("Failed to read file: {e}")),
+        let msg = crate::gateway::jsonrpc_ws::decode_jsonrpc_frame(
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "method": "file.read",
+                "params": {"path": path},
+            }).to_string(),
+        );
+        match msg {
+            Ok(protocol_msg) => {
+                match self.core.handle(protocol_msg).await {
+                    Ok(outputs) => {
+                        let result = outputs.into_iter().next().unwrap();
+                        match crate::gateway::jsonrpc_ws::encode_jsonrpc_message(result) {
+                            Ok(s) => s,
+                            Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+                        }
+                    }
+                    Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+                }
+            }
+            Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
         }
     }
 
     /// Handle `log.list`: stub — returns empty list.
     async fn handle_log_list(&self, id: u64) -> String {
-        to_jsonrpc_response(id, serde_json::json!({ "runs": [] }))
+        let msg = crate::gateway::jsonrpc_ws::decode_jsonrpc_frame(
+            &serde_json::json!({"jsonrpc":"2.0","id":id,"method":"log.list","params":{}}).to_string(),
+        );
+        match msg {
+            Ok(protocol_msg) => match self.core.handle(protocol_msg).await {
+                Ok(outputs) => {
+                    let r = outputs.into_iter().next().unwrap();
+                    match crate::gateway::jsonrpc_ws::encode_jsonrpc_message(r) {
+                        Ok(s) => s,
+                        Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+                    }
+                }
+                Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+            },
+            Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+        }
     }
 
     /// Handle `log.read`: stub — returns empty entries.
     async fn handle_log_read(&self, id: u64, _run_id: String) -> String {
-        to_jsonrpc_response(id, serde_json::json!({ "entries": [] }))
+        let msg = crate::gateway::jsonrpc_ws::decode_jsonrpc_frame(
+            &serde_json::json!({"jsonrpc":"2.0","id":id,"method":"log.read","params":{"run_id":_run_id}}).to_string(),
+        );
+        match msg {
+            Ok(protocol_msg) => match self.core.handle(protocol_msg).await {
+                Ok(outputs) => {
+                    let r = outputs.into_iter().next().unwrap();
+                    match crate::gateway::jsonrpc_ws::encode_jsonrpc_message(r) {
+                        Ok(s) => s,
+                        Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+                    }
+                }
+                Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+            },
+            Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+        }
     }
 
     /// Handle `session.list`: return session summaries from FileSessionEntryStore.
     async fn handle_session_list(&self, id: u64) -> String {
-        match self.session_store.list_sessions() {
-            Ok(summaries) => {
-                let sessions: Vec<serde_json::Value> = summaries
-                    .into_iter()
-                    .map(|s| {
-                        serde_json::json!({
-                            "id": s.session_id,
-                            "entry_count": s.entry_count,
-                            "created_at": s.created_at,
-                        })
-                    })
-                    .collect();
-                to_jsonrpc_response(id, serde_json::json!({ "sessions": sessions }))
-            }
-            Err(e) => to_jsonrpc_error(Some(id), -32000, format!("Failed to list sessions: {e}")),
+        let msg = crate::gateway::jsonrpc_ws::decode_jsonrpc_frame(
+            &serde_json::json!({"jsonrpc":"2.0","id":id,"method":"session.list","params":{}}).to_string(),
+        );
+        match msg {
+            Ok(protocol_msg) => match self.core.handle(protocol_msg).await {
+                Ok(outputs) => {
+                    let r = outputs.into_iter().next().unwrap();
+                    match crate::gateway::jsonrpc_ws::encode_jsonrpc_message(r) {
+                        Ok(s) => s,
+                        Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+                    }
+                }
+                Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
+            },
+            Err(e) => to_jsonrpc_error(Some(id), -32000, e.to_string()),
         }
     }
 
@@ -733,18 +786,16 @@ impl Connection for JsonRpcConnection {
         "jsonrpc-ws"
     }
 
-    async fn recv(&mut self) -> Option<Result<Message, ConnectionError>> {
-        // Reading is done by the `run()` loop.
+    async fn recv(&mut self) -> Option<Result<AgentServerMessage, ConnectionError>> {
         None
     }
 
-    async fn send(&self, msg: Message) -> Result<(), ConnectionError> {
-        match msg {
-            Message::Event { event, .. } => {
+    async fn send(&self, msg: AgentServerMessage) -> Result<(), ConnectionError> {
+        match (&msg.kind, &msg.operation, &msg.payload) {
+            (MessageKind::Event, Operation::Agent(AgentOperation::Event), Payload::Agent(AgentPayload::Event { event, .. })) => {
                 let req_id = self.current_req_id.lock().await.clone();
                 let sub_id = self.subscribers.lock().await.first().copied().unwrap_or(0);
 
-                // Try to deserialize the event Value back to AgentStreamEvent
                 match serde_json::from_value::<vol_llm_agent::react::AgentStreamEvent>(event.clone()) {
                     Ok(agent_event) => {
                         let text = to_jsonrpc_event(&agent_event, sub_id, &req_id);
@@ -752,7 +803,6 @@ impl Connection for JsonRpcConnection {
                     }
                     Err(e) => {
                         tracing::error!(%e, ?event, "failed to deserialize AgentStreamEvent in Connection::send");
-                        // Fallback: send raw event with unknown type
                         let envelope = serde_json::json!({
                             "jsonrpc": "2.0",
                             "method": "agent.event",
@@ -771,7 +821,10 @@ impl Connection for JsonRpcConnection {
                     }
                 }
             }
-            // Connected, Result, Error are sent directly by the run() loop or handlers.
+            (MessageKind::Error, _, Payload::Error(ErrorPayload { message, .. })) => {
+                let text = to_jsonrpc_error(None, -32000, message.clone());
+                self.send_ws_text(&text).await
+            }
             _ => Ok(()),
         }
     }

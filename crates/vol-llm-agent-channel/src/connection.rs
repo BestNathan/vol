@@ -6,8 +6,8 @@ use async_trait::async_trait;
 use tokio::sync::RwLock;
 use vol_llm_agent::react::{AgentPlugin, AgentStreamEvent, PluginId, RunContext};
 
+use crate::agent_server_protocol::{AgentOperation, AgentPayload, AgentServerMessage, MessageKind, Operation, Payload};
 use crate::error::ConnectionError;
-use crate::protocol::Message;
 
 /// Abstract connection for agent communication.
 /// Implement for each transport protocol.
@@ -17,10 +17,10 @@ pub trait Connection: Send + Sync + 'static {
     fn protocol(&self) -> &str;
 
     /// Receive the next incoming message.
-    async fn recv(&mut self) -> Option<Result<Message, ConnectionError>>;
+    async fn recv(&mut self) -> Option<Result<AgentServerMessage, ConnectionError>>;
 
     /// Send a message.
-    async fn send(&self, msg: Message) -> Result<(), ConnectionError>;
+    async fn send(&self, msg: AgentServerMessage) -> Result<(), ConnectionError>;
 }
 
 /// Registered as AgentPlugin on agent creation.
@@ -75,14 +75,23 @@ impl AgentPlugin for ConnectionHolder {
         50
     }
 
-    async fn listen(&self, event: &AgentStreamEvent, _ctx: &RunContext) {
+    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
         if let Some(conn) = self.connection.read().await.as_ref() {
             let event_json = serde_json::to_value(event).unwrap_or(serde_json::Value::Null);
-            let _ = conn.send(Message::Event {
+            let msg = AgentServerMessage {
+                protocol: "agent-server/1".to_string(),
+                message_id: uuid::Uuid::new_v4().to_string(),
                 sender: self.sender.clone(),
                 receiver: self.receiver.clone(),
-                event: event_json,
-            }).await;
+                kind: MessageKind::Event,
+                operation: Operation::Agent(AgentOperation::Event),
+                payload: Payload::Agent(AgentPayload::Event {
+                    run_id: ctx.run_id.clone(),
+                    event: event_json,
+                }),
+                meta: Default::default(),
+            };
+            let _ = conn.send(msg).await;
         }
     }
 }
@@ -99,8 +108,8 @@ mod tests {
     #[async_trait]
     impl Connection for MockConnection {
         fn protocol(&self) -> &str { &self.protocol }
-        async fn recv(&mut self) -> Option<Result<Message, ConnectionError>> { None }
-        async fn send(&self, _msg: Message) -> Result<(), ConnectionError> { Ok(()) }
+        async fn recv(&mut self) -> Option<Result<AgentServerMessage, ConnectionError>> { None }
+        async fn send(&self, _msg: AgentServerMessage) -> Result<(), ConnectionError> { Ok(()) }
     }
 
     #[tokio::test]

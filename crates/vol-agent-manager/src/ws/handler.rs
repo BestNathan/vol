@@ -4,7 +4,11 @@ use axum::extract::ws::{Message as WsMessage, WebSocket};
 use chrono::Utc;
 use futures::{SinkExt, StreamExt};
 use tracing::{error, info, warn};
-use vol_llm_agent_channel::{Connection, Message};
+use vol_llm_agent_channel::{
+    AgentServerMessage, Connection, ConnectionError, MessageKind, Operation, Payload,
+    agent_server_protocol::{AgentOperation, AgentPayload, ErrorPayload},
+    Message,
+};
 
 use crate::events::{EventBus, ManagerEvent};
 use crate::metrics::collector::MetricsCollector;
@@ -34,30 +38,30 @@ impl Connection for ManagerConnection {
         "ws"
     }
 
-    async fn recv(&mut self) -> Option<Result<Message, vol_llm_agent_channel::ConnectionError>> {
+    async fn recv(&mut self) -> Option<Result<AgentServerMessage, ConnectionError>> {
         let msg = self.rx.next().await?;
         match msg {
             Ok(WsMessage::Text(text)) => {
-                match serde_json::from_str::<Message>(&text) {
+                match serde_json::from_str::<AgentServerMessage>(&text) {
                     Ok(msg) => Some(Ok(msg)),
-                    Err(e) => Some(Err(vol_llm_agent_channel::ConnectionError::ParseError(e.to_string()))),
+                    Err(e) => Some(Err(ConnectionError::ParseError(e.to_string()))),
                 }
             }
             Ok(WsMessage::Close(_)) => None,
             Ok(WsMessage::Binary(_) | WsMessage::Ping(_) | WsMessage::Pong(_)) => {
                 self.recv().await
             }
-            Err(e) => Some(Err(vol_llm_agent_channel::ConnectionError::WsReceiveError(e.to_string()))),
+            Err(e) => Some(Err(ConnectionError::WsReceiveError(e.to_string()))),
         }
     }
 
-    async fn send(&self, msg: Message) -> Result<(), vol_llm_agent_channel::ConnectionError> {
+    async fn send(&self, msg: AgentServerMessage) -> Result<(), ConnectionError> {
         let text = serde_json::to_string(&msg)
-            .map_err(|e| vol_llm_agent_channel::ConnectionError::WsSendError(e.to_string()))?;
+            .map_err(|e| ConnectionError::WsSendError(e.to_string()))?;
         let mut tx = self.tx.lock().await;
         tx.send(WsMessage::Text(text))
             .await
-            .map_err(|e| vol_llm_agent_channel::ConnectionError::WsSendError(e.to_string()))
+            .map_err(|e| ConnectionError::WsSendError(e.to_string()))
     }
 }
 

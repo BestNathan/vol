@@ -13,6 +13,7 @@ use vol_llm_skill::SkillLoader;
 use crate::connection::ConnectionHolder;
 use crate::dispatcher::AgentDispatcher;
 use crate::router::AgentRouter;
+use crate::server_core::AgentServerCore;
 
 use super::connection::JsonRpcConnection;
 
@@ -68,6 +69,11 @@ impl JsonRpcServer {
                     async move { ws.on_upgrade(move |socket| handle_ws(socket, server)) }
                 }),
             )
+    }
+
+    /// Construct an `AgentServerCore` for the new protocol path during migration.
+    pub fn build_core(&self) -> AgentServerCore {
+        AgentServerCore::new()
     }
 }
 

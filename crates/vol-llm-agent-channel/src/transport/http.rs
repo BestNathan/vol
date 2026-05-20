@@ -16,10 +16,10 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use tokio::sync::broadcast;
 
+use crate::agent_server_protocol::{AgentOperation, AgentPayload, AgentServerMessage, MessageKind, Operation, Payload};
 use crate::connection::{Connection, ConnectionHolder};
 use crate::dispatcher::AgentDispatcher;
 use crate::error::ConnectionError;
-use crate::protocol::Message;
 use crate::request::{AgentRequest, RunResult};
 
 /// Query parameter for SSE streaming mode.
@@ -33,11 +33,11 @@ struct StreamQuery {
 /// This implements the `Connection` trait purely for `ConnectionHolder`
 /// integration. `recv()` always returns `None` since HTTP is request-response.
 pub struct HttpEventConnection {
-    tx: broadcast::Sender<Message>,
+    tx: broadcast::Sender<AgentServerMessage>,
 }
 
 impl HttpEventConnection {
-    pub fn new(tx: broadcast::Sender<Message>) -> Self {
+    pub fn new(tx: broadcast::Sender<AgentServerMessage>) -> Self {
         Self { tx }
     }
 }
@@ -48,12 +48,12 @@ impl Connection for HttpEventConnection {
         "http"
     }
 
-    async fn recv(&mut self) -> Option<Result<Message, ConnectionError>> {
+    async fn recv(&mut self) -> Option<Result<AgentServerMessage, ConnectionError>> {
         // HTTP is request-response; no inbound messages after POST.
         None
     }
 
-    async fn send(&self, msg: Message) -> Result<(), ConnectionError> {
+    async fn send(&self, msg: AgentServerMessage) -> Result<(), ConnectionError> {
         self.tx
             .send(msg)
             .map_err(|e| ConnectionError::ChannelError(e.to_string()))?;
@@ -166,7 +166,7 @@ async fn handle_sse(
     let req = build_request(&agent_id, &body);
 
     // Create broadcast channel for event capture.
-    let (event_tx, mut event_rx) = broadcast::channel::<Message>(100);
+    let (event_tx, mut event_rx) = broadcast::channel::<AgentServerMessage>(100);
 
     // Create and attach HTTP event connection.
     let conn = HttpEventConnection::new(event_tx.clone());
@@ -182,7 +182,7 @@ async fn handle_sse(
     };
 
     // Use oneshot to signal completion with final result.
-    let (done_tx, done_rx) = tokio::sync::oneshot::channel::<Message>();
+    let (done_tx, done_rx) = tokio::sync::oneshot::channel::<AgentServerMessage>();
 
     // Spawn task to await dispatcher result and send final event.
     tokio::spawn(async move {
@@ -192,21 +192,27 @@ async fn handle_sse(
                     Ok(resp) => serde_json::to_value(resp).unwrap_or(serde_json::Value::Null),
                     Err(err) => serde_json::json!({ "error": err.to_string() }),
                 };
-                let msg = Message::Result {
-                    req_id: run_result.req_id,
-                    sender: agent_id,
-                    receiver: "client".to_string(),
-                    result: result_value,
-                };
+                let msg = AgentServerMessage::new_result(
+                    run_result.req_id,
+                    Operation::Agent(AgentOperation::Submit),
+                    Payload::Agent(AgentPayload::SubmitResult {
+                        run_id: run_result.run_id.unwrap_or_default(),
+                        response: result_value,
+                    }),
+                );
                 let _ = done_tx.send(msg);
             }
             Err(_) => {
-                let msg = Message::Error {
-                    req_id: None,
-                    sender: agent_id,
-                    receiver: "client".to_string(),
-                    message: "dispatcher dropped while processing request".to_string(),
-                };
+                let msg = AgentServerMessage::new_error(
+                    String::new(),
+                    Operation::Agent(AgentOperation::Submit),
+                    crate::agent_server_protocol::ErrorPayload {
+                        code: "dispatcher_dropped".to_string(),
+                        message: "dispatcher dropped while processing request".to_string(),
+                        detail: None,
+                        terminal: true,
+                    },
+                );
                 let _ = done_tx.send(msg);
             }
         }
