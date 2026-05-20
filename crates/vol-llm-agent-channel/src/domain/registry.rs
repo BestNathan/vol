@@ -50,8 +50,9 @@ impl HandlerRegistry {
         for method in methods {
             if self.method_index.contains_key(*method) {
                 return Err(format!(
-                    "method '{}' already registered",
-                    method
+                    "method '{}' already claimed by handler '{}'",
+                    method,
+                    self.handlers[self.method_index[*method]].name()
                 ));
             }
             self.method_index.insert(method.to_string(), idx);
