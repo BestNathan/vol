@@ -25,8 +25,10 @@ use vol_session::file_store::FileSessionEntryStore;
 
 use crate::connection::ConnectionHolder;
 use crate::dispatcher::AgentDispatcher;
+use crate::domain::handler::DomainHandler;
+use crate::domain::registry::HandlerRegistry;
 use crate::domain::{
-    agent::AgentHandler, file::FileHandler, handler::DomainHandler, log::LogHandler,
+    agent::AgentHandler, file::FileHandler, log::LogHandler,
     mcp::McpHandler, session::SessionHandler, skill::SkillHandler, system::SystemHandler,
 };
 use crate::router::AgentRouter;
@@ -82,13 +84,7 @@ pub struct AgentServerCore {
     holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
 
     // === Domain handlers ===
-    pub agent: AgentHandler,
-    pub file: FileHandler,
-    pub session: SessionHandler,
-    pub mcp: McpHandler,
-    pub skill: SkillHandler,
-    pub log: LogHandler,
-    pub system: SystemHandler,
+    handler_registry: HandlerRegistry,
 }
 
 impl AgentServerCore {
@@ -201,21 +197,12 @@ impl AgentServerCore {
         Ok(())
     }
 
-    /// Handle an inbound `AgentServerMessage` by dispatching to the appropriate domain handler.
+    /// Handle an inbound `AgentServerMessage` by dispatching via the handler registry.
     pub async fn handle(
         &self,
         message: crate::agent_server_protocol::AgentServerMessage,
     ) -> Result<Vec<crate::agent_server_protocol::AgentServerMessage>, crate::agent_server_protocol::ProtocolError> {
-        use crate::agent_server_protocol::Operation;
-        match message.operation.clone() {
-            Operation::Agent(_) => self.agent.handle(message).await,
-            Operation::File(_) => self.file.handle(message).await,
-            Operation::Session(_) => self.session.handle(message).await,
-            Operation::Mcp(_) => self.mcp.handle(message).await,
-            Operation::Skill(_) => self.skill.handle(message).await,
-            Operation::Log(_) => self.log.handle(message).await,
-            Operation::System(_) => self.system.handle(message).await,
-        }
+        self.handler_registry.dispatch(message).await
     }
 }
 
@@ -226,11 +213,28 @@ impl AgentServerCore {
 pub struct AgentServerCoreBuilder {
     working_dir: PathBuf,
     store_dir: PathBuf,
+    extra_handlers: Vec<Arc<dyn crate::domain::handler::DomainHandler>>,
+}
+
+impl Default for AgentServerCoreBuilder {
+    fn default() -> Self {
+        Self {
+            working_dir: PathBuf::new(),
+            store_dir: PathBuf::new(),
+            extra_handlers: Vec::new(),
+        }
+    }
 }
 
 impl AgentServerCoreBuilder {
     pub fn new(working_dir: PathBuf, store_dir: PathBuf) -> Self {
-        Self { working_dir, store_dir }
+        Self { working_dir, store_dir, extra_handlers: Vec::new() }
+    }
+
+    /// Register an external domain handler.
+    pub fn register_handler(mut self, handler: Arc<dyn crate::domain::handler::DomainHandler>) -> Self {
+        self.extra_handlers.push(handler);
+        self
     }
 
     /// Build the core. All internal registries are derived from working_dir and store_dir.
@@ -258,13 +262,35 @@ impl AgentServerCoreBuilder {
         let holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>> =
             Arc::new(std::sync::Mutex::new(HashMap::new()));
 
-        let agent = AgentHandler::new(router.clone(), Arc::clone(&holders));
-        let file = FileHandler::new(self.working_dir.clone());
-        let session = SessionHandler::new(agents_root);
-        let mcp = McpHandler::new(Some(mcp_manager.clone()));
-        let skill = SkillHandler::new(Some(skill_loader.clone()));
-        let log = LogHandler;
-        let system = SystemHandler;
+        let mut handler_registry = HandlerRegistry::new();
+        handler_registry
+            .register(Arc::new(AgentHandler::new(router.clone(), Arc::clone(&holders))))
+            .map_err(|e| format!("failed to register AgentHandler: {e}"))?;
+        handler_registry
+            .register(Arc::new(FileHandler::new(self.working_dir.clone())))
+            .map_err(|e| format!("failed to register FileHandler: {e}"))?;
+        handler_registry
+            .register(Arc::new(SessionHandler::new(agents_root)))
+            .map_err(|e| format!("failed to register SessionHandler: {e}"))?;
+        handler_registry
+            .register(Arc::new(McpHandler::new(Some(mcp_manager.clone()))))
+            .map_err(|e| format!("failed to register McpHandler: {e}"))?;
+        handler_registry
+            .register(Arc::new(SkillHandler::new(Some(skill_loader.clone()))))
+            .map_err(|e| format!("failed to register SkillHandler: {e}"))?;
+        handler_registry
+            .register(Arc::new(LogHandler))
+            .map_err(|e| format!("failed to register LogHandler: {e}"))?;
+        handler_registry
+            .register(Arc::new(SystemHandler))
+            .map_err(|e| format!("failed to register SystemHandler: {e}"))?;
+
+        // Register extra handlers from builder (external registration).
+        for extra in self.extra_handlers {
+            handler_registry
+                .register(extra)
+                .map_err(|e| format!("failed to register external handler: {e}"))?;
+        }
 
         Ok(AgentServerCore {
             working_dir: self.working_dir,
@@ -275,13 +301,7 @@ impl AgentServerCoreBuilder {
             llm,
             router,
             holders,
-            agent,
-            file,
-            session,
-            mcp,
-            skill,
-            log,
-            system,
+            handler_registry,
         })
     }
 }
@@ -369,13 +389,14 @@ impl AgentServerCore {
             }
         }
 
-        let agent = AgentHandler::new(router.clone(), Arc::clone(&holders));
-        let file = FileHandler::new(PathBuf::from("."));
-        let session = SessionHandler::new(agents_root);
-        let mcp = McpHandler::new(None);
-        let skill = SkillHandler::new(None);
-        let log = LogHandler;
-        let system = SystemHandler;
+        let mut handler_registry = HandlerRegistry::new();
+        handler_registry.register(Arc::new(AgentHandler::new(router.clone(), Arc::clone(&holders)))).ok();
+        handler_registry.register(Arc::new(FileHandler::new(PathBuf::from(".")))).ok();
+        handler_registry.register(Arc::new(SessionHandler::new(agents_root))).ok();
+        handler_registry.register(Arc::new(McpHandler::new(None))).ok();
+        handler_registry.register(Arc::new(SkillHandler::new(None))).ok();
+        handler_registry.register(Arc::new(LogHandler)).ok();
+        handler_registry.register(Arc::new(SystemHandler)).ok();
 
         AgentServerCore {
             working_dir: PathBuf::from("."),
@@ -386,13 +407,7 @@ impl AgentServerCore {
             llm: Arc::new(TestLlm),
             router,
             holders,
-            agent,
-            file,
-            session,
-            mcp,
-            skill,
-            log,
-            system,
+            handler_registry,
         }
     }
 }
