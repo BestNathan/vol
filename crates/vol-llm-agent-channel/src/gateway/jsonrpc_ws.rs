@@ -56,20 +56,16 @@ pub fn encode_jsonrpc_message(msg: AgentServerMessage) -> Result<String, Connect
     match msg.kind {
         MessageKind::Ack | MessageKind::Result => {
             let id = parse_message_id_for_jsonrpc(&msg.message_id);
-            let result = serde_json::to_value(&msg.payload)
-                .map_err(|e| ConnectionError::ParseError(format!("serialization error: {e}")))?;
-            // Unwrap {"domain":"X","data":Y} then unwrap variant name {"ListResult":Z} → {"skills":Z}
-            let flat_result = flatten_payload(&result);
+            let result = msg.payload.data_json();
             serde_json::to_string(&serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": id,
-                "result": flat_result,
+                "result": result,
             }))
             .map_err(|e| ConnectionError::ParseError(format!("serialization error: {e}")))
         }
         MessageKind::Event => {
-            let params = serde_json::to_value(&msg.payload)
-                .map_err(|e| ConnectionError::ParseError(format!("serialization error: {e}")))?;
+            let params = msg.payload.data_json();
             serde_json::to_string(&serde_json::json!({
                 "jsonrpc": "2.0",
                 "method": msg.operation.method_name(),
@@ -99,8 +95,7 @@ pub fn encode_jsonrpc_message(msg: AgentServerMessage) -> Result<String, Connect
         }
         MessageKind::Command => {
             let id = parse_message_id_for_jsonrpc(&msg.message_id);
-            let params = serde_json::to_value(&msg.payload)
-                .map_err(|e| ConnectionError::ParseError(format!("serialization error: {e}")))?;
+            let params = msg.payload.data_json();
             serde_json::to_string(&serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": id,
@@ -118,29 +113,6 @@ fn parse_message_id_for_jsonrpc(message_id: &str) -> serde_json::Value {
     } else {
         serde_json::Value::String(message_id.to_string())
     }
-}
-
-/// Flatten protocol payload for JSON-RPC frontend:
-/// 1. Strip `{"domain":"X","data":Y}` → Y
-/// 2. Strip variant name wrapper `{"ListResult":Z}` → Z
-fn flatten_payload(val: &serde_json::Value) -> serde_json::Value {
-    // Step 1: unwrap tagged enum {"domain":"X","data":Y}
-    let inner = if let Some(data) = val.get("data") {
-        data.clone()
-    } else {
-        val.clone()
-    };
-    // Step 2: unwrap single-key variant name {"ListResult":{"skills":[...]}}
-    if let Some(obj) = inner.as_object() {
-        if obj.len() == 1 {
-            if let Some((_key, v)) = obj.iter().next() {
-                if v.is_object() {
-                    return v.clone();
-                }
-            }
-        }
-    }
-    inner
 }
 
 #[cfg(test)]

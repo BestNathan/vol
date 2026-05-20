@@ -132,7 +132,7 @@ pub enum SystemOperation {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "domain", content = "data", rename_all = "snake_case")]
+#[serde(untagged)]
 pub enum Payload {
     Agent(AgentPayload),
     File(FilePayload),
@@ -142,6 +142,151 @@ pub enum Payload {
     Log(LogPayload),
     System(SystemPayload),
     Error(ErrorPayload),
+}
+
+impl Payload {
+    /// Decode a flat JSON value into the exact payload type for the given operation.
+    pub fn from_operation(
+        operation: &Operation,
+        value: serde_json::Value,
+    ) -> Result<Self, ProtocolError> {
+        use serde::Deserialize;
+        match operation {
+            // ── Agent ──
+            Operation::Agent(AgentOperation::Submit) => {
+                #[derive(Deserialize)] struct P { input: String, #[serde(default)] target: Option<String>, #[serde(default)] metadata: Option<serde_json::Map<String, serde_json::Value>> }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("agent.submit"))?;
+                Ok(Payload::Agent(AgentPayload::Submit { input: p.input, target: p.target, metadata: p.metadata }))
+            }
+            Operation::Agent(AgentOperation::Cancel) => {
+                #[derive(Deserialize)] struct P { req_id: String }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("agent.cancel"))?;
+                Ok(Payload::Agent(AgentPayload::Cancel { req_id: p.req_id }))
+            }
+            Operation::Agent(AgentOperation::Subscribe) => {
+                #[derive(Deserialize)] struct P { #[serde(default)] target: Option<String> }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("agent.subscribe"))?;
+                Ok(Payload::Agent(AgentPayload::Subscribe { target: p.target }))
+            }
+            Operation::Agent(AgentOperation::Unsubscribe) => {
+                #[derive(Deserialize)] struct P { subscription_id: String }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("agent.unsubscribe"))?;
+                Ok(Payload::Agent(AgentPayload::Unsubscribe { subscription_id: p.subscription_id }))
+            }
+            Operation::Agent(AgentOperation::Approve) => {
+                #[derive(Deserialize)] struct P { run_id: String, approved: bool, #[serde(default)] reason: Option<String> }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("agent.approve"))?;
+                Ok(Payload::Agent(AgentPayload::Approve { run_id: p.run_id, approved: p.approved, reason: p.reason }))
+            }
+            Operation::Agent(AgentOperation::List) => Ok(Payload::Agent(AgentPayload::ListResult { agents: vec![] })),
+            Operation::Agent(AgentOperation::Event) => {
+                #[derive(Deserialize)] struct P { run_id: String, event: serde_json::Value }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("agent.event"))?;
+                Ok(Payload::Agent(AgentPayload::Event { run_id: p.run_id, event: p.event }))
+            }
+            // ── File ──
+            Operation::File(FileOperation::List) => {
+                #[derive(Deserialize)] struct P { path: String }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("file.list"))?;
+                Ok(Payload::File(FilePayload::List { path: p.path }))
+            }
+            Operation::File(FileOperation::Read) => {
+                #[derive(Deserialize)] struct P { path: String }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("file.read"))?;
+                Ok(Payload::File(FilePayload::Read { path: p.path }))
+            }
+            // ── Session ──
+            Operation::Session(SessionOperation::List) => Ok(Payload::Session(SessionPayload::List)),
+            Operation::Session(SessionOperation::Resume) => {
+                #[derive(Deserialize)] struct P { session_id: String, #[serde(default)] agent_id: Option<String> }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("session.resume"))?;
+                Ok(Payload::Session(SessionPayload::Resume { session_id: p.session_id, agent_id: p.agent_id }))
+            }
+            Operation::Session(SessionOperation::Entries) => {
+                #[derive(Deserialize)] struct P { session_id: String, #[serde(default)] agent_id: Option<String> }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("session.entries"))?;
+                Ok(Payload::Session(SessionPayload::Entries { session_id: p.session_id, agent_id: p.agent_id }))
+            }
+            // ── MCP ──
+            Operation::Mcp(McpOperation::ListServers) => Ok(Payload::Mcp(McpPayload::ListServers)),
+            Operation::Mcp(McpOperation::ListTools) => {
+                #[derive(Deserialize)] struct P { #[serde(default)] server: Option<String> }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("mcp.list_tools"))?;
+                Ok(Payload::Mcp(McpPayload::ListTools { server: p.server }))
+            }
+            Operation::Mcp(McpOperation::CallTool) => {
+                #[derive(Deserialize)] struct P { server: String, tool_name: String, #[serde(default)] arguments: serde_json::Value }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("mcp.call_tool"))?;
+                Ok(Payload::Mcp(McpPayload::CallTool { server: p.server, tool_name: p.tool_name, arguments: p.arguments }))
+            }
+            Operation::Mcp(McpOperation::ListResources) => {
+                #[derive(Deserialize)] struct P { #[serde(default)] server: Option<String> }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("mcp.list_resources"))?;
+                Ok(Payload::Mcp(McpPayload::ListResources { server: p.server }))
+            }
+            Operation::Mcp(McpOperation::ListResourceTemplates) => {
+                #[derive(Deserialize)] struct P { #[serde(default)] server: Option<String> }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("mcp.list_resource_templates"))?;
+                Ok(Payload::Mcp(McpPayload::ListResourceTemplates { server: p.server }))
+            }
+            Operation::Mcp(McpOperation::ReadResource) => {
+                #[derive(Deserialize)] struct P { uri: String }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("mcp.read_resource"))?;
+                Ok(Payload::Mcp(McpPayload::ReadResource { uri: p.uri }))
+            }
+            Operation::Mcp(McpOperation::ListPrompts) => {
+                #[derive(Deserialize)] struct P { #[serde(default)] server: Option<String> }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("mcp.list_prompts"))?;
+                Ok(Payload::Mcp(McpPayload::ListPrompts { server: p.server }))
+            }
+            Operation::Mcp(McpOperation::GetPrompt) => {
+                #[derive(Deserialize)] struct P { name: String, #[serde(default)] arguments: Option<serde_json::Map<String, serde_json::Value>> }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("mcp.get_prompt"))?;
+                Ok(Payload::Mcp(McpPayload::GetPrompt { name: p.name, arguments: p.arguments }))
+            }
+            Operation::Mcp(McpOperation::Reconnect) => {
+                #[derive(Deserialize)] struct P { server: String }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("mcp.reconnect"))?;
+                Ok(Payload::Mcp(McpPayload::Reconnect { server: p.server }))
+            }
+            Operation::Mcp(McpOperation::ServerStatus) => {
+                #[derive(Deserialize)] struct P { #[serde(default)] server: Option<String> }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("mcp.server_status"))?;
+                Ok(Payload::Mcp(McpPayload::ServerStatus { server: p.server }))
+            }
+            // ── Skill ──
+            Operation::Skill(SkillOperation::List) => Ok(Payload::Skill(SkillPayload::List)),
+            Operation::Skill(SkillOperation::Get) => {
+                #[derive(Deserialize)] struct P { name: String }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("skill.get"))?;
+                Ok(Payload::Skill(SkillPayload::Get { name: p.name }))
+            }
+            // ── Log ──
+            Operation::Log(LogOperation::List) => Ok(Payload::Log(LogPayload::List)),
+            Operation::Log(LogOperation::Read) => {
+                #[derive(Deserialize)] struct P { run_id: String }
+                let p: P = serde_json::from_value(value).map_err(|_| ProtocolError::PayloadDecodeFailed("log.read"))?;
+                Ok(Payload::Log(LogPayload::Read { run_id: p.run_id }))
+            }
+            // ── System ──
+            Operation::System(SystemOperation::Connected) => Ok(Payload::System(SystemPayload::Empty)),
+        }
+    }
+
+    /// Encode the payload as flat JSON (no domain/data or variant wrappers).
+    pub fn data_json(&self) -> serde_json::Value {
+        let val = serde_json::to_value(self).unwrap_or(serde_json::Value::Null);
+        // With untagged Payload, the value is the variant's data directly, e.g.
+        // {"SubmitResult":{"run_id":"x"}}. Strip the variant name wrapper.
+        if let Some(obj) = val.as_object() {
+            if obj.len() == 1 {
+                if let Some((_key, inner)) = obj.iter().next() {
+                    return inner.clone();
+                }
+            }
+        }
+        val
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
