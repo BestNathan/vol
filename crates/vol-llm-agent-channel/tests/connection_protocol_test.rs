@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use tokio::sync::mpsc;
+use tokio::sync::Mutex;
 use vol_llm_agent_channel::{
     AgentServerMessage, Connection, ConnectionError, ConnectionHolder, MessageKind, Operation,
     agent_server_protocol::{AgentOperation, AgentPayload, Payload},
@@ -11,7 +12,7 @@ use vol_llm_agent_channel::{
 
 /// Minimal connection that uses AgentServerMessage for testing.
 struct TestConnection {
-    rx: mpsc::UnboundedReceiver<AgentServerMessage>,
+    rx: Mutex<mpsc::UnboundedReceiver<AgentServerMessage>>,
     tx: mpsc::UnboundedSender<AgentServerMessage>,
 }
 
@@ -20,7 +21,7 @@ impl TestConnection {
         let (in_tx, in_rx) = mpsc::unbounded_channel::<AgentServerMessage>();
         let (out_tx, out_rx) = mpsc::unbounded_channel::<AgentServerMessage>();
         (
-            Self { rx: in_rx, tx: out_tx },
+            Self { rx: Mutex::new(in_rx), tx: out_tx },
             TestHandle { tx: in_tx, rx: out_rx },
         )
     }
@@ -32,8 +33,8 @@ impl Connection for TestConnection {
         "test"
     }
 
-    async fn recv(&mut self) -> Option<Result<AgentServerMessage, ConnectionError>> {
-        self.rx.recv().await.map(Ok)
+    async fn recv(&self) -> Option<Result<AgentServerMessage, ConnectionError>> {
+        self.rx.lock().await.recv().await.map(Ok)
     }
 
     async fn send(&self, msg: AgentServerMessage) -> Result<(), ConnectionError> {
