@@ -375,3 +375,13 @@
 - Created concepts: [[react-pattern]], [[agent-plugin-system]], [[plugin-actions]], [[built-in-plugins]], [[agent-event-stream]], [[agent-builder-pattern]], [[tool-registry]], [[agent-observability]], [[semantic-caching]], [[human-in-the-loop]], [[retry-with-backoff]], [[rate-limiting]]
 - Created entities: [[vol-llm-agent-crate]], [[vol-llm-agents-crate]], [[vol-llm-core-crate]], [[vol-llm-tool-crate]], [[vol-llm-provider-crate]], [[tdengine]], [[dashscope]]
 - Cross-references added: 12
+
+## [2026-05-21] ingest | Agent Channel Transport Migration to Agent Server Protocol
+- Created sources: [[agent-channel-server-protocol-transport-migration]]
+- Created concepts: [[agent-server-protocol]]
+- Updated concepts: [[http-transport]] (now core-backed protocol transport), [[connection-trait]] (now carries `AgentServerMessage` with `recv(&self)`)
+- Updated entities: [[vol-llm-agent-channel-crate]] (transport architecture, legacy `Message` removal, source_count -> 6)
+- Updated sources: [[agent-channel-examples]] (examples now use `AgentServerCore` and protocol transports)
+- Updated index: new protocol concept/source entries and refreshed summaries for agent-channel, HTTP transport, and connection trait
+- Cross-references added: 12
+- Changes: WebSocket and HTTP transports now decode/encode Agent Server Protocol messages and delegate dispatch to `AgentServerCore`; legacy `protocol::Message` was removed; `vol-agent-manager` protocol tests were migrated; regression passed for `vol-llm-agent-channel` and manager integration tests.

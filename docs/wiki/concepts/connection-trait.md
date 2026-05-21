@@ -3,25 +3,25 @@ type: concept
 category: framework
 tags: [transport, connection, abstraction, trait]
 created: 2026-05-05
-updated: 2026-05-09
-source_count: 2
+updated: 2026-05-21
+source_count: 3
 ---
 
 # Connection Trait
 
 **Category:** Transport abstraction
-**Related:** [[vol-llm-agent-channel-crate]], [[http-transport]], [[connection-holder]], [[remote-agent-connection]], [[jsonrpc-transport]], [[jsonrpc-transport-refactoring]], [[tui-frontend-ratatui]]
+**Related:** [[vol-llm-agent-channel-crate]], [[http-transport]], [[connection-holder]], [[remote-agent-connection]], [[jsonrpc-transport]], [[jsonrpc-transport-refactoring]], [[agent-server-protocol]], [[agent-channel-server-protocol-transport-migration]], [[tui-frontend-ratatui]]
 
 ## Definition
 
-The `Connection` trait in `vol-llm-agent-channel` abstracts transport protocols behind a uniform interface, allowing the same agent event forwarding logic to work with WebSocket, HTTP, JSON-RPC WebSocket, and in-memory transports.
+The `Connection` trait in `vol-llm-agent-channel` abstracts transport protocols behind a uniform interface for receiving and sending `AgentServerMessage` values. It lets `AgentServerCore::serve` process WebSocket, JSON-RPC adapter, and in-memory connections through the same protocol loop.
 
 ## Key Points
 
 - Trait requires `Send + Sync + 'static` for safe concurrent use [[http-transport-impl]]
 - `protocol(&self) -> &str` returns a protocol identifier (e.g., "ws", "http", "memory", "jsonrpc-ws") [[http-transport-impl]]
-- `recv(&mut self) -> Option<Result<Message, ConnectionError>>` receives inbound messages [[http-transport-impl]]
-- `send(&self, msg: Message) -> Result<(), ConnectionError>` sends outbound messages [[http-transport-impl]]
+- `recv(&self) -> Option<Result<AgentServerMessage, ConnectionError>>` receives inbound protocol messages [[agent-channel-server-protocol-transport-migration]]
+- `send(&self, msg: AgentServerMessage) -> Result<(), ConnectionError>` sends outbound protocol messages [[agent-channel-server-protocol-transport-migration]]
 
 ## Implementations
 

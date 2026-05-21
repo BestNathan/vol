@@ -10,11 +10,11 @@ source_count: 6
 # vol-llm-agent-channel Crate
 
 **Category:** Rust crate — Agent communication channel layer
-**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]], [[skill-system]], [[skills-panel-json-rpc]]
+**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[agent-server-protocol]], [[agent-channel-server-protocol-transport-migration]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]], [[skill-system]], [[skills-panel-json-rpc]]
 
 ## Overview
 
-The `vol-llm-agent-channel` crate provides the communication layer between external clients and ReActAgent instances. It offers multiple transport protocols (WebSocket, HTTP, in-memory, JSON-RPC WebSocket) unified through the `Connection` trait, with FIFO request dispatching and multi-agent routing support.
+The `vol-llm-agent-channel` crate provides the communication layer between external clients and ReActAgent instances. It offers multiple transport protocols (WebSocket, HTTP, in-memory, JSON-RPC WebSocket) unified around [[agent-server-protocol]] messages, with `AgentServerCore` owning domain dispatch and transport code limited to wire-level decode/encode responsibilities.
 
 ## Key Facts
 
@@ -22,7 +22,7 @@ The `vol-llm-agent-channel` crate provides the communication layer between exter
 - `ConnectionHolder` implements `AgentPlugin` to forward agent events to the attached connection — single event bridge for all transports [[jsonrpc-transport-refactoring]]
 - `AgentDispatcher` provides FIFO request queueing with `submit()` returning oneshot receivers [[http-transport-impl]]
 - `AgentRouter` provides multi-agent request routing via `HashMap<String, AgentDispatcher>` [[agent-router]]
-- `Message` enum unifies all communication: Submit, Cancel, Connected, Event, Result, Error [[http-transport-impl]]
+- `AgentServerMessage` is the protocol boundary for WebSocket, HTTP, memory, JSON-RPC adapters, and manager integration; the legacy `protocol::Message` enum was removed [[agent-channel-server-protocol-transport-migration]]
 - `jsonrpc` module: `JsonRpcConnection` implements `Connection` trait, `JsonRpcServer` accepts `Vec<AgentRegistration>` for multi-agent, optional `Arc<SkillLoader>` for skill discovery [[jsonrpc-transport]], [[skills-panel-json-rpc]]
 - 14 JSON-RPC methods: 12 existing agent/file/log/session methods plus `skill.list`, `skill.get` [[jsonrpc-transport]], [[skills-panel-json-rpc]]
 - `run_id` is the business identifier for one agent inference run; `message_id` stays protocol correlation only [[run-id-unification]]
@@ -61,6 +61,8 @@ Client → Transport (WS/HTTP/JSON-RPC/Memory) → Connection → ConnectionHold
 - `jsonrpc/serde_helpers.rs` — JSON-RPC serialization helpers
 
 ## Timeline
+
+- **2026-05-21:** WebSocket and HTTP transports migrated to `AgentServerCore` + `AgentServerMessage`; legacy `protocol::Message` deleted; examples and manager protocol tests updated [[agent-channel-server-protocol-transport-migration]]
 
 - **2026-04**: Initial implementation with WebSocket transport and memory transport
 - **2026-05-05**: HTTP transport added with blocking and SSE modes [[http-transport-impl]]

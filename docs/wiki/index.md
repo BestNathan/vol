@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-21 (run-id-unification)
+Last updated: 2026-05-19 (react-plugin-event-shutdown)
 
 ## Entities
 
@@ -8,13 +8,13 @@ Last updated: 2026-05-21 (run-id-unification)
 |------|---------|--------|---------|
 | [[nq-deribit-repository]] | Rust Cargo workspace combining Deribit volatility monitoring with LLM agent tooling; documents major directories, crate families, docs, OpenSpec, k8s, scripts, and Cargo mirror configuration | active | 2026-05-19 |
 | [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs, ConnectionStatePanel connection status dashboard, MCP state types, Skills panel with detail dialog/mobile cards, auto-reconnect with session restoration, mobile responsive layout, bounded-scroll FileTree sidebar, mobile FileTree rail, and single-click lazy directory expansion with collapsed unloaded directories and greater-than-style chevrons | active | 2026-05-18 |
-| [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with plugin event shutdown and `run_with_id()` support for caller-provided run ids | active | 2026-05-21 |
+| [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with plugin event shutdown using traced emission and drop-driven interceptor/listener completion | active | 2026-05-19 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions | stable | 2026-05-04 |
 | [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager | stable | 2026-05-19 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with LLMClient trait; protocol-abstracted SSE streaming parsers (AnthropicProtocol, OpenaiStreamParser); factory dispatch and TOML-based config | stable | 2026-05-15 |
 | [[vol-session]] | Session message store and entry persistence | active | 2026-05-04 |
-| [[vol-llm-agent-channel-crate]] | Agent communication channel layer with multiple transports, JSON-RPC Connection implementation, skill discovery RPCs, and unified `run_id` business identity | active | 2026-05-21 |
+| [[vol-llm-agent-channel-crate]] | Agent communication channel layer with Agent Server Protocol transports, AgentServerCore dispatch, JSON-RPC adapter, and skill.list/skill.get RPC methods | active | 2026-05-21 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 | [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support | active | 2026-05-10 |
@@ -22,6 +22,7 @@ Last updated: 2026-05-21 (run-id-unification)
 
 ## Concepts
 
+| [[agent-server-protocol]] | Typed AgentServerMessage boundary used by transports and AgentServerCore domain dispatch | active | 2026-05-21 |
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
 | [[react-pattern]] | Reason-Act-Observe agent execution loop | active | 2026-05-04 |
@@ -35,7 +36,7 @@ Last updated: 2026-05-21 (run-id-unification)
 | [[tool-context]] | Tool execution context with alert, messages, metadata | stable | 2026-05-04 |
 | [[skill-system]] | Skills as native ReActAgent capability via SkillsConfig | active | 2026-05-04 |
 | [[session-as-ssot]] | Session as single source of truth for messages | active | 2026-05-04 |
-| [[run-context]] | Unified run state management replacing PluginContext, with model field and caller-provided `run_id` propagation through ReActAgent::run_with_id | active | 2026-05-21 |
+| [[run-context]] | Unified run state management replacing PluginContext, with model field | active | 2026-05-06 |
 | [[context-builder]] | Pluggable prompt construction from contributors | active | 2026-05-04 |
 | [[session-contributor]] | Session history as context contributor | active | 2026-05-04 |
 | [[session-compression]] | Two-layer session message compression | active | 2026-05-04 |
@@ -47,12 +48,12 @@ Last updated: 2026-05-21 (run-id-unification)
 | [[human-in-the-loop]] | Human approval workflow for tool execution | stable | 2026-05-04 |
 | [[retry-with-backoff]] | Automatic retry with exponential backoff on errors | stable | 2026-05-04 |
 | [[rate-limiting]] | Concurrency control using semaphore-based rate limiting | stable | 2026-05-04 |
-| [[http-transport]] | HTTP transport with blocking and SSE streaming modes | active | 2026-05-05 |
-| [[connection-trait]] | Connection trait abstracting transport protocols | active | 2026-05-05 |
+| [[http-transport]] | HTTP transport that accepts AgentServerMessage bodies and delegates blocking/SSE responses to AgentServerCore | active | 2026-05-21 |
+| [[connection-trait]] | Connection trait abstracting AgentServerMessage transport protocols for AgentServerCore serve loops | active | 2026-05-21 |
 | [[connection-holder]] | ConnectionHolder plugin for forwarding agent events | active | 2026-05-05 |
-| [[agent-dispatcher]] | FIFO request queueing for single-agent execution, using `run_id` for queued cancellation and result identity | active | 2026-05-21 |
+| [[agent-dispatcher]] | FIFO request queueing for single-agent execution | active | 2026-05-05 |
 | [[subagent-review-pattern]] | Independent subagent review of documents before user gate | active | 2026-05-06 |
-| [[agent-router]] | Multi-agent routing with per-agent dispatchers and cross-dispatcher cancellation by `run_id` | active | 2026-05-21 |
+| [[agent-router]] | Multi-agent routing with per-agent dispatchers | active | 2026-05-07 |
 | [[connection-holder-clone-limitation]] | ConnectionHolder cannot be both plugin and transport reference | active | 2026-05-07 |
 | [[clarifying-requirements-workflow]] | Structured dialogue for turning vague requests into requirements | active | 2026-05-06 |
 | [[mcp-transport-pattern]] | Multi-transport startup pattern for MCP servers (stdio, HTTP/SSE) — server-side (CLI flags) and client-side (type-field config parsing) | active | 2026-05-15 |
@@ -88,6 +89,7 @@ Last updated: 2026-05-21 (run-id-unification)
 
 ## Sources
 
+| [[agent-channel-server-protocol-transport-migration]] | 2026-05-21 transport migration: WebSocket/HTTP use AgentServerCore and AgentServerMessage; legacy Message removed | report | 2026-05-21 |
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
 | [[agent-channel-examples]] | WS + HTTP service examples using channel primitives | active | 2026-05-07 |
@@ -136,7 +138,6 @@ Last updated: 2026-05-21 (run-id-unification)
 | [[file-tree-chevron-glyph-refinement]] | FileTree directory expand/collapse chevron changed to a greater-than-style glyph | active | 2026-05-18 |
 | [[claude-md-project-overview]] | CLAUDE.md Project Overview documenting the repository's major directories, crate families, docs, OpenSpec, k8s, scripts, and Cargo mirror configuration | active | 2026-05-19 |
 | [[react-plugin-event-shutdown]] | ReAct plugin event shutdown refactor: traced emits, optional shared channel senders, drop-driven interceptor/listener completion | active | 2026-05-19 |
-| [[run-id-unification]] | Agent Server/channel identity unification: `run_id` is the business run id and `message_id` remains protocol correlation | active | 2026-05-21 |
 
 ## Analyses
 
