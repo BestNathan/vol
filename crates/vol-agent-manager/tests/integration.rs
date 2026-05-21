@@ -21,7 +21,10 @@ use vol_agent_manager::state::manager::AgentStateManager;
 use vol_agent_manager::state::models::{AgentState, AgentStatus, HostInfo};
 use vol_agent_manager::instance::AgentInstanceRegistry;
 use vol_agent_manager::task::dispatcher::TaskDispatcher;
-use vol_llm_agent_channel::Message;
+use vol_llm_agent_channel::{
+    agent_server_protocol::{AgentOperation, AgentPayload, ErrorPayload},
+    AgentServerMessage, MessageKind, Operation, Payload,
+};
 use vol_agent_manager::AppRouterState;
 
 // ---------------------------------------------------------------------------
@@ -356,74 +359,95 @@ async fn test_metrics_endpoint_returns_prometheus_format() {
 }
 
 // ---------------------------------------------------------------------------
-// Tests: Protocol message roundtrip (via vol-llm-agent-channel Message)
+// Tests: Protocol message roundtrip (via Agent Server Protocol)
 // ---------------------------------------------------------------------------
 
 #[test]
 fn test_protocol_message_roundtrip() {
-    let mut metadata = std::collections::HashMap::new();
+    let mut metadata = serde_json::Map::new();
     metadata.insert("type".to_string(), serde_json::json!("heartbeat"));
-    let msg = Message::Submit {
-        req_id: "req-1".to_string(),
-        sender: "agent-1".to_string(),
-        receiver: "manager".to_string(),
-        input: serde_json::json!({"status": "Idle"}).to_string(),
-        metadata: Some(metadata),
-    };
+    let msg = AgentServerMessage::new_command(
+        "req-1",
+        Operation::Agent(AgentOperation::Submit),
+        Payload::Agent(AgentPayload::Submit {
+            input: serde_json::json!({"status": "Idle"}).to_string(),
+            target: None,
+            metadata: Some(metadata),
+        }),
+    );
     let serialized = serde_json::to_string(&msg).unwrap();
-    let parsed: Message = serde_json::from_str(&serialized).unwrap();
-    match parsed {
-        Message::Submit { sender, metadata, .. } => {
-            assert_eq!(sender, "agent-1");
+    let parsed: AgentServerMessage = serde_json::from_str(&serialized).unwrap();
+
+    assert_eq!(parsed.message_id, "req-1");
+    assert_eq!(parsed.kind, MessageKind::Command);
+    assert_eq!(parsed.operation, Operation::Agent(AgentOperation::Submit));
+    match parsed.payload {
+        Payload::Agent(AgentPayload::Submit { metadata, .. }) => {
             let meta = metadata.unwrap();
             assert_eq!(meta.get("type").and_then(|v| v.as_str()), Some("heartbeat"));
         }
-        _ => panic!("expected Submit variant"),
+        _ => panic!("expected submit payload"),
     }
 }
 
 #[test]
 fn test_protocol_control_command() {
-    let mut metadata = std::collections::HashMap::new();
+    let mut metadata = serde_json::Map::new();
     metadata.insert("type".to_string(), serde_json::json!("execute-task"));
     metadata.insert("task_id".to_string(), serde_json::json!("task-123"));
-    let msg = Message::Submit {
-        req_id: "req-2".to_string(),
+    let msg = AgentServerMessage {
+        protocol: "agent-server/1".to_string(),
+        message_id: "req-2".to_string(),
         sender: "manager".to_string(),
         receiver: "agent-1".to_string(),
-        input: serde_json::json!({"cmd": "run"}).to_string(),
-        metadata: Some(metadata),
+        kind: MessageKind::Command,
+        operation: Operation::Agent(AgentOperation::Submit),
+        payload: Payload::Agent(AgentPayload::Submit {
+            input: serde_json::json!({"cmd": "run"}).to_string(),
+            target: None,
+            metadata: Some(metadata),
+        }),
+        meta: Default::default(),
     };
     let serialized = serde_json::to_string(&msg).unwrap();
-    let parsed: Message = serde_json::from_str(&serialized).unwrap();
-    match parsed {
-        Message::Submit { metadata, receiver, .. } => {
-            assert_eq!(receiver, "agent-1");
+    let parsed: AgentServerMessage = serde_json::from_str(&serialized).unwrap();
+
+    assert_eq!(parsed.receiver, "agent-1");
+    match parsed.payload {
+        Payload::Agent(AgentPayload::Submit { metadata, .. }) => {
             let meta = metadata.unwrap();
             assert_eq!(meta.get("type").and_then(|v| v.as_str()), Some("execute-task"));
             assert_eq!(meta.get("task_id").and_then(|v| v.as_str()), Some("task-123"));
         }
-        _ => panic!("expected Submit variant"),
+        _ => panic!("expected submit payload"),
     }
 }
 
 #[test]
 fn test_protocol_error_message() {
-    let msg = Message::Error {
-        req_id: Some("req-3".to_string()),
+    let msg = AgentServerMessage {
+        protocol: "agent-server/1".to_string(),
+        message_id: "req-3".to_string(),
         sender: "manager".to_string(),
         receiver: "agent-1".to_string(),
-        message: "unauthorized".to_string(),
+        kind: MessageKind::Error,
+        operation: Operation::Agent(AgentOperation::Submit),
+        payload: Payload::Error(ErrorPayload {
+            code: "unauthorized".to_string(),
+            message: "unauthorized".to_string(),
+            detail: None,
+            terminal: false,
+        }),
+        meta: Default::default(),
     };
     let serialized = serde_json::to_string(&msg).unwrap();
-    let parsed: Message = serde_json::from_str(&serialized).unwrap();
-    match parsed {
-        Message::Error { sender, receiver, message, .. } => {
-            assert_eq!(sender, "manager");
-            assert_eq!(receiver, "agent-1");
-            assert_eq!(message, "unauthorized");
-        }
-        _ => panic!("expected Error variant"),
+    let parsed: AgentServerMessage = serde_json::from_str(&serialized).unwrap();
+
+    assert_eq!(parsed.sender, "manager");
+    assert_eq!(parsed.receiver, "agent-1");
+    match parsed.payload {
+        Payload::Error(error) => assert_eq!(error.message, "unauthorized"),
+        _ => panic!("expected error payload"),
     }
 }
 
