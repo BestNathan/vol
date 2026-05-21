@@ -20,7 +20,7 @@ use tokio::net::TcpListener;
 use tracing::info;
 use vol_llm_agent::agent_def::AgentDef;
 use vol_llm_agent::react::{AgentConfig, ReActAgent};
-use vol_llm_agent_channel::{AgentDispatcher, ConnectionHolder, HttpTransport, WsServer};
+use vol_llm_agent_channel::{AgentDispatcher, AgentServerCore, ConnectionHolder, HttpTransport, WsServer};
 use vol_llm_provider::create_provider;
 use vol_llm_tool::ToolRegistry;
 use vol_session::{InMemoryEntryStore, Session};
@@ -53,6 +53,7 @@ async fn main() {
     )
     .with_type("general-assistant");
 
+    let def_for_core = def.clone();
     let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
     let tools = Arc::new(ToolRegistry::new());
     let mut config = AgentConfig::new(Arc::from(llm), tools, session);
@@ -67,10 +68,18 @@ async fn main() {
     let holder = Arc::new(ConnectionHolder::new("my-agent".to_string(), "client".to_string()));
 
     let dispatcher = Arc::new(AgentDispatcher::new(agent));
+    let core = Arc::new(
+        AgentServerCore::new(std::env::current_dir().unwrap(), "~/.vol-llm-agent-channel")
+            .await
+            .expect("failed to create agent server core"),
+    );
+    core.register_agent("my-agent", def_for_core)
+        .await
+        .expect("failed to register my-agent");
 
     // Build routers
     // SSE streaming (?stream=true) is handled internally by HttpTransport.
-    let ws_router = WsServer::new(dispatcher.clone(), holder.clone(), "my-agent").into_axum_router();
+    let ws_router = WsServer::new(core).into_axum_router();
     let http_router = HttpTransport::new(dispatcher, holder, "my-agent").into_axum_router();
 
     // Combine
