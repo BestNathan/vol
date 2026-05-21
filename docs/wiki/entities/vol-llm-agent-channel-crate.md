@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, agent, transport, rust, json-rpc]
 created: 2026-05-05
-updated: 2026-05-10
-source_count: 5
+updated: 2026-05-21
+source_count: 6
 ---
 
 # vol-llm-agent-channel Crate
@@ -25,6 +25,8 @@ The `vol-llm-agent-channel` crate provides the communication layer between exter
 - `Message` enum unifies all communication: Submit, Cancel, Connected, Event, Result, Error [[http-transport-impl]]
 - `jsonrpc` module: `JsonRpcConnection` implements `Connection` trait, `JsonRpcServer` accepts `Vec<AgentRegistration>` for multi-agent, optional `Arc<SkillLoader>` for skill discovery [[jsonrpc-transport]], [[skills-panel-json-rpc]]
 - 14 JSON-RPC methods: 12 existing agent/file/log/session methods plus `skill.list`, `skill.get` [[jsonrpc-transport]], [[skills-panel-json-rpc]]
+- `run_id` is the business identifier for one agent inference run; `message_id` stays protocol correlation only [[run-id-unification]]
+- `AgentRequest`, `RunResult`, dispatcher cancellation, and agent-domain submit/cancel handling all now propagate `run_id` [[run-id-unification]]
 - 49 integration tests for JSON-RPC serialization and parsing [[task-5-jsonrpc-integration-tests]]
 
 ## Transport Comparison
@@ -66,3 +68,4 @@ Client → Transport (WS/HTTP/JSON-RPC/Memory) → Connection → ConnectionHold
 - **2026-05-07**: Example applications added — `single_agent.rs` (dual transport) and `multi_agent.rs` (agent router) [[agent-channel-examples]]
 - **2026-05-09**: JSON-RPC transport refactoring — `JsonRpcConnection` implements `Connection` trait, `EventBridgePlugin` deleted, `JsonRpcServer` with multi-agent support, 49 integration tests [[jsonrpc-transport-refactoring]]
 - **2026-05-16**: `skill.list` and `skill.get` RPC methods added — `JsonRpcServer` gains `Option<Arc<SkillLoader>>`, `handle_skill_list()` returns metadata array, `handle_skill_get()` returns full `SkillDetail` or not-found error; `SkillLoader` wired into `jsonrpc_agent_service.rs` at startup [[skills-panel-json-rpc]]
+- **2026-05-21**: Run identity unified around `run_id` — protocol submit/cancel payloads, `AgentRequest`, `RunResult`, dispatcher/router cancellation, and agent-domain handler propagation now use run id as the business lifecycle id while `message_id` remains transport correlation [[run-id-unification]]

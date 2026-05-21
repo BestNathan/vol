@@ -5,9 +5,11 @@ use chrono::Utc;
 use futures::{SinkExt, StreamExt};
 use tracing::{error, info, warn};
 use vol_llm_agent_channel::{
-    AgentServerMessage, Connection, ConnectionError, MessageKind, Operation, Payload,
-    agent_server_protocol::{AgentOperation, AgentPayload, ErrorPayload},
-    Message,
+    AgentServerMessage, Connection, ConnectionError,
+    agent_server_protocol::{
+        AgentOperation, AgentPayload, ErrorPayload, Operation, Payload, SystemOperation,
+        SystemPayload,
+    },
 };
 
 use crate::events::{EventBus, ManagerEvent};
@@ -19,7 +21,7 @@ use crate::task::dispatcher::TaskDispatcher;
 /// WebSocket connection adapter implementing the Connection trait.
 struct ManagerConnection {
     tx: Arc<tokio::sync::Mutex<futures::stream::SplitSink<WebSocket, WsMessage>>>,
-    rx: futures::stream::SplitStream<WebSocket>,
+    rx: tokio::sync::Mutex<futures::stream::SplitStream<WebSocket>>,
 }
 
 impl ManagerConnection {
@@ -27,7 +29,7 @@ impl ManagerConnection {
         let (tx, rx) = ws.split();
         Self {
             tx: Arc::new(tokio::sync::Mutex::new(tx)),
-            rx,
+            rx: tokio::sync::Mutex::new(rx),
         }
     }
 }
@@ -38,20 +40,20 @@ impl Connection for ManagerConnection {
         "ws"
     }
 
-    async fn recv(&mut self) -> Option<Result<AgentServerMessage, ConnectionError>> {
-        let msg = self.rx.next().await?;
-        match msg {
-            Ok(WsMessage::Text(text)) => {
-                match serde_json::from_str::<AgentServerMessage>(&text) {
-                    Ok(msg) => Some(Ok(msg)),
-                    Err(e) => Some(Err(ConnectionError::ParseError(e.to_string()))),
+    async fn recv(&self) -> Option<Result<AgentServerMessage, ConnectionError>> {
+        loop {
+            let msg = self.rx.lock().await.next().await?;
+            match msg {
+                Ok(WsMessage::Text(text)) => {
+                    return match serde_json::from_str::<AgentServerMessage>(&text) {
+                        Ok(msg) => Some(Ok(msg)),
+                        Err(e) => Some(Err(ConnectionError::ParseError(e.to_string()))),
+                    };
                 }
+                Ok(WsMessage::Close(_)) => return None,
+                Ok(WsMessage::Binary(_) | WsMessage::Ping(_) | WsMessage::Pong(_)) => {}
+                Err(e) => return Some(Err(ConnectionError::WsReceiveError(e.to_string()))),
             }
-            Ok(WsMessage::Close(_)) => None,
-            Ok(WsMessage::Binary(_) | WsMessage::Ping(_) | WsMessage::Pong(_)) => {
-                self.recv().await
-            }
-            Err(e) => Some(Err(ConnectionError::WsReceiveError(e.to_string()))),
         }
     }
 
@@ -78,25 +80,37 @@ pub async fn handle_agent_connection(
     // Auth check
     if let Some(expected) = &expected_token {
         if token.as_ref() != Some(expected) {
-            let err = Message::Error {
-                req_id: None,
-                sender: "manager".to_string(),
-                receiver: "client".to_string(),
-                message: "invalid token".to_string(),
-            };
+            let err = AgentServerMessage::new_error(
+                "auth-error",
+                Operation::Agent(AgentOperation::Event),
+                ErrorPayload {
+                    code: "invalid_token".to_string(),
+                    message: "invalid token".to_string(),
+                    detail: None,
+                    terminal: true,
+                },
+            );
             let text = serde_json::to_string(&err).unwrap();
             let _ = ws.send(WsMessage::Text(text)).await;
             return;
         }
     }
 
-    let mut conn = ManagerConnection::new(ws);
+    let conn = ManagerConnection::new(ws);
 
-    // Wait for register message (Submit with metadata type=register)
+    // Wait for register message (agent.submit with metadata type=register)
     let agent_id = match conn.recv().await {
-        Some(Ok(Message::Submit { metadata, sender, input, .. })) => {
-            let meta = metadata.as_ref();
-            let is_register = meta.map_or(false, |m| {
+        Some(Ok(AgentServerMessage {
+            sender,
+            payload:
+                Payload::Agent(AgentPayload::Submit {
+                    input,
+                    metadata,
+                    ..
+                }),
+            ..
+        })) => {
+            let is_register = metadata.as_ref().map_or(false, |m| {
                 m.get("type").and_then(|v| v.as_str()) == Some("register")
             });
             if !is_register {
@@ -159,10 +173,11 @@ pub async fn handle_agent_connection(
     };
 
     // Send Connected ack
-    let _ = conn.send(Message::Connected {
-        sender: "manager".to_string(),
-        receiver: agent_id.clone(),
-    }).await;
+    let _ = conn.send(AgentServerMessage::new_ack(
+        "connected",
+        Operation::System(SystemOperation::Connected),
+        Payload::System(SystemPayload::Empty),
+    )).await;
 
     metrics.agent_connections_current.inc();
 
@@ -173,12 +188,16 @@ pub async fn handle_agent_connection(
                 if let Err(e) = handle_message(
                     &msg, &agent_id, &state_manager, &metrics, &event_bus, &task_dispatcher,
                 ).await {
-                    let _ = conn.send(Message::Error {
-                        req_id: None,
-                        sender: "manager".to_string(),
-                        receiver: agent_id.clone(),
-                        message: e.to_string(),
-                    }).await;
+                    let _ = conn.send(AgentServerMessage::new_error(
+                        "handler-error",
+                        msg.operation.clone(),
+                        ErrorPayload {
+                            code: "handler_error".to_string(),
+                            message: e.to_string(),
+                            detail: None,
+                            terminal: false,
+                        },
+                    )).await;
                 }
             }
             Some(Err(e)) => {
@@ -199,7 +218,7 @@ pub async fn handle_agent_connection(
 }
 
 async fn handle_message(
-    msg: &Message,
+    msg: &AgentServerMessage,
     agent_id: &str,
     state_manager: &AgentStateManager,
     metrics: &MetricsCollector,
@@ -212,8 +231,13 @@ async fn handle_message(
         .map(|s| s.r#type.clone())
         .unwrap_or_else(|| "unknown".to_string());
 
-    match msg {
-        Message::Submit { metadata, input, .. } => {
+    match (&msg.operation, &msg.payload) {
+        (
+            Operation::Agent(AgentOperation::Submit),
+            Payload::Agent(AgentPayload::Submit {
+                metadata, input, ..
+            }),
+        ) => {
             let meta_type = metadata.as_ref().and_then(|m| {
                 m.get("type").and_then(|v| v.as_str())
             }).unwrap_or("unknown");
@@ -278,11 +302,11 @@ async fn handle_message(
                 }
             }
         }
-        Message::Cancel { req_id, .. } => {
-            info!(agent_id, req_id, "Received cancel request");
+        (Operation::Agent(AgentOperation::Cancel), Payload::Agent(AgentPayload::Cancel { run_id })) => {
+            info!(agent_id, run_id, "Received cancel request");
         }
         _ => {
-            // Ignore Connected, Event, Result, Error from agent
+            // Ignore messages this manager does not handle.
         }
     }
     Ok(())
@@ -320,15 +344,18 @@ mod tests {
 
     #[test]
     fn test_message_serialization() {
-        let msg = Message::Submit {
-            req_id: "req-1".to_string(),
-            sender: "agent-a".to_string(),
-            receiver: "manager".to_string(),
-            input: "hello".to_string(),
-            metadata: None,
-        };
+        let msg = AgentServerMessage::new_command(
+            "req-1",
+            Operation::Agent(AgentOperation::Submit),
+            Payload::Agent(AgentPayload::Submit {
+                input: "hello".to_string(),
+                target: None,
+                metadata: None,
+                run_id: None,
+            }),
+        );
         let serialized = serde_json::to_string(&msg).unwrap();
-        assert!(serialized.contains("submit"));
-        assert!(serialized.contains("agent-a"));
+        assert!(serialized.contains("Submit"));
+        assert!(serialized.contains("req-1"));
     }
 }

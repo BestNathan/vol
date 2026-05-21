@@ -1,17 +1,15 @@
 //! ReAct Agent implementation.
 
-use super::{
-    AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext,
-};
+use super::{AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext};
 use crate::react::state::ToolCallRecord;
 use std::path::PathBuf;
 use std::sync::Arc;
 use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
-use vol_llm_mcp::McpManager;
 use vol_llm_core::{
-    ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
-    ToolChoice,
+    ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData,
+    StreamReceiver, ToolChoice,
 };
+use vol_llm_mcp::McpManager;
 use vol_llm_tool::ToolContext;
 use vol_session::{InMemoryEntryStore, Session};
 
@@ -85,20 +83,37 @@ impl Default for AgentConfig {
 }
 
 fn generate_agent_id() -> String {
-    format!("agent-{}", uuid::Uuid::new_v4().simple().to_string()[..8].to_string())
+    format!(
+        "agent-{}",
+        uuid::Uuid::new_v4().simple().to_string()[..8].to_string()
+    )
 }
 
 /// Dummy LLM for Default impl (tests only — will panic if used).
 struct DefaultLlm;
 #[async_trait::async_trait]
 impl LLMClient for DefaultLlm {
-    fn provider(&self) -> vol_llm_core::LLMProvider { vol_llm_core::LLMProvider::Anthropic }
-    fn model(&self) -> &str { "default" }
-    fn supported_params(&self) -> &[vol_llm_core::SupportedParam] { &[] }
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
-        unimplemented!("DefaultLlm::converse called — AgentConfig::default() is for struct defaults only")
+    fn provider(&self) -> vol_llm_core::LLMProvider {
+        vol_llm_core::LLMProvider::Anthropic
     }
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+    fn model(&self) -> &str {
+        "default"
+    }
+    fn supported_params(&self) -> &[vol_llm_core::SupportedParam] {
+        &[]
+    }
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
+        unimplemented!(
+            "DefaultLlm::converse called — AgentConfig::default() is for struct defaults only"
+        )
+    }
+    async fn converse_stream(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<StreamReceiver> {
         let (_tx, rx) = tokio::sync::mpsc::channel(10);
         Ok(StreamReceiver::new(rx))
     }
@@ -156,15 +171,20 @@ impl ReActAgent {
     /// - All tool calls made during execution
     /// - Error information if any tool call failed
     pub async fn run(&self, user_input: &str) -> Result<AgentResponse, crate::AgentError> {
+        let run_id = uuid::Uuid::new_v4().simple().to_string();
+        self.run_with_id(user_input, run_id).await
+    }
+
+    pub async fn run_with_id(
+        &self,
+        user_input: &str,
+        run_id: impl Into<String>,
+    ) -> Result<AgentResponse, crate::AgentError> {
+        let run_id = run_id.into();
         // === Phase 1: Generate run_id, compute effective config from def ===
 
-        let run_id = uuid::Uuid::new_v4().simple().to_string();
-
-        let (run_ctx, plugin_rx) = RunContext::new(
-            run_id.clone(),
-            user_input.to_string(),
-            self.config.clone(),
-        );
+        let (run_ctx, plugin_rx) =
+            RunContext::new(run_id.clone(), user_input.to_string(), self.config.clone());
 
         // Persist user message to session so it's available via SessionContributor.
         // This replaces the old UserInputContributor which injected input directly
@@ -181,10 +201,7 @@ impl ReActAgent {
 
         // Spawn listener tasks - one per plugin, subscribing to event broadcast
         let plugins = self.config.plugin_registry.plugins().to_vec();
-        let mut listener_set = spawn_listener_tasks(
-            plugins,
-            run_ctx.clone(),
-        );
+        let mut listener_set = spawn_listener_tasks(plugins, run_ctx.clone());
 
         let interceptor_plugins = self.config.plugin_registry.plugins().to_vec();
         let interceptor_ctx = run_ctx.without_plugin_event_tx();
@@ -231,35 +248,38 @@ impl ReActAgent {
                 let iteration = run_ctx.current_iteration();
 
                 if iteration > max_iterations {
-                    run_ctx.emit(AgentStreamEvent::max_iterations_reached(
-                        iteration,
-                        max_iterations,
-                    )).await;
+                    run_ctx
+                        .emit(AgentStreamEvent::max_iterations_reached(
+                            iteration,
+                            max_iterations,
+                        ))
+                        .await;
 
-                    match run_ctx.intercept(&AgentStreamEvent::iteration_complete(iteration, vec![], None)).await {
-                        Ok(PluginDecision::Continue) => {
-                            run_ctx.emit(AgentStreamEvent::iteration_continued(iteration)).await;
-                            run_ctx.reset_iteration();
-                            continue;
-                        }
-                        _ => {
-                            let reason = format!("Max iterations ({}) reached", max_iterations);
-                            run_ctx.emit(AgentStreamEvent::agent_aborted(reason.clone())).await;
-                            return Err(crate::AgentError::MaxIterationsReached {
-                                max: max_iterations,
-                            });
-                        }
-                    }
+                    let reason = format!("Max iterations ({}) reached", max_iterations);
+                    run_ctx
+                        .emit(AgentStreamEvent::agent_aborted(reason.clone()))
+                        .await;
+                    return Err(crate::AgentError::MaxIterationsReached {
+                        max: max_iterations,
+                    });
                 }
 
                 // Reason phase - call LLM with streaming
                 let tools_defs = run_ctx.effective_tools();
 
                 // Get messages from ctx (not local variable)
-                let messages = run_ctx.get_context().await.map_err(|e| crate::AgentError::from(e))?;
+                let messages = run_ctx
+                    .get_context()
+                    .await
+                    .map_err(|e| crate::AgentError::from(e))?;
 
                 // Emit LLMCallStart with full message history
-                run_ctx.emit(AgentStreamEvent::llm_call_start(iteration, messages.clone())).await;
+                run_ctx
+                    .emit(AgentStreamEvent::llm_call_start(
+                        iteration,
+                        messages.clone(),
+                    ))
+                    .await;
 
                 let request = ConversationRequest::with_history(None, messages)
                     .with_tools(tools_defs)
@@ -268,21 +288,36 @@ impl ReActAgent {
                 let llm_stream = match llm.converse_stream(request).await {
                     Ok(stream) => stream,
                     Err(e) => {
-                        run_ctx.emit(AgentStreamEvent::llm_call_error(e.to_string())).await;
-                        run_ctx.emit(AgentStreamEvent::agent_aborted(format!("LLM request failed: {}", e))).await;
+                        run_ctx
+                            .emit(AgentStreamEvent::llm_call_error(e.to_string()))
+                            .await;
+                        run_ctx
+                            .emit(AgentStreamEvent::agent_aborted(format!(
+                                "LLM request failed: {}",
+                                e
+                            )))
+                            .await;
                         return Err(crate::AgentError::Llm(e));
                     }
                 };
 
                 // Consume LLM stream — emits Thinking/Content streaming events internally
-                let (thinking, tool_calls, content, model, usage) = match consume_llm_stream(llm_stream, &run_ctx).await {
-                    Ok(data) => data,
-                    Err(e) => {
-                        run_ctx.emit(AgentStreamEvent::llm_call_error(e.to_string())).await;
-                        run_ctx.emit(AgentStreamEvent::agent_aborted(format!("LLM stream failed: {}", e))).await;
-                        return Err(e);
-                    }
-                };
+                let (thinking, tool_calls, content, model, usage) =
+                    match consume_llm_stream(llm_stream, &run_ctx).await {
+                        Ok(data) => data,
+                        Err(e) => {
+                            run_ctx
+                                .emit(AgentStreamEvent::llm_call_error(e.to_string()))
+                                .await;
+                            run_ctx
+                                .emit(AgentStreamEvent::agent_aborted(format!(
+                                    "LLM stream failed: {}",
+                                    e
+                                )))
+                                .await;
+                            return Err(e);
+                        }
+                    };
 
                 // Record reasoning step
                 if !thinking.is_empty() {
@@ -290,11 +325,12 @@ impl ReActAgent {
                 }
 
                 // Emit LLMCallComplete with real model and usage
-                run_ctx.emit(AgentStreamEvent::llm_call_complete(model.clone(), usage)).await;
+                run_ctx
+                    .emit(AgentStreamEvent::llm_call_complete(model.clone(), usage))
+                    .await;
 
                 // Check if tool calls
                 if !tool_calls.is_empty() {
-
                     // IMPORTANT: Add assistant message with tool calls to history
                     let assistant_message = if !content.is_empty() {
                         Message::assistant_with_tools(content.clone(), tool_calls.clone())
@@ -335,12 +371,14 @@ impl ReActAgent {
                                 tracing::warn!("Plugin intercepted to skip tool: {}", call.name);
                                 let duration_ms = tool_begin.elapsed().as_millis() as u64;
 
-                                run_ctx.emit(AgentStreamEvent::tool_call_skipped(
-                                    call.id.clone(),
-                                    call.name.clone(),
-                                    "Plugin skipped".to_string(),
-                                    Some(duration_ms),
-                                )).await;
+                                run_ctx
+                                    .emit(AgentStreamEvent::tool_call_skipped(
+                                        call.id.clone(),
+                                        call.name.clone(),
+                                        "Plugin skipped".to_string(),
+                                        Some(duration_ms),
+                                    ))
+                                    .await;
 
                                 continue;
                             }
@@ -361,24 +399,27 @@ impl ReActAgent {
                             Ok(r) => r,
                             Err(e) => {
                                 let duration_ms = tool_begin.elapsed().as_millis() as u64;
-                                run_ctx.emit(AgentStreamEvent::tool_call_error(
-                                    call.id.clone(),
-                                    call.name.clone(),
-                                    e.to_string(),
-                                    Some(duration_ms),
-                                )).await;
+                                run_ctx
+                                    .emit(AgentStreamEvent::tool_call_error(
+                                        call.id.clone(),
+                                        call.name.clone(),
+                                        e.to_string(),
+                                        Some(duration_ms),
+                                    ))
+                                    .await;
 
-                                run_ctx.record_tool_call(ToolCallRecord {
-                                    tool_name: call.name.clone(),
-                                    arguments: call.arguments.clone(),
-                                    result: format!("Error: {}", e),
-                                    iteration,
-                                    success: false,
-                                }).await;
+                                run_ctx
+                                    .record_tool_call(ToolCallRecord {
+                                        tool_name: call.name.clone(),
+                                        arguments: call.arguments.clone(),
+                                        result: format!("Error: {}", e),
+                                        iteration,
+                                        success: false,
+                                    })
+                                    .await;
 
                                 // Add error message to session — LLM sees it on next turn
-                                let error_content =
-                                    format!("Tool '{}' error: {}", call.name, e);
+                                let error_content = format!("Tool '{}' error: {}", call.name, e);
                                 if let Err(e) = run_ctx
                                     .add_message(Message::tool(error_content, call.id.clone()))
                                     .await
@@ -472,7 +513,9 @@ impl ReActAgent {
                     "session_id": response.session_id,
                 });
                 run_ctx
-                    .emit(AgentStreamEvent::agent_complete_with_response(response_json))
+                    .emit(AgentStreamEvent::agent_complete_with_response(
+                        response_json,
+                    ))
                     .await;
 
                 return Ok(response);
@@ -517,7 +560,16 @@ impl ReActAgent {
 async fn consume_llm_stream(
     mut stream: StreamReceiver,
     run_ctx: &RunContext,
-) -> Result<(String, Vec<vol_llm_core::ToolCall>, String, String, Option<vol_llm_core::TokenUsage>), crate::AgentError> {
+) -> Result<
+    (
+        String,
+        Vec<vol_llm_core::ToolCall>,
+        String,
+        String,
+        Option<vol_llm_core::TokenUsage>,
+    ),
+    crate::AgentError,
+> {
     let mut thinking = String::new();
     let mut tool_calls = Vec::new();
     let mut content = String::new();
@@ -542,10 +594,14 @@ async fn consume_llm_stream(
             StreamEventData::ThinkingComplete { thinking: t } => {
                 if !thinking_started {
                     run_ctx.emit(AgentStreamEvent::thinking_start()).await;
-                    run_ctx.emit(AgentStreamEvent::thinking_delta(t.clone())).await;
+                    run_ctx
+                        .emit(AgentStreamEvent::thinking_delta(t.clone()))
+                        .await;
                 }
                 thinking = t;
-                run_ctx.emit(AgentStreamEvent::thinking_complete(thinking.clone())).await;
+                run_ctx
+                    .emit(AgentStreamEvent::thinking_complete(thinking.clone()))
+                    .await;
             }
             StreamEventData::ContentDelta { delta } => {
                 if !content_started {
@@ -558,10 +614,14 @@ async fn consume_llm_stream(
             StreamEventData::ContentComplete { content: c } => {
                 if !content_started {
                     run_ctx.emit(AgentStreamEvent::content_start()).await;
-                    run_ctx.emit(AgentStreamEvent::content_delta(c.clone())).await;
+                    run_ctx
+                        .emit(AgentStreamEvent::content_delta(c.clone()))
+                        .await;
                 }
                 content = c;
-                run_ctx.emit(AgentStreamEvent::content_complete(content.clone())).await;
+                run_ctx
+                    .emit(AgentStreamEvent::content_complete(content.clone()))
+                    .await;
             }
             StreamEventData::ToolCallComplete { tool_call } => {
                 tool_calls.push(tool_call);
@@ -572,7 +632,11 @@ async fn consume_llm_stream(
             StreamEventData::ResponseStart { model: m } => {
                 model = m;
             }
-            StreamEventData::ToolCallArgumentDelta { tool_call_id, tool_name, delta } => {
+            StreamEventData::ToolCallArgumentDelta {
+                tool_call_id,
+                tool_name,
+                delta,
+            } => {
                 run_ctx
                     .emit(AgentStreamEvent::tool_call_argument_delta(
                         tool_call_id.clone(),
@@ -594,7 +658,9 @@ async fn consume_llm_stream(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_llm_core::{ConversationResponse, FinishReason, Message as CoreMessage, StreamReceiver};
+    use vol_llm_core::{
+        ConversationResponse, FinishReason, Message as CoreMessage, StreamReceiver,
+    };
 
     use crate::agent_def::AgentDef;
     use crate::react::plugin::PluginRegistry;
@@ -613,7 +679,10 @@ mod tests {
         fn supported_params(&self) -> &[vol_llm_core::SupportedParam] {
             &[]
         }
-        async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+        async fn converse(
+            &self,
+            _request: ConversationRequest,
+        ) -> vol_llm_core::Result<ConversationResponse> {
             Ok(ConversationResponse {
                 message: CoreMessage::assistant("mock".to_string()),
                 model: "mock".to_string(),
@@ -622,7 +691,10 @@ mod tests {
                 raw: None,
             })
         }
-        async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+        async fn converse_stream(
+            &self,
+            _request: ConversationRequest,
+        ) -> vol_llm_core::Result<StreamReceiver> {
             let (_tx, rx) = tokio::sync::mpsc::channel(10);
             Ok(StreamReceiver::new(rx))
         }

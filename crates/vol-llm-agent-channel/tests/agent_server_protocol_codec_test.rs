@@ -33,6 +33,67 @@ fn agent_server_protocol_codec_test_decode_payload_rejects_wrong_shape() {
 }
 
 #[test]
+fn agent_server_protocol_codec_test_decode_agent_submit_accepts_supplied_run_id() {
+    let payload = decode_payload(
+        Operation::Agent(AgentOperation::Submit),
+        serde_json::json!({
+            "input": "hello",
+            "target": "agent",
+            "run_id": "run_supplied_1"
+        }),
+    )
+    .unwrap();
+
+    assert_eq!(
+        payload,
+        Payload::Agent(AgentPayload::Submit {
+            input: "hello".to_string(),
+            target: Some("agent".to_string()),
+            metadata: None,
+            run_id: Some("run_supplied_1".to_string()),
+        })
+    );
+}
+
+#[test]
+fn agent_server_protocol_codec_test_decode_agent_submit_defaults_missing_run_id() {
+    let payload = decode_payload(
+        Operation::Agent(AgentOperation::Submit),
+        serde_json::json!({
+            "input": "hello",
+            "target": "agent"
+        }),
+    )
+    .unwrap();
+
+    assert_eq!(
+        payload,
+        Payload::Agent(AgentPayload::Submit {
+            input: "hello".to_string(),
+            target: Some("agent".to_string()),
+            metadata: None,
+            run_id: None,
+        })
+    );
+}
+
+#[test]
+fn agent_server_protocol_codec_test_decode_agent_cancel_uses_run_id() {
+    let payload = decode_payload(
+        Operation::Agent(AgentOperation::Cancel),
+        serde_json::json!({"run_id": "run_123"}),
+    )
+    .unwrap();
+
+    assert_eq!(
+        payload,
+        Payload::Agent(AgentPayload::Cancel {
+            run_id: "run_123".to_string(),
+        })
+    );
+}
+
+#[test]
 fn agent_server_protocol_codec_test_message_id_reused_across_submit_ack_not_equal_run_id() {
     let submit = AgentServerMessage::new_command(
         "msg_1",
@@ -41,6 +102,7 @@ fn agent_server_protocol_codec_test_message_id_reused_across_submit_ack_not_equa
             input: "hello".to_string(),
             target: None,
             metadata: None,
+            run_id: None,
         }),
     );
 

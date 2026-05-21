@@ -3,7 +3,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use tokio::sync::{Mutex, Notify, oneshot};
+use tokio::sync::{oneshot, Mutex, Notify};
 use vol_llm_agent::ReActAgent;
 use vol_session::Session;
 
@@ -48,14 +48,14 @@ impl AgentDispatcher {
         // Spawn the background execution loop
         tokio::spawn(Self::run_loop(agent.clone(), state.clone()));
 
-        Self {
-            agent,
-            state,
-        }
+        Self { agent, state }
     }
 
     /// Submit a request. Returns immediately with a receiver for the result.
-    pub fn submit(&self, request: AgentRequest) -> Result<oneshot::Receiver<RunResult>, ChannelError> {
+    pub fn submit(
+        &self,
+        request: AgentRequest,
+    ) -> Result<oneshot::Receiver<RunResult>, ChannelError> {
         let (tx, rx) = oneshot::channel();
         let pending = PendingRequest { request, tx };
 
@@ -70,10 +70,10 @@ impl AgentDispatcher {
     }
 
     /// Cancel a queued request. Returns false if already executing or completed.
-    pub async fn cancel(&self, req_id: &str) -> bool {
+    pub async fn cancel(&self, run_id: &str) -> bool {
         let mut queue = self.state.queue.lock().await;
 
-        if let Some(pos) = queue.iter().position(|p| p.request.req_id == req_id) {
+        if let Some(pos) = queue.iter().position(|p| p.request.run_id == run_id) {
             let pending = queue.remove(pos).unwrap();
             // Drop the sender without sending — the receiver will get RecvError.
             drop(pending.tx);
@@ -133,23 +133,23 @@ impl AgentDispatcher {
             // (e.g., stuck MCP tool calls, unresponsive LLM).
             let result = match tokio::time::timeout(
                 std::time::Duration::from_secs(300),
-                agent.run(&pending.request.input),
+                agent.run_with_id(&pending.request.input, pending.request.run_id.clone()),
             )
             .await
             {
                 Ok(r) => r,
                 Err(_) => {
-                    tracing::error!(req_id = %pending.request.req_id, "agent run timed out after 5 minutes");
+                    tracing::error!(run_id = %pending.request.run_id, "agent run timed out after 5 minutes");
                     Err(vol_llm_agent::AgentError::Context(
-                        "Agent run timed out — the run exceeded 5 minutes and was aborted".to_string(),
+                        "Agent run timed out — the run exceeded 5 minutes and was aborted"
+                            .to_string(),
                     ))
                 }
             };
 
             let run_result = RunResult {
-                req_id: pending.request.req_id.clone(),
+                run_id: pending.request.run_id.clone(),
                 target_id: pending.request.target_id.clone(),
-                run_id: result.as_ref().ok().map(|r| r.run_id.clone()),
                 response: result.map_err(|e| ChannelError::AgentError(e.to_string())),
             };
 
@@ -162,7 +162,6 @@ impl AgentDispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::ChannelError;
     use crate::request::AgentRequest;
 
     #[tokio::test]
@@ -171,13 +170,19 @@ mod tests {
 
         let (tx1, _) = oneshot::channel();
         let req1 = AgentRequest::new("agent_a", "hello");
-        state.queue.lock().await.push_back(PendingRequest { request: req1, tx: tx1 });
+        state.queue.lock().await.push_back(PendingRequest {
+            request: req1,
+            tx: tx1,
+        });
 
         assert_eq!(state.queue.lock().await.len(), 1);
 
         let (tx2, _) = oneshot::channel();
         let req2 = AgentRequest::new("agent_b", "world");
-        state.queue.lock().await.push_back(PendingRequest { request: req2, tx: tx2 });
+        state.queue.lock().await.push_back(PendingRequest {
+            request: req2,
+            tx: tx2,
+        });
 
         assert_eq!(state.queue.lock().await.len(), 2);
 
@@ -194,32 +199,42 @@ mod tests {
         let state = DispatcherState::new();
 
         let (tx1, _rx1) = oneshot::channel::<RunResult>();
-        let req1 = AgentRequest::with_id("req-1", "agent_a", "hello");
-        state.queue.lock().await.push_back(PendingRequest { request: req1, tx: tx1 });
+        let req1 = AgentRequest::with_run_id("run-1", "agent_a", "hello");
+        state.queue.lock().await.push_back(PendingRequest {
+            request: req1,
+            tx: tx1,
+        });
 
         let (tx2, _rx2) = oneshot::channel::<RunResult>();
-        let req2 = AgentRequest::with_id("req-2", "agent_a", "world");
-        state.queue.lock().await.push_back(PendingRequest { request: req2, tx: tx2 });
+        let req2 = AgentRequest::with_run_id("run-2", "agent_a", "world");
+        state.queue.lock().await.push_back(PendingRequest {
+            request: req2,
+            tx: tx2,
+        });
 
         assert_eq!(state.queue.lock().await.len(), 2);
 
-        // Cancel req-1
+        // Cancel run-1
         let mut queue = state.queue.lock().await;
-        let pos = queue.iter().position(|p| p.request.req_id == "req-1");
+        let pos = queue.iter().position(|p| p.request.run_id == "run-1");
         assert!(pos.is_some());
         let pending = queue.remove(pos.unwrap()).unwrap();
         drop(pending.tx);
 
         assert_eq!(queue.len(), 1);
-        assert_eq!(queue[0].request.req_id, "req-2");
+        assert_eq!(queue[0].request.run_id, "run-2");
     }
 
     #[tokio::test]
     async fn test_cancel_nonexistent_returns_false() {
         let state = DispatcherState::new();
 
-        let found = state.queue.lock().await.iter()
-            .any(|p| p.request.req_id == "nonexistent");
+        let found = state
+            .queue
+            .lock()
+            .await
+            .iter()
+            .any(|p| p.request.run_id == "nonexistent");
         assert!(!found);
     }
 

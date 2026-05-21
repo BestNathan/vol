@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tokio::sync::{RwLock, oneshot};
+use tokio::sync::{oneshot, RwLock};
 
 use crate::dispatcher::AgentDispatcher;
 use crate::error::ChannelError;
@@ -46,10 +46,10 @@ impl AgentRouter {
         dispatcher.submit(request)
     }
 
-    /// Cancel a request by req_id across all registered dispatchers.
-    pub async fn cancel(&self, req_id: &str) -> bool {
+    /// Cancel a request by run_id across all registered dispatchers.
+    pub async fn cancel(&self, run_id: &str) -> bool {
         for dispatcher in self.dispatchers.read().await.values() {
-            if dispatcher.cancel(req_id).await {
+            if dispatcher.cancel(run_id).await {
                 return true;
             }
         }

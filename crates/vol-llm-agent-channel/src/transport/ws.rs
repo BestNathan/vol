@@ -9,8 +9,7 @@ use axum::Router;
 use futures::{SinkExt, StreamExt};
 
 use crate::agent_server_protocol::{
-    AgentOperation, AgentPayload, AgentServerMessage, ErrorPayload, MessageKind, Operation,
-    Payload,
+    AgentOperation, AgentPayload, AgentServerMessage, ErrorPayload, MessageKind, Operation, Payload,
 };
 use crate::connection::{Connection, ConnectionHolder};
 use crate::dispatcher::AgentDispatcher;
@@ -24,21 +23,31 @@ fn serialize_message(msg: &AgentServerMessage) -> Result<String, ConnectionError
 
 fn protocol_to_old_message(msg: AgentServerMessage) -> Result<Message, ConnectionError> {
     match (msg.kind, msg.operation, msg.payload) {
-        (MessageKind::Command, Operation::Agent(AgentOperation::Submit), Payload::Agent(AgentPayload::Submit { input, metadata, .. })) => {
-            Ok(Message::Submit {
-                req_id: msg.message_id,
-                sender: msg.sender,
-                receiver: msg.receiver,
-                input,
-                metadata: metadata.map(|m| m.into_iter().collect()),
-            })
-        }
-        (MessageKind::Command, Operation::Agent(AgentOperation::Cancel), _) => Ok(Message::Cancel {
+        (
+            MessageKind::Command,
+            Operation::Agent(AgentOperation::Submit),
+            Payload::Agent(AgentPayload::Submit {
+                input, metadata, ..
+            }),
+        ) => Ok(Message::Submit {
             req_id: msg.message_id,
             sender: msg.sender,
             receiver: msg.receiver,
+            input,
+            metadata: metadata.map(|m| m.into_iter().collect()),
         }),
-        (MessageKind::Event, Operation::Agent(AgentOperation::Event), Payload::Agent(AgentPayload::Event { event, .. })) => Ok(Message::Event {
+        (MessageKind::Command, Operation::Agent(AgentOperation::Cancel), _) => {
+            Ok(Message::Cancel {
+                req_id: msg.message_id,
+                sender: msg.sender,
+                receiver: msg.receiver,
+            })
+        }
+        (
+            MessageKind::Event,
+            Operation::Agent(AgentOperation::Event),
+            Payload::Agent(AgentPayload::Event { event, .. }),
+        ) => Ok(Message::Event {
             sender: msg.sender,
             receiver: msg.receiver,
             event,
@@ -50,23 +59,33 @@ fn protocol_to_old_message(msg: AgentServerMessage) -> Result<Message, Connectio
             result: serde_json::to_value(payload)
                 .map_err(|e| ConnectionError::ParseError(e.to_string()))?,
         }),
-        (MessageKind::Error, _, Payload::Error(ErrorPayload { message, .. })) => Ok(Message::Error {
-            req_id: Some(msg.message_id),
-            sender: msg.sender,
-            receiver: msg.receiver,
-            message,
-        }),
+        (MessageKind::Error, _, Payload::Error(ErrorPayload { message, .. })) => {
+            Ok(Message::Error {
+                req_id: Some(msg.message_id),
+                sender: msg.sender,
+                receiver: msg.receiver,
+                message,
+            })
+        }
         (MessageKind::Ack, _, _) => Ok(Message::Connected {
             sender: msg.sender,
             receiver: msg.receiver,
         }),
-        _ => Err(ConnectionError::ParseError("unsupported protocol message for ws shim".to_string())),
+        _ => Err(ConnectionError::ParseError(
+            "unsupported protocol message for ws shim".to_string(),
+        )),
     }
 }
 
 fn old_message_to_protocol(msg: Message) -> Result<AgentServerMessage, ConnectionError> {
     match msg {
-        Message::Submit { req_id, sender, receiver, input, metadata } => Ok(AgentServerMessage {
+        Message::Submit {
+            req_id,
+            sender,
+            receiver,
+            input,
+            metadata,
+        } => Ok(AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: req_id,
             sender,
@@ -77,10 +96,15 @@ fn old_message_to_protocol(msg: Message) -> Result<AgentServerMessage, Connectio
                 input,
                 target: None,
                 metadata: metadata.map(|m| m.into_iter().collect()),
+                run_id: None,
             }),
             meta: Default::default(),
         }),
-        Message::Cancel { req_id, sender, receiver } => Ok(AgentServerMessage {
+        Message::Cancel {
+            req_id,
+            sender,
+            receiver,
+        } => Ok(AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: req_id,
             sender,
@@ -106,7 +130,11 @@ fn old_message_to_protocol(msg: Message) -> Result<AgentServerMessage, Connectio
             }),
             meta: Default::default(),
         }),
-        Message::Event { sender, receiver, event } => Ok(AgentServerMessage {
+        Message::Event {
+            sender,
+            receiver,
+            event,
+        } => Ok(AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: uuid::Uuid::new_v4().to_string(),
             sender,
@@ -119,7 +147,12 @@ fn old_message_to_protocol(msg: Message) -> Result<AgentServerMessage, Connectio
             }),
             meta: Default::default(),
         }),
-        Message::Result { req_id, sender, receiver, result } => Ok(AgentServerMessage {
+        Message::Result {
+            req_id,
+            sender,
+            receiver,
+            result,
+        } => Ok(AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: req_id,
             sender,
@@ -132,7 +165,12 @@ fn old_message_to_protocol(msg: Message) -> Result<AgentServerMessage, Connectio
             }),
             meta: Default::default(),
         }),
-        Message::Error { req_id, sender, receiver, message } => Ok(AgentServerMessage {
+        Message::Error {
+            req_id,
+            sender,
+            receiver,
+            message,
+        } => Ok(AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: req_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             sender,
@@ -216,21 +254,23 @@ impl WsConnection {
                         Ok(()) => {}
                         Err(e) => {
                             tracing::warn!(%e, "error handling inbound message");
-                            let _ = self.send(AgentServerMessage {
-                                protocol: "agent-server/1".to_string(),
-                                message_id: uuid::Uuid::new_v4().to_string(),
-                                sender: self.agent_id.clone(),
-                                receiver: "client".to_string(),
-                                kind: MessageKind::Error,
-                                operation: Operation::Agent(AgentOperation::Submit),
-                                payload: Payload::Error(ErrorPayload {
-                                    code: "handler_error".to_string(),
-                                    message: format!("handler error: {e}"),
-                                    detail: None,
-                                    terminal: false,
-                                }),
-                                meta: Default::default(),
-                            }).await;
+                            let _ = self
+                                .send(AgentServerMessage {
+                                    protocol: "agent-server/1".to_string(),
+                                    message_id: uuid::Uuid::new_v4().to_string(),
+                                    sender: self.agent_id.clone(),
+                                    receiver: "client".to_string(),
+                                    kind: MessageKind::Error,
+                                    operation: Operation::Agent(AgentOperation::Submit),
+                                    payload: Payload::Error(ErrorPayload {
+                                        code: "handler_error".to_string(),
+                                        message: format!("handler error: {e}"),
+                                        detail: None,
+                                        terminal: false,
+                                    }),
+                                    meta: Default::default(),
+                                })
+                                .await;
                         }
                     }
                 }
@@ -250,8 +290,14 @@ impl WsConnection {
 
     async fn handle_message(&self, msg: Message) -> Result<(), ConnectionError> {
         match msg {
-            Message::Submit { req_id, input, metadata, .. } => {
-                let mut request = crate::request::AgentRequest::with_id(&req_id, &self.agent_id, &input);
+            Message::Submit {
+                req_id,
+                input,
+                metadata,
+                ..
+            } => {
+                let mut request =
+                    crate::request::AgentRequest::with_run_id(&req_id, &self.agent_id, &input);
                 if let Some(meta) = metadata {
                     request.metadata = meta;
                 }
@@ -287,7 +333,7 @@ impl WsConnection {
                         };
 
                         let result = Message::Result {
-                            req_id: run_result.req_id,
+                            req_id: run_result.run_id,
                             sender: self.agent_id.clone(),
                             receiver: "client".to_string(),
                             result: response_value,
@@ -320,14 +366,13 @@ impl WsConnection {
                         req_id: Some(req_id),
                         sender: self.agent_id.clone(),
                         receiver: "client".to_string(),
-                        message: "request not found in queue (already executing or completed)".to_string(),
+                        message: "request not found in queue (already executing or completed)"
+                            .to_string(),
                     };
                     self.send(old_message_to_protocol(err)?).await
                 }
             }
-            _ => {
-                Ok(())
-            }
+            _ => Ok(()),
         }
     }
 }
@@ -344,16 +389,14 @@ impl Connection for WsConnection {
             rx.next().await?
         };
         match msg {
-            Ok(WsMessage::Text(text)) => {
-                match serde_json::from_str::<AgentServerMessage>(&text) {
-                    Ok(msg) => Some(Ok(msg)),
-                    Err(e) => Some(Err(ConnectionError::ParseError(e.to_string()))),
-                }
-            }
+            Ok(WsMessage::Text(text)) => match serde_json::from_str::<AgentServerMessage>(&text) {
+                Ok(msg) => Some(Ok(msg)),
+                Err(e) => Some(Err(ConnectionError::ParseError(e.to_string()))),
+            },
             Ok(WsMessage::Close(_)) => None,
-            Ok(WsMessage::Binary(_)) => {
-                Some(Err(ConnectionError::ParseError("binary messages not supported".to_string())))
-            }
+            Ok(WsMessage::Binary(_)) => Some(Err(ConnectionError::ParseError(
+                "binary messages not supported".to_string(),
+            ))),
             Ok(WsMessage::Ping(data)) => {
                 tracing::debug!("WebSocket ping: {} bytes", data.len());
                 self.recv().await
@@ -402,25 +445,29 @@ impl WsServer {
         let agent_id = self.agent_id.clone();
         let server = Arc::new(self);
 
-        Router::new()
-            .route(
-                "/ws",
-                get({
+        Router::new().route(
+            "/ws",
+            get({
+                let server = server.clone();
+                let agent_id = agent_id.clone();
+                move |ws: WebSocketUpgrade| {
                     let server = server.clone();
                     let agent_id = agent_id.clone();
-                    move |ws: WebSocketUpgrade| {
-                        let server = server.clone();
-                        let agent_id = agent_id.clone();
-                        async move { ws.on_upgrade(move |socket| handle_ws(socket, server, agent_id)) }
-                    }
-                }),
-            )
+                    async move { ws.on_upgrade(move |socket| handle_ws(socket, server, agent_id)) }
+                }
+            }),
+        )
     }
 }
 
 /// Handler for an upgraded WebSocket connection.
 async fn handle_ws(socket: WebSocket, server: Arc<WsServer>, agent_id: String) {
-    let conn = WsConnection::new(socket, server.dispatcher.clone(), server.holder.clone(), agent_id);
+    let conn = WsConnection::new(
+        socket,
+        server.dispatcher.clone(),
+        server.holder.clone(),
+        agent_id,
+    );
 
     // Attach the connection to the holder so the plugin can forward events.
     let conn_arc = Arc::new(conn);
@@ -433,7 +480,9 @@ async fn handle_ws(socket: WebSocket, server: Arc<WsServer>, agent_id: String) {
     match Arc::try_unwrap(conn_arc) {
         Ok(conn) => conn.run().await,
         Err(_) => {
-            tracing::warn!("could not take ownership of WsConnection (refcount > 1), skipping run loop");
+            tracing::warn!(
+                "could not take ownership of WsConnection (refcount > 1), skipping run loop"
+            );
             // Still detach to clean up.
             server.holder.detach().await;
         }

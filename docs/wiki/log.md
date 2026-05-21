@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-05-21] ingest | Run ID Unification
+- Created sources: [[run-id-unification]]
+- Updated entities: [[vol-llm-agent-channel-crate]] (protocol payloads, request/result model, dispatcher/router cancellation, and agent-domain handling now use `run_id` as business identity), [[vol-llm-agent-crate]] (`ReActAgent::run_with_id()` preserves caller-provided run ids)
+- Updated concepts: [[run-context]] (caller-provided run id propagation), [[agent-dispatcher]] (queue execution/cancellation by run id), [[agent-router]] (cross-dispatcher cancellation by run id)
+- Updated index: refreshed summaries/dates and added new source entry
+- Cross-references added: 18
+- Changes: Agent Server/channel identity was unified so `message_id` remains protocol correlation while `run_id` represents one inference run across submit ack/result, cancellation, dispatcher state, ReActAgent execution, plugins, and logs; legacy HTTP/WS `req_id` fields are compatibility shims bridged into `run_id`.
+
 ## [2026-05-19] ingest | ReAct Plugin Event Shutdown
 - Created sources: [[react-plugin-event-shutdown]]
 - Updated entities: [[vol-llm-agent-crate]] (plugin event shutdown now preserves trace ids and uses drop-driven interceptor/listener completion)

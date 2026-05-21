@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, agent, react, rust]
 created: 2026-05-04
-updated: 2026-05-19
-source_count: 2
+updated: 2026-05-21
+source_count: 3
 ---
 
 # vol-llm-agent Crate
@@ -20,6 +20,7 @@ The core crate implementing the ReAct Agent pattern with a plugin system for cro
 - Implements `ReActAgent` with builder pattern [[react-agent-docs]]
 - Plugin system with `AgentPlugin` trait and priority-based execution [[react-agent-docs]]
 - Built-in plugins: HITL, Observability, Caching, Retry, RateLimiter [[react-agent-docs]]
+- `ReActAgent::run_with_id()` lets channel/dispatcher callers provide the run id used to create `RunContext`; `run()` remains the generated-id convenience entrypoint [[run-id-unification]]
 - Plugin event shutdown now uses optional shared channel sender handles, `emit_traced()`, interceptor `plugin_rx` close, and listener task draining instead of normal timeout-based abort [[react-plugin-event-shutdown]]
 - Source modules: `react/`, `plugins/`, `observability/`, `rag/`, `embedding/` [[react-agent-docs]]
 
@@ -28,3 +29,4 @@ The core crate implementing the ReAct Agent pattern with a plugin system for cro
 - **2026-04**: Observability plugin added with JSONL logging
 - **2026-04**: All 10 tests passing (mock, simulation, integration)
 - **2026-05-19**: Plugin event shutdown refactor — `RunContext` channel senders are optional shared handles, `PluginRequest::Emit` preserves trace ids through `emit_traced()`, interceptor exits on `plugin_rx` close, and listener tasks drain in-flight plugin work [[react-plugin-event-shutdown]]
+- **2026-05-21**: Added `ReActAgent::run_with_id()` so channel dispatch can preserve a caller-provided `run_id` when constructing `RunContext`; `run()` now delegates after generating a new id [[run-id-unification]]

@@ -53,7 +53,15 @@ impl DomainHandler for AgentHandler {
             _ => return Err(ProtocolError::PayloadDecodeFailed("agent")),
         };
         match (op, message.payload) {
-            (AgentOperation::Submit, Payload::Agent(AgentPayload::Submit { input, target, metadata: _ })) => {
+            (
+                AgentOperation::Submit,
+                Payload::Agent(AgentPayload::Submit {
+                    input,
+                    target,
+                    metadata: _,
+                    run_id,
+                }),
+            ) => {
                 let target_id = {
                     let holders = self.holders.lock().unwrap();
                     target
@@ -62,18 +70,20 @@ impl DomainHandler for AgentHandler {
                         .unwrap_or_else(|| "agent".to_string())
                 };
 
-                let request = AgentRequest::new(&target_id, &input);
-                let req_id = request.req_id.clone();
-                let req_id_clone = req_id.clone();
+                let request = match run_id {
+                    Some(run_id) => AgentRequest::with_run_id(run_id, &target_id, &input),
+                    None => AgentRequest::new(&target_id, &input),
+                };
+                let run_id = request.run_id.clone();
+                let run_id_clone = run_id.clone();
 
                 match self.router.send(&target_id, request).await {
                     Ok(rx) => {
                         let router = self.router.clone();
                         tokio::spawn(async move {
-                            Self::process_run_result(rx, &req_id_clone, &router).await;
+                            Self::process_run_result(rx, &run_id_clone, &router).await;
                         });
 
-                        let run_id = uuid::Uuid::new_v4().to_string();
                         Ok(vec![
                             AgentServerMessage::new_ack(
                                 message.message_id.clone(),
@@ -87,8 +97,8 @@ impl DomainHandler for AgentHandler {
                                 message.message_id,
                                 Operation::Agent(AgentOperation::Submit),
                                 Payload::Agent(AgentPayload::SubmitResult {
-                                    run_id,
-                                    response: serde_json::json!({"req_id": req_id}),
+                                    run_id: run_id.clone(),
+                                    response: serde_json::json!({"run_id": run_id}),
                                 }),
                             ),
                         ])
@@ -105,47 +115,44 @@ impl DomainHandler for AgentHandler {
                     )]),
                 }
             }
-            (AgentOperation::Cancel, Payload::Agent(AgentPayload::Cancel { req_id })) => {
-                let cancelled = self.router.cancel(&req_id).await;
-                let run_id = uuid::Uuid::new_v4().to_string();
+            (AgentOperation::Cancel, Payload::Agent(AgentPayload::Cancel { run_id })) => {
+                let cancelled = self.router.cancel(&run_id).await;
                 Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Agent(AgentOperation::Cancel),
-                    Payload::Agent(AgentPayload::CancelResult {
-                        run_id,
-                        cancelled,
-                    }),
+                    Payload::Agent(AgentPayload::CancelResult { run_id, cancelled }),
                 )])
             }
-            (AgentOperation::Subscribe, Payload::Agent(AgentPayload::Subscribe { .. })) => Ok(vec![
-                AgentServerMessage::new_result(
+            (AgentOperation::Subscribe, Payload::Agent(AgentPayload::Subscribe { .. })) => {
+                Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Agent(AgentOperation::Subscribe),
                     Payload::Agent(AgentPayload::SubscribeResult {
                         subscription_id: uuid::Uuid::new_v4().to_string(),
                     }),
-                ),
-            ]),
-            (AgentOperation::Unsubscribe, Payload::Agent(AgentPayload::Unsubscribe { subscription_id })) => {
-                Ok(vec![AgentServerMessage::new_result(
-                    message.message_id,
-                    Operation::Agent(AgentOperation::Unsubscribe),
-                    Payload::Agent(AgentPayload::UnsubscribeResult {
-                        subscription_id,
-                        removed: true,
-                    }),
                 )])
             }
-            (AgentOperation::Approve, Payload::Agent(AgentPayload::Approve { run_id, .. })) => Ok(vec![
-                AgentServerMessage::new_result(
+            (
+                AgentOperation::Unsubscribe,
+                Payload::Agent(AgentPayload::Unsubscribe { subscription_id }),
+            ) => Ok(vec![AgentServerMessage::new_result(
+                message.message_id,
+                Operation::Agent(AgentOperation::Unsubscribe),
+                Payload::Agent(AgentPayload::UnsubscribeResult {
+                    subscription_id,
+                    removed: true,
+                }),
+            )]),
+            (AgentOperation::Approve, Payload::Agent(AgentPayload::Approve { run_id, .. })) => {
+                Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Agent(AgentOperation::Approve),
                     Payload::Agent(AgentPayload::ApproveResult {
                         run_id,
                         accepted: true,
                     }),
-                ),
-            ]),
+                )])
+            }
             (AgentOperation::List, _) => {
                 let agents: Vec<serde_json::Value> = self
                     .holders
@@ -160,18 +167,24 @@ impl DomainHandler for AgentHandler {
                     Payload::Agent(AgentPayload::ListResult { agents }),
                 )])
             }
-            (AgentOperation::Event, Payload::Agent(AgentPayload::Event { run_id, event })) => Ok(vec![
-                AgentServerMessage::new_event(
+            (AgentOperation::Event, Payload::Agent(AgentPayload::Event { run_id, event })) => {
+                Ok(vec![AgentServerMessage::new_event(
                     message.message_id,
                     Operation::Agent(AgentOperation::Event),
                     Payload::Agent(AgentPayload::Event { run_id, event }),
-                ),
-            ]),
+                )])
+            }
             (AgentOperation::Submit, _) => Err(ProtocolError::PayloadDecodeFailed("agent.submit")),
             (AgentOperation::Cancel, _) => Err(ProtocolError::PayloadDecodeFailed("agent.cancel")),
-            (AgentOperation::Subscribe, _) => Err(ProtocolError::PayloadDecodeFailed("agent.subscribe")),
-            (AgentOperation::Unsubscribe, _) => Err(ProtocolError::PayloadDecodeFailed("agent.unsubscribe")),
-            (AgentOperation::Approve, _) => Err(ProtocolError::PayloadDecodeFailed("agent.approve")),
+            (AgentOperation::Subscribe, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("agent.subscribe"))
+            }
+            (AgentOperation::Unsubscribe, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("agent.unsubscribe"))
+            }
+            (AgentOperation::Approve, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("agent.approve"))
+            }
             (AgentOperation::Event, _) => Err(ProtocolError::PayloadDecodeFailed("agent.event")),
         }
     }
@@ -180,22 +193,20 @@ impl DomainHandler for AgentHandler {
 impl AgentHandler {
     async fn process_run_result(
         rx: tokio::sync::oneshot::Receiver<crate::request::RunResult>,
-        req_id: &str,
+        run_id: &str,
         _router: &AgentRouter,
     ) {
         match rx.await {
-            Ok(result) => {
-                match &result.response {
-                    Ok(response) => {
-                        tracing::info!(%req_id, run_id = ?result.run_id, iterations = response.iterations, "agent run completed");
-                    }
-                    Err(e) => {
-                        tracing::error!(%req_id, %e, "agent run failed");
-                    }
+            Ok(result) => match &result.response {
+                Ok(response) => {
+                    tracing::info!(%run_id, iterations = response.iterations, "agent run completed");
                 }
-            }
+                Err(e) => {
+                    tracing::error!(%run_id, %e, "agent run failed");
+                }
+            },
             Err(_) => {
-                tracing::warn!(%req_id, "agent run receiver dropped (possibly cancelled)");
+                tracing::warn!(%run_id, "agent run receiver dropped (possibly cancelled)");
             }
         }
     }

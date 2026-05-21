@@ -176,7 +176,7 @@ async fn chat_handler(
                 Ok(resp) => (
                     StatusCode::OK,
                     Json(serde_json::json!({
-                        "req_id": run_result.req_id,
+                        "run_id": run_result.run_id,
                         "success": true,
                         "response": serde_json::to_value(resp).unwrap_or(serde_json::Value::Null),
                     })),

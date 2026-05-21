@@ -13,6 +13,7 @@ async fn submit_emits_ack_and_result_with_same_message_id() {
             input: "hello world".to_string(),
             target: None,
             metadata: None,
+            run_id: Some("run_supplied_1".to_string()),
         }),
     );
 
@@ -26,13 +27,17 @@ async fn submit_emits_ack_and_result_with_same_message_id() {
     let run_id = match &outputs[0].payload {
         Payload::Agent(AgentPayload::SubmitAck { run_id, accepted }) => {
             assert!(*accepted);
+            assert_eq!(run_id, "run_supplied_1");
             run_id.clone()
         }
         other => panic!("expected SubmitAck payload, got {:?}", other),
     };
 
     match &outputs[1].payload {
-        Payload::Agent(AgentPayload::SubmitResult { run_id: result_run_id, .. }) => {
+        Payload::Agent(AgentPayload::SubmitResult {
+            run_id: result_run_id,
+            ..
+        }) => {
             assert_eq!(result_run_id, &run_id);
         }
         other => panic!("expected SubmitResult payload, got {:?}", other),
@@ -46,7 +51,7 @@ async fn cancel_returns_result_with_cancelled_flag() {
         "msg_cancel_1",
         Operation::Agent(AgentOperation::Cancel),
         Payload::Agent(AgentPayload::Cancel {
-            req_id: "req_target_123".to_string(),
+            run_id: "run_target_123".to_string(),
         }),
     );
 
