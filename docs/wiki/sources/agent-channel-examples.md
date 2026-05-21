@@ -3,17 +3,17 @@ type: source
 category: implementation
 tags: [examples, agent, channel, websocket, http, axum]
 created: 2026-05-07
-updated: 2026-05-07
+updated: 2026-05-21
 ---
 
 # Agent Channel Examples: WS + HTTP Service
 
 **Source Type:** Implementation
-**Related:** [[vol-llm-agent-channel-crate]], [[agent-router]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]]
+**Related:** [[vol-llm-agent-channel-crate]], [[agent-server-protocol]], [[http-transport]], [[agent-channel-server-protocol-transport-migration]]
 
 ## Summary
 
-Two example applications in `crates/vol-llm-agent-channel/examples/` demonstrate how to build runnable agent services using `vol-llm-agent-channel` primitives with real LLM providers.
+Two example applications in `crates/vol-llm-agent-channel/examples/` demonstrate how to build runnable agent services using `AgentServerCore` and Agent Server Protocol transports.
 
 ## Examples Created
 
@@ -22,7 +22,7 @@ Two example applications in `crates/vol-llm-agent-channel/examples/` demonstrate
 A single `ReActAgent` with dual transport (WebSocket + HTTP) behind one axum server.
 
 - Endpoints: `/ws` (WS), `/api/chat` (HTTP POST), `/api/chat?stream=true` (SSE), `/health`
-- Uses `WsServer` and `HttpTransport` with shared `AgentDispatcher` and `ConnectionHolder`
+- Uses `WsServer` and `HttpTransport` backed by shared `AgentServerCore`
 - LLM provider created from env vars (DashScope Anthropic endpoint)
 - Port: 3000
 
@@ -30,10 +30,10 @@ A single `ReActAgent` with dual transport (WebSocket + HTTP) behind one axum ser
 
 Multiple `ReActAgent` instances registered with `AgentRouter`, each accessible via path parameter.
 
-- Endpoints: `/ws/:agent_id` (WS), `/api/chat/:agent_id` (HTTP POST), `/api/agents` (list), `/health`
-- Three agents: translator, summarizer, coder — each with different system prompts
-- `AppState` struct with `router`, `dispatchers`, and `holders` maps
-- Custom handlers extract `agent_id` from path for per-agent lookup
+- Endpoints: `/ws` (Agent Server Protocol WS), `/api/chat/:agent_id` (HTTP POST), `/api/agents` (list), `/health`
+- Three agents: translator, summarizer, coder — each registered with `AgentServerCore::register_agent`
+- HTTP chat builds `AgentPayload::Submit` with `target: Some(agent_id)` and delegates to `AgentServerCore::handle`
+- WebSocket traffic uses core-backed `WsServer` instead of per-agent transport state
 - Port: 3001
 
 ## Key Concepts Extracted
@@ -41,6 +41,6 @@ Multiple `ReActAgent` instances registered with `AgentRouter`, each accessible v
 - [[agent-router]] — Multi-agent routing pattern with per-agent dispatchers
 - [[connection-holder-clone-limitation]] — ConnectionHolder cannot be both a plugin and transport reference
 
-## Known Limitations
+## Current Transport Architecture
 
-**ConnectionHolder Clone Issue:** `ConnectionHolder` implements `AgentPlugin` but not `Clone`. The `plugin_registry.register()` method takes ownership and wraps in `Arc`, making it impossible to also hold an `Arc<ConnectionHolder>` for transport use. The examples document this with NOTE comments. A future refactor would need either `Clone` on `ConnectionHolder` or a separate event-forwarding mechanism.
+The examples no longer keep transport-owned `AgentDispatcher` or `ConnectionHolder` maps. Agent registration, routing, event holders, sessions, tools, and provider setup are created through `AgentServerCore`; transports only carry `AgentServerMessage` values across WebSocket or HTTP boundaries [[agent-channel-server-protocol-transport-migration]].

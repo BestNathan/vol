@@ -14,7 +14,7 @@ Last updated: 2026-05-19 (react-plugin-event-shutdown)
 | [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager | stable | 2026-05-19 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with LLMClient trait; protocol-abstracted SSE streaming parsers (AnthropicProtocol, OpenaiStreamParser); factory dispatch and TOML-based config | stable | 2026-05-15 |
 | [[vol-session]] | Session message store and entry persistence | active | 2026-05-04 |
-| [[vol-llm-agent-channel-crate]] | Agent communication channel layer with multiple transports and JSON-RPC Connection implementation, plus skill.list/skill.get RPC methods for skill discovery | active | 2026-05-16 |
+| [[vol-llm-agent-channel-crate]] | Agent communication channel layer with Agent Server Protocol transports, AgentServerCore dispatch, JSON-RPC adapter, and skill.list/skill.get RPC methods | active | 2026-05-21 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 | [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support | active | 2026-05-10 |
@@ -22,6 +22,7 @@ Last updated: 2026-05-19 (react-plugin-event-shutdown)
 
 ## Concepts
 
+| [[agent-server-protocol]] | Typed AgentServerMessage boundary used by transports and AgentServerCore domain dispatch | active | 2026-05-21 |
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
 | [[react-pattern]] | Reason-Act-Observe agent execution loop | active | 2026-05-04 |
@@ -47,8 +48,8 @@ Last updated: 2026-05-19 (react-plugin-event-shutdown)
 | [[human-in-the-loop]] | Human approval workflow for tool execution | stable | 2026-05-04 |
 | [[retry-with-backoff]] | Automatic retry with exponential backoff on errors | stable | 2026-05-04 |
 | [[rate-limiting]] | Concurrency control using semaphore-based rate limiting | stable | 2026-05-04 |
-| [[http-transport]] | HTTP transport with blocking and SSE streaming modes | active | 2026-05-05 |
-| [[connection-trait]] | Connection trait abstracting transport protocols | active | 2026-05-05 |
+| [[http-transport]] | HTTP transport that accepts AgentServerMessage bodies and delegates blocking/SSE responses to AgentServerCore | active | 2026-05-21 |
+| [[connection-trait]] | Connection trait abstracting AgentServerMessage transport protocols for AgentServerCore serve loops | active | 2026-05-21 |
 | [[connection-holder]] | ConnectionHolder plugin for forwarding agent events | active | 2026-05-05 |
 | [[agent-dispatcher]] | FIFO request queueing for single-agent execution | active | 2026-05-05 |
 | [[subagent-review-pattern]] | Independent subagent review of documents before user gate | active | 2026-05-06 |
@@ -88,6 +89,7 @@ Last updated: 2026-05-19 (react-plugin-event-shutdown)
 
 ## Sources
 
+| [[agent-channel-server-protocol-transport-migration]] | 2026-05-21 transport migration: WebSocket/HTTP use AgentServerCore and AgentServerMessage; legacy Message removed | report | 2026-05-21 |
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
 | [[agent-channel-examples]] | WS + HTTP service examples using channel primitives | active | 2026-05-07 |
