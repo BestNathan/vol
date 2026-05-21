@@ -19,11 +19,7 @@ use axum::{Json, Router};
 use tokio::net::TcpListener;
 use tracing::info;
 use vol_llm_agent::agent_def::AgentDef;
-use vol_llm_agent::react::{AgentConfig, ReActAgent};
-use vol_llm_agent_channel::{AgentDispatcher, AgentServerCore, ConnectionHolder, HttpTransport, WsServer};
-use vol_llm_provider::create_provider;
-use vol_llm_tool::ToolRegistry;
-use vol_session::{InMemoryEntryStore, Session};
+use vol_llm_agent_channel::{AgentServerCore, HttpTransport, WsServer};
 
 #[tokio::main]
 async fn main() {
@@ -35,16 +31,7 @@ async fn main() {
         )
         .init();
 
-    // Create LLM provider from env
-    let llm = create_provider(&vol_llm_provider::LLMConfig::with_env_key(
-        vol_llm_core::LLMProvider::Anthropic,
-        "claude-sonnet-4-6",
-        "ANTHROPIC_AUTH_TOKEN",
-        "https://coding.dashscope.aliyuncs.com/apps/anthropic",
-    ))
-    .expect("failed to create LLM provider — set ANTHROPIC_AUTH_TOKEN");
-
-    info!(model = "claude-sonnet-4-6", "LLM provider created");
+    info!(model = "claude-sonnet-4-6", "LLM provider configured through AgentServerCore");
 
     // Build agent
     let def = AgentDef::new(
@@ -54,20 +41,7 @@ async fn main() {
     .with_type("general-assistant");
 
     let def_for_core = def.clone();
-    let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
-    let tools = Arc::new(ToolRegistry::new());
-    let mut config = AgentConfig::new(Arc::from(llm), tools, session);
-    config.def = Some(def);
-    let agent = ReActAgent::new(config);
 
-    // Shared primitives
-    // ConnectionHolder: sender=agent id (outgoing events), receiver=client id (incoming messages)
-    // NOTE: To forward agent stream events (tool calls, thinking, content) to the WebSocket
-    // connection, register the holder as a plugin on the agent before creation.
-    // ConnectionHolder does not implement Clone; see the channel crate tests for usage patterns.
-    let holder = Arc::new(ConnectionHolder::new("my-agent".to_string(), "client".to_string()));
-
-    let dispatcher = Arc::new(AgentDispatcher::new(agent));
     let core = Arc::new(
         AgentServerCore::new(std::env::current_dir().unwrap(), "~/.vol-llm-agent-channel")
             .await
@@ -79,8 +53,8 @@ async fn main() {
 
     // Build routers
     // SSE streaming (?stream=true) is handled internally by HttpTransport.
-    let ws_router = WsServer::new(core).into_axum_router();
-    let http_router = HttpTransport::new(dispatcher, holder, "my-agent").into_axum_router();
+    let ws_router = WsServer::new(core.clone()).into_axum_router();
+    let http_router = HttpTransport::new(core.clone()).into_axum_router();
 
     // Combine
     let app = Router::new()

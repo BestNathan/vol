@@ -29,4 +29,4 @@ pub use router::AgentRouter;
 pub use domain::handler::DomainHandler;
 pub use domain::registry::HandlerRegistry;
 pub use server_core::AgentServerCore;
-pub use transport::{HttpEventConnection, HttpTransport, MemoryConnection, MemoryHandle, WsConnection, WsServer};
+pub use transport::{HttpTransport, MemoryConnection, MemoryHandle, WsConnection, WsServer};
