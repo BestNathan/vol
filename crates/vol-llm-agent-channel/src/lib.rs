@@ -8,8 +8,6 @@ pub mod connection;
 pub mod dispatcher;
 pub mod domain;
 pub mod error;
-pub mod gateway;
-pub mod jsonrpc;
 pub mod operation_codec;
 pub mod request;
 pub mod router;
@@ -20,7 +18,7 @@ pub use agent_server_protocol::{AgentServerMessage, FileOperation, MessageKind, 
 pub use connection::{Connection, ConnectionHolder};
 pub use dispatcher::AgentDispatcher;
 pub use error::{ChannelError, ConnectionError};
-pub use jsonrpc::JsonRpcServer;
+pub use transport::jsonrpc::JsonRpcServer;
 pub use operation_codec::{decode_payload, method_to_operation};
 pub use request::{AgentRequest, RunResult};
 pub use router::AgentRouter;
