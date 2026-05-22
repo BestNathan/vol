@@ -1,44 +1,27 @@
 //! Agent request and result types.
 
-use std::collections::HashMap;
-
-use vol_llm_agent::AgentResponse;
+use vol_llm_agent::{AgentInput, AgentResponse};
 
 use crate::error::ChannelError;
 
 /// External request to an agent.
 #[derive(Debug, Clone)]
 pub struct AgentRequest {
-    /// Unique run ID for one inference run.
-    pub run_id: String,
     /// Target agent ID for routing.
     pub target_id: String,
     /// Sender agent ID (Some for agent-to-agent calls).
     pub sender_id: Option<String>,
-    /// User input to pass to ReActAgent::run_with_id().
-    pub input: String,
-    /// Arbitrary metadata for this request.
-    pub metadata: HashMap<String, serde_json::Value>,
+    /// Input to pass to ReActAgent::run_input().
+    pub input: AgentInput,
 }
 
 impl AgentRequest {
-    /// Create a new request with an auto-generated run_id.
-    pub fn new(target_id: impl Into<String>, input: impl Into<String>) -> Self {
-        Self::with_run_id(uuid::Uuid::new_v4().simple().to_string(), target_id, input)
-    }
-
-    /// Create a new request with a specific run_id.
-    pub fn with_run_id(
-        run_id: impl Into<String>,
-        target_id: impl Into<String>,
-        input: impl Into<String>,
-    ) -> Self {
+    /// Create a new request.
+    pub fn new(target_id: impl Into<String>, input: AgentInput) -> Self {
         Self {
-            run_id: run_id.into(),
             target_id: target_id.into(),
             sender_id: None,
-            input: input.into(),
-            metadata: HashMap::new(),
+            input,
         }
     }
 }
@@ -65,18 +48,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn agent_request_with_run_id_sets_run_id() {
-        let request = AgentRequest::with_run_id("run_123", "agent_a", "hello");
+    fn agent_request_new_stores_input() {
+        let input = AgentInput::text("hello");
+        let request = AgentRequest::new("agent_a", input);
 
-        assert_eq!(request.run_id, "run_123");
         assert_eq!(request.target_id, "agent_a");
-        assert_eq!(request.input, "hello");
+        assert_eq!(request.input.display_text(), "hello");
     }
 
     #[test]
-    fn agent_request_new_generates_run_id() {
-        let request = AgentRequest::new("agent_a", "hello");
+    fn agent_request_with_run_id_on_input() {
+        let input = AgentInput::text("hello").with_run_id("run_123");
+        let request = AgentRequest::new("agent_a", input);
 
-        assert!(!request.run_id.is_empty());
+        assert_eq!(request.input.run_id.as_deref(), Some("run_123"));
+        assert_eq!(request.input.display_text(), "hello");
     }
 }
