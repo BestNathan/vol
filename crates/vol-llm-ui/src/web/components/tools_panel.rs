@@ -2,7 +2,22 @@
 
 use dioxus::prelude::*;
 use crate::state::{ToolState, ToolCallEntry, ToolCallStatus, UiEvent, UiEventKind, SubscriptionSet};
+use crate::web::client::JsonRpcClient;
 use crate::web::components::app::AppState;
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct ToolDef {
+    name: String,
+    description: Option<String>,
+    parameters: Option<serde_json::Value>,
+}
+
+struct ToolPanelState {
+    tools: Vec<ToolDef>,
+    loading: bool,
+    error: Option<String>,
+    call_result: Option<String>,
+}
 
 fn update_status(calls: &mut Vec<ToolCallEntry>, name: &str, status: ToolCallStatus, dur: Option<u64>) {
     for e in calls.iter_mut().rev() {
@@ -48,6 +63,8 @@ fn reduce_tool_state(s: &mut ToolState, event: &UiEvent) {
 pub fn ToolsPanel() -> Element {
     let app_state: AppState = use_context();
     let signal = use_signal(|| ToolState::new());
+    let tool_state = use_signal(|| ToolPanelState { tools: vec![], loading: false, error: None, call_result: None });
+    let client: JsonRpcClient = app_state.rpc_client.clone();
 
     use_hook(move || {
         let bus = app_state.event_bus.clone();
@@ -66,12 +83,94 @@ pub fn ToolsPanel() -> Element {
     let count = signal.read().calls.len();
     rsx! {
         div { class: "flex-1 overflow-y-auto p-2",
-            div { class: "px-2.5 pt-1 pb-2 text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]", "Tools Called ({count})" }
-            div { class: "font-mono text-[13px]",
-                if count == 0 {
-                    div { class: "p-2.5 text-[#666] text-center", "No tool calls yet" }
-                } else {
-                    {(0..count).map(|idx| { let s = signal.clone(); rsx! { ToolItem { signal: s, index: idx } } }).collect::<Vec<Element>>().into_iter()}
+            // System Tools section
+            div { class: "mb-3",
+                div { class: "flex items-center justify-between mb-2",
+                    div { class: "px-2.5 pt-1 pb-2 text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]", "System Tools" }
+                    button {
+                        class: "px-2 py-0.5 text-[12px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#4a4a65]",
+                        onclick: {
+                            let client = client.clone();
+                            let ts = tool_state.clone();
+                            move |_| {
+                                ts.write_unchecked().loading = true;
+                                ts.write_unchecked().error = None;
+                                let ts_clone = ts.clone();
+                                client.tool_list(move |result: Result<Vec<serde_json::Value>, String>| {
+                                    let mut s = ts_clone.write_unchecked();
+                                    s.loading = false;
+                                    match result {
+                                        Ok(tools) => {
+                                            s.tools = tools.iter()
+                                                .filter_map(|t: &serde_json::Value| serde_json::from_value::<ToolDef>(t.clone()).ok())
+                                                .collect();
+                                        }
+                                        Err(e) => s.error = Some(e),
+                                    }
+                                });
+                            }
+                        },
+                        "Fetch Tools"
+                    }
+                }
+                {tool_state.read().loading.then(|| rsx! { div { class: "text-[12px] text-[#888] px-2", "Loading..." } })}
+                {tool_state.read().error.as_ref().map(|e| rsx! { div { class: "text-[12px] text-[#c04040] px-2", "{e}" } })}
+                for tool in &tool_state.read().tools {
+                    div { class: "border-b border-[#2a2a44] py-1 px-2",
+                        div { class: "flex items-center justify-between",
+                            div {
+                                span { class: "text-[13px] font-semibold text-[#e0e0e0]", "{tool.name}" }
+                                if let Some(ref desc) = tool.description {
+                                    span { class: "text-[12px] text-[#888] ml-2", " - {desc}" }
+                                }
+                            }
+                            button {
+                                class: "px-1.5 py-0.5 text-[11px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#5a5a75]",
+                                onclick: {
+                                    let client = client.clone();
+                                    let ts = tool_state.clone();
+                                    let name = tool.name.clone();
+                                    move |_| {
+                                        let args_val = serde_json::json!({});
+                                        let ts_clone = ts.clone();
+                                        client.tool_call(&name, &args_val, move |result: Result<serde_json::Value, String>| {
+                                            let mut s = ts_clone.write_unchecked();
+                                            match result {
+                                                Ok(val) => s.call_result = Some(
+                                                    serde_json::to_string_pretty(&val).unwrap_or_else(|_| val.to_string())
+                                                ),
+                                                Err(e) => s.call_result = Some(format!("Error: {e}")),
+                                            }
+                                        });
+                                    }
+                                },
+                                "Run"
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Call result display
+            if let Some(ref result) = tool_state.read().call_result {
+                div { class: "mb-2",
+                    div { class: "text-[12px] font-semibold text-[#888] mb-1", "Call Result" }
+                    pre { class: "text-[12px] font-mono text-[#ccc] bg-[#1a1a2e] p-2 rounded overflow-x-auto whitespace-pre-wrap", "{result}" }
+                }
+            }
+
+            // Divider
+            div { class: "border-t border-[#333] my-2" }
+
+            // Call History section
+            div {
+                div { class: "px-2.5 pt-1 pb-2 text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]", "Call History ({count})" }
+                div { class: "font-mono text-[13px]",
+                    if count == 0 {
+                        div { class: "p-2.5 text-[#666] text-center", "No tool calls yet" }
+                    } else {
+                        {(0..count).map(|idx| { let s = signal.clone(); rsx! { ToolItem { signal: s, index: idx } } }).collect::<Vec<Element>>().into_iter()}
+                    }
                 }
             }
         }
