@@ -39,6 +39,7 @@ pub enum Operation {
     Session(SessionOperation),
     Mcp(McpOperation),
     Skill(SkillOperation),
+    Tool(ToolOperation),
     Log(LogOperation),
     System(SystemOperation),
 }
@@ -70,6 +71,8 @@ impl Operation {
             Operation::Mcp(McpOperation::ServerStatus) => "mcp.server_status",
             Operation::Skill(SkillOperation::List) => "skill.list",
             Operation::Skill(SkillOperation::Get) => "skill.get",
+            Operation::Tool(ToolOperation::List) => "tool.list",
+            Operation::Tool(ToolOperation::Call) => "tool.call",
             Operation::Log(LogOperation::List) => "log.list",
             Operation::Log(LogOperation::Read) => "log.read",
             Operation::System(SystemOperation::Connected) => "system.connected",
@@ -122,6 +125,12 @@ pub enum SkillOperation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ToolOperation {
+    List,
+    Call,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LogOperation {
     List,
     Read,
@@ -140,6 +149,7 @@ pub enum Payload {
     Session(SessionPayload),
     Mcp(McpPayload),
     Skill(SkillPayload),
+    Tool(ToolPayload),
     Log(LogPayload),
     System(SystemPayload),
     Error(ErrorPayload),
@@ -395,6 +405,24 @@ impl Payload {
                     .map_err(|_| ProtocolError::PayloadDecodeFailed("skill.get"))?;
                 Ok(Payload::Skill(SkillPayload::Get { name: p.name }))
             }
+            // ── Tool ──
+            Operation::Tool(ToolOperation::List) => {
+                Ok(Payload::Tool(ToolPayload::List))
+            }
+            Operation::Tool(ToolOperation::Call) => {
+                #[derive(Deserialize)]
+                struct P {
+                    tool_name: String,
+                    #[serde(default)]
+                    arguments: serde_json::Value,
+                }
+                let p: P = serde_json::from_value(value)
+                    .map_err(|_| ProtocolError::PayloadDecodeFailed("tool.call"))?;
+                Ok(Payload::Tool(ToolPayload::Call {
+                    tool_name: p.tool_name,
+                    arguments: p.arguments,
+                }))
+            }
             // ── Log ──
             Operation::Log(LogOperation::List) => Ok(Payload::Log(LogPayload::List)),
             Operation::Log(LogOperation::Read) => {
@@ -612,6 +640,22 @@ pub enum SkillPayload {
     GetResult {
         skill: serde_json::Value,
         name: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ToolPayload {
+    List,
+    ListResult {
+        tools: Vec<serde_json::Value>,
+    },
+    Call {
+        tool_name: String,
+        arguments: serde_json::Value,
+    },
+    CallResult {
+        tool_name: String,
+        result: serde_json::Value,
     },
 }
 
