@@ -5,9 +5,9 @@
 //! - `subscribe` — send `agent.subscribe` request
 //! - Event stream via callback
 //!
-//! Server event format (jsonrpsee subscription):
+//! Server event format (AgentPayload::Event via encode_jsonrpc_message):
 //! ```json
-//! {"jsonrpc":"2.0","method":"agent.event","params":{"subscription":N,"result":{...}}}
+//! {"jsonrpc":"2.0","method":"agent.event","params":{"run_id":"...","event":{...}}}
 //! ```
 
 use std::cell::{Cell, RefCell};
