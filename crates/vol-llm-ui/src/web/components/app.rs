@@ -53,71 +53,76 @@ impl PartialEq for AppState {
 }
 
 fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
-    let data = &event.data;
-    match event.event_type.as_str() {
-        "agent_start" => Some(UiEvent::AgentStart {
+    let ev = &event.event;
+    // AgentStreamEvent is externally-tagged: {"VariantName": {...fields}}
+    let (variant, data) = ev.as_object()
+        .and_then(|obj| obj.iter().next())
+        .map(|(k, v)| (k.as_str(), v))?;
+
+    match variant {
+        "AgentStart" => Some(UiEvent::AgentStart {
             input: data.get("input").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "agent_complete" => Some(UiEvent::AgentComplete {
-            response: data.get("response").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        "AgentComplete" => Some(UiEvent::AgentComplete {
+            response: data.get("response")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
         }),
-        "agent_error" => Some(UiEvent::AgentError {
-            message: data.get("message").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        }),
-        "agent_aborted" => Some(UiEvent::AgentAborted {
+        "AgentAborted" => Some(UiEvent::AgentAborted {
             reason: data.get("reason").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "thinking_start" => Some(UiEvent::ThinkingStart),
-        "thinking_delta" => Some(UiEvent::ThinkingDelta {
+        "ThinkingStart" => Some(UiEvent::ThinkingStart),
+        "ThinkingDelta" => Some(UiEvent::ThinkingDelta {
             delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "thinking_complete" => Some(UiEvent::ThinkingComplete),
-        "llm_call_start" => Some(UiEvent::LlmCallStart {
+        "ThinkingComplete" => Some(UiEvent::ThinkingComplete),
+        "LLMCallStart" => Some(UiEvent::LlmCallStart {
             iteration: data.get("iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         }),
-        "llm_call_complete" => Some(UiEvent::LlmCallComplete {
+        "LLMCallComplete" => Some(UiEvent::LlmCallComplete {
             model: data.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "llm_call_error" => Some(UiEvent::LlmCallError {
+        "LLMCallError" => Some(UiEvent::LlmCallError {
             error: data.get("error").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "content_start" => Some(UiEvent::ContentStart),
-        "content_delta" => Some(UiEvent::ContentDelta {
+        "ContentStart" => Some(UiEvent::ContentStart),
+        "ContentDelta" => Some(UiEvent::ContentDelta {
             delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "content_complete" => Some(UiEvent::ContentComplete {
+        "ContentComplete" => Some(UiEvent::ContentComplete {
             content: data.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "tool_call_begin" => Some(UiEvent::ToolCallBegin {
+        "ToolCallBegin" => Some(UiEvent::ToolCallBegin {
             tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            arguments: data.get("arguments").map(|v| v.to_string()).unwrap_or_default(),
+            arguments: data.get("arguments").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "tool_call_argument_delta" => Some(UiEvent::ToolCallArgumentDelta {
+        "ToolCallArgumentDelta" => Some(UiEvent::ToolCallArgumentDelta {
             delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "tool_call_complete" => Some(UiEvent::ToolCallComplete {
+        "ToolCallComplete" => Some(UiEvent::ToolCallComplete {
             tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            result: data.get("result").map(|v| v.to_string()).unwrap_or_default(),
+            result: data.get("result").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
         }),
-        "tool_call_error" => Some(UiEvent::ToolCallError {
+        "ToolCallError" => Some(UiEvent::ToolCallError {
             tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             error: data.get("error").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
         }),
-        "tool_call_skipped" => Some(UiEvent::ToolCallSkipped {
+        "ToolCallSkipped" => Some(UiEvent::ToolCallSkipped {
             tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             reason: data.get("reason").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
         }),
-        "max_iterations_reached" => Some(UiEvent::MaxIterationsReached {
-            current: data.get("current").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            max: data.get("max").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+        "MaxIterationsReached" => Some(UiEvent::MaxIterationsReached {
+            current: data.get("current_iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            max: data.get("max_iterations").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         }),
-        "iteration_continued" => Some(UiEvent::IterationContinued {
+        "IterationContinued" => Some(UiEvent::IterationContinued {
             from_iteration: data.get("from_iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         }),
-        "iteration_complete" => Some(UiEvent::IterationComplete {
+        "IterationComplete" => Some(UiEvent::IterationComplete {
             iteration: data.get("iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
             final_answer: data.get("final_answer").and_then(|v| v.as_str()).map(|s| s.to_string()),
         }),
