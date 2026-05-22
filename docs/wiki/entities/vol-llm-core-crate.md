@@ -3,14 +3,14 @@ type: entity
 category: product
 tags: [crate, llm, abstraction, rust]
 created: 2026-05-04
-updated: 2026-05-04
-source_count: 1
+updated: 2026-05-21
+source_count: 2
 ---
 
 # vol-llm-core Crate
 
 **Category:** Rust crate — LLM interaction abstractions
-**Related:** [[vol-llm-agent-crate]], [[vol-llm-provider-crate]], [[vol-llm-tool-crate]]
+**Related:** [[vol-llm-agent-crate]], [[vol-llm-provider-crate]], [[vol-llm-tool-crate]], [[agentinput-multimodal-run]]
 
 ## Overview
 
@@ -24,3 +24,4 @@ Defines the core abstractions for LLM interaction: message types, conversation r
 
 ## Timeline
 - **2026-04**: Initial core types defined
+- **2026-05-21**: Multipart message content derives equality for tests and carries `ContentPart::Image`/`ImageUrl` values used by structured agent input [[agentinput-multimodal-run-implementation]]

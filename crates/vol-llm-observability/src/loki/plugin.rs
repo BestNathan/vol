@@ -160,7 +160,7 @@ mod tests {
             sandbox: None,
             context_builder,
             plugin_registry: PluginRegistry::new(),
-            mcp_session: None,
+            mcp_manager: None,
         };
 
         let (ctx, _rx) = RunContext::new(
@@ -272,7 +272,7 @@ mod tests {
             sandbox: None,
             context_builder,
             plugin_registry: PluginRegistry::new(),
-            mcp_session: None,
+            mcp_manager: None,
         };
 
         let (ctx, _rx) = RunContext::new(

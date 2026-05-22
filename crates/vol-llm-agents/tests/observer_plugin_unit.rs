@@ -130,13 +130,11 @@ fn create_test_context() -> RunContext {
         )),
         Arc::new(ToolRegistry::new()),
         AgentConfig {
-            max_iterations: 10,
-            max_history_messages: 20,
             context_builder: create_test_context_builder(),
             plugin_registry: PluginRegistry::new(),
-            agent_id: "test-agent".to_string(),
             ..Default::default()
         },
+        20,
         "test-model".to_string(),
     );
     ctx

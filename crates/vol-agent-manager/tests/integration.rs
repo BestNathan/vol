@@ -21,6 +21,7 @@ use vol_agent_manager::state::manager::AgentStateManager;
 use vol_agent_manager::state::models::{AgentState, AgentStatus, HostInfo};
 use vol_agent_manager::instance::AgentInstanceRegistry;
 use vol_agent_manager::task::dispatcher::TaskDispatcher;
+use vol_llm_agent::AgentInput;
 use vol_llm_agent_channel::Message;
 use vol_agent_manager::AppRouterState;
 
@@ -367,7 +368,7 @@ fn test_protocol_message_roundtrip() {
         req_id: "req-1".to_string(),
         sender: "agent-1".to_string(),
         receiver: "manager".to_string(),
-        input: serde_json::json!({"status": "Idle"}).to_string(),
+        input: AgentInput::text(serde_json::json!({"status": "Idle"}).to_string()),
         metadata: Some(metadata),
     };
     let serialized = serde_json::to_string(&msg).unwrap();
@@ -391,7 +392,7 @@ fn test_protocol_control_command() {
         req_id: "req-2".to_string(),
         sender: "manager".to_string(),
         receiver: "agent-1".to_string(),
-        input: serde_json::json!({"cmd": "run"}).to_string(),
+        input: AgentInput::text(serde_json::json!({"cmd": "run"}).to_string()),
         metadata: Some(metadata),
     };
     let serialized = serde_json::to_string(&msg).unwrap();

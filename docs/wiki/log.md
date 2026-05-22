@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-05-21] ingest | AgentInput Multimodal Run Implementation
+- Created sources: [[agentinput-multimodal-run-implementation]]
+- Created concepts: [[agentinput-multimodal-run]]
+- Updated entities: [[vol-llm-agent-crate]] (AgentInput/InputPart, run_input, run_id and metadata support), [[vol-llm-core-crate]] (multipart message content testability), [[vol-llm-provider-crate]] (Anthropic multipart text/image conversion), [[vol-llm-agent-channel-crate]] (legacy string and structured AgentInput compatibility), [[vol-llm-tool-crate]] (McpTool aligned with McpManager)
+- Updated index: refreshed entity summaries, new concept and source entries
+- Cross-references added: 14
+- Changes: ReActAgent now supports structured multimodal AgentInput while preserving run(&str); first modalities are text and image URL/data URL; Anthropic provider emits native multipart blocks; agent-channel transports deserialize both old string input and new structured input
+
 ## [2026-05-13] ingest | McpManager Implementation — Connection Lifecycle Manager
 - Created sources: [[mcp-manager-impl]]
 - Created concepts: [[mcp-manager-lifecycle]]

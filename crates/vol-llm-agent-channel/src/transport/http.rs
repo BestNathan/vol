@@ -15,6 +15,7 @@ use axum::routing::post;
 use axum::{Json, Router};
 use serde::Deserialize;
 use tokio::sync::broadcast;
+use vol_llm_agent::AgentInput;
 
 use crate::connection::{Connection, ConnectionHolder};
 use crate::dispatcher::AgentDispatcher;
@@ -110,7 +111,7 @@ impl HttpTransport {
 /// Request body for HTTP POST.
 #[derive(Debug, Deserialize)]
 struct HttpRequestBody {
-    input: String,
+    input: AgentInput,
     #[serde(default)]
     req_id: Option<String>,
     #[serde(default)]
@@ -148,7 +149,10 @@ async fn handle_blocking(
 
     match rx.await {
         Ok(run_result) => run_result_response(run_result),
-        Err(_) => error_response(500, "dispatcher dropped while processing request".to_string()),
+        Err(_) => error_response(
+            500,
+            "dispatcher dropped while processing request".to_string(),
+        ),
     }
 }
 
@@ -257,7 +261,7 @@ async fn handle_sse(
 }
 
 fn build_request(agent_id: &str, body: &HttpRequestBody) -> AgentRequest {
-    let mut request = AgentRequest::new(agent_id, &body.input);
+    let mut request = AgentRequest::with_input(agent_id, body.input.clone());
     if let Some(req_id) = &body.req_id {
         request.req_id = req_id.clone();
     }
@@ -269,7 +273,11 @@ fn build_request(agent_id: &str, body: &HttpRequestBody) -> AgentRequest {
 
 fn error_response(status: u16, message: String) -> axum::response::Response {
     let body = serde_json::json!({ "error": message });
-    (StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(body)).into_response()
+    (
+        StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+        Json(body),
+    )
+        .into_response()
 }
 
 fn run_result_response(run_result: RunResult) -> axum::response::Response {
@@ -306,17 +314,29 @@ mod tests {
     use vol_llm_agent::agent_def::AgentDef;
     use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
     use vol_llm_context::ContextBuilderBuilder;
-    use vol_llm_core::{ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMProvider, StreamReceiver, SupportedParam, TokenUsage, Message};
-    use vol_session::{InMemoryEntryStore, Session};
+    use vol_llm_core::{
+        ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMProvider, Message,
+        StreamReceiver, SupportedParam, TokenUsage,
+    };
     use vol_llm_tool::ToolRegistry;
+    use vol_session::{InMemoryEntryStore, Session};
 
     struct MockLlm;
     #[async_trait::async_trait]
     impl LLMClient for MockLlm {
-        fn provider(&self) -> LLMProvider { LLMProvider::Anthropic }
-        fn model(&self) -> &str { "mock" }
-        fn supported_params(&self) -> &[SupportedParam] { &[] }
-        async fn converse(&self, _: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+        fn provider(&self) -> LLMProvider {
+            LLMProvider::Anthropic
+        }
+        fn model(&self) -> &str {
+            "mock"
+        }
+        fn supported_params(&self) -> &[SupportedParam] {
+            &[]
+        }
+        async fn converse(
+            &self,
+            _: ConversationRequest,
+        ) -> vol_llm_core::Result<ConversationResponse> {
             Ok(ConversationResponse {
                 message: Message::assistant("mock response".to_string()),
                 model: "mock".to_string(),
@@ -325,7 +345,10 @@ mod tests {
                 raw: None,
             })
         }
-        async fn converse_stream(&self, _: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+        async fn converse_stream(
+            &self,
+            _: ConversationRequest,
+        ) -> vol_llm_core::Result<StreamReceiver> {
             let (_tx, rx) = tokio::sync::mpsc::channel(10);
             Ok(StreamReceiver::new(rx))
         }
@@ -344,11 +367,14 @@ mod tests {
             sandbox: None,
             context_builder,
             plugin_registry: PluginRegistry::new(),
-            mcp_session: None,
+            mcp_manager: None,
         };
         let agent = ReActAgent::new(config);
         let dispatcher = Arc::new(AgentDispatcher::new(agent));
-        let holder = Arc::new(ConnectionHolder::new("test_agent".to_string(), "client".to_string()));
+        let holder = Arc::new(ConnectionHolder::new(
+            "test_agent".to_string(),
+            "client".to_string(),
+        ));
         HttpTransport::new(dispatcher, holder, "test_agent")
     }
 
@@ -396,7 +422,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let content_type = response.headers().get("content-type").unwrap().to_str().unwrap();
+        let content_type = response
+            .headers()
+            .get("content-type")
+            .unwrap()
+            .to_str()
+            .unwrap();
         assert!(content_type.contains("text/event-stream"));
     }
 
@@ -462,11 +493,14 @@ mod tests {
             sandbox: None,
             context_builder,
             plugin_registry: PluginRegistry::new(),
-            mcp_session: None,
+            mcp_manager: None,
         };
         let agent = ReActAgent::new(config);
         let dispatcher = Arc::new(AgentDispatcher::new(agent));
-        let holder = Arc::new(ConnectionHolder::new("slow_agent".to_string(), "client".to_string()));
+        let holder = Arc::new(ConnectionHolder::new(
+            "slow_agent".to_string(),
+            "client".to_string(),
+        ));
         let transport = HttpTransport::new(dispatcher, holder, "slow_agent");
         let app = transport.into_axum_router();
 
@@ -490,9 +524,7 @@ mod tests {
             let client = client.clone();
             let url = url.clone();
             let body = body.clone();
-            async move {
-                client.post(&url).json(&body).send().await
-            }
+            async move { client.post(&url).json(&body).send().await }
         });
 
         // Give the first request time to attach its connection.
@@ -511,15 +543,27 @@ mod tests {
 #[cfg(test)]
 mod slow_llm {
     use super::*;
-    use vol_llm_core::{ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMProvider, StreamReceiver, SupportedParam, TokenUsage, Message};
+    use vol_llm_core::{
+        ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMProvider, Message,
+        StreamReceiver, SupportedParam, TokenUsage,
+    };
 
     pub struct SlowMockLlm;
     #[async_trait::async_trait]
     impl LLMClient for SlowMockLlm {
-        fn provider(&self) -> LLMProvider { LLMProvider::Anthropic }
-        fn model(&self) -> &str { "slow-mock" }
-        fn supported_params(&self) -> &[SupportedParam] { &[] }
-        async fn converse(&self, _: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+        fn provider(&self) -> LLMProvider {
+            LLMProvider::Anthropic
+        }
+        fn model(&self) -> &str {
+            "slow-mock"
+        }
+        fn supported_params(&self) -> &[SupportedParam] {
+            &[]
+        }
+        async fn converse(
+            &self,
+            _: ConversationRequest,
+        ) -> vol_llm_core::Result<ConversationResponse> {
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             Ok(ConversationResponse {
                 message: Message::assistant("slow response".to_string()),
@@ -529,7 +573,10 @@ mod slow_llm {
                 raw: None,
             })
         }
-        async fn converse_stream(&self, _: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+        async fn converse_stream(
+            &self,
+            _: ConversationRequest,
+        ) -> vol_llm_core::Result<StreamReceiver> {
             let (_tx, rx) = tokio::sync::mpsc::channel(10);
             Ok(StreamReceiver::new(rx))
         }

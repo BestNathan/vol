@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, tools, rust, registry]
 created: 2026-05-04
-updated: 2026-05-04
-source_count: 1
+updated: 2026-05-21
+source_count: 2
 ---
 
 # vol-llm-tool Crate
@@ -24,3 +24,4 @@ Provides the `Tool` trait, `ToolRegistry`, and execution framework for agent too
 
 ## Timeline
 - **2026-04**: Tool framework implemented
+- **2026-05-21**: `McpTool` compile blocker fixed by aligning proxy execution with `Arc<McpManager>` after the manager lifecycle refactor [[agentinput-multimodal-run-implementation]]

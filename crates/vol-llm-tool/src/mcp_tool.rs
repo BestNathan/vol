@@ -3,13 +3,15 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use vol_llm_mcp::McpSession;
+use vol_llm_mcp::McpManager;
 
-use crate::tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity};
+use crate::tool::{
+    ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity,
+};
 
-/// A tool that proxies execution to an MCP server via McpSession.
+/// A tool that proxies execution to an MCP server via McpManager.
 pub struct McpTool {
-    session: Arc<McpSession>,
+    manager: Arc<McpManager>,
     server_name: String,
     tool_name: String,
     display_name: &'static str,
@@ -18,9 +20,9 @@ pub struct McpTool {
 }
 
 impl McpTool {
-    /// Create a new McpTool from a session and tool info.
+    /// Create a new McpTool from a manager and tool info.
     pub fn new(
-        session: Arc<McpSession>,
+        manager: Arc<McpManager>,
         server_name: &str,
         tool_name: &str,
         description: &str,
@@ -36,7 +38,7 @@ impl McpTool {
         let description: &'static str = Box::leak(description.to_string().into_boxed_str());
 
         Self {
-            session,
+            manager,
             server_name: sanitized,
             tool_name: sanitized_tool,
             display_name,
@@ -70,7 +72,7 @@ impl ExecutableTool for McpTool {
         _context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         let result = self
-            .session
+            .manager
             .call_tool(&self.server_name, &self.tool_name, args.clone())
             .await;
 

@@ -37,17 +37,17 @@ impl Connection for ManagerConnection {
     async fn recv(&mut self) -> Option<Result<Message, vol_llm_agent_channel::ConnectionError>> {
         let msg = self.rx.next().await?;
         match msg {
-            Ok(WsMessage::Text(text)) => {
-                match serde_json::from_str::<Message>(&text) {
-                    Ok(msg) => Some(Ok(msg)),
-                    Err(e) => Some(Err(vol_llm_agent_channel::ConnectionError::ParseError(e.to_string()))),
-                }
-            }
+            Ok(WsMessage::Text(text)) => match serde_json::from_str::<Message>(&text) {
+                Ok(msg) => Some(Ok(msg)),
+                Err(e) => Some(Err(vol_llm_agent_channel::ConnectionError::ParseError(
+                    e.to_string(),
+                ))),
+            },
             Ok(WsMessage::Close(_)) => None,
-            Ok(WsMessage::Binary(_) | WsMessage::Ping(_) | WsMessage::Pong(_)) => {
-                self.recv().await
-            }
-            Err(e) => Some(Err(vol_llm_agent_channel::ConnectionError::WsReceiveError(e.to_string()))),
+            Ok(WsMessage::Binary(_) | WsMessage::Ping(_) | WsMessage::Pong(_)) => self.recv().await,
+            Err(e) => Some(Err(vol_llm_agent_channel::ConnectionError::WsReceiveError(
+                e.to_string(),
+            ))),
         }
     }
 
@@ -90,7 +90,12 @@ pub async fn handle_agent_connection(
 
     // Wait for register message (Submit with metadata type=register)
     let agent_id = match conn.recv().await {
-        Some(Ok(Message::Submit { metadata, sender, input, .. })) => {
+        Some(Ok(Message::Submit {
+            metadata,
+            sender,
+            input,
+            ..
+        })) => {
             let meta = metadata.as_ref();
             let is_register = meta.map_or(false, |m| {
                 m.get("type").and_then(|v| v.as_str()) == Some("register")
@@ -100,24 +105,54 @@ pub async fn handle_agent_connection(
                 return;
             }
 
-            let id = if sender != "client" { sender } else { input.clone() };
+            let input_text = input.text_content();
+            let id = if sender != "client" {
+                sender
+            } else {
+                input_text.clone()
+            };
 
             // Parse register metadata from input field (JSON string)
-            match serde_json::from_str::<serde_json::Value>(&input) {
+            match serde_json::from_str::<serde_json::Value>(&input_text) {
                 Ok(reg_data) => {
-                    let name = reg_data.get("name").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
-                    let agent_type = reg_data.get("type").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
-                    let version = reg_data.get("version").and_then(|v| v.as_str()).unwrap_or("0.0.0").to_string();
-                    let capabilities = reg_data.get("capabilities")
+                    let name = reg_data
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+                    let agent_type = reg_data
+                        .get("type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+                    let version = reg_data
+                        .get("version")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0.0.0")
+                        .to_string();
+                    let capabilities = reg_data
+                        .get("capabilities")
                         .and_then(|v| v.as_array())
-                        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str().map(String::from))
+                                .collect()
+                        })
                         .unwrap_or_default();
 
                     let host_info = reg_data.get("host_info");
-                    let hostname = host_info.and_then(|h| h.get("hostname").and_then(|v| v.as_str())).unwrap_or("unknown");
-                    let os = host_info.and_then(|h| h.get("os").and_then(|v| v.as_str())).unwrap_or("unknown");
-                    let arch = host_info.and_then(|h| h.get("arch").and_then(|v| v.as_str())).unwrap_or("unknown");
-                    let ip = host_info.and_then(|h| h.get("ip").and_then(|v| v.as_str())).unwrap_or("0.0.0.0");
+                    let hostname = host_info
+                        .and_then(|h| h.get("hostname").and_then(|v| v.as_str()))
+                        .unwrap_or("unknown");
+                    let os = host_info
+                        .and_then(|h| h.get("os").and_then(|v| v.as_str()))
+                        .unwrap_or("unknown");
+                    let arch = host_info
+                        .and_then(|h| h.get("arch").and_then(|v| v.as_str()))
+                        .unwrap_or("unknown");
+                    let ip = host_info
+                        .and_then(|h| h.get("ip").and_then(|v| v.as_str()))
+                        .unwrap_or("0.0.0.0");
 
                     let state = AgentState {
                         agent_id: id.clone(),
@@ -136,9 +171,9 @@ pub async fn handle_agent_connection(
                         last_heartbeat: Utc::now(),
                     };
                     state_manager.register(state).await;
-                    metrics.agent_registered_total.set(
-                        state_manager.list_all().await.len() as f64,
-                    );
+                    metrics
+                        .agent_registered_total
+                        .set(state_manager.list_all().await.len() as f64);
                     event_bus.emit(ManagerEvent::agent_registered(&id));
                     id
                 }
@@ -155,10 +190,12 @@ pub async fn handle_agent_connection(
     };
 
     // Send Connected ack
-    let _ = conn.send(Message::Connected {
-        sender: "manager".to_string(),
-        receiver: agent_id.clone(),
-    }).await;
+    let _ = conn
+        .send(Message::Connected {
+            sender: "manager".to_string(),
+            receiver: agent_id.clone(),
+        })
+        .await;
 
     metrics.agent_connections_current.inc();
 
@@ -167,14 +204,23 @@ pub async fn handle_agent_connection(
         match conn.recv().await {
             Some(Ok(msg)) => {
                 if let Err(e) = handle_message(
-                    &msg, &agent_id, &state_manager, &metrics, &event_bus, &task_dispatcher,
-                ).await {
-                    let _ = conn.send(Message::Error {
-                        req_id: None,
-                        sender: "manager".to_string(),
-                        receiver: agent_id.clone(),
-                        message: e.to_string(),
-                    }).await;
+                    &msg,
+                    &agent_id,
+                    &state_manager,
+                    &metrics,
+                    &event_bus,
+                    &task_dispatcher,
+                )
+                .await
+                {
+                    let _ = conn
+                        .send(Message::Error {
+                            req_id: None,
+                            sender: "manager".to_string(),
+                            receiver: agent_id.clone(),
+                            message: e.to_string(),
+                        })
+                        .await;
                 }
             }
             Some(Err(e)) => {
@@ -209,22 +255,34 @@ async fn handle_message(
         .unwrap_or_else(|| "unknown".to_string());
 
     match msg {
-        Message::Submit { metadata, input, .. } => {
-            let meta_type = metadata.as_ref().and_then(|m| {
-                m.get("type").and_then(|v| v.as_str())
-            }).unwrap_or("unknown");
+        Message::Submit {
+            metadata, input, ..
+        } => {
+            let input_text = input.text_content();
+            let meta_type = metadata
+                .as_ref()
+                .and_then(|m| m.get("type").and_then(|v| v.as_str()))
+                .unwrap_or("unknown");
 
             match meta_type {
                 "heartbeat" => {
                     state_manager.update_heartbeat(agent_id).await;
-                    let status = serde_json::from_str::<serde_json::Value>(input)
+                    let status = serde_json::from_str::<serde_json::Value>(&input_text)
                         .ok()
-                        .and_then(|v| v.get("status").and_then(|s| s.as_str()).map(|s| s.to_string()))
+                        .and_then(|v| {
+                            v.get("status")
+                                .and_then(|s| s.as_str())
+                                .map(|s| s.to_string())
+                        })
                         .unwrap_or_else(|| "Idle".to_string());
                     if status == "Busy" {
-                        state_manager.update_status(agent_id, AgentStatus::Busy).await;
+                        state_manager
+                            .update_status(agent_id, AgentStatus::Busy)
+                            .await;
                     } else {
-                        state_manager.update_status(agent_id, AgentStatus::Idle).await;
+                        state_manager
+                            .update_status(agent_id, AgentStatus::Idle)
+                            .await;
                     }
                     metrics.increment_messages("heartbeat", agent_id, &agent_type);
                 }
@@ -233,21 +291,29 @@ async fn handle_message(
                     metrics.increment_messages("metric", agent_id, &agent_type);
                 }
                 "event" => {
-                    let data = serde_json::from_str::<serde_json::Value>(input)
+                    let data = serde_json::from_str::<serde_json::Value>(&input_text)
                         .unwrap_or(serde_json::Value::Null);
-                    let event_name = data.get("event_name").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
+                    let event_name = data
+                        .get("event_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown")
+                        .to_string();
                     event_bus.emit(ManagerEvent::agent_event(agent_id, &event_name, data));
                     metrics.increment_messages("event", agent_id, &agent_type);
                 }
                 "task_result" => {
-                    let data = serde_json::from_str::<serde_json::Value>(input)
+                    let data = serde_json::from_str::<serde_json::Value>(&input_text)
                         .unwrap_or(serde_json::Value::Null);
-                    let status = data.get("status").and_then(|v| v.as_str()).unwrap_or("unknown");
+                    let status = data
+                        .get("status")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
                     let result = data.get("result").cloned();
                     let error = data.get("error").and_then(|v| v.as_str());
 
                     // Extract task_id from metadata
-                    let task_id = metadata.as_ref()
+                    let task_id = metadata
+                        .as_ref()
                         .and_then(|m| m.get("task_id"))
                         .and_then(|v| v.as_str());
 
@@ -260,7 +326,8 @@ async fn handle_message(
                             "Failed" => {
                                 let error_msg = error.unwrap_or("unknown error");
                                 task_dispatcher.fail_task(task_id, error_msg).await;
-                                event_bus.emit(ManagerEvent::task_failed(task_id, agent_id, error_msg));
+                                event_bus
+                                    .emit(ManagerEvent::task_failed(task_id, agent_id, error_msg));
                             }
                             _ => {
                                 warn!(task_id, agent_id, status = %status, "Unknown task result status");
@@ -287,6 +354,7 @@ async fn handle_message(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vol_llm_agent::AgentInput;
 
     #[test]
     fn test_parse_register_metadata() {
@@ -302,7 +370,10 @@ mod tests {
                 "ip": "10.0.0.1"
             }
         });
-        assert_eq!(json.get("name").and_then(|v| v.as_str()), Some("test-agent"));
+        assert_eq!(
+            json.get("name").and_then(|v| v.as_str()),
+            Some("test-agent")
+        );
     }
 
     #[test]
@@ -320,7 +391,7 @@ mod tests {
             req_id: "req-1".to_string(),
             sender: "agent-a".to_string(),
             receiver: "manager".to_string(),
-            input: "hello".to_string(),
+            input: AgentInput::text("hello"),
             metadata: None,
         };
         let serialized = serde_json::to_string(&msg).unwrap();

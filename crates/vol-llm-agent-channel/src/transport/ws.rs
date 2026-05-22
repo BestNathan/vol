@@ -63,20 +63,20 @@ impl WsConnection {
 
         loop {
             match self.recv().await {
-                Some(Ok(msg)) => {
-                    match self.handle_message(msg).await {
-                        Ok(()) => {}
-                        Err(e) => {
-                            tracing::warn!(%e, "error handling inbound message");
-                            let _ = self.send(Message::Error {
+                Some(Ok(msg)) => match self.handle_message(msg).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        tracing::warn!(%e, "error handling inbound message");
+                        let _ = self
+                            .send(Message::Error {
                                 req_id: None,
                                 sender: self.agent_id.clone(),
                                 receiver: "client".to_string(),
                                 message: format!("handler error: {e}"),
-                            }).await;
-                        }
+                            })
+                            .await;
                     }
-                }
+                },
                 Some(Err(e)) => {
                     tracing::warn!(%e, "receive error");
                     break;
@@ -93,8 +93,14 @@ impl WsConnection {
 
     async fn handle_message(&self, msg: Message) -> Result<(), ConnectionError> {
         match msg {
-            Message::Submit { req_id, input, metadata, .. } => {
-                let mut request = crate::request::AgentRequest::with_id(&req_id, &self.agent_id, &input);
+            Message::Submit {
+                req_id,
+                input,
+                metadata,
+                ..
+            } => {
+                let mut request =
+                    crate::request::AgentRequest::with_id_and_input(&req_id, &self.agent_id, input);
                 if let Some(meta) = metadata {
                     request.metadata = meta;
                 }
@@ -102,12 +108,14 @@ impl WsConnection {
                 let rx = match self.dispatcher.submit(request) {
                     Ok(rx) => rx,
                     Err(e) => {
-                        return self.send(Message::Error {
-                            req_id: Some(req_id),
-                            sender: self.agent_id.clone(),
-                            receiver: "client".to_string(),
-                            message: e.to_string(),
-                        }).await;
+                        return self
+                            .send(Message::Error {
+                                req_id: Some(req_id),
+                                sender: self.agent_id.clone(),
+                                receiver: "client".to_string(),
+                                message: e.to_string(),
+                            })
+                            .await;
                     }
                 };
 
@@ -133,7 +141,8 @@ impl WsConnection {
                             sender: self.agent_id.clone(),
                             receiver: "client".to_string(),
                             message: "dispatcher dropped while processing request".to_string(),
-                        }).await
+                        })
+                        .await
                     }
                 }
             }
@@ -145,19 +154,20 @@ impl WsConnection {
                         sender: self.agent_id.clone(),
                         receiver: "client".to_string(),
                         message: "request cancelled".to_string(),
-                    }).await
+                    })
+                    .await
                 } else {
                     self.send(Message::Error {
                         req_id: Some(req_id),
                         sender: self.agent_id.clone(),
                         receiver: "client".to_string(),
-                        message: "request not found in queue (already executing or completed)".to_string(),
-                    }).await
+                        message: "request not found in queue (already executing or completed)"
+                            .to_string(),
+                    })
+                    .await
                 }
             }
-            _ => {
-                Ok(())
-            }
+            _ => Ok(()),
         }
     }
 }
@@ -171,16 +181,14 @@ impl Connection for WsConnection {
     async fn recv(&mut self) -> Option<Result<Message, ConnectionError>> {
         let msg = self.rx.next().await?;
         match msg {
-            Ok(WsMessage::Text(text)) => {
-                match serde_json::from_str::<Message>(&text) {
-                    Ok(msg) => Some(Ok(msg)),
-                    Err(e) => Some(Err(ConnectionError::ParseError(e.to_string()))),
-                }
-            }
+            Ok(WsMessage::Text(text)) => match serde_json::from_str::<Message>(&text) {
+                Ok(msg) => Some(Ok(msg)),
+                Err(e) => Some(Err(ConnectionError::ParseError(e.to_string()))),
+            },
             Ok(WsMessage::Close(_)) => None,
-            Ok(WsMessage::Binary(_)) => {
-                Some(Err(ConnectionError::ParseError("binary messages not supported".to_string())))
-            }
+            Ok(WsMessage::Binary(_)) => Some(Err(ConnectionError::ParseError(
+                "binary messages not supported".to_string(),
+            ))),
             Ok(WsMessage::Ping(data)) => {
                 tracing::debug!("WebSocket ping: {} bytes", data.len());
                 self.recv().await
@@ -229,25 +237,29 @@ impl WsServer {
         let agent_id = self.agent_id.clone();
         let server = Arc::new(self);
 
-        Router::new()
-            .route(
-                "/ws",
-                get({
+        Router::new().route(
+            "/ws",
+            get({
+                let server = server.clone();
+                let agent_id = agent_id.clone();
+                move |ws: WebSocketUpgrade| {
                     let server = server.clone();
                     let agent_id = agent_id.clone();
-                    move |ws: WebSocketUpgrade| {
-                        let server = server.clone();
-                        let agent_id = agent_id.clone();
-                        async move { ws.on_upgrade(move |socket| handle_ws(socket, server, agent_id)) }
-                    }
-                }),
-            )
+                    async move { ws.on_upgrade(move |socket| handle_ws(socket, server, agent_id)) }
+                }
+            }),
+        )
     }
 }
 
 /// Handler for an upgraded WebSocket connection.
 async fn handle_ws(socket: WebSocket, server: Arc<WsServer>, agent_id: String) {
-    let conn = WsConnection::new(socket, server.dispatcher.clone(), server.holder.clone(), agent_id);
+    let conn = WsConnection::new(
+        socket,
+        server.dispatcher.clone(),
+        server.holder.clone(),
+        agent_id,
+    );
 
     // Attach the connection to the holder so the plugin can forward events.
     let conn_arc = Arc::new(conn);
@@ -260,7 +272,9 @@ async fn handle_ws(socket: WebSocket, server: Arc<WsServer>, agent_id: String) {
     match Arc::try_unwrap(conn_arc) {
         Ok(conn) => conn.run().await,
         Err(_) => {
-            tracing::warn!("could not take ownership of WsConnection (refcount > 1), skipping run loop");
+            tracing::warn!(
+                "could not take ownership of WsConnection (refcount > 1), skipping run loop"
+            );
             // Still detach to clean up.
             server.holder.detach().await;
         }

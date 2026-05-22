@@ -3,7 +3,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use tokio::sync::{Mutex, Notify, oneshot};
+use tokio::sync::{oneshot, Mutex, Notify};
 use vol_llm_agent::ReActAgent;
 use vol_session::Session;
 
@@ -48,14 +48,14 @@ impl AgentDispatcher {
         // Spawn the background execution loop
         tokio::spawn(Self::run_loop(agent.clone(), state.clone()));
 
-        Self {
-            agent,
-            state,
-        }
+        Self { agent, state }
     }
 
     /// Submit a request. Returns immediately with a receiver for the result.
-    pub fn submit(&self, request: AgentRequest) -> Result<oneshot::Receiver<RunResult>, ChannelError> {
+    pub fn submit(
+        &self,
+        request: AgentRequest,
+    ) -> Result<oneshot::Receiver<RunResult>, ChannelError> {
         let (tx, rx) = oneshot::channel();
         let pending = PendingRequest { request, tx };
 
@@ -130,7 +130,7 @@ impl AgentDispatcher {
             };
 
             // Execute the agent run.
-            let result = agent.run(&pending.request.input).await;
+            let result = agent.run_input(pending.request.input.clone()).await;
 
             let run_result = RunResult {
                 req_id: pending.request.req_id.clone(),
@@ -157,20 +157,29 @@ mod tests {
 
         let (tx1, _) = oneshot::channel();
         let req1 = AgentRequest::new("agent_a", "hello");
-        state.queue.lock().await.push_back(PendingRequest { request: req1, tx: tx1 });
+        state.queue.lock().await.push_back(PendingRequest {
+            request: req1,
+            tx: tx1,
+        });
 
         assert_eq!(state.queue.lock().await.len(), 1);
 
         let (tx2, _) = oneshot::channel();
         let req2 = AgentRequest::new("agent_b", "world");
-        state.queue.lock().await.push_back(PendingRequest { request: req2, tx: tx2 });
+        state.queue.lock().await.push_back(PendingRequest {
+            request: req2,
+            tx: tx2,
+        });
 
         assert_eq!(state.queue.lock().await.len(), 2);
 
         // Pop front (FIFO)
         let first = state.queue.lock().await.pop_front();
         assert!(first.is_some());
-        assert_eq!(first.unwrap().request.input, "hello");
+        assert_eq!(
+            first.unwrap().request.input,
+            vol_llm_agent::AgentInput::text("hello")
+        );
 
         assert_eq!(state.queue.lock().await.len(), 1);
     }
@@ -181,11 +190,17 @@ mod tests {
 
         let (tx1, _rx1) = oneshot::channel::<RunResult>();
         let req1 = AgentRequest::with_id("req-1", "agent_a", "hello");
-        state.queue.lock().await.push_back(PendingRequest { request: req1, tx: tx1 });
+        state.queue.lock().await.push_back(PendingRequest {
+            request: req1,
+            tx: tx1,
+        });
 
         let (tx2, _rx2) = oneshot::channel::<RunResult>();
         let req2 = AgentRequest::with_id("req-2", "agent_a", "world");
-        state.queue.lock().await.push_back(PendingRequest { request: req2, tx: tx2 });
+        state.queue.lock().await.push_back(PendingRequest {
+            request: req2,
+            tx: tx2,
+        });
 
         assert_eq!(state.queue.lock().await.len(), 2);
 
@@ -204,7 +219,11 @@ mod tests {
     async fn test_cancel_nonexistent_returns_false() {
         let state = DispatcherState::new();
 
-        let found = state.queue.lock().await.iter()
+        let found = state
+            .queue
+            .lock()
+            .await
+            .iter()
             .any(|p| p.request.req_id == "nonexistent");
         assert!(!found);
     }

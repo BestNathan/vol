@@ -20,8 +20,10 @@ use crate::protocol::Message;
 use crate::request::{AgentRequest, RunResult};
 use crate::router::AgentRouter;
 
-use super::serde_helpers::{parse_jsonrpc_request, to_jsonrpc_error, to_jsonrpc_event, to_jsonrpc_response, JsonRpcRequest};
-use vol_session::Session;
+use super::serde_helpers::{
+    parse_jsonrpc_request, to_jsonrpc_error, to_jsonrpc_event, to_jsonrpc_response, JsonRpcRequest,
+};
+use vol_session::{Session, SessionEntryStore};
 
 /// JSON-RPC connection over WebSocket.
 pub struct JsonRpcConnection {
@@ -94,7 +96,12 @@ impl JsonRpcConnection {
                 "agents": self.holders.keys().cloned().collect::<Vec<_>>(),
             },
         });
-        let _ = self.ws_tx.lock().await.send(WsMessage::Text(connected.to_string())).await;
+        let _ = self
+            .ws_tx
+            .lock()
+            .await
+            .send(WsMessage::Text(connected.to_string()))
+            .await;
 
         // Main frame processing loop.
         loop {
@@ -160,41 +167,39 @@ impl JsonRpcConnection {
             JsonRpcRequest::AgentCancel { id, req_id } => {
                 self.handle_cancel(*id, req_id.clone()).await
             }
-            JsonRpcRequest::AgentSubscribe { id } => {
-                self.handle_subscribe(*id).await
+            JsonRpcRequest::AgentSubscribe { id } => self.handle_subscribe(*id).await,
+            JsonRpcRequest::AgentUnsubscribe { id } => self.handle_unsubscribe(*id).await,
+            JsonRpcRequest::AgentApprove {
+                id,
+                req_id,
+                approved,
+                reason,
+            } => {
+                self.handle_approve(*id, req_id.clone(), *approved, reason.clone())
+                    .await
             }
-            JsonRpcRequest::AgentUnsubscribe { id } => {
-                self.handle_unsubscribe(*id).await
-            }
-            JsonRpcRequest::AgentApprove { id, req_id, approved, reason } => {
-                self.handle_approve(*id, req_id.clone(), *approved, reason.clone()).await
-            }
-            JsonRpcRequest::FileList { id, path } => {
-                self.handle_file_list(*id, path.clone()).await
-            }
-            JsonRpcRequest::FileRead { id, path } => {
-                self.handle_file_read(*id, path.clone()).await
-            }
-            JsonRpcRequest::LogList { id } => {
-                self.handle_log_list(*id).await
-            }
+            JsonRpcRequest::FileList { id, path } => self.handle_file_list(*id, path.clone()).await,
+            JsonRpcRequest::FileRead { id, path } => self.handle_file_read(*id, path.clone()).await,
+            JsonRpcRequest::LogList { id } => self.handle_log_list(*id).await,
             JsonRpcRequest::LogRead { id, run_id } => {
                 self.handle_log_read(*id, run_id.clone()).await
             }
-            JsonRpcRequest::SessionList { id } => {
-                self.handle_session_list(*id).await
-            }
+            JsonRpcRequest::SessionList { id } => self.handle_session_list(*id).await,
             JsonRpcRequest::SessionResume { id, session_id } => {
                 self.handle_session_resume(*id, session_id.clone()).await
             }
-            JsonRpcRequest::AgentList { id } => {
-                self.handle_agent_list(*id).await
-            }
+            JsonRpcRequest::AgentList { id } => self.handle_agent_list(*id).await,
             JsonRpcRequest::SessionEntries { id, session_id } => {
                 self.handle_session_entries(*id, session_id.clone()).await
             }
             JsonRpcRequest::Unknown { id, method } => {
-                return self.send_ws_text(&to_jsonrpc_error(*id, -32601, format!("Method not found: {method}"))).await;
+                return self
+                    .send_ws_text(&to_jsonrpc_error(
+                        *id,
+                        -32601,
+                        format!("Method not found: {method}"),
+                    ))
+                    .await;
             }
         };
 
@@ -221,9 +226,12 @@ impl JsonRpcConnection {
         let rx = match self.router.send(&target_id, request).await {
             Ok(rx) => rx,
             Err(e) => {
-                return to_jsonrpc_response(id, serde_json::json!({
-                    "error": e.to_string(),
-                }));
+                return to_jsonrpc_response(
+                    id,
+                    serde_json::json!({
+                        "error": e.to_string(),
+                    }),
+                );
             }
         };
 
@@ -251,7 +259,9 @@ impl JsonRpcConnection {
 
     /// Handle `agent.subscribe`: add subscription ID to list.
     async fn handle_subscribe(&self, id: u64) -> String {
-        let sub_id = self.next_sub_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let sub_id = self
+            .next_sub_id
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.subscribers.lock().await.push(sub_id);
         to_jsonrpc_response(id, serde_json::json!({ "subscription_id": sub_id }))
     }
@@ -260,12 +270,22 @@ impl JsonRpcConnection {
     async fn handle_unsubscribe(&self, id: u64) -> String {
         // The id from the JSON-RPC request is treated as the subscription ID to remove.
         let mut subs = self.subscribers.lock().await;
-        let removed = subs.iter().position(|&s| s == id).map(|i| subs.remove(i)).is_some();
+        let removed = subs
+            .iter()
+            .position(|&s| s == id)
+            .map(|i| subs.remove(i))
+            .is_some();
         to_jsonrpc_response(id, serde_json::json!({ "unsubscribed": removed }))
     }
 
     /// Handle `agent.approve`: stub — always approved.
-    async fn handle_approve(&self, id: u64, _req_id: String, _approved: bool, _reason: Option<String>) -> String {
+    async fn handle_approve(
+        &self,
+        id: u64,
+        _req_id: String,
+        _approved: bool,
+        _reason: Option<String>,
+    ) -> String {
         to_jsonrpc_response(id, serde_json::json!({ "approved": true }))
     }
 
@@ -288,7 +308,9 @@ impl JsonRpcConnection {
                 list.sort_by(|a, b| {
                     let a_dir = a["is_dir"].as_bool().unwrap_or(false);
                     let b_dir = b["is_dir"].as_bool().unwrap_or(false);
-                    b_dir.cmp(&a_dir).then_with(|| a["name"].as_str().cmp(&b["name"].as_str()))
+                    b_dir
+                        .cmp(&a_dir)
+                        .then_with(|| a["name"].as_str().cmp(&b["name"].as_str()))
                 });
                 to_jsonrpc_response(id, serde_json::json!({ "entries": list }))
             }
@@ -340,7 +362,11 @@ impl JsonRpcConnection {
         let session = match Session::resume(session_id.clone(), self.session_store.clone()).await {
             Ok(s) => Arc::new(s),
             Err(e) => {
-                return to_jsonrpc_error(Some(id), -32000, format!("Failed to resume session: {e}"));
+                return to_jsonrpc_error(
+                    Some(id),
+                    -32000,
+                    format!("Failed to resume session: {e}"),
+                );
             }
         };
 
@@ -357,11 +383,14 @@ impl JsonRpcConnection {
                     .into_iter()
                     .filter_map(|e| serde_json::to_value(e).ok())
                     .collect();
-                to_jsonrpc_response(id, serde_json::json!({
-                    "session_id": session_id,
-                    "entry_count": entry_count,
-                    "entries": json_entries,
-                }))
+                to_jsonrpc_response(
+                    id,
+                    serde_json::json!({
+                        "session_id": session_id,
+                        "entry_count": entry_count,
+                        "entries": json_entries,
+                    }),
+                )
             }
             Err(e) => to_jsonrpc_error(Some(id), -32000, format!("Failed to read entries: {e}")),
         }
@@ -369,15 +398,19 @@ impl JsonRpcConnection {
 
     /// Handle `agent.list`: return metadata for all registered agents.
     async fn handle_agent_list(&self, id: u64) -> String {
-        let agents: Vec<serde_json::Value> = self.holders.keys().map(|k| {
-            serde_json::json!({
-                "id": k,
-                "name": k,
-                "type": k,
-                "description": "Code assistant",
-                "scope": "Server",
+        let agents: Vec<serde_json::Value> = self
+            .holders
+            .keys()
+            .map(|k| {
+                serde_json::json!({
+                    "id": k,
+                    "name": k,
+                    "type": k,
+                    "description": "Code assistant",
+                    "scope": "Server",
+                })
             })
-        }).collect();
+            .collect();
         to_jsonrpc_response(id, serde_json::json!({ "agents": agents }))
     }
 
@@ -402,16 +435,14 @@ impl JsonRpcConnection {
         current_req_id: Arc<tokio::sync::Mutex<String>>,
     ) {
         match rx.await {
-            Ok(result) => {
-                match &result.response {
-                    Ok(response) => {
-                        tracing::info!(%req_id, run_id = ?result.run_id, iterations = response.iterations, "agent run completed");
-                    }
-                    Err(e) => {
-                        tracing::error!(%req_id, %e, "agent run failed");
-                    }
+            Ok(result) => match &result.response {
+                Ok(response) => {
+                    tracing::info!(%req_id, run_id = ?result.run_id, iterations = response.iterations, "agent run completed");
                 }
-            }
+                Err(e) => {
+                    tracing::error!(%req_id, %e, "agent run failed");
+                }
+            },
             Err(_) => {
                 tracing::warn!(%req_id, "agent run receiver dropped (possibly cancelled)");
             }
@@ -447,7 +478,9 @@ impl Connection for JsonRpcConnection {
                 let sub_id = self.subscribers.lock().await.first().copied().unwrap_or(0);
 
                 // Try to deserialize the event Value back to AgentStreamEvent
-                match serde_json::from_value::<vol_llm_agent::react::AgentStreamEvent>(event.clone()) {
+                match serde_json::from_value::<vol_llm_agent::react::AgentStreamEvent>(
+                    event.clone(),
+                ) {
                     Ok(agent_event) => {
                         let text = to_jsonrpc_event(&agent_event, sub_id, &req_id);
                         self.send_ws_text(&text).await

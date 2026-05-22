@@ -3,14 +3,14 @@ type: entity
 category: product
 tags: [crate, agent, transport, rust, json-rpc]
 created: 2026-05-05
-updated: 2026-05-10
-source_count: 4
+updated: 2026-05-21
+source_count: 5
 ---
 
 # vol-llm-agent-channel Crate
 
 **Category:** Rust crate — Agent communication channel layer
-**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]]
+**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]], [[agentinput-multimodal-run]]
 
 ## Overview
 
@@ -65,3 +65,4 @@ Client → Transport (WS/HTTP/JSON-RPC/Memory) → Connection → ConnectionHold
 - **2026-05-05**: HTTP transport quality improvements — concurrent request protection, clean stream termination, holder detach, and test suite (5 tests) [[http-transport-impl]]
 - **2026-05-07**: Example applications added — `single_agent.rs` (dual transport) and `multi_agent.rs` (agent router) [[agent-channel-examples]]
 - **2026-05-09**: JSON-RPC transport refactoring — `JsonRpcConnection` implements `Connection` trait, `EventBridgePlugin` deleted, `JsonRpcServer` with multi-agent support, 49 integration tests [[jsonrpc-transport-refactoring]]
+- **2026-05-21**: `Message::Submit` and `AgentRequest` now carry `AgentInput`, while custom deserialization keeps legacy string input compatible across HTTP, WebSocket, dispatcher, and JSON-RPC paths [[agentinput-multimodal-run-implementation]]
