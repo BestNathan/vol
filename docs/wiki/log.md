@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-05-22] ingest | JSON-RPC Transport Consolidation
+- Created sources: [[jsonrpc-transport-consolidation]]
+- Updated entities: [[vol-llm-agent-channel-crate]] (module structure, key facts, timeline)
+- Updated index: new source entry, updated date
+- Cross-references added: 1
+- Changes: Moved jsonrpc/{server,connection,serde_helpers}.rs and gateway/jsonrpc_ws.rs (as codec.rs) into transport/jsonrpc/; deleted old jsonrpc/ and gateway/ directories; updated internal imports and test paths; no public API breakage.
+
 ## [2026-05-22] ingest | AgentInput Channel Unification
 - Created sources: [[agentinput-channel-unification]]
 - Updated concepts: [[agent-dispatcher]] (run_input instead of run_with_id), [[agentinput-multimodal-run]] (channel uses AgentInput directly)

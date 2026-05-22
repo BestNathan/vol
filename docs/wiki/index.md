@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-22 (agentinput-channel-unification)
+Last updated: 2026-05-22 (jsonrpc-transport-consolidation)
 
 ## Entities
 
@@ -108,6 +108,7 @@ Last updated: 2026-05-22 (agentinput-channel-unification)
 | [[tailwind-css-full-migration]] | Full Tailwind CSS v4 migration — all 16 components, GLOBAL_CSS deleted, build pipeline verified | complete | 2026-05-12 |
 | [[agentinput-multimodal-run-implementation]] | AgentInput multimodal run implementation: run_input, Anthropic multipart conversion, channel compatibility | active | 2026-05-21 |
 | [[agentinput-channel-unification]] | Channel crate unified to use AgentInput directly: Submit payload, AgentRequest, dispatcher all switched from String | active | 2026-05-22 |
+| [[jsonrpc-transport-consolidation]] | JSON-RPC transport consolidated: jsonrpc/ and gateway/ moved into transport/jsonrpc/ | active | 2026-05-22 |
 
 ## Analyses
 
