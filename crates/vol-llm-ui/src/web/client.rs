@@ -822,7 +822,9 @@ impl JsonRpcClient {
                 let msg = error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
                 cb(Err(msg.to_string()));
             } else {
-                match serde_json::from_value::<crate::state::SkillDetail>(result) {
+                // SkillGetResult has { skill, name }; extract the skill payload.
+                let skill_payload = result.get("skill").unwrap_or(&result);
+                match serde_json::from_value::<crate::state::SkillDetail>(skill_payload.clone()) {
                     Ok(detail) => cb(Ok(detail)),
                     Err(e) => cb(Err(format!("failed to parse skill: {e}"))),
                 }

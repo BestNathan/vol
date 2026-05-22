@@ -220,7 +220,9 @@ pub struct SkillDetail {
     pub description: String,
     pub triggers: Vec<String>,
     pub content: String,
+    #[serde(default)]
     pub file_listing: Vec<String>,
+    #[serde(default)]
     pub directory: String,
 }
 
