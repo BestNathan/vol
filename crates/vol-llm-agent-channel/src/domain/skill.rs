@@ -73,6 +73,8 @@ impl DomainHandler for SkillHandler {
                         "description": s.description,
                         "triggers": s.triggers,
                         "content": s.content,
+                        "file_listing": s.file_listing,
+                        "directory": s.directory,
                     })),
                     None => None,
                 };
