@@ -51,7 +51,7 @@ impl JsonRpcConnection {
             };
             match msg {
                 Ok(WsMessage::Text(text)) => {
-                    match crate::gateway::jsonrpc_ws::decode_jsonrpc_frame(&text) {
+                    match crate::transport::jsonrpc::codec::decode_jsonrpc_frame(&text) {
                         Ok(agent_msg) => {
                             if tx.send(Ok(agent_msg)).await.is_err() {
                                 break;
@@ -131,7 +131,7 @@ impl Connection for JsonRpcConnection {
                     .map_err(|e| ConnectionError::WsSendError(e.to_string()))
             }
             _ => {
-                let text = crate::gateway::jsonrpc_ws::encode_jsonrpc_message(msg)
+                let text = crate::transport::jsonrpc::codec::encode_jsonrpc_message(msg)
                     .map_err(|e| ConnectionError::WsSendError(e.to_string()))?;
                 let mut tx = self.ws_tx.lock().await;
                 tx.send(WsMessage::Text(text))
@@ -144,7 +144,7 @@ impl Connection for JsonRpcConnection {
 
 #[cfg(test)]
 mod tests {
-    use crate::jsonrpc::serde_helpers::to_jsonrpc_event;
+    use crate::transport::jsonrpc::serde_helpers::to_jsonrpc_event;
     use vol_llm_agent::react::AgentStreamEvent;
 
     #[test]
