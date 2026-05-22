@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use vol_llm_agent::AgentInput;
 
 /// Lightweight protocol error type for operation lookup and payload decoding.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -156,21 +157,15 @@ impl Payload {
             Operation::Agent(AgentOperation::Submit) => {
                 #[derive(Deserialize)]
                 struct P {
-                    input: String,
+                    input: AgentInput,
                     #[serde(default)]
                     target: Option<String>,
-                    #[serde(default)]
-                    metadata: Option<serde_json::Map<String, serde_json::Value>>,
-                    #[serde(default)]
-                    run_id: Option<String>,
                 }
                 let p: P = serde_json::from_value(value)
                     .map_err(|_| ProtocolError::PayloadDecodeFailed("agent.submit"))?;
                 Ok(Payload::Agent(AgentPayload::Submit {
                     input: p.input,
                     target: p.target,
-                    metadata: p.metadata,
-                    run_id: p.run_id,
                 }))
             }
             Operation::Agent(AgentOperation::Cancel) => {
@@ -437,13 +432,9 @@ impl Payload {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AgentPayload {
     Submit {
-        input: String,
+        input: AgentInput,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         target: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        metadata: Option<serde_json::Map<String, serde_json::Value>>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        run_id: Option<String>,
     },
     SubmitAck {
         run_id: String,
