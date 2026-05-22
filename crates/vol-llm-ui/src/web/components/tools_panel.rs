@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 use crate::state::{ToolState, ToolCallEntry, ToolCallStatus, UiEvent, UiEventKind, SubscriptionSet};
-use crate::web::client::JsonRpcClient;
+use crate::web::client::{ConnectionState, JsonRpcClient};
 use crate::web::components::app::AppState;
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -66,31 +66,49 @@ pub fn ToolsPanel() -> Element {
     let tool_state = use_signal(|| ToolPanelState { tools: vec![], loading: false, error: None, call_result: None });
     let client: JsonRpcClient = app_state.rpc_client.clone();
 
-    // Auto-fetch tools on mount
-    let client_for_fetch = client.clone();
-    let ts_for_fetch = tool_state.clone();
-    use_effect(move || {
-        ts_for_fetch.write_unchecked().loading = true;
-        client_for_fetch.tool_list({
-            let ts = ts_for_fetch.clone();
-            move |result| {
-                let mut s = ts.write_unchecked();
-                s.loading = false;
-                match result {
-                    Ok(tools) => {
-                        s.tools = tools.iter()
-                            .filter_map(|t| serde_json::from_value::<ToolDef>(t.clone()).ok())
-                            .collect();
+    // EventBus for subscriptions (clone before hooks consume it)
+    let event_bus = app_state.event_bus.clone();
+    let event_bus2 = event_bus.clone();
+
+    // Fetch tools: runs initially via use_effect, runs on reconnect via EventBus
+    let fetch_tools = {
+        let client = client.clone();
+        let ts = tool_state.clone();
+        move || {
+            if client.state() == ConnectionState::Connected {
+                ts.write_unchecked().loading = true;
+                client.tool_list({
+                    let ts2 = ts.clone();
+                    move |result| {
+                        let mut s = ts2.write_unchecked();
+                        s.loading = false;
+                        match result {
+                            Ok(tools) => {
+                                s.tools = tools.iter()
+                                    .filter_map(|t| serde_json::from_value::<ToolDef>(t.clone()).ok())
+                                    .collect();
+                            }
+                            Err(e) => { s.error = Some(e); }
+                        }
                     }
-                    Err(e) => s.error = Some(e),
-                }
+                });
             }
-        });
+        }
+    };
+    let fetch_tools_for_effect = fetch_tools.clone();
+
+    // Subscribe to WsConnected to re-fetch on reconnect
+    use_hook(move || {
+        let sub = event_bus.subscribe(UiEventKind::WsConnected, move |_| { fetch_tools(); });
+        std::sync::Arc::new(sub)
     });
 
-    // Event subscriptions
+    // Initial fetch on mount
+    use_effect(move || { fetch_tools_for_effect(); });
+
+    // Tool call event subscriptions
     use_hook(move || {
-        let bus = app_state.event_bus.clone();
+        let bus = event_bus2;
         let mut set = SubscriptionSet::new(bus.clone());
         for kind in [UiEventKind::ToolCallBegin, UiEventKind::ToolCallComplete, UiEventKind::ToolCallError, UiEventKind::ToolCallSkipped] {
             set.subscribe(&bus, kind, {
