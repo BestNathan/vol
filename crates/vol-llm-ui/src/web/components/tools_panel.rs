@@ -66,6 +66,29 @@ pub fn ToolsPanel() -> Element {
     let tool_state = use_signal(|| ToolPanelState { tools: vec![], loading: false, error: None, call_result: None });
     let client: JsonRpcClient = app_state.rpc_client.clone();
 
+    // Auto-fetch tools on mount
+    let client_for_fetch = client.clone();
+    let ts_for_fetch = tool_state.clone();
+    use_effect(move || {
+        ts_for_fetch.write_unchecked().loading = true;
+        client_for_fetch.tool_list({
+            let ts = ts_for_fetch.clone();
+            move |result| {
+                let mut s = ts.write_unchecked();
+                s.loading = false;
+                match result {
+                    Ok(tools) => {
+                        s.tools = tools.iter()
+                            .filter_map(|t| serde_json::from_value::<ToolDef>(t.clone()).ok())
+                            .collect();
+                    }
+                    Err(e) => s.error = Some(e),
+                }
+            }
+        });
+    });
+
+    // Event subscriptions
     use_hook(move || {
         let bus = app_state.event_bus.clone();
         let mut set = SubscriptionSet::new(bus.clone());
