@@ -29,6 +29,7 @@ use crate::domain::registry::HandlerRegistry;
 use crate::domain::{
     agent::AgentHandler, file::FileHandler, log::LogHandler,
     mcp::McpHandler, session::SessionHandler, skill::SkillHandler, system::SystemHandler,
+    tool::ToolHandler,
 };
 use crate::router::AgentRouter;
 
@@ -313,6 +314,9 @@ impl AgentServerCoreBuilder {
             .register(Arc::new(SkillHandler::new(Some(skill_loader.clone()))))
             .map_err(|e| format!("failed to register SkillHandler: {e}"))?;
         handler_registry
+            .register(Arc::new(ToolHandler::new(tool_registry.clone())))
+            .map_err(|e| format!("failed to register ToolHandler: {e}"))?;
+        handler_registry
             .register(Arc::new(LogHandler))
             .map_err(|e| format!("failed to register LogHandler: {e}"))?;
         handler_registry
@@ -447,6 +451,7 @@ impl AgentServerCore {
         handler_registry.register(Arc::new(SessionHandler::new(agents_root))).ok();
         handler_registry.register(Arc::new(McpHandler::new(None))).ok();
         handler_registry.register(Arc::new(SkillHandler::new(None))).ok();
+        handler_registry.register(Arc::new(ToolHandler::new(Arc::new(ToolRegistry::new())))).ok();
         handler_registry.register(Arc::new(LogHandler)).ok();
         handler_registry.register(Arc::new(SystemHandler)).ok();
 
