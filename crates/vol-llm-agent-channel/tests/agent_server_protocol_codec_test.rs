@@ -1,5 +1,6 @@
 //! Integration tests for agent server protocol types and operation codec.
 
+use vol_llm_agent::AgentInput;
 use vol_llm_agent_channel::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, FileOperation, Operation, Payload,
 };
@@ -47,10 +48,8 @@ fn agent_server_protocol_codec_test_decode_agent_submit_accepts_supplied_run_id(
     assert_eq!(
         payload,
         Payload::Agent(AgentPayload::Submit {
-            input: "hello".to_string(),
+            input: AgentInput::text("hello"),
             target: Some("agent".to_string()),
-            metadata: None,
-            run_id: Some("run_supplied_1".to_string()),
         })
     );
 }
@@ -69,10 +68,8 @@ fn agent_server_protocol_codec_test_decode_agent_submit_defaults_missing_run_id(
     assert_eq!(
         payload,
         Payload::Agent(AgentPayload::Submit {
-            input: "hello".to_string(),
+            input: AgentInput::text("hello"),
             target: Some("agent".to_string()),
-            metadata: None,
-            run_id: None,
         })
     );
 }
@@ -99,10 +96,8 @@ fn agent_server_protocol_codec_test_message_id_reused_across_submit_ack_not_equa
         "msg_1",
         Operation::Agent(AgentOperation::Submit),
         Payload::Agent(AgentPayload::Submit {
-            input: "hello".to_string(),
+            input: AgentInput::text("hello"),
             target: None,
-            metadata: None,
-            run_id: None,
         }),
     );
 

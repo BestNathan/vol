@@ -2,6 +2,7 @@
 //! verifying full handler registry dispatch for all 22 methods.
 
 use vol_llm_agent::agent_def::AgentDef;
+use vol_llm_agent::AgentInput;
 use vol_llm_agent_channel::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, FileOperation, LogOperation, McpOperation,
     MessageKind, Operation, Payload, SessionOperation, SkillOperation,
@@ -72,10 +73,8 @@ async fn test_e2e_all_methods() {
         "5",
         Operation::Agent(AgentOperation::Submit),
         Payload::Agent(AgentPayload::Submit {
-            input: "hello".into(),
+            input: AgentInput::text("hello"),
             target: Some("test-agent".into()),
-            metadata: None,
-            run_id: None,
         }),
     ))
     .await

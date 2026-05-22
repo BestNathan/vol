@@ -23,6 +23,7 @@ use serde::Deserialize;
 use tokio::net::TcpListener;
 use tracing::info;
 use vol_llm_agent::agent_def::AgentDef;
+use vol_llm_agent::AgentInput;
 use vol_llm_agent_channel::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, Operation, Payload,
 };
@@ -110,10 +111,8 @@ async fn chat_handler(
         uuid::Uuid::new_v4().to_string(),
         Operation::Agent(AgentOperation::Submit),
         Payload::Agent(AgentPayload::Submit {
-            input: body.input,
+            input: AgentInput::text(body.input),
             target: Some(agent_id),
-            metadata: None,
-            run_id: None,
         }),
     );
 

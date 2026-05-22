@@ -1,3 +1,4 @@
+use vol_llm_agent::AgentInput;
 use vol_llm_agent_channel::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, MessageKind, Operation, Payload,
 };
@@ -10,10 +11,8 @@ async fn submit_emits_ack_and_result_with_same_message_id() {
         "msg_submit_1",
         Operation::Agent(AgentOperation::Submit),
         Payload::Agent(AgentPayload::Submit {
-            input: "hello world".to_string(),
+            input: AgentInput::text("hello world").with_run_id("run_supplied_1"),
             target: None,
-            metadata: None,
-            run_id: Some("run_supplied_1".to_string()),
         }),
     );
 

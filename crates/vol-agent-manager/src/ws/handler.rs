@@ -192,21 +192,27 @@ fn parse_register_message(msg: AgentServerMessage) -> Option<(String, String)> {
         sender,
         kind: MessageKind::Command,
         operation: Operation::Agent(AgentOperation::Submit),
-        payload: Payload::Agent(AgentPayload::Submit { input, metadata, .. }),
+        payload: Payload::Agent(AgentPayload::Submit { input, .. }),
         ..
     } = msg else {
         return None;
     };
 
-    let is_register = metadata
-        .as_ref()
-        .is_some_and(|m| m.get("type").and_then(|v| v.as_str()) == Some("register"));
+    let is_register = input
+        .metadata
+        .get("type")
+        .and_then(|v| v.as_str())
+        == Some("register");
     if !is_register {
         return None;
     }
 
-    let id = if sender != "client" { sender } else { input.clone() };
-    Some((id, input))
+    let id = if sender != "client" {
+        sender
+    } else {
+        input.display_text()
+    };
+    Some((id, input.display_text()))
 }
 
 async fn handle_message(
@@ -227,16 +233,15 @@ async fn handle_message(
         (
             MessageKind::Command,
             Operation::Agent(AgentOperation::Submit),
-            Payload::Agent(AgentPayload::Submit { metadata, input, .. }),
+            Payload::Agent(AgentPayload::Submit { input, .. }),
         ) => {
-            let meta_type = metadata.as_ref().and_then(|m| {
-                m.get("type").and_then(|v| v.as_str())
-            }).unwrap_or("unknown");
+            let meta_type = input.metadata.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
 
             match meta_type {
                 "heartbeat" => {
                     state_manager.update_heartbeat(agent_id).await;
-                    let status = serde_json::from_str::<serde_json::Value>(input)
+                    let input_text = input.display_text();
+                    let status = serde_json::from_str::<serde_json::Value>(&input_text)
                         .ok()
                         .and_then(|v| v.get("status").and_then(|s| s.as_str()).map(|s| s.to_string()))
                         .unwrap_or_else(|| "Idle".to_string());
@@ -252,22 +257,22 @@ async fn handle_message(
                     metrics.increment_messages("metric", agent_id, &agent_type);
                 }
                 "event" => {
-                    let data = serde_json::from_str::<serde_json::Value>(input)
+                    let input_text = input.display_text();
+                    let data = serde_json::from_str::<serde_json::Value>(&input_text)
                         .unwrap_or(serde_json::Value::Null);
                     let event_name = data.get("event_name").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
                     event_bus.emit(ManagerEvent::agent_event(agent_id, &event_name, data));
                     metrics.increment_messages("event", agent_id, &agent_type);
                 }
                 "task_result" => {
-                    let data = serde_json::from_str::<serde_json::Value>(input)
+                    let input_text = input.display_text();
+                    let data = serde_json::from_str::<serde_json::Value>(&input_text)
                         .unwrap_or(serde_json::Value::Null);
                     let status = data.get("status").and_then(|v| v.as_str()).unwrap_or("unknown");
                     let result = data.get("result").cloned();
                     let error = data.get("error").and_then(|v| v.as_str());
 
-                    let task_id = metadata.as_ref()
-                        .and_then(|m| m.get("task_id"))
-                        .and_then(|v| v.as_str());
+                    let task_id = input.metadata.get("task_id").and_then(|v| v.as_str());
 
                     if let Some(task_id) = task_id {
                         match status {
@@ -347,6 +352,7 @@ fn error_message(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vol_llm_agent::AgentInput;
 
     #[test]
     fn test_parse_register_metadata() {
@@ -380,10 +386,8 @@ mod tests {
             "req-1",
             Operation::Agent(AgentOperation::Submit),
             Payload::Agent(AgentPayload::Submit {
-                input: "hello".to_string(),
+                input: AgentInput::text("hello"),
                 target: None,
-                metadata: None,
-                run_id: None,
             }),
         );
         let serialized = serde_json::to_string(&msg).unwrap();

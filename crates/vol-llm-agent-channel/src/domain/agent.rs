@@ -58,8 +58,6 @@ impl DomainHandler for AgentHandler {
                 Payload::Agent(AgentPayload::Submit {
                     input,
                     target,
-                    metadata: _,
-                    run_id,
                 }),
             ) => {
                 let target_id = {
@@ -70,12 +68,12 @@ impl DomainHandler for AgentHandler {
                         .unwrap_or_else(|| "agent".to_string())
                 };
 
-                let request = match run_id {
-                    Some(run_id) => AgentRequest::with_run_id(run_id, &target_id, &input),
-                    None => AgentRequest::new(&target_id, &input),
-                };
-                let run_id = request.run_id.clone();
+                let run_id = input
+                    .run_id
+                    .clone()
+                    .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string());
                 let run_id_clone = run_id.clone();
+                let request = AgentRequest::new(&target_id, input);
 
                 match self.router.send(&target_id, request).await {
                     Ok(rx) => {
