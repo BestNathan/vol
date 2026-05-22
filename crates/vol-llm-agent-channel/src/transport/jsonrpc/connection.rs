@@ -15,7 +15,7 @@ use crate::agent_server_protocol::{AgentOperation, AgentPayload, AgentServerMess
 use crate::connection::Connection;
 use crate::error::ConnectionError;
 
-use super::serde_helpers::{to_jsonrpc_error, to_jsonrpc_event};
+use super::serde_helpers::to_jsonrpc_error;
 
 /// JSON-RPC connection over WebSocket.
 pub struct JsonRpcConnection {
@@ -92,37 +92,6 @@ impl Connection for JsonRpcConnection {
 
     async fn send(&self, msg: AgentServerMessage) -> Result<(), ConnectionError> {
         match (&msg.kind, &msg.operation, &msg.payload) {
-            (MessageKind::Event, Operation::Agent(AgentOperation::Event), Payload::Agent(AgentPayload::Event { event, .. })) => {
-                match serde_json::from_value::<vol_llm_agent::react::AgentStreamEvent>(event.clone()) {
-                    Ok(agent_event) => {
-                        let text = to_jsonrpc_event(&agent_event, 0, "");
-                        let mut tx = self.ws_tx.lock().await;
-                        tx.send(WsMessage::Text(text))
-                            .await
-                            .map_err(|e| ConnectionError::WsSendError(e.to_string()))
-                    }
-                    Err(e) => {
-                        tracing::error!(%e, ?event, "failed to deserialize AgentStreamEvent in send");
-                        let envelope = serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "method": "agent.event",
-                            "params": {
-                                "subscription": 0,
-                                "result": {
-                                    "event_type": "unknown",
-                                    "data": event,
-                                },
-                            },
-                        });
-                        let text = serde_json::to_string(&envelope)
-                            .map_err(|e| ConnectionError::WsSendError(e.to_string()))?;
-                        let mut tx = self.ws_tx.lock().await;
-                        tx.send(WsMessage::Text(text))
-                            .await
-                            .map_err(|e| ConnectionError::WsSendError(e.to_string()))
-                    }
-                }
-            }
             (MessageKind::Error, _, Payload::Error(ErrorPayload { message, .. })) => {
                 let text = to_jsonrpc_error(None, -32000, message.clone());
                 let mut tx = self.ws_tx.lock().await;
@@ -144,21 +113,30 @@ impl Connection for JsonRpcConnection {
 
 #[cfg(test)]
 mod tests {
-    use crate::transport::jsonrpc::serde_helpers::to_jsonrpc_event;
-    use vol_llm_agent::react::AgentStreamEvent;
+    use super::*;
+    use crate::agent_server_protocol::{AgentOperation, AgentPayload, Operation, Payload};
+    use crate::transport::jsonrpc::codec::encode_jsonrpc_message;
 
     #[test]
-    fn test_jsonrpc_event_format() {
-        let event = AgentStreamEvent::agent_start("hello world".to_string());
-        let json = to_jsonrpc_event(&event, 1, "req-abc-123");
+    fn test_send_event_uses_codec_format() {
+        let msg = AgentServerMessage::new_event(
+            "msg-1",
+            Operation::Agent(AgentOperation::Event),
+            Payload::Agent(AgentPayload::Event {
+                run_id: "run-1".to_string(),
+                event: serde_json::json!({"AgentStart": {"input": "hello"}}),
+            }),
+        );
+        let json = encode_jsonrpc_message(msg).unwrap();
 
-        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
-
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed["jsonrpc"], "2.0");
         assert_eq!(parsed["method"], "agent.event");
-        assert_eq!(parsed["params"]["subscription"], 1);
-        assert_eq!(parsed["params"]["result"]["req_id"], "req-abc-123");
-        assert_eq!(parsed["params"]["result"]["event_type"], "agent_start");
-        assert_eq!(parsed["params"]["result"]["data"]["input"], "hello world");
+        // New format: params has run_id and event directly (flat)
+        assert_eq!(parsed["params"]["run_id"], "run-1");
+        assert_eq!(parsed["params"]["event"]["AgentStart"]["input"], "hello");
+        // Old subscription/result nesting must NOT exist
+        assert!(parsed["params"].get("subscription").is_none());
+        assert!(parsed["params"].get("result").is_none());
     }
 }
