@@ -1,6 +1,7 @@
 use crate::agent_server_protocol::{
     AgentOperation, FileOperation, LogOperation, McpOperation,
     Operation, Payload, ProtocolError, SessionOperation, SkillOperation, SystemOperation,
+    ToolOperation,
 };
 
 pub fn method_to_operation(method: &str) -> Result<Operation, ProtocolError> {
@@ -29,6 +30,8 @@ pub fn method_to_operation(method: &str) -> Result<Operation, ProtocolError> {
         "mcp.server_status" => Ok(Operation::Mcp(McpOperation::ServerStatus)),
         "skill.list" => Ok(Operation::Skill(SkillOperation::List)),
         "skill.get" => Ok(Operation::Skill(SkillOperation::Get)),
+        "tool.list" => Ok(Operation::Tool(ToolOperation::List)),
+        "tool.call" => Ok(Operation::Tool(ToolOperation::Call)),
         "log.list" => Ok(Operation::Log(LogOperation::List)),
         "log.read" => Ok(Operation::Log(LogOperation::Read)),
         "system.connected" => Ok(Operation::System(SystemOperation::Connected)),
