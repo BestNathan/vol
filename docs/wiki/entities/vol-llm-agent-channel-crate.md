@@ -4,7 +4,7 @@ category: product
 tags: [crate, agent, transport, rust, json-rpc]
 created: 2026-05-05
 updated: 2026-05-22
-source_count: 7
+source_count: 8
 ---
 
 # vol-llm-agent-channel Crate
@@ -68,4 +68,4 @@ Client → Transport (WS/HTTP/JSON-RPC/Memory) → Connection → ConnectionHold
 - **2026-05-05**: HTTP transport quality improvements — concurrent request protection, clean stream termination, holder detach, and test suite (5 tests) [[http-transport-impl]]
 - **2026-05-07**: Example applications added — `single_agent.rs` (dual transport) and `multi_agent.rs` (agent router) [[agent-channel-examples]]
 - **2026-05-09**: JSON-RPC transport refactoring — `JsonRpcConnection` implements `Connection` trait, `EventBridgePlugin` deleted, `JsonRpcServer` with multi-agent support, 49 integration tests [[jsonrpc-transport-refactoring]]
-- **2026-05-22**: JSON-RPC transport consolidated — `jsonrpc/` and `gateway/jsonrpc_ws.rs` moved into `transport/jsonrpc/`, old directories removed [[jsonrpc-transport-consolidation]]
+- **2026-05-22**: Tool protocol operations added — `tool.list` and `tool.call` JSON-RPC methods with `ToolHandler` backed by `ToolRegistry` [[tool-protocol-operations]]

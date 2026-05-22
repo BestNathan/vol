@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-05-22] ingest | Tool Protocol Operations
+- Created sources: [[tool-protocol-operations]]
+- Updated entities: [[vol-llm-agent-channel-crate]] (timeline, source_count)
+- Updated index: new source entry, updated date
+- Cross-references added: 1
+- Changes: Added ToolOperation/ToolPayload to protocol; created ToolHandler with tool.list/tool.call; frontend client and tools panel updated with system tool listing and direct invocation.
+
 ## [2026-05-22] ingest | JSON-RPC Transport Consolidation
 - Created sources: [[jsonrpc-transport-consolidation]]
 - Updated entities: [[vol-llm-agent-channel-crate]] (module structure, key facts, timeline)

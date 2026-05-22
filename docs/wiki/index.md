@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-22 (jsonrpc-transport-consolidation)
+Last updated: 2026-05-22 (tool-protocol-operations)
 
 ## Entities
 
@@ -109,6 +109,7 @@ Last updated: 2026-05-22 (jsonrpc-transport-consolidation)
 | [[agentinput-multimodal-run-implementation]] | AgentInput multimodal run implementation: run_input, Anthropic multipart conversion, channel compatibility | active | 2026-05-21 |
 | [[agentinput-channel-unification]] | Channel crate unified to use AgentInput directly: Submit payload, AgentRequest, dispatcher all switched from String | active | 2026-05-22 |
 | [[jsonrpc-transport-consolidation]] | JSON-RPC transport consolidated: jsonrpc/ and gateway/ moved into transport/jsonrpc/ | active | 2026-05-22 |
+| [[tool-protocol-operations]] | Tool protocol: tool.list/tool.call JSON-RPC methods with ToolHandler backed by ToolRegistry | active | 2026-05-22 |
 
 ## Analyses
 
