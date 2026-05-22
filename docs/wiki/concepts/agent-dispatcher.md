@@ -3,14 +3,14 @@ type: concept
 category: framework
 tags: [dispatcher, queue, fifo, request]
 created: 2026-05-05
-updated: 2026-05-21
-source_count: 2
+updated: 2026-05-22
+source_count: 3
 ---
 
 # Agent Dispatcher
 
 **Category:** Request queueing
-**Related:** [[vol-llm-agent-channel-crate]], [[http-transport]], [[react-pattern]], [[agent-router]], [[jsonrpc-server-handler]]
+**Related:** [[vol-llm-agent-channel-crate]], [[http-transport]], [[react-pattern]], [[agent-router]], [[jsonrpc-server-handler]], [[agentinput-multimodal-run]]
 
 ## Definition
 
@@ -28,7 +28,7 @@ source_count: 2
 1. Caller invokes `submit()`, which enqueues the request and notifies the background loop
 2. Background loop (spawned once at creation) waits for notifications
 3. On notification, acquires a "busy" mutex (ensures single execution)
-4. Pops front of FIFO queue and executes `agent.run_with_id(&input, request.run_id)`
+4. Pops front of FIFO queue and executes `agent.run_input(request.input)`
 5. Wraps result in `RunResult { run_id, target_id, response }` and sends it via the oneshot channel
 
 The busy mutex ensures only one agent run executes at a time, preventing concurrent execution on the same agent instance.
@@ -39,6 +39,6 @@ Both blocking and SSE HTTP modes use `dispatcher.submit()` to queue the request.
 
 ## Related Concepts
 
-- [[run-id-unification]]: Dispatcher request/result identity now uses `run_id`.
+- [[agentinput-multimodal-run]]: Dispatcher passes `AgentInput` directly to `run_input()`.
 - [[agent-router]]: Routes requests to dispatchers and cancels across dispatchers by run id.
-- [[run-context]]: Receives the dispatcher's chosen run id through `ReActAgent::run_with_id()`.
+- [[run-context]]: Receives the run id from `AgentInput.run_id` through `ReActAgent::run_input()`.

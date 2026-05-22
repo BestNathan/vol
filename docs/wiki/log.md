@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-05-22] ingest | AgentInput Channel Unification
+- Created sources: [[agentinput-channel-unification]]
+- Updated concepts: [[agent-dispatcher]] (run_input instead of run_with_id), [[agentinput-multimodal-run]] (channel uses AgentInput directly)
+- Updated entities: [[vol-llm-agent-channel-crate]] (new key facts, timeline entry)
+- Updated index: new source entry, updated date
+- Cross-references added: 3
+- Changes: Unified AgentPayload::Submit, AgentRequest, and dispatcher to use AgentInput directly. Dropped redundant run_id/metadata fields. Switched dispatcher from run_with_id to run_input.
+
 ## [2026-05-21] ingest | AgentInput Multimodal Run Implementation
 - Created sources: [[agentinput-multimodal-run-implementation]]
 - Created concepts: [[agentinput-multimodal-run]]

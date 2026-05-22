@@ -3,14 +3,14 @@ type: entity
 category: product
 tags: [crate, agent, transport, rust, json-rpc]
 created: 2026-05-05
-updated: 2026-05-21
-source_count: 5
+updated: 2026-05-22
+source_count: 6
 ---
 
 # vol-llm-agent-channel Crate
 
 **Category:** Rust crate — Agent communication channel layer
-**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]], [[agentinput-multimodal-run]]
+**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]], [[agentinput-multimodal-run]], [[agentinput-channel-unification]]
 
 ## Overview
 
@@ -22,7 +22,8 @@ The `vol-llm-agent-channel` crate provides the communication layer between exter
 - `ConnectionHolder` implements `AgentPlugin` to forward agent events to the attached connection — single event bridge for all transports [[jsonrpc-transport-refactoring]]
 - `AgentDispatcher` provides FIFO request queueing with `submit()` returning oneshot receivers [[http-transport-impl]]
 - `AgentRouter` provides multi-agent request routing via `HashMap<String, AgentDispatcher>` [[agent-router]]
-- `Message` enum unifies all communication: Submit, Cancel, Connected, Event, Result, Error [[http-transport-impl]]
+- `AgentPayload::Submit` carries `input: AgentInput` with `target` for routing — `run_id` and `metadata` live inside `AgentInput` [[agentinput-channel-unification]]
+- `AgentDispatcher` calls `agent.run_input(AgentInput)` instead of the removed `run_with_id()` [[agent-dispatcher]]
 - `jsonrpc` module: `JsonRpcConnection` implements `Connection` trait, `JsonRpcServer` accepts `Vec<AgentRegistration>` for multi-agent [[jsonrpc-transport]]
 - 12 JSON-RPC methods: `agent.submit` (with optional `target`), `cancel`, `subscribe`, `unsubscribe`, `approve`, `file.list`, `file.read`, `log.list`, `log.read`, `session.list`, `session.resume` [[jsonrpc-transport]]
 - 49 integration tests for JSON-RPC serialization and parsing [[task-5-jsonrpc-integration-tests]]
@@ -65,4 +66,4 @@ Client → Transport (WS/HTTP/JSON-RPC/Memory) → Connection → ConnectionHold
 - **2026-05-05**: HTTP transport quality improvements — concurrent request protection, clean stream termination, holder detach, and test suite (5 tests) [[http-transport-impl]]
 - **2026-05-07**: Example applications added — `single_agent.rs` (dual transport) and `multi_agent.rs` (agent router) [[agent-channel-examples]]
 - **2026-05-09**: JSON-RPC transport refactoring — `JsonRpcConnection` implements `Connection` trait, `EventBridgePlugin` deleted, `JsonRpcServer` with multi-agent support, 49 integration tests [[jsonrpc-transport-refactoring]]
-- **2026-05-21**: `Message::Submit` and `AgentRequest` now carry `AgentInput`, while custom deserialization keeps legacy string input compatible across HTTP, WebSocket, dispatcher, and JSON-RPC paths [[agentinput-multimodal-run-implementation]]
+- **2026-05-22**: `AgentPayload::Submit`, `AgentRequest`, and dispatcher unified to use `AgentInput` directly — dropped redundant `run_id`/`metadata` fields, dispatcher switched from `run_with_id` to `run_input` [[agentinput-channel-unification]]

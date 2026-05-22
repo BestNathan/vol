@@ -3,8 +3,8 @@ type: concept
 category: architecture
 tags: [agent-input, multimodal, react-agent, api-compatibility]
 created: 2026-05-21
-updated: 2026-05-21
-source_count: 1
+updated: 2026-05-22
+source_count: 2
 ---
 
 # AgentInput Multimodal Run
@@ -60,8 +60,9 @@ For channel clients, both forms are accepted:
 
 ## Related
 
-- [[agentinput-multimodal-run-implementation]]: source page for the implementation.
+- [[agentinput-multimodal-run-implementation]]: original implementation source.
+- [[agentinput-channel-unification]]: channel crate unified to use `AgentInput` directly.
 - [[vol-llm-agent-crate]]: owns `AgentInput`, `InputPart`, and `run_input`.
 - [[vol-llm-provider-crate]]: converts multipart content for Anthropic.
-- [[vol-llm-agent-channel-crate]]: preserves legacy and structured protocol inputs.
+- [[vol-llm-agent-channel-crate]]: `AgentPayload::Submit`, `AgentRequest`, and `AgentDispatcher` all use `AgentInput` directly — no intermediate string conversion.
 - [[react-pattern]]: execution loop receiving structured user content.
