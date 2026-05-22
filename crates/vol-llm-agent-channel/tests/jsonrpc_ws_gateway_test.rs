@@ -2,7 +2,7 @@ use vol_llm_agent_channel::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, ErrorPayload, FileOperation, FilePayload,
     MessageKind, Operation, Payload,
 };
-use vol_llm_agent_channel::gateway::jsonrpc_ws::{decode_jsonrpc_frame, encode_jsonrpc_message};
+use vol_llm_agent_channel::transport::jsonrpc::codec::{decode_jsonrpc_frame, encode_jsonrpc_message};
 
 #[test]
 fn decode_agent_submit_maps_jsonrpc_id_to_message_id() {
