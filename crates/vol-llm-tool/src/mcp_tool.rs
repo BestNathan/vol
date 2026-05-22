@@ -5,7 +5,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use vol_llm_mcp::McpManager;
 
-use crate::tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity};
+use crate::tool::{
+    ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity,
+};
 
 /// A tool that proxies execution to an MCP server via McpManager.
 pub struct McpTool {

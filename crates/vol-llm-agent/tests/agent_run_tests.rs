@@ -7,9 +7,10 @@ use vol_llm_agent::react::{
     plugin::{AgentPlugin, PluginDecision, PluginId, RunContext},
     AgentConfig, AgentError, AgentStreamEvent, ReActAgent,
 };
+use vol_llm_agent::AgentInput;
 use vol_llm_core::test_utils::MockLlmClient;
 use vol_llm_core::{
-    ConversationRequest, ConversationResponse, LLMClient, LLMProvider, StreamEvent,
+    ConversationRequest, ConversationResponse, LLMClient, LLMProvider, MessageContent, StreamEvent,
     StreamEventData, StreamReceiver, SupportedParam, ToolCall,
 };
 
@@ -51,7 +52,10 @@ async fn react_agent_run_with_id_returns_caller_run_id() {
         .unwrap();
     let agent = ReActAgent::new(config);
 
-    let result = agent.run_with_id("Hi", "run_supplied_1").await.unwrap();
+    let result = agent
+        .run_input(AgentInput::text("Hi").with_run_id("run_supplied_1"))
+        .await
+        .unwrap();
 
     assert_eq!(result.run_id, "run_supplied_1");
     assert_eq!(result.content, "Hello, I can help with that.");
@@ -78,6 +82,102 @@ async fn test_agent_run_single_iteration() {
     assert!(result.error.is_none());
     assert_eq!(result.iterations, 1);
     assert_eq!(result.content, "Hello, I can help with that.");
+}
+
+#[tokio::test]
+async fn test_agent_run_input_text_matches_run() {
+    let mock = MockLlmClient::new();
+    mock.set_stream_events(vec![content_complete_event("ok")])
+        .await;
+
+    let config = AgentConfig::builder()
+        .with_llm(Arc::new(mock))
+        .with_system_prompt("You are a test assistant.".to_string())
+        .build()
+        .unwrap();
+    let agent = ReActAgent::new(config);
+
+    let result = agent.run_input(AgentInput::text("Hi")).await.unwrap();
+
+    assert_eq!(result.content, "ok");
+    assert!(result.error.is_none());
+}
+
+#[tokio::test]
+async fn test_agent_run_input_uses_provided_run_id() {
+    let mock = MockLlmClient::new();
+    mock.set_stream_events(vec![content_complete_event("ok")])
+        .await;
+
+    let config = AgentConfig::builder()
+        .with_llm(Arc::new(mock))
+        .with_system_prompt("You are a test assistant.".to_string())
+        .build()
+        .unwrap();
+    let agent = ReActAgent::new(config);
+
+    let result = agent
+        .run_input(AgentInput::text("Hi").with_run_id("caller-run-id"))
+        .await
+        .unwrap();
+
+    assert_eq!(result.run_id, "caller-run-id");
+}
+
+#[tokio::test]
+async fn test_agent_run_input_sends_multipart_user_message() {
+    let mock = Arc::new(MockLlmClient::new());
+    mock.set_stream_events(vec![content_complete_event("ok")])
+        .await;
+
+    let config = AgentConfig::builder()
+        .with_llm(mock.clone())
+        .with_system_prompt("You are a test assistant.".to_string())
+        .build()
+        .unwrap();
+    let agent = ReActAgent::new(config);
+
+    agent
+        .run_input(
+            AgentInput::new()
+                .text_part("look")
+                .image_url("data:image/png;base64,AAAA"),
+        )
+        .await
+        .unwrap();
+
+    let request = mock.last_request().await.unwrap();
+    let user_message = request
+        .messages
+        .iter()
+        .find(|message| matches!(message.content, Some(MessageContent::MultiPart(_))))
+        .expect("multipart user message should be sent to LLM");
+
+    match user_message.content.as_ref().unwrap() {
+        MessageContent::MultiPart(parts) => assert_eq!(parts.len(), 2),
+        other => panic!("expected multipart content, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_agent_run_input_rejects_empty_parts_before_llm_call() {
+    let mock = Arc::new(MockLlmClient::new());
+
+    let config = AgentConfig::builder()
+        .with_llm(mock.clone())
+        .with_system_prompt("You are a test assistant.".to_string())
+        .build()
+        .unwrap();
+    let agent = ReActAgent::new(config);
+
+    let result = agent.run_input(AgentInput::new()).await;
+
+    assert!(matches!(
+        result,
+        Err(AgentError::InvalidInput(message))
+            if message == "Agent input must contain at least one part"
+    ));
+    assert_eq!(mock.call_count(), 0);
 }
 
 /// A tool that always succeeds — used to test tool execution flow.
@@ -453,6 +553,31 @@ impl LLMClient for LoopMock {
     }
 }
 
+struct RejectMaxIterationsPlugin;
+
+#[async_trait]
+impl AgentPlugin for RejectMaxIterationsPlugin {
+    fn id(&self) -> PluginId {
+        "reject_max_iterations".to_string()
+    }
+
+    fn priority(&self) -> u32 {
+        100
+    }
+
+    async fn intercept(&self, event: &AgentStreamEvent, _: &RunContext) -> PluginDecision {
+        match event {
+            AgentStreamEvent::IterationComplete {
+                final_answer: None,
+                ..
+            } => PluginDecision::Abort("max iterations reached".to_string()),
+            _ => PluginDecision::Continue,
+        }
+    }
+
+    async fn listen(&self, _: &AgentStreamEvent, _: &RunContext) {}
+}
+
 #[tokio::test]
 async fn test_agent_run_max_iterations_reached() {
     let (mock, count) = LoopMock::new();
@@ -464,6 +589,7 @@ async fn test_agent_run_max_iterations_reached() {
         .with_def(def)
         .with_llm(Arc::new(mock))
         .with_tool(EchoTool)
+        .with_plugin(RejectMaxIterationsPlugin)
         .build()
         .unwrap();
     let agent = ReActAgent::new(config);

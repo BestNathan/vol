@@ -125,7 +125,6 @@ fn create_test_context() -> RunContext {
         AgentConfig {
             context_builder: create_test_context_builder(),
             plugin_registry: PluginRegistry::new(),
-            agent_id: "test-agent".to_string(),
             ..Default::default()
         },
     );

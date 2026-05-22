@@ -1,6 +1,6 @@
 //! ReAct Agent implementation.
 
-use super::{AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext};
+use super::{AgentInput, AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext};
 use crate::react::state::ToolCallRecord;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -171,25 +171,29 @@ impl ReActAgent {
     /// - All tool calls made during execution
     /// - Error information if any tool call failed
     pub async fn run(&self, user_input: &str) -> Result<AgentResponse, crate::AgentError> {
-        let run_id = uuid::Uuid::new_v4().simple().to_string();
-        self.run_with_id(user_input, run_id).await
+        self.run_input(AgentInput::text(user_input)).await
     }
 
-    pub async fn run_with_id(
-        &self,
-        user_input: &str,
-        run_id: impl Into<String>,
-    ) -> Result<AgentResponse, crate::AgentError> {
-        let run_id = run_id.into();
-        // === Phase 1: Generate run_id, compute effective config from def ===
-
+    pub async fn run_input(&self, input: AgentInput) -> Result<AgentResponse, crate::AgentError> {
+        let user_content = input
+            .to_message_content()
+            .map_err(|e| crate::AgentError::InvalidInput(e.to_string()))?;
+        let user_input = input.display_text();
+        let run_id = input
+            .run_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string());
         let (run_ctx, plugin_rx) =
-            RunContext::new(run_id.clone(), user_input.to_string(), self.config.clone());
+            RunContext::new(run_id.clone(), user_input.clone(), self.config.clone());
+
+        for (key, value) in input.metadata {
+            run_ctx.data.write().await.insert(key, value);
+        }
 
         // Persist user message to session so it's available via SessionContributor.
         // This replaces the old UserInputContributor which injected input directly
         // into the context without persisting it.
-        let user_msg = Message::user(user_input.to_string());
+        let user_msg = Message::user(user_content);
         run_ctx.add_message(user_msg).await.map_err(|e| {
             crate::AgentError::SessionError(format!("Failed to persist user message: {}", e))
         })?;
@@ -213,7 +217,7 @@ impl ReActAgent {
 
         // === Phase 3: Spawn agent loop task and await it ===
         let llm = self.config.llm.clone();
-        let user_input = user_input.to_string();
+        let user_input = user_input.clone();
         let sandbox = self.config.sandbox.clone();
         let agent_task = tokio::spawn(async move {
             let max_iterations = run_ctx.max_iterations();

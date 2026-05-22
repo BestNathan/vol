@@ -31,6 +31,7 @@
 pub mod agent;
 pub mod config_builder;
 pub mod hitl;
+pub mod input;
 pub mod plugin;
 pub mod plugin_stream;
 pub mod response;
@@ -44,11 +45,12 @@ pub use hitl::{
     run_cli_approval_loop, spawn_custom_approval_handler, ApprovalChannel, ApprovalHandler,
     ApprovalTrigger, BoxedApprovalHandler, HitlConfig, TimeoutBehavior,
 };
+pub use hitl::{ApprovalRequest, ApprovalResponse};
+pub use input::{AgentInput, AgentInputError, InputPart};
 pub use plugin::{AgentPlugin, PluginDecision, PluginId, PluginRegistry};
 pub use plugin_stream::{
     create_shortcircuit_stream, create_skip_stream, run_interceptor_loop, spawn_listener_tasks,
 };
-pub use hitl::{ApprovalRequest, ApprovalResponse};
 pub use response::{AgentError, AgentResponse};
 pub use run_context::{PluginRequest, RunContext};
 pub use state::{ReasoningStep, ToolCallRecord};

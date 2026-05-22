@@ -24,8 +24,8 @@ pub enum LLMError {
     #[error("Request timeout: {0}")]
     Timeout(String),
 
-    #[error("Parameter '{param}' is not supported by this provider")]
-    UnsupportedParam { param: String },
+    #[error("Invalid request: {0}")]
+    InvalidRequest(String),
 
     #[error("Tool call error: {0}")]
     ToolCall(String),
