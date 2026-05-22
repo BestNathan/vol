@@ -1,5 +1,6 @@
 mod http;
 mod memory;
+pub mod jsonrpc;
 mod ws;
 
 pub use http::HttpTransport;
