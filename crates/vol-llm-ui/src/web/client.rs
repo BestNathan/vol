@@ -833,6 +833,65 @@ impl JsonRpcClient {
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
+    /// List all system tools.
+    pub fn tool_list(&self, cb: impl FnOnce(Result<Vec<serde_json::Value>, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "tool.list",
+            "params": {},
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("tools").and_then(|v| v.as_array()) {
+                Some(tools) => cb(Ok(tools.clone())),
+                None => cb(Err("no tools in response".to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// Call a tool directly.
+    pub fn tool_call(
+        &self,
+        tool_name: &str,
+        arguments: &serde_json::Value,
+        cb: impl FnOnce(Result<serde_json::Value, String>) + 'static,
+    ) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "tool.call",
+            "params": { "tool_name": tool_name, "arguments": arguments },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            if let Some(error) = result.get("error") {
+                let msg = error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
+                cb(Err(msg.to_string()));
+            } else {
+                cb(Ok(result.clone()));
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
     fn handle_message(inner: &Rc<ClientInner>, data: &str) {
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
             if val.get("method").and_then(|m| m.as_str()) == Some("agent.event") {
