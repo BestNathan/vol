@@ -7,7 +7,7 @@
 
 use serde_json::Value;
 use vol_llm_agent::react::AgentStreamEvent;
-use vol_llm_agent_channel::jsonrpc::serde_helpers::*;
+use vol_llm_agent_channel::transport::jsonrpc::serde_helpers::*;
 use vol_llm_core::conversation::TokenUsage;
 
 // ---------------------------------------------------------------------------
