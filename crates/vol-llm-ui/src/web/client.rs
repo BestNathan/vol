@@ -294,13 +294,13 @@ impl JsonRpcClient {
     }
 
     /// Cancel a running agent.
-    pub fn cancel(&self, req_id: &str) -> Result<(), String> {
+    pub fn cancel(&self, run_id: &str) -> Result<(), String> {
         let id = self.alloc_id();
 
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "agent.cancel",
-            "params": { "req_id": req_id },
+            "params": { "run_id": run_id },
             "id": id,
         });
         let json = serde_json::to_string(&msg).map_err(|e| e.to_string())?;
