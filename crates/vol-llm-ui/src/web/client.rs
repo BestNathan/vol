@@ -21,12 +21,11 @@ use crate::state::{McpPromptInfo, McpResourceInfo, McpResourceTemplateInfo, McpS
 use wasm_bindgen::prelude::*;
 
 /// Agent event received from the server subscription.
+/// Format matches AgentPayload::Event { run_id, event }.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentEvent {
-    pub req_id: String,
-    #[serde(rename = "event_type")]
-    pub event_type: String,
-    pub data: serde_json::Value,
+    pub run_id: String,
+    pub event: serde_json::Value,
 }
 
 /// File entry returned by file.list.
@@ -836,12 +835,10 @@ impl JsonRpcClient {
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
             if val.get("method").and_then(|m| m.as_str()) == Some("agent.event") {
                 if let Some(params) = val.get("params") {
-                    if let Some(result) = params.get("result") {
-                        if let Ok(event) = serde_json::from_value::<AgentEvent>(result.clone()) {
-                            let _ = inner.event_tx.unbounded_send(event);
-                        } else {
-                            log::warn!("Failed to parse AgentEvent: {}", result);
-                        }
+                    if let Ok(event) = serde_json::from_value::<AgentEvent>(params.clone()) {
+                        let _ = inner.event_tx.unbounded_send(event);
+                    } else {
+                        log::warn!("Failed to parse AgentEvent: {}", params);
                     }
                 }
             } else if let Some(id) = val.get("id").and_then(|v| v.as_u64()) {
