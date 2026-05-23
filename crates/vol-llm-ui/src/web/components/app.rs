@@ -412,6 +412,7 @@ pub fn App() -> Element {
     let restore_client = client.clone();
     let restore_global = global_signal.clone();
     let restore_conv = conversation_signal.clone();
+    let restore_agents = agents_signal.clone();
     wasm_bindgen_futures::spawn_local(async move {
         loop {
             // Wait for reconnection to succeed
@@ -476,12 +477,11 @@ pub fn App() -> Element {
             match rx3.await {
                 Ok(Ok(entries)) => {
                     let conv_entries = crate::web::components::sessions_panel::session_entries_to_conversation(entries);
+                    let agent_id = restore_agents.read().selected.clone().unwrap_or_default();
                     {
                         let mut conv = restore_conv.write_unchecked();
-                        conv.entries = conv_entries;
-                        if conv.auto_scroll {
-                            conv.conversation_scroll = 0;
-                        }
+                        let ac = conv.get_or_create(&agent_id);
+                        ac.entries = conv_entries;
                     }
                     log::info!("Conversation restored from session");
                 }

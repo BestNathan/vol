@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::state::{AgentsState, AgentSubTab, UiEventKind};
+use crate::state::{AgentsState, AgentSubTab, ConversationState, UiEventKind};
 
 use super::conversation::ConversationView;
 use super::input_area::InputArea;
@@ -59,6 +59,7 @@ fn SubTabButton(label: String, active: bool, onclick: EventHandler<()>) -> Eleme
 pub fn AgentsPanel() -> Element {
     let app: crate::web::components::app::AppState = use_context();
     let agents_signal: Signal<AgentsState> = use_context();
+    let conv_signal: Signal<ConversationState> = use_context();
 
     // Load agents helper
     let rpc_load = app.rpc_client.clone();
@@ -193,6 +194,7 @@ pub fn AgentsPanel() -> Element {
                         is_selected: selected.as_ref() == Some(&agent.id),
                         on_click: {
                             let mut sig = agents_signal;
+                            let mut conv_sig = conv_signal;
                             let agent_id = agent.id.clone();
                             let is_selected = selected.as_ref() == Some(&agent.id);
                             move |_: ()| {
@@ -202,6 +204,9 @@ pub fn AgentsPanel() -> Element {
                                         s.selected = Some(agent_id.clone());
                                         s.sub_tab = AgentSubTab::Conversation;
                                     }
+                                });
+                                conv_sig.with_mut(|cs| {
+                                    cs.set_active(if is_selected { None } else { Some(agent_id.clone()) });
                                 });
                             }
                         },
