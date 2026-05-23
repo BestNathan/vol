@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-05-23] ingest | Agent Directory Discovery
+- Created sources: [[agent-directory-discovery]]
+- Updated entities: [[vol-llm-agent-channel-crate]] (agent_defs, discover_agents, agent.list metadata)
+- Updated index: new source entry, updated date
+- Cross-references added: 1
+- Changes: Created 3 agent definition files (general-purpose, explore, review); example uses discover_agents(); agent.list returns type/description/scope; frontend adds agent selector dropdown with target param.
+
 ## [2026-05-22] ingest | Tool Protocol Operations
 - Created sources: [[tool-protocol-operations]]
 - Updated entities: [[vol-llm-agent-channel-crate]] (timeline, source_count)

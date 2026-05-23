@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-22 (tool-protocol-operations)
+Last updated: 2026-05-23 (agent-directory-discovery)
 
 ## Entities
 
@@ -110,6 +110,7 @@ Last updated: 2026-05-22 (tool-protocol-operations)
 | [[agentinput-channel-unification]] | Channel crate unified to use AgentInput directly: Submit payload, AgentRequest, dispatcher all switched from String | active | 2026-05-22 |
 | [[jsonrpc-transport-consolidation]] | JSON-RPC transport consolidated: jsonrpc/ and gateway/ moved into transport/jsonrpc/ | active | 2026-05-22 |
 | [[tool-protocol-operations]] | Tool protocol: tool.list/tool.call JSON-RPC methods with ToolHandler backed by ToolRegistry | active | 2026-05-22 |
+| [[agent-directory-discovery]] | Agent directory discovery: discover_agents() from .md files, agent.list metadata, frontend agent selector | active | 2026-05-23 |
 
 ## Analyses
 
