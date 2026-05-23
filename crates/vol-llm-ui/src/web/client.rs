@@ -213,13 +213,16 @@ impl JsonRpcClient {
     }
 
     /// Submit input to the agent. Returns the request ID.
-    pub fn submit(&self, input: &str) -> Result<String, String> {
+    pub fn submit(&self, input: &str, target: Option<&str>) -> Result<String, String> {
         let id = self.alloc_id();
-
+        let mut params = serde_json::json!({ "input": input });
+        if let Some(t) = target {
+            params["target"] = serde_json::Value::String(t.to_string());
+        }
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "agent.submit",
-            "params": { "input": input },
+            "params": params,
             "id": id,
         });
         let json = serde_json::to_string(&msg).map_err(|e| e.to_string())?;
