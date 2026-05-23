@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-23 (agent-directory-discovery)
+Last updated: 2026-05-23 (agent-centric-ui)
 
 ## Entities
 
@@ -111,6 +111,7 @@ Last updated: 2026-05-23 (agent-directory-discovery)
 | [[jsonrpc-transport-consolidation]] | JSON-RPC transport consolidated: jsonrpc/ and gateway/ moved into transport/jsonrpc/ | active | 2026-05-22 |
 | [[tool-protocol-operations]] | Tool protocol: tool.list/tool.call JSON-RPC methods with ToolHandler backed by ToolRegistry | active | 2026-05-22 |
 | [[agent-directory-discovery]] | Agent directory discovery: discover_agents() from .md files, agent.list metadata, frontend agent selector | active | 2026-05-23 |
+| [[agent-centric-ui]] | Agent-centric UI: agents tab first, conversation/sessions as sub-tabs, agent status cards, agent_id session filtering | active | 2026-05-23 |
 
 ## Analyses
 

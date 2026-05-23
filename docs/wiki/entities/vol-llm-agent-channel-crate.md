@@ -4,7 +4,7 @@ category: product
 tags: [crate, agent, transport, rust, json-rpc]
 created: 2026-05-05
 updated: 2026-05-23
-source_count: 9
+source_count: 10
 ---
 
 # vol-llm-agent-channel Crate

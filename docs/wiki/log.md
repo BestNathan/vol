@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-05-23] ingest | Agent-Centric UI + Protocol
+- Created sources: [[agent-centric-ui]]
+- Updated entities: [[vol-llm-agent-channel-crate]] (session.list agent_id, agent status tracking)
+- Updated index: new source entry, updated date
+- Cross-references added: 1
+- Changes: Tab bar reorganized (Agents first, no Conversation/Sessions tabs). Conversation/Sessions are sub-tabs inside Agents panel scoped to selected agent. Agent cards show status/current task. session.list accepts agent_id filter. agent.list returns status/current_input.
+
 ## [2026-05-23] ingest | Agent Directory Discovery
 - Created sources: [[agent-directory-discovery]]
 - Updated entities: [[vol-llm-agent-channel-crate]] (agent_defs, discover_agents, agent.list metadata)
