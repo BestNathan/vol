@@ -623,6 +623,9 @@
   .h-\[100dvh\] {
     height: 100dvh;
   }
+  .h-\[200px\] {
+    height: 200px;
+  }
   .h-\[calc\(100vh-9\.5rem\)\] {
     height: calc(100vh - 9.5rem);
   }
@@ -668,9 +671,6 @@
   .max-h-\[85vh\] {
     max-height: 85vh;
   }
-  .max-h-\[90dvh\] {
-    max-height: 90dvh;
-  }
   .max-h-\[100px\] {
     max-height: 100px;
   }
@@ -679,6 +679,9 @@
   }
   .max-h-\[150px\] {
     max-height: 150px;
+  }
+  .max-h-\[180px\] {
+    max-height: 180px;
   }
   .max-h-\[200px\] {
     max-height: 200px;
@@ -700,6 +703,9 @@
   }
   .min-h-\[40px\] {
     min-height: 40px;
+  }
+  .min-h-\[60px\] {
+    min-height: 60px;
   }
   .min-h-\[100px\] {
     min-height: 100px;
@@ -773,9 +779,6 @@
   .w-\[650px\] {
     width: 650px;
   }
-  .w-\[700px\] {
-    width: 700px;
-  }
   .w-\[800px\] {
     width: 800px;
   }
@@ -802,6 +805,9 @@
   }
   .max-w-\[150px\] {
     max-width: 150px;
+  }
+  .max-w-\[260px\] {
+    max-width: 260px;
   }
   .max-w-\[300px\] {
     max-width: 300px;
@@ -1225,6 +1231,9 @@
   .border-\[\#80a0ff\] {
     border-color: #80a0ff;
   }
+  .border-\[\#333\] {
+    border-color: #333;
+  }
   .border-\[\#4080c0\] {
     border-color: #4080c0;
   }
@@ -1294,6 +1303,9 @@
   .bg-\[\#1a2a44\] {
     background-color: #1a2a44;
   }
+  .bg-\[\#1e1e36\] {
+    background-color: #1e1e36;
+  }
   .bg-\[\#1e1e38\] {
     background-color: #1e1e38;
   }
@@ -1323,6 +1335,9 @@
   }
   .bg-\[\#3a2020\] {
     background-color: #3a2020;
+  }
+  .bg-\[\#40c040\] {
+    background-color: #40c040;
   }
   .bg-\[\#203a20\] {
     background-color: #203a20;
@@ -1681,6 +1696,9 @@
   }
   .text-\[0\.55rem\] {
     font-size: 0.55rem;
+  }
+  .text-\[9px\] {
+    font-size: 9px;
   }
   .text-\[10px\] {
     font-size: 10px;
@@ -2343,6 +2361,20 @@
       }
     }
   }
+  .hover\:bg-\[\#4a4a65\] {
+    &:hover {
+      @media (hover: hover) {
+        background-color: #4a4a65;
+      }
+    }
+  }
+  .hover\:bg-\[\#5a5a75\] {
+    &:hover {
+      @media (hover: hover) {
+        background-color: #5a5a75;
+      }
+    }
+  }
   .hover\:bg-\[\#50a050\] {
     &:hover {
       @media (hover: hover) {
@@ -2752,11 +2784,6 @@
   .sm\:w-\[33\.33\%\] {
     @media (width >= 480px) {
       width: 33.33%;
-    }
-  }
-  .sm\:w-\[40\%\] {
-    @media (width >= 480px) {
-      width: 40%;
     }
   }
   .sm\:w-\[90vw\] {

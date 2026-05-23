@@ -6779,6 +6779,7 @@ dependencies = [
  "vol-llm-provider",
  "vol-llm-skill",
  "vol-llm-tool",
+ "vol-llm-tools-builtin",
  "vol-session",
 ]
 

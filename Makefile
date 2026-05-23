@@ -10,7 +10,7 @@ web-dev: ## Start Dioxus dev server (port 8080)
 	dx serve --package vol-llm-ui --bin vol-llm-ui-web --no-default-features --features web --addr 0.0.0.0 --port 8080
 
 web-backend: ## Start backend JSON-RPC agent service
-	ANTHROPIC_AUTH_TOKEN=sk cargo run --example jsonrpc_agent_service -p vol-llm-agent-channel
+	ANTHROPIC_AUTH_TOKEN=sk cargo watch -x "run --example jsonrpc_agent_service -p vol-llm-agent-channel"
 
 web-check: ## cargo check (web only)
 	cargo check -p vol-llm-ui --no-default-features --features web
