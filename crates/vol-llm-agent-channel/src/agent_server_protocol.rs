@@ -261,7 +261,14 @@ impl Payload {
             }
             // ── Session ──
             Operation::Session(SessionOperation::List) => {
-                Ok(Payload::Session(SessionPayload::List))
+                #[derive(Deserialize)]
+                struct P {
+                    #[serde(default)]
+                    agent_id: Option<String>,
+                }
+                let p: P = serde_json::from_value(value)
+                    .map_err(|_| ProtocolError::PayloadDecodeFailed("session.list"))?;
+                Ok(Payload::Session(SessionPayload::List { agent_id: p.agent_id }))
             }
             Operation::Session(SessionOperation::Resume) => {
                 #[derive(Deserialize)]
@@ -531,7 +538,10 @@ pub enum FilePayload {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SessionPayload {
-    List,
+    List {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agent_id: Option<String>,
+    },
     ListResult {
         sessions: Vec<serde_json::Value>,
     },

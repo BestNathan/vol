@@ -138,7 +138,7 @@ async fn test_e2e_all_methods() {
     let resp = handle(command(
         "10",
         Operation::Session(SessionOperation::List),
-        Payload::Session(vol_llm_agent_channel::agent_server_protocol::SessionPayload::List),
+        Payload::Session(vol_llm_agent_channel::agent_server_protocol::SessionPayload::List { agent_id: None }),
     ))
     .await
     .unwrap();

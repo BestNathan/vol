@@ -42,7 +42,7 @@ async fn core_dispatches_session_list_to_session_domain() {
     let msg = AgentServerMessage::new_command(
         "msg_3",
         Operation::Session(SessionOperation::List),
-        Payload::Session(SessionPayload::List),
+        Payload::Session(SessionPayload::List { agent_id: None }),
     );
 
     let outputs = core.handle(msg).await.unwrap();
