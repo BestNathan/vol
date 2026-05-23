@@ -80,6 +80,7 @@ impl DomainHandler for SessionHandler {
                                 if let Ok(summaries) = store.list_sessions() {
                                     for s in summaries {
                                         all_sessions.push(serde_json::json!({
+                                            "id": s.session_id,
                                             "agent_id": agent_id,
                                             "session_id": s.session_id,
                                             "entry_count": s.entry_count,
