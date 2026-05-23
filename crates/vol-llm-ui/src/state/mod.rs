@@ -9,6 +9,7 @@ mod event_buffer;
 pub use event_buffer::EventBuffer;
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
@@ -315,8 +316,6 @@ pub struct LogRunSummary {
 // === EventBus (web only) =====================================================
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
-use std::collections::HashMap;
-#[cfg(all(feature = "web", not(feature = "tui")))]
 use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(all(feature = "web", not(feature = "tui")))]
 use std::sync::{Arc, Mutex};
@@ -443,19 +442,58 @@ impl GlobalState {
     }
 }
 
-/// Local state for ConversationView.
+/// Per-agent conversation entries.
 #[cfg(all(feature = "web", not(feature = "tui")))]
-#[derive(Debug)]
-pub struct ConversationState {
+#[derive(Debug, Clone)]
+pub struct AgentConversation {
     pub entries: Vec<ConversationEntry>,
-    pub conversation_scroll: u16,
     pub auto_scroll: bool,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl AgentConversation {
+    pub fn new() -> Self {
+        Self { entries: Vec::new(), auto_scroll: true }
+    }
+}
+
+/// Conversation state keyed by agent_id.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug, Clone)]
+pub struct ConversationState {
+    pub agents: HashMap<String, AgentConversation>,
+    pub active_agent: Option<String>,
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl ConversationState {
     pub fn new() -> Self {
-        Self { entries: Vec::new(), conversation_scroll: 0, auto_scroll: true }
+        Self { agents: HashMap::new(), active_agent: None }
+    }
+
+    pub fn get_or_create(&mut self, agent_id: &str) -> &mut AgentConversation {
+        self.agents.entry(agent_id.to_string()).or_insert_with(AgentConversation::new)
+    }
+
+    pub fn active_mut(&mut self) -> &mut AgentConversation {
+        let id = self.active_agent.clone().unwrap_or_default();
+        self.get_or_create(&id)
+    }
+
+    pub fn active_entries(&self) -> &[ConversationEntry] {
+        self.active_agent.as_ref()
+            .and_then(|id| self.agents.get(id))
+            .map(|a| a.entries.as_slice())
+            .unwrap_or(&[])
+    }
+
+    pub fn set_active(&mut self, agent_id: Option<String>) -> bool {
+        if self.active_agent != agent_id {
+            self.active_agent = agent_id;
+            true
+        } else {
+            false
+        }
     }
 }
 
