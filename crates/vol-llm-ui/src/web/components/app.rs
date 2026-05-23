@@ -14,7 +14,6 @@ use super::agents_panel::AgentsPanel;
 use super::approval_dialog::ApprovalDialog;
 use super::file_content::FileContentView;
 use super::file_tree::FileTree;
-use super::input_area::InputArea;
 use super::log_viewer::LogViewer;
 use super::mcp_panel::McpPanel;
 use super::skills::SkillsPanel;
@@ -533,7 +532,6 @@ pub fn App() -> Element {
                     div { class: "min-w-0 flex-1 flex flex-col overflow-hidden",
                         TabBar {}
                         TabContent { skill_dialog_signal }
-                        InputArea {}
                     }
                 }
             }

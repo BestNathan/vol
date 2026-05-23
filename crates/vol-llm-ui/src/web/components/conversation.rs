@@ -104,7 +104,7 @@ pub fn ConversationView() -> Element {
     let count = signal.read().entries.len();
     if count == 0 {
         return rsx! {
-            div { class: "flex-1 overflow-y-auto p-1.5 sm:p-2.5",
+            div { class: "flex-1 overflow-y-auto p-1.5 sm:p-2.5 min-h-0",
                 div { class: "flex items-center justify-center h-full text-[#666]", "No messages yet. Type a query and press Send." }
             }
         };
@@ -116,7 +116,7 @@ pub fn ConversationView() -> Element {
         rsx! { MessageEntry { entry } }
     }).collect();
     rsx! {
-        div { class: "flex-1 overflow-y-auto p-1.5 sm:p-2.5", {messages.into_iter()} }
+        div { class: "flex-1 overflow-y-auto p-1.5 sm:p-2.5 min-h-0", {messages.into_iter()} }
     }
 }
 

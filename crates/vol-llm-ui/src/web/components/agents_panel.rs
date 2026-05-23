@@ -5,6 +5,7 @@ use dioxus::prelude::*;
 use crate::state::{AgentsState, AgentSubTab, UiEventKind};
 
 use super::conversation::ConversationView;
+use super::input_area::InputArea;
 use super::sessions_panel::SessionsPanel;
 
 /// Agent card — responsive, works on mobile.
@@ -233,10 +234,15 @@ pub fn AgentsPanel() -> Element {
                         },
                     }
                 }
-                div { class: "flex-1 overflow-hidden min-h-0",
+                div { class: "flex-1 min-h-0 flex flex-col overflow-hidden",
                     match sub_tab {
-                        AgentSubTab::Conversation => rsx! { ConversationView {} },
-                        AgentSubTab::Sessions => rsx! { SessionsPanel {} },
+                        AgentSubTab::Conversation => rsx! {
+                            ConversationView {}
+                            InputArea {}
+                        },
+                        AgentSubTab::Sessions => rsx! {
+                            SessionsPanel {}
+                        },
                     }
                 }
             } else {
