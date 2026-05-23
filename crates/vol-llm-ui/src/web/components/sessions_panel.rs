@@ -237,7 +237,6 @@ fn SessionItem(
     created_at: i64,
     rpc: JsonRpcClient,
     conversation_signal: Signal<ConversationState>,
-    active_tab: Signal<ActiveTab>,
     agents_signal: Signal<AgentsState>,
 ) -> Element {
     let mut show_detail = use_signal(|| false);
@@ -254,7 +253,6 @@ fn SessionItem(
     let rpc_resume = rpc.clone();
     let sid_resume = session_id.clone();
     let conv_resume = conversation_signal;
-    let tab_resume = active_tab;
     let agents_resume = agents_signal;
 
     rsx! {
@@ -300,7 +298,6 @@ fn SessionItem(
                     let rpc = rpc_resume.clone();
                     let sid = sid_resume.clone();
                     let mut conv = conv_resume;
-                    let mut tab = tab_resume;
                     let mut agents = agents_resume;
                     let agent_id = agents.read().selected.clone();
                     rpc.session_resume(&sid, agent_id.as_deref(), move |result| {
@@ -309,7 +306,6 @@ fn SessionItem(
                                 let conv_entries = session_entries_to_conversation(resp.entries);
                                 conv.with_mut(|s| { s.entries = conv_entries; });
                                 agents.with_mut(|a| a.sub_tab = AgentSubTab::Conversation);
-                                tab.set(ActiveTab::Agents);
                             }
                             Err(e) => log::error!("Failed to resume session: {e}"),
                         }
@@ -404,7 +400,6 @@ pub fn SessionsPanel() -> Element {
                 created_at: session.created_at,
                 rpc: rpc_for_items.clone(),
                 conversation_signal,
-                active_tab: app.active_tab,
                 agents_signal,
             }
         }

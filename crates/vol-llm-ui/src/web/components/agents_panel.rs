@@ -198,7 +198,10 @@ pub fn AgentsPanel() -> Element {
                             move |_: ()| {
                                 sig.with_mut(|s| {
                                     if is_selected { s.selected = None; }
-                                    else { s.selected = Some(agent_id.clone()); }
+                                    else {
+                                        s.selected = Some(agent_id.clone());
+                                        s.sub_tab = AgentSubTab::Conversation;
+                                    }
                                 });
                             }
                         },
