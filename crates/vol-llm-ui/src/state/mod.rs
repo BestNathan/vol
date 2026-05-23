@@ -980,11 +980,10 @@ impl UiState {
                     text: format!("Continuing from iteration {} (counter reset to 0)", from_iteration),
                 });
             }
-            UiEvent::IterationComplete { iteration, final_answer } => {
+            UiEvent::IterationComplete { iteration, final_answer: _ } => {
+                // Content already rendered via ContentComplete stream;
+                // only update iteration counter, do not push duplicate AgentAnswer.
                 self.iteration = iteration;
-                if let Some(answer) = final_answer {
-                    self.conversation.push(ConversationEntry::AgentAnswer { text: answer });
-                }
             }
             UiEvent::ApprovalRequest { tool_name, reason, arguments } => {
                 self.approval_state.tool_name = Some(tool_name);
