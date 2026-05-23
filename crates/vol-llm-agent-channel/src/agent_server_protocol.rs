@@ -542,6 +542,7 @@ pub enum SessionPayload {
     ResumeResult {
         session_id: String,
         restored: bool,
+        entry_count: usize,
         entries: Vec<serde_json::Value>,
     },
     Entries {

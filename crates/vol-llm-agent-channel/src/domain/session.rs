@@ -110,12 +110,14 @@ impl DomainHandler for SessionHandler {
                             .into_iter()
                             .filter_map(|e| serde_json::to_value(e).ok())
                             .collect();
+                        let entry_count = json_entries.len();
                         Ok(vec![AgentServerMessage::new_result(
                             message.message_id,
                             Operation::Session(SessionOperation::Resume),
                             Payload::Session(SessionPayload::ResumeResult {
                                 session_id,
                                 restored: true,
+                                entry_count,
                                 entries: json_entries,
                             }),
                         )])
