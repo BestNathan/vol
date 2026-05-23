@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-05-23] ingest | Per-Agent Conversation State
+- Created sources: [[per-agent-conversation]]
+- Updated entities: [[vol-llm-ui-crate]] (per-agent ConversationState, source_count)
+- Updated index: new source entry, updated date
+- Cross-references added: 1
+- Changes: ConversationState rewritten as HashMap<String, AgentConversation>; events route to active agent; agent switch restores per-agent entries; resume stores under correct agent key.
+
 ## [2026-05-23] ingest | Agent-Centric UI + Protocol
 - Created sources: [[agent-centric-ui]]
 - Updated entities: [[vol-llm-agent-channel-crate]] (session.list agent_id, agent status tracking)

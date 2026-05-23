@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-23 (agent-centric-ui)
+Last updated: 2026-05-23 (per-agent-conversation)
 
 ## Entities
 
@@ -112,6 +112,7 @@ Last updated: 2026-05-23 (agent-centric-ui)
 | [[tool-protocol-operations]] | Tool protocol: tool.list/tool.call JSON-RPC methods with ToolHandler backed by ToolRegistry | active | 2026-05-22 |
 | [[agent-directory-discovery]] | Agent directory discovery: discover_agents() from .md files, agent.list metadata, frontend agent selector | active | 2026-05-23 |
 | [[agent-centric-ui]] | Agent-centric UI: agents tab first, conversation/sessions as sub-tabs, agent status cards, agent_id session filtering | active | 2026-05-23 |
+| [[per-agent-conversation]] | Per-agent conversation state: HashMap keyed by agent_id, independent entries per agent, active_agent routing | active | 2026-05-23 |
 
 ## Analyses
 

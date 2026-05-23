@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-18 (file-tree-chevron-glyph-refinement)
-source_count: 20
+updated: 2026-05-23 (per-agent-conversation)
+source_count: 21
 ---
 
 # vol-llm-ui Crate
