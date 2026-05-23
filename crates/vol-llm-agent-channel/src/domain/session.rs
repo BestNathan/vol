@@ -69,26 +69,32 @@ impl DomainHandler for SessionHandler {
             _ => return Err(ProtocolError::PayloadDecodeFailed("session")),
         };
         match (op, message.payload) {
-            (SessionOperation::List, Payload::Session(SessionPayload::List)) => {
+            (SessionOperation::List, Payload::Session(SessionPayload::List { agent_id })) => {
                 let mut all_sessions: Vec<serde_json::Value> = Vec::new();
 
-                if self.agents_root.is_dir() {
-                    for entry in std::fs::read_dir(&self.agents_root).into_iter().flatten().flatten() {
-                        if entry.path().is_dir() {
-                            if let Some(agent_id) = entry.file_name().to_str() {
-                                let store = self.agent_store(agent_id);
-                                if let Ok(summaries) = store.list_sessions() {
-                                    for s in summaries {
-                                        all_sessions.push(serde_json::json!({
-                                            "id": s.session_id,
-                                            "agent_id": agent_id,
-                                            "session_id": s.session_id,
-                                            "entry_count": s.entry_count,
-                                            "created_at": s.created_at,
-                                        }));
-                                    }
-                                }
-                            }
+                let agent_ids: Vec<String> = if let Some(ref aid) = agent_id {
+                    vec![aid.clone()]
+                } else if self.agents_root.is_dir() {
+                    std::fs::read_dir(&self.agents_root)
+                        .into_iter().flatten().flatten()
+                        .filter(|e| e.path().is_dir())
+                        .filter_map(|e| e.file_name().to_str().map(String::from))
+                        .collect()
+                } else {
+                    vec![]
+                };
+
+                for aid in &agent_ids {
+                    let store = self.agent_store(aid);
+                    if let Ok(summaries) = store.list_sessions() {
+                        for s in summaries {
+                            all_sessions.push(serde_json::json!({
+                                "id": s.session_id,
+                                "agent_id": aid,
+                                "session_id": s.session_id,
+                                "entry_count": s.entry_count,
+                                "created_at": s.created_at,
+                            }));
                         }
                     }
                 }
