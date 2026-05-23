@@ -614,12 +614,13 @@ pub struct AgentsState {
     pub expanded: HashSet<usize>,
     pub loading: bool,
     pub error: Option<String>,
+    pub selected: Option<String>,
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl AgentsState {
     pub fn new() -> Self {
-        Self { agents: Vec::new(), expanded: HashSet::new(), loading: false, error: None }
+        Self { agents: Vec::new(), expanded: HashSet::new(), loading: false, error: None, selected: None }
     }
 }
 

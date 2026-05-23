@@ -1,7 +1,7 @@
 //! Text input for sending messages to the agent.
 
 use dioxus::prelude::*;
-use crate::state::{ApprovalUiState, GlobalState};
+use crate::state::{AgentsState, ApprovalUiState, GlobalState};
 use crate::web::components::app::AppState;
 use web_time::Instant;
 
@@ -10,6 +10,7 @@ pub fn InputArea() -> Element {
     let app_state: AppState = use_context();
     let global: Signal<GlobalState> = use_context();
     let approval: Signal<ApprovalUiState> = use_context();
+    let agents: Signal<AgentsState> = use_context();
     let is_running = global.read().is_running;
     let has_approval = approval.read().has_pending();
 
@@ -20,12 +21,14 @@ pub fn InputArea() -> Element {
     let mut submit = {
         let client = client.clone();
         let mut input_text = input_text.clone();
+        let agents = agents.clone();
         move || {
             let text = input_text.peek().clone();
             let text = text.trim().to_string();
             if text.is_empty() { return; }
-            match client.submit(&text) {
-                Ok(req_id) => log::info!("Submitted via JSON-RPC: {}", req_id),
+            let target = agents.read().selected.clone();
+            match client.submit(&text, target.as_deref()) {
+                Ok(run_id) => log::info!("Submitted via JSON-RPC: {}", run_id),
                 Err(e) => log::error!("Failed to submit via JSON-RPC: {}", e),
             }
             input_text.set(String::new());
@@ -69,12 +72,41 @@ pub fn InputArea() -> Element {
         } }
     };
 
+    // Read agents for selector
+    let agent_list = agents.read();
+    let selected_agent = agent_list.selected.clone();
+    let has_agents = !agent_list.agents.is_empty();
+    drop(agent_list);
+
     rsx! {
         div { class: "border-t border-[#333355] p-2.5 bg-[#252540] flex-shrink-0 sm:px-2 sm:py-1.5",
             if has_approval {
                 div { p { class: "text-[#f0c040]", "Tool approval pending in the dialog above." } }
             } else {
                 div {
+                    if has_agents {
+                        select {
+                            class: "w-full bg-[#1a1a2e] text-[#e0e0e0] border border-[#444466] rounded px-2 py-1 text-[14px] mb-2 outline-none focus:border-[#80a0ff]",
+                            onchange: {
+                                let agents = agents.clone();
+                                move |evt: Event<FormData>| {
+                                    agents.write_unchecked().selected = Some(evt.value());
+                                }
+                            },
+                            option {
+                                value: "",
+                                selected: selected_agent.is_none(),
+                                "Auto (first available)"
+                            }
+                            for agent in &agents.read().agents {
+                                option {
+                                    value: "{agent.id}",
+                                    selected: selected_agent.as_ref() == Some(&agent.id),
+                                    "{agent.name}"
+                                }
+                            }
+                        }
+                    }
                     textarea {
                         oninput: on_input,
                         onkeydown: on_keydown,
