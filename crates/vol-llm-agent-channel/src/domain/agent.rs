@@ -15,14 +15,16 @@ use crate::router::AgentRouter;
 pub struct AgentHandler {
     router: AgentRouter,
     holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
+    agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>>,
 }
 
 impl AgentHandler {
     pub fn new(
         router: AgentRouter,
         holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
+        agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>>,
     ) -> Self {
-        Self { router, holders }
+        Self { router, holders, agent_defs }
     }
 }
 
@@ -152,12 +154,25 @@ impl DomainHandler for AgentHandler {
                 )])
             }
             (AgentOperation::List, _) => {
+                let defs = self.agent_defs.read().unwrap();
                 let agents: Vec<serde_json::Value> = self
                     .holders
                     .lock()
                     .unwrap()
                     .keys()
-                    .map(|k| serde_json::json!({ "id": k, "name": k }))
+                    .map(|k| {
+                        let def = defs.get(k);
+                        serde_json::json!({
+                            "id": k,
+                            "name": k,
+                            "type": def.map_or("unknown", |d| &d.r#type),
+                            "description": def.and_then(|d| if d.description.is_empty() { None } else { Some(d.description.as_str()) }).unwrap_or(""),
+                            "scope": def.map_or("repo", |d| match d.scope {
+                                vol_llm_agent::AgentScope::User => "user",
+                                vol_llm_agent::AgentScope::Repo => "repo",
+                            }),
+                        })
+                    })
                     .collect();
                 Ok(vec![AgentServerMessage::new_result(
                     message.message_id,

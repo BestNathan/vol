@@ -83,6 +83,9 @@ pub struct AgentServerCore {
     router: AgentRouter,
     holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
 
+    // === Agent definitions ===
+    agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>>,
+
     // === Domain handlers ===
     handler_registry: HandlerRegistry,
 }
@@ -139,6 +142,10 @@ impl AgentServerCore {
         &self.holders
     }
 
+    pub fn agent_defs(&self) -> &Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>> {
+        &self.agent_defs
+    }
+
     /// Register a new agent with the given id and definition.
     ///
     /// Agent 所有资源归 `{store_dir}/agents/{agent_id}/` 下，不污染用户工作区。
@@ -190,6 +197,8 @@ impl AgentServerCore {
         let agents = loader.list_metadata().await;
         for meta in agents {
             if let Some(def) = loader.get(&meta.name).await {
+                // Store def for metadata queries
+                self.agent_defs.write().unwrap().insert(meta.name.clone(), (*def).clone());
                 let arc_def = Arc::try_unwrap(def).unwrap_or_else(|arc| (*arc).clone());
                 self.register_agent(&meta.name, arc_def).await?;
             }
@@ -308,10 +317,16 @@ impl AgentServerCoreBuilder {
         let router = AgentRouter::new();
         let holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>> =
             Arc::new(std::sync::Mutex::new(HashMap::new()));
+        let agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>> =
+            Arc::new(std::sync::RwLock::new(HashMap::new()));
 
         let mut handler_registry = HandlerRegistry::new();
         handler_registry
-            .register(Arc::new(AgentHandler::new(router.clone(), Arc::clone(&holders))))
+            .register(Arc::new(AgentHandler::new(
+                router.clone(),
+                Arc::clone(&holders),
+                agent_defs.clone(),
+            )))
             .map_err(|e| format!("failed to register AgentHandler: {e}"))?;
         handler_registry
             .register(Arc::new(FileHandler::new(self.working_dir.clone())))
@@ -351,6 +366,7 @@ impl AgentServerCoreBuilder {
             llm,
             router,
             holders,
+            agent_defs,
             handler_registry,
         })
     }
@@ -457,8 +473,14 @@ impl AgentServerCore {
             holders.lock().unwrap().insert("test_agent".to_string(), holder);
         }
 
+        let agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>> =
+            Arc::new(std::sync::RwLock::new(HashMap::new()));
         let mut handler_registry = HandlerRegistry::new();
-        handler_registry.register(Arc::new(AgentHandler::new(router.clone(), Arc::clone(&holders)))).ok();
+        handler_registry.register(Arc::new(AgentHandler::new(
+            router.clone(),
+            Arc::clone(&holders),
+            agent_defs.clone(),
+        ))).ok();
         handler_registry.register(Arc::new(FileHandler::new(PathBuf::from(".")))).ok();
         handler_registry.register(Arc::new(SessionHandler::new(agents_root))).ok();
         handler_registry.register(Arc::new(McpHandler::new(None))).ok();
@@ -476,6 +498,7 @@ impl AgentServerCore {
             llm: Arc::new(TestLlm),
             router,
             holders,
+            agent_defs,
             handler_registry,
         }
     }
