@@ -290,8 +290,10 @@ impl AgentServerCoreBuilder {
         // Derive skill loader from .agents/skills/ in working_dir.
         let skill_loader = derive_skill_loader(&self.working_dir);
 
-        // Derive tool registry (empty by default, agents populate it).
-        let tool_registry = Arc::new(ToolRegistry::new());
+        // Derive tool registry with built-in tools.
+        let mut tool_registry = ToolRegistry::new();
+        vol_llm_tools_builtin::register_all(&mut tool_registry);
+        let tool_registry = Arc::new(tool_registry);
 
         let router = AgentRouter::new();
         let holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>> =
