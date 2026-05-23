@@ -492,13 +492,17 @@ impl JsonRpcClient {
     }
 
     /// Resume a session on the server (swaps agent session). Returns response via callback.
-    pub fn session_resume(&self, session_id: &str, cb: impl FnOnce(Result<SessionResumeResponse, String>) + 'static) {
+    pub fn session_resume(&self, session_id: &str, agent_id: Option<&str>, cb: impl FnOnce(Result<SessionResumeResponse, String>) + 'static) {
         let id = self.alloc_id();
 
+        let mut params = serde_json::json!({ "session_id": session_id });
+        if let Some(aid) = agent_id {
+            params["agent_id"] = serde_json::json!(aid);
+        }
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "session.resume",
-            "params": { "session_id": session_id },
+            "params": params,
             "id": id,
         });
         let json = match serde_json::to_string(&msg) {

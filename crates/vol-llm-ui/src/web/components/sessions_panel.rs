@@ -3,7 +3,7 @@
 
 use dioxus::prelude::*;
 
-use crate::state::{ActiveTab, AgentsState, ConversationEntry, ConversationState, SessionsState};
+use crate::state::{ActiveTab, AgentSubTab, AgentsState, ConversationEntry, ConversationState, SessionsState};
 use crate::web::client::{JsonRpcClient, SessionEntry};
 
 fn truncate_for_log(s: &str, max_len: usize) -> String {
@@ -238,6 +238,7 @@ fn SessionItem(
     rpc: JsonRpcClient,
     conversation_signal: Signal<ConversationState>,
     active_tab: Signal<ActiveTab>,
+    agents_signal: Signal<AgentsState>,
 ) -> Element {
     let mut show_detail = use_signal(|| false);
     let entries = use_signal(|| Vec::<ConversationEntry>::new());
@@ -254,6 +255,7 @@ fn SessionItem(
     let sid_resume = session_id.clone();
     let conv_resume = conversation_signal;
     let tab_resume = active_tab;
+    let agents_resume = agents_signal;
 
     rsx! {
         div {
@@ -299,11 +301,14 @@ fn SessionItem(
                     let sid = sid_resume.clone();
                     let mut conv = conv_resume;
                     let mut tab = tab_resume;
-                    rpc.session_resume(&sid, move |result| {
+                    let mut agents = agents_resume;
+                    let agent_id = agents.read().selected.clone();
+                    rpc.session_resume(&sid, agent_id.as_deref(), move |result| {
                         match result {
                             Ok(resp) => {
                                 let conv_entries = session_entries_to_conversation(resp.entries);
                                 conv.with_mut(|s| { s.entries = conv_entries; });
+                                agents.with_mut(|a| a.sub_tab = AgentSubTab::Conversation);
                                 tab.set(ActiveTab::Agents);
                             }
                             Err(e) => log::error!("Failed to resume session: {e}"),
@@ -331,6 +336,7 @@ pub fn SessionsPanel() -> Element {
     let app: super::app::AppState = use_context();
     let sessions_signal: Signal<SessionsState> = use_context();
     let conversation_signal: Signal<ConversationState> = use_context();
+    let agents_signal: Signal<AgentsState> = use_context();
     let rpc_for_load = app.rpc_client.clone();
     let rpc_for_items = app.rpc_client.clone();
 
@@ -399,6 +405,7 @@ pub fn SessionsPanel() -> Element {
                 rpc: rpc_for_items.clone(),
                 conversation_signal,
                 active_tab: app.active_tab,
+                agents_signal,
             }
         }
     }).collect();

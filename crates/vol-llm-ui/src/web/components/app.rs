@@ -454,7 +454,7 @@ pub fn App() -> Element {
 
             // Resume the session
             let (tx2, rx2) = futures_channel::oneshot::channel();
-            restore_client.session_resume(&latest_id, move |result| {
+            restore_client.session_resume(&latest_id, None, move |result| {
                 let _ = tx2.send(result);
             });
             match rx2.await {
