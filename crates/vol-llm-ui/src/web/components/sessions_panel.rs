@@ -3,7 +3,7 @@
 
 use dioxus::prelude::*;
 
-use crate::state::{ActiveTab, ConversationEntry, ConversationState, SessionsState};
+use crate::state::{ActiveTab, AgentsState, ConversationEntry, ConversationState, SessionsState};
 use crate::web::client::{JsonRpcClient, SessionEntry};
 
 fn truncate_for_log(s: &str, max_len: usize) -> String {
@@ -335,15 +335,18 @@ pub fn SessionsPanel() -> Element {
     let rpc_for_items = app.rpc_client.clone();
 
     // Load sessions on mount
+    let agents_signal: Signal<AgentsState> = use_context();
     use_hook(move || {
         let mut sig = sessions_signal;
+        let agents = agents_signal;
 
         sig.with_mut(|s| {
             s.loading = true;
             s.error = None;
         });
 
-        rpc_for_load.session_list(move |result| {
+        let agent_id = agents.read().selected.clone();
+        rpc_for_load.session_list(agent_id.as_deref(), move |result| {
             sig.with_mut(|s| {
                 s.loading = false;
                 match result {

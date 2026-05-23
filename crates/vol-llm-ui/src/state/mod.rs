@@ -249,6 +249,10 @@ impl ActiveTab {
     }
 }
 
+/// Sub-tabs within the Agents panel.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AgentSubTab { Conversation, Sessions }
+
 /// Sub-tabs within the MCP panel.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum McpSubtab { Servers, Tools, Resources, Prompts }
@@ -613,12 +617,13 @@ pub struct AgentsState {
     pub loading: bool,
     pub error: Option<String>,
     pub selected: Option<String>,
+    pub sub_tab: AgentSubTab,
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl AgentsState {
     pub fn new() -> Self {
-        Self { agents: Vec::new(), expanded: HashSet::new(), loading: false, error: None, selected: None }
+        Self { agents: Vec::new(), expanded: HashSet::new(), loading: false, error: None, selected: None, sub_tab: AgentSubTab::Conversation }
     }
 }
 

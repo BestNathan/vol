@@ -410,13 +410,18 @@ impl JsonRpcClient {
     }
 
     /// List all persisted sessions on the server. Returns entries via callback.
-    pub fn session_list(&self, cb: impl FnOnce(Result<Vec<crate::state::SessionListEntry>, String>) + 'static) {
+    pub fn session_list(&self, agent_id: Option<&str>, cb: impl FnOnce(Result<Vec<crate::state::SessionListEntry>, String>) + 'static) {
         let id = self.alloc_id();
+
+        let mut params = serde_json::Map::new();
+        if let Some(aid) = agent_id {
+            params.insert("agent_id".to_string(), serde_json::json!(aid));
+        }
 
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "session.list",
-            "params": {},
+            "params": params,
             "id": id,
         });
         let json = match serde_json::to_string(&msg) {

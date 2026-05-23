@@ -431,7 +431,7 @@ pub fn App() -> Element {
 
             // Fetch session list
             let (tx, rx) = futures_channel::oneshot::channel();
-            restore_client.session_list(move |result| {
+            restore_client.session_list(None, move |result| {
                 let _ = tx.send(result);
             });
             let sessions = match rx.await {
