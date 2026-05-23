@@ -12,13 +12,11 @@ use crate::web::client::{AgentEvent, JsonRpcClient};
 
 use super::agents_panel::AgentsPanel;
 use super::approval_dialog::ApprovalDialog;
-use super::conversation::ConversationView;
 use super::file_content::FileContentView;
 use super::file_tree::FileTree;
 use super::input_area::InputArea;
 use super::log_viewer::LogViewer;
 use super::mcp_panel::McpPanel;
-use super::sessions_panel::SessionsPanel;
 use super::skills::SkillsPanel;
 use super::skill_detail_dialog::SkillDetailDialog;
 use super::status_bar::StatusBar;
@@ -134,7 +132,7 @@ fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
 pub fn App() -> Element {
     let ws_url = derive_ws_url();
     let event_bus = use_signal(|| EventBus::new());
-    let active_tab = use_signal(|| ActiveTab::Conversation);
+    let active_tab = use_signal(|| ActiveTab::Agents);
     let global_signal = use_signal(|| GlobalState::new(ws_url.clone()));
     let approval_signal = use_signal(|| ApprovalUiState::new());
     let workspace_signal = use_signal(|| WorkspaceState::new("."));
@@ -555,14 +553,12 @@ fn TabBar() -> Element {
 
     rsx! {
         div { class: "flex flex-nowrap bg-[#252540] border-b border-[#333355] flex-shrink-0 overflow-x-auto",
-            TabButton { state: state.clone(), tab: ActiveTab::Conversation, label: "Conversation" }
-            TabButton { state: state.clone(), tab: ActiveTab::Sessions, label: "Sessions" }
+            TabButton { state: state.clone(), tab: ActiveTab::Agents, label: "Agents" }
             TabButton { state: state.clone(), tab: ActiveTab::Tools, label: "Tools" }
             TabButton { state: state.clone(), tab: ActiveTab::Workspace, label: "Workspace" }
             TabButton { state: state.clone(), tab: ActiveTab::Skills, label: "Skills" }
             TabButton { state: state.clone(), tab: ActiveTab::Mcp, label: "MCP" }
             TabButton { state: state.clone(), tab: ActiveTab::Logs, label: "Logs" }
-            TabButton { state: state.clone(), tab: ActiveTab::Agents, label: "Agents" }
         }
     }
 }
@@ -593,14 +589,12 @@ fn TabContent(skill_dialog_signal: Signal<SkillDialogState>) -> Element {
     let active = *state.active_tab.read();
 
     match active {
-        ActiveTab::Conversation => rsx! { ConversationView {} },
+        ActiveTab::Agents => rsx! { AgentsPanel {} },
         ActiveTab::Tools => rsx! { ToolsTabContent {} },
         ActiveTab::Workspace => rsx! { FileContentView {} },
         ActiveTab::Skills => rsx! { SkillsPanel { dialog_signal: skill_dialog_signal } },
         ActiveTab::Logs => rsx! { LogViewer {} },
-        ActiveTab::Agents => rsx! { AgentsPanel {} },
         ActiveTab::Mcp => rsx! { McpPanel {} },
-        ActiveTab::Sessions => rsx! { SessionsPanel {} },
     }
 }
 

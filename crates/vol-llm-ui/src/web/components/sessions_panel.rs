@@ -304,7 +304,7 @@ fn SessionItem(
                             Ok(resp) => {
                                 let conv_entries = session_entries_to_conversation(resp.entries);
                                 conv.with_mut(|s| { s.entries = conv_entries; });
-                                tab.set(ActiveTab::Conversation);
+                                tab.set(ActiveTab::Agents);
                             }
                             Err(e) => log::error!("Failed to resume session: {e}"),
                         }

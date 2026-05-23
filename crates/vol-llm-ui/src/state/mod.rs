@@ -234,19 +234,17 @@ pub struct OpenFileTab {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ActiveTab { Conversation, Sessions, Tools, Workspace, Skills, Mcp, Logs, Agents }
+pub enum ActiveTab { Agents, Tools, Workspace, Skills, Mcp, Logs }
 
 impl ActiveTab {
-    pub fn toggle(self) -> Self {
+    pub fn next(self) -> Self {
         match self {
-            ActiveTab::Conversation => ActiveTab::Sessions,
-            ActiveTab::Sessions => ActiveTab::Tools,
+            ActiveTab::Agents => ActiveTab::Tools,
             ActiveTab::Tools => ActiveTab::Workspace,
             ActiveTab::Workspace => ActiveTab::Skills,
             ActiveTab::Skills => ActiveTab::Mcp,
             ActiveTab::Mcp => ActiveTab::Logs,
             ActiveTab::Logs => ActiveTab::Agents,
-            ActiveTab::Agents => ActiveTab::Conversation,
         }
     }
 }
@@ -436,7 +434,7 @@ impl GlobalState {
             ws_last_error: None,
             reconnecting: false, reconnect_attempts: 0, reconnect_delay_secs: 0,
             reconnect_maxed: false,
-            unsafe_mode: false, active_tab: ActiveTab::Conversation,
+            unsafe_mode: false, active_tab: ActiveTab::Agents,
         }
     }
 }
@@ -814,7 +812,7 @@ impl UiState {
             tool_calls: Vec::new(),
             workspace: WorkspaceTreeNode::root(working_dir.to_string(), ".".into()),
             modified_files: HashSet::new(),
-            active_tab: ActiveTab::Conversation,
+            active_tab: ActiveTab::Agents,
             conversation_scroll: 0,
             workspace_scroll: 0,
             tools_scroll: 0,
@@ -1190,16 +1188,14 @@ mod tests {
     }
 
     #[test]
-    fn test_active_tab_toggle() {
+    fn test_active_tab_next() {
         use ActiveTab::*;
-        assert_eq!(Conversation.toggle(), Sessions);
-        assert_eq!(Sessions.toggle(), Tools);
-        assert_eq!(Tools.toggle(), Workspace);
-        assert_eq!(Workspace.toggle(), Skills);
-        assert_eq!(Skills.toggle(), Mcp);
-        assert_eq!(Mcp.toggle(), Logs);
-        assert_eq!(Logs.toggle(), Agents);
-        assert_eq!(Agents.toggle(), Conversation);
+        assert_eq!(Agents.next(), Tools);
+        assert_eq!(Tools.next(), Workspace);
+        assert_eq!(Workspace.next(), Skills);
+        assert_eq!(Skills.next(), Mcp);
+        assert_eq!(Mcp.next(), Logs);
+        assert_eq!(Logs.next(), Agents);
     }
 
     #[test]
