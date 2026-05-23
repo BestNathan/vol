@@ -3,7 +3,7 @@
 
 use dioxus::prelude::*;
 
-use crate::state::{ActiveTab, AgentSubTab, AgentsState, ConversationEntry, ConversationState, SessionsState};
+use crate::state::{AgentSubTab, AgentsState, ConversationEntry, ConversationState, SessionsState};
 use crate::web::client::{JsonRpcClient, SessionEntry};
 
 fn truncate_for_log(s: &str, max_len: usize) -> String {
@@ -304,7 +304,11 @@ fn SessionItem(
                         match result {
                             Ok(resp) => {
                                 let conv_entries = session_entries_to_conversation(resp.entries);
-                                conv.with_mut(|s| { s.entries = conv_entries; });
+                                let active_id = agents.read().selected.clone().unwrap_or_default();
+                                conv.with_mut(|s| {
+                                    let ac = s.get_or_create(&active_id);
+                                    ac.entries = conv_entries;
+                                });
                                 agents.with_mut(|a| a.sub_tab = AgentSubTab::Conversation);
                             }
                             Err(e) => log::error!("Failed to resume session: {e}"),
@@ -337,10 +341,10 @@ pub fn SessionsPanel() -> Element {
     let rpc_for_items = app.rpc_client.clone();
 
     // Load sessions on mount
-    let agents_signal: Signal<AgentsState> = use_context();
+    let agents_for_hook = agents_signal;
     use_hook(move || {
         let mut sig = sessions_signal;
-        let agents = agents_signal;
+        let agents = agents_for_hook;
 
         sig.with_mut(|s| {
             s.loading = true;
