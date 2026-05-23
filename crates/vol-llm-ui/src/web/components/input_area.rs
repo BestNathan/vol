@@ -72,41 +72,12 @@ pub fn InputArea() -> Element {
         } }
     };
 
-    // Read agents for selector
-    let agent_list = agents.read();
-    let selected_agent = agent_list.selected.clone();
-    let has_agents = !agent_list.agents.is_empty();
-    drop(agent_list);
-
     rsx! {
         div { class: "border-t border-[#333355] p-2.5 bg-[#252540] flex-shrink-0 sm:px-2 sm:py-1.5",
             if has_approval {
                 div { p { class: "text-[#f0c040]", "Tool approval pending in the dialog above." } }
             } else {
                 div {
-                    if has_agents {
-                        select {
-                            class: "w-full bg-[#1a1a2e] text-[#e0e0e0] border border-[#444466] rounded px-2 py-1 text-[14px] mb-2 outline-none focus:border-[#80a0ff]",
-                            onchange: {
-                                let agents = agents.clone();
-                                move |evt: Event<FormData>| {
-                                    agents.write_unchecked().selected = Some(evt.value());
-                                }
-                            },
-                            option {
-                                value: "",
-                                selected: selected_agent.is_none(),
-                                "Auto (first available)"
-                            }
-                            for agent in &agents.read().agents {
-                                option {
-                                    value: "{agent.id}",
-                                    selected: selected_agent.as_ref() == Some(&agent.id),
-                                    "{agent.name}"
-                                }
-                            }
-                        }
-                    }
                     textarea {
                         oninput: on_input,
                         onkeydown: on_keydown,
