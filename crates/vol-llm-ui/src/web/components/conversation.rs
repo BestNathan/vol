@@ -24,73 +24,71 @@ fn flush_pending_content(entries: &mut Vec<ConversationEntry>) {
 }
 
 pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
+    let conv = s.active_mut();
     match event {
         UiEvent::AgentStart { input } => {
-            s.entries.push(ConversationEntry::UserInput { text: input.clone() });
-            if s.auto_scroll { s.conversation_scroll = 0; }
+            conv.entries.clear();
+            conv.entries.push(ConversationEntry::UserInput { text: input.clone() });
         }
         UiEvent::AgentComplete { response: _ } => {
-            flush_pending_content(&mut s.entries);
-            let tc = s.entries.iter().filter(|e| matches!(e, ConversationEntry::ToolCall { .. })).count() as u32;
-            s.entries.push(ConversationEntry::RunSummary { iterations: 0, tool_calls: tc, elapsed_ms: 0 });
-            // Content already pushed by ContentComplete → AgentAnswer conversion above.
-            // AgentComplete's response field contains the same content, so skip to avoid duplication.
-            if s.auto_scroll { s.conversation_scroll = 0; }
+            flush_pending_content(&mut conv.entries);
+            let tc = conv.entries.iter().filter(|e| matches!(e, ConversationEntry::ToolCall { .. })).count() as u32;
+            conv.entries.push(ConversationEntry::RunSummary { iterations: 0, tool_calls: tc, elapsed_ms: 0 });
         }
         UiEvent::AgentAborted { reason } | UiEvent::AgentError { message: reason } => {
-            flush_pending_content(&mut s.entries);
-            s.entries.push(ConversationEntry::Error { message: reason.clone() });
+            flush_pending_content(&mut conv.entries);
+            conv.entries.push(ConversationEntry::Error { message: reason.clone() });
         }
         UiEvent::ThinkingStart => {
-            s.entries.push(ConversationEntry::Thinking { content: String::new() });
+            conv.entries.push(ConversationEntry::Thinking { content: String::new() });
         }
         UiEvent::ThinkingDelta { delta } => {
-            if let Some(ConversationEntry::Thinking { content }) = s.entries.last_mut() {
+            if let Some(ConversationEntry::Thinking { content }) = conv.entries.last_mut() {
                 content.push_str(delta);
             }
         }
         UiEvent::ThinkingComplete => {
-            // Flush thinking entry.
+            // No-op — thinking content already streamed via deltas
         }
         UiEvent::LlmCallStart { iteration } => {
-            s.entries.push(ConversationEntry::LlmCall { iteration: *iteration, model: String::new() });
+            conv.entries.push(ConversationEntry::LlmCall { iteration: *iteration, model: String::new() });
         }
         UiEvent::LlmCallComplete { model } => {
-            if let Some(ConversationEntry::LlmCall { model: m, .. }) = s.entries.last_mut() {
+            if let Some(ConversationEntry::LlmCall { model: m, .. }) = conv.entries.last_mut() {
                 *m = model.clone();
             }
         }
         UiEvent::LlmCallError { error } => {
-            s.entries.push(ConversationEntry::Error { message: format!("LLM error: {error}") });
+            conv.entries.push(ConversationEntry::Error { message: format!("LLM error: {error}") });
         }
         UiEvent::ContentStart => {
-            s.entries.push(ConversationEntry::ContentStreaming { content: String::new() });
+            conv.entries.push(ConversationEntry::ContentStreaming { content: String::new() });
         }
         UiEvent::ContentDelta { delta } => {
-            if let Some(ConversationEntry::ContentStreaming { content }) = s.entries.last_mut() {
+            if let Some(ConversationEntry::ContentStreaming { content }) = conv.entries.last_mut() {
                 content.push_str(delta);
             }
         }
         UiEvent::ContentComplete { content } => {
-            if let Some(ConversationEntry::ContentStreaming { .. }) = s.entries.last() {
-                *s.entries.last_mut().unwrap() = ConversationEntry::AgentAnswer { text: content.clone() };
+            if let Some(ConversationEntry::ContentStreaming { .. }) = conv.entries.last() {
+                *conv.entries.last_mut().unwrap() = ConversationEntry::AgentAnswer { text: content.clone() };
             } else if !content.is_empty() {
-                s.entries.push(ConversationEntry::AgentAnswer { text: content.clone() });
+                conv.entries.push(ConversationEntry::AgentAnswer { text: content.clone() });
             }
         }
         UiEvent::MaxIterationsReached { current, max } => {
-            s.entries.push(ConversationEntry::Error {
+            conv.entries.push(ConversationEntry::Error {
                 message: format!("Max iterations reached ({}/{}) — waiting for user decision...", current, max),
             });
         }
         UiEvent::IterationContinued { from_iteration } => {
-            s.entries.push(ConversationEntry::AgentAnswer {
+            conv.entries.push(ConversationEntry::AgentAnswer {
                 text: format!("Continuing from iteration {from_iteration} (counter reset to 0)"),
             });
         }
         UiEvent::IterationComplete { final_answer, .. } => {
             if let Some(answer) = final_answer {
-                s.entries.push(ConversationEntry::AgentAnswer { text: answer.clone() });
+                conv.entries.push(ConversationEntry::AgentAnswer { text: answer.clone() });
             }
         }
         _ => {}
@@ -101,7 +99,8 @@ pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
 pub fn ConversationView() -> Element {
     let signal: Signal<ConversationState> = use_context();
 
-    let count = signal.read().entries.len();
+    let guard = signal.read();
+    let count = guard.active_entries().len();
     if count == 0 {
         return rsx! {
             div { class: "flex-1 overflow-y-auto p-1.5 sm:p-2.5 min-h-0",
@@ -110,7 +109,7 @@ pub fn ConversationView() -> Element {
         };
     }
 
-    let entries = signal.read().entries.clone();
+    let entries = guard.active_entries().to_vec();
     let messages: Vec<Element> = (0..count).map(|index| {
         let entry = entries[index].clone();
         rsx! { MessageEntry { entry } }
