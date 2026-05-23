@@ -207,8 +207,18 @@ impl AgentServerCore {
 
     /// Serve incoming messages from a connection, dispatching each to the handler registry.
     ///
+    /// Attaches the connection to all holders so agent events flow through.
     /// Loops `recv() → handle() → send()` until the connection closes or errors.
     pub async fn serve(&self, conn: impl crate::connection::Connection) {
+        // Attach to all holders so agent events are pushed to this connection.
+        let conn: Arc<dyn crate::connection::Connection> = Arc::new(conn);
+        let holders: Vec<_> = {
+            self.holders.lock().unwrap().values().cloned().collect()
+        };
+        for holder in &holders {
+            holder.attach(conn.clone()).await;
+        }
+
         while let Some(result) = conn.recv().await {
             let responses = match result {
                 Ok(msg) => match self.handle(msg).await {
