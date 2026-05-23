@@ -10,8 +10,6 @@
 
 use std::sync::Arc;
 
-use vol_llm_agent::agent_def::AgentDef;
-
 use vol_llm_agent_channel::AgentServerCore;
 use vol_llm_agent_channel::JsonRpcServer;
 
@@ -33,16 +31,10 @@ async fn main() {
         .await
         .expect("failed to build core");
 
-    // Register default agent.
-    let def = AgentDef::new(
-        "general-assistant",
-        "You are a helpful AI assistant. Answer questions concisely.",
-    )
-    .with_type("general-assistant");
-
-    core.register_agent("general-assistant", def)
+    // Discover and register agents from .agents/agents/ directories.
+    core.discover_agents()
         .await
-        .expect("failed to register agent");
+        .expect("failed to discover agents");
 
     // Create JSON-RPC server
     let server = JsonRpcServer::new(Arc::new(core));
@@ -55,7 +47,7 @@ async fn main() {
 
     tracing::info!("JSON-RPC server started on ws://localhost:3001");
     tracing::info!("  Methods: agent.submit, agent.cancel, agent.approve");
-    tracing::info!("           agent.subscribe, agent.unsubscribe");
+    tracing::info!("           agent.list, agent.subscribe, agent.unsubscribe");
     tracing::info!("           file.list, file.read");
     tracing::info!("           log.list, log.read");
     tracing::info!("           session.list, session.resume");
