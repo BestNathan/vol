@@ -61,6 +61,23 @@ impl StorePaths {
     }
 }
 
+/// Runtime status of a registered agent.
+#[derive(Debug, Clone, Default)]
+pub struct AgentStatus {
+    pub status: String,  // "idle" | "running"
+    pub current_input: Option<String>,
+    pub run_id: Option<String>,
+}
+
+impl AgentStatus {
+    pub fn idle() -> Self {
+        Self { status: "idle".into(), current_input: None, run_id: None }
+    }
+    pub fn running(input: String, run_id: String) -> Self {
+        Self { status: "running".into(), current_input: Some(input), run_id: Some(run_id) }
+    }
+}
+
 /// Shared core for the agent server.
 ///
 /// The core owns all shared resources (paths, registries, agent runtime).
@@ -85,6 +102,9 @@ pub struct AgentServerCore {
 
     // === Agent definitions ===
     agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>>,
+
+    // === Agent status ===
+    agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>>,
 
     // === Domain handlers ===
     handler_registry: HandlerRegistry,
@@ -146,6 +166,10 @@ impl AgentServerCore {
         &self.agent_defs
     }
 
+    pub fn agent_status(&self) -> &Arc<std::sync::RwLock<HashMap<String, AgentStatus>>> {
+        &self.agent_status
+    }
+
     /// Register a new agent with the given id and definition.
     ///
     /// Agent 所有资源归 `{store_dir}/agents/{agent_id}/` 下，不污染用户工作区。
@@ -172,7 +196,11 @@ impl AgentServerCore {
         config.working_dir = agent_dir.clone();
         config.mcp_manager = Some(mcp);
 
-        let holder = ConnectionHolder::new(agent_id.clone(), "client".to_string());
+        let holder = ConnectionHolder::new(
+            agent_id.clone(),
+            "client".to_string(),
+            Some(self.agent_status.clone()),
+        );
         config.plugin_registry.register(holder.clone());
 
         let agent = vol_llm_agent::ReActAgent::new(config);
@@ -201,6 +229,7 @@ impl AgentServerCore {
                 self.agent_defs.write().unwrap().insert(meta.name.clone(), (*def).clone());
                 let arc_def = Arc::try_unwrap(def).unwrap_or_else(|arc| (*arc).clone());
                 self.register_agent(&meta.name, arc_def).await?;
+                self.agent_status.write().unwrap().insert(meta.name.clone(), AgentStatus::idle());
             }
         }
         Ok(())
@@ -319,6 +348,8 @@ impl AgentServerCoreBuilder {
             Arc::new(std::sync::Mutex::new(HashMap::new()));
         let agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>> =
             Arc::new(std::sync::RwLock::new(HashMap::new()));
+        let agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>> =
+            Arc::new(std::sync::RwLock::new(HashMap::new()));
 
         let mut handler_registry = HandlerRegistry::new();
         handler_registry
@@ -326,6 +357,7 @@ impl AgentServerCoreBuilder {
                 router.clone(),
                 Arc::clone(&holders),
                 agent_defs.clone(),
+                agent_status.clone(),
             )))
             .map_err(|e| format!("failed to register AgentHandler: {e}"))?;
         handler_registry
@@ -367,6 +399,7 @@ impl AgentServerCoreBuilder {
             router,
             holders,
             agent_defs,
+            agent_status,
             handler_registry,
         })
     }
@@ -468,18 +501,21 @@ impl AgentServerCore {
             let config = AgentConfig::new(Arc::new(TestLlm), tools, session);
             let agent = ReActAgent::new(config);
             let dispatcher = Arc::new(AgentDispatcher::new(agent));
-            let holder = Arc::new(ConnectionHolder::new("test_agent".to_string(), "client".to_string()));
+            let holder = Arc::new(ConnectionHolder::new("test_agent".to_string(), "client".to_string(), None));
             router.register("test_agent".to_string(), dispatcher).await;
             holders.lock().unwrap().insert("test_agent".to_string(), holder);
         }
 
         let agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>> =
             Arc::new(std::sync::RwLock::new(HashMap::new()));
+        let agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>> =
+            Arc::new(std::sync::RwLock::new(HashMap::new()));
         let mut handler_registry = HandlerRegistry::new();
         handler_registry.register(Arc::new(AgentHandler::new(
             router.clone(),
             Arc::clone(&holders),
             agent_defs.clone(),
+            agent_status.clone(),
         ))).ok();
         handler_registry.register(Arc::new(FileHandler::new(PathBuf::from(".")))).ok();
         handler_registry.register(Arc::new(SessionHandler::new(agents_root))).ok();
@@ -499,6 +535,7 @@ impl AgentServerCore {
             router,
             holders,
             agent_defs,
+            agent_status,
             handler_registry,
         }
     }

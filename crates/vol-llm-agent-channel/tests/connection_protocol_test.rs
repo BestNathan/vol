@@ -116,6 +116,6 @@ fn test_event_message_round_trip() {
 /// Test ConnectionHolder can be created (sanity check that trait signature compiles).
 #[tokio::test]
 async fn test_holder_new_is_empty() {
-    let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string());
+    let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string(), None);
     assert!(!holder.is_connected().await);
 }

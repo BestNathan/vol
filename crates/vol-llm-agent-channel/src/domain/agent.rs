@@ -10,12 +10,14 @@ use crate::connection::ConnectionHolder;
 use crate::domain::handler::DomainHandler;
 use crate::request::AgentRequest;
 use crate::router::AgentRouter;
+use crate::server_core::AgentStatus;
 
 /// Handler for agent-domain operations.
 pub struct AgentHandler {
     router: AgentRouter,
     holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
     agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>>,
+    agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>>,
 }
 
 impl AgentHandler {
@@ -23,8 +25,9 @@ impl AgentHandler {
         router: AgentRouter,
         holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
         agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>>,
+        agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>>,
     ) -> Self {
-        Self { router, holders, agent_defs }
+        Self { router, holders, agent_defs, agent_status }
     }
 }
 
@@ -155,6 +158,7 @@ impl DomainHandler for AgentHandler {
             }
             (AgentOperation::List, _) => {
                 let defs = self.agent_defs.read().unwrap();
+                let status_map = self.agent_status.read().unwrap();
                 let agents: Vec<serde_json::Value> = self
                     .holders
                     .lock()
@@ -162,6 +166,7 @@ impl DomainHandler for AgentHandler {
                     .keys()
                     .map(|k| {
                         let def = defs.get(k);
+                        let status = status_map.get(k);
                         serde_json::json!({
                             "id": k,
                             "name": k,
@@ -171,6 +176,8 @@ impl DomainHandler for AgentHandler {
                                 vol_llm_agent::AgentScope::User => "user",
                                 vol_llm_agent::AgentScope::Repo => "repo",
                             }),
+                            "status": status.map_or("idle", |s| s.status.as_str()),
+                            "current_input": status.and_then(|s| s.current_input.clone()),
                         })
                     })
                     .collect();

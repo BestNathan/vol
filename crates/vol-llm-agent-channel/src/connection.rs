@@ -1,5 +1,6 @@
 // crates/vol-llm-agent-channel/src/connection.rs
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -31,15 +32,21 @@ pub struct ConnectionHolder {
     connection: Arc<RwLock<Option<Arc<dyn Connection>>>>,
     sender: String,
     receiver: String,
+    agent_status: Option<Arc<std::sync::RwLock<HashMap<String, crate::server_core::AgentStatus>>>>,
 }
 
 impl ConnectionHolder {
     /// Create a new empty holder.
-    pub fn new(sender: String, receiver: String) -> Self {
+    pub fn new(
+        sender: String,
+        receiver: String,
+        agent_status: Option<Arc<std::sync::RwLock<HashMap<String, crate::server_core::AgentStatus>>>>,
+    ) -> Self {
         Self {
             connection: Arc::new(RwLock::new(None)),
             sender,
             receiver,
+            agent_status,
         }
     }
 
@@ -76,6 +83,25 @@ impl AgentPlugin for ConnectionHolder {
     }
 
     async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
+        // Update agent status
+        if let Some(ref status_map) = self.agent_status {
+            match event {
+                AgentStreamEvent::AgentStart { input, .. } => {
+                    status_map.write().unwrap().insert(
+                        self.sender.clone(),
+                        crate::server_core::AgentStatus::running(input.clone(), ctx.run_id.clone()),
+                    );
+                }
+                AgentStreamEvent::AgentComplete { .. } | AgentStreamEvent::AgentAborted { .. } => {
+                    status_map.write().unwrap().insert(
+                        self.sender.clone(),
+                        crate::server_core::AgentStatus::idle(),
+                    );
+                }
+                _ => {}
+            }
+        }
+
         if let Some(conn) = self.connection.read().await.as_ref() {
             let event_json = serde_json::to_value(event).unwrap_or(serde_json::Value::Null);
             let msg = AgentServerMessage {
@@ -114,13 +140,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_holder_new_is_empty() {
-        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string());
+        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string(), None);
         assert!(!holder.is_connected().await);
     }
 
     #[tokio::test]
     async fn test_holder_attach() {
-        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string());
+        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string(), None);
         let conn = Arc::new(MockConnection { protocol: "test".to_string() });
 
         holder.attach(conn.clone()).await;
@@ -130,7 +156,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_holder_detach_replaces_connection() {
-        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string());
+        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string(), None);
         let conn1 = Arc::new(MockConnection { protocol: "test1".to_string() });
         let conn2 = Arc::new(MockConnection { protocol: "test2".to_string() });
 
@@ -143,7 +169,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_holder_detach_clears() {
-        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string());
+        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string(), None);
         let conn = Arc::new(MockConnection { protocol: "test".to_string() });
 
         holder.attach(conn).await;
