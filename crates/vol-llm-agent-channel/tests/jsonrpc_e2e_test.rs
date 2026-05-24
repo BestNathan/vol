@@ -1,7 +1,7 @@
 //! End-to-end test: exercise every operation through core.handle() directly,
 //! verifying full handler registry dispatch for all 22 methods.
 
-use vol_llm_agent::agent_def::AgentDef;
+use vol_llm_core::AgentDef;
 use vol_llm_agent::AgentInput;
 use vol_llm_agent_channel::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, FileOperation, LogOperation, McpOperation,

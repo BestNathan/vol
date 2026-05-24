@@ -101,7 +101,7 @@ pub struct AgentServerCore {
     holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
 
     // === Agent definitions ===
-    agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>>,
+    agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>>,
 
     // === Agent status ===
     agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>>,
@@ -162,7 +162,7 @@ impl AgentServerCore {
         &self.holders
     }
 
-    pub fn agent_defs(&self) -> &Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>> {
+    pub fn agent_defs(&self) -> &Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>> {
         &self.agent_defs
     }
 
@@ -176,7 +176,7 @@ impl AgentServerCore {
     pub async fn register_agent(
         &self,
         agent_id: impl Into<String>,
-        def: vol_llm_agent::agent_def::AgentDef,
+        def: vol_llm_core::agent_def::AgentDef,
     ) -> Result<(), String> {
         let agent_id = agent_id.into();
         let agent_dir = self.store_dir.join("agents").join(&agent_id);
@@ -346,7 +346,7 @@ impl AgentServerCoreBuilder {
         let router = AgentRouter::new();
         let holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>> =
             Arc::new(std::sync::Mutex::new(HashMap::new()));
-        let agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>> =
+        let agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>> =
             Arc::new(std::sync::RwLock::new(HashMap::new()));
         let agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>> =
             Arc::new(std::sync::RwLock::new(HashMap::new()));
@@ -506,7 +506,7 @@ impl AgentServerCore {
             holders.lock().unwrap().insert("test_agent".to_string(), holder);
         }
 
-        let agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_agent::AgentDef>>> =
+        let agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>> =
             Arc::new(std::sync::RwLock::new(HashMap::new()));
         let agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>> =
             Arc::new(std::sync::RwLock::new(HashMap::new()));

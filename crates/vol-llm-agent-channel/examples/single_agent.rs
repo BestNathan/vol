@@ -18,7 +18,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use tokio::net::TcpListener;
 use tracing::info;
-use vol_llm_agent::agent_def::AgentDef;
+use vol_llm_core::AgentDef;
 use vol_llm_agent_channel::{AgentServerCore, HttpTransport, WsServer};
 
 #[tokio::main]

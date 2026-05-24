@@ -47,7 +47,7 @@ async fn upgrade_agent_ws(
 
 /// Run an agent instance from a definition, broadcasting events to connected WS clients.
 async fn run_agent_instance(
-    agent_def: vol_llm_agent::AgentDef,
+    agent_def: vol_llm_core::AgentDef,
     session: Arc<vol_session::Session>,
     llm_config: vol_llm_provider::LLMConfig,
     broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,

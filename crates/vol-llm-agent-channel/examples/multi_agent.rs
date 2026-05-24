@@ -22,7 +22,7 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use tokio::net::TcpListener;
 use tracing::info;
-use vol_llm_agent::agent_def::AgentDef;
+use vol_llm_core::AgentDef;
 use vol_llm_agent::AgentInput;
 use vol_llm_agent_channel::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, Operation, Payload,
