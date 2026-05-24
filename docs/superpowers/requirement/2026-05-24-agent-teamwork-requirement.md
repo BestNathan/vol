@@ -31,7 +31,7 @@ The goal is to add teamwork capabilities so agents can coordinate like a team: p
 | `vol-llm-runtime` crate | New independent crate holding `AgentRuntime` with all core runtime structures |
 | `Task` model extension | Add `publisher: Option<String>` and `assignee: Option<String>` to `Task`; leverage existing `dependencies`/`blocks` for task readiness checks |
 | `ToolContext.agent_def` | Add `agent_def: Option<AgentDef>` to `ToolContext` |
-| `task_publish` tool | New tool replacing/augmenting `task_create` with publisher/assignee |
+| `task_create` extension | Extend `task_create` to accept optional `assignee` param; publisher auto-populated from ToolContext.agent_def |
 | `task_claim` tool | New tool: atomically claims a pending task for the calling agent |
 | `task_list` enhancement | Filter by assignee (mine / unassigned / specific) and status |
 | `AgentServerCore` refactor | Uses `AgentRuntime` internally; registers teamwork tools into shared registry |
@@ -59,7 +59,7 @@ The goal is to add teamwork capabilities so agents can coordinate like a team: p
 3. `AgentServerCore` delegates to `AgentRuntime` for all runtime concerns
 4. `ToolContext` carries `agent_def: Option<AgentDef>`, populated automatically when agents call tools
 5. `Task` model has `publisher: Option<String>` and `assignee: Option<String>` fields
-6. `task_publish` tool creates a task with publisher populated from ToolContext.agent_def
+6. `task_create` extended: auto-populates `publisher` from ToolContext.agent_def, accepts optional `assignee` param
 7. `task_claim` tool atomically claims a task (status Pending→Running, assignee set), returns task content for execution; fails if task is already claimed
 8. `task_list` supports filtering by assignee (`assignee=<agent_type>` or `unassigned`)
 9. Agent A can publish a task, Agent B can discover it via `task_list`, claim it via `task_claim`, and execute it
