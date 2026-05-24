@@ -16,6 +16,8 @@ struct TaskCreateParams {
     description: String,
     #[serde(rename = "activeForm", default)]
     active_form: Option<String>,
+    #[serde(default)]
+    assignee: Option<String>,
 }
 
 pub struct TaskCreate {
@@ -53,6 +55,10 @@ impl ExecutableTool for TaskCreate {
                 "activeForm": {
                     "type": "string",
                     "description": "Present continuous form shown in spinner when in_progress (e.g., \"Running tests\")"
+                },
+                "assignee": {
+                    "type": "string",
+                    "description": "Agent type to assign this task to. Omit for open claim."
                 }
             },
             "required": ["subject", "description"]
@@ -62,7 +68,7 @@ impl ExecutableTool for TaskCreate {
     async fn execute(
         &self,
         args: &serde_json::Value,
-        _context: &ToolContext,
+        context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         let params: TaskCreateParams = serde_json::from_value(args.clone())
             .map_err(|e| {
@@ -75,6 +81,8 @@ impl ExecutableTool for TaskCreate {
         let mut task = Task::new(TaskKind::Agent, params.subject.clone(), vec![]);
         task.description = params.description;
         task.active_form = params.active_form;
+        task.publisher = context.agent_def.as_ref().map(|a| a.r#type.clone());
+        task.assignee = params.assignee;
 
         let id = self.store.create(task).await.map_err(|e| {
             vol_llm_tool::ToolError::ExecutionFailed(format!(
