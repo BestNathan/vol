@@ -21,6 +21,7 @@ use vol_llm_mcp::McpManager;
 use vol_llm_provider::{create_provider, ProviderLoader};
 use vol_llm_skill::SkillLoader;
 use vol_llm_tool::ToolRegistry;
+use vol_llm_runtime::AgentRuntime;
 use vol_session::file_store::FileSessionEntryStore;
 
 use crate::connection::ConnectionHolder;
@@ -61,22 +62,7 @@ impl StorePaths {
     }
 }
 
-/// Runtime status of a registered agent.
-#[derive(Debug, Clone, Default)]
-pub struct AgentStatus {
-    pub status: String,  // "idle" | "running"
-    pub current_input: Option<String>,
-    pub run_id: Option<String>,
-}
-
-impl AgentStatus {
-    pub fn idle() -> Self {
-        Self { status: "idle".into(), current_input: None, run_id: None }
-    }
-    pub fn running(input: String, run_id: String) -> Self {
-        Self { status: "running".into(), current_input: Some(input), run_id: Some(run_id) }
-    }
-}
+pub use vol_llm_runtime::AgentStatus;
 
 /// Shared core for the agent server.
 ///
@@ -86,11 +72,14 @@ impl AgentStatus {
 /// Given only `working_dir` and `store_dir`, all internal registries are
 /// derived automatically (LLM, MCP, skills, agents, tools, sessions).
 pub struct AgentServerCore {
-    // === Paths ===
+    // === AgentRuntime ===
+    pub runtime: AgentRuntime,
+
+    // === Paths (derived from runtime) ===
     working_dir: PathBuf,
     store_dir: PathBuf,
 
-    // === Registries ===
+    // === Registries (from runtime) ===
     mcp_manager: Arc<McpManager>,
     skill_loader: Arc<SkillLoader>,
     tool_registry: Arc<ToolRegistry>,
@@ -100,10 +89,10 @@ pub struct AgentServerCore {
     router: AgentRouter,
     holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
 
-    // === Agent definitions ===
+    // === Agent definitions (from runtime) ===
     agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>>,
 
-    // === Agent status ===
+    // === Agent status (from runtime) ===
     agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>>,
 
     // === Domain handlers ===
@@ -320,36 +309,36 @@ impl AgentServerCoreBuilder {
         self
     }
 
-    /// Build the core. All internal registries are derived from working_dir and store_dir.
+    /// Build the core. Creates AgentRuntime internally, then wraps it with transport layer.
     pub async fn build(self) -> Result<AgentServerCore, String> {
-        // Expand ~ in store_dir to home directory.
-        let store_dir = expand_tilde(self.store_dir);
+        // Build AgentRuntime (owns all shared resources)
+        let runtime = AgentRuntime::builder(self.working_dir.clone(), self.store_dir.clone())
+            .build()
+            .await?;
 
-        // Create store subdirectories: sessions/ agents/
+        // Extract resources from runtime for handlers
+        let store_dir = runtime.store_dir().to_path_buf();
         let agents_root = store_dir.join("agents");
-        std::fs::create_dir_all(&agents_root).map_err(|e| format!("failed to create agents dir: {e}"))?;
+        let mcp_manager = runtime.mcp_manager.clone();
+        let skill_loader = runtime.skill_loader.clone();
+        let tool_registry = runtime.tool_registry.clone();
+        let agent_defs = runtime.agent_defs.clone();
+        let agent_status = runtime.agent_status.clone();
 
-        // Derive LLM client from .agents/providers/*.toml (default: first provider found).
-        let llm = derive_llm_client(&self.working_dir)?;
-
-        // Derive MCP manager from .mcp.json in working_dir.
-        let mcp_manager = derive_mcp_manager(&self.working_dir);
-
-        // Derive skill loader from .agents/skills/ in working_dir.
-        let skill_loader = derive_skill_loader(&self.working_dir);
-
-        // Derive tool registry with built-in tools.
-        let mut tool_registry = ToolRegistry::new();
-        vol_llm_tools_builtin::register_all(&mut tool_registry);
-        let tool_registry = Arc::new(tool_registry);
+        // Derive LLM for backward compat (first available)
+        let llm = {
+            let ids = runtime.llm_registry.ids();
+            let first_id = ids.first().ok_or_else(|| "No LLM providers configured".to_string())?;
+            let fc = runtime.llm_registry.get(first_id)
+                .ok_or_else(|| "Provider not found".to_string())?;
+            create_provider(&fc.to_llm_config())
+                .map(Arc::from)
+                .map_err(|e| format!("LLM error: {}", e))?
+        };
 
         let router = AgentRouter::new();
         let holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>> =
             Arc::new(std::sync::Mutex::new(HashMap::new()));
-        let agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>> =
-            Arc::new(std::sync::RwLock::new(HashMap::new()));
-        let agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>> =
-            Arc::new(std::sync::RwLock::new(HashMap::new()));
 
         let mut handler_registry = HandlerRegistry::new();
         handler_registry
@@ -382,7 +371,6 @@ impl AgentServerCoreBuilder {
             .register(Arc::new(SystemHandler))
             .map_err(|e| format!("failed to register SystemHandler: {e}"))?;
 
-        // Register extra handlers from builder (external registration).
         for extra in self.extra_handlers {
             handler_registry
                 .register(extra)
@@ -390,6 +378,7 @@ impl AgentServerCoreBuilder {
         }
 
         Ok(AgentServerCore {
+            runtime,
             working_dir: self.working_dir,
             store_dir,
             mcp_manager,
@@ -525,7 +514,10 @@ impl AgentServerCore {
         handler_registry.register(Arc::new(LogHandler)).ok();
         handler_registry.register(Arc::new(SystemHandler)).ok();
 
+        let runtime = AgentRuntime::for_test();
+
         AgentServerCore {
+            runtime,
             working_dir: PathBuf::from("."),
             store_dir,
             mcp_manager: Arc::new(McpManager::new(vec![])),

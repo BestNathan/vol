@@ -26,6 +26,7 @@ vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-tool = { path = "../vol-llm-tool" }
 vol-llm-tools-builtin = { path = "../vol-llm-tools-builtin" }
 vol-llm-provider = { path = "../vol-llm-provider" }
+vol-llm-runtime = { path = "../vol-llm-runtime" }
 
 [dev-dependencies]
 tempfile = "3"

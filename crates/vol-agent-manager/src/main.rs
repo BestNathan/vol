@@ -78,6 +78,7 @@ async fn main() -> Result<()> {
         instance_registry: instance_registry.clone(),
         agent_loader: agent_loader.clone(),
         llm_config,
+        runtime: None, // AgentRuntime created on-demand or configured via config
     };
 
     // Build router

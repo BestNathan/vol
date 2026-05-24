@@ -6605,6 +6605,7 @@ dependencies = [
  "vol-llm-agent-channel",
  "vol-llm-core",
  "vol-llm-provider",
+ "vol-llm-runtime",
  "vol-llm-tools-builtin",
  "vol-session",
 ]
@@ -6777,6 +6778,7 @@ dependencies = [
  "vol-llm-core",
  "vol-llm-mcp",
  "vol-llm-provider",
+ "vol-llm-runtime",
  "vol-llm-skill",
  "vol-llm-tool",
  "vol-llm-tools-builtin",
@@ -6921,6 +6923,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "vol-llm-runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+ "vol-llm-agent",
+ "vol-llm-core",
+ "vol-llm-mcp",
+ "vol-llm-provider",
+ "vol-llm-skill",
+ "vol-llm-task",
+ "vol-llm-tool",
+ "vol-llm-tools-builtin",
+ "vol-session",
+]
+
+[[package]]
 name = "vol-llm-skill"
 version = "0.1.0"
 dependencies = [
@@ -6952,6 +6976,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "uuid",
+ "vol-llm-core",
  "vol-llm-tool",
 ]
 

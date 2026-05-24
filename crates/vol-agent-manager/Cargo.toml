@@ -26,6 +26,7 @@ vol-llm-provider = { path = "../vol-llm-provider" }
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-tools-builtin = { path = "../vol-llm-tools-builtin" }
 vol-llm-agent-channel = { path = "../vol-llm-agent-channel" }
+vol-llm-runtime = { path = "../vol-llm-runtime" }
 async-trait = { workspace = true }
 
 [dev-dependencies]

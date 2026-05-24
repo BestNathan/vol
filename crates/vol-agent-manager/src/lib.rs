@@ -26,4 +26,5 @@ pub struct AppRouterState {
     pub instance_registry: Arc<crate::instance::AgentInstanceRegistry>,
     pub agent_loader: Arc<vol_llm_agent::AgentLoader>,
     pub llm_config: vol_llm_provider::LLMConfig,
+    pub runtime: Option<Arc<vol_llm_runtime::AgentRuntime>>,
 }
