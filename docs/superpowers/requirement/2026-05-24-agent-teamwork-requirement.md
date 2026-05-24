@@ -29,7 +29,7 @@ The goal is to add teamwork capabilities so agents can coordinate like a team: p
 | Item | Description |
 |------|-------------|
 | `vol-llm-runtime` crate | New independent crate holding `AgentRuntime` with all core runtime structures |
-| `Task` model extension | Add `publisher: Option<String>` and `assignee: Option<String>` to `Task` |
+| `Task` model extension | Add `publisher: Option<String>` and `assignee: Option<String>` to `Task`; leverage existing `dependencies`/`blocks` for task readiness checks |
 | `ToolContext.agent_def` | Add `agent_def: Option<AgentDef>` to `ToolContext` |
 | `task_publish` tool | New tool replacing/augmenting `task_create` with publisher/assignee |
 | `task_claim` tool | New tool: atomically claims a pending task for the calling agent |
@@ -75,7 +75,7 @@ The goal is to add teamwork capabilities so agents can coordinate like a team: p
 | Pending task never claimed | Stays Pending indefinitely; visible in list, no auto-timeout |
 | Agent fails execution of claimed task | Task status → Failed; publisher or any agent can publish a new follow-up task |
 | Agent tries to claim already-Running task | `task_claim` returns error "task is not in Pending status" |
-| Agent claims task with dependencies not yet completed | `task_claim` should reject — task is not "ready" |
+| Agent claims task with uncompleted dependencies | `task_claim` rejects — uses existing `Task.dependencies` and `TaskStore.get_ready_tasks()` to enforce readiness |
 | Agent publishes task and also wants to execute it | Can call `task_claim` on their own published task (self-claim) |
 
 ## Open Questions
