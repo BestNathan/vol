@@ -219,6 +219,7 @@ impl ReActAgent {
         let llm = self.config.llm.clone();
         let user_input = user_input.clone();
         let sandbox = self.config.sandbox.clone();
+        let agent_def = self.config.def.clone();
         let agent_task = tokio::spawn(async move {
             let max_iterations = run_ctx.max_iterations();
             // === Emit and intercept AgentStart ===
@@ -395,10 +396,13 @@ impl ReActAgent {
                         }
 
                         // Execute tool
-                        let tool_ctx = match &sandbox {
+                        let mut tool_ctx = match &sandbox {
                             Some(sandbox) => ToolContext::default().with_sandbox(sandbox.clone()),
                             None => ToolContext::default(),
                         };
+                        if let Some(ref def) = agent_def {
+                            tool_ctx = tool_ctx.with_agent_def(def.clone());
+                        }
                         let result = match run_ctx.execute_tool(call, &tool_ctx).await {
                             Ok(r) => r,
                             Err(e) => {

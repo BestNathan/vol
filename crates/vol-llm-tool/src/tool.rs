@@ -43,6 +43,7 @@ impl ToolResult {
 pub struct ToolContext {
     pub messages: Vec<Message>,
     pub sandbox: Option<SandboxRef>,
+    pub agent_def: Option<vol_llm_core::AgentDef>,
 }
 
 impl std::fmt::Debug for ToolContext {
@@ -50,6 +51,7 @@ impl std::fmt::Debug for ToolContext {
         f.debug_struct("ToolContext")
             .field("messages", &self.messages)
             .field("sandbox", &self.sandbox.as_ref().map(|_| "<sandbox>"))
+            .field("agent_def", &self.agent_def)
             .finish()
     }
 }
@@ -58,6 +60,12 @@ impl ToolContext {
     /// Set the sandbox for this tool context
     pub fn with_sandbox(mut self, sandbox: SandboxRef) -> Self {
         self.sandbox = Some(sandbox);
+        self
+    }
+
+    /// Set the agent definition for this tool context.
+    pub fn with_agent_def(mut self, def: vol_llm_core::AgentDef) -> Self {
+        self.agent_def = Some(def);
         self
     }
 
