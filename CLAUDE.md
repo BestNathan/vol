@@ -72,24 +72,63 @@ This repository is a Rust Cargo workspace for Deribit volatility monitoring and 
 
 **When developing or running the web frontend**, you must use the web-related Makefile commands — do NOT run generic `cargo build` or `cargo run` commands as they will not compile the WASM binary or serve the frontend.
 
+#### Required Web Development Tools
+
+Install these before starting web development:
+
+| Tool | Purpose | Install / verify |
+|------|---------|------------------|
+| Rust + Cargo | Build the Dioxus WASM app and backend service | `cargo --version` |
+| `wasm32-unknown-unknown` target | Build the web frontend WASM binary | `rustup target add wasm32-unknown-unknown` |
+| Dioxus CLI (`dx`) 0.6.x | Serve the Dioxus 0.6 web app on port 8080 | `cargo install dioxus-cli --version 0.6.3 --locked` |
+| `cargo-watch` | Auto-rebuild and restart the JSON-RPC backend | `cargo install cargo-watch --locked` |
+| Node.js + npm | Run Tailwind CLI and manage web CSS dependencies | `node --version && npm --version` |
+| `crates/vol-llm-ui` npm dependencies | Provide `tailwindcss` for CSS compilation | `npm ci --prefix crates/vol-llm-ui` |
+
+Pre-flight checks:
+
+```bash
+which dx
+cargo watch --version
+npm ci --prefix crates/vol-llm-ui
+lsof -i :8080 2>/dev/null || true
+lsof -i :3001 2>/dev/null || true
+```
+
 All web development commands use the Makefile. Run `make help` to see available commands:
 
 | Command | Description |
 |---------|-------------|
-| `make web-css` | Build Tailwind CSS (watch mode) |
+| `make web-css` | Build Tailwind CSS in watch mode |
 | `make web-dev` | Start Dioxus dev server (port 8080) |
 | `make web-backend` | Start backend JSON-RPC agent service (port 3001) |
 | `make web-check` | cargo check (web only) |
 | `make web-build` | Build WASM binary |
 | `make web-clippy` | cargo clippy (web only) |
 
-**Starting web development requires running 3 commands in separate terminals:**
+**Starting web development requires running 3 services in separate terminals:**
 
-1. `make web-css` — compile Tailwind CSS in watch mode (must stay running)
-2. `make web-dev` — start Dioxus dev server on port 8080
-3. `make web-backend` — start backend JSON-RPC agent service on port 3001
+1. `make web-css` — compile Tailwind CSS in persistent watch mode.
+2. `make web-dev` — start Dioxus dev server on port 8080.
+3. `make web-backend` — start backend JSON-RPC agent service on port 3001.
 
-**Important:** `make web-css` must be running before `make web-dev`, otherwise new Tailwind utility classes (e.g., arbitrary values like `w-[600px]`, `h-[70vh]`) won't be compiled into the CSS and won't take effect.
+The `make web-css` target runs:
+
+```bash
+npx --prefix crates/vol-llm-ui @tailwindcss/cli \
+  -i crates/vol-llm-ui/assets/input.css \
+  -o crates/vol-llm-ui/assets/tailwind.css \
+  --watch=always
+```
+
+**Important:** Tailwind CSS must be compiled before `make web-dev`; otherwise new Tailwind utility classes (e.g., arbitrary values like `w-[600px]`, `h-[70vh]`) won't be present in `assets/tailwind.css` and won't take effect.
+
+If `make web-dev` serves `Err 404 - dioxus is not currently serving a web app`, restart it explicitly with the web platform:
+
+```bash
+dx serve --platform web --package vol-llm-ui --bin vol-llm-ui-web \
+  --no-default-features --features web --addr 0.0.0.0 --port 8080
+```
 
 ### Model Service
 
