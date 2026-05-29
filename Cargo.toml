@@ -33,7 +33,6 @@ members = [
     "crates/vol-llm-yaml-agent",
     "crates/vol-llm-agent-channel",
     "crates/vol-llm-ui",
-    "crates/vol-agent-manager",
     "crates/md-frontmatter",
     "crates/vol-mcp-servers",
     "crates/vol-llm-mcp",

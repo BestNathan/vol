@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-05-29] ingest | Remove vol-agent-manager and Legacy Frontend
+- Created sources: [[remove-vol-agent-manager]]
+- Updated entities: [[vol-llm-ui-crate]], [[vol-llm-agent-channel-crate]]
+- Updated index: new source entry, updated date
+- Cross-references added: 4
+- Changes: Removed obsolete `vol-agent-manager` crate, manager-only Docker/Kubernetes artifacts, and legacy React `frontend/`; active web backend remains `vol-llm-agent-channel` JSON-RPC service via `make web-backend`.
+
 ## [2026-05-28] ingest | CLAUDE.md Web Development Environment
 - Created sources: [[web-dev-environment-claudemd]]
 - Updated entities: [[vol-llm-ui-crate]] (web development prerequisites, persistent Makefile CSS watcher, project web-dev skill, startup services, troubleshooting)

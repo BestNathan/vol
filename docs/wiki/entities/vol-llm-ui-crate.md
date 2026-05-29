@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-27 (web-dev-environment-claudemd)
-source_count: 22
+updated: 2026-05-29 (remove-vol-agent-manager)
+source_count: 23
 ---
 
 # vol-llm-ui Crate
@@ -90,3 +90,4 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-18**: FileTree collapsed-state follow-up — `TreeNode` now treats unloaded empty directories as visually collapsed, first click loads without inserting into `collapsed_dirs`, and directory chevrons use a larger `w-6 h-6 text-[16px]` affordance [[file-tree-collapsed-state-follow-up]]
 - **2026-05-18**: FileTree chevron glyph refinement — directory expand/collapse control now uses a CSS-drawn chevron, points right when collapsed, and rotates downward when expanded [[file-tree-chevron-glyph-refinement]]
 - **2026-05-28**: Web development environment guidance added to `CLAUDE.md` and `.claude/skills/nq-web-dev/SKILL.md`; `make web-css` now runs Tailwind in persistent watch mode with `--watch=always`; required tools include Dioxus CLI 0.6.x, `cargo-watch`, Node/npm, `wasm32-unknown-unknown`, and `crates/vol-llm-ui` npm dependencies; Dioxus 404 fallback uses `dx serve --platform web` [[web-dev-environment-claudemd]]
+- **2026-05-29**: Legacy React `frontend/` and obsolete `vol-agent-manager` backend removed; `crates/vol-llm-ui` remains the sole active web frontend, backed by `vol-llm-agent-channel`'s JSON-RPC service [[remove-vol-agent-manager]]

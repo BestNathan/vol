@@ -56,9 +56,7 @@ This repository is a Rust Cargo workspace for Deribit volatility monitoring and 
 | `crates/vol-llm-agent-channel`, `crates/vol-llm-mcp`, `crates/vol-mcp-servers` | Agent communication, JSON-RPC/MCP integration, and MCP server implementations. |
 | `crates/vol-llm-ui` | Dioxus 0.6 WASM web frontend. Use the web Makefile commands rather than generic Cargo commands for this crate. |
 | `crates/vol-llm-tui` | Terminal UI frontend for the LLM agent experience. |
-| `crates/vol-agent-manager` | Backend JSON-RPC agent service used by the web frontend. |
 | `docs/` | Architecture, deployment, development notes, migrations, test results, superpowers docs, and the persistent project wiki at `docs/wiki`. |
-| `frontend/` | Supporting frontend assets/source outside the Dioxus crate. |
 | `openspec/` | OpenSpec change/spec artifacts. |
 | `k8s/` | Kubernetes manifests. |
 | `scripts/` | Repository automation scripts. |
@@ -101,7 +99,7 @@ All web development commands use the Makefile. Run `make help` to see available 
 |---------|-------------|
 | `make web-css` | Build Tailwind CSS in watch mode |
 | `make web-dev` | Start Dioxus dev server (port 8080) |
-| `make web-backend` | Start backend JSON-RPC agent service (port 3001) |
+| `make web-backend` | Start backend JSON-RPC agent service from `vol-llm-agent-channel` (port 3001) |
 | `make web-check` | cargo check (web only) |
 | `make web-build` | Build WASM binary |
 | `make web-clippy` | cargo clippy (web only) |
