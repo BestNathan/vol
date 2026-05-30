@@ -353,7 +353,7 @@ impl AgentServerCoreBuilder {
             .register(Arc::new(FileHandler::new(self.working_dir.clone())))
             .map_err(|e| format!("failed to register FileHandler: {e}"))?;
         handler_registry
-            .register(Arc::new(SessionHandler::new(agents_root)))
+            .register(Arc::new(SessionHandler::new(agents_root, router.clone())))
             .map_err(|e| format!("failed to register SessionHandler: {e}"))?;
         handler_registry
             .register(Arc::new(McpHandler::new(Some(mcp_manager.clone()))))
@@ -507,7 +507,7 @@ impl AgentServerCore {
             agent_status.clone(),
         ))).ok();
         handler_registry.register(Arc::new(FileHandler::new(PathBuf::from(".")))).ok();
-        handler_registry.register(Arc::new(SessionHandler::new(agents_root))).ok();
+        handler_registry.register(Arc::new(SessionHandler::new(agents_root, router.clone()))).ok();
         handler_registry.register(Arc::new(McpHandler::new(None))).ok();
         handler_registry.register(Arc::new(SkillHandler::new(None))).ok();
         handler_registry.register(Arc::new(ToolHandler::new(Arc::new(ToolRegistry::new())))).ok();

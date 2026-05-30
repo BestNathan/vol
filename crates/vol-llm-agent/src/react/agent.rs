@@ -278,14 +278,6 @@ impl ReActAgent {
                     .await
                     .map_err(|e| crate::AgentError::from(e))?;
 
-                // Emit LLMCallStart with full message history
-                run_ctx
-                    .emit(AgentStreamEvent::llm_call_start(
-                        iteration,
-                        messages.clone(),
-                    ))
-                    .await;
-
                 let request = ConversationRequest::with_history(None, messages)
                     .with_tools(tools_defs)
                     .with_tool_choice(ToolChoice::Auto);
@@ -293,9 +285,6 @@ impl ReActAgent {
                 let llm_stream = match llm.converse_stream(request).await {
                     Ok(stream) => stream,
                     Err(e) => {
-                        run_ctx
-                            .emit(AgentStreamEvent::llm_call_error(e.to_string()))
-                            .await;
                         run_ctx
                             .emit(AgentStreamEvent::agent_aborted(format!(
                                 "LLM request failed: {}",
@@ -312,9 +301,6 @@ impl ReActAgent {
                         Ok(data) => data,
                         Err(e) => {
                             run_ctx
-                                .emit(AgentStreamEvent::llm_call_error(e.to_string()))
-                                .await;
-                            run_ctx
                                 .emit(AgentStreamEvent::agent_aborted(format!(
                                     "LLM stream failed: {}",
                                     e
@@ -329,21 +315,23 @@ impl ReActAgent {
                     run_ctx.record_reasoning_step(thinking.clone(), None).await;
                 }
 
-                // Emit LLMCallComplete with real model and usage
-                run_ctx
-                    .emit(AgentStreamEvent::llm_call_complete(model.clone(), usage))
-                    .await;
-
                 // Check if tool calls
                 if !tool_calls.is_empty() {
                     // IMPORTANT: Add assistant message with tool calls to history
-                    let assistant_message = if !content.is_empty() {
-                        Message::assistant_with_tools(content.clone(), tool_calls.clone())
-                    } else {
-                        Message::assistant_with_tools(
-                            "Calling tools to get information.".to_string(),
-                            tool_calls.clone(),
-                        )
+                    let assistant_message = {
+                        let msg = if !content.is_empty() {
+                            Message::assistant_with_tools(content.clone(), tool_calls.clone())
+                        } else {
+                            Message::assistant_with_tools(
+                                "Calling tools to get information.".to_string(),
+                                tool_calls.clone(),
+                            )
+                        };
+                        if !thinking.is_empty() {
+                            msg.with_thinking(thinking.clone())
+                        } else {
+                            msg
+                        }
                     };
                     if let Err(e) = run_ctx.add_message(assistant_message).await {
                         return Err(crate::AgentError::from(e));
@@ -495,10 +483,11 @@ impl ReActAgent {
                     .await;
 
                 // Save assistant response to session
-                if let Err(e) = run_ctx
-                    .add_message(Message::assistant(content.clone()))
-                    .await
-                {
+                let mut final_msg = Message::assistant(content.clone());
+                if !thinking.is_empty() {
+                    final_msg = final_msg.with_thinking(thinking.clone());
+                }
+                if let Err(e) = run_ctx.add_message(final_msg).await {
                     return Err(crate::AgentError::from(e));
                 }
 

@@ -727,6 +727,9 @@
   .min-h-0 {
     min-height: calc(var(--spacing) * 0);
   }
+  .min-h-\[16px\] {
+    min-height: 16px;
+  }
   .min-h-\[18rem\] {
     min-height: 18rem;
   }
@@ -1244,6 +1247,10 @@
     border-bottom-style: var(--tw-border-style);
     border-bottom-width: 2px;
   }
+  .border-l {
+    border-left-style: var(--tw-border-style);
+    border-left-width: 1px;
+  }
   .border-l-\[3px\] {
     border-left-style: var(--tw-border-style);
     border-left-width: 3px;
@@ -1383,6 +1390,9 @@
   }
   .bg-\[\#203a20\] {
     background-color: #203a20;
+  }
+  .bg-\[\#333\] {
+    background-color: #333;
   }
   .bg-\[\#555\] {
     background-color: #555;
@@ -1616,8 +1626,17 @@
   .py-\[5px\] {
     padding-block: 5px;
   }
+  .pt-0 {
+    padding-top: calc(var(--spacing) * 0);
+  }
+  .pt-0\.5 {
+    padding-top: calc(var(--spacing) * 0.5);
+  }
   .pt-1 {
     padding-top: calc(var(--spacing) * 1);
+  }
+  .pt-1\.5 {
+    padding-top: calc(var(--spacing) * 1.5);
   }
   .pt-2 {
     padding-top: calc(var(--spacing) * 2);

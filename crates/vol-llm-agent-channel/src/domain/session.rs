@@ -1,24 +1,28 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use vol_session::file_store::FileSessionEntryStore;
-use vol_session::SessionEntryStore;
+use vol_session::{Session, SessionEntryStore};
 
 use crate::agent_server_protocol::{
     AgentServerMessage, Operation, Payload, ProtocolError, SessionOperation, SessionPayload,
 };
 use crate::domain::handler::DomainHandler;
+use crate::router::AgentRouter;
 
 /// Handler for session-domain operations.
 ///
 /// Scans all agent directories under agents_root to aggregate sessions.
+/// Holds a router reference to swap agent sessions on resume.
 pub struct SessionHandler {
     agents_root: PathBuf,
+    router: AgentRouter,
 }
 
 impl SessionHandler {
-    pub fn new(agents_root: PathBuf) -> Self {
-        Self { agents_root }
+    pub fn new(agents_root: PathBuf, router: AgentRouter) -> Self {
+        Self { agents_root, router }
     }
 
     /// Get a session store for a specific agent.
@@ -27,7 +31,7 @@ impl SessionHandler {
     }
 
     /// Find which agent owns a session by scanning all agent dirs.
-    fn find_store_for_session(&self, session_id: &str) -> Result<FileSessionEntryStore, ProtocolError> {
+    fn find_store_for_session(&self, session_id: &str) -> Result<(FileSessionEntryStore, String), ProtocolError> {
         if self.agents_root.is_dir() {
             for entry in std::fs::read_dir(&self.agents_root).into_iter().flatten().flatten() {
                 if entry.path().is_dir() {
@@ -35,7 +39,7 @@ impl SessionHandler {
                         let store = self.agent_store(agent_id);
                         if let Ok(summaries) = store.list_sessions() {
                             if summaries.iter().any(|s| s.session_id == session_id) {
-                                return Ok(store);
+                                return Ok((store, agent_id.to_string()));
                             }
                         }
                     }
@@ -106,12 +110,25 @@ impl DomainHandler for SessionHandler {
                 )])
             }
             (SessionOperation::Resume, Payload::Session(SessionPayload::Resume { session_id, agent_id })) => {
-                let store = match agent_id {
-                    Some(id) => self.agent_store(&id),
+                let (store, resolved_agent_id) = match agent_id {
+                    Some(ref id) => (self.agent_store(id), id.clone()),
                     None => self.find_store_for_session(&session_id)?,
                 };
                 match store.get_entries(&session_id).await {
                     Ok(entries) => {
+                        // Swap the agent's active session so subsequent messages go here.
+                        let session_store: Arc<dyn SessionEntryStore> = Arc::new(store);
+                        match Session::resume(session_id.clone(), session_store).await {
+                            Ok(session) => {
+                                if let Err(e) = self.router.swap_session(&resolved_agent_id, Arc::new(session)).await {
+                                    tracing::warn!(%session_id, %resolved_agent_id, %e, "session entries loaded but swap failed");
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(%session_id, %resolved_agent_id, %e, "session entries loaded but resume failed");
+                            }
+                        }
+
                         let json_entries: Vec<serde_json::Value> = entries
                             .into_iter()
                             .filter_map(|e| serde_json::to_value(e).ok())
@@ -141,8 +158,8 @@ impl DomainHandler for SessionHandler {
                 }
             }
             (SessionOperation::Entries, Payload::Session(SessionPayload::Entries { session_id, agent_id })) => {
-                let store = match agent_id {
-                    Some(id) => self.agent_store(&id),
+                let (store, _agent_id) = match agent_id {
+                    Some(id) => (self.agent_store(&id), id),
                     None => self.find_store_for_session(&session_id)?,
                 };
                 match store.get_entries(&session_id).await {

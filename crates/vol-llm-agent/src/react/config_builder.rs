@@ -137,6 +137,10 @@ impl AgentConfigBuilder {
                     Ok(r) => r,
                     Err(arc) => (*arc).clone(),
                 };
+                let tools = std::mem::take(&mut self.tools);
+                for tool in tools {
+                    reg.register_boxed(tool);
+                }
                 reg.register_from_mcp(manager.clone()).await;
                 Arc::new(reg)
             }
@@ -168,7 +172,11 @@ impl AgentConfigBuilder {
         // Build tool registry: if tool_registry not set, build from individual tools
         let mut tools = match self.tool_registry {
             Some(registry) => {
-                Arc::try_unwrap(registry).unwrap_or_else(|arc| (*arc).clone())
+                let mut tools = Arc::try_unwrap(registry).unwrap_or_else(|arc| (*arc).clone());
+                for tool in self.tools {
+                    tools.register_boxed(tool);
+                }
+                tools
             }
             None => {
                 let mut registry = ToolRegistry::new();

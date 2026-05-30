@@ -214,17 +214,6 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                 }
                 lines.push(Line::raw(""));
             }
-            ConversationEntry::LlmCall { iteration, model } => {
-                let label = if model.is_empty() {
-                    format!("Calling LLM (iteration {iteration})...")
-                } else {
-                    format!("Calling LLM: {model} (iteration {iteration})")
-                };
-                lines.push(Line::from(vec![
-                    Span::styled(label, Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
-                ]));
-                lines.push(Line::raw(""));
-            }
             ConversationEntry::ContentStreaming { content } => {
                 if content.is_empty() {
                     lines.push(Line::from(vec![

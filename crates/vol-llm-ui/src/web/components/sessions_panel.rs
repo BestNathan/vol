@@ -16,10 +16,10 @@ fn truncate_for_log(s: &str, max_len: usize) -> String {
 
 /// Convert raw session entries to ConversationEntry for display.
 pub(crate) fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<ConversationEntry> {
-    entries.into_iter().filter_map(|e| {
+    entries.into_iter().flat_map(|e| {
         let entry_type = e.entry_type.clone();
         let data_debug = serde_json::to_string(&e.data).unwrap_or_default();
-        let result = match e.entry_type.as_str() {
+        let result: Vec<ConversationEntry> = match e.entry_type.as_str() {
             "message" => {
                 let data = &e.data;
                 // data.message is SessionMessage wrapper
@@ -41,32 +41,42 @@ pub(crate) fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec
                                 }
                             };
                             match role {
-                                "user" => Some(ConversationEntry::UserInput { text }),
-                                "assistant" => Some(ConversationEntry::AgentAnswer { text }),
+                                "user" => vec![ConversationEntry::UserInput { text }],
+                                "assistant" => {
+                                    let mut entries = Vec::new();
+                                    // Extract thinking if present, so resumed sessions show thinking blocks
+                                    if let Some(thinking) = msg.get("thinking").and_then(|v| v.as_str()) {
+                                        if !thinking.is_empty() {
+                                            entries.push(ConversationEntry::Thinking { content: thinking.to_string() });
+                                        }
+                                    }
+                                    entries.push(ConversationEntry::AgentAnswer { text });
+                                    entries
+                                }
                                 "tool" => {
                                     let tool_name = msg.get("name").and_then(|v| v.as_str()).unwrap_or("tool").to_string();
-                                    Some(ConversationEntry::ToolResult {
+                                    vec![ConversationEntry::ToolResult {
                                         tool_name,
                                         preview: text,
                                         success: true,
-                                    })
+                                    }]
                                 }
                                 _ => {
                                     log::warn!("session entry unknown role: {role}");
-                                    None
+                                    vec![]
                                 }
                             }
                         } else {
                             log::warn!("session entry message missing role, data: {}", truncate_for_log(&data_debug, 200));
-                            None
+                            vec![]
                         }
                     } else {
                         log::warn!("session entry data missing inner message, data: {}", truncate_for_log(&data_debug, 200));
-                        None
+                        vec![]
                     }
                 } else {
                     log::warn!("session entry data missing message wrapper, data: {}", truncate_for_log(&data_debug, 200));
-                    None
+                    vec![]
                 }
             }
             "checkpoint" => {
@@ -79,21 +89,21 @@ pub(crate) fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec
                     .and_then(|c| c.get("note"))
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
-                Some(ConversationEntry::EntryCheckpoint { reason, note, created_at: e.created_at })
+                vec![ConversationEntry::EntryCheckpoint { reason, note, created_at: e.created_at }]
             }
             "summary" => {
-                Some(ConversationEntry::RunSummary {
+                vec![ConversationEntry::RunSummary {
                     iterations: 0,
                     tool_calls: 0,
                     elapsed_ms: 0,
-                })
+                }]
             }
             _ => {
                 log::warn!("session entry unknown entry_type: {entry_type}, data: {}", truncate_for_log(&data_debug, 100));
-                None
+                vec![]
             }
         };
-        if result.is_none() {
+        if result.is_empty() {
             log::warn!("session entry dropped: type={entry_type}, data_preview={}", truncate_for_log(&data_debug, 100));
         }
         result

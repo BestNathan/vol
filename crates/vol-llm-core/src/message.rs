@@ -150,6 +150,12 @@ impl Message {
             thinking: None,
         }
     }
+
+    /// Attach thinking content to this message.
+    pub fn with_thinking(mut self, thinking: String) -> Self {
+        self.thinking = Some(thinking);
+        self
+    }
 }
 
 #[cfg(test)]

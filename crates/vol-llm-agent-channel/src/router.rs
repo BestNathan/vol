@@ -8,6 +8,7 @@ use tokio::sync::{oneshot, RwLock};
 use crate::dispatcher::AgentDispatcher;
 use crate::error::ChannelError;
 use crate::request::{AgentRequest, RunResult};
+use vol_session::Session;
 
 /// Routes requests to registered dispatchers by agent_id.
 ///
@@ -59,6 +60,20 @@ impl AgentRouter {
     /// Check if an agent is registered.
     pub async fn has_agent(&self, agent_id: &str) -> bool {
         self.dispatchers.read().await.contains_key(agent_id)
+    }
+
+    /// Swap the session of a registered agent.
+    pub async fn swap_session(
+        &self,
+        agent_id: &str,
+        session: Arc<Session>,
+    ) -> Result<(), ChannelError> {
+        let dispatchers = self.dispatchers.read().await;
+        let dispatcher = dispatchers
+            .get(agent_id)
+            .ok_or_else(|| ChannelError::AgentNotFound(agent_id.to_string()))?;
+        dispatcher.swap_session(session);
+        Ok(())
     }
 
     /// List all registered agent IDs.

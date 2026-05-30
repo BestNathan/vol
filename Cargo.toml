@@ -36,6 +36,7 @@ members = [
     "crates/md-frontmatter",
     "crates/vol-mcp-servers",
     "crates/vol-llm-mcp",
+    "crates/vol-llm-runtime",
     "crates/vol-observability",
 ]
 

@@ -51,6 +51,11 @@ impl ProviderLoader {
         self.providers.keys().map(|s| s.as_str()).collect()
     }
 
+    /// Programmatically insert a provider (useful for testing).
+    pub fn insert(&mut self, id: impl Into<String>, config: ProviderFileConfig) {
+        self.providers.insert(id.into(), config);
+    }
+
     /// Check if a provider exists
     pub fn contains(&self, id: &str) -> bool {
         self.providers.contains_key(id)

@@ -12,10 +12,12 @@ use crate::web::client::{AgentEvent, JsonRpcClient};
 
 use super::agents_panel::AgentsPanel;
 use super::approval_dialog::ApprovalDialog;
+use super::conversation::ConversationView;
 use super::file_content::FileContentView;
 use super::file_tree::FileTree;
 use super::log_viewer::LogViewer;
 use super::mcp_panel::McpPanel;
+use super::sessions_panel::SessionsPanel;
 use super::skills::SkillsPanel;
 use super::skill_detail_dialog::SkillDetailDialog;
 use super::status_bar::StatusBar;
@@ -74,16 +76,7 @@ fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
             delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
         "ThinkingComplete" => Some(UiEvent::ThinkingComplete),
-        "LLMCallStart" => Some(UiEvent::LlmCallStart {
-            iteration: data.get("iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-        }),
-        "LLMCallComplete" => Some(UiEvent::LlmCallComplete {
-            model: data.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        }),
-        "LLMCallError" => Some(UiEvent::LlmCallError {
-            error: data.get("error").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        }),
-        "ContentStart" => Some(UiEvent::ContentStart),
+"ContentStart" => Some(UiEvent::ContentStart),
         "ContentDelta" => Some(UiEvent::ContentDelta {
             delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
@@ -256,8 +249,7 @@ pub fn App() -> Element {
         for kind in [
             UiEventKind::AgentStart, UiEventKind::AgentComplete, UiEventKind::AgentAborted,
             UiEventKind::AgentError, UiEventKind::ThinkingStart, UiEventKind::ThinkingDelta,
-            UiEventKind::ThinkingComplete, UiEventKind::LlmCallStart, UiEventKind::LlmCallComplete,
-            UiEventKind::LlmCallError,
+            UiEventKind::ThinkingComplete,
             UiEventKind::ContentStart, UiEventKind::ContentDelta,
             UiEventKind::ContentComplete, UiEventKind::MaxIterationsReached,
             UiEventKind::IterationContinued, UiEventKind::IterationComplete,
@@ -589,6 +581,8 @@ fn TabContent(skill_dialog_signal: Signal<SkillDialogState>) -> Element {
     let active = *state.active_tab.read();
 
     match active {
+        ActiveTab::Conversation => rsx! { ConversationView {} },
+        ActiveTab::Sessions => rsx! { SessionsPanel {} },
         ActiveTab::Agents => rsx! { AgentsPanel {} },
         ActiveTab::Tools => rsx! { ToolsTabContent {} },
         ActiveTab::Workspace => rsx! { FileContentView {} },
