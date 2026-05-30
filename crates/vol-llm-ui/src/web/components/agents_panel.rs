@@ -184,9 +184,9 @@ pub fn AgentsPanel() -> Element {
     let selected_agent = agents.iter().find(|a| selected.as_ref() == Some(&a.id));
 
     rsx! {
-        div { class: "flex flex-col h-full",
+        div { class: "flex flex-col flex-1 min-h-0 overflow-hidden",
             // Card grid — responsive: stack on mobile, wrap on desktop
-            div { class: "flex flex-col sm:flex-row sm:flex-wrap gap-2 p-2 border-b border-[#333355] overflow-y-auto max-h-[200px] min-h-[60px]",
+            div { class: "flex flex-col sm:flex-row sm:flex-wrap gap-2 p-2 border-b border-[#333355] overflow-y-auto max-h-[200px] min-h-[60px] flex-shrink-0",
                 for agent in &agents {
                     AgentCard {
                         key: "{agent.id}",

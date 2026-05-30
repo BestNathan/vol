@@ -71,6 +71,7 @@ impl Operation {
             Operation::Mcp(McpOperation::ServerStatus) => "mcp.server_status",
             Operation::Skill(SkillOperation::List) => "skill.list",
             Operation::Skill(SkillOperation::Get) => "skill.get",
+            Operation::Skill(SkillOperation::Refresh) => "skill.refresh",
             Operation::Tool(ToolOperation::List) => "tool.list",
             Operation::Tool(ToolOperation::Call) => "tool.call",
             Operation::Log(LogOperation::List) => "log.list",
@@ -122,6 +123,7 @@ pub enum McpOperation {
 pub enum SkillOperation {
     List,
     Get,
+    Refresh,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -412,6 +414,7 @@ impl Payload {
                     .map_err(|_| ProtocolError::PayloadDecodeFailed("skill.get"))?;
                 Ok(Payload::Skill(SkillPayload::Get { name: p.name }))
             }
+            Operation::Skill(SkillOperation::Refresh) => Ok(Payload::Skill(SkillPayload::Refresh)),
             // ── Tool ──
             Operation::Tool(ToolOperation::List) => {
                 Ok(Payload::Tool(ToolPayload::List))
@@ -651,6 +654,10 @@ pub enum SkillPayload {
     GetResult {
         skill: serde_json::Value,
         name: String,
+    },
+    Refresh,
+    RefreshResult {
+        discovered: usize,
     },
 }
 

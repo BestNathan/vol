@@ -5,6 +5,18 @@ use crate::state::{ToolState, ToolCallEntry, ToolCallStatus, UiEvent, UiEventKin
 use crate::web::client::JsonRpcClient;
 use crate::web::components::app::AppState;
 
+/// Safely write to a Signal in an async callback.
+///
+/// When a component unmounts (e.g. tab switch), its signals are dropped.
+/// Async callbacks (WebSocket reconnect, RPC responses) may still fire
+/// after unmount and panic on `with_mut()`. This function catches that
+/// panic and silently returns false instead of crashing the WASM module.
+fn safe_write<T>(mut sig: Signal<T>, f: impl FnOnce(&mut T)) -> bool {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        sig.with_mut(f);
+    })).is_ok()
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 struct ToolDef {
     name: String,
@@ -62,14 +74,13 @@ pub fn ToolsTabContent() -> Element {
     let tool_state = use_signal(|| ToolsPanelState { tools: vec![], loading: false, error: None, call_result: None });
     let client: JsonRpcClient = app_state.rpc_client.clone();
 
-    // Load tools on mount (follow sessions pattern: use_hook)
+    // Load tools on mount
     let client_for_load = client.clone();
     use_hook(move || {
-        let mut sig = tool_state.clone();
+        let mut sig = tool_state;
         sig.with_mut(|s| { s.loading = true; s.error = None; });
         client_for_load.tool_list(move |result| {
-            let mut sig = sig.clone();
-            sig.with_mut(|s| {
+            safe_write(sig, |s| {
                 s.loading = false;
                 match result {
                     Ok(tools) => {
@@ -86,13 +97,13 @@ pub fn ToolsTabContent() -> Element {
     // Re-fetch on reconnect
     let event_bus = app_state.event_bus.clone();
     let client_for_reconnect = client.clone();
-    let ts_for_reconnect = tool_state.clone();
+    let ts_for_reconnect = tool_state;
     use_hook(move || {
         let _sub = event_bus.subscribe(UiEventKind::WsConnected, move |_| {
             let cl = client_for_reconnect.clone();
-            let mut sig = ts_for_reconnect.clone();
+            let sig = ts_for_reconnect;
             cl.tool_list(move |result| {
-                sig.with_mut(|s| {
+                safe_write(sig, |s| {
                     s.loading = false;
                     match result {
                         Ok(tools) => {
@@ -133,14 +144,13 @@ pub fn ToolsTabContent() -> Element {
                             class: "px-2 py-0.5 text-[12px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#4a4a65]",
                             onclick: {
                                 let client = client.clone();
-                                let ts = tool_state.clone();
+                                let ts = tool_state;
                                 move |_| {
-                                    let mut ts = ts.clone();
-                                    ts.with_mut(|s| { s.loading = true; s.error = None; });
-                                    let ts2 = ts.clone();
+                                    let ts = ts;
+                                    safe_write(ts, |s| { s.loading = true; s.error = None; });
+                                    let ts2 = ts;
                                     client.tool_list(move |result| {
-                                        let mut ts2 = ts2.clone();
-                                        ts2.with_mut(|s| {
+                                        safe_write(ts2, |s| {
                                             s.loading = false;
                                             match result {
                                                 Ok(tools) => {
@@ -176,14 +186,13 @@ pub fn ToolsTabContent() -> Element {
                                     class: "px-1.5 py-0.5 text-[11px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#5a5a75]",
                                     onclick: {
                                         let client = client.clone();
-                                        let ts = tool_state.clone();
+                                        let ts = tool_state;
                                         let name = tool.name.clone();
                                         move |_| {
                                             let args_val = serde_json::json!({});
-                                            let ts2 = ts.clone();
+                                            let ts = ts;
                                             client.tool_call(&name, &args_val, move |result| {
-                                                let mut ts2 = ts2.clone();
-                                                ts2.with_mut(|s| {
+                                                safe_write(ts, |s| {
                                                     match result {
                                                         Ok(val) => s.call_result = Some(
                                                             serde_json::to_string_pretty(&val).unwrap_or_else(|_| val.to_string())

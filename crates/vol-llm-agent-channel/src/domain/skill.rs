@@ -29,6 +29,7 @@ impl DomainHandler for SkillHandler {
         vec![
             Operation::Skill(SkillOperation::List),
             Operation::Skill(SkillOperation::Get),
+            Operation::Skill(SkillOperation::Refresh),
         ]
     }
 
@@ -96,8 +97,36 @@ impl DomainHandler for SkillHandler {
                     )]),
                 }
             }
+            (SkillOperation::Refresh, Payload::Skill(SkillPayload::Refresh)) => {
+                let discovered = match &self.skill_loader {
+                    Some(loader) => {
+                        match loader.discover_all().await {
+                            Ok(()) => loader.list_metadata().await.len(),
+                            Err(e) => {
+                                return Ok(vec![AgentServerMessage::new_error(
+                                    message.message_id,
+                                    Operation::Skill(SkillOperation::Refresh),
+                                    crate::agent_server_protocol::ErrorPayload {
+                                        code: "skill_refresh_failed".to_string(),
+                                        message: e.to_string(),
+                                        detail: None,
+                                        terminal: false,
+                                    },
+                                )]);
+                            }
+                        }
+                    }
+                    None => 0,
+                };
+                Ok(vec![AgentServerMessage::new_result(
+                    message.message_id,
+                    Operation::Skill(SkillOperation::Refresh),
+                    Payload::Skill(SkillPayload::RefreshResult { discovered }),
+                )])
+            }
             (SkillOperation::List, _) => Err(ProtocolError::PayloadDecodeFailed("skill.list")),
             (SkillOperation::Get, _) => Err(ProtocolError::PayloadDecodeFailed("skill.get")),
+            (SkillOperation::Refresh, _) => Err(ProtocolError::PayloadDecodeFailed("skill.refresh")),
         }
     }
 }

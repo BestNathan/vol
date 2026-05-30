@@ -7,6 +7,10 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/wiki-context.sh\""
+          },
+          {
+            "type": "command",
+            "command": "echo \"<user-preferences>DO NOT use git worktree</user-preferences>\""
           }
         ]
       }

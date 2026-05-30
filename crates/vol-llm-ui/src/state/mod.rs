@@ -9,6 +9,7 @@ mod event_buffer;
 pub use event_buffer::EventBuffer;
 
 use serde::{Deserialize, Serialize};
+#[cfg(all(feature = "web", not(feature = "tui")))]
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -204,7 +205,7 @@ impl WorkspaceTreeNode {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SkillDisplayEntry {
     pub name: String,
     pub version: String,
@@ -235,18 +236,24 @@ pub struct OpenFileTab {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ActiveTab { Agents, Tools, Workspace, Skills, Mcp, Logs }
+pub enum ActiveTab { Conversation, Sessions, Agents, Tools, Workspace, Skills, Mcp, Logs }
 
 impl ActiveTab {
     pub fn next(self) -> Self {
         match self {
+            ActiveTab::Conversation => ActiveTab::Sessions,
+            ActiveTab::Sessions => ActiveTab::Agents,
             ActiveTab::Agents => ActiveTab::Tools,
             ActiveTab::Tools => ActiveTab::Workspace,
             ActiveTab::Workspace => ActiveTab::Skills,
             ActiveTab::Skills => ActiveTab::Mcp,
             ActiveTab::Mcp => ActiveTab::Logs,
-            ActiveTab::Logs => ActiveTab::Agents,
+            ActiveTab::Logs => ActiveTab::Conversation,
         }
+    }
+
+    pub fn toggle(self) -> Self {
+        self.next()
     }
 }
 
@@ -543,12 +550,13 @@ impl WorkspaceState {
 pub struct SkillsState {
     pub skills: Vec<SkillDisplayEntry>,
     pub error: Option<String>,
+    pub loading: bool,
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl SkillsState {
     pub fn new() -> Self {
-        Self { skills: Vec::new(), error: None }
+        Self { skills: Vec::new(), error: None, loading: false }
     }
 }
 
@@ -1233,12 +1241,14 @@ mod tests {
     #[test]
     fn test_active_tab_next() {
         use ActiveTab::*;
+        assert_eq!(Conversation.next(), Sessions);
+        assert_eq!(Sessions.next(), Agents);
         assert_eq!(Agents.next(), Tools);
         assert_eq!(Tools.next(), Workspace);
         assert_eq!(Workspace.next(), Skills);
         assert_eq!(Skills.next(), Mcp);
         assert_eq!(Mcp.next(), Logs);
-        assert_eq!(Logs.next(), Agents);
+        assert_eq!(Logs.next(), Conversation);
     }
 
     #[test]

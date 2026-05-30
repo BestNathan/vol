@@ -76,6 +76,50 @@ pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
                 conv.entries.push(ConversationEntry::AgentAnswer { text: content.clone() });
             }
         }
+        UiEvent::ToolCallBegin { tool_name, arguments } => {
+            // Extract a brief preview for display
+            let preview = if arguments.is_empty() {
+                String::new()
+            } else if let Ok(v) = serde_json::from_str::<serde_json::Value>(arguments) {
+                v.get("command").and_then(|v| v.as_str())
+                    .map(|c| if c.len() > 80 { format!("Command: {}...", &c[..77]) } else { format!("Command: {}", c) })
+                    .or_else(|| v.get("path").and_then(|v| v.as_str()).map(|p| format!("Path: {}", p)))
+                    .or_else(|| v.get("file_path").and_then(|v| v.as_str()).map(|f| format!("File: {}", f)))
+                    .unwrap_or_else(|| format!("Args: {}", if arguments.len() > 80 { format!("{}...", &arguments[..77]) } else { arguments.clone() }))
+            } else {
+                format!("Args: {}", if arguments.len() > 80 { format!("{}...", &arguments[..77]) } else { arguments.clone() })
+            };
+            conv.entries.push(ConversationEntry::ToolCall {
+                tool_name: tool_name.clone(),
+                arg_preview: preview,
+            });
+        }
+        UiEvent::ToolCallComplete { tool_name, result, duration_ms: _ } => {
+            let preview = if result.len() > 200 {
+                format!("{}...", &result[..197])
+            } else {
+                result.clone()
+            };
+            conv.entries.push(ConversationEntry::ToolResult {
+                tool_name: tool_name.clone(),
+                preview,
+                success: true,
+            });
+        }
+        UiEvent::ToolCallError { tool_name, error, duration_ms: _ } => {
+            conv.entries.push(ConversationEntry::ToolResult {
+                tool_name: tool_name.clone(),
+                preview: error.clone(),
+                success: false,
+            });
+        }
+        UiEvent::ToolCallSkipped { tool_name, reason, duration_ms: _ } => {
+            conv.entries.push(ConversationEntry::ToolResult {
+                tool_name: tool_name.clone(),
+                preview: reason.clone(),
+                success: false,
+            });
+        }
         UiEvent::MaxIterationsReached { current, max } => {
             conv.entries.push(ConversationEntry::Error {
                 message: format!("Max iterations reached ({}/{}) — waiting for user decision...", current, max),
@@ -101,6 +145,8 @@ pub fn ConversationView() -> Element {
 
     let guard = signal.read();
     let count = guard.active_entries().len();
+    let _version = count; // Trigger re-render when count changes
+
     if count == 0 {
         return rsx! {
             div { class: "flex-1 overflow-y-auto p-1.5 sm:p-2.5 min-h-0",
@@ -114,8 +160,24 @@ pub fn ConversationView() -> Element {
         let entry = entries[index].clone();
         rsx! { MessageEntry { entry } }
     }).collect();
+
+    // Auto-scroll to bottom when messages change
+    use_effect(move || {
+        if let Some(window) = web_sys::window() {
+            if let Some(document) = window.document() {
+                if let Some(el) = document.get_element_by_id("conversation-scroll") {
+                    el.set_scroll_top(el.scroll_height());
+                }
+            }
+        }
+    });
+
     rsx! {
-        div { class: "flex-1 overflow-y-auto p-1.5 sm:p-2.5 min-h-0", {messages.into_iter()} }
+        div {
+            id: "conversation-scroll",
+            class: "flex-1 overflow-y-auto p-1.5 sm:p-2.5 min-h-0",
+            {messages.into_iter()}
+        }
     }
 }
 

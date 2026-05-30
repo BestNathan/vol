@@ -552,7 +552,7 @@ fn render_skills(frame: &mut Frame, area: Rect, state: &UiState) {
     frame.render_widget(Paragraph::new(Text::from(lines)), inner);
 }
 
-fn render_agents_panel(frame: &mut Frame, area: Rect, state: &UiState) {
+fn render_agents_panel(frame: &mut Frame, area: Rect, _state: &UiState) {
     let block = Block::default().borders(Borders::ALL).title(" Agents ");
     let inner = block.inner(area);
     frame.render_widget(block, area);

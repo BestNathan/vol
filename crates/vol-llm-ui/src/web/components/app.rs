@@ -261,6 +261,8 @@ pub fn App() -> Element {
             UiEventKind::ContentStart, UiEventKind::ContentDelta,
             UiEventKind::ContentComplete, UiEventKind::MaxIterationsReached,
             UiEventKind::IterationContinued, UiEventKind::IterationComplete,
+            UiEventKind::ToolCallBegin, UiEventKind::ToolCallComplete,
+            UiEventKind::ToolCallError, UiEventKind::ToolCallSkipped,
         ] {
             set.subscribe(&bus, kind, {
                 let conv = conv.clone();

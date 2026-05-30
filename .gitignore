@@ -37,3 +37,7 @@ frontend/dist/
 
 # node_modules
 node_modules/
+
+.claude/settings.local.json
+
+.playwright-mcp

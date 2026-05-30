@@ -19,7 +19,7 @@ use vol_llm_core::LLMClient;
 use vol_llm_mcp::McpConfig;
 use vol_llm_mcp::McpManager;
 use vol_llm_provider::{create_provider, ProviderLoader};
-use vol_llm_skill::SkillLoader;
+use vol_llm_skill::{SkillLoader, SkillTool};
 use vol_llm_tool::ToolRegistry;
 use vol_llm_runtime::AgentRuntime;
 use vol_session::file_store::FileSessionEntryStore;
@@ -316,25 +316,25 @@ impl AgentServerCoreBuilder {
             .build()
             .await?;
 
-        // Extract resources from runtime for handlers
+        // Extract all resources from runtime first
         let store_dir = runtime.store_dir().to_path_buf();
         let agents_root = store_dir.join("agents");
         let mcp_manager = runtime.mcp_manager.clone();
         let skill_loader = runtime.skill_loader.clone();
-        let tool_registry = runtime.tool_registry.clone();
         let agent_defs = runtime.agent_defs.clone();
         let agent_status = runtime.agent_status.clone();
 
-        // Derive LLM for backward compat (first available)
-        let llm = {
-            let ids = runtime.llm_registry.ids();
-            let first_id = ids.first().ok_or_else(|| "No LLM providers configured".to_string())?;
-            let fc = runtime.llm_registry.get(first_id)
-                .ok_or_else(|| "Provider not found".to_string())?;
-            create_provider(&fc.to_llm_config())
-                .map(Arc::from)
-                .map_err(|e| format!("LLM error: {}", e))?
+        // Register SkillTool on the shared tool registry (mirrors AgentConfigBuilder behavior)
+        let tool_registry = {
+            let mut registry = (*runtime.tool_registry).clone();
+            registry.register(SkillTool::new(skill_loader.clone()));
+            Arc::new(registry)
         };
+
+        // Derive LLM — try each configured provider, skip ones that fail auth.
+        // This avoids crashing when a provider's env var isn't set (e.g. OPENAI_API_KEY)
+        // as long as at least one provider resolves successfully.
+        let llm = derive_llm_client(&self.working_dir)?;
 
         let router = AgentRouter::new();
         let holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>> =

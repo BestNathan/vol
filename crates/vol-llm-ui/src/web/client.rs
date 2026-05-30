@@ -845,6 +845,39 @@ impl JsonRpcClient {
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
+    /// Refresh skills by re-discovering from all roots.
+    pub fn skill_refresh(&self, cb: impl FnOnce(Result<usize, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "skill.refresh",
+            "params": {},
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("discovered").and_then(|v| v.as_u64()) {
+                Some(count) => cb(Ok(count as usize)),
+                None => {
+                    if let Some(error) = result.get("error") {
+                        let msg = error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
+                        cb(Err(msg.to_string()));
+                    } else {
+                        cb(Err("no discovered count in response".to_string()));
+                    }
+                }
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
     /// List all system tools.
     pub fn tool_list(&self, cb: impl FnOnce(Result<Vec<serde_json::Value>, String>) + 'static) {
         let id = self.alloc_id();
