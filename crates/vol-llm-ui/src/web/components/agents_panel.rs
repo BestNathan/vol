@@ -22,9 +22,9 @@ fn AgentCard(
     };
 
     let card_class = if is_selected {
-        "flex items-center gap-2 px-2.5 py-2 rounded-md cursor-pointer border border-[#80a0ff] bg-[#1a2a44] w-full sm:w-auto"
+        "flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer border border-[#80a0ff] bg-[#1a2a44] w-full sm:w-auto"
     } else {
-        "flex items-center gap-2 px-2.5 py-2 rounded-md cursor-pointer border border-[#2a2a44] bg-[#1e1e36] hover:bg-[#222240] w-full sm:w-auto"
+        "flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer border border-[#2a2a44] bg-[#1e1e36] hover:bg-[#222240] w-full sm:w-auto"
     };
 
     rsx! {
