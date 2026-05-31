@@ -120,15 +120,72 @@ fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
         };
     }
 
+    let mobile_servers = servers.clone();
+    let desktop_servers = servers;
+
     rsx! {
-        div { class: "font-mono text-[13px]",
-            {servers.into_iter().map(|s| {
-                let sig = signal.clone();
-                let app = app_state.clone();
-                rsx! { ServerRow { signal: sig, server: s, app_state: app } }
-            }).collect::<Vec<Element>>().into_iter()}
-            if let Some(ref e) = error {
-                div { class: "text-[#c04040] p-2 text-[12px]", "{e}" }
+        div {
+            // Mobile: server cards
+            div { class: "sm:hidden flex flex-col gap-2",
+                for s in &mobile_servers {
+                    let status_color = match s.status.as_str() {
+                        "connected" => "#40c040",
+                        "connecting" => "#f0c040",
+                        "disconnected" => "#888",
+                        _ => "#c04040",
+                    };
+                    let show_reconnect = s.status != "connected" && s.status != "connecting";
+                    let sig = signal.clone();
+                    let app = app_state.clone();
+                    let name = s.name.clone();
+                    let status = s.status.clone();
+                    rsx! {
+                        div { class: "rounded-lg border border-[#333355] bg-[#20203a] p-3",
+                            div { class: "flex items-center justify-between",
+                                div { class: "flex items-center gap-2 min-w-0",
+                                    span { class: "w-2 h-2 rounded-full flex-shrink-0", style: "background-color: {status_color};" }
+                                    span { class: "text-[13px] text-[#e0e0e0] truncate", "{name}" }
+                                }
+                                span { class: "text-[11px] text-[#666] flex-shrink-0 ml-2", "{status}" }
+                            }
+                            if show_reconnect {
+                                button {
+                                    class: "mt-2 w-full px-2 py-1 bg-[#2a2a44] text-[#aaa] rounded text-[11px] hover:text-[#e0e0e0]",
+                                    onclick: move |_| {
+                                        let srv = s.name.clone();
+                                        let client = app_state.rpc_client.clone();
+                                        let sig = sig.clone();
+                                        client.mcp_reconnect(&srv, move |result| {
+                                            if let Ok(true) = result {
+                                                let mut sig2 = sig;
+                                                client.mcp_list_servers(move |r| {
+                                                    if let Ok(servers) = r {
+                                                        sig2.with_mut(|s| {
+                                                            s.servers = servers;
+                                                            s.error = None;
+                                                        });
+                                                    }
+                                                });
+                                            }
+                                        });
+                                    },
+                                    "Reconnect"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Desktop: server rows
+            div { class: "hidden sm:block font-mono text-[13px]",
+                {desktop_servers.into_iter().map(|s| {
+                    let sig = signal.clone();
+                    let app = app_state.clone();
+                    rsx! { ServerRow { signal: sig, server: s, app_state: app } }
+                }).collect::<Vec<Element>>().into_iter()}
+                if let Some(ref e) = error {
+                    div { class: "text-[#c04040] p-2 text-[12px]", "{e}" }
+                }
             }
         }
     }
@@ -204,18 +261,57 @@ fn ToolList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>) -> 
     }
 
     rsx! {
-        div { class: "font-mono text-[13px]",
-            {groups.into_iter().map(|(server, tools)| {
-                rsx! {
-                    div { class: "mb-2",
-                        div { class: "text-[12px] text-[#888] font-semibold mb-1", "{server} ({tools.len()} tools)" }
-                        {tools.into_iter().map(|t| {
-                            let dsig = dialog_signal.clone();
-                            rsx! { ToolCard { signal: dsig, tool: t } }
-                        }).collect::<Vec<Element>>().into_iter()}
+        div {
+            // Mobile: compact tool cards (no server grouping)
+            div { class: "sm:hidden flex flex-col gap-2",
+                for t in &tools {
+                    let dsig = dialog_signal.clone();
+                    let tool = t.clone();
+                    rsx! {
+                        div { class: "rounded-lg border border-[#333355] bg-[#20203a] p-3",
+                            div { class: "flex items-center justify-between",
+                                div { class: "min-w-0",
+                                    div { class: "truncate text-[14px] font-bold text-[#e0e0e0]", "{tool.name}" }
+                                    div { class: "text-[11px] text-[#666] mt-0.5", "{tool.server}" }
+                                    if let Some(ref desc) = tool.description {
+                                        div { class: "text-[11px] text-[#777] truncate mt-0.5", "{desc}" }
+                                    }
+                                }
+                                button {
+                                    class: "px-2 py-0.5 text-[11px] bg-[#4080ff] text-white rounded hover:bg-[#5090ff] flex-shrink-0 ml-2",
+                                    onclick: move |_| {
+                                        let t = tool.clone();
+                                        dsig.write_unchecked().tool_call_dialog = Some(crate::state::McpToolCallState {
+                                            server: t.server.clone(),
+                                            tool_name: t.name.clone(),
+                                            arguments_json: t.input_schema.as_ref().map(|v| serde_json::to_string_pretty(v).unwrap_or_default()).unwrap_or_else(|| "{}".to_string()),
+                                            input_schema: t.input_schema.clone(),
+                                            result: None,
+                                            error: None,
+                                            loading: false,
+                                        });
+                                    },
+                                    "Call"
+                                }
+                            }
+                        }
                     }
                 }
-            }).collect::<Vec<Element>>().into_iter()}
+            }
+            // Desktop: grouped layout
+            div { class: "hidden sm:block font-mono text-[13px]",
+                {groups.into_iter().map(|(server, tools)| {
+                    rsx! {
+                        div { class: "mb-2",
+                            div { class: "text-[12px] text-[#888] font-semibold mb-1", "{server} ({tools.len()} tools)" }
+                            {tools.into_iter().map(|t| {
+                                let dsig = dialog_signal.clone();
+                                rsx! { ToolCard { signal: dsig, tool: t } }
+                            }).collect::<Vec<Element>>().into_iter()}
+                        }
+                    }
+                }).collect::<Vec<Element>>().into_iter()}
+            }
         }
     }
 }
@@ -281,25 +377,71 @@ fn ResourceList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>)
         .collect();
 
     rsx! {
-        div { class: "font-mono text-[13px]",
-            {all_servers.into_iter().map(|server| {
-                let dsig = dialog_signal.clone();
-                let res = resource_groups.remove(&server).unwrap_or_default();
-                let tmp = template_groups.remove(&server).unwrap_or_default();
-                let total = res.len() + tmp.len();
-                rsx! {
-                    div { class: "mb-2",
-                        div { class: "text-[12px] text-[#888] font-semibold mb-1", "{server} ({total} items)" }
-                        {res.into_iter().map(|r| {
-                            let dsig = dsig.clone();
-                            rsx! { ResourceRow { signal: dsig, resource: r } }
-                        }).collect::<Vec<Element>>().into_iter()}
-                        {tmp.into_iter().map(|t| {
-                            rsx! { TemplateRow { template: t } }
-                        }).collect::<Vec<Element>>().into_iter()}
+        div {
+            // Mobile: resource + template cards (flat list)
+            div { class: "sm:hidden flex flex-col gap-2",
+                for r in &resources {
+                    let dsig = dialog_signal.clone();
+                    let res = r.clone();
+                    rsx! {
+                        div { class: "rounded-lg border border-[#333355] bg-[#20203a] p-3",
+                            div { class: "flex items-center justify-between",
+                                div { class: "min-w-0 flex-1",
+                                    div { class: "text-[13px] text-[#e0e0e0] truncate", "{res.name}" }
+                                    div { class: "text-[11px] text-[#666] font-mono truncate mt-0.5", "{res.uri}" }
+                                }
+                                button {
+                                    class: "px-2 py-0.5 text-[11px] bg-[#4080ff] text-white rounded hover:bg-[#5090ff] flex-shrink-0 ml-2",
+                                    onclick: move |_| {
+                                        let r = res.clone();
+                                        dsig.write_unchecked().resource_viewer = Some(crate::state::McpResourceViewerState {
+                                            uri: r.uri.clone(),
+                                            content: None,
+                                            error: None,
+                                            loading: false,
+                                        });
+                                    },
+                                    "Read"
+                                }
+                            }
+                        }
                     }
                 }
-            }).collect::<Vec<Element>>().into_iter()}
+                for t in &templates {
+                    rsx! {
+                        div { class: "rounded-lg border border-[#333355] bg-[#20203a] p-3",
+                            div { class: "flex items-center justify-between",
+                                div { class: "min-w-0 flex-1",
+                                    div { class: "text-[13px] text-[#e0e0e0]", "{t.name}" }
+                                    div { class: "text-[11px] text-[#666] font-mono truncate mt-0.5", "{t.uri_template}" }
+                                }
+                                span { class: "text-[10px] bg-[#2a2a44] text-[#888] px-1.5 py-0.5 rounded flex-shrink-0 ml-2", "tmpl" }
+                            }
+                        }
+                    }
+                }
+            }
+            // Desktop: grouped layout
+            div { class: "hidden sm:block font-mono text-[13px]",
+                {all_servers.into_iter().map(|server| {
+                    let dsig = dialog_signal.clone();
+                    let res = resource_groups.remove(&server).unwrap_or_default();
+                    let tmp = template_groups.remove(&server).unwrap_or_default();
+                    let total = res.len() + tmp.len();
+                    rsx! {
+                        div { class: "mb-2",
+                            div { class: "text-[12px] text-[#888] font-semibold mb-1", "{server} ({total} items)" }
+                            {res.into_iter().map(|r| {
+                                let dsig = dsig.clone();
+                                rsx! { ResourceRow { signal: dsig, resource: r } }
+                            }).collect::<Vec<Element>>().into_iter()}
+                            {tmp.into_iter().map(|t| {
+                                rsx! { TemplateRow { template: t } }
+                            }).collect::<Vec<Element>>().into_iter()}
+                        }
+                    }
+                }).collect::<Vec<Element>>().into_iter()}
+            }
         }
     }
 }
@@ -357,18 +499,56 @@ fn PromptList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>) -
     }
 
     rsx! {
-        div { class: "font-mono text-[13px]",
-            {groups.into_iter().map(|(server, prompts)| {
-                rsx! {
-                    div { class: "mb-2",
-                        div { class: "text-[12px] text-[#888] font-semibold mb-1", "{server} ({prompts.len()} prompts)" }
-                        {prompts.into_iter().map(|p| {
-                            let dsig = dialog_signal.clone();
-                            rsx! { PromptRow { signal: dsig, prompt: p } }
-                        }).collect::<Vec<Element>>().into_iter()}
+        div {
+            // Mobile: prompt cards
+            div { class: "sm:hidden flex flex-col gap-2",
+                for p in &prompts {
+                    let dsig = dialog_signal.clone();
+                    let prompt = p.clone();
+                    rsx! {
+                        div { class: "rounded-lg border border-[#333355] bg-[#20203a] p-3",
+                            div { class: "flex items-center justify-between",
+                                div { class: "min-w-0",
+                                    div { class: "truncate text-[14px] font-bold text-[#e0e0e0]", "{prompt.name}" }
+                                    div { class: "text-[11px] text-[#666] mt-0.5", "{prompt.server}" }
+                                    if let Some(ref desc) = prompt.description {
+                                        div { class: "text-[11px] text-[#777] truncate mt-0.5", "{desc}" }
+                                    }
+                                }
+                                button {
+                                    class: "px-2 py-0.5 text-[11px] bg-[#4080ff] text-white rounded hover:bg-[#5090ff] flex-shrink-0 ml-2",
+                                    onclick: move |_| {
+                                        let p = prompt.clone();
+                                        dsig.write_unchecked().prompt_viewer = Some(crate::state::McpPromptViewerState {
+                                            server: p.server.clone(),
+                                            prompt_name: p.name.clone(),
+                                            args_json: "{}".to_string(),
+                                            result: None,
+                                            error: None,
+                                            loading: false,
+                                        });
+                                    },
+                                    "Get"
+                                }
+                            }
+                        }
                     }
                 }
-            }).collect::<Vec<Element>>().into_iter()}
+            }
+            // Desktop: grouped layout
+            div { class: "hidden sm:block font-mono text-[13px]",
+                {groups.into_iter().map(|(server, prompts)| {
+                    rsx! {
+                        div { class: "mb-2",
+                            div { class: "text-[12px] text-[#888] font-semibold mb-1", "{server} ({prompts.len()} prompts)" }
+                            {prompts.into_iter().map(|p| {
+                                let dsig = dialog_signal.clone();
+                                rsx! { PromptRow { signal: dsig, prompt: p } }
+                            }).collect::<Vec<Element>>().into_iter()}
+                        }
+                    }
+                }).collect::<Vec<Element>>().into_iter()}
+            }
         }
     }
 }
