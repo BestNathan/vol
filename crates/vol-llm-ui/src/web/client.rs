@@ -495,6 +495,68 @@ impl JsonRpcClient {
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
+    /// Fetch contributor metadata for an agent.
+    pub fn agent_context_config(&self, agent_id: &str, cb: impl FnOnce(Result<Vec<crate::state::ContributorInfoEntry>, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "agent.context_config",
+            "params": { "agent_id": agent_id },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("contributors").and_then(|v| v.as_array()) {
+                Some(arr) => {
+                    let parsed: Vec<crate::state::ContributorInfoEntry> = arr.iter()
+                        .filter_map(|e| serde_json::from_value(e.clone()).ok())
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no contributors in response".to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// Fetch full message snapshot for a named contributor.
+    pub fn agent_context_snapshot(&self, agent_id: &str, contributor_name: &str, cb: impl FnOnce(Result<Vec<crate::state::ContextMessageEntry>, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "agent.context_snapshot",
+            "params": { "agent_id": agent_id, "contributor_name": contributor_name },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("messages").and_then(|v| v.as_array()) {
+                Some(arr) => {
+                    let parsed: Vec<crate::state::ContextMessageEntry> = arr.iter()
+                        .filter_map(|e| serde_json::from_value(e.clone()).ok())
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no messages in response".to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
     /// List all persisted sessions on the server. Returns entries via callback.
     pub fn session_list(&self, agent_id: Option<&str>, cb: impl FnOnce(Result<Vec<crate::state::SessionListEntry>, String>) + 'static) {
         let id = self.alloc_id();

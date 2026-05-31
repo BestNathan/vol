@@ -250,7 +250,7 @@ impl ActiveTab {
 
 /// Sub-tabs within the Agents panel.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AgentSubTab { Conversation, Sessions }
+pub enum AgentSubTab { Conversation, Sessions, Context }
 
 /// Sub-tabs within the MCP panel.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -591,6 +591,50 @@ pub struct AgentListEntry {
     pub type_: String,
     pub description: String,
     pub scope: String,
+}
+
+/// A contributor info entry from agent.context_config RPC.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ContributorInfoEntry {
+    pub name: String,
+    pub anchor_zone: String,
+    pub estimated_tokens: usize,
+    pub message_count: usize,
+}
+
+/// A context message from agent.context_snapshot RPC.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ContextMessageEntry {
+    pub role: String,
+    pub content: String,
+}
+
+/// Local state for ContextPanel.
+#[cfg(all(feature = "web", not(feature = "tui")))]
+#[derive(Debug)]
+pub struct ContextState {
+    pub contributors: Vec<ContributorInfoEntry>,
+    pub loading: bool,
+    pub error: Option<String>,
+    pub dialog_open: bool,
+    pub dialog_contributor_name: String,
+    pub dialog_messages: Vec<ContextMessageEntry>,
+    pub dialog_loading: bool,
+}
+
+#[cfg(all(feature = "web", not(feature = "tui")))]
+impl ContextState {
+    pub fn new() -> Self {
+        Self {
+            contributors: Vec::new(),
+            loading: false,
+            error: None,
+            dialog_open: false,
+            dialog_contributor_name: String::new(),
+            dialog_messages: Vec::new(),
+            dialog_loading: false,
+        }
+    }
 }
 
 /// MCP server info returned by mcp.list_servers.
