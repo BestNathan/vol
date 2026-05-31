@@ -14,6 +14,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use dioxus::prelude::{Signal, Writable};
 use futures_channel::mpsc;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -102,6 +103,7 @@ struct ClientInner {
     pending: RefCell<HashMap<u64, ResponseCallback>>,
     /// Queued messages to send once the WebSocket opens.
     send_queue: RefCell<Vec<String>>,
+    debug_state: RefCell<Option<Signal<crate::state::DebugState>>>,
     on_state_change: Cell<Option<Box<dyn Fn(ConnectionState)>>>,
     /// Next request ID — shared across clones via Rc.
     next_id: Cell<u64>,
@@ -133,6 +135,7 @@ impl JsonRpcClient {
             event_tx,
             pending: RefCell::new(HashMap::new()),
             send_queue: RefCell::new(Vec::new()),
+            debug_state: RefCell::new(None),
             on_state_change: Cell::new(None),
             next_id: Cell::new(1),
         });
@@ -197,6 +200,7 @@ impl JsonRpcClient {
 
     /// Send a JSON-RPC message. Queues if the WebSocket is still connecting.
     fn send_raw(&self, msg: &str) -> Result<(), String> {
+        self.push_debug_out(msg);
         let ws = self.inner.ws.borrow();
         match ws.ready_state() {
             1 => { // OPEN
@@ -225,6 +229,20 @@ impl JsonRpcClient {
     /// Get the WebSocket URL this client connected to.
     pub fn url(&self) -> &str {
         &self.inner.url
+    }
+
+    /// Attach debug state for WS message capture.
+    pub fn set_debug_state(&self, debug_state: Signal<crate::state::DebugState>) {
+        *self.inner.debug_state.borrow_mut() = Some(debug_state);
+    }
+
+    fn push_debug_out(&self, msg: &str) {
+        if let Some(ref ds) = *self.inner.debug_state.borrow() {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(msg) {
+                let method = val.get("method").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
+                ds.write_unchecked().push_ws(crate::state::WsDirection::Out, method, msg.to_string());
+            }
+        }
     }
 
     /// Get the next event from the event stream (async).
@@ -986,7 +1004,19 @@ impl JsonRpcClient {
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
+    fn push_debug_in(inner: &Rc<ClientInner>, data: &str) {
+        if let Some(ref ds) = *inner.debug_state.borrow() {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
+                let method = val.get("method").and_then(|v| v.as_str())
+                    .unwrap_or("<response>")
+                    .to_string();
+                ds.write_unchecked().push_ws(crate::state::WsDirection::In, method, data.to_string());
+            }
+        }
+    }
+
     fn handle_message(inner: &Rc<ClientInner>, data: &str) {
+        Self::push_debug_in(inner, data);
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
             if val.get("method").and_then(|m| m.as_str()) == Some("agent.event") {
                 if let Some(params) = val.get("params") {
