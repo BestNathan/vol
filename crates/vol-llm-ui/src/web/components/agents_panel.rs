@@ -4,6 +4,7 @@ use dioxus::prelude::*;
 
 use crate::state::{AgentsState, AgentSubTab, ConversationEntry, ConversationState, GlobalState, UiEventKind};
 
+use super::context_panel::ContextPanel;
 use super::conversation::ConversationView;
 use super::input_area::InputArea;
 use super::sessions_panel::SessionsPanel;
@@ -307,6 +308,14 @@ pub fn AgentsPanel() -> Element {
                             move |_: ()| { sig.with_mut(|s| s.sub_tab = AgentSubTab::Sessions); }
                         },
                     }
+                    SubTabButton {
+                        label: "Context".to_string(),
+                        active: sub_tab == AgentSubTab::Context,
+                        onclick: {
+                            let mut sig = agents_signal;
+                            move |_: ()| { sig.with_mut(|s| s.sub_tab = AgentSubTab::Context); }
+                        },
+                    }
                 }
                 div { class: "flex-1 min-h-0 flex flex-col overflow-hidden",
                     match sub_tab {
@@ -318,9 +327,7 @@ pub fn AgentsPanel() -> Element {
                             SessionsPanel {}
                         },
                         AgentSubTab::Context => rsx! {
-                            div { class: "flex-1 flex items-center justify-center text-[#666] text-[14px]",
-                                "Context panel — coming in next task"
-                            }
+                            ContextPanel {}
                         },
                     }
                 }
