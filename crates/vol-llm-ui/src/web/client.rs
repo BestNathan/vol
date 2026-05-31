@@ -100,6 +100,8 @@ struct ClientInner {
     event_tx: mpsc::UnboundedSender<AgentEvent>,
     /// Pending response callbacks keyed by request ID.
     pending: RefCell<HashMap<u64, ResponseCallback>>,
+    /// Queued messages to send once the WebSocket opens.
+    send_queue: RefCell<Vec<String>>,
     on_state_change: Cell<Option<Box<dyn Fn(ConnectionState)>>>,
     /// Next request ID — shared across clones via Rc.
     next_id: Cell<u64>,
@@ -130,6 +132,7 @@ impl JsonRpcClient {
             state: Cell::new(ConnectionState::Connecting),
             event_tx,
             pending: RefCell::new(HashMap::new()),
+            send_queue: RefCell::new(Vec::new()),
             on_state_change: Cell::new(None),
             next_id: Cell::new(1),
         });
@@ -167,6 +170,11 @@ impl JsonRpcClient {
         let client_for_open = client.clone();
         let on_open = Closure::wrap(Box::new(move |_e: web_sys::Event| {
             inner_open.state.set(ConnectionState::Connected);
+            // Flush queued messages
+            let queue: Vec<String> = inner_open.send_queue.borrow_mut().drain(..).collect();
+            for msg in queue {
+                let _ = inner_open.ws.borrow().send_with_str(&msg);
+            }
             if let Some(cb) = inner_open.on_state_change.take() {
                 cb(ConnectionState::Connected);
                 inner_open.on_state_change.set(Some(cb));
@@ -187,9 +195,21 @@ impl JsonRpcClient {
         id
     }
 
-    /// Send a JSON-RPC message without holding any borrows across the send.
+    /// Send a JSON-RPC message. Queues if the WebSocket is still connecting.
     fn send_raw(&self, msg: &str) -> Result<(), String> {
-        self.inner.ws.borrow().send_with_str(msg).map_err(|e| format!("send failed: {e:?}"))
+        let ws = self.inner.ws.borrow();
+        match ws.ready_state() {
+            1 => { // OPEN
+                ws.send_with_str(msg).map_err(|e| format!("send failed: {e:?}"))
+            }
+            0 => { // CONNECTING — queue for on_open
+                self.inner.send_queue.borrow_mut().push(msg.to_string());
+                Ok(())
+            }
+            _ => { // CLOSING (2) or CLOSED (3)
+                Err("WebSocket not connected".to_string())
+            }
+        }
     }
 
     /// Set a callback for connection state changes.
@@ -280,6 +300,10 @@ impl JsonRpcClient {
         let client_o = client.clone();
         let on_open = Closure::wrap(Box::new(move |_e: web_sys::Event| {
             inner_o.state.set(ConnectionState::Connected);
+            let queue: Vec<String> = inner_o.send_queue.borrow_mut().drain(..).collect();
+            for msg in queue {
+                let _ = inner_o.ws.borrow().send_with_str(&msg);
+            }
             if let Some(cb) = inner_o.on_state_change.take() {
                 cb(ConnectionState::Connected);
                 inner_o.on_state_change.set(Some(cb));

@@ -237,8 +237,10 @@ impl AgentRuntimeBuilder {
                     vec![]
                 });
             let manager = McpManager::new(configs);
-            let mgr = manager.clone();
-            tokio::spawn(async move { let _ = mgr.connect().await; });
+            // Connect synchronously so tools are cached before we register them.
+            if let Err(e) = manager.connect().await {
+                tracing::warn!("MCP connect error (tools may be unavailable): {}", e);
+            }
             Arc::new(manager)
         };
 
@@ -264,6 +266,10 @@ impl AgentRuntimeBuilder {
         let tool_config = vol_llm_tool::ToolConfig::default();
         vol_llm_tools_builtin::register_web_all(&mut tool_registry, &tool_config);
         tool_registry.register(SkillTool::new(skill_loader.clone()));
+        let mcp_count = tool_registry.register_from_mcp(mcp_manager.clone()).await;
+        if mcp_count > 0 {
+            tracing::info!(mcp_count, "MCP tools registered");
+        }
         let tool_registry = Arc::new(tool_registry);
 
         Ok(AgentRuntime {

@@ -112,7 +112,8 @@ All web development commands use the Makefile. Run `make help` to see available 
 | Command | Description |
 |---------|-------------|
 | `make web-css` | Build Tailwind CSS in watch mode |
-| `make web-dev` | Start Dioxus dev server (port 8080) |
+| `make web-dev` | Start Dioxus dev server on port 8080 (WASM optimized: `opt-level="s"`, `lto=true`, no debug symbols) |
+| `make web-serve` | Release WASM build + serve with `Cache-Control` immutable headers (phone testing, port 8080) |
 | `make web-backend` | Start backend JSON-RPC agent service from `vol-llm-agent-channel` (port 3001) |
 | `make web-check` | cargo check (web only) |
 | `make web-build` | Build WASM binary |

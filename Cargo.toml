@@ -140,7 +140,8 @@ vol-observability = { path = "crates/vol-observability" }
 
 [profile.wasm-dev]
 inherits = "dev"
-opt-level = 1
+opt-level = "s"
+lto = true
 
 [profile.server-dev]
 inherits = "dev"
