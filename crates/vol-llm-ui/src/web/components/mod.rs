@@ -20,6 +20,7 @@ pub mod mcp_prompt_viewer;
 pub mod file_content;
 pub mod file_tree;
 pub mod workspace;
+pub mod debug_panel;
 pub mod schema_form;
 
 pub use app::App;
@@ -38,4 +39,5 @@ pub use skill_detail_dialog::SkillDetailDialog;
 pub use status_bar::StatusBar;
 pub use tools_panel::ToolsPanel;
 pub use tools_tab::ToolsTabContent;
+pub use debug_panel::DebugPanel;
 pub use workspace::WorkspacePanel;

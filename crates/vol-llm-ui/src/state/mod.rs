@@ -1114,7 +1114,7 @@ pub fn truncate_preview(s: &str, max_chars: usize) -> String {
 pub enum WsDirection { In, Out }
 
 /// A captured WebSocket message.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WsMessage {
     pub direction: WsDirection,
     pub method: String,

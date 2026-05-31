@@ -27,7 +27,7 @@ fn tab_label(tab: DebugTab) -> &'static str {
 
 #[component]
 pub fn DebugPanel() -> Element {
-    let mut debug = use_context::<Signal<DebugState>>();
+    let debug = use_context::<Signal<DebugState>>();
     let guard = debug.read();
     let messages = guard.ws_messages.clone();
     let open = guard.open;
@@ -44,21 +44,19 @@ pub fn DebugPanel() -> Element {
                     div { class: "flex items-center gap-3",
                         span { class: "text-[#e0e0e0] font-bold text-sm", "Debug Panel" }
                         div { class: "flex gap-1",
-                            for tab in [DebugTab::Ws] {
-                                let is_active = tab == active_tab;
-                                let tab_cls = if is_active {
+                            {
+                                let tab = DebugTab::Ws;
+                                let cls = if tab == active_tab {
                                     "px-3 py-1 text-[12px] font-semibold cursor-pointer border-b-2 border-[#80a0ff] text-[#e0e0e0]"
                                 } else {
                                     "px-3 py-1 text-[12px] cursor-pointer text-[#888] hover:text-[#ccc] border-b-2 border-transparent"
                                 };
-                                button {
-                                    class: "{tab_cls}",
-                                    onclick: {
-                                        let mut d = debug;
-                                        let tab = tab;
-                                        move |_| { d.write_unchecked().active_tab = tab; }
-                                    },
-                                    {tab_label(tab)}
+                                rsx! {
+                                    button {
+                                        class: "{cls}",
+                                        onclick: move |_| { debug.write_unchecked().active_tab = tab; },
+                                        {tab_label(tab)}
+                                    }
                                 }
                             }
                         }
@@ -66,7 +64,7 @@ pub fn DebugPanel() -> Element {
                     button {
                         class: "text-[#888] hover:text-white text-lg leading-none px-1",
                         onclick: {
-                            let mut d = debug;
+                            let d = debug;
                             move |_| { d.write_unchecked().open = false; }
                         },
                         "×"
