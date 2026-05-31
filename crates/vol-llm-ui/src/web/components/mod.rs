@@ -22,6 +22,7 @@ pub mod file_tree;
 pub mod workspace;
 pub mod debug_panel;
 pub mod schema_form;
+pub mod tool_dialog;
 
 pub use app::App;
 pub use agents_panel::AgentsPanel;

@@ -4,6 +4,7 @@ use dioxus::prelude::*;
 use crate::state::{ToolState, ToolCallEntry, ToolCallStatus, UiEvent, UiEventKind};
 use crate::web::client::JsonRpcClient;
 use crate::web::components::app::AppState;
+use super::tool_dialog::{SystemToolDialog, SystemToolDialogState};
 
 /// Safely write to a Signal in an async callback.
 ///
@@ -72,6 +73,7 @@ pub fn ToolsTabContent() -> Element {
     let app_state: AppState = use_context();
     let call_signal: Signal<ToolState> = use_context();
     let tool_state = use_signal(|| ToolsPanelState { tools: vec![], loading: false, error: None, call_result: None });
+    let dialog_state = use_signal(|| SystemToolDialogState::new());
     let client: JsonRpcClient = app_state.rpc_client.clone();
 
     // Load tools on mount
@@ -187,21 +189,19 @@ pub fn ToolsTabContent() -> Element {
                                     button {
                                         class: "px-2 py-0.5 text-[11px] bg-[#4080ff] text-white rounded hover:bg-[#5090ff] flex-shrink-0 ml-2",
                                         onclick: {
-                                            let client = client.clone();
-                                            let ts = tool_state;
+                                            let mut ds = dialog_state;
                                             let name = tool.name.clone();
+                                            let desc = tool.description.clone();
+                                            let params = tool.parameters.clone();
                                             move |_| {
-                                                let args_val = serde_json::json!({});
-                                                let ts = ts;
-                                                client.tool_call(&name, &args_val, move |result| {
-                                                    safe_write(ts, |s| {
-                                                        match result {
-                                                            Ok(val) => s.call_result = Some(
-                                                                serde_json::to_string_pretty(&val).unwrap_or_else(|_| val.to_string())
-                                                            ),
-                                                            Err(e) => s.call_result = Some(format!("Error: {e}")),
-                                                        }
-                                                    });
+                                                ds.with_mut(|s| {
+                                                    s.open = true;
+                                                    s.tool_name = name.clone();
+                                                    s.description = desc.clone();
+                                                    s.parameters = params.clone();
+                                                    s.result = None;
+                                                    s.error = None;
+                                                    s.loading = false;
                                                 });
                                             }
                                         },
@@ -225,21 +225,19 @@ pub fn ToolsTabContent() -> Element {
                                     button {
                                         class: "px-1.5 py-0.5 text-[11px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#5a5a75]",
                                         onclick: {
-                                            let client = client.clone();
-                                            let ts = tool_state;
+                                            let mut ds = dialog_state;
                                             let name = tool.name.clone();
+                                            let desc = tool.description.clone();
+                                            let params = tool.parameters.clone();
                                             move |_| {
-                                                let args_val = serde_json::json!({});
-                                                let ts = ts;
-                                                client.tool_call(&name, &args_val, move |result| {
-                                                    safe_write(ts, |s| {
-                                                        match result {
-                                                            Ok(val) => s.call_result = Some(
-                                                                serde_json::to_string_pretty(&val).unwrap_or_else(|_| val.to_string())
-                                                            ),
-                                                            Err(e) => s.call_result = Some(format!("Error: {e}")),
-                                                        }
-                                                    });
+                                                ds.with_mut(|s| {
+                                                    s.open = true;
+                                                    s.tool_name = name.clone();
+                                                    s.description = desc.clone();
+                                                    s.parameters = params.clone();
+                                                    s.result = None;
+                                                    s.error = None;
+                                                    s.loading = false;
                                                 });
                                             }
                                         },
@@ -290,6 +288,8 @@ pub fn ToolsTabContent() -> Element {
                 }
             }
         }
+
+        SystemToolDialog { signal: dialog_state }
     }
 }
 
