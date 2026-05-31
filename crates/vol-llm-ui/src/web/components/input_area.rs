@@ -1,7 +1,7 @@
 //! Text input for sending messages to the agent.
 
 use dioxus::prelude::*;
-use crate::state::{AgentsState, ApprovalUiState, GlobalState};
+use crate::state::{AgentsState, ApprovalUiState, ConversationState, GlobalState};
 use crate::web::components::app::AppState;
 use web_time::Instant;
 
@@ -11,6 +11,7 @@ pub fn InputArea() -> Element {
     let global: Signal<GlobalState> = use_context();
     let approval: Signal<ApprovalUiState> = use_context();
     let agents: Signal<AgentsState> = use_context();
+    let conv: Signal<ConversationState> = use_context();
     let is_running = global.read().is_running;
     let has_approval = approval.read().has_pending();
 
@@ -87,7 +88,27 @@ pub fn InputArea() -> Element {
                         rows: 2,
                         class: "w-full bg-[#1a1a2e] text-[#e0e0e0] border border-[#444466] rounded-md px-2 py-1.5 text-[16px] sm:text-[14px] font-sans resize-none min-h-[40px] max-h-[120px] outline-none focus:border-[#80a0ff] disabled:opacity-50"
                     }
-                    div { class: "mt-1 text-[10px] sm:text-[11px] text-[#666]", {hint} }
+                    div { class: "mt-1 flex items-center justify-between text-[10px] sm:text-[11px] text-[#666]",
+                        {hint}
+                        button {
+                            class: "text-[#555] hover:text-[#c0c040] hover:underline cursor-pointer",
+                            disabled: is_running,
+                            onclick: {
+                                let mut g = global;
+                                let c = conv;
+                                let agents = agents;
+                                move |_| {
+                                    let new_id = format!("web-{:x}", (js_sys::Date::now() as u64).wrapping_mul(1000));
+                                    g.write_unchecked().session_id = new_id;
+                                    let agent_id = agents.read().selected.clone().unwrap_or_default();
+                                    if !agent_id.is_empty() {
+                                        c.write_unchecked().get_or_create(&agent_id).entries.clear();
+                                    }
+                                }
+                            },
+                            "+ New Session"
+                        }
+                    }
                 }
             }
         }
