@@ -200,9 +200,8 @@ impl JsonRpcClient {
 
     /// Send a JSON-RPC message. Queues if the WebSocket is still connecting.
     fn send_raw(&self, msg: &str) -> Result<(), String> {
-        self.push_debug_out(msg);
         let ws = self.inner.ws.borrow();
-        match ws.ready_state() {
+        let result = match ws.ready_state() {
             1 => { // OPEN
                 ws.send_with_str(msg).map_err(|e| format!("send failed: {e:?}"))
             }
@@ -213,7 +212,13 @@ impl JsonRpcClient {
             _ => { // CLOSING (2) or CLOSED (3)
                 Err("WebSocket not connected".to_string())
             }
+        };
+        drop(ws);
+        // Capture for debug AFTER send, never blocks the critical path
+        if result.is_ok() {
+            self.push_debug_out(msg);
         }
+        result
     }
 
     /// Set a callback for connection state changes.
@@ -1016,7 +1021,6 @@ impl JsonRpcClient {
     }
 
     fn handle_message(inner: &Rc<ClientInner>, data: &str) {
-        Self::push_debug_in(inner, data);
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
             if val.get("method").and_then(|m| m.as_str()) == Some("agent.event") {
                 if let Some(params) = val.get("params") {
@@ -1038,5 +1042,7 @@ impl JsonRpcClient {
                 }
             }
         }
+        // Capture for debug AFTER processing — never blocks message handling
+        Self::push_debug_in(inner, data);
     }
 }
