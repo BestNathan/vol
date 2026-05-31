@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use gloo_timers::future::TimeoutFuture;
 
-use crate::state::{ActiveTab, ApprovalUiState, AgentsState, ConversationState, EventBus, GlobalState, SessionsState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
+use crate::state::{ActiveTab, ApprovalUiState, AgentsState, ConversationState, DebugState, EventBus, GlobalState, SessionsState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
 use crate::state::McpDialogState;
 use crate::state::SkillDialogState;
 use crate::web::client::{AgentEvent, JsonRpcClient};
@@ -20,6 +20,7 @@ use super::mcp_panel::McpPanel;
 use super::sessions_panel::SessionsPanel;
 use super::skills::SkillsPanel;
 use super::skill_detail_dialog::SkillDetailDialog;
+use super::debug_panel::DebugPanel;
 use super::status_bar::StatusBar;
 use super::tools_tab::ToolsTabContent;
 use super::mcp_tool_dialog::ToolCallDialog;
@@ -134,6 +135,7 @@ pub fn App() -> Element {
     let sessions_signal = use_signal(|| SessionsState::new());
     let mcp_dialog_signal = use_signal(|| McpDialogState::default());
     let skill_dialog_signal = use_signal(|| SkillDialogState::new());
+    let debug_signal = use_signal(|| DebugState::new());
 
     let client = use_hook(|| {
         let c = JsonRpcClient::new(&ws_url);
@@ -178,6 +180,7 @@ pub fn App() -> Element {
             }
         });
 
+        c.set_debug_state(debug_signal);
         c
     });
 
@@ -509,6 +512,7 @@ pub fn App() -> Element {
     use_context_provider(|| sessions_signal);
     use_context_provider(|| mcp_dialog_signal);
     use_context_provider(|| skill_dialog_signal);
+    use_context_provider(|| debug_signal);
 
     rsx! {
         // The Stylesheet component inserts a style link into the head of the document
@@ -532,6 +536,7 @@ pub fn App() -> Element {
             ResourceViewer { signal: mcp_dialog_signal }
             PromptViewer { signal: mcp_dialog_signal }
             SkillDetailDialog { signal: skill_dialog_signal }
+            DebugPanel {}
         }
     }
 }
