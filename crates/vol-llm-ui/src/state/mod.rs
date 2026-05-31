@@ -1147,13 +1147,11 @@ impl DebugState {
     }
 
     pub fn push_ws(&mut self, direction: WsDirection, method: String, payload: String) {
-        if self.open {
-            if self.start_time.is_none() {
-                self.start_time = Some(web_time::Instant::now());
-            }
-            let elapsed_ms = self.start_time.unwrap().elapsed().as_millis() as u64;
-            self.ws_messages.push(WsMessage { direction, method, payload, elapsed_ms });
+        if self.start_time.is_none() {
+            self.start_time = Some(web_time::Instant::now());
         }
+        let elapsed_ms = self.start_time.unwrap().elapsed().as_millis() as u64;
+        self.ws_messages.push(WsMessage { direction, method, payload, elapsed_ms });
     }
 }
 

@@ -99,7 +99,7 @@ fn WsTab(messages: Vec<crate::state::WsMessage>) -> Element {
             }
             div { class: "px-3 py-1.5 border-t border-[#333] text-[10px] text-[#666] shrink-0 flex items-center justify-between",
                 span { "{messages.len()} messages" }
-                span { "Recording is active while panel is open" }
+                span { "Recording since page load" }
             }
         }
     }
