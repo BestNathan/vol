@@ -137,6 +137,20 @@ pub fn App() -> Element {
     let skill_dialog_signal = use_signal(|| SkillDialogState::new());
     let debug_signal = use_signal(|| DebugState::new());
 
+    // Prevent browser zoom on input focus and disable pinch-to-zoom
+    use_hook(|| {
+        if let Some(window) = web_sys::window() {
+            if let Some(document) = window.document() {
+                if let Ok(Some(meta)) = document.query_selector("meta[name=\"viewport\"]") {
+                    let _ = meta.set_attribute(
+                        "content",
+                        "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no",
+                    );
+                }
+            }
+        }
+    });
+
     let client = use_hook(|| {
         let c = JsonRpcClient::new(&ws_url);
         let bus = event_bus.with(|eb| eb.clone());
