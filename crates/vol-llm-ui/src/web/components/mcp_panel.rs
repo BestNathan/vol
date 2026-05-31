@@ -120,14 +120,14 @@ fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
         };
     }
 
-    let mobile_servers = servers.clone();
+    let rpc_for_reconnect = app_state.rpc_client.clone();
     let desktop_servers = servers;
 
     rsx! {
         div {
             // Mobile: server cards
             div { class: "sm:hidden flex flex-col gap-2",
-                for s in &mobile_servers {
+                {desktop_servers.iter().map(|s| {
                     let status_color = match s.status.as_str() {
                         "connected" => "#40c040",
                         "connecting" => "#f0c040",
@@ -136,33 +136,34 @@ fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
                     };
                     let show_reconnect = s.status != "connected" && s.status != "connecting";
                     let sig = signal.clone();
-                    let app = app_state.clone();
-                    let name = s.name.clone();
-                    let status = s.status.clone();
+                    let srv_name = s.name.clone();
+                    let srv_status = s.status.clone();
+                    let client = rpc_for_reconnect.clone();
                     rsx! {
                         div { class: "rounded-lg border border-[#333355] bg-[#20203a] p-3",
                             div { class: "flex items-center justify-between",
                                 div { class: "flex items-center gap-2 min-w-0",
                                     span { class: "w-2 h-2 rounded-full flex-shrink-0", style: "background-color: {status_color};" }
-                                    span { class: "text-[13px] text-[#e0e0e0] truncate", "{name}" }
+                                    span { class: "text-[13px] text-[#e0e0e0] truncate", "{srv_name}" }
                                 }
-                                span { class: "text-[11px] text-[#666] flex-shrink-0 ml-2", "{status}" }
+                                span { class: "text-[11px] text-[#666] flex-shrink-0 ml-2", "{srv_status}" }
                             }
                             if show_reconnect {
                                 button {
                                     class: "mt-2 w-full px-2 py-1 bg-[#2a2a44] text-[#aaa] rounded text-[11px] hover:text-[#e0e0e0]",
                                     onclick: move |_| {
-                                        let srv = s.name.clone();
-                                        let client = app_state.rpc_client.clone();
-                                        let sig = sig.clone();
-                                        client.mcp_reconnect(&srv, move |result| {
+                                        let name = srv_name.clone();
+                                        let cl1 = client.clone();
+                                        let cl2 = client.clone();
+                                        let s = sig.clone();
+                                        cl1.mcp_reconnect(&name, move |result| {
                                             if let Ok(true) = result {
-                                                let mut sig2 = sig;
-                                                client.mcp_list_servers(move |r| {
-                                                    if let Ok(servers) = r {
-                                                        sig2.with_mut(|s| {
-                                                            s.servers = servers;
-                                                            s.error = None;
+                                                let mut s2 = s.clone();
+                                                cl2.mcp_list_servers(move |r| {
+                                                    if let Ok(srvs) = r {
+                                                        s2.with_mut(|st| {
+                                                            st.servers = srvs;
+                                                            st.error = None;
                                                         });
                                                     }
                                                 });
@@ -174,7 +175,7 @@ fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
                             }
                         }
                     }
-                }
+                }).collect::<Vec<Element>>().into_iter()}
             }
             // Desktop: server rows
             div { class: "hidden sm:block font-mono text-[13px]",
@@ -264,7 +265,7 @@ fn ToolList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>) -> 
         div {
             // Mobile: compact tool cards (no server grouping)
             div { class: "sm:hidden flex flex-col gap-2",
-                for t in &tools {
+                {tools.iter().map(|t| {
                     let dsig = dialog_signal.clone();
                     let tool = t.clone();
                     rsx! {
@@ -296,7 +297,7 @@ fn ToolList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>) -> 
                             }
                         }
                     }
-                }
+                }).collect::<Vec<Element>>().into_iter()}
             }
             // Desktop: grouped layout
             div { class: "hidden sm:block font-mono text-[13px]",
@@ -380,7 +381,7 @@ fn ResourceList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>)
         div {
             // Mobile: resource + template cards (flat list)
             div { class: "sm:hidden flex flex-col gap-2",
-                for r in &resources {
+                {resources.iter().map(|r| {
                     let dsig = dialog_signal.clone();
                     let res = r.clone();
                     rsx! {
@@ -406,8 +407,8 @@ fn ResourceList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>)
                             }
                         }
                     }
-                }
-                for t in &templates {
+                }).collect::<Vec<Element>>().into_iter()}
+                {templates.iter().map(|t| {
                     rsx! {
                         div { class: "rounded-lg border border-[#333355] bg-[#20203a] p-3",
                             div { class: "flex items-center justify-between",
@@ -419,7 +420,7 @@ fn ResourceList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>)
                             }
                         }
                     }
-                }
+                }).collect::<Vec<Element>>().into_iter()}
             }
             // Desktop: grouped layout
             div { class: "hidden sm:block font-mono text-[13px]",
@@ -502,7 +503,7 @@ fn PromptList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>) -
         div {
             // Mobile: prompt cards
             div { class: "sm:hidden flex flex-col gap-2",
-                for p in &prompts {
+                {prompts.iter().map(|p| {
                     let dsig = dialog_signal.clone();
                     let prompt = p.clone();
                     rsx! {
@@ -533,7 +534,7 @@ fn PromptList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>) -
                             }
                         }
                     }
-                }
+                }).collect::<Vec<Element>>().into_iter()}
             }
             // Desktop: grouped layout
             div { class: "hidden sm:block font-mono text-[13px]",
