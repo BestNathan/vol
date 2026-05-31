@@ -109,21 +109,24 @@ lsof -i :3001 2>/dev/null || true
 
 All web development commands use the Makefile. Run `make help` to see available commands:
 
-| Command | Description |
-|---------|-------------|
-| `make web-css` | Build Tailwind CSS in watch mode |
-| `make web-dev` | Start Dioxus dev server on port 8080 (WASM optimized: `opt-level="s"`, `lto=true`, no debug symbols) |
-| `make web-serve` | Release WASM build + serve with `Cache-Control` immutable headers (phone testing, port 8080) |
-| `make web-backend` | Start backend JSON-RPC agent service from `vol-llm-agent-channel` (port 3001) |
-| `make web-check` | cargo check (web only) |
-| `make web-build` | Build WASM binary |
-| `make web-clippy` | cargo clippy (web only) |
+| Command | Auto-reload | Description |
+|---------|:-----------:|-------------|
+| `make web-css` | Tailwind watch | Build Tailwind CSS in watch mode |
+| `make web-dev` | WASM hot-reload | Start Dioxus dev server on port 8080 (WASM optimized: `opt-level="s"`, `lto=true`, no debug symbols) |
+| `make web-serve` | — | Release WASM build + serve with `Cache-Control` immutable headers (phone testing, port 8080) |
+| `make web-backend` | cargo-watch | Start backend JSON-RPC agent service from `vol-llm-agent-channel` (port 3001) |
+| `make web-check` | — | cargo check (web only) |
+| `make web-build` | — | Build WASM binary |
+| `make web-clippy` | — | cargo clippy (web only) |
+
+All three development services (`web-css`, `web-dev`, `web-backend`) have built-in watch/auto-reload.
+**Changes to Rust source code, CSS, or backend code are picked up automatically — you do NOT need to restart services.**
 
 **Starting web development requires running 3 services in separate terminals:**
 
 1. `make web-css` — compile Tailwind CSS in persistent watch mode.
-2. `make web-dev` — start Dioxus dev server on port 8080.
-3. `make web-backend` — start backend JSON-RPC agent service on port 3001.
+2. `make web-dev` — start Dioxus dev server on port 8080 (hot-reload on WASM rebuild).
+3. `make web-backend` — start backend JSON-RPC agent service on port 3001 (auto-restart on Rust changes via cargo-watch).
 
 The `make web-css` target runs:
 
