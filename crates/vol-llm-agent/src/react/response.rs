@@ -59,4 +59,7 @@ pub enum AgentError {
 
     #[error("Session error: {0}")]
     SessionError(String),
+
+    #[error("agent is already running — concurrent run_input() rejected")]
+    AlreadyRunning,
 }
