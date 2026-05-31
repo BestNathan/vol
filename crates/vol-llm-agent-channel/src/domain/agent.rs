@@ -213,6 +213,8 @@ impl DomainHandler for AgentHandler {
             }
             (AgentOperation::Status, _) => Err(ProtocolError::PayloadDecodeFailed("agent.status")),
             (AgentOperation::Event, _) => Err(ProtocolError::PayloadDecodeFailed("agent.event")),
+            (AgentOperation::ContextConfig, _) => todo!(),
+            (AgentOperation::ContextSnapshot, _) => todo!(),
         }
     }
 }

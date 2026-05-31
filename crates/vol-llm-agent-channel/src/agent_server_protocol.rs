@@ -55,6 +55,8 @@ impl Operation {
             Operation::Agent(AgentOperation::List) => "agent.list",
             Operation::Agent(AgentOperation::Event) => "agent.event",
             Operation::Agent(AgentOperation::Status) => "agent.status",
+            Operation::Agent(AgentOperation::ContextConfig) => "agent.context_config",
+            Operation::Agent(AgentOperation::ContextSnapshot) => "agent.context_snapshot",
             Operation::File(FileOperation::List) => "file.list",
             Operation::File(FileOperation::Read) => "file.read",
             Operation::Session(SessionOperation::List) => "session.list",
@@ -92,6 +94,8 @@ pub enum AgentOperation {
     List,
     Event,
     Status,
+    ContextConfig,
+    ContextSnapshot,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -239,6 +243,28 @@ impl Payload {
                 let p: P = serde_json::from_value(value)
                     .map_err(|_| ProtocolError::PayloadDecodeFailed("agent.status"))?;
                 Ok(Payload::Agent(AgentPayload::Status { agent_id: p.agent_id }))
+            }
+            Operation::Agent(AgentOperation::ContextConfig) => {
+                #[derive(Deserialize)]
+                struct P {
+                    agent_id: String,
+                }
+                let p: P = serde_json::from_value(value)
+                    .map_err(|_| ProtocolError::PayloadDecodeFailed("agent.context_config"))?;
+                Ok(Payload::Agent(AgentPayload::ContextConfig { agent_id: p.agent_id }))
+            }
+            Operation::Agent(AgentOperation::ContextSnapshot) => {
+                #[derive(Deserialize)]
+                struct P {
+                    agent_id: String,
+                    contributor_name: String,
+                }
+                let p: P = serde_json::from_value(value)
+                    .map_err(|_| ProtocolError::PayloadDecodeFailed("agent.context_snapshot"))?;
+                Ok(Payload::Agent(AgentPayload::ContextSnapshot {
+                    agent_id: p.agent_id,
+                    contributor_name: p.contributor_name,
+                }))
             }
             Operation::Agent(AgentOperation::Event) => {
                 #[derive(Deserialize)]
@@ -538,6 +564,19 @@ pub enum AgentPayload {
         status: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         run_id: Option<String>,
+    },
+    ContextConfig {
+        agent_id: String,
+    },
+    ContextConfigResult {
+        contributors: Vec<serde_json::Value>,
+    },
+    ContextSnapshot {
+        agent_id: String,
+        contributor_name: String,
+    },
+    ContextSnapshotResult {
+        messages: Vec<serde_json::Value>,
     },
 }
 
