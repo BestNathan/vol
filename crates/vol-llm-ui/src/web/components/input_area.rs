@@ -94,7 +94,7 @@ pub fn InputArea() -> Element {
                             class: "text-[#555] hover:text-[#c0c040] hover:underline cursor-pointer",
                             disabled: is_running,
                             onclick: {
-                                let mut g = global;
+                                let g = global;
                                 let c = conv;
                                 let agents = agents;
                                 move |_| {

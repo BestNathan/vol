@@ -2,6 +2,7 @@
 //! resume swaps the agent session — only resume modifies the conversation.
 
 use dioxus::prelude::*;
+use gloo_timers::future::TimeoutFuture;
 
 use crate::state::{AgentSubTab, AgentsState, ConversationEntry, ConversationState, SessionsState};
 use crate::web::client::{JsonRpcClient, SessionEntry};
@@ -344,6 +345,12 @@ fn SessionItem(
                             Err(e) => log::error!("Failed to resume session: {e}"),
                         }
                         resuming.set(false);
+                    });
+                    // Safety timeout — reset button state if response never arrives
+                    let mut resuming_timeout = is_resuming;
+                    wasm_bindgen_futures::spawn_local(async move {
+                        TimeoutFuture::new(15_000).await;
+                        resuming_timeout.set(false);
                     });
                 },
                 if *is_resuming.read() { "Resuming..." } else { "Resume" }
