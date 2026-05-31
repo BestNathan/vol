@@ -43,7 +43,7 @@ impl DomainHandler for ToolHandler {
         };
         match (op, message.payload) {
             (ToolOperation::List, Payload::Tool(ToolPayload::List)) => {
-                let tools: Vec<serde_json::Value> = self
+                let mut tools: Vec<serde_json::Value> = self
                     .tool_registry
                     .definitions()
                     .iter()
@@ -55,6 +55,12 @@ impl DomainHandler for ToolHandler {
                         })
                     })
                     .collect();
+                tools.sort_by(|a, b| {
+                    a.get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .cmp(b.get("name").and_then(|v| v.as_str()).unwrap_or(""))
+                });
                 Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Tool(ToolOperation::List),
