@@ -54,6 +54,7 @@ impl Operation {
             Operation::Agent(AgentOperation::Approve) => "agent.approve",
             Operation::Agent(AgentOperation::List) => "agent.list",
             Operation::Agent(AgentOperation::Event) => "agent.event",
+            Operation::Agent(AgentOperation::Status) => "agent.status",
             Operation::File(FileOperation::List) => "file.list",
             Operation::File(FileOperation::Read) => "file.read",
             Operation::Session(SessionOperation::List) => "session.list",
@@ -90,6 +91,7 @@ pub enum AgentOperation {
     Approve,
     List,
     Event,
+    Status,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -228,6 +230,15 @@ impl Payload {
             }
             Operation::Agent(AgentOperation::List) => {
                 Ok(Payload::Agent(AgentPayload::ListResult { agents: vec![] }))
+            }
+            Operation::Agent(AgentOperation::Status) => {
+                #[derive(Deserialize)]
+                struct P {
+                    agent_id: String,
+                }
+                let p: P = serde_json::from_value(value)
+                    .map_err(|_| ProtocolError::PayloadDecodeFailed("agent.status"))?;
+                Ok(Payload::Agent(AgentPayload::Status { agent_id: p.agent_id }))
             }
             Operation::Agent(AgentOperation::Event) => {
                 #[derive(Deserialize)]
@@ -519,6 +530,14 @@ pub enum AgentPayload {
     Event {
         run_id: String,
         event: serde_json::Value,
+    },
+    Status {
+        agent_id: String,
+    },
+    StatusResult {
+        status: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        run_id: Option<String>,
     },
 }
 

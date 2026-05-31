@@ -46,6 +46,7 @@ impl DomainHandler for AgentHandler {
             Operation::Agent(AgentOperation::Approve),
             Operation::Agent(AgentOperation::List),
             Operation::Agent(AgentOperation::Event),
+            Operation::Agent(AgentOperation::Status),
         ]
     }
 
@@ -205,6 +206,22 @@ impl DomainHandler for AgentHandler {
             (AgentOperation::Approve, _) => {
                 Err(ProtocolError::PayloadDecodeFailed("agent.approve"))
             }
+            (AgentOperation::Status, Payload::Agent(AgentPayload::Status { agent_id })) => {
+                let status_map = self.agent_status.read().unwrap();
+                let (status, run_id) = status_map
+                    .get(&agent_id)
+                    .map(|s| {
+                        let run_id = s.run_id.clone();
+                        (s.status.clone(), run_id)
+                    })
+                    .unwrap_or_else(|| ("idle".to_string(), None));
+                Ok(vec![AgentServerMessage::new_result(
+                    message.message_id,
+                    Operation::Agent(AgentOperation::Status),
+                    Payload::Agent(AgentPayload::StatusResult { status, run_id }),
+                )])
+            }
+            (AgentOperation::Status, _) => Err(ProtocolError::PayloadDecodeFailed("agent.status")),
             (AgentOperation::Event, _) => Err(ProtocolError::PayloadDecodeFailed("agent.event")),
         }
     }

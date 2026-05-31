@@ -13,6 +13,7 @@ pub fn method_to_operation(method: &str) -> Result<Operation, ProtocolError> {
         "agent.approve" => Ok(Operation::Agent(AgentOperation::Approve)),
         "agent.list" => Ok(Operation::Agent(AgentOperation::List)),
         "agent.event" => Ok(Operation::Agent(AgentOperation::Event)),
+        "agent.status" => Ok(Operation::Agent(AgentOperation::Status)),
         "file.list" => Ok(Operation::File(FileOperation::List)),
         "file.read" => Ok(Operation::File(FileOperation::Read)),
         "session.list" => Ok(Operation::Session(SessionOperation::List)),
