@@ -160,6 +160,12 @@ impl JsonRpcClient {
         let inner_clone = inner.clone();
         let on_close = Closure::wrap(Box::new(move |_e: web_sys::CloseEvent| {
             inner_clone.state.set(ConnectionState::Disconnected);
+            // Clear all pending callbacks — they will never complete
+            let pending: Vec<_> = inner_clone.pending.borrow_mut().drain().collect();
+            for (_, cb) in pending {
+                let err = serde_json::json!({"error": {"message": "WebSocket disconnected"}});
+                cb(err);
+            }
             if let Some(cb) = inner_clone.on_state_change.take() {
                 cb(ConnectionState::Disconnected);
                 inner_clone.on_state_change.set(Some(cb));
@@ -313,6 +319,12 @@ impl JsonRpcClient {
         let inner_c = inner.clone();
         let on_close = Closure::wrap(Box::new(move |_e: web_sys::CloseEvent| {
             inner_c.state.set(ConnectionState::Disconnected);
+            // Clear all pending callbacks — they will never complete
+            let pending: Vec<_> = inner_c.pending.borrow_mut().drain().collect();
+            for (_, cb) in pending {
+                let err = serde_json::json!({"error": {"message": "WebSocket disconnected"}});
+                cb(err);
+            }
             if let Some(cb) = inner_c.on_state_change.take() {
                 cb(ConnectionState::Disconnected);
                 inner_c.on_state_change.set(Some(cb));
