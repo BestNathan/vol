@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::state::GlobalState;
+use crate::state::{DebugState, GlobalState};
 
 const BUILD_TIME: &str = env!("BUILD_TIME");
 
@@ -14,6 +14,7 @@ fn format_elapsed(d: std::time::Duration) -> String {
 #[component]
 pub fn StatusBar() -> Element {
     let g: Signal<GlobalState> = use_context();
+    let debug = use_context::<Signal<DebugState>>();
     let gs = g.read();
 
     let elapsed = if gs.is_running {
@@ -76,6 +77,21 @@ pub fn StatusBar() -> Element {
                     span { class: "text-[#a0a0c0] font-bold", {env!("CARGO_PKG_VERSION")} }
                     span { class: "text-[#555] mx-0.5", " | " }
                     span { class: "text-[#666]", {BUILD_TIME} }
+                }
+                div { class: "flex-shrink-0 ml-2",
+                    button {
+                        class: {
+                            let d = debug.read();
+                            if d.open {
+                                "text-[11px] px-1.5 py-0.5 rounded-[3px] font-bold bg-[#2a2a44] text-[#c0c040] hover:bg-[#3a3a55] cursor-pointer"
+                            } else {
+                                "text-[11px] px-1.5 py-0.5 rounded-[3px] font-bold bg-transparent text-[#555] hover:text-[#888] hover:bg-[#2a2a44] cursor-pointer"
+                            }
+                        },
+                        onclick: move |_| { debug.write_unchecked().toggle(); },
+                        title: "Debug Panel",
+                        "🐛"
+                    }
                 }
             }
         }
