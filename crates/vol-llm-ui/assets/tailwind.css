@@ -733,6 +733,9 @@
   .max-h-\[250px\] {
     max-height: 250px;
   }
+  .max-h-\[300px\] {
+    max-height: 300px;
+  }
   .max-h-\[calc\(100\%-32px\)\] {
     max-height: calc(100% - 32px);
   }
@@ -814,8 +817,14 @@
   .w-\[80vw\] {
     width: 80vw;
   }
+  .w-\[90px\] {
+    width: 90px;
+  }
   .w-\[95vw\] {
     width: 95vw;
+  }
+  .w-\[100px\] {
+    width: 100px;
   }
   .w-\[100vw\] {
     width: 100vw;
@@ -1304,6 +1313,9 @@
   .border-\[\#80a0ff\] {
     border-color: #80a0ff;
   }
+  .border-\[\#222\] {
+    border-color: #222;
+  }
   .border-\[\#333\] {
     border-color: #333;
   }
@@ -1763,6 +1775,9 @@
   }
   .pl-\[42px\] {
     padding-left: 42px;
+  }
+  .pl-\[120px\] {
+    padding-left: 120px;
   }
   .text-center {
     text-align: center;
@@ -2483,6 +2498,13 @@
       }
     }
   }
+  .hover\:bg-\[\#3a3a55\] {
+    &:hover {
+      @media (hover: hover) {
+        background-color: #3a3a55;
+      }
+    }
+  }
   .hover\:bg-\[\#3a2020\] {
     &:hover {
       @media (hover: hover) {
@@ -2604,6 +2626,13 @@
       }
     }
   }
+  .hover\:text-\[\#888\] {
+    &:hover {
+      @media (hover: hover) {
+        color: #888;
+      }
+    }
+  }
   .hover\:text-\[\#aaa\] {
     &:hover {
       @media (hover: hover) {
@@ -2615,6 +2644,13 @@
     &:hover {
       @media (hover: hover) {
         color: #bbb;
+      }
+    }
+  }
+  .hover\:text-\[\#c0c040\] {
+    &:hover {
+      @media (hover: hover) {
+        color: #c0c040;
       }
     }
   }
@@ -2678,6 +2714,13 @@
     &:hover {
       @media (hover: hover) {
         color: var(--color-white);
+      }
+    }
+  }
+  .hover\:underline {
+    &:hover {
+      @media (hover: hover) {
+        text-decoration-line: underline;
       }
     }
   }

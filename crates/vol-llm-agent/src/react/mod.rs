@@ -39,7 +39,7 @@ pub mod run_context;
 pub mod state;
 pub mod stream;
 
-pub use agent::{AgentConfig, ReActAgent};
+pub use agent::{AgentBusyError, AgentConfig, ReActAgent, RunningState};
 pub use config_builder::{AgentConfigBuildError, AgentConfigBuilder};
 pub use hitl::{
     run_cli_approval_loop, spawn_custom_approval_handler, ApprovalChannel, ApprovalHandler,

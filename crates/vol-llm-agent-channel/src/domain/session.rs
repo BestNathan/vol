@@ -120,8 +120,21 @@ impl DomainHandler for SessionHandler {
                         let session_store: Arc<dyn SessionEntryStore> = Arc::new(store);
                         match Session::resume(session_id.clone(), session_store).await {
                             Ok(session) => {
-                                if let Err(e) = self.router.swap_session(&resolved_agent_id, Arc::new(session)).await {
-                                    tracing::warn!(%session_id, %resolved_agent_id, %e, "session entries loaded but swap failed");
+                                match self.router.swap_session(&resolved_agent_id, Arc::new(session)).await {
+                                    Ok(()) => {}
+                                    Err(e) => {
+                                        tracing::warn!(%session_id, %resolved_agent_id, %e, "session entries loaded but swap failed");
+                                        return Ok(vec![AgentServerMessage::new_error(
+                                            message.message_id,
+                                            Operation::Session(SessionOperation::Resume),
+                                            crate::agent_server_protocol::ErrorPayload {
+                                                code: "agent_busy".to_string(),
+                                                message: format!("Session loaded but agent is running — try again when idle: {e}"),
+                                                detail: None,
+                                                terminal: false,
+                                            },
+                                        )]);
+                                    }
                                 }
                             }
                             Err(e) => {

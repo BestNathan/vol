@@ -17,7 +17,6 @@ pub struct AgentHandler {
     router: AgentRouter,
     holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
     agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>>,
-    agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>>,
 }
 
 impl AgentHandler {
@@ -25,9 +24,8 @@ impl AgentHandler {
         router: AgentRouter,
         holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
         agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>>,
-        agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>>,
     ) -> Self {
-        Self { router, holders, agent_defs, agent_status }
+        Self { router, holders, agent_defs }
     }
 }
 
@@ -159,7 +157,6 @@ impl DomainHandler for AgentHandler {
             }
             (AgentOperation::List, _) => {
                 let defs = self.agent_defs.read().unwrap();
-                let status_map = self.agent_status.read().unwrap();
                 let agents: Vec<serde_json::Value> = self
                     .holders
                     .lock()
@@ -167,7 +164,6 @@ impl DomainHandler for AgentHandler {
                     .keys()
                     .map(|k| {
                         let def = defs.get(k);
-                        let status = status_map.get(k);
                         serde_json::json!({
                             "id": k,
                             "name": k,
@@ -177,8 +173,8 @@ impl DomainHandler for AgentHandler {
                                 vol_llm_core::AgentScope::User => "user",
                                 vol_llm_core::AgentScope::Repo => "repo",
                             }),
-                            "status": status.map_or("idle", |s| s.status.as_str()),
-                            "current_input": status.and_then(|s| s.current_input.clone()),
+                            "status": "idle",
+                            "current_input": None::<String>,
                         })
                     })
                     .collect();
@@ -207,18 +203,12 @@ impl DomainHandler for AgentHandler {
                 Err(ProtocolError::PayloadDecodeFailed("agent.approve"))
             }
             (AgentOperation::Status, Payload::Agent(AgentPayload::Status { agent_id })) => {
-                let status_map = self.agent_status.read().unwrap();
-                let (status, run_id) = status_map
-                    .get(&agent_id)
-                    .map(|s| {
-                        let run_id = s.run_id.clone();
-                        (s.status.clone(), run_id)
-                    })
-                    .unwrap_or_else(|| ("idle".to_string(), None));
+                let is_busy = self.router.is_agent_running(&agent_id).await;
+                let status = if is_busy { "running".to_string() } else { "idle".to_string() };
                 Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Agent(AgentOperation::Status),
-                    Payload::Agent(AgentPayload::StatusResult { status, run_id }),
+                    Payload::Agent(AgentPayload::StatusResult { status, run_id: None }),
                 )])
             }
             (AgentOperation::Status, _) => Err(ProtocolError::PayloadDecodeFailed("agent.status")),

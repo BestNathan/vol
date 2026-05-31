@@ -62,7 +62,7 @@ impl AgentRouter {
         self.dispatchers.read().await.contains_key(agent_id)
     }
 
-    /// Swap the session of a registered agent.
+    /// Swap the session of a registered agent. Fails if agent is running.
     pub async fn swap_session(
         &self,
         agent_id: &str,
@@ -72,13 +72,22 @@ impl AgentRouter {
         let dispatcher = dispatchers
             .get(agent_id)
             .ok_or_else(|| ChannelError::AgentNotFound(agent_id.to_string()))?;
-        dispatcher.swap_session(session);
-        Ok(())
+        dispatcher.swap_session(session).map_err(|e| {
+            ChannelError::AgentBusy(e.to_string())
+        })
     }
 
     /// List all registered agent IDs.
     pub async fn list_agents(&self) -> Vec<String> {
         self.dispatchers.read().await.keys().cloned().collect()
+    }
+
+    /// Check if an agent is currently running.
+    pub async fn is_agent_running(&self, agent_id: &str) -> bool {
+        let dispatchers = self.dispatchers.read().await;
+        dispatchers
+            .get(agent_id)
+            .map_or(false, |d| d.is_busy())
     }
 }
 

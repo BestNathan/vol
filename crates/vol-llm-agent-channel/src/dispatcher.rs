@@ -91,11 +91,10 @@ impl AgentDispatcher {
         self.state.queue.lock().await.len()
     }
 
-    /// Atomically replace the agent's session.
-    pub fn swap_session(&self, new_session: Arc<Session>) {
-        let old_agent = { self.agent.read().unwrap().clone() };
-        let new_agent = Arc::new(old_agent.with_session(new_session));
-        *self.agent.write().unwrap() = new_agent;
+    /// Atomically replace the agent's session. Fails if agent is running.
+    pub fn swap_session(&self, new_session: Arc<Session>) -> Result<(), vol_llm_agent::AgentBusyError> {
+        let agent = self.agent.read().unwrap();
+        agent.set_session(new_session)
     }
 
     /// Whether the dispatcher is currently executing a request.

@@ -342,7 +342,6 @@ impl AgentServerCoreBuilder {
                 router.clone(),
                 Arc::clone(&holders),
                 agent_defs.clone(),
-                agent_status.clone(),
             )))
             .map_err(|e| format!("failed to register AgentHandler: {e}"))?;
         handler_registry
@@ -500,7 +499,6 @@ impl AgentServerCore {
             router.clone(),
             Arc::clone(&holders),
             agent_defs.clone(),
-            agent_status.clone(),
         ))).ok();
         handler_registry.register(Arc::new(FileHandler::new(PathBuf::from(".")))).ok();
         handler_registry.register(Arc::new(SessionHandler::new(agents_root, router.clone()))).ok();
