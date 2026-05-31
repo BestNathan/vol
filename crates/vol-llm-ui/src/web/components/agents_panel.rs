@@ -317,6 +317,11 @@ pub fn AgentsPanel() -> Element {
                         AgentSubTab::Sessions => rsx! {
                             SessionsPanel {}
                         },
+                        AgentSubTab::Context => rsx! {
+                            div { class: "flex-1 flex items-center justify-center text-[#666] text-[14px]",
+                                "Context panel — coming in next task"
+                            }
+                        },
                     }
                 }
             } else {
