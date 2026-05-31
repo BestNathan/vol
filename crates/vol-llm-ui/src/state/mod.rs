@@ -1107,6 +1107,56 @@ pub fn truncate_preview(s: &str, max_chars: usize) -> String {
     format!("{}...", truncated)
 }
 
+// === DebugState and WsMessage types =========================================
+
+/// Whether a WS message is inbound or outbound.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WsDirection { In, Out }
+
+/// A captured WebSocket message.
+#[derive(Debug, Clone)]
+pub struct WsMessage {
+    pub direction: WsDirection,
+    pub method: String,
+    pub payload: String,
+    pub elapsed_ms: u64,
+}
+
+/// Debug panel state.
+#[derive(Debug, Clone)]
+pub struct DebugState {
+    pub open: bool,
+    pub active_tab: DebugTab,
+    pub ws_messages: Vec<WsMessage>,
+    start_time: Option<web_time::Instant>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DebugTab { Ws }
+
+impl DebugState {
+    pub fn new() -> Self {
+        Self { open: false, active_tab: DebugTab::Ws, ws_messages: Vec::new(), start_time: None }
+    }
+
+    pub fn toggle(&mut self) {
+        self.open = !self.open;
+        if !self.open {
+            self.active_tab = DebugTab::Ws;
+        }
+    }
+
+    pub fn push_ws(&mut self, direction: WsDirection, method: String, payload: String) {
+        if self.open {
+            if self.start_time.is_none() {
+                self.start_time = Some(web_time::Instant::now());
+            }
+            let elapsed_ms = self.start_time.unwrap().elapsed().as_millis() as u64;
+            self.ws_messages.push(WsMessage { direction, method, payload, elapsed_ms });
+        }
+    }
+}
+
 // === Tests ===================================================================
 
 #[cfg(test)]
