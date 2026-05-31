@@ -260,6 +260,116 @@ fn truncate_lines(s: &str, max_lines: usize, max_chars: usize) -> String {
     } else { result }
 }
 
+/// Mobile card for a single session (sm:hidden).
+#[component]
+fn SessionCard(
+    session_id: String,
+    entry_count: usize,
+    created_at: i64,
+    rpc: crate::web::client::JsonRpcClient,
+    conversation_signal: Signal<ConversationState>,
+    agents_signal: Signal<AgentsState>,
+) -> Element {
+    let mut show_detail = use_signal(|| false);
+    let entries = use_signal(|| Vec::<ConversationEntry>::new());
+    let mut loading = use_signal(|| false);
+    let is_resuming = use_signal(|| false);
+    let had_parse_failure = use_signal(|| false);
+
+    let rpc_view = rpc.clone();
+    let sid_view = session_id.clone();
+    let rpc_resume = rpc.clone();
+    let sid_resume = session_id.clone();
+    let conv_resume = conversation_signal;
+    let agents_resume = agents_signal;
+
+    rsx! {
+        div {
+            class: "cursor-pointer rounded-lg border border-[#333355] bg-[#20203a] p-3 active:bg-[#2a2a44]",
+            onclick: move |_: Event<MouseData>| {
+                if entries.read().is_empty() && !*loading.read() {
+                    loading.set(true);
+                    let rpc = rpc_view.clone();
+                    let sid = sid_view.clone();
+                    let mut ent = entries;
+                    let mut ld = loading;
+                    let mut parse_fail = had_parse_failure;
+                    rpc.session_entries(&sid, move |result| {
+                        match result {
+                            Ok(e) => {
+                                let converted = session_entries_to_conversation(e.clone());
+                                if e.len() > 0 && converted.is_empty() {
+                                    parse_fail.set(true);
+                                }
+                                ent.set(converted);
+                            }
+                            Err(e) => {
+                                log::error!("Failed to load session entries: {e}");
+                                parse_fail.set(true);
+                            }
+                        }
+                        ld.set(false);
+                    });
+                }
+                show_detail.set(true);
+            },
+            div { class: "flex items-center justify-between",
+                span { class: "font-mono text-[13px] text-[#e0e0e0] font-semibold truncate",
+                    "{truncate_id(&session_id)}"
+                }
+                span { class: "bg-[#2a2a44] text-[#aaa] rounded-full px-2 py-0.5 text-[11px] flex-shrink-0 ml-2",
+                    "{entry_count} entries"
+                }
+            }
+            div { class: "flex items-center justify-between mt-1.5",
+                span { class: "text-[11px] text-[#666]", "{format_age(created_at)}" }
+                button {
+                    class: "px-2.5 py-0.5 bg-[#408040] text-[#e0e0e0] border-none rounded-[3px] cursor-pointer text-[12px] hover:bg-[#50a050] disabled:bg-[#333355] disabled:cursor-not-allowed",
+                    disabled: *is_resuming.read(),
+                    onclick: move |evt: Event<MouseData>| {
+                        evt.stop_propagation();
+                        let mut resuming = is_resuming;
+                        let _ = resuming.set(true);
+                        let rpc = rpc_resume.clone();
+                        let sid = sid_resume.clone();
+                        let mut conv = conv_resume;
+                        let mut agents = agents_resume;
+                        let agent_id = agents.read().selected.clone();
+                        rpc.session_resume(&sid, agent_id.as_deref(), move |result| {
+                            match result {
+                                Ok(resp) => {
+                                    let conv_entries = session_entries_to_conversation(resp.entries);
+                                    let active_id = agents.read().selected.clone().unwrap_or_default();
+                                    conv.with_mut(|s| {
+                                        let ac = s.get_or_create(&active_id);
+                                        ac.entries = conv_entries;
+                                    });
+                                    agents.with_mut(|a| a.sub_tab = AgentSubTab::Conversation);
+                                }
+                                Err(e) => log::error!("Failed to resume session: {e}"),
+                            }
+                            let _ = resuming.set(false);
+                        });
+                        let mut resuming_timeout = is_resuming;
+                        wasm_bindgen_futures::spawn_local(async move {
+                            TimeoutFuture::new(15_000).await;
+                            let _ = resuming_timeout.set(false);
+                        });
+                    },
+                    if *is_resuming.read() { "Resuming..." } else { "Resume" }
+                }
+            }
+        }
+        SessionDetailOverlay {
+            session_id,
+            entries,
+            loading,
+            show: show_detail,
+            had_parse_failure,
+        }
+    }
+}
+
 /// Session item component — click to view in overlay, resume to swap agent session.
 #[component]
 fn SessionItem(
@@ -433,7 +543,20 @@ pub fn SessionsPanel() -> Element {
         };
     }
 
-    let items: Vec<Element> = sessions.iter().map(|session| {
+    let mobile_items: Vec<Element> = sessions.iter().map(|session| {
+        rsx! {
+            SessionCard {
+                session_id: session.id.clone(),
+                entry_count: session.entry_count,
+                created_at: session.created_at,
+                rpc: rpc_for_items.clone(),
+                conversation_signal,
+                agents_signal,
+            }
+        }
+    }).collect();
+
+    let desktop_items: Vec<Element> = sessions.iter().map(|session| {
         rsx! {
             SessionItem {
                 session_id: session.id.clone(),
@@ -449,7 +572,12 @@ pub fn SessionsPanel() -> Element {
     rsx! {
         div { class: "flex-1 overflow-y-auto p-2",
             div { class: "px-2.5 pt-1 pb-2 text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]", "Sessions" }
-            {items.into_iter()}
+            div { class: "sm:hidden flex flex-col gap-2",
+                {mobile_items.into_iter()}
+            }
+            div { class: "hidden sm:block",
+                {desktop_items.into_iter()}
+            }
         }
     }
 }
