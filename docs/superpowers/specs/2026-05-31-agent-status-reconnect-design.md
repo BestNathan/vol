@@ -16,15 +16,18 @@ Request:   {"method": "agent.status", "params": {"agent_id": "..."}}
 Response:  {"status": "idle" | "running", "run_id": "..." | null}
 ```
 
-### Frontend Flow: Select Agent After Reconnect
+### Frontend Flow: Select Agent
 
 ```
 User selects agent
-  → agent.status(agent_id)     ← check running state first
-  → load session entries       ← parallel with above
-  ↓
-  ├─ idle → normal mode, input enabled
-  └─ running → show running banner, input disabled, subscribe(run_id)
+  → agent.status(agent_id)
+  ├─ idle → do nothing (conversation stays as-is, input enabled)
+  └─ running →
+       1. Fetch session for this agent (session.list + session.entries)
+       2. Load entries into conversation (replaces current conversation)
+       3. Push RunningBanner at top
+       4. Set is_running = true, input disabled
+       5. Subscribe(run_id) for live events
 ```
 
 ### Running Banner
@@ -34,7 +37,7 @@ A non-dismissible banner at the top of the conversation view:
 > ⬤ Agent is currently running. Below is the live conversation.
 > [run_id: abc123]
 
-- Appears when `agent.status` returns `status: "running"`
+- Appears when `agent.status` returns `status: "running"` and session is loaded
 - Disappears when `AgentComplete` / `AgentAborted` / `AgentError` event arrives
 - Shows `run_id` so the user can reference it for cancel operations
 
@@ -49,12 +52,12 @@ A non-dismissible banner at the top of the conversation view:
 | **Frontend** |
 | Client | `web/client.rs` | Add `agent_status(agent_id, cb)` RPC method |
 | State | `state/mod.rs` | Add `ConversationEntry::RunningBanner { run_id: String }` variant |
-| UI | `conversation.rs` | Render `RunningBanner` at top of conversation; clear on AgentComplete/Aborted/Error |
-| Logic | `app.rs` | Remove `is_running = false` from WsConnected handler; on agent select: call `agent.status`, if running: push `RunningBanner`, set `is_running = true`, subscribe(run_id) |
+| UI | `conversation.rs` | Render `RunningBanner` at top of conversation; clear on AgentComplete/Aborted/Error; add `load_session_entries` helper |
+| Logic | `app.rs` | Remove `is_running = false` from WsConnected handler. On agent select: call `agent.status` → if running: load session + push banner + set running + subscribe; if idle: no-op |
 
 ### Edge Cases
 
-- **Status fails to load**: Treat as idle (degraded, input available).
-- **Agent running but session empty**: Still show banner + subscribe. User sees live events.
+- **Status RPC fails**: Treat as idle (degraded, input available).
+- **Agent running but session empty**: Still show banner + subscribe. User sees live events from this point.
 - **Agent complete between status check and subscribe**: `AgentComplete` event from subscribe will clear the banner naturally.
-- **User selects different agent while current is running**: Clear running state for previous agent, check status for new agent.
+- **User selects different agent while current is running**: Clear running state for previous agent, check status for new one.
