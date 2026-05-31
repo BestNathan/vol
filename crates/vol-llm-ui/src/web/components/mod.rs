@@ -3,6 +3,7 @@
 pub mod app;
 pub mod approval_dialog;
 pub mod agents_panel;
+pub mod context_panel;
 pub mod conversation;
 pub mod input_area;
 pub mod log_viewer;
@@ -27,6 +28,7 @@ pub mod tool_dialog;
 pub use app::App;
 pub use agents_panel::AgentsPanel;
 pub use approval_dialog::ApprovalDialog;
+pub use context_panel::ContextPanel;
 pub use conversation::ConversationView;
 pub use file_content::FileContentView;
 pub use file_tree::FileTree;
