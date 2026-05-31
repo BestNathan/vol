@@ -8,6 +8,7 @@ use tokio::sync::{oneshot, RwLock};
 use crate::dispatcher::AgentDispatcher;
 use crate::error::ChannelError;
 use crate::request::{AgentRequest, RunResult};
+use vol_llm_agent::ReActAgent;
 use vol_session::Session;
 
 /// Routes requests to registered dispatchers by agent_id.
@@ -80,6 +81,15 @@ impl AgentRouter {
     /// List all registered agent IDs.
     pub async fn list_agents(&self) -> Vec<String> {
         self.dispatchers.read().await.keys().cloned().collect()
+    }
+
+    /// Clone the agent for the given agent_id.
+    pub async fn get_agent(&self, agent_id: &str) -> Option<Arc<ReActAgent>> {
+        self.dispatchers
+            .read()
+            .await
+            .get(agent_id)
+            .map(|d| d.get_agent())
     }
 
     /// Check if an agent is currently running.

@@ -104,6 +104,11 @@ impl AgentDispatcher {
         self.state.busy.try_lock().is_err()
     }
 
+    /// Clone the wrapped agent (read-only access via Arc clone).
+    pub fn get_agent(&self) -> Arc<ReActAgent> {
+        self.agent.read().unwrap().clone()
+    }
+
     /// Background loop that processes requests FIFO.
     async fn run_loop(agent: Arc<std::sync::RwLock<Arc<ReActAgent>>>, state: Arc<DispatcherState>) {
         loop {
