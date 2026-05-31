@@ -132,12 +132,13 @@ pub enum ConversationEntry {
     UserInput { text: String },
     Thinking { content: String },
     ContentStreaming { content: String },
-    ToolCall { tool_name: String, arg_preview: String },
-    ToolResult { tool_name: String, preview: String, success: bool },
+    ToolCall { tool_name: String, arg_preview: String, full_arguments: String },
+    ToolResult { tool_name: String, preview: String, full_result: String, success: bool },
     AgentAnswer { text: String },
     RunSummary { iterations: u32, tool_calls: u32, elapsed_ms: u128 },
     EntryCheckpoint { reason: String, note: Option<String>, created_at: i64 },
     Error { message: String },
+    RunningBanner { run_id: String },
 }
 
 /// A node in the workspace directory tree.
@@ -949,7 +950,7 @@ impl UiState {
             UiEvent::ToolCallBegin { tool_name, arguments } => {
                 let seq = self.tool_call_count + 1;
                 self.tool_call_count = seq;
-                let preview = extract_arg_preview(&arguments);
+                let preview = format_tool_args(&arguments);
                 self.tool_calls.push(ToolCallEntry {
                     sequence: seq,
                     tool_name: tool_name.clone(),
@@ -960,6 +961,7 @@ impl UiState {
                 self.conversation.push(ConversationEntry::ToolCall {
                     tool_name,
                     arg_preview: preview,
+                    full_arguments: arguments,
                 });
             }
             UiEvent::ToolCallArgumentDelta { delta: _ } => {
@@ -971,22 +973,27 @@ impl UiState {
                 self.conversation.push(ConversationEntry::ToolResult {
                     tool_name,
                     preview,
+                    full_result: result,
                     success: true,
                 });
             }
             UiEvent::ToolCallError { tool_name, error, duration_ms } => {
                 self.update_tool_call_status(&tool_name, ToolCallStatus::Error, duration_ms);
+                let err = error;
                 self.conversation.push(ConversationEntry::ToolResult {
                     tool_name,
-                    preview: error,
+                    preview: err.clone(),
+                    full_result: err,
                     success: false,
                 });
             }
             UiEvent::ToolCallSkipped { tool_name, reason, duration_ms } => {
                 self.update_tool_call_status(&tool_name, ToolCallStatus::Skipped, duration_ms);
+                let rsn = reason;
                 self.conversation.push(ConversationEntry::ToolResult {
                     tool_name,
-                    preview: reason,
+                    preview: rsn.clone(),
+                    full_result: rsn,
                     success: false,
                 });
             }
@@ -1060,29 +1067,38 @@ impl UiState {
 
 // === Helpers =================================================================
 
-fn extract_arg_preview(arguments: &str) -> String {
+pub fn format_tool_args(arguments: &str) -> String {
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(arguments) {
-        if let Some(cmd) = parsed.get("command").and_then(|v| v.as_str()) {
-            if cmd.chars().count() > 80 {
-                return format!("Command: {}...", cmd.chars().take(77).collect::<String>());
+        if let Some(obj) = parsed.as_object() {
+            if obj.is_empty() { return String::new(); }
+            if obj.len() == 1 {
+                let (_, v) = obj.iter().next().unwrap();
+                return json_value_to_display(v);
             }
-            return format!("Command: {}", cmd);
+            let parts: Vec<String> = obj.iter()
+                .map(|(k, v)| format!("{}={}", k, json_value_to_display(v)))
+                .collect();
+            return parts.join(", ");
         }
-        if let Some(path) = parsed.get("path").and_then(|v| v.as_str()) {
-            return format!("Path: {}", path);
-        }
-        if let Some(file_path) = parsed.get("file_path").and_then(|v| v.as_str()) {
-            return format!("File: {}", file_path);
-        }
-        if arguments.chars().count() > 80 {
-            return format!("Args: {}...", arguments.chars().take(77).collect::<String>());
-        }
-        return format!("Args: {}", arguments);
+        return json_value_to_display(&parsed);
     }
-    String::new()
+    arguments.to_string()
 }
 
-fn truncate_preview(s: &str, max_chars: usize) -> String {
+fn json_value_to_display(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Number(n) => n.to_string(),
+        serde_json::Value::Bool(b) => b.to_string(),
+        serde_json::Value::Null => "null".to_string(),
+        _ => {
+            let s = v.to_string();
+            if s.len() > 60 { format!("{}…", s.chars().take(57).collect::<String>()) } else { s }
+        }
+    }
+}
+
+pub fn truncate_preview(s: &str, max_chars: usize) -> String {
     let total_chars = s.chars().count();
     if total_chars <= max_chars {
         return s.to_string();
@@ -1223,22 +1239,26 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_arg_preview() {
-        // JSON with command
-        let preview = extract_arg_preview(r#"{"command":"ls -la"}"#);
-        assert_eq!(preview, "Command: ls -la");
+    fn test_format_tool_args() {
+        // Single param (command) — returns value directly
+        let preview = format_tool_args(r#"{"command":"ls -la"}"#);
+        assert_eq!(preview, "ls -la");
 
-        // JSON with path
-        let preview = extract_arg_preview(r#"{"path":"/tmp/test.txt"}"#);
-        assert_eq!(preview, "Path: /tmp/test.txt");
+        // Single param (path)
+        let preview = format_tool_args(r#"{"path":"/tmp/test.txt"}"#);
+        assert_eq!(preview, "/tmp/test.txt");
 
-        // JSON with file_path
-        let preview = extract_arg_preview(r#"{"file_path":"src/main.rs"}"#);
-        assert_eq!(preview, "File: src/main.rs");
+        // Single param (file_path)
+        let preview = format_tool_args(r#"{"file_path":"src/main.rs"}"#);
+        assert_eq!(preview, "src/main.rs");
 
-        // Non-JSON or parse failure
-        let preview = extract_arg_preview("not json");
-        assert_eq!(preview, "");
+        // Multiple params → key=value pairs
+        let preview = format_tool_args(r#"{"command":"ls","path":"/tmp"}"#);
+        assert!(preview.contains("command=ls") && preview.contains("path=/tmp"));
+
+        // Non-JSON → raw string
+        let preview = format_tool_args("not json");
+        assert_eq!(preview, "not json");
     }
 
     #[test]

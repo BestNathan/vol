@@ -227,7 +227,7 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                     }
                 }
             }
-            ConversationEntry::ToolCall { tool_name, arg_preview } => {
+            ConversationEntry::ToolCall { tool_name, arg_preview, .. } => {
                 lines.push(Line::from(vec![
                     Span::styled(format!("[{}]", tool_name), Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
                 ]));
@@ -239,7 +239,7 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                     }
                 }
             }
-            ConversationEntry::ToolResult { tool_name, preview, success } => {
+            ConversationEntry::ToolResult { tool_name, preview, success, .. } => {
                 let status = if *success { "OK" } else { "ERR" };
                 let color = if *success { Color::Green } else { Color::Red };
                 lines.push(Line::from(vec![
@@ -287,6 +287,14 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                 lines.push(Line::from(vec![
                     Span::styled(label,
                         Style::default().fg(Color::Yellow).add_modifier(Modifier::DIM)),
+                ]));
+            }
+            ConversationEntry::RunningBanner { run_id } => {
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("\u{2b24} Agent running  [{}]", run_id),
+                        Style::default().fg(Color::LightBlue).add_modifier(Modifier::BOLD),
+                    ),
                 ]));
             }
         }

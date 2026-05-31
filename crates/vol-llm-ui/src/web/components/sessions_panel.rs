@@ -50,14 +50,29 @@ pub(crate) fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec
                                             entries.push(ConversationEntry::Thinking { content: thinking.to_string() });
                                         }
                                     }
+                                    // Extract tool_calls if present
+                                    if let Some(tool_calls) = msg.get("tool_calls").and_then(|v| v.as_array()) {
+                                        for tc in tool_calls {
+                                            let tc_name = tc.get("name").and_then(|v| v.as_str()).unwrap_or("tool").to_string();
+                                            let arguments = tc.get("arguments").and_then(|v| v.as_str()).unwrap_or("{}").to_string();
+                                            let arg_preview = crate::state::format_tool_args(&arguments);
+                                            entries.push(ConversationEntry::ToolCall {
+                                                tool_name: tc_name,
+                                                arg_preview,
+                                                full_arguments: arguments,
+                                            });
+                                        }
+                                    }
                                     entries.push(ConversationEntry::AgentAnswer { text });
                                     entries
                                 }
                                 "tool" => {
                                     let tool_name = msg.get("name").and_then(|v| v.as_str()).unwrap_or("tool").to_string();
+                                    let preview = crate::state::truncate_preview(&text, 200);
                                     vec![ConversationEntry::ToolResult {
                                         tool_name,
-                                        preview: text,
+                                        preview,
+                                        full_result: text,
                                         success: true,
                                     }]
                                 }
@@ -165,7 +180,7 @@ fn SessionDetailOverlay(
                 ConversationEntry::AgentAnswer { text } => rsx! {
                     div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#e0e0e0] leading-[1.5]", {text} }
                 },
-                ConversationEntry::ToolResult { tool_name, preview, success } => {
+                ConversationEntry::ToolResult { tool_name, preview, success, .. } => {
                     let cls = if success {
                         "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#1a2a1a] border-l-[3px] border-[#40c040]"
                     } else {
@@ -192,6 +207,11 @@ fn SessionDetailOverlay(
                     let tw = if tool_calls == 1 { "tool call" } else { "tool calls" };
                     rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#80c080] font-bold py-1.5", "Done | {iterations} {iw} | {tool_calls} {tw} | {elapsed_ms}ms" } }
                 }
+                ConversationEntry::RunningBanner { run_id } => rsx! {
+                    div { class: "mb-2 px-3 py-2 rounded-md bg-[#1a2a44] border border-[#3a5a7a] text-sm",
+                        span { class: "text-[#c0d0e0]", "\u{2b24} Running  [{run_id}]" }
+                    }
+                },
                 _ => rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap", "Entry" } },
             }
         }

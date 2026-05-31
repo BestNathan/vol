@@ -433,6 +433,31 @@ impl JsonRpcClient {
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
+    /// Query agent running status.
+    pub fn agent_status(&self, agent_id: &str, cb: impl FnOnce(Result<(String, Option<String>), String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "agent.status",
+            "params": { "agent_id": agent_id },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            let status = result.get("status").and_then(|v| v.as_str()).unwrap_or("idle").to_string();
+            let run_id = result.get("run_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+            cb(Ok((status, run_id)));
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
     /// List all persisted sessions on the server. Returns entries via callback.
     pub fn session_list(&self, agent_id: Option<&str>, cb: impl FnOnce(Result<Vec<crate::state::SessionListEntry>, String>) + 'static) {
         let id = self.alloc_id();
