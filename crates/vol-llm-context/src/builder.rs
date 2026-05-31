@@ -1,10 +1,26 @@
-use vol_llm_core::Message;
+use vol_llm_core::{Message, MessageRole};
 
 use crate::{AttentionAnchor, ContextBlock, ContextContributor, ContextError, TokenBudget, estimate_tokens};
 
 /// Output from ContextBuilder — ready-to-send LLM messages.
 pub struct ContextOutput {
     pub messages: Vec<Message>,
+}
+
+/// Metadata about a context contributor for UI display.
+#[derive(Debug, Clone)]
+pub struct ContributorInfo {
+    pub name: String,
+    pub anchor_zone: String,
+    pub estimated_tokens: usize,
+    pub message_count: usize,
+}
+
+/// A message from a contributor snapshot, suitable for frontend display.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ContextMessage {
+    pub role: String,
+    pub content: String,
 }
 
 /// Orchestrator that collects contributors and produces messages.
@@ -34,6 +50,64 @@ impl ContextBuilder {
     /// Get contributor names as a list.
     pub fn contributor_names(&self) -> Vec<&str> {
         self.contributors.iter().map(|c| c.name()).collect()
+    }
+
+    /// Get info for all contributors (calls contribute() for message_count + anchor_zone).
+    pub async fn contributor_infos(&self) -> Result<Vec<ContributorInfo>, ContextError> {
+        let mut infos = Vec::new();
+        for contributor in &self.contributors {
+            let blocks = contributor.contribute().await?;
+            let anchor_zone = blocks
+                .first()
+                .map(|b| match b.anchor {
+                    AttentionAnchor::Head(_) => "head",
+                    AttentionAnchor::Middle(_) => "middle",
+                    AttentionAnchor::Tail(_) => "tail",
+                })
+                .unwrap_or("unknown")
+                .to_string();
+            let message_count: usize = blocks.iter().map(|b| b.messages.len()).sum();
+            infos.push(ContributorInfo {
+                name: contributor.name().to_string(),
+                anchor_zone,
+                estimated_tokens: contributor.estimate_size(),
+                message_count,
+            });
+        }
+        Ok(infos)
+    }
+
+    /// Get full message snapshot from a named contributor.
+    pub async fn snapshot_by_name(&self, name: &str) -> Result<Vec<ContextMessage>, ContextError> {
+        for contributor in &self.contributors {
+            if contributor.name() == name {
+                let blocks = contributor.contribute().await?;
+                let messages: Vec<ContextMessage> = blocks
+                    .into_iter()
+                    .flat_map(|b| b.messages)
+                    .map(|msg| {
+                        let role = match msg.role {
+                            MessageRole::System => "system",
+                            MessageRole::User => "user",
+                            MessageRole::Assistant => "assistant",
+                            MessageRole::Tool => "tool",
+                        }
+                        .to_string();
+                        let content = msg
+                            .content
+                            .as_ref()
+                            .map(|c| c.as_str().to_string())
+                            .unwrap_or_default();
+                        ContextMessage { role, content }
+                    })
+                    .collect();
+                return Ok(messages);
+            }
+        }
+        Err(ContextError::ContributorError(
+            name.to_string(),
+            "contributor not found".to_string(),
+        ))
     }
 
     /// Build the context: collect blocks, check budget, compress if needed, produce messages.
