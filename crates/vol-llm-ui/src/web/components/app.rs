@@ -154,9 +154,7 @@ pub fn App() -> Element {
                     let mut g = global_conn.write_unchecked();
                     g.ws_connected = true;
                     g.ws_last_error = None;
-                    // Reset running state on reconnect — in-flight run's events are lost.
-                    g.is_running = false;
-                    g.run_start = None;
+                    // Keep is_running — agent.status will determine actual state.
                     // Clear reconnect state
                     g.reconnecting = false;
                     g.reconnect_attempts = 0;

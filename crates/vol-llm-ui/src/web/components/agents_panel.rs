@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::state::{AgentsState, AgentSubTab, ConversationState, UiEventKind};
+use crate::state::{AgentsState, AgentSubTab, ConversationEntry, ConversationState, GlobalState, UiEventKind};
 
 use super::conversation::ConversationView;
 use super::input_area::InputArea;
@@ -55,11 +55,53 @@ fn SubTabButton(label: String, active: bool, onclick: EventHandler<()>) -> Eleme
     rsx! { button { class: "{cls}", onclick: move |_| onclick.call(()), "{label}" } }
 }
 
+fn load_running_session(
+    client: &crate::web::client::JsonRpcClient,
+    agent_id: &str,
+    conv: Signal<ConversationState>,
+    run_id: &str,
+) {
+    let c = client.clone();
+    let agent = agent_id.to_string();
+    let rid = run_id.to_string();
+
+    wasm_bindgen_futures::spawn_local(async move {
+        let (tx, rx) = futures_channel::oneshot::channel();
+        c.session_list(Some(&agent), move |result| {
+            let _ = tx.send(result);
+        });
+        let sessions = match rx.await {
+            Ok(Ok(s)) => s,
+            _ => { log::warn!("Failed to list sessions for {}", agent); return; }
+        };
+        if sessions.is_empty() { return; }
+        let latest_id = sessions[0].id.clone();
+
+        let (tx2, rx2) = futures_channel::oneshot::channel();
+        c.session_entries(&latest_id, move |result| {
+            let _ = tx2.send(result);
+        });
+        let entries = match rx2.await {
+            Ok(Ok(e)) => e,
+            _ => { log::warn!("Failed to fetch session entries for {}", agent); return; }
+        };
+
+        let conv_entries = crate::web::components::sessions_panel::session_entries_to_conversation(entries);
+        let mut banner_entries = vec![ConversationEntry::RunningBanner { run_id: rid }];
+        banner_entries.extend(conv_entries);
+
+        let mut cs = conv.write_unchecked();
+        let ac = cs.get_or_create(&agent);
+        ac.entries = banner_entries;
+    });
+}
+
 #[component]
 pub fn AgentsPanel() -> Element {
     let app: crate::web::components::app::AppState = use_context();
     let agents_signal: Signal<AgentsState> = use_context();
     let conv_signal: Signal<ConversationState> = use_context();
+    let global: Signal<GlobalState> = use_context();
 
     // Load agents helper
     let rpc_load = app.rpc_client.clone();
@@ -197,17 +239,41 @@ pub fn AgentsPanel() -> Element {
                             let mut conv_sig = conv_signal;
                             let agent_id = agent.id.clone();
                             let is_selected = selected.as_ref() == Some(&agent.id);
+                            let client = app.rpc_client.clone();
+                            let global_check = global;
                             move |_: ()| {
+                                let was_selected = is_selected;
                                 sig.with_mut(|s| {
-                                    if is_selected { s.selected = None; }
+                                    if was_selected { s.selected = None; }
                                     else {
                                         s.selected = Some(agent_id.clone());
                                         s.sub_tab = AgentSubTab::Conversation;
                                     }
                                 });
                                 conv_sig.with_mut(|cs| {
-                                    cs.set_active(if is_selected { None } else { Some(agent_id.clone()) });
+                                    cs.set_active(if was_selected { None } else { Some(agent_id.clone()) });
                                 });
+
+                                if !was_selected {
+                                    let c = client.clone();
+                                    let a = agent_id.clone();
+                                    let conv = conv_sig;
+                                    let g = global_check;
+                                    wasm_bindgen_futures::spawn_local(async move {
+                                        let (tx, rx) = futures_channel::oneshot::channel();
+                                        c.agent_status(&a, move |result| {
+                                            let _ = tx.send(result);
+                                        });
+                                        let status_result = rx.await;
+                                        if let Ok(Ok((status, Some(run_id)))) = status_result {
+                                            if status == "running" {
+                                                log::info!("Agent {} is running (run_id: {}) — loading session", a, run_id);
+                                                load_running_session(&c, &a, conv, &run_id);
+                                                g.write_unchecked().is_running = true;
+                                            }
+                                        }
+                                    });
+                                }
                             }
                         },
                     }
