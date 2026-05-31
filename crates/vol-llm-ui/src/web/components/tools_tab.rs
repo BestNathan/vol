@@ -173,37 +173,78 @@ pub fn ToolsTabContent() -> Element {
                     if let Some(ref e) = error {
                         div { class: "text-[12px] text-[#c04040] px-2 break-words", "Error: {e}" }
                     }
-                    for tool in &tools {
-                        div { class: "border-b border-[#2a2a44] py-1 px-2",
-                            div { class: "flex items-center justify-between",
-                                div {
-                                    span { class: "text-[13px] font-semibold text-[#e0e0e0]", "{tool.name}" }
-                                    if let Some(ref desc) = tool.description {
-                                        span { class: "text-[12px] text-[#888] ml-2", " - {desc}" }
+                    // Mobile: tool cards
+                    div { class: "sm:hidden flex flex-col gap-2 mb-2",
+                        for tool in &tools {
+                            div { class: "rounded-lg border border-[#333355] bg-[#20203a] p-3",
+                                div { class: "flex items-center justify-between",
+                                    div { class: "min-w-0",
+                                        div { class: "truncate text-[14px] font-bold text-[#e0e0e0]", "{tool.name}" }
+                                        if let Some(ref desc) = tool.description {
+                                            div { class: "mt-0.5 text-[11px] text-[#777] truncate", "{desc}" }
+                                        }
+                                    }
+                                    button {
+                                        class: "px-2 py-0.5 text-[11px] bg-[#4080ff] text-white rounded hover:bg-[#5090ff] flex-shrink-0 ml-2",
+                                        onclick: {
+                                            let client = client.clone();
+                                            let ts = tool_state;
+                                            let name = tool.name.clone();
+                                            move |_| {
+                                                let args_val = serde_json::json!({});
+                                                let ts = ts;
+                                                client.tool_call(&name, &args_val, move |result| {
+                                                    safe_write(ts, |s| {
+                                                        match result {
+                                                            Ok(val) => s.call_result = Some(
+                                                                serde_json::to_string_pretty(&val).unwrap_or_else(|_| val.to_string())
+                                                            ),
+                                                            Err(e) => s.call_result = Some(format!("Error: {e}")),
+                                                        }
+                                                    });
+                                                });
+                                            }
+                                        },
+                                        "Run"
                                     }
                                 }
-                                button {
-                                    class: "px-1.5 py-0.5 text-[11px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#5a5a75]",
-                                    onclick: {
-                                        let client = client.clone();
-                                        let ts = tool_state;
-                                        let name = tool.name.clone();
-                                        move |_| {
-                                            let args_val = serde_json::json!({});
-                                            let ts = ts;
-                                            client.tool_call(&name, &args_val, move |result| {
-                                                safe_write(ts, |s| {
-                                                    match result {
-                                                        Ok(val) => s.call_result = Some(
-                                                            serde_json::to_string_pretty(&val).unwrap_or_else(|_| val.to_string())
-                                                        ),
-                                                        Err(e) => s.call_result = Some(format!("Error: {e}")),
-                                                    }
-                                                });
-                                            });
+                            }
+                        }
+                    }
+                    // Desktop: tool rows
+                    div { class: "hidden sm:block",
+                        for tool in &tools {
+                            div { class: "border-b border-[#2a2a44] py-1 px-2",
+                                div { class: "flex items-center justify-between",
+                                    div {
+                                        span { class: "text-[13px] font-semibold text-[#e0e0e0]", "{tool.name}" }
+                                        if let Some(ref desc) = tool.description {
+                                            span { class: "text-[12px] text-[#888] ml-2", " - {desc}" }
                                         }
-                                    },
-                                    "Run"
+                                    }
+                                    button {
+                                        class: "px-1.5 py-0.5 text-[11px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#5a5a75]",
+                                        onclick: {
+                                            let client = client.clone();
+                                            let ts = tool_state;
+                                            let name = tool.name.clone();
+                                            move |_| {
+                                                let args_val = serde_json::json!({});
+                                                let ts = ts;
+                                                client.tool_call(&name, &args_val, move |result| {
+                                                    safe_write(ts, |s| {
+                                                        match result {
+                                                            Ok(val) => s.call_result = Some(
+                                                                serde_json::to_string_pretty(&val).unwrap_or_else(|_| val.to_string())
+                                                            ),
+                                                            Err(e) => s.call_result = Some(format!("Error: {e}")),
+                                                        }
+                                                    });
+                                                });
+                                            }
+                                        },
+                                        "Run"
+                                    }
                                 }
                             }
                         }
@@ -236,7 +277,17 @@ pub fn ToolsTabContent() -> Element {
                 }
             } else {
                 div { class: "px-2.5 pt-1 pb-2 text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]", "Call History ({call_count})" }
-                {call_items.into_iter()}
+                // Mobile: history cards
+                div { class: "sm:hidden flex flex-col gap-2",
+                    {(0..call_count).map(|idx| {
+                        let s = call_signal.clone();
+                        rsx! { ToolCallHistoryCard { signal: s, index: idx } }
+                    }).collect::<Vec<Element>>().into_iter()}
+                }
+                // Desktop: history rows
+                div { class: "hidden sm:block",
+                    {call_items.into_iter()}
+                }
             }
         }
     }
@@ -278,6 +329,47 @@ fn ToolCallItem(signal: Signal<ToolState>, index: usize) -> Element {
                         span { class: "text-[#6090ff] font-semibold font-sans", "Input: " }
                         "{arg}"
                     }
+                }
+            }
+        }
+    }
+}
+
+/// Mobile card for tool call history (sm:hidden).
+#[component]
+fn ToolCallHistoryCard(signal: Signal<ToolState>, index: usize) -> Element {
+    let is_expanded = signal.read().expanded.contains(&index);
+    let (seq, name, arg, status, dur) = {
+        let ui = signal.read();
+        match ui.calls.get(index) {
+            Some(e) => (e.sequence, e.tool_name.clone(), e.arg_preview.clone(), e.status.clone(), e.duration_ms),
+            None => return rsx! {},
+        }
+    };
+    let scls = match status { ToolCallStatus::Running => "text-[#c0c040]", ToolCallStatus::Success => "text-[#40c040]", ToolCallStatus::Error => "text-[#c04040]", ToolCallStatus::Skipped => "text-[#888]" };
+    let label = match status { ToolCallStatus::Running => "...", ToolCallStatus::Success => "OK", ToolCallStatus::Error => "ERR", ToolCallStatus::Skipped => "SKIP" };
+    let dur_s = dur.map(|ms| format!("{ms}ms")).unwrap_or_default();
+    rsx! {
+        div {
+            class: "cursor-pointer rounded-lg border border-[#333355] bg-[#20203a] p-3 active:bg-[#2a2a44]",
+            onclick: move |_: Event<MouseData>| {
+                let mut state = signal.write_unchecked();
+                if state.expanded.contains(&index) {
+                    state.expanded.remove(&index);
+                } else {
+                    state.expanded.insert(index);
+                }
+            },
+            div { class: "flex items-center gap-2",
+                span { class: "text-[#555] text-[11px]", "{seq}." }
+                span { class: "font-semibold text-[13px] text-[#e0e0e0] truncate", "[{name}]" }
+                span { class: "text-[11px] px-1.5 py-0.5 rounded-[3px] {scls}", "{label}" }
+                if !dur_s.is_empty() { span { class: "text-[11px] text-[#666] ml-auto", "{dur_s}" } }
+            }
+            if is_expanded {
+                div { class: "mt-2 pt-2 border-t border-[#2a2a44] text-[12px] font-mono text-[#888] whitespace-pre-wrap break-all",
+                    span { class: "text-[#6090ff] font-semibold font-sans", "Input: " }
+                    "{arg}"
                 }
             }
         }
