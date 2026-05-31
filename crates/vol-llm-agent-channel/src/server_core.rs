@@ -19,7 +19,7 @@ use vol_llm_core::LLMClient;
 use vol_llm_mcp::McpConfig;
 use vol_llm_mcp::McpManager;
 use vol_llm_provider::{create_provider, ProviderLoader};
-use vol_llm_skill::{SkillLoader, SkillTool};
+use vol_llm_skill::SkillLoader;
 use vol_llm_tool::ToolRegistry;
 use vol_llm_runtime::AgentRuntime;
 use vol_session::file_store::FileSessionEntryStore;
@@ -324,12 +324,8 @@ impl AgentServerCoreBuilder {
         let agent_defs = runtime.agent_defs.clone();
         let agent_status = runtime.agent_status.clone();
 
-        // Register SkillTool on the shared tool registry (mirrors AgentConfigBuilder behavior)
-        let tool_registry = {
-            let mut registry = (*runtime.tool_registry).clone();
-            registry.register(SkillTool::new(skill_loader.clone()));
-            Arc::new(registry)
-        };
+        // Tool registry already includes SkillTool from AgentRuntime
+        let tool_registry = runtime.tool_registry.clone();
 
         // Derive LLM — try each configured provider, skip ones that fail auth.
         // This avoids crashing when a provider's env var isn't set (e.g. OPENAI_API_KEY)

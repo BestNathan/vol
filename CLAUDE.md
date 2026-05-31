@@ -43,6 +43,20 @@ git-fetch-with-cli = true
 
 This repository is a Rust Cargo workspace for Deribit volatility monitoring and LLM agent tooling. The original monitoring pipeline is event-driven: configuration feeds data sources, data sources publish through the event bus, alert handlers evaluate market conditions, and notification handlers deliver alerts.
 
+### AgentRuntime — Single Source of Truth
+
+`vol-llm-runtime` (`AgentRuntime`) is the **authoritative owner** of all shared agent resources. It is the single place where tools, skills, MCP, and providers are assembled. `AgentServerCore` wraps it for transport — it does NOT patch or extend the resource set.
+
+**Tool registration rules:**
+
+| Location | Role | Should register tools? |
+|----------|------|------------------------|
+| `AgentRuntimeBuilder::build()` | **Primary** — all tools registered here | YES — builtin, task, web, **skill**, and future tools |
+| `AgentServerCoreBuilder::build()` | Transport wrapper — inherits runtime's registry as-is | NO — must not clone/patch the registry |
+| `AgentConfigBuilder::build()` | Standalone path (TUI, tests) — mirrors the same set | YES — but only for callers that bypass Runtime |
+
+When adding a new tool or resource that should be available to all agents, register it in `AgentRuntimeBuilder::build()` (`crates/vol-llm-runtime/src/lib.rs`). The `AgentServerCore` path will pick it up automatically.
+
 ### Main Directories
 
 | Path | Purpose |

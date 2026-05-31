@@ -14,7 +14,7 @@ use vol_llm_agent::ReActAgent;
 use vol_llm_agent::AgentLoader;
 use vol_llm_mcp::{McpConfig, McpManager};
 use vol_llm_provider::{create_provider, ProviderLoader};
-use vol_llm_skill::SkillLoader;
+use vol_llm_skill::{SkillLoader, SkillTool};
 use vol_llm_task::FileTaskStore;
 use vol_llm_task::TaskStore;
 use vol_llm_tool::ToolRegistry;
@@ -263,6 +263,7 @@ impl AgentRuntimeBuilder {
         vol_llm_task::tools::register_all(&mut tool_registry, task_store.clone());
         let tool_config = vol_llm_tool::ToolConfig::default();
         vol_llm_tools_builtin::register_web_all(&mut tool_registry, &tool_config);
+        tool_registry.register(SkillTool::new(skill_loader.clone()));
         let tool_registry = Arc::new(tool_registry);
 
         Ok(AgentRuntime {

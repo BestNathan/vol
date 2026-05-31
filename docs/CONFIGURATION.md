@@ -1,367 +1,398 @@
-# Vol Monitor Configuration Guide
+# Configuration & Environment Variables
 
 ## Overview
 
-This project uses environment-specific configuration files with sensitive credentials managed separately:
+The project uses TOML config files for application settings and a `.env` file for secrets. Config presets target different environments and two subsystems:
 
-| File | Purpose | Contains Sensitive Data |
-|------|---------|------------------------|
-| `config.dev.toml` | Local development | No (uses placeholders) |
-| `config.prod.toml` | Production | No (uses env vars) |
-| `config.toml` | Default (symlink) | No |
-| `.env` | Local environment | **Yes** (gitignored) |
-| `k8s/secrets.yaml` | K8s credentials | **Yes** (encrypted in production) |
-| `k8s/configmap.yaml` | K8s non-sensitive config | No |
+| File | Purpose | Sensitive Data |
+|------|---------|---------------|
+| `.env.example` | Template for local secrets | Placeholders |
+| `.env` | Local secrets (gitignored) | **Yes** |
+| `config.toml` | Default / K8s ConfigMap | No |
+| `config.dev.toml` | Local development | No |
+| `config.prod.toml` | Production | No |
+| `config.agent-test.toml` | Agent advice testing | No |
+| `config.feishu-test.toml` | Feishu notification testing | No |
+| `config.toml.example` | Legacy example (v0.3.x format) | Placeholders |
 
-## Quick Start
+**Quick Start**
 
-### Local Development
+```bash
+cp .env.example .env       # edit with your credentials
+source .env
+cargo run --release -p vol-monitor -- --config config.dev.toml
+```
 
-1. **Setup environment:**
-   ```bash
-   # Copy the template
-   cp .env.example .env
+---
 
-   # Edit .env with your credentials
-   vim .env
-   ```
+## Subsystem A — Volatility Monitoring Pipeline
 
-2. **Run in development mode:**
-   ```bash
-   # Using the helper script
-   ./scripts/run-dev.sh dev
+Configuration for the Deribit market data pipeline: WebSocket connection, tenor definitions, alert rules, notifications, tracing.
 
-   # Or manually
-   source .env
-   cargo run --release -- --config config.dev.toml
-   ```
+### A.1 Environment Variables
 
-3. **Run with production config locally (for testing):**
-   ```bash
-   ./scripts/run-dev.sh prod
-   ```
+All secrets are injected via environment variables. Copy `.env.example` to `.env` and fill in:
 
-### Kubernetes Deployment
-
-1. **Create secrets (one-time setup):**
-   ```bash
-   # Create namespace if it doesn't exist
-   kubectl create namespace deribit
-
-   # Create secrets with actual values
-   kubectl create secret generic vol-monitor-secrets \
-     --from-literal=deribit-client-id=<your-client-id> \
-     --from-literal=deribit-client-secret=<your-client-secret> \
-     --from-literal=feishu-app-id=<your-app-id> \
-     --from-literal=feishu-app-secret=<your-app-secret> \
-     --from-literal=feishu-receive-id=<your-receive-id> \
-     -n deribit
-   ```
-
-2. **Deploy ConfigMap:**
-   ```bash
-   kubectl apply -f k8s/configmap.yaml
-   ```
-
-3. **Deploy application:**
-   ```bash
-   # One-click deploy
-   ./k8s/deploy.sh latest
-
-   # Or manual
-   kubectl apply -f k8s/deployment.yaml
-   ```
-
-## Configuration Files
-
-### config.dev.toml
-
-Development configuration with:
-- Shorter cooldown periods for testing
-- Relaxed alert thresholds
-- Feishu notifications disabled by default
-- Human-readable log format
-- OpenTelemetry disabled by default
-- Local log output (`./logs`)
-
-### config.prod.toml
-
-Production configuration with:
-- Standard cooldown periods
-- Strict alert thresholds
-- All notifications enabled
-- JSON log format
-- OpenTelemetry enabled
-- Centralized logging (`/var/log/vol-monitor`)
-
-## Environment Variables
-
-### Required for Deribit Integration
+#### Deribit API
 
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `DERIBIT_CLIENT_ID` | Deribit API client ID | `nhXng7Bj` |
 | `DERIBIT_CLIENT_SECRET` | Deribit API client secret | `OxCGY...` |
-| `DERIBIT_WS_URL` | WebSocket URL | `wss://www.deribit.com/ws/api/v2` |
+| `DERIBIT_WS_URL` | WebSocket endpoint | `wss://www.deribit.com/ws/api/v2` |
 
-### Required for Feishu Notifications
+For testnet use `wss://test.deribit.com/ws/api/v2`.
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `FEISHU_APP_ID` | Feishu app ID | `cli_a936b...` |
-| `FEISHU_APP_SECRET` | Feishu app secret | `JnWnF...` |
-| `FEISHU_RECEIVE_ID` | Message recipient ID | `oc_c2920...` |
+#### Feishu / Lark Notifications
 
-### Optional Configuration
+| Variable | Description |
+|----------|-------------|
+| `FEISHU_APP_ID` | Feishu app ID |
+| `FEISHU_APP_SECRET` | Feishu app secret |
+| `FEISHU_RECEIVE_ID` | Message recipient (chat_id, open_id, or user_id) |
+
+#### Proxy (required in China)
+
+| Variable | Description |
+|----------|-------------|
+| `HTTPS_PROXY` | Proxy for HTTPS requests (e.g. `http://192.168.2.98:8890`) |
+| `HTTP_PROXY` | Proxy for HTTP requests |
+| `NO_PROXY` | Bypass list: `localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8` |
+
+#### Logging & Tracing
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `HTTPS_PROXY` | HTTP proxy for API calls | - |
 | `RUST_LOG` | Log level filter | `info` |
-| `OTEL_ENDPOINT` | Jaeger/OTLP endpoint | `http://localhost:4317` |
-| `OTEL_SERVICE_NAME` | Service name for tracing | `vol-monitor` |
+| `OTEL_ENDPOINT` | OTLP collector endpoint | `http://localhost:4317` |
+| `OTEL_SERVICE_NAME` | Service name in traces | `vol-monitor-dev` |
+| `OTEL_SERVICE_NAMESPACE` | Namespace in traces | `deribit-dev` |
+| `OTEL_DEPLOYMENT_ENVIRONMENT` | Environment tag | `development` |
+| `OTEL_SAMPLE_RATE` | Sampling rate (0.0–1.0) | `1.0` |
 
-## Security Considerations
+#### App Config
 
-### Sensitive Data Handling
+| Variable | Description |
+|----------|-------------|
+| `VOL_MONITOR_CONFIG` | Path to TOML config file (e.g. `./config.dev.toml`) |
 
-1. **Never commit `.env` files to git** - Already in `.gitignore`
-2. **Use Kubernetes Secrets** - Not ConfigMaps for credentials
-3. **Consider sealed-secrets or external-secrets** - For production K8s clusters
-4. **Rotate credentials regularly** - Especially after team changes
+### A.2 TOML Config Sections
 
-### Git Safety
+The config file is selected at runtime (via `VOL_MONITOR_CONFIG` or `--config`). Available config presets:
 
-```bash
-# Verify .env is ignored
-git check-ignore .env
+#### `config.dev.toml` — Local Development
 
-# If .env was accidentally committed:
-git rm --cached .env
-echo ".env" >> .gitignore
-git commit -m "chore: remove .env from tracking"
+- **Shorter cooldowns** (60s global, 120s/300s/600s per tenor) for rapid feedback
+- **Relaxed thresholds** (BTC short IV: 0.80) so you can see alerts without extreme market moves
+- **Feishu disabled** — only stdout notifications
+- **Human-readable logs**, console level `debug`
+- **OTEL disabled**
+- Logs written to `./logs/`, 3 day retention
+
+#### `config.prod.toml` — Production
+
+- **Standard cooldowns** (300s global, 600s/3600s/14400s per tenor)
+- **Strict thresholds** (BTC short IV: 0.55)
+- **All notifications enabled** (Feishu + stdout)
+- **JSON logs**, console level `info`
+- **OTEL enabled** → exports to Jaeger at `jaeger-collector.observability.svc.cluster.local:4317`
+- Logs written to `/var/log/vol-monitor/`, 7 day retention, 100MB rotation
+
+### A.3 Config Reference
+
+#### `[engine]`
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `hot_reload` | bool | Watch config file for changes |
+| `hot_reload_interval_secs` | int | Config reload check interval |
+| `channel_buffer_size` | int | Event bus channel capacity |
+| `alert_cooldown_secs` | int | Global minimum seconds between same-type alerts |
+
+#### `[engine.tenor_cooldowns]`
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `short_secs` | int | Cooldown for short-tenor alerts |
+| `medium_secs` | int | Cooldown for medium-tenor alerts |
+| `long_secs` | int | Cooldown for long-tenor alerts |
+
+#### `[tenors]`
+
+DTE (Days to Expiry) bucketing:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `short_max_dte` | int | Short tenor max DTE (default 7) |
+| `medium_min_dte` | int | Medium tenor min DTE (default 20) |
+| `medium_max_dte` | int | Medium tenor max DTE (default 40) |
+| `long_min_dte` | int | Long tenor min DTE (default 80) |
+| `long_max_dte` | int | Long tenor max DTE (default 200) |
+
+#### `[clients.deribit]`
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `ws_url` | string | Deribit WebSocket URL. Credentials from `DERIBIT_CLIENT_ID` / `DERIBIT_CLIENT_SECRET` env vars. |
+
+#### `[[datasources]]` (array)
+
+Each entry defines one data feed:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `id` | string | Unique identifier |
+| `type` | string | `"volatility"` or `"portfolio"` |
+| `symbols` | []string | For volatility: `["BTC", "ETH"]` |
+| `currencies` | []string | For portfolio: `["BTC", "ETH"]` |
+| `poll_interval_secs` | int | Poll interval (portfolio only) |
+
+#### `[[rules]]` (array)
+
+Each entry defines one alert rule. Common fields:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `id` | string | Unique rule identifier |
+| `type` | string | Rule type (see below) |
+| `enabled` | bool | Enable/disable this rule |
+| `notifications` | []string | Notification IDs to route alerts to |
+
+**Rule types:**
+
+`absolute-iv` — Trigger when IV exceeds a threshold:
+| Key | Type |
+|-----|------|
+| `symbol` | string |
+| `short_threshold` / `medium_threshold` / `long_threshold` | float |
+| `short_atm_threshold` / `medium_atm_threshold` / `long_atm_threshold` | float |
+| `dte_atm_thresholds` | map (DTE → threshold) |
+
+`rate-change` — Trigger on IV change over time windows:
+| Key | Type |
+|-----|------|
+| `symbol` | string |
+| `window_1h_threshold` / `window_4h_threshold` / `window_24h_threshold` | float |
+
+`term-structure` — Trigger on spread anomalies:
+| Key | Type |
+|-----|------|
+| `short_long_spread_threshold` | float |
+
+`skew` — Trigger on put/call skew divergence:
+| Key | Type |
+|-----|------|
+| `symbol` | string |
+| `threshold` | float |
+
+`margin-ratio` — Trigger on portfolio margin ratio:
+| Key | Type |
+|-----|------|
+| `datasources` | []string |
+| `min_threshold` | float |
+
+`portfolio` — Trigger on Greek/balance metrics:
+```toml
+metrics = [
+    { type = "delta_exposure", enabled = true, min_threshold = -100.0, max_threshold = 100.0 },
+    { type = "total_greeks", enabled = true, gamma_threshold = 50.0, vega_threshold = 200.0, theta_threshold = 100.0 },
+    { type = "free_balance", enabled = true, min_threshold = 0.5 },
+    { type = "margin_ratio", enabled = true, min_threshold = 1.25 },
+]
 ```
 
-## Configuration Differences
+#### `[[notifications]]` (array)
 
-### Cooldown Periods
+| Key | Type | Description |
+|-----|------|-------------|
+| `id` | string | Unique ID (referenced by rules) |
+| `type` | string | `"stdout"` or `"feishu"` |
+| `enabled` | bool | Enable/disable this channel |
+
+Feishu credentials are read from env vars: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`, `FEISHU_RECEIVE_ID`.
+
+#### `[tracing]`
+
+```toml
+[tracing.logging]
+log_dir = "./logs"
+log_prefix = "vol-monitor-dev"
+retention_days = 3
+max_file_size_mb = 100
+json_format = false
+console_level = "debug"
+file_level = "debug"
+error_file = true
+
+[tracing.opentelemetry]
+enabled = false
+endpoint = "http://localhost:4317"
+service_name = "vol-monitor-dev"
+service_namespace = "deribit-dev"
+deployment_environment = "development"
+sample_rate = 1.0
+
+[tracing.opentelemetry.batch]
+max_queue_size = 512
+max_batch_size = 128
+scheduled_delay_millis = 1000
+max_export_timeout_millis = 5000
+```
+
+### A.4 Dev vs Prod Summary
 
 | Setting | Dev | Prod |
 |---------|-----|------|
 | Global cooldown | 60s | 300s |
-| Short tenor | 120s | 600s |
-| Medium tenor | 300s | 3600s |
-| Long tenor | 600s | 14400s |
-
-### Alert Thresholds (BTC Absolute IV)
-
-| Setting | Dev | Prod |
-|---------|-----|------|
-| Short threshold | 0.80 | 0.55 |
-| Medium threshold | 0.75 | 0.53 |
-| Long threshold | 0.70 | 0.51 |
-
-### Logging
-
-| Setting | Dev | Prod |
-|---------|-----|------|
+| Short tenor cooldown | 120s | 600s |
+| Medium tenor cooldown | 300s | 3600s |
+| Long tenor cooldown | 600s | 14400s |
+| BTC short IV threshold | 0.80 | 0.55 |
+| BTC medium IV threshold | 0.75 | 0.53 |
+| BTC long IV threshold | 0.70 | 0.51 |
 | Log directory | `./logs` | `/var/log/vol-monitor` |
-| Log format | Human-readable | JSON |
+| Log format | text | JSON |
 | Console level | debug | info |
 | Retention | 3 days | 7 days |
+| OTEL | disabled | enabled |
+| Feishu | disabled | enabled |
 
-## Troubleshooting
+---
 
-### "Config file not found"
+## Subsystem B — LLM Agent Framework
 
-Ensure you're running from the project root:
-```bash
-pwd  # Should be /root/nq-deribit
-```
+Configuration for LLM providers, ReAct agents, MCP servers, skills, and the Agent Advice bridge.
 
-### "Missing credentials"
+### B.1 LLM Provider Environment Variables
 
-Check environment variables are loaded:
-```bash
-# For local dev
-source .env
-echo $DERIBIT_CLIENT_ID
+| Variable | Description |
+|----------|-------------|
+| `ANTHROPIC_AUTH_TOKEN` | Anthropic API key (or DashScope proxy token) |
+| `OPENAI_API_KEY` | OpenAI API key |
 
-# For K8s, check secret exists
-kubectl get secret vol-monitor-secrets -n deribit
-```
+### B.2 `[[llm_providers]]` — Provider Definitions
 
-### "Proxy connection failed"
+Define one or more LLM providers in the TOML config. The `api_key` field supports three formats:
 
-Update proxy settings:
-```bash
-# In .env for local dev
-HTTPS_PROXY="http://your-proxy:port"
-
-# In k8s/deployment.yaml for production
-env:
-- name: HTTPS_PROXY
-  value: "http://your-proxy:port"
-```
-
-## Migration from v0.3.x
-
-If migrating from the old single-file config:
-
-1. **Backup existing config:**
-   ```bash
-   cp config.toml config.toml.backup
-   ```
-
-2. **Extract sensitive values:**
-   ```bash
-   # From old config.toml, copy:
-   # - clients.deribit.client_id
-   # - clients.deribit.client_secret
-   # - notifications[].app_id, app_secret, receive_id
-   ```
-
-3. **Update to new format:**
-   ```bash
-   # Use config.prod.toml as base
-   # Set credentials via environment variables or K8s Secrets
-   ```
-
-4. **Update deployment:**
-   ```bash
-   # Recreate ConfigMap without secrets
-   kubectl apply -f k8s/configmap.yaml
-
-   # Create Secrets
-   kubectl create secret generic vol-monitor-secrets ...
-
-   # Restart deployment
-   kubectl rollout restart deployment/vol-monitor
-   ```
-
-## LLM Configuration
-
-### Overview
-
-The Agent Advice system uses LLM providers to generate analysis and recommendations for alerts. Multiple providers can be configured for failover or different use cases.
-
-### Secret Value Format
-
-The `api_key` field supports flexible value formats:
-
-| Format | Example | Description |
-|--------|---------|-------------|
-| Literal | `"sk-xxx-key"` | Direct API key value |
-| Env Var | `"${API_KEY}"` | Read from environment variable |
-| Env + Default | `"${API_KEY:sk-fallback}"` | Env var with fallback value |
-
-### Configuring LLM Providers
-
-Add provider configurations to your `config.toml`:
+| Format | Example | Behavior |
+|--------|---------|----------|
+| Literal | `"sk-abc123"` | Use the value directly |
+| Env var | `"${ANTHROPIC_AUTH_TOKEN}"` | Read from environment variable |
+| Env + fallback | `"${OPENAI_API_KEY:sk-default}"` | Use env var, fall back to literal if unset |
 
 ```toml
-# Single provider with environment variable
+# Anthropic via DashScope proxy
 [[llm_providers]]
 id = "anthropic-main"
 provider = "anthropic"
 model = "claude-sonnet-4-6"
 api_key = "${ANTHROPIC_AUTH_TOKEN}"
 base_url = "https://coding.dashscope.aliyuncs.com/apps/anthropic"
-```
 
-### Multiple Providers
-
-Configure multiple providers for failover or different models:
-
-```toml
-# Primary provider
+# Local model service
 [[llm_providers]]
-id = "anthropic-primary"
-provider = "anthropic"
-model = "claude-sonnet-4-6"
-api_key = "${ANTHROPIC_AUTH_TOKEN}"
-base_url = "https://coding.dashscope.aliyuncs.com/apps/anthropic"
-
-# Backup provider
-[[llm_providers]]
-id = "openai-backup"
+id = "qwen-local"
 provider = "openai"
-model = "gpt-4o"
-api_key = "${OPENAI_API_KEY:sk-fallback-key}"
-base_url = "https://api.openai.com/v1"
+model = "qwen3.6-plus"
+api_key = "not-needed"
+base_url = "http://192.168.2.162:31693/v1"
 ```
 
-### Agent Advice Configuration
+| Key | Type | Description |
+|-----|------|-------------|
+| `id` | string | Unique ID referenced by `[agent_advice]` and agents |
+| `provider` | string | `"anthropic"` or `"openai"` |
+| `model` | string | Model name |
+| `api_key` | string | API key (literal or `${ENV_VAR}`) |
+| `base_url` | string | API base URL |
 
-Configure the Agent Advice system to use a specific provider:
+### B.3 `[agent_advice]` — Agent Advice Bridge
+
+Connects the monitoring pipeline to LLM analysis. When an alert fires, the Agent Advice system uses a ReAct agent to analyze it and sends AI-generated recommendations via Feishu.
 
 ```toml
 [agent_advice]
 enabled = true
-cooldown_secs = 300  # 5 minutes between analyses
+cooldown_secs = 300
 max_analyses_per_hour = 20
-llm_provider_id = "anthropic-main"  # Must match a [[llm_providers]] id
+llm_provider_id = "anthropic-main"
 ```
 
-### Environment Variables
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Enable AI analysis of alerts |
+| `cooldown_secs` | int | `300` | Minimum seconds between analyses |
+| `max_analyses_per_hour` | int | `20` | Rate limit per rolling hour |
+| `llm_provider_id` | string | — | Must match a `[[llm_providers]]` id |
 
-Add LLM API keys to your `.env` file:
+Rate limiting uses both cooldown and hourly cap — both must be satisfied before an analysis proceeds.
+
+### B.4 Test Config Presets
+
+#### `config.agent-test.toml`
+
+For testing the Agent Advice integration:
+- **Very low thresholds** (BTC short IV: 0.10) — alerts fire constantly
+- **Short cooldowns** (30s global) — rapid analysis cycling
+- **stdout only** — no Feishu noise
+- **OTEL disabled**, debug-level console logs
+
+#### `config.feishu-test.toml`
+
+For testing end-to-end Feishu notification delivery:
+- Same low thresholds and short cooldowns as agent-test
+- **Feishu enabled** — validates notification pipeline
+- Requires valid `FEISHU_APP_ID` / `FEISHU_APP_SECRET` / `FEISHU_RECEIVE_ID`
+
+### B.5 Model Service
+
+The default model service runs at `http://192.168.2.162:31693` with these available models:
+
+| Model ID | Provider Type |
+|----------|---------------|
+| `gpt5.5` | openai-compatible |
+| `coding` | openai-compatible |
+| `qwen3.6-plus` | openai-compatible |
+| `glm5.1` | openai-compatible |
+
+Configure in `[[llm_providers]]` with `provider = "openai"` and the appropriate `base_url`.
+
+---
+
+## Kubernetes Deployment
+
+### Secrets
+
+Credentials are injected via K8s Secrets, not baked into the ConfigMap:
 
 ```bash
-# LLM API Keys
-ANTHROPIC_AUTH_TOKEN="sk-xxx-actual-key"
-OPENAI_API_KEY="sk-xxx-actual-key"
+kubectl create secret generic vol-monitor-secrets \
+  --from-literal=deribit-client-id=<id> \
+  --from-literal=deribit-client-secret=<secret> \
+  --from-literal=feishu-app-id=<app-id> \
+  --from-literal=feishu-app-secret=<app-secret> \
+  --from-literal=feishu-receive-id=<receive-id> \
+  -n deribit
 ```
 
-### Provider ID Reference
+### ConfigMap
 
-The `llm_provider_id` in `[agent_advice]` must match the `id` field of a `[[llm_providers]]` entry. If the provider is not found, the system will log a warning and Agent Advice will not be able to generate recommendations.
+The TOML config (without secrets) is deployed as a ConfigMap and mounted at `/etc/vol-monitor/config.toml`:
 
-### Example Configuration File
-
-See `config/llm.example.toml` for a complete example with comments.
-
-## Agent Advice Configuration
-
-The Agent Advice feature provides AI-powered analysis of alerts via Feishu.
-
-```toml
-[agent_advice]
-enabled = true              # Enable AI analysis
-cooldown_secs = 300         # Minimum seconds between analyses
-max_analyses_per_hour = 20  # Rate limit
-llm_provider_id = "anthropic-main"  # LLM provider to use
+```bash
+kubectl apply -f k8s/configmap.yaml
 ```
 
-### Configuration Options
+### Deploy
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable/disable AI analysis of alerts |
-| `cooldown_secs` | integer | `300` | Minimum seconds between consecutive analyses |
-| `max_analyses_per_hour` | integer | `20` | Maximum number of analyses per hour |
-| `llm_provider_id` | string | - | ID of the LLM provider to use (must match `[[llm_providers]]` entry) |
+```bash
+cd k8s && bash deploy.sh
+```
 
-### How It Works
+### Security Checklist
 
-When enabled, the system will:
-
-1. Subscribe to all alerts via broadcast channel
-2. Apply rate limiting to prevent API abuse
-3. Use ReAct Agent with tools to analyze alerts
-4. Send AI-generated advice via Feishu
-
-### Rate Limiting
-
-The rate limiting system uses two mechanisms:
-
-- **Cooldown**: Enforces a minimum delay between consecutive analyses
-- **Hourly limit**: Caps the total number of analyses per rolling hour
-
-Both limits must be satisfied for an analysis to proceed.
-
-### Provider ID Reference
-
-The `llm_provider_id` in `[agent_advice]` must match the `id` field of a `[[llm_providers]]` entry. If the provider is not found, the system will log a warning and Agent Advice will not be able to generate recommendations.
-
-See the [LLM Configuration](#llm-configuration) section above for provider configuration details.
+- [ ] `.env` is in `.gitignore`
+- [ ] No credentials in `config.toml` — only env var references
+- [ ] K8s Secrets used, not ConfigMap literals
+- [ ] Consider `sealed-secrets` or `external-secrets` for production
+- [ ] Rotate credentials after team changes
