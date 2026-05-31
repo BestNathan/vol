@@ -216,7 +216,7 @@ async fn test_run_interceptor_loop_continue_decision() {
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
-        AgentConfig::default(),
+        Arc::new(AgentConfig::default()),
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(ContinuePlugin)];
@@ -255,7 +255,7 @@ async fn test_run_interceptor_loop_skip_decision() {
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
-        AgentConfig::default(),
+        Arc::new(AgentConfig::default()),
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(SkipPlugin)];
@@ -281,7 +281,7 @@ async fn test_run_interceptor_loop_emit_request_preserves_trace_id() {
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
-        AgentConfig::default(),
+        Arc::new(AgentConfig::default()),
     );
     let mut event_rx = run_ctx.event_tx.as_ref().unwrap().subscribe();
 
@@ -359,7 +359,7 @@ async fn test_spawn_listener_tasks_shutdown_on_close() {
     let (mut run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
-        AgentConfig::default(),
+        Arc::new(AgentConfig::default()),
     );
 
     let count1 = Arc::new(AtomicUsize::new(0));
@@ -431,7 +431,7 @@ async fn test_listener_set_drains_and_exits_cleanly() {
     let (mut run_ctx, _rx) = RunContext::new(
         "shutdown-test".to_string(),
         "test input".to_string(),
-        AgentConfig::default(),
+        Arc::new(AgentConfig::default()),
     );
 
     let events1 = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -503,7 +503,7 @@ async fn test_listener_set_exits_with_no_events() {
     let (mut run_ctx, _rx) = RunContext::new(
         "empty-test".to_string(),
         "test".to_string(),
-        AgentConfig::default(),
+        Arc::new(AgentConfig::default()),
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![

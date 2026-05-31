@@ -53,7 +53,7 @@ pub struct RunContext {
     // Resource references
     pub session: Arc<Session>,
     pub tools: Arc<ToolRegistry>,
-    pub config: AgentConfig,
+    pub config: Arc<AgentConfig>,
 
     // Event bus
     pub event_tx: Option<Arc<broadcast::Sender<TracedEvent<AgentStreamEvent>>>>,
@@ -116,23 +116,25 @@ impl RunContext {
     pub fn new(
         run_id: String,
         user_input: String,
-        config: AgentConfig,
+        config: Arc<AgentConfig>,
     ) -> (Self, mpsc::Receiver<PluginRequest>) {
         let (event_tx, _) = broadcast::channel::<TracedEvent<AgentStreamEvent>>(1024);
         let event_tx = Arc::new(event_tx);
         let (plugin_event_tx, plugin_event_rx) = mpsc::channel(100);
 
+        let session = config.session.read().unwrap().clone();
+
         let ctx = Self {
             run_id,
             user_input,
-            session_id: config.session.id.clone(),
+            session_id: session.id.clone(),
             model: if config.llm.model().is_empty() { "unknown".to_string() } else { config.llm.model().to_string() },
             iteration: AtomicU32::new(0),
             all_tool_calls: Arc::new(RwLock::new(Vec::new())),
             current_tool_calls: Arc::new(RwLock::new(Vec::new())),
             data: Arc::new(RwLock::new(HashMap::new())),
-            session: config.session.clone(),
-            tools: config.tools.clone(),
+            session,
+            tools: Arc::clone(&config.tools),
             config,
             event_tx: Some(event_tx),
             plugin_event_tx: Some(Arc::new(plugin_event_tx)),
@@ -470,7 +472,7 @@ mod tests {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
-            AgentConfig::default(),
+            Arc::new(AgentConfig::default()),
         );
         ctx
     }
@@ -562,10 +564,10 @@ mod tests {
             )))
             .build();
 
-        let config = AgentConfig {
+        let config = Arc::new(AgentConfig {
             context_builder,
             ..Default::default()
-        };
+        });
 
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
@@ -605,11 +607,11 @@ mod tests {
         );
         session.add_message(history_msg).await.unwrap();
 
-        let config = AgentConfig {
+        let config = Arc::new(AgentConfig {
             context_builder,
-            session,
+            session: std::sync::RwLock::new(session),
             ..Default::default()
-        };
+        });
 
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
@@ -642,11 +644,11 @@ mod tests {
             Arc::new(InMemoryEntryStore::new()),
         ));
 
-        let config = AgentConfig {
+        let config = Arc::new(AgentConfig {
             context_builder,
-            session: session.clone(),
+            session: std::sync::RwLock::new(session.clone()),
             ..Default::default()
-        };
+        });
 
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
@@ -688,11 +690,11 @@ mod tests {
         let history_msg = SessionMessage::new(session.id.clone(), Message::user("History"));
         session.add_message(history_msg).await.unwrap();
 
-        let config = AgentConfig {
+        let config = Arc::new(AgentConfig {
             context_builder,
-            session,
+            session: std::sync::RwLock::new(session),
             ..Default::default()
-        };
+        });
 
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
@@ -716,7 +718,7 @@ mod tests {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
-            AgentConfig::default(),
+            Arc::new(AgentConfig::default()),
         );
 
         ctx.record_reasoning_step("First thought".to_string(), Some(100))
@@ -736,7 +738,7 @@ mod tests {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test".to_string(),
-            AgentConfig::default(),
+            Arc::new(AgentConfig::default()),
         );
 
         let record = ToolCallRecord {
@@ -758,7 +760,7 @@ mod tests {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test".to_string(),
-            AgentConfig::default(),
+            Arc::new(AgentConfig::default()),
         );
 
         ctx.set_final_content("Final answer".to_string()).await;
@@ -773,7 +775,7 @@ mod tests {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test".to_string(),
-            AgentConfig::default(),
+            Arc::new(AgentConfig::default()),
         );
 
         ctx.record_reasoning_step("thought".to_string(), None).await;

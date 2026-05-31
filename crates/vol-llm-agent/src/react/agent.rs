@@ -14,7 +14,9 @@ use vol_llm_tool::ToolContext;
 use vol_session::{InMemoryEntryStore, Session};
 
 /// Agent configuration — single source of truth for ReActAgent.
-#[derive(Clone)]
+///
+/// Clone is intentionally NOT derived. After construction, config is shared
+/// via Arc and external code only gets &AgentConfig references.
 pub struct AgentConfig {
     // === Declarative definition (optional) ===
     pub def: Option<crate::agent_def::AgentDef>,
@@ -22,7 +24,9 @@ pub struct AgentConfig {
     // === Runtime components ===
     pub llm: Arc<dyn vol_llm_core::LLMClient>,
     pub tools: Arc<vol_llm_tool::ToolRegistry>,
-    pub session: Arc<Session>,
+    /// Session handle with interior mutability. Read via agent.session(),
+    /// write via agent.set_session() (gated by is_running).
+    pub(crate) session: std::sync::RwLock<Arc<Session>>,
     pub sandbox: Option<SandboxRef>,
 
     // === Context and plugins ===
@@ -54,7 +58,7 @@ impl AgentConfig {
             def: None,
             llm,
             tools,
-            session,
+            session: std::sync::RwLock::new(session),
             sandbox: None,
             context_builder: ContextBuilderBuilder::new(128_000).build(),
             plugin_registry: PluginRegistry::new(),
@@ -71,7 +75,7 @@ impl Default for AgentConfig {
             def: None,
             llm: Arc::new(DefaultLlm),
             tools: Arc::new(vol_llm_tool::ToolRegistry::new()),
-            session: Arc::new(Session::new(Arc::new(InMemoryEntryStore::new()))),
+            session: std::sync::RwLock::new(Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())))),
             sandbox: None,
             context_builder: ContextBuilderBuilder::new(128_000).build(),
             plugin_registry: PluginRegistry::new(),
@@ -119,62 +123,120 @@ impl LLMClient for DefaultLlm {
     }
 }
 
-/// ReAct Agent
+/// Shared running state — exposed for external status queries.
+pub struct RunningState {
+    /// true while run_input() is executing.
+    pub is_running: std::sync::atomic::AtomicBool,
+    /// Current input text (for status display).
+    pub current_input: std::sync::RwLock<Option<String>>,
+    /// Current run_id (for status display).
+    pub current_run_id: std::sync::RwLock<Option<String>>,
+}
+
+impl RunningState {
+    fn new() -> Self {
+        Self {
+            is_running: std::sync::atomic::AtomicBool::new(false),
+            current_input: std::sync::RwLock::new(None),
+            current_run_id: std::sync::RwLock::new(None),
+        }
+    }
+}
+
+/// RAII guard that clears running state on drop (even on panic).
+struct RunningGuard<'a> {
+    run_state: &'a RunningState,
+}
+
+impl Drop for RunningGuard<'_> {
+    fn drop(&mut self) {
+        self.run_state
+            .is_running
+            .store(false, std::sync::atomic::Ordering::Release);
+        *self.run_state.current_input.write().unwrap() = None;
+        *self.run_state.current_run_id.write().unwrap() = None;
+    }
+}
+
+/// ReAct Agent — owns config (Arc) and running state.
 pub struct ReActAgent {
-    config: AgentConfig,
+    config: Arc<AgentConfig>,
+    run_state: Arc<RunningState>,
 }
 
 impl ReActAgent {
     /// Create a new ReActAgent from config.
     pub fn new(config: AgentConfig) -> Self {
-        Self { config }
+        Self {
+            config: Arc::new(config),
+            run_state: Arc::new(RunningState::new()),
+        }
     }
 
-    /// Set the sandbox for tool execution
+    // ── Read-only access ──
+
+    /// Immutable reference to config.
+    pub fn config(&self) -> &AgentConfig {
+        &self.config
+    }
+
+    /// Cheap clone of the shared session handle.
+    pub fn session(&self) -> Arc<Session> {
+        self.config.session.read().unwrap().clone()
+    }
+
+    /// Whether agent is currently executing run_input().
+    pub fn is_running(&self) -> bool {
+        self.run_state
+            .is_running
+            .load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// Shared running state for external status queries.
+    pub fn run_state(&self) -> &Arc<RunningState> {
+        &self.run_state
+    }
+
+    // ── Mutation (gated by is_running) ──
+
+    /// Replace the session. Rejected if agent is running.
+    pub fn set_session(&self, session: Arc<Session>) -> Result<(), AgentBusyError> {
+        if self.is_running() {
+            return Err(AgentBusyError {
+                agent_id: self.config.agent_id.clone(),
+            });
+        }
+        *self.config.session.write().unwrap() = session;
+        Ok(())
+    }
+
+    // ── Builder-style (consuming self, initial setup only) ──
+
+    /// Set the sandbox for tool execution (builder pattern, consumes self).
     pub fn with_sandbox(mut self, sandbox: SandboxRef) -> Self {
-        self.config.sandbox = Some(sandbox);
+        Arc::get_mut(&mut self.config)
+            .expect("with_sandbox called after config was shared")
+            .sandbox = Some(sandbox);
         self
     }
 
-    /// Create agent with new session
-    pub fn with_new_session(&self, _session_id: String) -> Self {
-        use vol_session::InMemoryEntryStore;
-
-        let entry_store = Arc::new(InMemoryEntryStore::new());
-        let new_session = Arc::new(Session::new(entry_store));
-        // Note: session.id is now self-generated; session_id param is ignored for the ID.
-        // If the caller needs a specific ID, use Session::resume instead.
-        Self {
-            config: AgentConfig {
-                session: new_session,
-                ..self.config.clone()
-            },
-        }
-    }
-
-    /// Create a new agent with the given session (clones the rest of config).
-    pub fn with_session(&self, session: Arc<Session>) -> Self {
-        Self {
-            config: AgentConfig {
-                session,
-                ..self.config.clone()
-            },
-        }
-    }
+    // ── Execution ──
 
     /// Run ReAct loop and return the final response.
-    ///
-    /// All events are emitted via RunContext event bus.
-    /// The returned AgentResponse contains the complete execution context including:
-    /// - Final answer content and complete reasoning chain
-    /// - run_id and session_id for correlation
-    /// - All tool calls made during execution
-    /// - Error information if any tool call failed
     pub async fn run(&self, user_input: &str) -> Result<AgentResponse, crate::AgentError> {
         self.run_input(AgentInput::text(user_input)).await
     }
 
     pub async fn run_input(&self, input: AgentInput) -> Result<AgentResponse, crate::AgentError> {
+        // Re-entrancy guard
+        if self
+            .run_state
+            .is_running
+            .swap(true, std::sync::atomic::Ordering::AcqRel)
+        {
+            return Err(crate::AgentError::AlreadyRunning);
+        }
+
         let user_content = input
             .to_message_content()
             .map_err(|e| crate::AgentError::InvalidInput(e.to_string()))?;
@@ -183,6 +245,14 @@ impl ReActAgent {
             .run_id
             .clone()
             .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string());
+
+        // Set status metadata
+        *self.run_state.current_input.write().unwrap() = Some(user_input.clone());
+        *self.run_state.current_run_id.write().unwrap() = Some(run_id.clone());
+
+        // RAII guard: clears running state on drop (even on panic)
+        let _guard = RunningGuard { run_state: &self.run_state };
+
         let (run_ctx, plugin_rx) =
             RunContext::new(run_id.clone(), user_input.clone(), self.config.clone());
 
@@ -191,8 +261,6 @@ impl ReActAgent {
         }
 
         // Persist user message to session so it's available via SessionContributor.
-        // This replaces the old UserInputContributor which injected input directly
-        // into the context without persisting it.
         let user_msg = Message::user(user_content);
         run_ctx.add_message(user_msg).await.map_err(|e| {
             crate::AgentError::SessionError(format!("Failed to persist user message: {}", e))
@@ -203,7 +271,6 @@ impl ReActAgent {
         // === Phase 2.6: Spawn listener and interceptor tasks ===
         use super::plugin_stream::{run_interceptor_loop, spawn_listener_tasks};
 
-        // Spawn listener tasks - one per plugin, subscribing to event broadcast
         let plugins = self.config.plugin_registry.plugins().to_vec();
         let mut listener_set = spawn_listener_tasks(plugins, run_ctx.clone());
 
@@ -549,6 +616,13 @@ impl ReActAgent {
 
         agent_result
     }
+}
+
+/// Returned when mutation is attempted while agent is running.
+#[derive(Debug, thiserror::Error)]
+#[error("agent {agent_id} is currently running — state mutation not allowed")]
+pub struct AgentBusyError {
+    pub agent_id: String,
 }
 
 /// Consume LLM stream response, emit streaming events, and accumulate into complete data.

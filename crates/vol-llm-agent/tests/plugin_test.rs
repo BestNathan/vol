@@ -1,5 +1,7 @@
 //! Plugin system integration tests.
 
+use std::sync::Arc;
+
 use vol_llm_agent::react::plugin::PluginId;
 use vol_llm_agent::react::RunContext;
 use vol_llm_agent::react::*;
@@ -60,7 +62,7 @@ async fn test_run_context_data_storage() {
     let (ctx, _plugin_rx) = RunContext::new(
         "test-run-123".to_string(),
         "test input".to_string(),
-        AgentConfig::default(),
+        Arc::new(AgentConfig::default()),
     );
 
     // Test setting and getting data

@@ -317,7 +317,7 @@ fn create_test_run_context() -> RunContext {
     let (ctx, _plugin_rx) = RunContext::new(
         "test-run".to_string(),
         "test input".to_string(),
-        AgentConfig::default(),
+        Arc::new(AgentConfig::default()),
     );
 
     ctx

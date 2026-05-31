@@ -226,7 +226,7 @@ impl AgentConfigBuilder {
             def: self.def,
             llm,
             tools: Arc::new(tools),
-            session,
+            session: std::sync::RwLock::new(session),
             sandbox: self.sandbox,
             context_builder,
             plugin_registry: self.plugin_registry,
