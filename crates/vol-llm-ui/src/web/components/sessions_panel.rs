@@ -325,7 +325,7 @@ fn SessionItem(
                 onclick: move |evt: Event<MouseData>| {
                     evt.stop_propagation();
                     let mut resuming = is_resuming;
-                    resuming.set(true);
+                    let _ = resuming.set(true);
                     let rpc = rpc_resume.clone();
                     let sid = sid_resume.clone();
                     let mut conv = conv_resume;
@@ -344,13 +344,13 @@ fn SessionItem(
                             }
                             Err(e) => log::error!("Failed to resume session: {e}"),
                         }
-                        resuming.set(false);
+                        let _ = resuming.set(false);
                     });
                     // Safety timeout — reset button state if response never arrives
                     let mut resuming_timeout = is_resuming;
                     wasm_bindgen_futures::spawn_local(async move {
                         TimeoutFuture::new(15_000).await;
-                        resuming_timeout.set(false);
+                        let _ = resuming_timeout.set(false);
                     });
                 },
                 if *is_resuming.read() { "Resuming..." } else { "Resume" }
