@@ -88,15 +88,13 @@ pub fn ContextPanel() -> Element {
     let mut ctx_state = use_signal(ContextState::new);
 
     let rpc_client = app.rpc_client.clone();
-    let rpc_client_for_effect = rpc_client.clone();
-    let selected = agents_signal.read().selected.clone();
+    let rpc_client_effect = rpc_client.clone();
 
     // Load contributors when selected agent changes
-    use_effect({
-        let selected = selected.clone();
-        move || {
-            if let Some(ref agent_id) = selected {
-                let client = rpc_client_for_effect.clone();
+    use_effect(move || {
+        let selected = agents_signal.read().selected.clone();
+        if let Some(ref agent_id) = selected {
+                let client = rpc_client_effect.clone();
                 let aid = agent_id.clone();
                 let mut sig = ctx_state;
                 sig.with_mut(|s| {
@@ -130,7 +128,6 @@ pub fn ContextPanel() -> Element {
                     }
                 });
             }
-        }
     });
 
     if agents_signal.read().selected.is_none() {
@@ -201,12 +198,21 @@ pub fn ContextPanel() -> Element {
                                                 }
                                                 Ok(Err(e)) => {
                                                     sig.with_mut(|s| {
+                                                        s.dialog_messages = vec![ContextMessageEntry {
+                                                            role: "error".to_string(),
+                                                            content: format!("Failed to load snapshot: {}", e),
+                                                        }];
                                                         s.dialog_loading = false;
                                                     });
-                                                    log::warn!("snapshot failed for {}: {}", name, e);
                                                 }
                                                 Err(_) => {
-                                                    sig.with_mut(|s| s.dialog_loading = false);
+                                                    sig.with_mut(|s| {
+                                                        s.dialog_messages = vec![ContextMessageEntry {
+                                                            role: "error".to_string(),
+                                                            content: "Request dropped".to_string(),
+                                                        }];
+                                                        s.dialog_loading = false;
+                                                    });
                                                 }
                                             }
                                         });
