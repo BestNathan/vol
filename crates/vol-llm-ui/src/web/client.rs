@@ -198,12 +198,16 @@ impl JsonRpcClient {
         id
     }
 
-    /// Send a JSON-RPC message. Queues if the WebSocket is still connecting.
+    /// Send a JSON-RPC message.
     fn send_raw(&self, msg: &str) -> Result<(), String> {
-        let ws = self.inner.ws.borrow();
-        let result = match ws.ready_state() {
+        let state = self.inner.ws.borrow().ready_state();
+        let method = serde_json::from_str::<serde_json::Value>(msg)
+            .ok().and_then(|v| v.get("method").and_then(|m| m.as_str()).map(|s| s.to_string()))
+            .unwrap_or_default();
+        log::info!("send_raw: method={method} state={state}");
+        let result = match state {
             1 => { // OPEN
-                ws.send_with_str(msg).map_err(|e| format!("send failed: {e:?}"))
+                self.inner.ws.borrow().send_with_str(msg).map_err(|e| format!("send failed: {e:?}"))
             }
             0 => { // CONNECTING — queue for on_open
                 self.inner.send_queue.borrow_mut().push(msg.to_string());
@@ -213,8 +217,6 @@ impl JsonRpcClient {
                 Err("WebSocket not connected".to_string())
             }
         };
-        drop(ws);
-        // Capture for debug AFTER send, never blocks the critical path
         if result.is_ok() {
             self.push_debug_out(msg);
         }
@@ -566,6 +568,7 @@ impl JsonRpcClient {
     /// Resume a session on the server (swaps agent session). Returns response via callback.
     pub fn session_resume(&self, session_id: &str, agent_id: Option<&str>, cb: impl FnOnce(Result<SessionResumeResponse, String>) + 'static) {
         let id = self.alloc_id();
+        log::info!("session_resume: id={id} session_id={session_id} agent_id={agent_id:?}");
 
         let mut params = serde_json::json!({ "session_id": session_id });
         if let Some(aid) = agent_id {
@@ -587,20 +590,23 @@ impl JsonRpcClient {
         }
 
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            log::info!("session_resume response received");
             if let Some(error) = result.get("error") {
                 let msg = error.get("message").and_then(|m| m.as_str())
                     .unwrap_or("unknown RPC error");
+                log::error!("session_resume RPC error: {msg}");
                 cb(Err(msg.to_string()));
                 return;
             }
             let session_id = match result.get("session_id").and_then(|v| v.as_str()) {
                 Some(s) => s.to_string(),
-                None => { cb(Err("no session_id in response".to_string())); return; }
+                None => { log::error!("session_resume: no session_id in response"); cb(Err("no session_id in response".to_string())); return; }
             };
             let entry_count = result.get("entry_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
             let entries = result.get("entries").and_then(|v| v.as_array())
                 .map(|arr| arr.iter().filter_map(|e| serde_json::from_value(e.clone()).ok()).collect())
                 .unwrap_or_default();
+            log::info!("session_resume success: session_id={session_id} entries={entry_count}");
             cb(Ok(SessionResumeResponse { session_id, entry_count, entries }));
         });
         self.inner.pending.borrow_mut().insert(id, cb);
@@ -1021,6 +1027,7 @@ impl JsonRpcClient {
     }
 
     fn handle_message(inner: &Rc<ClientInner>, data: &str) {
+        log::info!("handle_message: {:.200}", data);
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
             if val.get("method").and_then(|m| m.as_str()) == Some("agent.event") {
                 if let Some(params) = val.get("params") {
