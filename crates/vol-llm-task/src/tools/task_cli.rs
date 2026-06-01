@@ -66,10 +66,10 @@ impl ExecutableTool for TaskCliTool {
         let cmd_str = args.get("command")
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        let first_token = cmd_str.split_whitespace().next().unwrap_or("");
+        let first_token = cmd_str.trim().split_whitespace().next().unwrap_or("");
 
         match first_token {
-            "update" | "stop" => ToolSensitivity::RequiresApproval {
+            "update" | "stop" | "+done" | "+claim" => ToolSensitivity::RequiresApproval {
                 reason: "This operation modifies task state".to_string(),
             },
             _ => ToolSensitivity::Safe,
