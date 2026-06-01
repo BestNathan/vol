@@ -42,6 +42,7 @@ pub enum Operation {
     Tool(ToolOperation),
     Log(LogOperation),
     System(SystemOperation),
+    Task(TaskOperation),
 }
 
 impl Operation {
@@ -57,6 +58,8 @@ impl Operation {
             Operation::Agent(AgentOperation::Status) => "agent.status",
             Operation::Agent(AgentOperation::ContextConfig) => "agent.context_config",
             Operation::Agent(AgentOperation::ContextSnapshot) => "agent.context_snapshot",
+            Operation::Task(TaskOperation::List) => "task.list",
+            Operation::Task(TaskOperation::Get) => "task.get",
             Operation::File(FileOperation::List) => "file.list",
             Operation::File(FileOperation::Read) => "file.read",
             Operation::Session(SessionOperation::List) => "session.list",
@@ -149,6 +152,12 @@ pub enum SystemOperation {
     Connected,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TaskOperation {
+    List,
+    Get,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Payload {
@@ -160,6 +169,7 @@ pub enum Payload {
     Tool(ToolPayload),
     Log(LogPayload),
     System(SystemPayload),
+    Task(TaskPayload),
     Error(ErrorPayload),
 }
 
@@ -485,6 +495,31 @@ impl Payload {
             Operation::System(SystemOperation::Connected) => {
                 Ok(Payload::System(SystemPayload::Empty))
             }
+            // ── Task ──
+            Operation::Task(TaskOperation::List) => {
+                #[derive(Deserialize)]
+                struct P {
+                    #[serde(default)]
+                    status: Option<String>,
+                    #[serde(default)]
+                    assignee: Option<String>,
+                }
+                let p: P = serde_json::from_value(value)
+                    .map_err(|_| ProtocolError::PayloadDecodeFailed("task.list"))?;
+                Ok(Payload::Task(TaskPayload::List {
+                    status: p.status,
+                    assignee: p.assignee,
+                }))
+            }
+            Operation::Task(TaskOperation::Get) => {
+                #[derive(Deserialize)]
+                struct P {
+                    task_id: u64,
+                }
+                let p: P = serde_json::from_value(value)
+                    .map_err(|_| ProtocolError::PayloadDecodeFailed("task.get"))?;
+                Ok(Payload::Task(TaskPayload::Get { task_id: p.task_id }))
+            }
         }
     }
 
@@ -746,6 +781,25 @@ pub enum LogPayload {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SystemPayload {
     Empty,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TaskPayload {
+    List {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        assignee: Option<String>,
+    },
+    ListResult {
+        tasks: Vec<serde_json::Value>,
+    },
+    Get {
+        task_id: u64,
+    },
+    GetResult {
+        task: serde_json::Value,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
