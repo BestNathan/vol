@@ -161,7 +161,7 @@ impl DomainHandler for AgentHandler {
             }
             (AgentOperation::List, _) => {
                 let defs = self.agent_defs.read().unwrap();
-                let agents: Vec<serde_json::Value> = self
+                let mut agents: Vec<serde_json::Value> = self
                     .holders
                     .lock()
                     .unwrap()
@@ -174,14 +174,31 @@ impl DomainHandler for AgentHandler {
                             "type": def.map_or("unknown", |d| &d.r#type),
                             "description": def.and_then(|d| if d.description.is_empty() { None } else { Some(d.description.as_str()) }).unwrap_or(""),
                             "scope": def.map_or("repo", |d| match d.scope {
-                                vol_llm_core::AgentScope::User => "user",
                                 vol_llm_core::AgentScope::Repo => "repo",
+                                vol_llm_core::AgentScope::User => "user",
                             }),
                             "status": "idle",
                             "current_input": None::<String>,
                         })
                     })
                     .collect();
+
+                // Stable sort: repo first, user second; alphabetical by name within group
+                fn scope_rank(scope: &str) -> u8 {
+                    match scope {
+                        "repo" => 0,
+                        _ => 1,
+                    }
+                }
+                agents.sort_by(|a, b| {
+                    let sa = a.get("scope").and_then(|v| v.as_str()).unwrap_or("");
+                    let sb = b.get("scope").and_then(|v| v.as_str()).unwrap_or("");
+                    let na = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    let nb = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    scope_rank(sa).cmp(&scope_rank(sb))
+                        .then_with(|| na.cmp(nb))
+                });
+
                 Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Agent(AgentOperation::List),
@@ -239,9 +256,7 @@ impl DomainHandler for AgentHandler {
                     )]),
                 };
 
-                let contributors = {
-                    let cb = &agent.config().context_builder;
-                    let infos = cb.contributor_infos().await.unwrap_or_default();
+                let contributors = agent.contributors().await.map(|infos| {
                     infos.into_iter().map(|info| {
                         serde_json::json!({
                             "name": info.name,
@@ -250,7 +265,7 @@ impl DomainHandler for AgentHandler {
                             "message_count": info.message_count,
                         })
                     }).collect::<Vec<_>>()
-                };
+                }).unwrap_or_default();
 
                 Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
@@ -273,13 +288,13 @@ impl DomainHandler for AgentHandler {
                     )]),
                 };
 
-                let messages = {
-                    let cb = &agent.config().context_builder;
-                    cb.snapshot_by_name(&contributor_name).await.unwrap_or_default()
-                        .into_iter()
-                        .map(|m| serde_json::json!({"role": m.role, "content": m.content}))
-                        .collect::<Vec<_>>()
-                };
+                let messages = agent.snapshot_by_name(&contributor_name).await
+                    .map(|msgs| {
+                        msgs.into_iter()
+                            .map(|m| serde_json::json!({"role": m.role, "content": m.content}))
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
 
                 Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
