@@ -4,7 +4,7 @@ use super::{AgentInput, AgentResponse, AgentStreamEvent, PluginDecision, PluginR
 use crate::react::state::ToolCallRecord;
 use std::path::PathBuf;
 use std::sync::Arc;
-use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
+use vol_llm_context::{ContextBuilder, ContextBuilderBuilder, ContextContributor, ContextError, ContextMessage, ContributorInfo};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData,
     StreamReceiver, ToolChoice,
@@ -30,7 +30,7 @@ pub struct AgentConfig {
     pub sandbox: Option<SandboxRef>,
 
     // === Context and plugins ===
-    pub context_builder: ContextBuilder,
+    pub(crate) context_builder: ContextBuilder,
     pub plugin_registry: PluginRegistry,
 
     // === MCP ===
@@ -48,24 +48,19 @@ impl AgentConfig {
         super::config_builder::AgentConfigBuilder::new()
     }
 
-    /// Convenience constructor for direct struct creation (backwards-compatible).
-    pub fn new(
-        llm: Arc<dyn vol_llm_core::LLMClient>,
-        tools: Arc<vol_llm_tool::ToolRegistry>,
-        session: Arc<Session>,
-    ) -> Self {
-        Self {
-            def: None,
-            llm,
-            tools,
-            session: std::sync::RwLock::new(session),
-            sandbox: None,
-            context_builder: ContextBuilderBuilder::new(128_000).build(),
-            plugin_registry: PluginRegistry::new(),
-            mcp_manager: None,
-            agent_id: generate_agent_id(),
-            working_dir: PathBuf::from("."),
-        }
+    /// Add a context contributor.
+    pub fn add_contributor(&mut self, contributor: Box<dyn ContextContributor>) {
+        self.context_builder.add_contributor(contributor);
+    }
+
+    /// List contributor info (for RPC / UI queries).
+    pub async fn contributor_infos(&self) -> Result<Vec<ContributorInfo>, ContextError> {
+        self.context_builder.contributor_infos().await
+    }
+
+    /// Get message snapshot from a specific contributor.
+    pub async fn snapshot_by_name(&self, name: &str) -> Result<Vec<ContextMessage>, ContextError> {
+        self.context_builder.snapshot_by_name(name).await
     }
 }
 
