@@ -94,7 +94,7 @@ impl ExecutableTool for TaskCliTool {
 
         crate::cli::executor::execute(cmd, &self.store, context)
             .await
-            .map_err(|e| vol_llm_tool::ToolError::ExecutionFailed(e))
+            .map_err(vol_llm_tool::ToolError::ExecutionFailed)
     }
 }
 
