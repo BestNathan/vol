@@ -764,6 +764,8 @@ impl SessionsState {
     }
 }
 
+/// Local state for TasksPanel.
+#[cfg(all(feature = "web", not(feature = "tui")))]
 #[derive(Debug, Clone)]
 pub struct TaskState {
     pub tasks: Vec<crate::web::client::TaskEntry>,
@@ -773,6 +775,7 @@ pub struct TaskState {
     pub selected_task: Option<u64>,
 }
 
+#[cfg(all(feature = "web", not(feature = "tui")))]
 impl TaskState {
     pub fn new() -> Self {
         Self {
@@ -1374,7 +1377,8 @@ mod tests {
     fn test_active_tab_next() {
         use ActiveTab::*;
         assert_eq!(Conversation.next(), Sessions);
-        assert_eq!(Sessions.next(), Agents);
+        assert_eq!(Sessions.next(), Tasks);
+        assert_eq!(Tasks.next(), Agents);
         assert_eq!(Agents.next(), Tools);
         assert_eq!(Tools.next(), Workspace);
         assert_eq!(Workspace.next(), Skills);
