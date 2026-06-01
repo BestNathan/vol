@@ -17,6 +17,7 @@ pub struct AgentHandler {
     router: AgentRouter,
     holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
     agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>>,
+    agent_status: Arc<std::sync::RwLock<HashMap<String, crate::server_core::AgentStatus>>>,
 }
 
 impl AgentHandler {
@@ -24,8 +25,9 @@ impl AgentHandler {
         router: AgentRouter,
         holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
         agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>>,
+        agent_status: Arc<std::sync::RwLock<HashMap<String, crate::server_core::AgentStatus>>>,
     ) -> Self {
-        Self { router, holders, agent_defs }
+        Self { router, holders, agent_defs, agent_status }
     }
 }
 
@@ -205,12 +207,19 @@ impl DomainHandler for AgentHandler {
                 Err(ProtocolError::PayloadDecodeFailed("agent.approve"))
             }
             (AgentOperation::Status, Payload::Agent(AgentPayload::Status { agent_id })) => {
-                let is_busy = self.router.is_agent_running(&agent_id).await;
-                let status = if is_busy { "running".to_string() } else { "idle".to_string() };
+                let status_entry = self.agent_status.read().unwrap().get(&agent_id).cloned();
+                let (status, run_id) = match status_entry {
+                    Some(s) if s.status == "running" => (s.status, s.run_id),
+                    _ => {
+                        let is_busy = self.router.is_agent_running(&agent_id).await;
+                        let status = if is_busy { "running".to_string() } else { "idle".to_string() };
+                        (status, None)
+                    }
+                };
                 Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Agent(AgentOperation::Status),
-                    Payload::Agent(AgentPayload::StatusResult { status, run_id: None }),
+                    Payload::Agent(AgentPayload::StatusResult { status, run_id }),
                 )])
             }
             (AgentOperation::Status, _) => Err(ProtocolError::PayloadDecodeFailed("agent.status")),

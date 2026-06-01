@@ -63,6 +63,7 @@ fn render_right_panel(frame: &mut Frame, area: Rect, state: &UiState) {
         ActiveTab::Agents => render_agents_panel(frame, chunks[1], state),
         ActiveTab::Sessions => render_sessions_panel(frame, chunks[1], state),
         ActiveTab::Mcp => render_mcp(frame, chunks[1], state),
+        ActiveTab::Tasks => render_tasks_placeholder(frame, chunks[1]),
     }
 
     render_input_area(frame, chunks[2], state);
@@ -118,6 +119,8 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &UiState) {
         Span::styled(" Skills ", style(ActiveTab::Skills)),
         Span::raw(" "),
         Span::styled(" Logs ", style(ActiveTab::Logs)),
+        Span::raw(" "),
+        Span::styled(" Tasks ", style(ActiveTab::Tasks)),
         Span::raw(" "),
         Span::styled(" Agents ", style(ActiveTab::Agents)),
         Span::raw(" "),
@@ -582,6 +585,20 @@ fn render_mcp(frame: &mut Frame, area: Rect, _state: &UiState) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let text = Text::raw("MCP tab (TUI)");
+    let paragraph = Paragraph::new(text)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(paragraph, inner);
+}
+
+fn render_tasks_placeholder(frame: &mut Frame, area: Rect) {
+    let block = Block::default()
+        .title("Tasks")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::DarkGray));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let text = Text::raw("Tasks tab (TUI — coming soon)");
     let paragraph = Paragraph::new(text)
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::DarkGray));
