@@ -27,10 +27,10 @@ use std::time::Instant;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum UiEvent {
     // Agent lifecycle
-    AgentStart { input: String },
-    AgentComplete { response: String },
-    AgentAborted { reason: String },
-    AgentError { message: String },
+    AgentStart { run_id: String, input: String },
+    AgentComplete { run_id: String, response: String },
+    AgentAborted { run_id: String, reason: String },
+    AgentError { run_id: String, message: String },
 
     // Thinking
     ThinkingStart,
@@ -227,13 +227,14 @@ pub struct OpenFileTab {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ActiveTab { Conversation, Sessions, Agents, Tools, Workspace, Skills, Mcp, Logs }
+pub enum ActiveTab { Conversation, Sessions, Tasks, Agents, Tools, Workspace, Skills, Mcp, Logs }
 
 impl ActiveTab {
     pub fn next(self) -> Self {
         match self {
             ActiveTab::Conversation => ActiveTab::Sessions,
-            ActiveTab::Sessions => ActiveTab::Agents,
+            ActiveTab::Sessions => ActiveTab::Tasks,
+            ActiveTab::Tasks => ActiveTab::Agents,
             ActiveTab::Agents => ActiveTab::Tools,
             ActiveTab::Tools => ActiveTab::Workspace,
             ActiveTab::Workspace => ActiveTab::Skills,
@@ -250,7 +251,7 @@ impl ActiveTab {
 
 /// Sub-tabs within the Agents panel.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AgentSubTab { Conversation, Sessions, Context }
+pub enum AgentSubTab { Conversation, Sessions, Context, Tasks }
 
 /// Sub-tabs within the MCP panel.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -412,7 +413,11 @@ pub struct GlobalState {
     pub tool_call_count: u32,
     pub run_start: Option<Instant>,
     pub run_elapsed: std::time::Duration,
-    pub is_running: bool,
+    pub running_agents: HashSet<String>,
+    /// Maps run_id → agent_id so events can be attributed to the correct agent.
+    pub run_map: HashMap<String, String>,
+    /// Set on submit, consumed on AgentStart to attribute the run to the correct agent.
+    pub pending_submit_agent: Option<String>,
     pub exiting: bool,
     pub ws_url: String,
     pub ws_connected: bool,
@@ -431,12 +436,37 @@ impl GlobalState {
         Self {
             session_id: "web-session".into(), run_count: 0, iteration: 0,
             tool_call_count: 0, run_start: None, run_elapsed: std::time::Duration::ZERO,
-            is_running: false, exiting: false, ws_url, ws_connected: false,
+            running_agents: HashSet::new(), run_map: HashMap::new(),
+            pending_submit_agent: None, exiting: false, ws_url, ws_connected: false,
             ws_last_error: None,
             reconnecting: false, reconnect_attempts: 0, reconnect_delay_secs: 0,
             reconnect_maxed: false,
             unsafe_mode: false, active_tab: ActiveTab::Agents,
         }
+    }
+
+    pub fn is_running(&self) -> bool {
+        !self.running_agents.is_empty()
+    }
+
+    pub fn is_agent_running(&self, agent_id: &str) -> bool {
+        self.running_agents.contains(agent_id)
+    }
+
+    pub fn set_agent_running(&mut self, agent_id: String, run_id: String) {
+        self.run_map.insert(run_id, agent_id.clone());
+        self.running_agents.insert(agent_id);
+    }
+
+    pub fn set_agent_idle_by_run(&mut self, run_id: &str) {
+        if let Some(agent_id) = self.run_map.remove(run_id) {
+            self.running_agents.remove(&agent_id);
+        }
+    }
+
+    pub fn clear_all_running(&mut self) {
+        self.running_agents.clear();
+        self.run_map.clear();
     }
 }
 
@@ -598,6 +628,8 @@ pub struct AgentListEntry {
 pub struct ContributorInfoEntry {
     pub name: String,
     pub anchor_zone: String,
+    #[serde(default)]
+    pub position: usize,
     pub estimated_tokens: usize,
     pub message_count: usize,
 }
@@ -729,6 +761,27 @@ pub struct SessionsState {
 impl SessionsState {
     pub fn new() -> Self {
         Self { sessions: Vec::new(), loading: false, error: None }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TaskState {
+    pub tasks: Vec<crate::web::client::TaskEntry>,
+    pub loading: bool,
+    pub error: Option<String>,
+    pub status_filter: Option<String>,
+    pub selected_task: Option<u64>,
+}
+
+impl TaskState {
+    pub fn new() -> Self {
+        Self {
+            tasks: Vec::new(),
+            loading: false,
+            error: None,
+            status_filter: Some("all".to_string()),
+            selected_task: None,
+        }
     }
 }
 
@@ -939,7 +992,7 @@ impl UiState {
     /// Apply a UiEvent to mutate state.
     pub fn apply(&mut self, event: UiEvent) {
         match event {
-            UiEvent::AgentStart { input } => {
+            UiEvent::AgentStart { input, .. } => {
                 self.reset_for_run();
                 self.is_running = true;
                 self.conversation.push(ConversationEntry::UserInput { text: input });
@@ -950,14 +1003,14 @@ impl UiState {
                 self.run_elapsed = elapsed;
                 self.is_running = false;
             }
-            UiEvent::AgentAborted { reason } => {
+            UiEvent::AgentAborted { reason, .. } => {
                 self.flush_pending_content();
                 let elapsed = self.run_start.map(|s| s.elapsed()).unwrap_or_default();
                 self.run_elapsed = elapsed;
                 self.conversation.push(ConversationEntry::Error { message: reason });
                 self.is_running = false;
             }
-            UiEvent::AgentError { message } => {
+            UiEvent::AgentError { message, .. } => {
                 self.flush_pending_content();
                 let elapsed = self.run_start.map(|s| s.elapsed()).unwrap_or_default();
                 self.run_elapsed = elapsed;
