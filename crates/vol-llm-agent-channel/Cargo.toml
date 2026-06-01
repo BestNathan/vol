@@ -22,11 +22,13 @@ async-stream = "0.3"
 vol-session = { path = "../vol-session" }
 vol-llm-mcp = { workspace = true }
 vol-llm-skill = { path = "../vol-llm-skill" }
+vol-llm-context = { path = "../vol-llm-context" }
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-tool = { path = "../vol-llm-tool" }
 vol-llm-tools-builtin = { path = "../vol-llm-tools-builtin" }
 vol-llm-provider = { path = "../vol-llm-provider" }
 vol-llm-runtime = { path = "../vol-llm-runtime" }
+vol-llm-task = { path = "../vol-llm-task" }
 
 [dev-dependencies]
 tempfile = "3"

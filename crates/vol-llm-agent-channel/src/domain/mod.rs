@@ -7,4 +7,5 @@ pub mod registry;
 pub mod session;
 pub mod skill;
 pub mod system;
+pub mod task;
 pub mod tool;
