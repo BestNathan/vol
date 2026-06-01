@@ -178,8 +178,14 @@ impl ReActAgent {
     // ── Contributor API ──
 
     /// Add a context contributor at runtime.
+    /// Panics if config has been shared (cloned) because `Arc::get_mut` requires
+    /// a unique strong reference. This is safe when called during setup before
+    /// the agent is shared across threads.
     pub fn add_contributor(&mut self, contributor: Box<dyn ContextContributor>) {
-        self.config.context_builder.add_contributor(contributor);
+        Arc::get_mut(&mut self.config)
+            .expect("add_contributor called after config was shared")
+            .context_builder
+            .add_contributor(contributor);
     }
 
     /// List all contributors with metadata (SOT for external queries).
