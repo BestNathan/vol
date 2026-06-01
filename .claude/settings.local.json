@@ -8,7 +8,30 @@
       "WebFetch(domain:www.doubao.com)",
       "WebFetch(domain:docs.rs)",
       "WebFetch(domain:www.mintlify.com)",
-      "WebFetch(domain:blakecrosley.com)"
+      "WebFetch(domain:blakecrosley.com)",
+      "mcp__docs-rs-http__docs_rs_search_in_crate",
+      "mcp__docs-rs-http__docs_rs_get_item",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_console_messages",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_click",
+      "mcp__plugin_playwright_playwright__browser_run_code_unsafe",
+      "Bash(curl -s http://localhost:8080)",
+      "Bash(grep *)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_network_requests"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "钉钉文档",
+    "docs-rs",
+    "docs-rs-http",
+    "Deribit API Documentation"
+  ]
 }

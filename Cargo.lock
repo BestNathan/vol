@@ -6730,6 +6730,9 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "uuid",
+ "vol-llm-agent",
+ "vol-llm-core",
+ "vol-llm-provider",
  "vol-llm-tool",
 ]
 
