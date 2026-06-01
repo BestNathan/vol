@@ -20,13 +20,14 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
 
     let rpc = app.rpc_client.clone();
     let sig = task_state;
+    let initial_assignee = assignee_filter.clone();
 
     // Initial load
     use_hook(move || {
         let mut s = sig;
         s.with_mut(|t| { t.loading = true; t.error = None; });
         let s2 = sig;
-        rpc.task_list(None, assignee_filter.as_deref(), move |result| {
+        rpc.task_list(None, initial_assignee.as_deref(), move |result| {
             let mut s2 = s2;
             s2.with_mut(|t| {
                 t.loading = false;

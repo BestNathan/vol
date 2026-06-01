@@ -8,6 +8,7 @@ use super::context_panel::ContextPanel;
 use super::conversation::ConversationView;
 use super::input_area::InputArea;
 use super::sessions_panel::SessionsPanel;
+use super::tasks_panel::TasksPanel;
 
 /// Agent card — responsive, works on mobile.
 #[component]
@@ -270,7 +271,7 @@ pub fn AgentsPanel() -> Element {
                                             if status == "running" {
                                                 log::info!("Agent {} is running (run_id: {}) — loading session", a, run_id);
                                                 load_running_session(&c, &a, conv, &run_id);
-                                                g.write_unchecked().is_running = true;
+                                                g.write_unchecked().set_agent_running(a.clone(), run_id.clone());
                                             }
                                         }
                                     });
@@ -316,6 +317,14 @@ pub fn AgentsPanel() -> Element {
                             move |_: ()| { sig.with_mut(|s| s.sub_tab = AgentSubTab::Context); }
                         },
                     }
+                    SubTabButton {
+                        label: "Tasks".to_string(),
+                        active: sub_tab == AgentSubTab::Tasks,
+                        onclick: {
+                            let mut sig = agents_signal;
+                            move |_: ()| { sig.with_mut(|s| s.sub_tab = AgentSubTab::Tasks); }
+                        },
+                    }
                 }
                 div { class: "flex-1 min-h-0 flex flex-col overflow-hidden",
                     match sub_tab {
@@ -328,6 +337,9 @@ pub fn AgentsPanel() -> Element {
                         },
                         AgentSubTab::Context => rsx! {
                             ContextPanel {}
+                        },
+                        AgentSubTab::Tasks => rsx! {
+                            TasksPanel { assignee_filter: Some(selected_agent.map(|a| a.name.clone()).unwrap_or_default()) }
                         },
                     }
                 }
