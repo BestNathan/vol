@@ -196,30 +196,45 @@ impl AgentConfigBuilder {
             Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())))
         });
 
-        // Build context builder, adding SkillInjector
-        let context_builder = match self.context_builder {
-            Some(cb) => {
-                let injector = SkillInjector::new(skill_loader);
-                let budget = cb.token_budget();
-                let mut b = ContextBuilderBuilder::new(budget.total)
-                    .head_size(budget.head_size)
-                    .tail_size(budget.tail_size)
-                    .add_contributors_from(&cb)
-                    .add_contributor(Box::new(injector));
-                for c in self.contributors {
-                    b = b.add_contributor(c);
+        // Build context builder — system prompt first (if agent def has one),
+        // then SkillInjector, then any manual contributors.
+        let context_builder = {
+            let (total, head_size, tail_size) = self
+                .context_builder
+                .as_ref()
+                .map(|cb| {
+                    let b = cb.token_budget();
+                    (b.total, b.head_size, b.tail_size)
+                })
+                .unwrap_or((128_000, 0, 0));
+
+            let mut b = ContextBuilderBuilder::new(total)
+                .head_size(head_size)
+                .tail_size(tail_size);
+
+            // 1. System prompt from AgentDef.prompt (first, Head(0))
+            if let Some(ref def) = self.def {
+                if !def.prompt.is_empty() {
+                    b = b.add_contributor(Box::new(
+                        vol_llm_context::builtin::SimpleContributor::system(def.prompt.clone()),
+                    ));
                 }
-                b.build()
             }
-            None => {
-                let injector = SkillInjector::new(skill_loader);
-                let mut b = ContextBuilderBuilder::new(128_000)
-                    .add_contributor(Box::new(injector));
-                for c in self.contributors {
-                    b = b.add_contributor(c);
-                }
-                b.build()
+
+            // 2. SkillInjector — always
+            b = b.add_contributor(Box::new(SkillInjector::new(skill_loader)));
+
+            // 3. Clone existing context_builder contributors (if any)
+            if let Some(ref cb) = self.context_builder {
+                b = b.add_contributors_from(cb);
             }
+
+            // 4. Manual contributors from with_system_prompt / with_contributor
+            for c in self.contributors {
+                b = b.add_contributor(c);
+            }
+
+            b.build()
         };
 
         Ok(AgentConfig {
