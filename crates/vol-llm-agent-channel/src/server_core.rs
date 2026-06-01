@@ -30,7 +30,7 @@ use crate::domain::registry::HandlerRegistry;
 use crate::domain::{
     agent::AgentHandler, file::FileHandler, log::LogHandler,
     mcp::McpHandler, session::SessionHandler, skill::SkillHandler, system::SystemHandler,
-    tool::ToolHandler,
+    task::TaskHandler, tool::ToolHandler,
 };
 use crate::router::AgentRouter;
 
@@ -184,6 +184,9 @@ impl AgentServerCore {
         // AgentConfig.working_dir 控制日志等内部路径 → agent 私有目录
         config.working_dir = agent_dir.clone();
         config.mcp_manager = Some(mcp);
+
+        // Populate context builder with standard contributors
+        config.init_standard_contributors(&self.skill_loader);
 
         let holder = ConnectionHolder::new(
             agent_id.clone(),
@@ -342,6 +345,7 @@ impl AgentServerCoreBuilder {
                 router.clone(),
                 Arc::clone(&holders),
                 agent_defs.clone(),
+                agent_status.clone(),
             )))
             .map_err(|e| format!("failed to register AgentHandler: {e}"))?;
         handler_registry
@@ -365,6 +369,10 @@ impl AgentServerCoreBuilder {
         handler_registry
             .register(Arc::new(SystemHandler))
             .map_err(|e| format!("failed to register SystemHandler: {e}"))?;
+
+        handler_registry
+            .register(Arc::new(TaskHandler::new(runtime.task_store.clone())))
+            .map_err(|e| format!("failed to register TaskHandler: {e}"))?;
 
         for extra in self.extra_handlers {
             handler_registry
@@ -499,6 +507,7 @@ impl AgentServerCore {
             router.clone(),
             Arc::clone(&holders),
             agent_defs.clone(),
+            agent_status.clone(),
         ))).ok();
         handler_registry.register(Arc::new(FileHandler::new(PathBuf::from(".")))).ok();
         handler_registry.register(Arc::new(SessionHandler::new(agents_root, router.clone()))).ok();
@@ -507,6 +516,9 @@ impl AgentServerCore {
         handler_registry.register(Arc::new(ToolHandler::new(Arc::new(ToolRegistry::new())))).ok();
         handler_registry.register(Arc::new(LogHandler)).ok();
         handler_registry.register(Arc::new(SystemHandler)).ok();
+        handler_registry.register(Arc::new(TaskHandler::new(
+            Arc::new(vol_llm_task::InMemoryTaskStore::new()),
+        ))).ok();
 
         let runtime = AgentRuntime::for_test();
 
