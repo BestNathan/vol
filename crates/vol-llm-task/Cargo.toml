@@ -15,6 +15,10 @@ dashmap = { workspace = true }
 fd-lock = "4"
 vol-llm-core = { workspace = true }
 vol-llm-tool = { workspace = true }
+clap = { version = "4", features = ["string"] }
 
 [dev-dependencies]
 tempfile = "3"
+vol-llm-agent = { workspace = true }
+vol-llm-provider = { workspace = true }
+vol-llm-core = { workspace = true }
