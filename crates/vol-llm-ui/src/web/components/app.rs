@@ -8,6 +8,22 @@ use gloo_timers::future::TimeoutFuture;
 use crate::state::{ActiveTab, ApprovalUiState, AgentsState, ConversationState, DebugState, EventBus, GlobalState, SessionsState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
 use crate::state::McpDialogState;
 use crate::state::SkillDialogState;
+
+/// Thread-local slot so `reduce_conversation` can read the owning agent for the
+/// currently-publishing event without threading through every UiEvent variant.
+thread_local! {
+    static CURRENT_EVENT_AGENT: std::cell::RefCell<Option<String>> = std::cell::RefCell::new(None);
+}
+
+/// Called by the WS event loop before publishing each event.
+pub fn set_current_event_agent(agent_id: Option<String>) {
+    CURRENT_EVENT_AGENT.with(|c| *c.borrow_mut() = agent_id);
+}
+
+/// Called by conversation subscriber to route events to the correct agent.
+pub fn current_event_agent_id() -> Option<String> {
+    CURRENT_EVENT_AGENT.with(|c| c.borrow().clone())
+}
 use crate::web::client::{AgentEvent, JsonRpcClient};
 
 use super::agents_panel::AgentsPanel;
@@ -21,6 +37,7 @@ use super::sessions_panel::SessionsPanel;
 use super::skills::SkillsPanel;
 use super::skill_detail_dialog::SkillDetailDialog;
 use super::debug_panel::DebugPanel;
+use super::tasks_panel::TasksPanel;
 use super::status_bar::StatusBar;
 use super::tools_tab::ToolsTabContent;
 use super::mcp_tool_dialog::ToolCallDialog;
@@ -59,17 +76,22 @@ fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
         .and_then(|obj| obj.iter().next())
         .map(|(k, v)| (k.as_str(), v))?;
 
+    let run_id = event.run_id.clone();
+
     match variant {
         "AgentStart" => Some(UiEvent::AgentStart {
+            run_id: run_id.clone(),
             input: data.get("input").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
         "AgentComplete" => Some(UiEvent::AgentComplete {
+            run_id: run_id.clone(),
             response: data.get("response")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string(),
         }),
         "AgentAborted" => Some(UiEvent::AgentAborted {
+            run_id: run_id.clone(),
             reason: data.get("reason").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
         "ThinkingStart" => Some(UiEvent::ThinkingStart),
@@ -184,7 +206,7 @@ pub fn App() -> Element {
                     g.ws_connected = false;
                     g.ws_last_error = Some("Disconnected".to_string());
                     // Reset running state so input is re-enabled after disconnect.
-                    g.is_running = false;
+                    g.clear_all_running();
                     // Start reconnect loop if not already reconnecting and not maxed
                     if !g.reconnecting && !g.reconnect_maxed {
                         g.reconnecting = true;
@@ -208,19 +230,34 @@ pub fn App() -> Element {
         // GlobalState: agent lifecycle events
         set.subscribe(&bus, UiEventKind::AgentStart, {
             let global = global.clone();
-            move |_e| {
-                let mut s = global.write_unchecked();
-                s.run_count += 1; s.iteration = 0; s.tool_call_count = 0;
-                s.run_start = Some(web_time::Instant::now());
-                s.run_elapsed = Duration::ZERO; s.is_running = true;
+            move |e| {
+                if let UiEvent::AgentStart { run_id, .. } = e {
+                    let mut s = global.write_unchecked();
+                    s.run_count += 1; s.iteration = 0; s.tool_call_count = 0;
+                    s.run_start = Some(web_time::Instant::now());
+                    s.run_elapsed = Duration::ZERO;
+                    // Attribute the run to the agent that submitted it
+                    if let Some(agent_id) = s.pending_submit_agent.take() {
+                        s.run_map.insert(run_id.clone(), agent_id.clone());
+                        s.running_agents.insert(agent_id);
+                    }
+                }
             }
         });
         for kind in [UiEventKind::AgentComplete, UiEventKind::AgentAborted, UiEventKind::AgentError] {
             let global = global.clone();
-            set.subscribe(&bus, kind, move |_e| {
+            set.subscribe(&bus, kind, move |e| {
+                let run_id = match e {
+                    UiEvent::AgentComplete { run_id, .. } => Some(run_id.clone()),
+                    UiEvent::AgentAborted { run_id, .. } => Some(run_id.clone()),
+                    UiEvent::AgentError { run_id, .. } => Some(run_id.clone()),
+                    _ => None,
+                };
                 let mut s = global.write_unchecked();
                 if let Some(start) = s.run_start { s.run_elapsed = start.elapsed(); }
-                s.is_running = false;
+                if let Some(run_id) = run_id {
+                    s.set_agent_idle_by_run(&run_id);
+                }
             });
         }
         set.subscribe(&bus, UiEventKind::IterationComplete, {
@@ -303,17 +340,24 @@ pub fn App() -> Element {
     // WS event loop
     let bus_ev = event_bus.with(|eb| eb.clone());
     let client_ev = client.clone();
+    let global_ev = global_signal.clone();
     wasm_bindgen_futures::spawn_local(async move {
         loop {
             match client_ev.next_event().await {
                 Some(event) => {
+                    // Look up which agent this event belongs to via run_map
+                    let agent_id = {
+                        global_ev.read_unchecked().run_map.get(&event.run_id).cloned()
+                    };
+                    set_current_event_agent(agent_id);
                     if let Some(ui_event) = agent_event_to_ui(&event) {
                         bus_ev.publish(&ui_event);
                     }
                 }
                 None => {
                     log::warn!("Event stream closed");
-                    bus_ev.publish(&UiEvent::AgentError { message: "Event stream closed".to_string() });
+                    set_current_event_agent(None);
+                    bus_ev.publish(&UiEvent::AgentError { run_id: String::new(), message: "Event stream closed".to_string() });
                     bus_ev.publish(&UiEvent::WsDisconnected { reason: Some("Event stream closed".to_string()) });
                     break;
                 }
@@ -562,6 +606,7 @@ fn TabBar() -> Element {
 
     rsx! {
         div { class: "flex flex-nowrap bg-[#252540] border-b border-[#333355] flex-shrink-0 overflow-x-auto",
+            TabButton { state: state.clone(), tab: ActiveTab::Tasks, label: "Tasks" }
             TabButton { state: state.clone(), tab: ActiveTab::Agents, label: "Agents" }
             TabButton { state: state.clone(), tab: ActiveTab::Tools, label: "Tools" }
             TabButton { state: state.clone(), tab: ActiveTab::Workspace, label: "Workspace" }
@@ -598,6 +643,7 @@ fn TabContent(skill_dialog_signal: Signal<SkillDialogState>) -> Element {
     let active = *state.active_tab.read();
 
     match active {
+        ActiveTab::Tasks => rsx! { TasksPanel { assignee_filter: None } },
         ActiveTab::Conversation => rsx! { ConversationView {} },
         ActiveTab::Sessions => rsx! { SessionsPanel {} },
         ActiveTab::Agents => rsx! { AgentsPanel {} },
