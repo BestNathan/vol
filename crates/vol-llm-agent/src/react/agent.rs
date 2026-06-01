@@ -175,6 +175,23 @@ impl ReActAgent {
         &self.config
     }
 
+    // ── Contributor API ──
+
+    /// Add a context contributor at runtime.
+    pub fn add_contributor(&mut self, contributor: Box<dyn ContextContributor>) {
+        self.config.context_builder.add_contributor(contributor);
+    }
+
+    /// List all contributors with metadata (SOT for external queries).
+    pub async fn contributors(&self) -> Result<Vec<ContributorInfo>, ContextError> {
+        self.config.contributor_infos().await
+    }
+
+    /// Get messages from a specific contributor by name.
+    pub async fn snapshot_by_name(&self, name: &str) -> Result<Vec<ContextMessage>, ContextError> {
+        self.config.snapshot_by_name(name).await
+    }
+
     /// Cheap clone of the shared session handle.
     pub fn session(&self) -> Arc<Session> {
         self.config.session.read().unwrap().clone()
