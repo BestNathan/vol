@@ -1,7 +1,7 @@
 use crate::agent_server_protocol::{
     AgentOperation, FileOperation, LogOperation, McpOperation,
     Operation, Payload, ProtocolError, SessionOperation, SkillOperation, SystemOperation,
-    ToolOperation,
+    TaskOperation, ToolOperation,
 };
 
 pub fn method_to_operation(method: &str) -> Result<Operation, ProtocolError> {
@@ -16,6 +16,8 @@ pub fn method_to_operation(method: &str) -> Result<Operation, ProtocolError> {
         "agent.status" => Ok(Operation::Agent(AgentOperation::Status)),
         "agent.context_config" => Ok(Operation::Agent(AgentOperation::ContextConfig)),
         "agent.context_snapshot" => Ok(Operation::Agent(AgentOperation::ContextSnapshot)),
+        "task.list" => Ok(Operation::Task(TaskOperation::List)),
+        "task.get" => Ok(Operation::Task(TaskOperation::Get)),
         "file.list" => Ok(Operation::File(FileOperation::List)),
         "file.read" => Ok(Operation::File(FileOperation::Read)),
         "session.list" => Ok(Operation::Session(SessionOperation::List)),
