@@ -48,6 +48,23 @@ pub struct AgentListEntry {
     pub scope: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskEntry {
+    pub id: u64,
+    pub status: String,
+    pub kind: String,
+    pub publisher: Option<String>,
+    pub assignee: Option<String>,
+    pub subject: String,
+    pub description: String,
+    pub active_form: Option<String>,
+    pub dependencies: Vec<u64>,
+    pub blocks: Vec<u64>,
+    pub created_at: u64,
+    pub started_at: Option<u64>,
+    pub completed_at: Option<u64>,
+}
+
 /// Session entry matching the vol-session wire format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionEntry {
@@ -1084,6 +1101,73 @@ impl JsonRpcClient {
                 cb(Err(msg.to_string()));
             } else {
                 cb(Ok(result.clone()));
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    pub fn task_list(&self, status: Option<&str>, assignee: Option<&str>, cb: impl FnOnce(Result<Vec<TaskEntry>, String>) + 'static) {
+        let id = self.alloc_id();
+
+        let mut params = serde_json::Map::new();
+        if let Some(s) = status {
+            params.insert("status".to_string(), serde_json::json!(s));
+        }
+        if let Some(a) = assignee {
+            params.insert("assignee".to_string(), serde_json::json!(a));
+        }
+
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "task.list",
+            "params": params,
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("tasks").and_then(|v| v.as_array()) {
+                Some(tasks) => {
+                    let parsed: Vec<TaskEntry> = tasks.iter()
+                        .filter_map(|t| serde_json::from_value(t.clone()).ok())
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no tasks in response".to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    pub fn task_get(&self, task_id: u64, cb: impl FnOnce(Result<TaskEntry, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "task.get",
+            "params": { "task_id": task_id },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => { cb(Err(e.to_string())); return; }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match result.get("task") {
+                Some(task) => match serde_json::from_value(task.clone()) {
+                    Ok(t) => cb(Ok(t)),
+                    Err(e) => cb(Err(format!("parse error: {e}"))),
+                },
+                None => cb(Err("no task in response".to_string())),
             }
         });
         self.inner.pending.borrow_mut().insert(id, cb);
