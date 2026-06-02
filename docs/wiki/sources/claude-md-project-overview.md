@@ -10,7 +10,7 @@ tags: [claude-md, project-overview, repository-structure]
 
 **Authors/Creators:** Claude Code
 **Date:** 2026-05-19
-**Link:** `/root/nq-deribit/CLAUDE.md`
+**Link:** `/root/vol/CLAUDE.md`
 
 ## TL;DR
 
@@ -35,7 +35,7 @@ The LLM side is summarized through provider/core/tool/agent crates (`vol-llm-cor
 
 ## Entities Mentioned
 
-- [[nq-deribit-repository]]: repository-level Cargo workspace and directory map
+- [[vol-repository]]: repository-level Cargo workspace and directory map
 - [[vol-llm-ui-crate]]: Dioxus WASM web frontend called out in the overview
 - [[vol-llm-agent-crate]]: ReAct orchestration crate grouped under LLM agent infrastructure
 - [[vol-llm-agents-crate]]: higher-level agent implementations grouped under LLM agent infrastructure

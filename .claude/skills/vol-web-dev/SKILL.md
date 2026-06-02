@@ -1,9 +1,9 @@
 ---
-name: nq-web-dev
-description: Use when developing the vol-llm-ui Dioxus/WASM web frontend in the nq-deribit project — starting dev servers, adding Tailwind classes, debugging frontend-backend connection issues, or troubleshooting why styles don't appear
+name: vol-web-dev
+description: Use when developing the vol-llm-ui Dioxus/WASM web frontend in the vol project — starting dev servers, adding Tailwind classes, debugging frontend-backend connection issues, or troubleshooting why styles don't appear
 ---
 
-# NQ Web Development
+# Vol Web Development
 
 ## Overview
 

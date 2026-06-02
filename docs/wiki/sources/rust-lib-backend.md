@@ -38,7 +38,7 @@ The `RustLibBackend` provides the same `GrepBackend` trait interface as `RgCliBa
 
 ## Entities Mentioned
 - [[vol-llm-tool-crate]]: Tool definition and registry framework using ExecutableTool trait
-- [[nq-deribit-repository]]: Parent repository containing the grep-tool crate
+- [[vol-repository]]: Parent repository containing the grep-tool crate
 
 ## Concepts Covered
 - [[tool-registry]]: GrepTool registered as a built-in tool with multi-backend strategy

@@ -12,7 +12,7 @@
 - Updated entities: [[vol-llm-ui-crate]] (web development prerequisites, persistent Makefile CSS watcher, project web-dev skill, startup services, troubleshooting)
 - Updated index: new source entry, vol-llm-ui summary/date, updated date
 - Cross-references added: 7
-- Changes: CLAUDE.md now documents web-only prerequisites: Dioxus CLI 0.6.x, cargo-watch, Node/npm, wasm32 target, vol-llm-ui npm dependencies, Tailwind --watch=always, and dx --platform web fallback for Dioxus 404. `make web-css` now runs persistent Tailwind watch mode, and `.claude/skills/nq-web-dev/SKILL.md` is tracked as the project-specific web startup/debug guide.
+- Changes: CLAUDE.md now documents web-only prerequisites: Dioxus CLI 0.6.x, cargo-watch, Node/npm, wasm32 target, vol-llm-ui npm dependencies, Tailwind --watch=always, and dx --platform web fallback for Dioxus 404. `make web-css` now runs persistent Tailwind watch mode, and `.claude/skills/vol-web-dev/SKILL.md` is tracked as the project-specific web startup/debug guide.
 
 ## [2026-05-23] ingest | Per-Agent Conversation State
 - Created sources: [[per-agent-conversation]]

@@ -31,7 +31,7 @@ async fn test_compress_real_session() {
     let home = std::env::var("HOME").unwrap_or_default();
     let session_path = PathBuf::from(&home)
         .join(".vol-coding")
-        .join("nq-deribit")
+        .join("vol")
         .join("sessions")
         .join("f98d7668-d00f-4983-90c6-cf6194e373bd.jsonl");
 

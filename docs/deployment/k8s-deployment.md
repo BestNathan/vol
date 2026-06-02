@@ -50,7 +50,7 @@ kubectl apply -f k8s/configmap.yaml
 ```bash
 # Delete and recreate
 kubectl -n deribit delete configmap vol-monitor-config
-kubectl -n deribit create configmap vol-monitor-config --from-file=config.toml=/root/nq-deribit/config.prod.toml
+kubectl -n deribit create configmap vol-monitor-config --from-file=config.toml=/root/vol/config.prod.toml
 
 # Or apply updated manifest
 kubectl apply -f k8s/configmap.yaml

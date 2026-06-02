@@ -57,27 +57,16 @@ package/crate rename.
 > currently only linked from the two source files in items 5–6), so the index needs no edit.
 > The entity being absent from the index is a pre-existing wiki state, not part of this change.
 
-## Decisions requiring user confirmation (resolved at review gate)
+## Decisions (resolved by user 2026-06-02)
 
-These three are genuinely borderline; my recommended defaults are listed. Please confirm or
-override at the review gate.
-
-- **D1 — `nq-web-dev` skill** (`.claude/skills/nq-web-dev/`): the skill's `description`
-  text says "in the nq-deribit project".
-  - *Recommended default:* update the description text `nq-deribit` → `vol`, but **keep the
-    skill folder name `nq-web-dev`** (renaming the folder changes the invocation name
-    `/nq-web-dev` and is closer to a "tool rename", which the user said is not required).
-- **D2 — ignored test path** (`crates/vol-llm-wiki/tests/wiki_integration_test.rs:34`):
-  `.join("nq-deribit")` builds `~/.vol-coding/nq-deribit/sessions/...` for an `#[ignore]`d
-  real-LLM test.
-  - *Recommended default:* update to `.join("vol")` for codename consistency. Low risk
-    (test is `#[ignore]`d and only runs against a hand-placed session fixture).
-- **D3 — wiki entity rename**: renaming `nq-deribit-repository.md` → `vol-repository.md`
-  requires updating its 2 backlinks (items 5–6) and the wiki index, then validating with
-  the `wiki-lint` skill.
-  - *Recommended default:* do the rename + backlink fixes + `wiki-lint`. (Alternative:
-    keep the filename, only change visible headings — but that leaves an `nq-deribit`
-    token in the path.)
+- **D1 — `nq-web-dev` skill → RENAME FOLDER.** Rename `.claude/skills/nq-web-dev/` →
+  `.claude/skills/vol-web-dev/`, update `SKILL.md` `name:` and description text
+  (`nq-deribit` → `vol`). Invocation becomes `/vol-web-dev`.
+- **D2 — ignored test path → UPDATE.** `crates/vol-llm-wiki/tests/wiki_integration_test.rs:34`
+  `.join("nq-deribit")` → `.join("vol")`.
+- **D3 — wiki entity → RENAME + FIX BACKLINKS.** Rename `nq-deribit-repository.md` →
+  `vol-repository.md`, update heading/body, fix the 2 `[[nq-deribit-repository]]` backlinks,
+  validate with `wiki-lint`.
 
 ## Constraints
 
@@ -111,4 +100,4 @@ override at the review gate.
 
 ## Open Questions
 
-- D1/D2/D3 above — resolved at the user review gate.
+- None. D1/D2/D3 resolved (see Decisions).

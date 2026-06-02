@@ -22,7 +22,7 @@ tags: [web, dioxus, tailwind, claude-md, environment]
 - Backend auto-reload requires `cargo-watch`.
 - Tailwind v4 CSS compilation requires `npm ci --prefix crates/vol-llm-ui` before running the CLI.
 - `make web-css` now runs Tailwind in persistent watch mode using `--watch=always`.
-- `.claude/skills/nq-web-dev/SKILL.md` is tracked as the project-specific web development run/debug guide.
+- `.claude/skills/vol-web-dev/SKILL.md` is tracked as the project-specific web development run/debug guide.
 - If `make web-dev` serves `Err 404 - dioxus is not currently serving a web app`, use `dx serve --platform web ...` explicitly.
 
 ## Detailed Summary
@@ -38,7 +38,7 @@ npx --prefix crates/vol-llm-ui @tailwindcss/cli \
   --watch=always
 ```
 
-This reflects the observed behavior that Tailwind CLI exits after a one-time build unless explicit watch mode is used, and `--watch=always` keeps watching when launched from a background non-interactive process. The project skill `.claude/skills/nq-web-dev/SKILL.md` now captures the same three-service startup workflow for future Claude Code sessions.
+This reflects the observed behavior that Tailwind CLI exits after a one-time build unless explicit watch mode is used, and `--watch=always` keeps watching when launched from a background non-interactive process. The project skill `.claude/skills/vol-web-dev/SKILL.md` now captures the same three-service startup workflow for future Claude Code sessions.
 
 The document also keeps the Makefile-driven workflow for `make web-dev`, `make web-backend`, `make web-check`, `make web-build`, and `make web-clippy`, while documenting an explicit fallback command when Dioxus CLI starts a server but does not serve the web app:
 

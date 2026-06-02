@@ -1,4 +1,4 @@
-# nq-deribit
+# vol
 
 A Rust workspace combining a Deribit volatility monitoring pipeline with a full LLM agent framework — ReAct orchestration, MCP integration, built-in tools, skills, TUI and web frontends.
 
