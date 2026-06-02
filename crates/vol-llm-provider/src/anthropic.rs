@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use futures_util::StreamExt;
 use reqwest::Client;
 use serde_json::json;
+use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing::info;
 use vol_llm_core::*;
@@ -15,6 +16,8 @@ pub struct AnthropicProvider {
     api_key: String,
     model: String,
     base_url: String,
+    body_defaults: HashMap<String, serde_json::Value>,
+    headers: HashMap<String, String>,
 }
 
 impl AnthropicProvider {
@@ -26,6 +29,8 @@ impl AnthropicProvider {
             api_key: config.resolve_api_key()?,
             model: config.model.clone(),
             base_url: config.base_url.clone(),
+            body_defaults: config.body.clone().unwrap_or_default(),
+            headers: config.headers.clone().unwrap_or_default(),
         })
     }
 
@@ -38,8 +43,7 @@ impl AnthropicProvider {
             .or_else(|_| std::env::var("https_proxy"))
             .ok();
 
-        let mut builder = Client::builder()
-            .danger_accept_invalid_certs(true);
+        let mut builder = Client::builder().danger_accept_invalid_certs(true);
 
         if let Some(url) = &proxy_url {
             // DashScope coding endpoint is accessible directly from China,
@@ -51,9 +55,69 @@ impl AnthropicProvider {
             builder = builder.proxy(proxy);
         }
 
-        builder
-            .build()
-            .map_err(|e| LLMError::Network(e.into()))
+        builder.build().map_err(|e| LLMError::Network(e.into()))
+    }
+
+    fn convert_user_content(&self, content: Option<&MessageContent>) -> Result<serde_json::Value> {
+        match content {
+            Some(MessageContent::Text(text)) => Ok(json!(text)),
+            Some(MessageContent::MultiPart(parts)) => {
+                let mut blocks = Vec::new();
+                for part in parts {
+                    match part {
+                        ContentPart::Text { text } => blocks.push(json!({
+                            "type": "text",
+                            "text": text,
+                        })),
+                        ContentPart::Image { image_url } => {
+                            blocks.push(self.convert_image_block(image_url)?);
+                        }
+                    }
+                }
+                Ok(json!(blocks))
+            }
+            None => Ok(json!("")),
+        }
+    }
+
+    fn convert_image_block(&self, image_url: &ImageUrl) -> Result<serde_json::Value> {
+        if image_url.url.starts_with("data:") {
+            let (media_type, data) = Self::parse_image_data_url(&image_url.url)?;
+            return Ok(json!({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": data,
+                },
+            }));
+        }
+
+        Ok(json!({
+            "type": "image",
+            "source": {
+                "type": "url",
+                "url": image_url.url,
+            },
+        }))
+    }
+
+    fn parse_image_data_url(url: &str) -> Result<(&str, &str)> {
+        let rest = url
+            .strip_prefix("data:")
+            .ok_or_else(|| LLMError::InvalidRequest("Invalid image data URL".to_string()))?;
+        let (metadata, data) = rest
+            .split_once(',')
+            .ok_or_else(|| LLMError::InvalidRequest("Invalid image data URL".to_string()))?;
+        let media_type = metadata
+            .strip_suffix(";base64")
+            .ok_or_else(|| LLMError::InvalidRequest("Invalid image data URL".to_string()))?;
+        if media_type.is_empty() || data.is_empty() {
+            return Err(LLMError::InvalidRequest(
+                "Invalid image data URL".to_string(),
+            ));
+        }
+        Ok((media_type, data))
     }
 
     /// Convert messages to Anthropic format
@@ -66,7 +130,7 @@ impl AnthropicProvider {
                     // Anthropic: system must be sent separately, not in messages
                 }
                 MessageRole::User => {
-                    let content = msg.content.as_ref().map(|c| c.as_str()).unwrap_or("");
+                    let content = self.convert_user_content(msg.content.as_ref())?;
                     result.push(json!({
                         "role": "user",
                         "content": content,
@@ -167,7 +231,9 @@ impl LLMClient for AnthropicProvider {
 
     async fn converse(&self, request: ConversationRequest) -> Result<ConversationResponse> {
         // max_tokens is required for Anthropic
-        let max_tokens = request.model_config.max_tokens.unwrap_or(8192);
+        let max_tokens = request.model_config.max_tokens
+            .or_else(|| self.body_defaults.get("max_tokens").and_then(|v| v.as_u64()).map(|v| v as u32))
+            .unwrap_or(8192);
 
         // Convert messages
         let anthropic_messages = self.convert_messages(&request.messages)?;
@@ -195,17 +261,41 @@ impl LLMClient for AnthropicProvider {
             body["tools"] = self.convert_tools(&tools);
         }
 
+        // Apply body defaults (skip max_tokens which is already handled)
+        for (key, value) in &self.body_defaults {
+            if key == "max_tokens" {
+                continue;
+            }
+            let overridden = match key.as_str() {
+                "temperature" => request.model_config.temperature.is_some(),
+                "top_p" => request.model_config.top_p.is_some(),
+                "top_k" => request.model_config.top_k.is_some(),
+                // These are set from request below — skip body defaults
+                "system" | "tools" | "messages" | "model" | "stream" | "max_tokens" => true,
+                _ => false,
+            };
+            if !overridden {
+                body[key] = value.clone();
+            }
+        }
+
         // Send request
         let url = format!("{}/v1/messages", self.base_url);
 
-        let response = self
+        let mut req = self
             .client
             .post(&url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
             .header("Content-Type", "application/json")
             .header("User-Agent", "claude-code/1.0.0")
-            .json(&body)
+            .json(&body);
+
+        for (key, value) in &self.headers {
+            req = req.header(key, value);
+        }
+
+        let response = req
             .send()
             .await
             .map_err(LLMError::Network)?;
@@ -309,7 +399,9 @@ impl LLMClient for AnthropicProvider {
 
     async fn converse_stream(&self, request: ConversationRequest) -> Result<StreamReceiver> {
         // max_tokens is required for Anthropic
-        let max_tokens = request.model_config.max_tokens.unwrap_or(8192);
+        let max_tokens = request.model_config.max_tokens
+            .or_else(|| self.body_defaults.get("max_tokens").and_then(|v| v.as_u64()).map(|v| v as u32))
+            .unwrap_or(8192);
 
         // Convert messages
         let anthropic_messages = self.convert_messages(&request.messages)?;
@@ -338,17 +430,41 @@ impl LLMClient for AnthropicProvider {
             body["tools"] = self.convert_tools(&tools);
         }
 
+        // Apply body defaults (skip max_tokens which is already handled)
+        for (key, value) in &self.body_defaults {
+            if key == "max_tokens" {
+                continue;
+            }
+            let overridden = match key.as_str() {
+                "temperature" => request.model_config.temperature.is_some(),
+                "top_p" => request.model_config.top_p.is_some(),
+                "top_k" => request.model_config.top_k.is_some(),
+                // These are set from request below — skip body defaults
+                "system" | "tools" | "messages" | "model" | "stream" | "max_tokens" => true,
+                _ => false,
+            };
+            if !overridden {
+                body[key] = value.clone();
+            }
+        }
+
         // Send request
         let url = format!("{}/v1/messages", self.base_url);
 
-        let response = self
+        let mut req = self
             .client
             .post(&url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
             .header("Content-Type", "application/json")
             .header("User-Agent", "claude-code/1.0.0")
-            .json(&body)
+            .json(&body);
+
+        for (key, value) in &self.headers {
+            req = req.header(key, value);
+        }
+
+        let response = req
             .send()
             .await
             .map_err(LLMError::Network)?;
@@ -444,6 +560,91 @@ impl LLMClient for AnthropicProvider {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    fn provider() -> AnthropicProvider {
+        AnthropicProvider {
+            client: Client::new(),
+            api_key: "test-key".to_string(),
+            model: "claude-test".to_string(),
+            base_url: "https://example.test".to_string(),
+        }
+    }
+
+    #[test]
+    fn converts_user_multipart_url_image() {
+        let provider = provider();
+        let messages = vec![Message::user(MessageContent::MultiPart(vec![
+            ContentPart::Text {
+                text: "look".to_string(),
+            },
+            ContentPart::Image {
+                image_url: ImageUrl {
+                    url: "https://example.test/image.png".to_string(),
+                    detail: Some("high".to_string()),
+                },
+            },
+        ]))];
+
+        let converted = provider.convert_messages(&messages).unwrap();
+
+        assert_eq!(converted[0]["role"], "user");
+        assert_eq!(
+            converted[0]["content"][0],
+            json!({ "type": "text", "text": "look" })
+        );
+        assert_eq!(
+            converted[0]["content"][1],
+            json!({
+                "type": "image",
+                "source": { "type": "url", "url": "https://example.test/image.png" },
+            })
+        );
+    }
+
+    #[test]
+    fn converts_user_multipart_data_url_image() {
+        let provider = provider();
+        let messages = vec![Message::user(MessageContent::MultiPart(vec![
+            ContentPart::Image {
+                image_url: ImageUrl {
+                    url: "data:image/png;base64,QUJD".to_string(),
+                    detail: None,
+                },
+            },
+        ]))];
+
+        let converted = provider.convert_messages(&messages).unwrap();
+
+        assert_eq!(
+            converted[0]["content"][0],
+            json!({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": "QUJD"
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_data_url_image() {
+        let provider = provider();
+        let messages = vec![Message::user(MessageContent::MultiPart(vec![
+            ContentPart::Image {
+                image_url: ImageUrl {
+                    url: "data:image/png,not-base64".to_string(),
+                    detail: None,
+                },
+            },
+        ]))];
+
+        let err = provider.convert_messages(&messages).unwrap_err();
+        assert!(err.to_string().contains("Invalid image data URL"));
+    }
+
     #[test]
     fn test_user_agent_header_constant() {
         // Verify the User-Agent header constant is set correctly

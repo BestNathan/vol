@@ -18,7 +18,7 @@ pub enum MessageRole {
 }
 
 /// Content part for multi-part messages (images, etc.)
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ContentPart {
     Text { text: String },
@@ -26,7 +26,7 @@ pub enum ContentPart {
 }
 
 /// Image URL for multi-part content
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct ImageUrl {
     pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -34,7 +34,7 @@ pub struct ImageUrl {
 }
 
 /// Message content - text or multi-part
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum MessageContent {
     /// Plain text
@@ -149,6 +149,12 @@ impl Message {
             name: None,
             thinking: None,
         }
+    }
+
+    /// Attach thinking content to this message.
+    pub fn with_thinking(mut self, thinking: String) -> Self {
+        self.thinking = Some(thinking);
+        self
     }
 }
 

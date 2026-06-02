@@ -3,8 +3,8 @@ type: concept
 category: framework
 tags: [router, multi-agent, dispatch, channel]
 created: 2026-05-07
-updated: 2026-05-07
-source_count: 1
+updated: 2026-05-21
+source_count: 2
 ---
 
 # Agent Router
@@ -20,6 +20,7 @@ source_count: 1
 - Created with `AgentRouter::new()` [[agent-channel-examples]]
 - `register(agent_id, dispatcher)` adds a dispatcher for a given agent ID [[agent-channel-examples]]
 - `send(agent_id, request)` routes a request to the appropriate dispatcher and returns a oneshot receiver [[agent-channel-examples]]
+- `cancel(run_id)` attempts cancellation across all registered dispatchers by run id [[run-id-unification]]
 - `list_agents()` returns the set of registered agent IDs [[agent-channel-examples]]
 - Returns `ChannelError::AgentNotFound` for unknown agent IDs [[agent-channel-examples]]
 
@@ -39,8 +40,14 @@ let result = rx.await?;
 
 ## Relationship to AgentDispatcher
 
-`AgentRouter` is a higher-level abstraction than `AgentDispatcher`. A dispatcher handles a single agent's request queue; the router distributes requests across multiple dispatchers based on agent ID. They compose: each agent gets its own dispatcher, and the router selects which dispatcher to use.
+`AgentRouter` is a higher-level abstraction than `AgentDispatcher`. A dispatcher handles a single agent's request queue; the router distributes requests across multiple dispatchers based on agent ID. They compose: each agent gets its own dispatcher, and the router selects which dispatcher to use. Cancellation is broadcast across dispatchers by `run_id`, matching the unified run identity model [[run-id-unification]].
 
 ## Multi-Agent Service Architecture
 
 In a multi-agent service, each agent needs its own `ConnectionHolder` (for transport integration) and `AgentDispatcher` (for request queueing). The router holds references to dispatchers, while a separate `HashMap` holds holders for WebSocket/HTTP handler lookup. This is necessary because `ConnectionHolder` does not implement `Clone` ([[connection-holder-clone-limitation]]).
+
+## Related Concepts
+
+- [[run-id-unification]]: Router cancellation now searches dispatchers by run id.
+- [[agent-dispatcher]]: Per-agent FIFO queue and run id cancellation target.
+- [[vol-llm-agent-channel-crate]]: Crate containing the router implementation.

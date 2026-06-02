@@ -2,6 +2,7 @@
 
 use crate::secret::Secret;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use vol_llm_core::LLMProvider;
 
 /// LLM configuration
@@ -15,6 +16,12 @@ pub struct LLMConfig {
     pub api_key: Secret,
     /// Base URL for API endpoint
     pub base_url: String,
+    /// Default body parameters (provider-specific), merged at runtime
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<HashMap<String, serde_json::Value>>,
+    /// Custom HTTP headers, attached to every request
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headers: Option<HashMap<String, String>>,
 }
 
 impl LLMConfig {
@@ -30,7 +37,21 @@ impl LLMConfig {
             model: model.into(),
             api_key,
             base_url: base_url.into(),
+            body: None,
+            headers: None,
         }
+    }
+
+    /// Set default body parameters
+    pub fn with_body(mut self, body: HashMap<String, serde_json::Value>) -> Self {
+        self.body = Some(body);
+        self
+    }
+
+    /// Set custom headers
+    pub fn with_headers(mut self, headers: HashMap<String, String>) -> Self {
+        self.headers = Some(headers);
+        self
     }
 
     /// Resolve API key from secret
@@ -85,5 +106,33 @@ mod tests {
             "https://api.test.com",
         );
         assert_eq!(config.resolve_api_key().unwrap(), "env-key");
+    }
+}
+
+/// File-level provider configuration, parsed from a single TOML file.
+/// Filename (without .toml extension) is the provider ID.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProviderFileConfig {
+    pub provider: LLMProvider,
+    pub model: String,
+    pub api_key: Secret,
+    pub base_url: String,
+    #[serde(default)]
+    pub body: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub headers: Option<HashMap<String, String>>,
+}
+
+impl ProviderFileConfig {
+    /// Convert to LLMConfig (for backward compatibility with existing factory)
+    pub fn to_llm_config(&self) -> LLMConfig {
+        LLMConfig {
+            provider: self.provider,
+            model: self.model.clone(),
+            api_key: self.api_key.clone(),
+            base_url: self.base_url.clone(),
+            body: self.body.clone(),
+            headers: self.headers.clone(),
+        }
     }
 }

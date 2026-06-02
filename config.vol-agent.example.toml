@@ -1,0 +1,180 @@
+# config.vol-agent.example.toml — Agent Framework service configuration
+#
+# This file configures the agent server, LLM providers, MCP servers, tools,
+# and runtime defaults. Copy and customize for your deployment.
+#
+# The agent framework also auto-discovers config from these locations:
+#   .agents/providers/*.toml     — LLM provider definitions (overrides inline [[providers]])
+#   .mcp.json                     — MCP server definitions (overrides inline [mcp])
+#   .agents/agents/*.md          — Agent definitions (Markdown + YAML frontmatter)
+#   .agents/agents/*.yaml        — YAML agent definitions
+#   .agents/skills/*/SKILL.md    — Skill definitions
+#
+# When the same provider/server is defined both inline and on disk,
+# the disk version takes precedence.
+
+# =============================================================================
+# Server — JSON-RPC WebSocket backend
+# =============================================================================
+[server]
+# Bind address for the JSON-RPC agent service
+host = "0.0.0.0"
+port = 3001
+
+# Max concurrent agent runs
+max_concurrent_runs = 5
+
+# Path to serve as static files (optional, for web frontend assets)
+# static_dir = "./crates/vol-llm-ui/dist"
+
+# =============================================================================
+# Store — data persistence paths
+# =============================================================================
+[store]
+# Working directory for project-level agent discovery (.agents/ dirs)
+working_dir = "."
+
+# Data store directory (sessions, tasks, logs)
+# Supports ~ tilde expansion
+store_dir = "~/.vol"
+
+# =============================================================================
+# Providers — LLM provider definitions
+# =============================================================================
+# Define one or more providers. The api_key field supports:
+#   "${ENV_VAR}"           — read from environment variable
+#   "${ENV_VAR:default}"   — env var with fallback
+#   "sk-xxx-literal"       — use directly (only for local/test services)
+
+[[providers]]
+id = "anthropic-main"
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+api_key = "${ANTHROPIC_AUTH_TOKEN}"
+# DashScope proxy endpoint for Claude models
+base_url = "https://coding.dashscope.aliyuncs.com/apps/anthropic"
+
+# Optional: custom body parameters for this provider
+[providers.body]
+max_tokens = 8192
+# temperature = 0.7
+
+# Optional: custom HTTP headers
+[providers.headers]
+"anthropic-version" = "2023-06-01"
+
+# --- Local model service ---
+[[providers]]
+id = "qwen-local"
+provider = "openai"
+model = "qwen3.6-plus"
+# Local service doesn't need a real key
+api_key = "local"
+base_url = "http://192.168.2.162:31693/v1"
+
+[providers.body]
+max_tokens = 4096
+
+# --- GPT model via local service ---
+[[providers]]
+id = "gpt-local"
+provider = "openai"
+model = "gpt5.5"
+api_key = "local"
+base_url = "http://192.168.2.162:31693/v1"
+
+[providers.body]
+max_tokens = 8192
+
+# --- OpenAI direct (fallback) ---
+# [[providers]]
+# id = "openai-direct"
+# provider = "openai"
+# model = "gpt-4o"
+# api_key = "${OPENAI_API_KEY}"
+# base_url = "https://api.openai.com/v1"
+
+# =============================================================================
+# Default Agent — runtime defaults for agents without explicit config
+# =============================================================================
+[default_agent]
+# Default LLM provider (must match a [[providers]] id)
+llm_provider_id = "anthropic-main"
+
+# ReAct loop limits
+max_iterations = 15
+max_history_messages = 30
+
+# HITL (Human-in-the-Loop) defaults
+[default_agent.hitl]
+# Tool categories that require human approval before execution
+approval_required_for = ["bash"]
+# Timeout waiting for human approval (0 = wait forever)
+timeout_secs = 300
+# Behavior on timeout: "approve", "reject", or "stop"
+on_timeout = "reject"
+
+# =============================================================================
+# MCP — Model Context Protocol servers
+# =============================================================================
+# MCP servers provide additional tools, resources, and prompts.
+# Equivalent to .mcp.json — use whichever format you prefer.
+#
+# Transport types:
+#   stdio  — spawn a local process
+#   http   — connect to a remote HTTP MCP server
+
+# Example: docs.rs MCP server (local binary)
+# [[mcp_servers]]
+# name = "docs-rs"
+# type = "stdio"
+# command = "cargo"
+# args = ["run", "--release", "-p", "vol-mcp-servers", "--bin", "docs-rs-mcp"]
+# [mcp_servers.env]
+# RUST_LOG = "info"
+
+# Example: remote MCP server
+# [[mcp_servers]]
+# name = "remote-tools"
+# type = "http"
+# url = "https://mcp.example.com/api"
+# [mcp_servers.headers]
+# Authorization = "Bearer ${MCP_TOKEN}"
+
+# =============================================================================
+# Tools — built-in tool configuration
+# =============================================================================
+
+# Web Search (Tavily)
+[tools.web_search]
+provider = "tavily"
+# api_key is read from TAVILY_API_KEY env var
+
+# Web Fetch
+[tools.web_fetch]
+# Maximum content length in bytes (default: unlimited)
+# max_content_length = 1048576
+
+# Proxy for web tools (default: inherits HTTPS_PROXY from env)
+# [tools.proxy]
+# proxy_url = "http://192.168.2.98:8890"
+
+# =============================================================================
+# Observability
+# =============================================================================
+[observability]
+
+# OTLP endpoint for logs, metrics, and traces
+# Default: OTEL_EXPORTER_OTLP_ENDPOINT env var, then http://localhost:4317
+# otlp_endpoint = "http://jaeger-collector.observability.svc.cluster.local:4317"
+
+# Service name in traces
+service_name = "vol-agent"
+
+# JSONL agent run logs written to {working_dir}/logs/agents/{agent_id}/
+[observability.logger]
+enabled = true
+
+# OpenTelemetry metrics (tool call counts, latency, token usage)
+[observability.metrics]
+enabled = true

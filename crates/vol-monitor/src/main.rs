@@ -11,7 +11,7 @@ use vol_config::{FeishuConfig, SkewConfig, TermStructureConfig};
 use vol_datasource::{PortfolioDataSource, VolatilityDataSource};
 use vol_engine::{EngineConfig, MonitoringEngineBuilder};
 use vol_llm_agents::{AdviceAgent, AdviceAgentConfig};
-use vol_llm_provider::LLMProviderRegistry;
+use vol_llm_provider::{LLMProviderRegistry, ProviderLoader};
 use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
 use vol_llm_tool::ToolRegistry;
 use vol_notification::{FeishuNotification, StdoutNotification};
@@ -85,13 +85,15 @@ async fn main() -> Result<()> {
     info!("  Deribit Volatility Monitor v0.3.0");
     info!("===========================================");
 
-    // Initialize LLM provider registry if providers are configured
-    let llm_registry: Option<LLMProviderRegistry> = if !config.llm_providers.is_empty() {
+    // Initialize LLM provider registry from .agents/providers/
+    // Pass current working directory so both project-level and user-level providers are loaded
+    let loader = ProviderLoader::load(std::env::current_dir().ok().as_deref());
+    let llm_registry: Option<LLMProviderRegistry> = if !loader.is_empty() {
         info!(
-            "Initializing LLM providers: {} configured",
-            config.llm_providers.len()
+            "Initializing LLM providers: {} loaded from .agents/providers/",
+            loader.len()
         );
-        match LLMProviderRegistry::from_configs(&config.llm_providers) {
+        match LLMProviderRegistry::from_loader(&loader) {
             Ok(registry) => {
                 info!("Available LLM providers: {:?}", registry.ids());
 
@@ -118,7 +120,7 @@ async fn main() -> Result<()> {
             }
         }
     } else {
-        info!("No LLM providers configured");
+        info!("No LLM providers configured in .agents/providers/");
         None
     };
 
@@ -386,7 +388,6 @@ fn create_default_config() -> Config {
         notifications: vec![],
         rules: vec![],
         tracing: vol_config::TracingConfig::default(),
-        llm_providers: vec![],
         agent_advice: vol_config::AgentAdviceConfig::default(),
         data_sources: None,
         alerts: None,

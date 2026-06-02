@@ -3,8 +3,27 @@
 use dioxus::prelude::*;
 use std::sync::Arc;
 use std::time::Duration;
+use gloo_timers::future::TimeoutFuture;
 
-use crate::state::{ActiveTab, ApprovalUiState, AgentsState, ConversationState, EventBus, GlobalState, SessionsState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
+use crate::state::{ActiveTab, ApprovalUiState, AgentsState, ConversationState, DebugState, EventBus, GlobalState, SessionsState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
+use crate::state::McpDialogState;
+use crate::state::SkillDialogState;
+
+/// Thread-local slot so `reduce_conversation` can read the owning agent for the
+/// currently-publishing event without threading through every UiEvent variant.
+thread_local! {
+    static CURRENT_EVENT_AGENT: std::cell::RefCell<Option<String>> = std::cell::RefCell::new(None);
+}
+
+/// Called by the WS event loop before publishing each event.
+pub fn set_current_event_agent(agent_id: Option<String>) {
+    CURRENT_EVENT_AGENT.with(|c| *c.borrow_mut() = agent_id);
+}
+
+/// Called by conversation subscriber to route events to the correct agent.
+pub fn current_event_agent_id() -> Option<String> {
+    CURRENT_EVENT_AGENT.with(|c| c.borrow().clone())
+}
 use crate::web::client::{AgentEvent, JsonRpcClient};
 
 use super::agents_panel::AgentsPanel;
@@ -12,12 +31,18 @@ use super::approval_dialog::ApprovalDialog;
 use super::conversation::ConversationView;
 use super::file_content::FileContentView;
 use super::file_tree::FileTree;
-use super::input_area::InputArea;
 use super::log_viewer::LogViewer;
+use super::mcp_panel::McpPanel;
 use super::sessions_panel::SessionsPanel;
 use super::skills::SkillsPanel;
+use super::skill_detail_dialog::SkillDetailDialog;
+use super::debug_panel::DebugPanel;
+use super::tasks_panel::TasksPanel;
 use super::status_bar::StatusBar;
 use super::tools_tab::ToolsTabContent;
+use super::mcp_tool_dialog::ToolCallDialog;
+use super::mcp_resource_viewer::ResourceViewer;
+use super::mcp_prompt_viewer::PromptViewer;
 
 /// Derive WebSocket URL from the page's host at runtime.
 fn derive_ws_url() -> String {
@@ -45,62 +70,72 @@ impl PartialEq for AppState {
 }
 
 fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
-    let data = &event.data;
-    match event.event_type.as_str() {
-        "agent_start" => Some(UiEvent::AgentStart {
+    let ev = &event.event;
+    // AgentStreamEvent is externally-tagged: {"VariantName": {...fields}}
+    let (variant, data) = ev.as_object()
+        .and_then(|obj| obj.iter().next())
+        .map(|(k, v)| (k.as_str(), v))?;
+
+    let run_id = event.run_id.clone();
+
+    match variant {
+        "AgentStart" => Some(UiEvent::AgentStart {
+            run_id: run_id.clone(),
             input: data.get("input").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "agent_complete" => Some(UiEvent::AgentComplete {
-            response: data.get("response").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        "AgentComplete" => Some(UiEvent::AgentComplete {
+            run_id: run_id.clone(),
+            response: data.get("response")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
         }),
-        "agent_error" => Some(UiEvent::AgentError {
-            message: data.get("message").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        }),
-        "agent_aborted" => Some(UiEvent::AgentAborted {
+        "AgentAborted" => Some(UiEvent::AgentAborted {
+            run_id: run_id.clone(),
             reason: data.get("reason").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "thinking_start" => Some(UiEvent::ThinkingStart),
-        "thinking_delta" => Some(UiEvent::ThinkingDelta {
+        "ThinkingStart" => Some(UiEvent::ThinkingStart),
+        "ThinkingDelta" => Some(UiEvent::ThinkingDelta {
             delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "thinking_complete" => Some(UiEvent::ThinkingComplete),
-        "content_start" => Some(UiEvent::ContentStart),
-        "content_delta" => Some(UiEvent::ContentDelta {
+        "ThinkingComplete" => Some(UiEvent::ThinkingComplete),
+"ContentStart" => Some(UiEvent::ContentStart),
+        "ContentDelta" => Some(UiEvent::ContentDelta {
             delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "content_complete" => Some(UiEvent::ContentComplete {
+        "ContentComplete" => Some(UiEvent::ContentComplete {
             content: data.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "tool_call_begin" => Some(UiEvent::ToolCallBegin {
+        "ToolCallBegin" => Some(UiEvent::ToolCallBegin {
             tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            arguments: data.get("arguments").map(|v| v.to_string()).unwrap_or_default(),
+            arguments: data.get("arguments").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "tool_call_argument_delta" => Some(UiEvent::ToolCallArgumentDelta {
+        "ToolCallArgumentDelta" => Some(UiEvent::ToolCallArgumentDelta {
             delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
-        "tool_call_complete" => Some(UiEvent::ToolCallComplete {
+        "ToolCallComplete" => Some(UiEvent::ToolCallComplete {
             tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            result: data.get("result").map(|v| v.to_string()).unwrap_or_default(),
+            result: data.get("result").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
         }),
-        "tool_call_error" => Some(UiEvent::ToolCallError {
+        "ToolCallError" => Some(UiEvent::ToolCallError {
             tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             error: data.get("error").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
         }),
-        "tool_call_skipped" => Some(UiEvent::ToolCallSkipped {
+        "ToolCallSkipped" => Some(UiEvent::ToolCallSkipped {
             tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             reason: data.get("reason").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
         }),
-        "max_iterations_reached" => Some(UiEvent::MaxIterationsReached {
-            current: data.get("current").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            max: data.get("max").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+        "MaxIterationsReached" => Some(UiEvent::MaxIterationsReached {
+            current: data.get("current_iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            max: data.get("max_iterations").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         }),
-        "iteration_continued" => Some(UiEvent::IterationContinued {
+        "IterationContinued" => Some(UiEvent::IterationContinued {
             from_iteration: data.get("from_iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         }),
-        "iteration_complete" => Some(UiEvent::IterationComplete {
+        "IterationComplete" => Some(UiEvent::IterationComplete {
             iteration: data.get("iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
             final_answer: data.get("final_answer").and_then(|v| v.as_str()).map(|s| s.to_string()),
         }),
@@ -112,7 +147,7 @@ fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
 pub fn App() -> Element {
     let ws_url = derive_ws_url();
     let event_bus = use_signal(|| EventBus::new());
-    let active_tab = use_signal(|| ActiveTab::Conversation);
+    let active_tab = use_signal(|| ActiveTab::Agents);
     let global_signal = use_signal(|| GlobalState::new(ws_url.clone()));
     let approval_signal = use_signal(|| ApprovalUiState::new());
     let workspace_signal = use_signal(|| WorkspaceState::new("."));
@@ -120,6 +155,23 @@ pub fn App() -> Element {
     let tool_signal = use_signal(|| ToolState::new());
     let agents_signal = use_signal(|| AgentsState::new());
     let sessions_signal = use_signal(|| SessionsState::new());
+    let mcp_dialog_signal = use_signal(|| McpDialogState::default());
+    let skill_dialog_signal = use_signal(|| SkillDialogState::new());
+    let debug_signal = use_signal(|| DebugState::new());
+
+    // Prevent browser zoom on input focus and disable pinch-to-zoom
+    use_hook(|| {
+        if let Some(window) = web_sys::window() {
+            if let Some(document) = window.document() {
+                if let Ok(Some(meta)) = document.query_selector("meta[name=\"viewport\"]") {
+                    let _ = meta.set_attribute(
+                        "content",
+                        "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no",
+                    );
+                }
+            }
+        }
+    });
 
     let client = use_hook(|| {
         let c = JsonRpcClient::new(&ws_url);
@@ -137,19 +189,34 @@ pub fn App() -> Element {
             bus_conn.publish(&event);
             match cs {
                 crate::web::client::ConnectionState::Connected => {
-                    global_conn.write_unchecked().ws_connected = true;
-                    global_conn.write_unchecked().ws_last_error = None;
+                    let mut g = global_conn.write_unchecked();
+                    g.ws_connected = true;
+                    g.ws_last_error = None;
+                    // Keep is_running — agent.status will determine actual state.
+                    // Clear reconnect state
+                    g.reconnecting = false;
+                    g.reconnect_attempts = 0;
+                    g.reconnect_maxed = false;
                 }
                 crate::web::client::ConnectionState::Connecting => {
                     global_conn.write_unchecked().ws_connected = false;
                 }
                 crate::web::client::ConnectionState::Disconnected => {
-                    global_conn.write_unchecked().ws_connected = false;
-                    global_conn.write_unchecked().ws_last_error = Some("Disconnected".to_string());
+                    let mut g = global_conn.write_unchecked();
+                    g.ws_connected = false;
+                    g.ws_last_error = Some("Disconnected".to_string());
+                    // Reset running state so input is re-enabled after disconnect.
+                    g.clear_all_running();
+                    // Start reconnect loop if not already reconnecting and not maxed
+                    if !g.reconnecting && !g.reconnect_maxed {
+                        g.reconnecting = true;
+                        g.reconnect_attempts = 0;
+                    }
                 }
             }
         });
 
+        c.set_debug_state(debug_signal);
         c
     });
 
@@ -163,19 +230,34 @@ pub fn App() -> Element {
         // GlobalState: agent lifecycle events
         set.subscribe(&bus, UiEventKind::AgentStart, {
             let global = global.clone();
-            move |_e| {
-                let mut s = global.write_unchecked();
-                s.run_count += 1; s.iteration = 0; s.tool_call_count = 0;
-                s.run_start = Some(web_time::Instant::now());
-                s.run_elapsed = Duration::ZERO; s.is_running = true;
+            move |e| {
+                if let UiEvent::AgentStart { run_id, .. } = e {
+                    let mut s = global.write_unchecked();
+                    s.run_count += 1; s.iteration = 0; s.tool_call_count = 0;
+                    s.run_start = Some(web_time::Instant::now());
+                    s.run_elapsed = Duration::ZERO;
+                    // Attribute the run to the agent that submitted it
+                    if let Some(agent_id) = s.pending_submit_agent.take() {
+                        s.run_map.insert(run_id.clone(), agent_id.clone());
+                        s.running_agents.insert(agent_id);
+                    }
+                }
             }
         });
         for kind in [UiEventKind::AgentComplete, UiEventKind::AgentAborted, UiEventKind::AgentError] {
             let global = global.clone();
-            set.subscribe(&bus, kind, move |_e| {
+            set.subscribe(&bus, kind, move |e| {
+                let run_id = match e {
+                    UiEvent::AgentComplete { run_id, .. } => Some(run_id.clone()),
+                    UiEvent::AgentAborted { run_id, .. } => Some(run_id.clone()),
+                    UiEvent::AgentError { run_id, .. } => Some(run_id.clone()),
+                    _ => None,
+                };
                 let mut s = global.write_unchecked();
                 if let Some(start) = s.run_start { s.run_elapsed = start.elapsed(); }
-                s.is_running = false;
+                if let Some(run_id) = run_id {
+                    s.set_agent_idle_by_run(&run_id);
+                }
             });
         }
         set.subscribe(&bus, UiEventKind::IterationComplete, {
@@ -219,9 +301,12 @@ pub fn App() -> Element {
         for kind in [
             UiEventKind::AgentStart, UiEventKind::AgentComplete, UiEventKind::AgentAborted,
             UiEventKind::AgentError, UiEventKind::ThinkingStart, UiEventKind::ThinkingDelta,
-            UiEventKind::ThinkingComplete, UiEventKind::ContentStart, UiEventKind::ContentDelta,
+            UiEventKind::ThinkingComplete,
+            UiEventKind::ContentStart, UiEventKind::ContentDelta,
             UiEventKind::ContentComplete, UiEventKind::MaxIterationsReached,
             UiEventKind::IterationContinued, UiEventKind::IterationComplete,
+            UiEventKind::ToolCallBegin, UiEventKind::ToolCallComplete,
+            UiEventKind::ToolCallError, UiEventKind::ToolCallSkipped,
         ] {
             set.subscribe(&bus, kind, {
                 let conv = conv.clone();
@@ -255,20 +340,218 @@ pub fn App() -> Element {
     // WS event loop
     let bus_ev = event_bus.with(|eb| eb.clone());
     let client_ev = client.clone();
+    let global_ev = global_signal.clone();
     wasm_bindgen_futures::spawn_local(async move {
         loop {
             match client_ev.next_event().await {
                 Some(event) => {
+                    // Look up which agent this event belongs to via run_map
+                    let agent_id = {
+                        global_ev.read_unchecked().run_map.get(&event.run_id).cloned()
+                    };
+                    set_current_event_agent(agent_id);
                     if let Some(ui_event) = agent_event_to_ui(&event) {
                         bus_ev.publish(&ui_event);
                     }
                 }
                 None => {
                     log::warn!("Event stream closed");
-                    bus_ev.publish(&UiEvent::AgentError { message: "Event stream closed".to_string() });
+                    set_current_event_agent(None);
+                    bus_ev.publish(&UiEvent::AgentError { run_id: String::new(), message: "Event stream closed".to_string() });
                     bus_ev.publish(&UiEvent::WsDisconnected { reason: Some("Event stream closed".to_string()) });
                     break;
                 }
+            }
+        }
+    });
+
+    // Reconnect loop: drives client.reconnect() with exponential backoff
+    let reconn_client = client.clone();
+    let reconn_global = global_signal.clone();
+    let reconn_bus = event_bus.with(|eb| eb.clone());
+    wasm_bindgen_futures::spawn_local(async move {
+        const MAX_ATTEMPTS: u32 = 10;
+        const MIN_DELAY: u64 = 3;
+        const MAX_DELAY: u64 = 30;
+
+        loop {
+            // Wait until reconnecting flag is set
+            loop {
+                let (should_reconnect, should_reset_reconnect_state) = {
+                    let g = reconn_global.read();
+                    (
+                        g.reconnecting && !g.reconnect_maxed,
+                        g.ws_connected && (g.reconnect_attempts != 0 || g.reconnect_maxed),
+                    )
+                };
+                if should_reconnect {
+                    break;
+                }
+                // If connected (e.g., initial connect), reset after the read guard is dropped.
+                if should_reset_reconnect_state {
+                    let mut gw = reconn_global.write_unchecked();
+                    gw.reconnect_attempts = 0;
+                    gw.reconnect_maxed = false;
+                }
+                TimeoutFuture::new(200).await;
+            }
+
+            for attempt in 1..=MAX_ATTEMPTS {
+                let delay = (MIN_DELAY * 2u64.pow(attempt - 1)).min(MAX_DELAY);
+
+                // Update state with countdown
+                {
+                    let mut g = reconn_global.write_unchecked();
+                    g.reconnect_attempts = attempt;
+                    g.reconnect_delay_secs = delay as u32;
+                }
+                reconn_bus.publish(&UiEvent::WsReconnecting {
+                    attempt,
+                    delay_secs: delay as u32,
+                });
+
+                // Countdown timer — update delay_secs each second
+                for remaining in (1..=delay).rev() {
+                    {
+                        let mut g = reconn_global.write_unchecked();
+                        g.reconnect_delay_secs = remaining as u32;
+                    }
+                    TimeoutFuture::new(1000).await;
+
+                    // Check if connection was restored externally
+                    if reconn_global.read().ws_connected {
+                        return;
+                    }
+                    // Check if reconnect was cancelled
+                    if !reconn_global.read().reconnecting {
+                        return;
+                    }
+                }
+
+                // Attempt reconnection
+                match reconn_client.reconnect() {
+                    Ok(()) => {
+                        log::info!("Reconnect attempt {attempt} initiated");
+                    }
+                    Err(e) => {
+                        log::warn!("Reconnect attempt {attempt} failed: {e}");
+                    }
+                }
+
+                // Wait up to 5 seconds for the connection to establish
+                for _ in 0..50 {
+                    TimeoutFuture::new(100).await;
+                    if reconn_global.read().ws_connected {
+                        return;
+                    }
+                }
+            }
+
+            // All attempts exhausted
+            {
+                let mut g = reconn_global.write_unchecked();
+                g.reconnecting = false;
+                g.reconnect_maxed = true;
+                g.ws_last_error = Some("Connection lost. Please refresh.".to_string());
+            }
+            reconn_bus.publish(&UiEvent::WsReconnectFailed);
+
+            // Exit the loop — no more reconnect attempts
+            break;
+        }
+    });
+
+    // Session restoration on reconnect success
+    let restore_client = client.clone();
+    let restore_global = global_signal.clone();
+    let restore_conv = conversation_signal.clone();
+    let restore_agents = agents_signal.clone();
+    wasm_bindgen_futures::spawn_local(async move {
+        loop {
+            // Wait for reconnection to succeed
+            loop {
+                {
+                    let g = restore_global.read();
+                    // Was reconnecting (attempts > 0), now connected
+                    if g.ws_connected && g.reconnect_attempts > 0 {
+                        break;
+                    }
+                }
+                TimeoutFuture::new(200).await;
+            }
+
+            log::info!("Reconnected — restoring most recent session");
+
+            // Fetch session list
+            let (tx, rx) = futures_channel::oneshot::channel();
+            restore_client.session_list(None, move |result| {
+                let _ = tx.send(result);
+            });
+            let sessions = match rx.await {
+                Ok(Ok(s)) => s,
+                _ => {
+                    log::warn!("Failed to fetch session list after reconnect");
+                    restore_global.write_unchecked().reconnect_attempts = 0;
+                    continue;
+                }
+            };
+
+            if sessions.is_empty() {
+                log::info!("No persisted sessions — nothing to restore");
+                restore_global.write_unchecked().reconnect_attempts = 0;
+                continue;
+            }
+
+            // Pick the most recent session (already sorted by time from backend)
+            let latest_id = sessions[0].id.clone();
+            log::info!("Restoring session: {latest_id}");
+
+            // Resume the session
+            let (tx2, rx2) = futures_channel::oneshot::channel();
+            restore_client.session_resume(&latest_id, None, move |result| {
+                let _ = tx2.send(result);
+            });
+            match rx2.await {
+                Ok(Ok(_)) => {
+                    log::info!("Session resumed");
+                }
+                _ => {
+                    log::warn!("Failed to resume session");
+                    restore_global.write_unchecked().reconnect_attempts = 0;
+                    continue;
+                }
+            }
+
+            // Fetch entries and rebuild conversation
+            let (tx3, rx3) = futures_channel::oneshot::channel();
+            restore_client.session_entries(&latest_id, move |result| {
+                let _ = tx3.send(result);
+            });
+            match rx3.await {
+                Ok(Ok(entries)) => {
+                    let conv_entries = crate::web::components::sessions_panel::session_entries_to_conversation(entries);
+                    let agent_id = restore_agents.read().selected.clone().unwrap_or_default();
+                    {
+                        let mut conv = restore_conv.write_unchecked();
+                        let ac = conv.get_or_create(&agent_id);
+                        ac.entries = conv_entries;
+                    }
+                    log::info!("Conversation restored from session");
+                }
+                _ => {
+                    log::warn!("Failed to fetch session entries");
+                }
+            }
+
+            // Reset reconnect state
+            restore_global.write_unchecked().reconnect_attempts = 0;
+
+            // Wait for next disconnect
+            loop {
+                if !restore_global.read().ws_connected {
+                    break;
+                }
+                TimeoutFuture::new(200).await;
             }
         }
     });
@@ -285,19 +568,33 @@ pub fn App() -> Element {
     use_context_provider(|| tool_signal);
     use_context_provider(|| agents_signal);
     use_context_provider(|| sessions_signal);
+    use_context_provider(|| mcp_dialog_signal);
+    use_context_provider(|| skill_dialog_signal);
+    use_context_provider(|| debug_signal);
 
     rsx! {
-        div { class: "flex flex-col h-[100dvh] w-[100vw] overflow-hidden font-[system-ui] text-[14px] text-[#e0e0e0] bg-[#1a1a2e]",
-            StatusBar {}
-            div { class: "flex flex-1 overflow-hidden",
-                FileTree {}
-                div { class: "flex-1 flex flex-col overflow-hidden",
-                    TabBar {}
-                    TabContent {}
-                    InputArea {}
+        // The Stylesheet component inserts a style link into the head of the document
+        document::Stylesheet {
+            // Urls are relative to your Cargo.toml file
+            href: asset!("/assets/tailwind.css")
+        }
+        div { class: "relative h-[100dvh] w-[100vw] font-[system-ui] text-[14px] text-[#e0e0e0] bg-[#1a1a2e]",
+            div { class: "flex flex-col h-full w-full overflow-hidden",
+                StatusBar {}
+                div { class: "flex flex-1 overflow-hidden relative",
+                    FileTree {}
+                    div { class: "min-w-0 flex-1 flex flex-col overflow-hidden",
+                        TabBar {}
+                        TabContent { skill_dialog_signal }
+                    }
                 }
             }
             ApprovalDialog {}
+            ToolCallDialog { signal: mcp_dialog_signal }
+            ResourceViewer { signal: mcp_dialog_signal }
+            PromptViewer { signal: mcp_dialog_signal }
+            SkillDetailDialog { signal: skill_dialog_signal }
+            DebugPanel {}
         }
     }
 }
@@ -308,14 +605,14 @@ fn TabBar() -> Element {
     let state: AppState = use_context();
 
     rsx! {
-        div { class: "flex bg-[#252540] border-b border-[#333355] flex-shrink-0 sm:overflow-x-auto",
-            TabButton { state: state.clone(), tab: ActiveTab::Conversation, label: "Conversation" }
-            TabButton { state: state.clone(), tab: ActiveTab::Sessions, label: "Sessions" }
+        div { class: "flex flex-nowrap bg-[#252540] border-b border-[#333355] flex-shrink-0 overflow-x-auto",
+            TabButton { state: state.clone(), tab: ActiveTab::Tasks, label: "Tasks" }
+            TabButton { state: state.clone(), tab: ActiveTab::Agents, label: "Agents" }
             TabButton { state: state.clone(), tab: ActiveTab::Tools, label: "Tools" }
             TabButton { state: state.clone(), tab: ActiveTab::Workspace, label: "Workspace" }
             TabButton { state: state.clone(), tab: ActiveTab::Skills, label: "Skills" }
+            TabButton { state: state.clone(), tab: ActiveTab::Mcp, label: "MCP" }
             TabButton { state: state.clone(), tab: ActiveTab::Logs, label: "Logs" }
-            TabButton { state: state.clone(), tab: ActiveTab::Agents, label: "Agents" }
         }
     }
 }
@@ -325,9 +622,9 @@ fn TabButton(state: AppState, tab: ActiveTab, label: String) -> Element {
     let current_tab = state.active_tab.read();
     let active = *current_tab == tab;
     let tab_class = if active {
-        "px-4 py-1.5 bg-[#1a1a2e] text-[#e0e0e0] border-b-2 border-[#80a0ff] cursor-pointer text-[13px]"
+        "px-2 sm:px-4 py-1 sm:py-1.5 bg-[#1a1a2e] text-[#e0e0e0] border-b-2 border-[#80a0ff] cursor-pointer text-[11px] sm:text-[13px] whitespace-nowrap flex-shrink-0"
     } else {
-        "px-4 py-1.5 bg-transparent text-[#888] border-b-2 border-transparent cursor-pointer text-[13px] hover:text-[#ccc] hover:bg-[#2a2a44]"
+        "px-2 sm:px-4 py-1 sm:py-1.5 bg-transparent text-[#888] border-b-2 border-transparent cursor-pointer text-[11px] sm:text-[13px] hover:text-[#ccc] hover:bg-[#2a2a44] whitespace-nowrap flex-shrink-0"
     };
     let mut active_tab_signal = state.active_tab;
     rsx! {
@@ -341,18 +638,20 @@ fn TabButton(state: AppState, tab: ActiveTab, label: String) -> Element {
 
 /// Tab content router.
 #[component]
-fn TabContent() -> Element {
+fn TabContent(skill_dialog_signal: Signal<SkillDialogState>) -> Element {
     let state: AppState = use_context();
     let active = *state.active_tab.read();
 
     match active {
+        ActiveTab::Tasks => rsx! { TasksPanel { assignee_filter: None } },
         ActiveTab::Conversation => rsx! { ConversationView {} },
+        ActiveTab::Sessions => rsx! { SessionsPanel {} },
+        ActiveTab::Agents => rsx! { AgentsPanel {} },
         ActiveTab::Tools => rsx! { ToolsTabContent {} },
         ActiveTab::Workspace => rsx! { FileContentView {} },
-        ActiveTab::Skills => rsx! { SkillsPanel {} },
+        ActiveTab::Skills => rsx! { SkillsPanel { dialog_signal: skill_dialog_signal } },
         ActiveTab::Logs => rsx! { LogViewer {} },
-        ActiveTab::Agents => rsx! { AgentsPanel {} },
-        ActiveTab::Sessions => rsx! { SessionsPanel {} },
+        ActiveTab::Mcp => rsx! { McpPanel {} },
     }
 }
 
@@ -369,5 +668,36 @@ pub fn status_label(status: crate::state::ToolCallStatus) -> &'static str {
         crate::state::ToolCallStatus::Success => "OK",
         crate::state::ToolCallStatus::Error => "ERR",
         crate::state::ToolCallStatus::Skipped => "SKIP",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn app_layout_does_not_use_a_floating_mobile_file_tree_button() {
+        let source = include_str!("app.rs");
+        let app_level_open_assignment = ["file_tree_drawer_open", "=", "true"].join(" ");
+
+        assert!(!source.contains(&app_level_open_assignment));
+    }
+
+    #[test]
+    fn reconnect_loop_does_not_write_global_state_while_a_read_guard_is_alive() {
+        let source = include_str!("app.rs");
+        let read_pos = source
+            .find("let g = reconn_global.read();")
+            .expect("reconnect loop should read global state");
+        let search_end = (read_pos + 500).min(source.len());
+        let read_scope = &source[read_pos..search_end];
+        let overlapping_write = [
+            "if g.ws_connected {",
+            "let mut gw = reconn_global.write_unchecked();",
+        ];
+
+        assert!(
+            !(read_scope.contains(overlapping_write[0])
+                && read_scope.contains(overlapping_write[1])),
+            "{read_scope}"
+        );
     }
 }

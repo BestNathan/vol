@@ -1,5 +1,70 @@
 # Change Log
 
+## [2026-05-29] ingest | Remove vol-agent-manager and Legacy Frontend
+- Created sources: [[remove-vol-agent-manager]]
+- Updated entities: [[vol-llm-ui-crate]], [[vol-llm-agent-channel-crate]]
+- Updated index: new source entry, updated date
+- Cross-references added: 4
+- Changes: Removed obsolete `vol-agent-manager` crate, manager-only Docker/Kubernetes artifacts, and legacy React `frontend/`; active web backend remains `vol-llm-agent-channel` JSON-RPC service via `make web-backend`.
+
+## [2026-05-28] ingest | CLAUDE.md Web Development Environment
+- Created sources: [[web-dev-environment-claudemd]]
+- Updated entities: [[vol-llm-ui-crate]] (web development prerequisites, persistent Makefile CSS watcher, project web-dev skill, startup services, troubleshooting)
+- Updated index: new source entry, vol-llm-ui summary/date, updated date
+- Cross-references added: 7
+- Changes: CLAUDE.md now documents web-only prerequisites: Dioxus CLI 0.6.x, cargo-watch, Node/npm, wasm32 target, vol-llm-ui npm dependencies, Tailwind --watch=always, and dx --platform web fallback for Dioxus 404. `make web-css` now runs persistent Tailwind watch mode, and `.claude/skills/nq-web-dev/SKILL.md` is tracked as the project-specific web startup/debug guide.
+
+## [2026-05-23] ingest | Per-Agent Conversation State
+- Created sources: [[per-agent-conversation]]
+- Updated entities: [[vol-llm-ui-crate]] (per-agent ConversationState, source_count)
+- Updated index: new source entry, updated date
+- Cross-references added: 1
+- Changes: ConversationState rewritten as HashMap<String, AgentConversation>; events route to active agent; agent switch restores per-agent entries; resume stores under correct agent key.
+
+## [2026-05-23] ingest | Agent-Centric UI + Protocol
+- Created sources: [[agent-centric-ui]]
+- Updated entities: [[vol-llm-agent-channel-crate]] (session.list agent_id, agent status tracking)
+- Updated index: new source entry, updated date
+- Cross-references added: 1
+- Changes: Tab bar reorganized (Agents first, no Conversation/Sessions tabs). Conversation/Sessions are sub-tabs inside Agents panel scoped to selected agent. Agent cards show status/current task. session.list accepts agent_id filter. agent.list returns status/current_input.
+
+## [2026-05-23] ingest | Agent Directory Discovery
+- Created sources: [[agent-directory-discovery]]
+- Updated entities: [[vol-llm-agent-channel-crate]] (agent_defs, discover_agents, agent.list metadata)
+- Updated index: new source entry, updated date
+- Cross-references added: 1
+- Changes: Created 3 agent definition files (general-purpose, explore, review); example uses discover_agents(); agent.list returns type/description/scope; frontend adds agent selector dropdown with target param.
+
+## [2026-05-22] ingest | Tool Protocol Operations
+- Created sources: [[tool-protocol-operations]]
+- Updated entities: [[vol-llm-agent-channel-crate]] (timeline, source_count)
+- Updated index: new source entry, updated date
+- Cross-references added: 1
+- Changes: Added ToolOperation/ToolPayload to protocol; created ToolHandler with tool.list/tool.call; frontend client and tools panel updated with system tool listing and direct invocation.
+
+## [2026-05-22] ingest | JSON-RPC Transport Consolidation
+- Created sources: [[jsonrpc-transport-consolidation]]
+- Updated entities: [[vol-llm-agent-channel-crate]] (module structure, key facts, timeline)
+- Updated index: new source entry, updated date
+- Cross-references added: 1
+- Changes: Moved jsonrpc/{server,connection,serde_helpers}.rs and gateway/jsonrpc_ws.rs (as codec.rs) into transport/jsonrpc/; deleted old jsonrpc/ and gateway/ directories; updated internal imports and test paths; no public API breakage.
+
+## [2026-05-22] ingest | AgentInput Channel Unification
+- Created sources: [[agentinput-channel-unification]]
+- Updated concepts: [[agent-dispatcher]] (run_input instead of run_with_id), [[agentinput-multimodal-run]] (channel uses AgentInput directly)
+- Updated entities: [[vol-llm-agent-channel-crate]] (new key facts, timeline entry)
+- Updated index: new source entry, updated date
+- Cross-references added: 3
+- Changes: Unified AgentPayload::Submit, AgentRequest, and dispatcher to use AgentInput directly. Dropped redundant run_id/metadata fields. Switched dispatcher from run_with_id to run_input.
+
+## [2026-05-21] ingest | AgentInput Multimodal Run Implementation
+- Created sources: [[agentinput-multimodal-run-implementation]]
+- Created concepts: [[agentinput-multimodal-run]]
+- Updated entities: [[vol-llm-agent-crate]] (AgentInput/InputPart, run_input, run_id and metadata support), [[vol-llm-core-crate]] (multipart message content testability), [[vol-llm-provider-crate]] (Anthropic multipart text/image conversion), [[vol-llm-agent-channel-crate]] (legacy string and structured AgentInput compatibility), [[vol-llm-tool-crate]] (McpTool aligned with McpManager)
+- Updated index: refreshed entity summaries, new concept and source entries
+- Cross-references added: 14
+- Changes: ReActAgent now supports structured multimodal AgentInput while preserving run(&str); first modalities are text and image URL/data URL; Anthropic provider emits native multipart blocks; agent-channel transports deserialize both old string input and new structured input
+
 ## [2026-05-13] ingest | McpManager Implementation — Connection Lifecycle Manager
 - Created sources: [[mcp-manager-impl]]
 - Created concepts: [[mcp-manager-lifecycle]]

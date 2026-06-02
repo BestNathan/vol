@@ -1,18 +1,18 @@
 //! Integration tests for ReActAgent run() flow using MockLlmClient.
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use async_trait::async_trait;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use vol_llm_agent::react::{
+    plugin::{AgentPlugin, PluginDecision, PluginId, RunContext},
     AgentConfig, AgentError, AgentStreamEvent, ReActAgent,
-    plugin::{AgentPlugin, RunContext, PluginDecision, PluginId},
 };
-use vol_llm_core::{
-    LLMClient, LLMProvider, ConversationRequest, ConversationResponse,
-    StreamReceiver, StreamEvent, StreamEventData, SupportedParam,
-    ToolCall,
-};
+use vol_llm_agent::AgentInput;
 use vol_llm_core::test_utils::MockLlmClient;
+use vol_llm_core::{
+    ConversationRequest, ConversationResponse, LLMClient, LLMProvider, MessageContent, StreamEvent,
+    StreamEventData, StreamReceiver, SupportedParam, ToolCall,
+};
 
 /// Helper: create a ContentComplete stream event.
 fn content_complete_event(content: &str) -> StreamEvent {
@@ -39,6 +39,28 @@ fn tool_call_event(tool_name: &str, args: &str, call_id: &str) -> StreamEvent {
     }
 }
 
+#[tokio::test]
+async fn react_agent_run_with_id_returns_caller_run_id() {
+    let mock = MockLlmClient::new();
+    mock.set_stream_events(vec![content_complete_event("Hello, I can help with that.")])
+        .await;
+
+    let config = AgentConfig::builder()
+        .with_llm(Arc::new(mock))
+        .with_system_prompt("You are a test assistant.".to_string())
+        .build()
+        .unwrap();
+    let agent = ReActAgent::new(config);
+
+    let result = agent
+        .run_input(AgentInput::text("Hi").with_run_id("run_supplied_1"))
+        .await
+        .unwrap();
+
+    assert_eq!(result.run_id, "run_supplied_1");
+    assert_eq!(result.content, "Hello, I can help with that.");
+}
+
 // ========================
 // Test 1: Single iteration — content only
 // ========================
@@ -46,9 +68,8 @@ fn tool_call_event(tool_name: &str, args: &str, call_id: &str) -> StreamEvent {
 #[tokio::test]
 async fn test_agent_run_single_iteration() {
     let mock = MockLlmClient::new();
-    mock.set_stream_events(vec![
-        content_complete_event("Hello, I can help with that."),
-    ]).await;
+    mock.set_stream_events(vec![content_complete_event("Hello, I can help with that.")])
+        .await;
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
@@ -63,14 +84,120 @@ async fn test_agent_run_single_iteration() {
     assert_eq!(result.content, "Hello, I can help with that.");
 }
 
+#[tokio::test]
+async fn test_agent_run_input_text_matches_run() {
+    let mock = MockLlmClient::new();
+    mock.set_stream_events(vec![content_complete_event("ok")])
+        .await;
+
+    let config = AgentConfig::builder()
+        .with_llm(Arc::new(mock))
+        .with_system_prompt("You are a test assistant.".to_string())
+        .build()
+        .unwrap();
+    let agent = ReActAgent::new(config);
+
+    let result = agent.run_input(AgentInput::text("Hi")).await.unwrap();
+
+    assert_eq!(result.content, "ok");
+    assert!(result.error.is_none());
+}
+
+#[tokio::test]
+async fn test_agent_run_input_uses_provided_run_id() {
+    let mock = MockLlmClient::new();
+    mock.set_stream_events(vec![content_complete_event("ok")])
+        .await;
+
+    let config = AgentConfig::builder()
+        .with_llm(Arc::new(mock))
+        .with_system_prompt("You are a test assistant.".to_string())
+        .build()
+        .unwrap();
+    let agent = ReActAgent::new(config);
+
+    let result = agent
+        .run_input(AgentInput::text("Hi").with_run_id("caller-run-id"))
+        .await
+        .unwrap();
+
+    assert_eq!(result.run_id, "caller-run-id");
+}
+
+#[tokio::test]
+async fn test_agent_run_input_sends_multipart_user_message() {
+    let mock = Arc::new(MockLlmClient::new());
+    mock.set_stream_events(vec![content_complete_event("ok")])
+        .await;
+
+    let config = AgentConfig::builder()
+        .with_llm(mock.clone())
+        .with_system_prompt("You are a test assistant.".to_string())
+        .build()
+        .unwrap();
+    let agent = ReActAgent::new(config);
+
+    agent
+        .run_input(
+            AgentInput::new()
+                .text_part("look")
+                .image_url("data:image/png;base64,AAAA"),
+        )
+        .await
+        .unwrap();
+
+    let request = mock.last_request().await.unwrap();
+    let user_message = request
+        .messages
+        .iter()
+        .find(|message| matches!(message.content, Some(MessageContent::MultiPart(_))))
+        .expect("multipart user message should be sent to LLM");
+
+    match user_message.content.as_ref().unwrap() {
+        MessageContent::MultiPart(parts) => assert_eq!(parts.len(), 2),
+        other => panic!("expected multipart content, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_agent_run_input_rejects_empty_parts_before_llm_call() {
+    let mock = Arc::new(MockLlmClient::new());
+
+    let config = AgentConfig::builder()
+        .with_llm(mock.clone())
+        .with_system_prompt("You are a test assistant.".to_string())
+        .build()
+        .unwrap();
+    let agent = ReActAgent::new(config);
+
+    let result = agent.run_input(AgentInput::new()).await;
+
+    assert!(matches!(
+        result,
+        Err(AgentError::InvalidInput(message))
+            if message == "Agent input must contain at least one part"
+    ));
+    assert_eq!(mock.call_count(), 0);
+}
+
 /// A tool that always succeeds — used to test tool execution flow.
 struct EchoTool;
 #[async_trait]
 impl vol_llm_tool::ExecutableTool for EchoTool {
-    fn name(&self) -> &'static str { "echo_tool" }
-    fn description(&self) -> &'static str { "Echo back" }
-    fn parameters(&self) -> serde_json::Value { serde_json::json!({"type": "object", "properties": {}}) }
-    async fn execute(&self, _args: &serde_json::Value, _ctx: &vol_llm_tool::ToolContext) -> vol_llm_tool::ToolResultType<vol_llm_tool::ToolResult> {
+    fn name(&self) -> &'static str {
+        "echo_tool"
+    }
+    fn description(&self) -> &'static str {
+        "Echo back"
+    }
+    fn parameters(&self) -> serde_json::Value {
+        serde_json::json!({"type": "object", "properties": {}})
+    }
+    async fn execute(
+        &self,
+        _args: &serde_json::Value,
+        _ctx: &vol_llm_tool::ToolContext,
+    ) -> vol_llm_tool::ToolResultType<vol_llm_tool::ToolResult> {
         Ok(vol_llm_tool::ToolResult {
             call_id: "echo".to_string(),
             content: "echoed".to_string(),
@@ -93,21 +220,38 @@ struct MultiCallMock {
 impl MultiCallMock {
     fn new() -> (Self, Arc<AtomicUsize>) {
         let count = Arc::new(AtomicUsize::new(0));
-        (Self { call_count: count.clone() }, count)
+        (
+            Self {
+                call_count: count.clone(),
+            },
+            count,
+        )
     }
 }
 
 #[async_trait]
 impl LLMClient for MultiCallMock {
-    fn provider(&self) -> LLMProvider { LLMProvider::Anthropic }
-    fn model(&self) -> &str { "multi-call-mock" }
-    fn supported_params(&self) -> &[SupportedParam] { &[] }
+    fn provider(&self) -> LLMProvider {
+        LLMProvider::Anthropic
+    }
+    fn model(&self) -> &str {
+        "multi-call-mock"
+    }
+    fn supported_params(&self) -> &[SupportedParam] {
+        &[]
+    }
 
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
         unimplemented!("Use converse_stream instead")
     }
 
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+    async fn converse_stream(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<StreamReceiver> {
         use tokio::sync::mpsc;
 
         let count = self.call_count.fetch_add(1, Ordering::SeqCst);
@@ -115,9 +259,13 @@ impl LLMClient for MultiCallMock {
 
         tokio::spawn(async move {
             if count == 0 {
-                let _ = tx.send(Ok(tool_call_event("echo_tool", r#"{}"#, "call_1"))).await;
+                let _ = tx
+                    .send(Ok(tool_call_event("echo_tool", r#"{}"#, "call_1")))
+                    .await;
             } else {
-                let _ = tx.send(Ok(content_complete_event("The file contains hello world."))).await;
+                let _ = tx
+                    .send(Ok(content_complete_event("The file contains hello world.")))
+                    .await;
             }
         });
 
@@ -132,8 +280,12 @@ async fn test_agent_run_multiple_iterations() {
     }
     #[async_trait]
     impl AgentPlugin for CountingPlugin {
-        fn id(&self) -> PluginId { "counter".to_string() }
-        fn priority(&self) -> u32 { 100 }
+        fn id(&self) -> PluginId {
+            "counter".to_string()
+        }
+        fn priority(&self) -> u32 {
+            100
+        }
         async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> PluginDecision {
             PluginDecision::Continue
         }
@@ -146,7 +298,9 @@ async fn test_agent_run_multiple_iterations() {
 
     let (mock, count) = MultiCallMock::new();
     let tool_count = Arc::new(AtomicUsize::new(0));
-    let plugin = CountingPlugin { tool_count: tool_count.clone() };
+    let plugin = CountingPlugin {
+        tool_count: tool_count.clone(),
+    };
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
@@ -174,23 +328,42 @@ struct ErrorOnFirstMock {
 impl ErrorOnFirstMock {
     fn new() -> (Self, Arc<AtomicUsize>) {
         let count = Arc::new(AtomicUsize::new(0));
-        (Self { call_count: count.clone() }, count)
+        (
+            Self {
+                call_count: count.clone(),
+            },
+            count,
+        )
     }
 }
 
 #[async_trait]
 impl LLMClient for ErrorOnFirstMock {
-    fn provider(&self) -> LLMProvider { LLMProvider::Anthropic }
-    fn model(&self) -> &str { "error-mock" }
-    fn supported_params(&self) -> &[SupportedParam] { &[] }
+    fn provider(&self) -> LLMProvider {
+        LLMProvider::Anthropic
+    }
+    fn model(&self) -> &str {
+        "error-mock"
+    }
+    fn supported_params(&self) -> &[SupportedParam] {
+        &[]
+    }
 
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
         unimplemented!()
     }
 
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+    async fn converse_stream(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<StreamReceiver> {
         self.call_count.fetch_add(1, Ordering::SeqCst);
-        Err(vol_llm_core::LLMError::Timeout("mock LLM failure".to_string()))
+        Err(vol_llm_core::LLMError::Timeout(
+            "mock LLM failure".to_string(),
+        ))
     }
 }
 
@@ -219,9 +392,8 @@ async fn test_agent_run_session_recording() {
     use vol_session::{InMemoryEntryStore, Session, SessionEntryStore};
 
     let mock = MockLlmClient::new();
-    mock.set_stream_events(vec![
-        content_complete_event("Session test answer."),
-    ]).await;
+    mock.set_stream_events(vec![content_complete_event("Session test answer.")])
+        .await;
 
     let tmp_dir = tempfile::tempdir().unwrap();
     let _tmp_dir = tmp_dir;
@@ -248,7 +420,10 @@ async fn test_agent_run_session_recording() {
 
     // Verify entries were recorded
     let entries = entry_store.get_entries(&session.id).await.unwrap();
-    assert!(!entries.is_empty(), "Session should have entries after agent run");
+    assert!(
+        !entries.is_empty(),
+        "Session should have entries after agent run"
+    );
 }
 
 // ========================
@@ -261,8 +436,12 @@ struct EventCollectorPlugin {
 
 #[async_trait]
 impl AgentPlugin for EventCollectorPlugin {
-    fn id(&self) -> PluginId { "collector".to_string() }
-    fn priority(&self) -> u32 { 100 }
+    fn id(&self) -> PluginId {
+        "collector".to_string()
+    }
+    fn priority(&self) -> u32 {
+        100
+    }
     async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> PluginDecision {
         PluginDecision::Continue
     }
@@ -283,12 +462,13 @@ impl AgentPlugin for EventCollectorPlugin {
 #[tokio::test]
 async fn test_agent_run_event_emission() {
     let mock = MockLlmClient::new();
-    mock.set_stream_events(vec![
-        content_complete_event("Event test answer."),
-    ]).await;
+    mock.set_stream_events(vec![content_complete_event("Event test answer.")])
+        .await;
 
     let events = Arc::new(tokio::sync::Mutex::new(Vec::new()));
-    let plugin = EventCollectorPlugin { events: events.clone() };
+    let plugin = EventCollectorPlugin {
+        events: events.clone(),
+    };
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
@@ -305,9 +485,16 @@ async fn test_agent_run_event_emission() {
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
     let recorded = events.lock().await.clone();
-    assert!(!recorded.is_empty(), "Should have recorded at least one event");
+    assert!(
+        !recorded.is_empty(),
+        "Should have recorded at least one event"
+    );
     // Should include AgentStart at minimum
-    assert!(recorded.iter().any(|e| e == "AgentStart"), "Expected AgentStart event, got: {:?}", recorded);
+    assert!(
+        recorded.iter().any(|e| e == "AgentStart"),
+        "Expected AgentStart event, got: {:?}",
+        recorded
+    );
 }
 
 // ========================
@@ -322,29 +509,73 @@ struct LoopMock {
 impl LoopMock {
     fn new() -> (Self, Arc<AtomicUsize>) {
         let count = Arc::new(AtomicUsize::new(0));
-        (Self { call_count: count.clone() }, count)
+        (
+            Self {
+                call_count: count.clone(),
+            },
+            count,
+        )
     }
 }
 
 #[async_trait]
 impl LLMClient for LoopMock {
-    fn provider(&self) -> LLMProvider { LLMProvider::Anthropic }
-    fn model(&self) -> &str { "loop-mock" }
-    fn supported_params(&self) -> &[SupportedParam] { &[] }
+    fn provider(&self) -> LLMProvider {
+        LLMProvider::Anthropic
+    }
+    fn model(&self) -> &str {
+        "loop-mock"
+    }
+    fn supported_params(&self) -> &[SupportedParam] {
+        &[]
+    }
 
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
         unimplemented!()
     }
 
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+    async fn converse_stream(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<StreamReceiver> {
         use tokio::sync::mpsc;
         self.call_count.fetch_add(1, Ordering::SeqCst);
         let (tx, rx) = mpsc::channel(10);
         tokio::spawn(async move {
-            let _ = tx.send(Ok(tool_call_event("echo_tool", r#"{}"#, "loop"))).await;
+            let _ = tx
+                .send(Ok(tool_call_event("echo_tool", r#"{}"#, "loop")))
+                .await;
         });
         Ok(StreamReceiver::new(rx))
     }
+}
+
+struct RejectMaxIterationsPlugin;
+
+#[async_trait]
+impl AgentPlugin for RejectMaxIterationsPlugin {
+    fn id(&self) -> PluginId {
+        "reject_max_iterations".to_string()
+    }
+
+    fn priority(&self) -> u32 {
+        100
+    }
+
+    async fn intercept(&self, event: &AgentStreamEvent, _: &RunContext) -> PluginDecision {
+        match event {
+            AgentStreamEvent::IterationComplete {
+                final_answer: None,
+                ..
+            } => PluginDecision::Abort("max iterations reached".to_string()),
+            _ => PluginDecision::Continue,
+        }
+    }
+
+    async fn listen(&self, _: &AgentStreamEvent, _: &RunContext) {}
 }
 
 #[tokio::test]
@@ -358,6 +589,7 @@ async fn test_agent_run_max_iterations_reached() {
         .with_def(def)
         .with_llm(Arc::new(mock))
         .with_tool(EchoTool)
+        .with_plugin(RejectMaxIterationsPlugin)
         .build()
         .unwrap();
     let agent = ReActAgent::new(config);
@@ -371,7 +603,12 @@ async fn test_agent_run_max_iterations_reached() {
         Ok(_) => panic!("Expected MaxIterationsReached error"),
     }
     // The agent should have made 3 LLM calls before hitting max iterations
-    assert_eq!(count.load(Ordering::SeqCst), 3, "Expected 3 calls, got {}", count.load(Ordering::SeqCst));
+    assert_eq!(
+        count.load(Ordering::SeqCst),
+        3,
+        "Expected 3 calls, got {}",
+        count.load(Ordering::SeqCst)
+    );
 }
 
 // ========================
@@ -381,9 +618,8 @@ async fn test_agent_run_max_iterations_reached() {
 #[tokio::test]
 async fn test_mock_llm_call_tracking() {
     let mock = MockLlmClient::new();
-    mock.set_stream_events(vec![
-        content_complete_event("Tracked answer."),
-    ]).await;
+    mock.set_stream_events(vec![content_complete_event("Tracked answer.")])
+        .await;
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
@@ -406,8 +642,12 @@ struct AbortPlugin;
 
 #[async_trait]
 impl AgentPlugin for AbortPlugin {
-    fn id(&self) -> PluginId { "aborter".to_string() }
-    fn priority(&self) -> u32 { 1 } // High priority (lower number = earlier in sorted order)
+    fn id(&self) -> PluginId {
+        "aborter".to_string()
+    }
+    fn priority(&self) -> u32 {
+        1
+    } // High priority (lower number = earlier in sorted order)
     async fn intercept(&self, event: &AgentStreamEvent, _: &RunContext) -> PluginDecision {
         if matches!(event, AgentStreamEvent::AgentStart { .. }) {
             PluginDecision::Abort("Plugin vetoed".to_string())
@@ -421,9 +661,10 @@ impl AgentPlugin for AbortPlugin {
 #[tokio::test]
 async fn test_plugin_intercept_abort() {
     let mock = MockLlmClient::new();
-    mock.set_stream_events(vec![
-        content_complete_event("This should never be returned."),
-    ]).await;
+    mock.set_stream_events(vec![content_complete_event(
+        "This should never be returned.",
+    )])
+    .await;
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock))
@@ -437,7 +678,11 @@ async fn test_plugin_intercept_abort() {
     assert!(result.is_err());
     match result {
         Err(AgentError::Context(reason)) => {
-            assert!(reason.contains("vetoed") || reason.contains("Plugin"), "Unexpected abort reason: {}", reason);
+            assert!(
+                reason.contains("vetoed") || reason.contains("Plugin"),
+                "Unexpected abort reason: {}",
+                reason
+            );
         }
         Err(e) => panic!("Expected Context error, got: {:?}", e),
         Ok(_) => panic!("Expected error from plugin abort"),

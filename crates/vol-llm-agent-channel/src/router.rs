@@ -3,11 +3,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tokio::sync::{RwLock, oneshot};
+use tokio::sync::{oneshot, RwLock};
 
 use crate::dispatcher::AgentDispatcher;
 use crate::error::ChannelError;
 use crate::request::{AgentRequest, RunResult};
+use vol_llm_agent::ReActAgent;
+use vol_session::Session;
 
 /// Routes requests to registered dispatchers by agent_id.
 ///
@@ -46,14 +48,56 @@ impl AgentRouter {
         dispatcher.submit(request)
     }
 
+    /// Cancel a request by run_id across all registered dispatchers.
+    pub async fn cancel(&self, run_id: &str) -> bool {
+        for dispatcher in self.dispatchers.read().await.values() {
+            if dispatcher.cancel(run_id).await {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Check if an agent is registered.
     pub async fn has_agent(&self, agent_id: &str) -> bool {
         self.dispatchers.read().await.contains_key(agent_id)
     }
 
+    /// Swap the session of a registered agent. Fails if agent is running.
+    pub async fn swap_session(
+        &self,
+        agent_id: &str,
+        session: Arc<Session>,
+    ) -> Result<(), ChannelError> {
+        let dispatchers = self.dispatchers.read().await;
+        let dispatcher = dispatchers
+            .get(agent_id)
+            .ok_or_else(|| ChannelError::AgentNotFound(agent_id.to_string()))?;
+        dispatcher.swap_session(session).map_err(|e| {
+            ChannelError::AgentBusy(e.to_string())
+        })
+    }
+
     /// List all registered agent IDs.
     pub async fn list_agents(&self) -> Vec<String> {
         self.dispatchers.read().await.keys().cloned().collect()
+    }
+
+    /// Clone the agent for the given agent_id.
+    pub async fn get_agent(&self, agent_id: &str) -> Option<Arc<ReActAgent>> {
+        self.dispatchers
+            .read()
+            .await
+            .get(agent_id)
+            .map(|d| d.get_agent())
+    }
+
+    /// Check if an agent is currently running.
+    pub async fn is_agent_running(&self, agent_id: &str) -> bool {
+        let dispatchers = self.dispatchers.read().await;
+        dispatchers
+            .get(agent_id)
+            .map_or(false, |d| d.is_busy())
     }
 }
 
@@ -66,11 +110,12 @@ impl Default for AgentRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vol_llm_agent::AgentInput;
 
     #[tokio::test]
     async fn test_router_empty_returns_not_found() {
         let router = AgentRouter::new();
-        let req = AgentRequest::new("nonexistent", "hello");
+        let req = AgentRequest::new("nonexistent", AgentInput::text("hello"));
         let result = router.send("nonexistent", req).await;
         assert!(result.is_err());
         match result.unwrap_err() {

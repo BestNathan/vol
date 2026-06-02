@@ -3,14 +3,14 @@ type: entity
 category: product
 tags: [crate, provider, anthropic, openai, rust]
 created: 2026-05-04
-updated: 2026-05-04
-source_count: 1
+updated: 2026-05-21
+source_count: 2
 ---
 
 # vol-llm-provider Crate
 
 **Category:** Rust crate — LLM provider implementations
-**Related:** [[vol-llm-core-crate]], [[vol-llm-agent-crate]], [[dashscope]]
+**Related:** [[vol-llm-core-crate]], [[vol-llm-agent-crate]], [[dashscope]], [[agentinput-multimodal-run]]
 
 ## Overview
 
@@ -24,3 +24,4 @@ Implements the `LLMClient` trait for Anthropic and OpenAI providers, handling pr
 
 ## Timeline
 - **2026-04**: Provider implementations added
+- **2026-05-21**: Anthropic user-content conversion preserves multipart text/image input, mapping URL images and base64 data URLs to provider-native content blocks [[agentinput-multimodal-run-implementation]]

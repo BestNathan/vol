@@ -134,11 +134,7 @@ impl EventBuffer {
                 });
             }
 
-            // LLM call meta events, plugin events — invisible in UI
-            AgentStreamEvent::LLMCallStart { .. }
-            | AgentStreamEvent::LLMCallComplete { .. }
-            | AgentStreamEvent::LLMCallError { .. }
-            | AgentStreamEvent::PluginEvent { .. } => {}
+            AgentStreamEvent::PluginEvent { .. } => {}
         }
     }
 
@@ -236,32 +232,6 @@ mod tests {
         );
 
         assert!(state.modified_files.contains("src/main.rs"));
-    }
-
-    #[test]
-    fn test_apply_stream_ignores_llm_meta_events() {
-        let mut buffer = EventBuffer::new();
-        let mut state = UiState::new("sess-1".into(), ".", "local");
-
-        buffer.apply_stream(
-            &AgentStreamEvent::LLMCallStart {
-                timestamp: chrono::Utc::now(),
-                iteration: 1,
-                messages: vec![],
-            },
-            &mut state,
-        );
-        buffer.apply_stream(
-            &AgentStreamEvent::LLMCallComplete {
-                timestamp: chrono::Utc::now(),
-                model: "test".into(),
-                usage: None,
-            },
-            &mut state,
-        );
-
-        // No conversation entries should be added
-        assert!(state.conversation.is_empty());
     }
 
     #[test]

@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [event-bus, pub-sub, state-management, dioxus, web, frontend]
 created: 2026-05-11
-updated: 2026-05-11
-source_count: 1
+updated: 2026-05-17 (frontend-auto-reconnect)
+source_count: 3
 ---
 
 # EventBus Pattern
@@ -39,6 +39,7 @@ pub enum UiEventKind {
     ApprovalRequest, ApprovalResolved,
     IterationComplete, IterationContinued, MaxIterationsReached,
     WsConnected, WsConnecting, WsDisconnected,
+    WsReconnecting { attempt: u32, delay_secs: u32 }, WsReconnectFailed, WsReconnected,
 }
 
 #[derive(Clone)]
@@ -114,8 +115,15 @@ Benefits:
 - Clear ownership: each component manages its own state lifecycle
 - TUI continues using `Arc<Mutex<UiState>>` unchanged
 
+## Connection Status Events
+
+The `UiEventKind` enum includes `WsConnected`, `WsConnecting`, `WsDisconnected` variants for tracking WebSocket connection state. [[remote-connection-impl]] publishes these events when the connection state changes. Components like `ConnectionStatePanel` subscribe to these kinds to display real-time connection status indicators. See [[connection-state-dashboard]] for the full pattern.
+
+Extended with `WsReconnecting { attempt, delay_secs }`, `WsReconnectFailed`, and `WsReconnected` variants for the auto-reconnect lifecycle. The reconnect watcher task publishes `WsReconnecting` every second with a countdown timer, and `WsReconnectFailed` when all 10 attempts are exhausted. See [[frontend-auto-reconnect]] for the full pattern.
+
 ## Related Concepts
 - [[dioxus-signal-pattern]]: Per-component signals replacing centralized Signal<UiState>
 - [[dioxus-web-pattern]]: Component architecture updated for EventBus
 - [[split-signal-state]]: Source documenting the full refactoring
 - [[agent-event-stream]]: UiEvent derived from agent stream events
+- [[connection-state-dashboard-pattern]]: Real-time connection status display via EventBus subscription

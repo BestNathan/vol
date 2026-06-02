@@ -232,14 +232,48 @@ async fn test_agent_max_iterations() {
         }
     }
 
+    struct RejectMaxIterationsPlugin;
+
+    #[async_trait]
+    impl AgentPlugin for RejectMaxIterationsPlugin {
+        fn id(&self) -> String {
+            "reject_max_iterations".to_string()
+        }
+
+        fn priority(&self) -> u32 {
+            100
+        }
+
+        async fn intercept(
+            &self,
+            event: &AgentStreamEvent,
+            _ctx: &RunContext,
+        ) -> PluginDecision {
+            match event {
+                AgentStreamEvent::IterationComplete {
+                    final_answer: None,
+                    ..
+                } => PluginDecision::Abort("max iterations reached".to_string()),
+                _ => PluginDecision::Continue,
+            }
+        }
+
+        async fn listen(&self, _event: &AgentStreamEvent, _ctx: &RunContext) {}
+    }
+
     let mock_llm = LoopMock::new();
 
+    let def = vol_llm_agent::agent_def::AgentDef::new("loop-test", "You are a test assistant.")
+        .with_max_iterations(3);
+
     let config = AgentConfig::builder()
+        .with_def(def)
         .with_llm(Arc::new(mock_llm))
         .with_tool(VolatilityIndexTool::new(None))
         .with_tool(IndexPriceTool::new(None))
         .with_tool(OptionsTool::new(None))
         .with_tool(RvTool::new(None))
+        .with_plugin(RejectMaxIterationsPlugin)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();

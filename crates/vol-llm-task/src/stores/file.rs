@@ -236,6 +236,8 @@ mod tests {
             id: TaskId(999),
             status: TaskStatus::Pending,
             kind: TaskKind::Agent,
+            publisher: None,
+            assignee: None,
             subject: "ghost".to_string(),
             description: String::new(),
             active_form: None,

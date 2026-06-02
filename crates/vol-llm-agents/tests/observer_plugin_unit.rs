@@ -118,26 +118,34 @@ async fn test_observer_plugin_forwards_multiple_events() {
 // Helper function to create test RunContext
 fn create_test_context() -> RunContext {
     use vol_llm_agent::react::{AgentConfig, PluginRegistry, RunContext};
-    use vol_session::{InMemoryEntryStore, Session};
-    use vol_llm_tool::ToolRegistry;
+    use vol_llm_core::LLMClient;
+
+    struct MockLlm;
+    #[async_trait::async_trait]
+    impl LLMClient for MockLlm {
+        fn provider(&self) -> vol_llm_core::LLMProvider { vol_llm_core::LLMProvider::Anthropic }
+        fn model(&self) -> &str { "mock" }
+        fn supported_params(&self) -> &[vol_llm_core::SupportedParam] { &[] }
+        async fn converse(&self, _: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
+            unimplemented!()
+        }
+        async fn converse_stream(&self, _: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::StreamReceiver> {
+            let (_tx, rx) = tokio::sync::mpsc::channel(10);
+            Ok(vol_llm_core::StreamReceiver::new(rx))
+        }
+    }
+
+    let config = AgentConfig::builder()
+        .with_llm(Arc::new(MockLlm))
+        .with_context_builder(create_test_context_builder())
+        .with_plugin_registry(PluginRegistry::new())
+        .build()
+        .expect("test AgentConfig build");
 
     let (ctx, _plugin_rx) = RunContext::new(
         "test-run".to_string(),
         "test input".to_string(),
-        "session-1".to_string(),
-        Arc::new(Session::new(
-            Arc::new(InMemoryEntryStore::new()),
-        )),
-        Arc::new(ToolRegistry::new()),
-        AgentConfig {
-            max_iterations: 10,
-            max_history_messages: 20,
-            context_builder: create_test_context_builder(),
-            plugin_registry: PluginRegistry::new(),
-            agent_id: "test-agent".to_string(),
-            ..Default::default()
-        },
-        "test-model".to_string(),
+        Arc::new(config),
     );
     ctx
 }

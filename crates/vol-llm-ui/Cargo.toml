@@ -43,10 +43,11 @@ crossterm = { version = "0.29", features = ["event-stream"], optional = true }
 futures = { version = "0.3", optional = true }
 
 # Web (optional)
-dioxus = { version = "0.6", features = ["web"], optional = true }
+dioxus = { version = "0.6", features = ["web", "asset"], optional = true }
 dioxus-signals = { version = "0.6", optional = true }
 log = { version = "0.4", optional = true }
-web-sys = { version = "0.3", features = ["WebSocket", "Window", "Location"], optional = true }
+gloo-timers = { version = "0.3", features = ["futures"], optional = true }
+web-sys = { version = "0.3", features = ["WebSocket", "Window", "Location", "CloseEvent", "Event", "HtmlElement", "Element"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 js-sys = { version = "0.3", optional = true }
@@ -57,7 +58,7 @@ web-time = { version = "1", optional = true }
 
 # Remote connection (JSON-RPC over WS) — TUI only
 jsonrpsee = { version = "0.26", features = ["client", "ws-client"], optional = true }
-dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
+dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false, optional = true }
 
 [dev-dependencies]
 chrono = { workspace = true }
@@ -74,6 +75,6 @@ tui = [
     "dep:vol-llm-agent", "dep:vol-llm-agent-channel",
     "dep:vol-llm-core", "dep:vol-llm-provider", "dep:vol-llm-tool",
     "dep:vol-llm-agents", "dep:vol-llm-skill", "dep:vol-llm-observability",
-    "dep:vol-session", "dep:jsonrpsee",
+    "dep:vol-session", "dep:jsonrpsee", "dep:dioxus-primitives",
 ]
-web = ["dep:dioxus", "dep:dioxus-signals", "dep:log", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:futures-channel", "dep:futures-core", "dep:futures-util", "dep:js-sys", "dep:web-time"]
+web = ["dep:dioxus", "dep:dioxus-signals", "dep:log", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:futures-channel", "dep:futures-core", "dep:futures-util", "dep:js-sys", "dep:web-time", "dep:gloo-timers", "dioxus?/asset"]

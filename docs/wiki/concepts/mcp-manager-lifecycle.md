@@ -3,6 +3,8 @@ type: concept
 category: pattern
 tags: [mcp, manager, lifecycle, reconnect, connection-state, rmcp]
 created: 2026-05-13
+updated: 2026-05-15
+source_count: 2
 ---
 
 # MCP Manager Lifecycle
@@ -51,10 +53,21 @@ All public methods take `&self` — internal mutability via `Arc<RwLock<>>`.
 ## Connection Flow
 
 ### Initial connect()
-For each server:
+For each server, dispatch on `config.transport`:
+
+**Stdio:**
 1. Set status → `Connecting`
 2. Spawn `TokioChildProcess` (command + args + env)
 3. Create `rmcp` transport (stdio)
+4. `ClientInfo.serve_with_ct(transport, cancel_token)`
+5. Wait for peer ready (10s timeout)
+6. Fetch & cache: tools, resources, resource templates, prompts
+7. Set status → `Connected`
+
+**Http:**
+1. Set status → `Connecting`
+2. Build `StreamableHttpClientTransportConfig` from URL + optional headers
+3. Create `StreamableHttpClientTransport` (reqwest-based)
 4. `ClientInfo.serve_with_ct(transport, cancel_token)`
 5. Wait for peer ready (10s timeout)
 6. Fetch & cache: tools, resources, resource templates, prompts
@@ -82,7 +95,7 @@ Spawned as async task with per-server `CancellationToken`:
 
 ### Disconnect()
 1. Cancel reconnect `CancellationToken`
-2. Kill `TokioChildProcess`
+2. Stdio: kill `TokioChildProcess`; Http: close `RunningService`
 3. Stop `RunningService`
 4. Clear caches
 5. Set status → `Disconnected`
@@ -115,3 +128,4 @@ Spawned as async task with per-server `CancellationToken`:
 
 - **2026-05-11**: `McpSession` — flat data structure, no lifecycle management [[react-agent-mcp-integration]]
 - **2026-05-13**: `McpManager` — full lifecycle manager with auto-reconnect and state tracking [[mcp-manager-impl]]
+- **2026-05-15**: Multi-transport dispatch — `connect_single` matches on `McpTransport` enum; HTTP via `StreamableHttpClientTransport` [[mcp-multi-transport-config]]

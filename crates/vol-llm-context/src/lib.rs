@@ -38,4 +38,4 @@ pub use context_contributor::{ContextContributor, ContextError};
 pub mod builder;
 pub mod builtin;
 
-pub use builder::{ContextBuilder, ContextBuilderBuilder, ContextOutput};
+pub use builder::{ContextBuilder, ContextBuilderBuilder, ContextMessage, ContextOutput, ContributorInfo};

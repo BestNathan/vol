@@ -14,7 +14,7 @@ async fn test_register_all() {
     tools::register_all(&mut registry, store);
 
     let defs = registry.definitions();
-    assert_eq!(defs.len(), 6);
+    assert_eq!(defs.len(), 7);
 
     let names: Vec<_> = defs.iter().map(|d| &d.name).collect();
     assert!(names.contains(&&"task_create".to_string()));

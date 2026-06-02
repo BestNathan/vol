@@ -34,3 +34,10 @@ frontend/dist/
 .env
 .env.local
 .env.*.local
+
+# node_modules
+node_modules/
+
+.claude/settings.local.json
+
+.playwright-mcp

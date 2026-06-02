@@ -1,0 +1,235 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Run Info",
+      "type": "stat",
+      "datasource": {
+        "type": "tdengine",
+        "uid": "tdengine-ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "sql": "SELECT run_id, agent_type, status, duration_ms FROM agent_run WHERE run_id = '$run_id' LIMIT 1",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "text": "Complete",
+                        "color": "green"
+                      },
+                      "1": {
+                        "text": "Aborted",
+                        "color": "red"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "title": "Event Timeline",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "targets": [
+        {
+          "expr": "{run_id=\"$run_id\"}",
+          "refId": "A",
+          "legendFormat": "{{event_type}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Tool Calls",
+      "type": "table",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "{run_id=\"$run_id\", event_type=~\"ToolCallComplete|ToolCallError\"}",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "Line"
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Thinking",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "targets": [
+        {
+          "expr": "{run_id=\"$run_id\", event_type=\"ThinkingComplete\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "LLM Call Latency",
+      "type": "timeseries",
+      "datasource": {
+        "type": "tdengine",
+        "uid": "tdengine-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 28
+      },
+      "targets": [
+        {
+          "sql": "SELECT ts, duration_ms FROM llm_call WHERE run_id = '$run_id' ORDER BY ts",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Token Usage",
+      "type": "bargauge",
+      "datasource": {
+        "type": "tdengine",
+        "uid": "tdengine-ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 28
+      },
+      "targets": [
+        {
+          "sql": "SELECT input_tokens, output_tokens, total_tokens FROM llm_call WHERE run_id = '$run_id' ORDER BY ts",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": [
+    "vol-observability",
+    "agent-run"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "run_id",
+        "type": "query",
+        "datasource": {
+          "type": "tdengine",
+          "uid": "tdengine-ds"
+        },
+        "query": "SELECT run_id FROM agent_run ORDER BY ts DESC LIMIT 100",
+        "refresh": 1,
+        "sort": 1,
+        "multi": false,
+        "includeAll": false
+      },
+      {
+        "name": "agent_id",
+        "type": "query",
+        "datasource": {
+          "type": "tdengine",
+          "uid": "tdengine-ds"
+        },
+        "query": "SELECT agent_id FROM agent_run WHERE run_id = '$run_id'",
+        "refresh": 1,
+        "sort": 1,
+        "multi": false,
+        "includeAll": false
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "title": "Agent Run",
+  "uid": "agent-run"
+}

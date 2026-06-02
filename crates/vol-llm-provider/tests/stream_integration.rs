@@ -58,6 +58,8 @@ data: {"type": "message_stop", "stop_reason": "end_turn"}
         model: "qwen3.5-plus".to_string(),
         base_url,
         api_key: Secret::literal("test-key"),
+        body: None,
+        headers: None,
     };
 
     let provider = AnthropicProvider::new(&config).unwrap();
@@ -109,6 +111,8 @@ data: {"type": "message_stop", "stop_reason": "tool_use"}
         model: "qwen3.5-plus".to_string(),
         base_url,
         api_key: Secret::literal("test-key"),
+        body: None,
+        headers: None,
     };
 
     let provider = AnthropicProvider::new(&config).unwrap();
@@ -146,6 +150,8 @@ async fn test_anthropic_stream_error_handling() {
         model: "qwen3.5-plus".to_string(),
         base_url: "http://127.0.0.1:1".to_string(), // Invalid port
         api_key: Secret::literal("test-key"),
+        body: None,
+        headers: None,
     };
 
     let provider = AnthropicProvider::new(&config).unwrap();

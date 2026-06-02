@@ -1,0 +1,11 @@
+provider = "anthropic"
+model = "qwen3.6-plus"
+api_key = "${ANTHROPIC_AUTH_TOKEN}"
+base_url = "http://k8s.nhome.local:31693"
+
+[body]
+max_tokens = 8192
+temperature = 0.7
+
+[headers]
+"anthropic-version" = "2023-06-01"

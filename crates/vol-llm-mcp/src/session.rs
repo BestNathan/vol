@@ -9,7 +9,7 @@ use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 use tracing;
 
-use crate::config::McpServerConfig;
+use crate::config::{McpServerConfig, McpTransport};
 use crate::error::McpError;
 
 /// Sanitize a server name to only contain [a-zA-Z0-9_-].
@@ -112,16 +112,22 @@ impl McpSession {
     async fn connect_single(
         config: &McpServerConfig,
     ) -> Result<(RunningService<RoleClient, ClientInfo>, Vec<Tool>), McpError> {
-        let mut command = Command::new(&config.command);
-        command.args(&config.args);
-        for (key, value) in &config.env {
-            command.env(key, value);
+        let McpTransport::Stdio { command, args, env } = &config.transport else {
+            return Err(McpError::ConnectionFailed {
+                server: config.name.clone(),
+                detail: format!("unsupported transport type for session: {:?}", config.transport),
+            });
+        };
+        let mut cmd = Command::new(command);
+        cmd.args(args);
+        for (key, value) in env {
+            cmd.env(key, value);
         }
-        command.stdin(Stdio::piped());
-        command.stdout(Stdio::piped());
-        command.stderr(Stdio::inherit());
+        cmd.stdin(Stdio::piped());
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::inherit());
 
-        let child = TokioChildProcess::new(command).map_err(|e: std::io::Error| {
+        let child = TokioChildProcess::new(cmd).map_err(|e: std::io::Error| {
             McpError::ConnectionFailed {
                 server: config.name.clone(),
                 detail: e.to_string(),

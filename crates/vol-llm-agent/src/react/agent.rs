@@ -1,24 +1,22 @@
 //! ReAct Agent implementation.
 
-use super::{
-    AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext,
-};
+use super::{AgentInput, AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext};
 use crate::react::state::ToolCallRecord;
-use vol_session::{InMemoryEntryStore, Session};
-use std::path::Path;
-use std::sync::Arc;
-use vol_llm_context::{ContextBuilder, ContextBuilderBuilder};
-use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
-use vol_llm_tool::ToolRegistry;
-use vol_llm_mcp::McpManager;
+use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
+use vol_llm_context::{ContextBuilder, ContextBuilderBuilder, ContextContributor, ContextError, ContextMessage, ContributorInfo};
 use vol_llm_core::{
-    ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData, StreamReceiver,
-    ToolChoice,
+    ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData,
+    StreamReceiver, ToolChoice,
 };
+use vol_llm_mcp::McpManager;
 use vol_llm_tool::ToolContext;
+use vol_session::{InMemoryEntryStore, Session, SessionContributor};
 
 /// Agent configuration — single source of truth for ReActAgent.
-#[derive(Clone)]
+///
+/// Clone is intentionally NOT derived. After construction, config is shared
+/// via Arc and external code only gets &AgentConfig references.
 pub struct AgentConfig {
     // === Declarative definition (optional) ===
     pub def: Option<crate::agent_def::AgentDef>,
@@ -26,15 +24,22 @@ pub struct AgentConfig {
     // === Runtime components ===
     pub llm: Arc<dyn vol_llm_core::LLMClient>,
     pub tools: Arc<vol_llm_tool::ToolRegistry>,
-    pub session: Arc<Session>,
+    /// Session handle with interior mutability. Read via agent.session(),
+    /// write via agent.set_session() (gated by is_running).
+    pub(crate) session: std::sync::RwLock<Arc<Session>>,
     pub sandbox: Option<SandboxRef>,
 
     // === Context and plugins ===
-    pub context_builder: ContextBuilder,
+    pub(crate) context_builder: RwLock<ContextBuilder>,
     pub plugin_registry: PluginRegistry,
 
-    // === MCP session ===
+    // === MCP ===
     pub mcp_manager: Option<Arc<McpManager>>,
+
+    // === Agent identity ===
+    pub agent_id: String,
+    /// Working directory. Log paths derive from `{working_dir}/logs/agents/{agent_id}/`.
+    pub working_dir: PathBuf,
 }
 
 impl AgentConfig {
@@ -43,22 +48,21 @@ impl AgentConfig {
         super::config_builder::AgentConfigBuilder::new()
     }
 
-    /// Convenience constructor for direct struct creation (backwards-compatible).
-    pub fn new(
-        llm: Arc<dyn vol_llm_core::LLMClient>,
-        tools: Arc<vol_llm_tool::ToolRegistry>,
-        session: Arc<Session>,
-    ) -> Self {
-        Self {
-            def: None,
-            llm,
-            tools,
-            session,
-            sandbox: None,
-            context_builder: ContextBuilderBuilder::new(128_000).build(),
-            plugin_registry: PluginRegistry::new(),
-            mcp_manager: None,
-        }
+    /// Add a context contributor.
+    pub fn add_contributor(&mut self, contributor: Box<dyn ContextContributor>) {
+        self.context_builder.write().unwrap().add_contributor(contributor);
+    }
+
+    /// List contributor info (for RPC / UI queries).
+    pub async fn contributor_infos(&self) -> Result<Vec<ContributorInfo>, ContextError> {
+        let cb = self.context_builder.read().unwrap().clone();
+        cb.contributor_infos().await
+    }
+
+    /// Get message snapshot from a specific contributor.
+    pub async fn snapshot_by_name(&self, name: &str) -> Result<Vec<ContextMessage>, ContextError> {
+        let cb = self.context_builder.read().unwrap().clone();
+        cb.snapshot_by_name(name).await
     }
 }
 
@@ -68,178 +72,224 @@ impl Default for AgentConfig {
             def: None,
             llm: Arc::new(DefaultLlm),
             tools: Arc::new(vol_llm_tool::ToolRegistry::new()),
-            session: Arc::new(Session::new(Arc::new(InMemoryEntryStore::new()))),
+            session: std::sync::RwLock::new(Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())))),
             sandbox: None,
-            context_builder: ContextBuilderBuilder::new(128_000).build(),
+            context_builder: RwLock::new(ContextBuilderBuilder::new(128_000).build()),
             plugin_registry: PluginRegistry::new(),
             mcp_manager: None,
+            agent_id: generate_agent_id(),
+            working_dir: PathBuf::from("."),
         }
     }
+}
+
+fn generate_agent_id() -> String {
+    format!(
+        "agent-{}",
+        uuid::Uuid::new_v4().simple().to_string()[..8].to_string()
+    )
 }
 
 /// Dummy LLM for Default impl (tests only — will panic if used).
 struct DefaultLlm;
 #[async_trait::async_trait]
 impl LLMClient for DefaultLlm {
-    fn provider(&self) -> vol_llm_core::LLMProvider { vol_llm_core::LLMProvider::Anthropic }
-    fn model(&self) -> &str { "default" }
-    fn supported_params(&self) -> &[vol_llm_core::SupportedParam] { &[] }
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
-        unimplemented!("DefaultLlm::converse called — AgentConfig::default() is for struct defaults only")
+    fn provider(&self) -> vol_llm_core::LLMProvider {
+        vol_llm_core::LLMProvider::Anthropic
     }
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+    fn model(&self) -> &str {
+        "default"
+    }
+    fn supported_params(&self) -> &[vol_llm_core::SupportedParam] {
+        &[]
+    }
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
+        unimplemented!(
+            "DefaultLlm::converse called — AgentConfig::default() is for struct defaults only"
+        )
+    }
+    async fn converse_stream(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<StreamReceiver> {
         let (_tx, rx) = tokio::sync::mpsc::channel(10);
         Ok(StreamReceiver::new(rx))
     }
 }
 
-/// Holds a shared SkillLoader and provides helpers to register skills
-/// into the tool registry and context builder.
-pub struct SkillsConfig {
-    loader: Arc<SkillLoader>,
+/// Shared running state — exposed for external status queries.
+pub struct RunningState {
+    /// true while run_input() is executing.
+    pub is_running: std::sync::atomic::AtomicBool,
+    /// Current input text (for status display).
+    pub current_input: std::sync::RwLock<Option<String>>,
+    /// Current run_id (for status display).
+    pub current_run_id: std::sync::RwLock<Option<String>>,
 }
 
-impl SkillsConfig {
-    /// Create from a working directory. The SkillLoader discovers skills
-    /// lazily on first access (no I/O during construction).
-    pub fn from_workdir(working_dir: &Path) -> Self {
+impl RunningState {
+    fn new() -> Self {
         Self {
-            loader: Arc::new(SkillLoader::new(Some(working_dir.to_path_buf()))),
-        }
-    }
-
-    /// Register the SkillTool into the tool registry.
-    /// Call this on a mutable reference before wrapping the registry in Arc.
-    pub fn register_tool(&self, registry: &mut ToolRegistry) {
-        registry.register(SkillTool::new(self.loader.clone()));
-    }
-
-    /// Build a new ContextBuilder from an existing one, adding the SkillInjector.
-    pub fn enhance_context_builder(
-        &self,
-        existing: &ContextBuilder,
-    ) -> ContextBuilder {
-        let injector = SkillInjector::new(self.loader.clone());
-        let budget = existing.token_budget();
-        ContextBuilderBuilder::new(budget.total)
-            .head_size(budget.head_size)
-            .tail_size(budget.tail_size)
-            .add_contributors_from(existing)
-            .add_contributor(Box::new(injector))
-            .build()
-    }
-}
-
-impl AgentConfig {
-    /// Enhance this config with skill injection in the context builder.
-    pub fn with_skills(self, working_dir: &Path) -> Self {
-        let skills = SkillsConfig::from_workdir(working_dir);
-        let new_context = skills.enhance_context_builder(&self.context_builder);
-        AgentConfig {
-            context_builder: new_context,
-            ..self
+            is_running: std::sync::atomic::AtomicBool::new(false),
+            current_input: std::sync::RwLock::new(None),
+            current_run_id: std::sync::RwLock::new(None),
         }
     }
 }
 
-/// ReAct Agent
+/// RAII guard that clears running state on drop (even on panic).
+struct RunningGuard<'a> {
+    run_state: &'a RunningState,
+}
+
+impl Drop for RunningGuard<'_> {
+    fn drop(&mut self) {
+        self.run_state
+            .is_running
+            .store(false, std::sync::atomic::Ordering::Release);
+        *self.run_state.current_input.write().unwrap() = None;
+        *self.run_state.current_run_id.write().unwrap() = None;
+    }
+}
+
+/// ReAct Agent — owns config (Arc) and running state.
 pub struct ReActAgent {
-    config: AgentConfig,
+    config: Arc<AgentConfig>,
+    run_state: Arc<RunningState>,
 }
 
 impl ReActAgent {
     /// Create a new ReActAgent from config.
     pub fn new(config: AgentConfig) -> Self {
-        Self { config }
+        Self {
+            config: Arc::new(config),
+            run_state: Arc::new(RunningState::new()),
+        }
     }
 
-    /// Set the sandbox for tool execution
+    // ── Read-only access ──
+
+    /// Immutable reference to config.
+    pub fn config(&self) -> &AgentConfig {
+        &self.config
+    }
+
+    // ── Contributor API ──
+
+    /// Add a context contributor at runtime.
+    pub fn add_contributor(&mut self, contributor: Box<dyn ContextContributor>) {
+        self.config
+            .context_builder
+            .write()
+            .unwrap()
+            .add_contributor(contributor);
+    }
+
+    /// List all contributors with metadata (SOT for external queries).
+    pub async fn contributors(&self) -> Result<Vec<ContributorInfo>, ContextError> {
+        self.config.contributor_infos().await
+    }
+
+    /// Get messages from a specific contributor by name.
+    pub async fn snapshot_by_name(&self, name: &str) -> Result<Vec<ContextMessage>, ContextError> {
+        self.config.snapshot_by_name(name).await
+    }
+
+    /// Cheap clone of the shared session handle.
+    pub fn session(&self) -> Arc<Session> {
+        self.config.session.read().unwrap().clone()
+    }
+
+    /// Whether agent is currently executing run_input().
+    pub fn is_running(&self) -> bool {
+        self.run_state
+            .is_running
+            .load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// Shared running state for external status queries.
+    pub fn run_state(&self) -> &Arc<RunningState> {
+        &self.run_state
+    }
+
+    // ── Mutation (gated by is_running) ──
+
+    /// Replace the session. Rejected if agent is running.
+    /// Also replaces the SessionContributor with a new one pointing to the new session.
+    pub fn set_session(&self, session: Arc<Session>) -> Result<(), AgentBusyError> {
+        if self.is_running() {
+            return Err(AgentBusyError {
+                agent_id: self.config.agent_id.clone(),
+            });
+        }
+        let max_history = self.config.def.as_ref()
+            .and_then(|d| d.max_history_messages)
+            .unwrap_or(50);
+        let session_contributor = Box::new(SessionContributor::new(
+            Arc::new(tokio::sync::Mutex::new((*session).clone())),
+            max_history,
+        ));
+        *self.config.session.write().unwrap() = session;
+        self.config.context_builder.write().unwrap()
+            .replace_contributor("session", session_contributor);
+        Ok(())
+    }
+
+    // ── Builder-style (consuming self, initial setup only) ──
+
+    /// Set the sandbox for tool execution (builder pattern, consumes self).
     pub fn with_sandbox(mut self, sandbox: SandboxRef) -> Self {
-        self.config.sandbox = Some(sandbox);
+        Arc::get_mut(&mut self.config)
+            .expect("with_sandbox called after config was shared")
+            .sandbox = Some(sandbox);
         self
     }
 
-    /// Create agent with new session
-    pub fn with_new_session(&self, _session_id: String) -> Self {
-        use vol_session::InMemoryEntryStore;
-
-        let entry_store = Arc::new(InMemoryEntryStore::new());
-        let new_session = Arc::new(Session::new(entry_store));
-        // Note: session.id is now self-generated; session_id param is ignored for the ID.
-        // If the caller needs a specific ID, use Session::resume instead.
-        Self {
-            config: AgentConfig {
-                session: new_session,
-                ..self.config.clone()
-            },
-        }
-    }
-
-    /// Create a new agent with the given session (clones the rest of config).
-    pub fn with_session(&self, session: Arc<Session>) -> Self {
-        Self {
-            config: AgentConfig {
-                session,
-                ..self.config.clone()
-            },
-        }
-    }
+    // ── Execution ──
 
     /// Run ReAct loop and return the final response.
-    ///
-    /// All events are emitted via RunContext event bus.
-    /// The returned AgentResponse contains the complete execution context including:
-    /// - Final answer content and complete reasoning chain
-    /// - run_id and session_id for correlation
-    /// - All tool calls made during execution
-    /// - Error information if any tool call failed
     pub async fn run(&self, user_input: &str) -> Result<AgentResponse, crate::AgentError> {
-        // === Phase 1: Generate run_id, compute effective config from def ===
+        self.run_input(AgentInput::text(user_input)).await
+    }
 
-        // Tool filtering from AgentDef
-        let effective_tools = if let Some(def) = &self.config.def {
-            let allowed: Option<Vec<&str>> = def.tools.as_ref()
-                .map(|t| t.iter().map(|s| s.as_str()).collect());
-            let disallowed: Option<Vec<&str>> = def.disallowed_tools.as_ref()
-                .map(|t| t.iter().map(|s| s.as_str()).collect());
-            ToolRegistry::filter(&self.config.tools, allowed.as_deref(), disallowed.as_deref())
-        } else {
-            self.config.tools.clone()
-        };
+    pub async fn run_input(&self, input: AgentInput) -> Result<AgentResponse, crate::AgentError> {
+        // Re-entrancy guard
+        if self
+            .run_state
+            .is_running
+            .swap(true, std::sync::atomic::Ordering::AcqRel)
+        {
+            return Err(crate::AgentError::AlreadyRunning);
+        }
 
-        // Read max_iterations and max_history from def if set, else use hardcoded defaults
-        let max_iterations = self.config.def.as_ref()
-            .and_then(|d| d.max_iterations)
-            .unwrap_or(5);
-        let max_history_messages = self.config.def.as_ref()
-            .and_then(|d| d.max_history_messages)
-            .unwrap_or(20);
+        let user_content = input
+            .to_message_content()
+            .map_err(|e| crate::AgentError::InvalidInput(e.to_string()))?;
+        let user_input = input.display_text();
+        let run_id = input
+            .run_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string());
 
-        // Clone config with effective tools
-        let config = AgentConfig {
-            tools: effective_tools.clone(),
-            ..self.config.clone()
-        };
+        // Set status metadata
+        *self.run_state.current_input.write().unwrap() = Some(user_input.clone());
+        *self.run_state.current_run_id.write().unwrap() = Some(run_id.clone());
 
-        let run_id = uuid::Uuid::new_v4().simple().to_string();
+        // RAII guard: clears running state on drop (even on panic)
+        let _guard = RunningGuard { run_state: &self.run_state };
 
-        let session = self.config.session.clone();
+        let (run_ctx, plugin_rx) =
+            RunContext::new(run_id.clone(), user_input.clone(), self.config.clone());
 
-        let (run_ctx, plugin_rx) = RunContext::new(
-            run_id.clone(),
-            user_input.to_string(),
-            self.config.session.id.clone(),
-            session.clone(),
-            effective_tools,
-            config.clone(),
-            max_history_messages,
-            config.llm.model().to_string(),
-        );
+        for (key, value) in input.metadata {
+            run_ctx.data.write().await.insert(key, value);
+        }
 
         // Persist user message to session so it's available via SessionContributor.
-        // This replaces the old UserInputContributor which injected input directly
-        // into the context without persisting it.
-        let user_msg = Message::user(user_input.to_string());
+        let user_msg = Message::user(user_content);
         run_ctx.add_message(user_msg).await.map_err(|e| {
             crate::AgentError::SessionError(format!("Failed to persist user message: {}", e))
         })?;
@@ -247,41 +297,26 @@ impl ReActAgent {
         // === Phase 2: Context is built per-iteration via get_context ===
 
         // === Phase 2.6: Spawn listener and interceptor tasks ===
-        use super::plugin_stream::{run_interceptor_loop, spawn_listener_task};
+        use super::plugin_stream::{run_interceptor_loop, spawn_listener_tasks};
 
-        // Spawn listener task - subscribes to event broadcast channel
-        // Handle stored for graceful shutdown wait
-        // Note: We create plugin_ctx and subscribe here to avoid cloning RunContext
-        // (which would clone senders and prevent channel close)
-        let listener_event_rx = run_ctx.event_tx.subscribe();
-        let listener_handle = spawn_listener_task(
-            config.plugin_registry.plugins().to_vec(),
-            run_ctx.clone(),
-            listener_event_rx,
-        );
+        let plugins = self.config.plugin_registry.plugins().to_vec();
+        let mut listener_set = spawn_listener_tasks(plugins, run_ctx.clone());
 
-        // Spawn interceptor loop task - receives from plugin_rx channel
-        // When plugin_rx is closed (agent drops run_ctx), interceptor exits
-        let interceptor_event_tx = run_ctx.event_tx.clone();
-        let interceptor_plugins = config.plugin_registry.plugins().to_vec();
-        let interceptor_ctx = run_ctx.clone();
+        let interceptor_plugins = self.config.plugin_registry.plugins().to_vec();
+        let interceptor_ctx = run_ctx.without_plugin_event_tx();
         let interceptor_handle = tokio::spawn(async move {
-            run_interceptor_loop(
-                plugin_rx,
-                interceptor_plugins,
-                interceptor_event_tx,
-                interceptor_ctx,
-            )
-            .await;
+            run_interceptor_loop(plugin_rx, interceptor_plugins, interceptor_ctx).await;
         });
+
+        let mut shutdown_event_tx = run_ctx.event_tx.clone();
 
         // === Phase 3: Spawn agent loop task and await it ===
         let llm = self.config.llm.clone();
-        let user_input = user_input.to_string();
+        let user_input = user_input.clone();
         let sandbox = self.config.sandbox.clone();
-        let max_iterations = max_iterations;
-
+        let agent_def = self.config.def.clone();
         let agent_task = tokio::spawn(async move {
+            let max_iterations = run_ctx.max_iterations();
             // === Emit and intercept AgentStart ===
             let start_event = AgentStreamEvent::agent_start(user_input.clone());
             run_ctx.emit(start_event.clone()).await;
@@ -313,35 +348,30 @@ impl ReActAgent {
                 let iteration = run_ctx.current_iteration();
 
                 if iteration > max_iterations {
-                    run_ctx.emit(AgentStreamEvent::max_iterations_reached(
-                        iteration,
-                        max_iterations,
-                    )).await;
+                    run_ctx
+                        .emit(AgentStreamEvent::max_iterations_reached(
+                            iteration,
+                            max_iterations,
+                        ))
+                        .await;
 
-                    match run_ctx.intercept(&AgentStreamEvent::iteration_complete(iteration, vec![], None)).await {
-                        Ok(PluginDecision::Continue) => {
-                            run_ctx.emit(AgentStreamEvent::iteration_continued(iteration)).await;
-                            run_ctx.reset_iteration();
-                            continue;
-                        }
-                        _ => {
-                            let reason = format!("Max iterations ({}) reached", max_iterations);
-                            run_ctx.emit(AgentStreamEvent::agent_aborted(reason.clone())).await;
-                            return Err(crate::AgentError::MaxIterationsReached {
-                                max: max_iterations,
-                            });
-                        }
-                    }
+                    let reason = format!("Max iterations ({}) reached", max_iterations);
+                    run_ctx
+                        .emit(AgentStreamEvent::agent_aborted(reason.clone()))
+                        .await;
+                    return Err(crate::AgentError::MaxIterationsReached {
+                        max: max_iterations,
+                    });
                 }
 
                 // Reason phase - call LLM with streaming
-                let tools_defs = config.tools.definitions();
+                let tools_defs = run_ctx.effective_tools();
 
                 // Get messages from ctx (not local variable)
-                let messages = run_ctx.get_context().await.map_err(|e| crate::AgentError::from(e))?;
-
-                // Emit LLMCallStart with full message history
-                run_ctx.emit(AgentStreamEvent::llm_call_start(iteration, messages.clone())).await;
+                let messages = run_ctx
+                    .get_context()
+                    .await
+                    .map_err(|e| crate::AgentError::from(e))?;
 
                 let request = ConversationRequest::with_history(None, messages)
                     .with_tools(tools_defs)
@@ -350,41 +380,53 @@ impl ReActAgent {
                 let llm_stream = match llm.converse_stream(request).await {
                     Ok(stream) => stream,
                     Err(e) => {
-                        run_ctx.emit(AgentStreamEvent::llm_call_error(e.to_string())).await;
-                        run_ctx.emit(AgentStreamEvent::agent_aborted(format!("LLM request failed: {}", e))).await;
+                        run_ctx
+                            .emit(AgentStreamEvent::agent_aborted(format!(
+                                "LLM request failed: {}",
+                                e
+                            )))
+                            .await;
                         return Err(crate::AgentError::Llm(e));
                     }
                 };
 
                 // Consume LLM stream — emits Thinking/Content streaming events internally
-                let (thinking, tool_calls, content, model, usage) = match consume_llm_stream(llm_stream, &run_ctx).await {
-                    Ok(data) => data,
-                    Err(e) => {
-                        run_ctx.emit(AgentStreamEvent::llm_call_error(e.to_string())).await;
-                        run_ctx.emit(AgentStreamEvent::agent_aborted(format!("LLM stream failed: {}", e))).await;
-                        return Err(e);
-                    }
-                };
+                let (thinking, tool_calls, content, model, usage) =
+                    match consume_llm_stream(llm_stream, &run_ctx).await {
+                        Ok(data) => data,
+                        Err(e) => {
+                            run_ctx
+                                .emit(AgentStreamEvent::agent_aborted(format!(
+                                    "LLM stream failed: {}",
+                                    e
+                                )))
+                                .await;
+                            return Err(e);
+                        }
+                    };
 
                 // Record reasoning step
                 if !thinking.is_empty() {
                     run_ctx.record_reasoning_step(thinking.clone(), None).await;
                 }
 
-                // Emit LLMCallComplete with real model and usage
-                run_ctx.emit(AgentStreamEvent::llm_call_complete(model.clone(), usage)).await;
-
                 // Check if tool calls
                 if !tool_calls.is_empty() {
-
                     // IMPORTANT: Add assistant message with tool calls to history
-                    let assistant_message = if !content.is_empty() {
-                        Message::assistant_with_tools(content.clone(), tool_calls.clone())
-                    } else {
-                        Message::assistant_with_tools(
-                            "Calling tools to get information.".to_string(),
-                            tool_calls.clone(),
-                        )
+                    let assistant_message = {
+                        let msg = if !content.is_empty() {
+                            Message::assistant_with_tools(content.clone(), tool_calls.clone())
+                        } else {
+                            Message::assistant_with_tools(
+                                "Calling tools to get information.".to_string(),
+                                tool_calls.clone(),
+                            )
+                        };
+                        if !thinking.is_empty() {
+                            msg.with_thinking(thinking.clone())
+                        } else {
+                            msg
+                        }
                     };
                     if let Err(e) = run_ctx.add_message(assistant_message).await {
                         return Err(crate::AgentError::from(e));
@@ -417,12 +459,14 @@ impl ReActAgent {
                                 tracing::warn!("Plugin intercepted to skip tool: {}", call.name);
                                 let duration_ms = tool_begin.elapsed().as_millis() as u64;
 
-                                run_ctx.emit(AgentStreamEvent::tool_call_skipped(
-                                    call.id.clone(),
-                                    call.name.clone(),
-                                    "Plugin skipped".to_string(),
-                                    Some(duration_ms),
-                                )).await;
+                                run_ctx
+                                    .emit(AgentStreamEvent::tool_call_skipped(
+                                        call.id.clone(),
+                                        call.name.clone(),
+                                        "Plugin skipped".to_string(),
+                                        Some(duration_ms),
+                                    ))
+                                    .await;
 
                                 continue;
                             }
@@ -435,32 +479,38 @@ impl ReActAgent {
                         }
 
                         // Execute tool
-                        let tool_ctx = match &sandbox {
+                        let mut tool_ctx = match &sandbox {
                             Some(sandbox) => ToolContext::default().with_sandbox(sandbox.clone()),
                             None => ToolContext::default(),
                         };
-                        let result = match config.tools.execute(call, &tool_ctx).await {
+                        if let Some(ref def) = agent_def {
+                            tool_ctx = tool_ctx.with_agent_def(def.clone());
+                        }
+                        let result = match run_ctx.execute_tool(call, &tool_ctx).await {
                             Ok(r) => r,
                             Err(e) => {
                                 let duration_ms = tool_begin.elapsed().as_millis() as u64;
-                                run_ctx.emit(AgentStreamEvent::tool_call_error(
-                                    call.id.clone(),
-                                    call.name.clone(),
-                                    e.to_string(),
-                                    Some(duration_ms),
-                                )).await;
+                                run_ctx
+                                    .emit(AgentStreamEvent::tool_call_error(
+                                        call.id.clone(),
+                                        call.name.clone(),
+                                        e.to_string(),
+                                        Some(duration_ms),
+                                    ))
+                                    .await;
 
-                                run_ctx.record_tool_call(ToolCallRecord {
-                                    tool_name: call.name.clone(),
-                                    arguments: call.arguments.clone(),
-                                    result: format!("Error: {}", e),
-                                    iteration,
-                                    success: false,
-                                }).await;
+                                run_ctx
+                                    .record_tool_call(ToolCallRecord {
+                                        tool_name: call.name.clone(),
+                                        arguments: call.arguments.clone(),
+                                        result: format!("Error: {}", e),
+                                        iteration,
+                                        success: false,
+                                    })
+                                    .await;
 
                                 // Add error message to session — LLM sees it on next turn
-                                let error_content =
-                                    format!("Tool '{}' error: {}", call.name, e);
+                                let error_content = format!("Tool '{}' error: {}", call.name, e);
                                 if let Err(e) = run_ctx
                                     .add_message(Message::tool(error_content, call.id.clone()))
                                     .await
@@ -528,10 +578,11 @@ impl ReActAgent {
                     .await;
 
                 // Save assistant response to session
-                if let Err(e) = run_ctx
-                    .add_message(Message::assistant(content.clone()))
-                    .await
-                {
+                let mut final_msg = Message::assistant(content.clone());
+                if !thinking.is_empty() {
+                    final_msg = final_msg.with_thinking(thinking.clone());
+                }
+                if let Err(e) = run_ctx.add_message(final_msg).await {
                     return Err(crate::AgentError::from(e));
                 }
 
@@ -554,7 +605,9 @@ impl ReActAgent {
                     "session_id": response.session_id,
                 });
                 run_ctx
-                    .emit(AgentStreamEvent::agent_complete_with_response(response_json))
+                    .emit(AgentStreamEvent::agent_complete_with_response(
+                        response_json,
+                    ))
                     .await;
 
                 return Ok(response);
@@ -572,45 +625,32 @@ impl ReActAgent {
             }
         };
 
-        // Wait for interceptor to finish with timeout
-        let interceptor_result =
-            tokio::time::timeout(std::time::Duration::from_secs(5), interceptor_handle).await;
-
-        // Wait for listener to finish with timeout
-        let listener_result =
-            tokio::time::timeout(std::time::Duration::from_secs(5), listener_handle).await;
-
-        match interceptor_result {
-            Ok(Ok(())) => {}
-            Ok(Err(join_err)) => {
-                tracing::warn!(%join_err, "Interceptor task panicked");
-            }
-            Err(_timeout) => {
-                tracing::warn!(
-                    "Interceptor task timeout after 5s - task may be hanging, proceeding anyway"
-                );
-            }
+        if let Err(join_err) = interceptor_handle.await {
+            tracing::warn!(%join_err, "Interceptor task panicked");
         }
 
-        match listener_result {
-            Ok(Ok(())) => {}
-            Ok(Err(join_err)) => {
-                tracing::warn!(%join_err, "Listener task panicked");
-            }
-            Err(_timeout) => {
-                tracing::warn!(
-                    "Listener task timeout after 5s - task may be hanging, proceeding anyway"
-                );
+        shutdown_event_tx.take();
+
+        while let Some(result) = listener_set.join_next().await {
+            if let Err(e) = result {
+                tracing::warn!(%e, "Listener task panicked");
             }
         }
 
         // Disconnect MCP manager
-        if let Some(ref mcp_manager) = config.mcp_manager {
+        if let Some(ref mcp_manager) = self.config.mcp_manager {
             mcp_manager.disconnect().await.ok();
         }
 
         agent_result
     }
+}
+
+/// Returned when mutation is attempted while agent is running.
+#[derive(Debug, thiserror::Error)]
+#[error("agent {agent_id} is currently running — state mutation not allowed")]
+pub struct AgentBusyError {
+    pub agent_id: String,
 }
 
 /// Consume LLM stream response, emit streaming events, and accumulate into complete data.
@@ -619,7 +659,16 @@ impl ReActAgent {
 async fn consume_llm_stream(
     mut stream: StreamReceiver,
     run_ctx: &RunContext,
-) -> Result<(String, Vec<vol_llm_core::ToolCall>, String, String, Option<vol_llm_core::TokenUsage>), crate::AgentError> {
+) -> Result<
+    (
+        String,
+        Vec<vol_llm_core::ToolCall>,
+        String,
+        String,
+        Option<vol_llm_core::TokenUsage>,
+    ),
+    crate::AgentError,
+> {
     let mut thinking = String::new();
     let mut tool_calls = Vec::new();
     let mut content = String::new();
@@ -644,10 +693,14 @@ async fn consume_llm_stream(
             StreamEventData::ThinkingComplete { thinking: t } => {
                 if !thinking_started {
                     run_ctx.emit(AgentStreamEvent::thinking_start()).await;
-                    run_ctx.emit(AgentStreamEvent::thinking_delta(t.clone())).await;
+                    run_ctx
+                        .emit(AgentStreamEvent::thinking_delta(t.clone()))
+                        .await;
                 }
                 thinking = t;
-                run_ctx.emit(AgentStreamEvent::thinking_complete(thinking.clone())).await;
+                run_ctx
+                    .emit(AgentStreamEvent::thinking_complete(thinking.clone()))
+                    .await;
             }
             StreamEventData::ContentDelta { delta } => {
                 if !content_started {
@@ -660,10 +713,14 @@ async fn consume_llm_stream(
             StreamEventData::ContentComplete { content: c } => {
                 if !content_started {
                     run_ctx.emit(AgentStreamEvent::content_start()).await;
-                    run_ctx.emit(AgentStreamEvent::content_delta(c.clone())).await;
+                    run_ctx
+                        .emit(AgentStreamEvent::content_delta(c.clone()))
+                        .await;
                 }
                 content = c;
-                run_ctx.emit(AgentStreamEvent::content_complete(content.clone())).await;
+                run_ctx
+                    .emit(AgentStreamEvent::content_complete(content.clone()))
+                    .await;
             }
             StreamEventData::ToolCallComplete { tool_call } => {
                 tool_calls.push(tool_call);
@@ -674,7 +731,11 @@ async fn consume_llm_stream(
             StreamEventData::ResponseStart { model: m } => {
                 model = m;
             }
-            StreamEventData::ToolCallArgumentDelta { tool_call_id, tool_name, delta } => {
+            StreamEventData::ToolCallArgumentDelta {
+                tool_call_id,
+                tool_name,
+                delta,
+            } => {
                 run_ctx
                     .emit(AgentStreamEvent::tool_call_argument_delta(
                         tool_call_id.clone(),
@@ -696,10 +757,13 @@ async fn consume_llm_stream(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_llm_core::{ConversationResponse, FinishReason, Message as CoreMessage, StreamReceiver};
+    use vol_llm_core::{
+        ConversationResponse, FinishReason, Message as CoreMessage, StreamReceiver,
+    };
 
     use crate::agent_def::AgentDef;
     use crate::react::plugin::PluginRegistry;
+    use vol_llm_tool::ToolRegistry;
     use vol_session::InMemoryEntryStore;
 
     struct MockLlm;
@@ -714,7 +778,10 @@ mod tests {
         fn supported_params(&self) -> &[vol_llm_core::SupportedParam] {
             &[]
         }
-        async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+        async fn converse(
+            &self,
+            _request: ConversationRequest,
+        ) -> vol_llm_core::Result<ConversationResponse> {
             Ok(ConversationResponse {
                 message: CoreMessage::assistant("mock".to_string()),
                 model: "mock".to_string(),
@@ -723,18 +790,22 @@ mod tests {
                 raw: None,
             })
         }
-        async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+        async fn converse_stream(
+            &self,
+            _request: ConversationRequest,
+        ) -> vol_llm_core::Result<StreamReceiver> {
             let (_tx, rx) = tokio::sync::mpsc::channel(10);
             Ok(StreamReceiver::new(rx))
         }
     }
 
     fn make_config() -> AgentConfig {
-        AgentConfig::new(
-            Arc::new(MockLlm),
-            Arc::new(ToolRegistry::new()),
-            Arc::new(Session::new(Arc::new(InMemoryEntryStore::new()))),
-        )
+        AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(Arc::new(ToolRegistry::new()))
+            .with_session(Arc::new(Session::new(Arc::new(InMemoryEntryStore::new()))))
+            .build()
+            .expect("Test config build failed")
     }
 
     #[test]
@@ -761,20 +832,14 @@ mod tests {
     }
 
     #[test]
-    fn test_skills_config_register_tool() {
-        let skills = SkillsConfig::from_workdir(Path::new("/tmp/test-project"));
-        let mut registry = ToolRegistry::new();
-        skills.register_tool(&mut registry);
-        let defs = registry.definitions();
-        assert!(defs.iter().any(|d| d.name == "skill"));
-    }
+    fn test_agent_config_fields() {
+        let config = AgentConfig {
+            agent_id: "test_agent".to_string(),
+            working_dir: PathBuf::from("."),
+            ..Default::default()
+        };
 
-    #[test]
-    fn test_skills_config_enhance_context_builder() {
-        let skills = SkillsConfig::from_workdir(Path::new("/tmp/test-project"));
-        let existing = ContextBuilderBuilder::new(128_000).build();
-        let enhanced = skills.enhance_context_builder(&existing);
-        let names = enhanced.contributor_names();
-        assert!(names.contains(&"skills"));
+        assert_eq!(config.agent_id, "test_agent");
+        assert_eq!(config.working_dir, PathBuf::from("."));
     }
 }

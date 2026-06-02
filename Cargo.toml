@@ -28,14 +28,16 @@ members = [
     "crates/vol-llm-skill",
     "crates/vol-llm-context",
     "crates/vol-llm-task",
+    "crates/vol-llm-runtime",
     "crates/vol-llm-wiki",
     "crates/vol-llm-yaml-agent",
     "crates/vol-llm-agent-channel",
     "crates/vol-llm-ui",
-    "crates/vol-agent-manager",
     "crates/md-frontmatter",
     "crates/vol-mcp-servers",
     "crates/vol-llm-mcp",
+    "crates/vol-llm-runtime",
+    "crates/vol-observability",
 ]
 
 [workspace.package]
@@ -124,6 +126,7 @@ vol-llm-memory = { path = "crates/vol-llm-memory" }
 vol-llm-skill = { path = "crates/vol-llm-skill" }
 vol-llm-context = { path = "crates/vol-llm-context" }
 vol-llm-task = { path = "crates/vol-llm-task" }
+vol-llm-runtime = { path = "crates/vol-llm-runtime" }
 vol-llm-tools-builtin = { path = "crates/vol-llm-tools-builtin" }
 vol-llm-wiki = { path = "crates/vol-llm-wiki" }
 md-frontmatter = { path = "crates/md-frontmatter" }
@@ -131,3 +134,17 @@ vol-llm-agent-channel = { path = "crates/vol-llm-agent-channel" }
 vol-mcp-servers = { path = "crates/vol-mcp-servers" }
 vol-llm-mcp = { path = "crates/vol-llm-mcp" }
 dirs = "5.0"
+vol-observability = { path = "crates/vol-observability" }
+
+[profile]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = "s"
+lto = true
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"

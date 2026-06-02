@@ -19,7 +19,7 @@ Created `vol-mcp-servers` crate with `docs-rs-mcp` binary implementing 4 MCP too
 
 ### Single Crate, Multiple Binaries
 
-Each MCP server is a `[[bin]]` entry in Cargo.toml, not a separate crate. This keeps shared dependencies (transport module, common utilities) in one place.
+Each MCP server is a `bin` entry in Cargo.toml, not a separate crate. This keeps shared dependencies (transport module, common utilities) in one place.
 
 ### rmcp over Custom MCP
 
@@ -44,7 +44,7 @@ The service is mounted via `Router::new().nest_service("/", service)`.
 
 ```
 vol-mcp-servers/
-├── Cargo.toml          # [[bin]] name = "docs-rs-mcp"
+├── Cargo.toml          # bin name = "docs-rs-mcp"
 ├── src/
 │   ├── lib.rs          # pub mod docs_rs; pub mod transport;
 │   ├── bin/docs_rs.rs  # CLI entry point

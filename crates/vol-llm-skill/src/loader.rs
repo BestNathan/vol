@@ -114,6 +114,7 @@ impl SkillLoader {
                 };
 
                 let file_listing = scan_skill_files(&dir_path);
+                let dir_str = dir_path.to_string_lossy().to_string();
                 let id = format!("{}:{}", scope.prefix(), doc.frontmatter.name);
 
                 let def = SkillDef {
@@ -125,6 +126,7 @@ impl SkillLoader {
                     triggers: doc.frontmatter.triggers,
                     content: doc.body,
                     file_listing,
+                    directory: dir_str,
                 };
 
                 match skills_map.entry(doc.frontmatter.name) {

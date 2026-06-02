@@ -1,14 +1,16 @@
 ---
 type: entity
 category: product
-tags: [crate, mcp, client, rust, rmcp]
+tags: [crate, mcp, client, rust, rmcp, multi-transport]
 created: 2026-05-11
+updated: 2026-05-15
+source_count: 3
 ---
 
 # vol-llm-mcp Crate
 
 **Category:** Rust crate — MCP Client protocol layer
-**Related:** [[vol-llm-tool-crate]], [[vol-llm-agent-crate]], [[rmcp-sdk]], [[mcp-transport-pattern]], [[mcp-client-integration]], [[mcp-manager-lifecycle]], [[react-agent-mcp-integration]]
+**Related:** [[vol-llm-tool-crate]], [[vol-llm-agent-crate]], [[rmcp-sdk]], [[mcp-transport-pattern]], [[mcp-client-integration]], [[mcp-manager-lifecycle]], [[react-agent-mcp-integration]], [[mcp-multi-transport-config]]
 
 ## Overview
 
@@ -28,10 +30,10 @@ vol-llm-agent → vol-llm-mcp (McpManager lifecycle)
 
 | Module | Purpose |
 |--------|---------|
-| `config.rs` | Parse and merge `.mcp.json` (project) + `~/.mcp.json` (user) |
-| `error.rs` | `McpError` enum: ConfigParse, ConnectionFailed, ToolCallFailed, ResourceReadFailed, PromptGetFailed, ServerDisconnected |
-| `manager.rs` | `McpManager`: connection lifecycle, state tracking, auto-reconnect, full MCP protocol |
-| `session.rs` | `McpSession`: legacy connection management (retained, no longer used by downstream code) |
+| `config.rs` | Parse and merge `.mcp.json` (project) + `~/.mcp.json` (user); `McpTransport` enum (Stdio/Http) with required `type` field |
+| `error.rs` | `McpError` enum: ConfigParse, ConnectionFailed, ToolCallFailed, ResourceReadFailed, PromptGetFailed, ServerDisconnected, TransportError |
+| `manager.rs` | `McpManager`: connection lifecycle, state tracking, auto-reconnect, full MCP protocol; dispatches on `McpTransport` for stdio vs HTTP connection |
+| `session.rs` | `McpSession`: legacy connection management (retained, stdio-only, no longer used by downstream code) |
 
 ## McpManager
 
@@ -51,7 +53,21 @@ vol-llm-agent → vol-llm-mcp (McpManager lifecycle)
 `ServerStatus` enum: `Connected`, `Disconnected`, `Connecting`, `Error(String)`
 `ServerState` tracks per-server: config, status, retry_count, running_service, cancel_token, cached tools/resources/templates/prompts, reconnect handle
 
+## McpTransport Enum
+
+`McpTransport` replaces the flat `command`/`args`/`env` fields on `McpServerConfig`:
+
+```rust
+pub enum McpTransport {
+    Stdio { command: String, args: Vec<String>, env: HashMap<String, String> },
+    Http { url: String, headers: Option<HashMap<String, String>> },
+}
+```
+
+Parsing uses serde's internally-tagged enum (`#[serde(tag = "type")]`). The `type` field is required — values `"stdio"` and `"http"` are recognized; others are skipped with a warning.
+
 ## Timeline
 
 - **2026-05-11**: Crate created with config parsing, session management, tool discovery/execution [[react-agent-mcp-integration]]
 - **2026-05-13**: `McpManager` added — connection lifecycle, auto-reconnect, full MCP protocol (resources, prompts) [[mcp-manager-impl]]
+- **2026-05-15**: Multi-transport config — `McpTransport` enum (Stdio/Http) with required `type` field; HTTP via `StreamableHttpClientTransport` [[mcp-multi-transport-config]]

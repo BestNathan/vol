@@ -21,6 +21,8 @@ fn create_test_llm() -> Arc<dyn LLMClient> {
             model: "qwen3.5-plus".to_string(),
             api_key: Secret::literal(api_key),
             base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
+            body: None,
+            headers: None,
         },
     };
     let registry = LLMProviderRegistry::from_configs(&[llm_config]).unwrap();

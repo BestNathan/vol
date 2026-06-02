@@ -3,26 +3,26 @@ type: concept
 category: framework
 tags: [http, transport, sse, axum]
 created: 2026-05-05
-updated: 2026-05-10
-source_count: 1
+updated: 2026-05-21
+source_count: 2
 ---
 
 # HTTP Transport
 
 **Category:** Network transport
-**Related:** [[vol-llm-agent-channel-crate]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[agent-channel-examples]], [[mcp-transport-pattern]]
+**Related:** [[vol-llm-agent-channel-crate]], [[connection-trait]], [[agent-server-protocol]], [[agent-channel-server-protocol-transport-migration]], [[agent-channel-examples]], [[mcp-transport-pattern]]
 
 ## Definition
 
-HTTP transport implementation for `vol-llm-agent-channel` using axum 0.7. Provides a reusable `Router` that can be mounted at any path, supporting both blocking (request-response) and SSE (Server-Sent Events) streaming modes.
+HTTP transport implementation for `vol-llm-agent-channel` using axum 0.7. It accepts `AgentServerMessage` JSON bodies, delegates to `AgentServerCore`, and returns protocol responses as either blocking JSON or SSE events.
 
 ## Key Points
-- `HttpTransport` struct holds `Arc<AgentDispatcher>`, `Arc<ConnectionHolder>`, and `agent_id` [[http-transport-impl]]
+- `HttpTransport` struct holds `Arc<AgentServerCore>` and does not depend on `AgentDispatcher` or `ConnectionHolder` [[agent-channel-server-protocol-transport-migration]]
 - `into_axum_router()` returns an axum `Router` with a POST `/` endpoint [[http-transport-impl]]
-- `?stream=true` query parameter switches between blocking and SSE modes [[http-transport-impl]]
-- SSE mode uses `HttpEventConnection` to capture agent events via broadcast channel [[http-transport-impl]]
-- Blocking mode awaits `dispatcher.submit()` result and returns JSON directly [[http-transport-impl]]
-- Concurrent SSE requests return 409 Conflict to prevent event channel clobbering [[http-transport-impl]]
+- `?stream=true` query parameter switches between blocking JSON and SSE event output [[agent-channel-server-protocol-transport-migration]]
+- Blocking mode deserializes one `AgentServerMessage`, calls `AgentServerCore::handle`, and returns `Vec<AgentServerMessage>` [[agent-channel-server-protocol-transport-migration]]
+- SSE mode emits serialized protocol response messages as SSE data events [[agent-channel-server-protocol-transport-migration]]
+- Business routing, agent dispatch, and domain response shaping live in `AgentServerCore` and its handlers, not the HTTP transport [[agent-server-protocol]]
 
 ## Blocking Mode
 

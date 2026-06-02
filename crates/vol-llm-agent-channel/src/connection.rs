@@ -1,13 +1,14 @@
 // crates/vol-llm-agent-channel/src/connection.rs
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 use vol_llm_agent::react::{AgentPlugin, AgentStreamEvent, PluginId, RunContext};
 
+use crate::agent_server_protocol::{AgentOperation, AgentPayload, AgentServerMessage, MessageKind, Operation, Payload};
 use crate::error::ConnectionError;
-use crate::protocol::Message;
 
 /// Abstract connection for agent communication.
 /// Implement for each transport protocol.
@@ -17,10 +18,10 @@ pub trait Connection: Send + Sync + 'static {
     fn protocol(&self) -> &str;
 
     /// Receive the next incoming message.
-    async fn recv(&mut self) -> Option<Result<Message, ConnectionError>>;
+    async fn recv(&self) -> Option<Result<AgentServerMessage, ConnectionError>>;
 
     /// Send a message.
-    async fn send(&self, msg: Message) -> Result<(), ConnectionError>;
+    async fn send(&self, msg: AgentServerMessage) -> Result<(), ConnectionError>;
 }
 
 /// Registered as AgentPlugin on agent creation.
@@ -31,15 +32,21 @@ pub struct ConnectionHolder {
     connection: Arc<RwLock<Option<Arc<dyn Connection>>>>,
     sender: String,
     receiver: String,
+    agent_status: Option<Arc<std::sync::RwLock<HashMap<String, crate::server_core::AgentStatus>>>>,
 }
 
 impl ConnectionHolder {
     /// Create a new empty holder.
-    pub fn new(sender: String, receiver: String) -> Self {
+    pub fn new(
+        sender: String,
+        receiver: String,
+        agent_status: Option<Arc<std::sync::RwLock<HashMap<String, crate::server_core::AgentStatus>>>>,
+    ) -> Self {
         Self {
             connection: Arc::new(RwLock::new(None)),
             sender,
             receiver,
+            agent_status,
         }
     }
 
@@ -75,14 +82,42 @@ impl AgentPlugin for ConnectionHolder {
         50
     }
 
-    async fn listen(&self, event: &AgentStreamEvent, _ctx: &RunContext) {
+    async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
+        // Update agent status
+        if let Some(ref status_map) = self.agent_status {
+            match event {
+                AgentStreamEvent::AgentStart { input, .. } => {
+                    status_map.write().unwrap().insert(
+                        self.sender.clone(),
+                        crate::server_core::AgentStatus::running(input.clone(), ctx.run_id.clone()),
+                    );
+                }
+                AgentStreamEvent::AgentComplete { .. } | AgentStreamEvent::AgentAborted { .. } => {
+                    status_map.write().unwrap().insert(
+                        self.sender.clone(),
+                        crate::server_core::AgentStatus::idle(),
+                    );
+                }
+                _ => {}
+            }
+        }
+
         if let Some(conn) = self.connection.read().await.as_ref() {
             let event_json = serde_json::to_value(event).unwrap_or(serde_json::Value::Null);
-            let _ = conn.send(Message::Event {
+            let msg = AgentServerMessage {
+                protocol: "agent-server/1".to_string(),
+                message_id: uuid::Uuid::new_v4().to_string(),
                 sender: self.sender.clone(),
                 receiver: self.receiver.clone(),
-                event: event_json,
-            }).await;
+                kind: MessageKind::Event,
+                operation: Operation::Agent(AgentOperation::Event),
+                payload: Payload::Agent(AgentPayload::Event {
+                    run_id: ctx.run_id.clone(),
+                    event: event_json,
+                }),
+                meta: Default::default(),
+            };
+            let _ = conn.send(msg).await;
         }
     }
 }
@@ -99,19 +134,19 @@ mod tests {
     #[async_trait]
     impl Connection for MockConnection {
         fn protocol(&self) -> &str { &self.protocol }
-        async fn recv(&mut self) -> Option<Result<Message, ConnectionError>> { None }
-        async fn send(&self, _msg: Message) -> Result<(), ConnectionError> { Ok(()) }
+        async fn recv(&self) -> Option<Result<AgentServerMessage, ConnectionError>> { None }
+        async fn send(&self, _msg: AgentServerMessage) -> Result<(), ConnectionError> { Ok(()) }
     }
 
     #[tokio::test]
     async fn test_holder_new_is_empty() {
-        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string());
+        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string(), None);
         assert!(!holder.is_connected().await);
     }
 
     #[tokio::test]
     async fn test_holder_attach() {
-        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string());
+        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string(), None);
         let conn = Arc::new(MockConnection { protocol: "test".to_string() });
 
         holder.attach(conn.clone()).await;
@@ -121,7 +156,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_holder_detach_replaces_connection() {
-        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string());
+        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string(), None);
         let conn1 = Arc::new(MockConnection { protocol: "test1".to_string() });
         let conn2 = Arc::new(MockConnection { protocol: "test2".to_string() });
 
@@ -134,7 +169,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_holder_detach_clears() {
-        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string());
+        let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string(), None);
         let conn = Arc::new(MockConnection { protocol: "test".to_string() });
 
         holder.attach(conn).await;

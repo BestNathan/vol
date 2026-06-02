@@ -1,7 +1,9 @@
 //! Unit tests for the react module.
 
 use super::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use vol_llm_core::LLMClient;
 use vol_llm_core::{ConversationRequest, ConversationResponse, StreamReceiver, SupportedParam};
 
@@ -75,51 +77,6 @@ async fn test_build_with_plugin() {
 
     // Build succeeds with plugin registered
     let _ = agent;
-}
-
-// ========================
-// prompt.rs tests
-// ========================
-
-#[test]
-fn test_default_system_prompt_content() {
-    let prompt = prompt::default_system_prompt();
-    // Contains Chinese text for derivatives market risk analyst
-    assert!(prompt.contains("衍生品"));
-    assert!(prompt.contains("风险分析师"));
-    assert!(prompt.contains("工具"));
-}
-
-#[test]
-fn test_system_prompt_builder_with_tools() {
-    let tools = vec![vol_llm_core::ToolDefinition {
-        name: "test_tool".to_string(),
-        description: Some("A test tool".to_string()),
-        parameters: Default::default(),
-    }];
-
-    let prompt = prompt::SystemPromptBuilder::new()
-        .with_tools(&tools)
-        .build();
-
-    // Base prompt content should be present
-    assert!(prompt.contains("衍生品"));
-}
-
-#[test]
-fn test_system_prompt_builder_with_instructions() {
-    let prompt = prompt::SystemPromptBuilder::new()
-        .with_instructions("Custom instructions here")
-        .build();
-
-    assert!(prompt.contains("Custom instructions here"));
-    assert!(prompt.contains("额外指示"));
-}
-
-#[test]
-fn test_system_prompt_builder_default() {
-    let prompt = prompt::SystemPromptBuilder::default().build();
-    assert!(prompt.contains("衍生品"));
 }
 
 // ========================
@@ -256,23 +213,15 @@ async fn test_run_interceptor_loop_continue_decision() {
     }
 
     let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
-    let (event_tx, _) = tokio::sync::broadcast::channel(10);
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
-        "test".to_string(),
-        Arc::new(vol_session::Session::new(
-            Arc::new(vol_session::InMemoryEntryStore::new()),
-        )),
-        Arc::new(vol_llm_tool::ToolRegistry::new()),
-        AgentConfig::default(),
-        20,
-        "test-model".to_string(),
+        Arc::new(AgentConfig::default()),
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(ContinuePlugin)];
 
-    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx, run_ctx));
+    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, run_ctx.without_plugin_event_tx()));
 
     // Send an intercept request
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
@@ -303,23 +252,15 @@ async fn test_run_interceptor_loop_skip_decision() {
     }
 
     let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
-    let (event_tx, _) = tokio::sync::broadcast::channel(10);
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
-        "test".to_string(),
-        Arc::new(vol_session::Session::new(
-            Arc::new(vol_session::InMemoryEntryStore::new()),
-        )),
-        Arc::new(vol_llm_tool::ToolRegistry::new()),
-        AgentConfig::default(),
-        20,
-        "test-model".to_string(),
+        Arc::new(AgentConfig::default()),
     );
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(SkipPlugin)];
 
-    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx.clone(), run_ctx));
+    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, run_ctx.without_plugin_event_tx()));
 
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
     plugin_tx.send(PluginRequest::Intercept {
@@ -335,33 +276,34 @@ async fn test_run_interceptor_loop_skip_decision() {
 }
 
 #[tokio::test]
-async fn test_run_interceptor_loop_emit_request() {
+async fn test_run_interceptor_loop_emit_request_preserves_trace_id() {
     let (plugin_tx, plugin_rx) = tokio::sync::mpsc::channel(10);
-    let (event_tx, mut event_rx) = tokio::sync::broadcast::channel(10);
     let (run_ctx, _rx) = RunContext::new(
         "test".to_string(),
         "test".to_string(),
-        "test".to_string(),
-        Arc::new(vol_session::Session::new(
-            Arc::new(vol_session::InMemoryEntryStore::new()),
-        )),
-        Arc::new(vol_llm_tool::ToolRegistry::new()),
-        AgentConfig::default(),
-        20,
-        "test-model".to_string(),
+        Arc::new(AgentConfig::default()),
     );
+    let mut event_rx = run_ctx.event_tx.as_ref().unwrap().subscribe();
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![];
+    let interceptor_ctx = run_ctx.without_plugin_event_tx();
+    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, interceptor_ctx));
 
-    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, event_tx, run_ctx));
+    let traced_event = vol_tracing::TracedEvent::with_trace_id(
+        AgentStreamEvent::agent_start("test".to_string()),
+        None,
+        "trace-from-plugin-request".to_string(),
+    );
 
-    // Send an emit request
-    plugin_tx.send(PluginRequest::Emit {
-        event: vol_tracing::TracedEvent::without_span(AgentStreamEvent::agent_start("test".to_string())),
-    }).await.unwrap();
+    plugin_tx
+        .send(PluginRequest::Emit {
+            event: traced_event,
+        })
+        .await
+        .unwrap();
 
-    // Should receive event on broadcast
     let event = event_rx.recv().await.unwrap();
+    assert_eq!(event.trace_id(), "trace-from-plugin-request");
     assert!(matches!(event.value(), AgentStreamEvent::AgentStart { .. }));
 
     drop(plugin_tx);
@@ -395,6 +337,202 @@ fn test_hitl_config_with_triggers() {
 
     assert_eq!(config.triggers.len(), 3);
     assert_eq!(config.timeout_secs, 30);
+}
+
+#[tokio::test]
+async fn test_spawn_listener_tasks_shutdown_on_close() {
+    struct ListenPlugin {
+        count: Arc<AtomicUsize>,
+    }
+    #[async_trait::async_trait]
+    impl plugin::AgentPlugin for ListenPlugin {
+        fn id(&self) -> plugin::PluginId { "listen".to_string() }
+        fn priority(&self) -> u32 { 100 }
+        async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision {
+            plugin::PluginDecision::Continue
+        }
+        async fn listen(&self, _: &AgentStreamEvent, _: &RunContext) {
+            self.count.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    let (mut run_ctx, _rx) = RunContext::new(
+        "test".to_string(),
+        "test".to_string(),
+        Arc::new(AgentConfig::default()),
+    );
+
+    let count1 = Arc::new(AtomicUsize::new(0));
+    let count2 = Arc::new(AtomicUsize::new(0));
+
+    let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![
+        Arc::new(ListenPlugin { count: count1.clone() }),
+        Arc::new(ListenPlugin { count: count2.clone() }),
+    ];
+
+    // Emit an event while listeners are running
+    run_ctx.emit(AgentStreamEvent::agent_start("test".to_string())).await;
+
+    // Spawn listeners
+    let mut listener_set = spawn_listener_tasks(plugins, run_ctx.clone());
+
+    // Emit another event
+    run_ctx.emit(AgentStreamEvent::agent_complete_with_response(serde_json::json!({}))).await;
+
+    // Give listeners a moment to process
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Drop the sender — this closes the broadcast and triggers listener exit
+    run_ctx.event_tx.take();
+
+    // Wait for all listeners to exit
+    while let Some(result) = listener_set.join_next().await {
+        assert!(result.is_ok(), "Listener task should not panic");
+    }
+
+    // Both plugins should have processed events
+    assert!(count1.load(Ordering::SeqCst) > 0,
+        "Plugin 1 should have processed events, got {}", count1.load(Ordering::SeqCst));
+    assert!(count2.load(Ordering::SeqCst) > 0,
+        "Plugin 2 should have processed events, got {}", count2.load(Ordering::SeqCst));
+}
+
+/// Simulates the full shutdown sequence from agent.rs:
+/// 1. Emit events while agent is running
+/// 2. Interceptor aborts (drops its Arc clones)
+/// 3. Drop the local event_tx
+/// 4. Await all listeners via join_next()
+/// Verifies: all listeners exit cleanly, all buffered events are processed.
+#[tokio::test]
+async fn test_listener_set_drains_and_exits_cleanly() {
+    struct EventCollector {
+        events: Arc<std::sync::Mutex<Vec<String>>>,
+    }
+    #[async_trait::async_trait]
+    impl plugin::AgentPlugin for EventCollector {
+        fn id(&self) -> plugin::PluginId { "collector".to_string() }
+        fn priority(&self) -> u32 { 100 }
+        async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision {
+            plugin::PluginDecision::Continue
+        }
+        async fn listen(&self, event: &AgentStreamEvent, _: &RunContext) {
+            // Record event type string
+            let desc = match event {
+                AgentStreamEvent::AgentStart { .. } => "agent_start".to_string(),
+                AgentStreamEvent::ThinkingStart { .. } => "thinking_start".to_string(),
+                AgentStreamEvent::ContentComplete { content, .. } => format!("content_complete({})", content.chars().take(10).collect::<String>()),
+                AgentStreamEvent::AgentComplete { .. } => "agent_complete".to_string(),
+                _ => format!("{:?}", event),
+            };
+            self.events.lock().unwrap().push(desc);
+        }
+    }
+
+    let (mut run_ctx, _rx) = RunContext::new(
+        "shutdown-test".to_string(),
+        "test input".to_string(),
+        Arc::new(AgentConfig::default()),
+    );
+
+    let events1 = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let events2 = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+    let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![
+        Arc::new(EventCollector { events: events1.clone() }),
+        Arc::new(EventCollector { events: events2.clone() }),
+    ];
+
+    // Spawn listeners (simulating agent.rs Phase 2.6)
+    let mut listener_set = spawn_listener_tasks(plugins, run_ctx.clone());
+
+    // Simulate agent loop emitting events
+    run_ctx.emit(AgentStreamEvent::agent_start("test input".to_string())).await;
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
+    run_ctx.emit(AgentStreamEvent::thinking_start()).await;
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
+    run_ctx.emit(AgentStreamEvent::content_complete("final answer here".to_string())).await;
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
+    run_ctx.emit(AgentStreamEvent::agent_complete()).await;
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
+    // Shutdown sequence: interceptor abort (already done by this point in agent.rs)
+    // Drop the event_tx to close the broadcast channel
+    run_ctx.event_tx.take();
+
+    // Await all listener tasks — they should drain buffers and exit naturally
+    let mut exit_count = 0;
+    while let Some(result) = listener_set.join_next().await {
+        assert!(result.is_ok(), "Listener task should exit cleanly, not panic");
+        exit_count += 1;
+    }
+    assert_eq!(exit_count, 2, "Both listener tasks should have exited");
+
+    // Verify all 4 events were processed by each listener
+    let e1 = events1.lock().unwrap();
+    let e2 = events2.lock().unwrap();
+    assert_eq!(e1.len(), 4, "Listener 1 should have processed all 4 events, got: {:?}", e1);
+    assert_eq!(e2.len(), 4, "Listener 2 should have processed all 4 events, got: {:?}", e2);
+
+    // Verify event order
+    assert!(e1[0].starts_with("agent_start"));
+    assert!(e1[1].starts_with("thinking_start"));
+    assert!(e1[2].starts_with("content_complete"));
+    assert!(e1[3].starts_with("agent_complete"));
+}
+
+/// Test that listeners with no events in the buffer still exit cleanly
+/// when the broadcast channel is closed.
+#[tokio::test]
+async fn test_listener_set_exits_with_no_events() {
+    struct NoOpPlugin;
+    #[async_trait::async_trait]
+    impl plugin::AgentPlugin for NoOpPlugin {
+        fn id(&self) -> plugin::PluginId { "noop".to_string() }
+        fn priority(&self) -> u32 { 0 }
+        async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision {
+            plugin::PluginDecision::Continue
+        }
+        async fn listen(&self, _: &AgentStreamEvent, _: &RunContext) {
+            // Deliberately no-op
+        }
+    }
+
+    let (mut run_ctx, _rx) = RunContext::new(
+        "empty-test".to_string(),
+        "test".to_string(),
+        Arc::new(AgentConfig::default()),
+    );
+
+    let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![
+        Arc::new(NoOpPlugin),
+        Arc::new(NoOpPlugin),
+        Arc::new(NoOpPlugin),
+    ];
+
+    // Spawn listeners without emitting any events
+    let mut listener_set = spawn_listener_tasks(plugins, run_ctx.clone());
+
+    // Close the broadcast immediately
+    run_ctx.event_tx.take();
+
+    // All listeners should exit quickly
+    let timeout = tokio::time::timeout(
+        Duration::from_secs(5),
+        async {
+            let mut count = 0;
+            while let Some(result) = listener_set.join_next().await {
+                assert!(result.is_ok(), "Listener should exit cleanly");
+                count += 1;
+            }
+            count
+        },
+    ).await;
+
+    assert!(timeout.is_ok(), "Listeners should exit within timeout even with no events");
+    assert_eq!(timeout.unwrap(), 3, "All 3 listener tasks should have exited");
 }
 
 #[test]

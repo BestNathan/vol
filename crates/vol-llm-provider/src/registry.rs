@@ -2,6 +2,7 @@
 
 use crate::config::LLMConfig;
 use crate::factory::create_provider;
+use crate::loader::ProviderLoader;
 use std::collections::HashMap;
 use std::sync::Arc;
 use vol_llm_core::{LLMClient, LLMError};
@@ -38,6 +39,18 @@ impl LLMProviderRegistry {
             registry
                 .providers
                 .insert(config.id.clone(), Arc::from(provider));
+        }
+        Ok(registry)
+    }
+
+    /// Create registry from a ProviderLoader
+    pub fn from_loader(loader: &ProviderLoader) -> Result<Self, LLMError> {
+        let mut registry = Self::new();
+        for id in loader.ids() {
+            let file_config = loader.get(id).expect("provider ID from loader.ids() should exist");
+            let llm_config = file_config.to_llm_config();
+            let provider = create_provider(&llm_config)?;
+            registry.providers.insert(id.to_string(), Arc::from(provider));
         }
         Ok(registry)
     }
@@ -121,5 +134,27 @@ mod tests {
     fn test_registry_ids() {
         let registry = LLMProviderRegistry::new();
         assert!(registry.ids().is_empty());
+    }
+
+    #[test]
+    fn test_registry_from_loader() {
+        use crate::loader::ProviderLoader;
+        use std::io::Write;
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".agents/providers")).unwrap();
+        let mut file = std::fs::File::create(dir.path().join(".agents/providers/test-provider.toml")).unwrap();
+        file.write_all(br#"
+provider = "anthropic"
+model = "claude-test"
+api_key = "${TEST_API_KEY_LOADER}"
+base_url = "https://api.test.com"
+"#).unwrap();
+        std::env::set_var("TEST_API_KEY_LOADER", "test-key-loader");
+
+        let loader = ProviderLoader::load(Some(dir.path()));
+        let registry = LLMProviderRegistry::from_loader(&loader).unwrap();
+        assert!(registry.contains("test-provider"));
+        assert_eq!(registry.len(), 1);
     }
 }

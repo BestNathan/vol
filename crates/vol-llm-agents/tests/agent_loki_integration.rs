@@ -14,7 +14,7 @@ use vol_llm_core::{
     LLMClient, LLMProvider,
     StreamEvent, StreamEventData, StreamReceiver, SupportedParam,
 };
-use vol_llm_observability::loki::LokiPlugin;
+use vol_llm_observability::LokiPlugin;
 use vol_llm_tool::ToolRegistry;
 use vol_session::{InMemoryEntryStore, Session};
 

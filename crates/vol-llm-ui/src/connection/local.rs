@@ -41,7 +41,7 @@ impl LocalConnection {
 
         let observer = Arc::new(LocalEventObserver {
             state: state.clone(),
-            event_tx: tx.clone(),
+            _event_tx: tx.clone(),
             render_tx: self.render_tx.clone(),
         });
 
@@ -179,7 +179,7 @@ impl FileOperations for LocalConnection {
 /// Observer that converts AgentStreamEvent into UiState mutations.
 struct LocalEventObserver {
     state: Arc<tokio::sync::RwLock<UiState>>,
-    event_tx: mpsc::Sender<UiEvent>,
+    _event_tx: mpsc::Sender<UiEvent>,
     render_tx: mpsc::Sender<()>,
 }
 

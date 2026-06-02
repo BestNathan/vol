@@ -18,6 +18,7 @@ pub use plugins::{CliApprovalChannel, SimpleHttpApprovalChannel};
 pub use rag::{Document, EmbeddingStore, RagAgent, RagConfig, RagResponse};
 pub use react::state::{ReasoningStep, ToolCallRecord};
 pub use react::{
-    AgentConfig, AgentConfigBuilder, AgentConfigBuildError, AgentError, AgentResponse, AgentStreamEvent, AgentStreamReceiver,
-    ReActAgent,
+    AgentBusyError, AgentConfig, AgentConfigBuildError, AgentConfigBuilder, AgentError,
+    AgentInput, AgentInputError, AgentResponse, AgentStreamEvent, AgentStreamReceiver, InputPart,
+    ReActAgent, RunningState,
 };

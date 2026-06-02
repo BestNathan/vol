@@ -17,6 +17,10 @@ pub enum ChannelError {
     /// Internal agent error (from ReActAgent::run).
     #[error("agent execution error: {0}")]
     AgentError(String),
+
+    /// Agent is busy (running) and cannot accept state mutation.
+    #[error("agent is busy: {0}")]
+    AgentBusy(String),
 }
 
 /// Error type for connection operations.

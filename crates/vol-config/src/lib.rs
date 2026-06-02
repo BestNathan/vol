@@ -131,9 +131,6 @@ pub struct Config {
     /// Tracing and logging configuration
     #[serde(default)]
     pub tracing: TracingConfig,
-    /// LLM providers configuration
-    #[serde(default)]
-    pub llm_providers: Vec<vol_llm_provider::LLMProviderConfig>,
     /// Agent advice configuration
     #[serde(default)]
     pub agent_advice: AgentAdviceConfig,

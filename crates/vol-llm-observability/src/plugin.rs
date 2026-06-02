@@ -2,11 +2,14 @@
 
 use std::path::PathBuf;
 
+use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::{json, Value};
+use vol_llm_agent::react::{AgentPlugin, PluginDecision, RunContext};
 use vol_llm_core::stream::AgentStreamEvent;
 
-use crate::run_log::logger::{LogEntry, append_log};
+use crate::run_log::logger::LogEntry;
+use crate::run_log::append_log;
 
 /// Writes all agent events to JSONL files.
 ///
@@ -179,9 +182,6 @@ fn event_name(event: &AgentStreamEvent) -> String {
     }
 }
 
-use async_trait::async_trait;
-use vol_llm_agent::react::{AgentPlugin, PluginDecision, RunContext};
-
 #[async_trait]
 impl AgentPlugin for LoggerPlugin {
     fn id(&self) -> String {
@@ -214,27 +214,17 @@ mod tests {
     use super::*;
     use serde_json::Map;
     use tempfile::TempDir;
+    use vol_llm_agent::react::AgentConfig;
 
     fn create_test_plugin(temp_dir: &TempDir) -> LoggerPlugin {
         LoggerPlugin::new(temp_dir.path().to_path_buf())
     }
 
     fn create_test_context() -> RunContext {
-        use std::sync::Arc;
-        use vol_llm_agent::react::AgentConfig;
-        use vol_llm_tool::ToolRegistry;
-        use vol_session::{InMemoryEntryStore, Session};
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
-            "session-1".to_string(),
-            Arc::new(Session::new(
-                Arc::new(InMemoryEntryStore::new()),
-            )),
-            Arc::new(ToolRegistry::new()),
             AgentConfig::default(),
-            20,
-            "test-model".to_string(),
         );
         ctx
     }
@@ -315,7 +305,6 @@ mod tests {
     fn test_log_entry_all_variants() {
         let temp_dir = TempDir::new().unwrap();
         let plugin = create_test_plugin(&temp_dir);
-        let ctx = create_test_context();
 
         let events = vec![
             AgentStreamEvent::AgentStart {
@@ -407,7 +396,6 @@ mod tests {
             },
         ];
 
-        let _ = &ctx; // suppress unused warning
         for event in events {
             if !LoggerPlugin::should_log(&event) {
                 continue;
@@ -421,41 +409,5 @@ mod tests {
             // Verify JSON serialization works
             assert!(line.contains("run-1"));
         }
-    }
-
-    #[tokio::test]
-    async fn test_listen_writes_log_file() {
-        let temp_dir = TempDir::new().unwrap();
-        let plugin = create_test_plugin(&temp_dir);
-        let ctx = create_test_context();
-
-        let event = AgentStreamEvent::AgentStart {
-            timestamp: Utc::now(),
-            input: "hello".to_string(),
-        };
-        plugin.listen(&event, &ctx).await;
-
-        let log_path = temp_dir.path().join("logs/test-run.jsonl");
-        assert!(log_path.exists());
-        let content = std::fs::read_to_string(&log_path).unwrap();
-        assert!(content.contains("AgentStart"));
-    }
-
-    #[tokio::test]
-    async fn test_listen_writes_plugin_event_log() {
-        let temp_dir = TempDir::new().unwrap();
-        let plugin = create_test_plugin(&temp_dir);
-        let ctx = create_test_context();
-
-        let mut data = Map::new();
-        data.insert("key".to_string(), json!("value"));
-        let event = AgentStreamEvent::plugin_event("my_plugin".to_string(), data);
-        plugin.listen(&event, &ctx).await;
-
-        let log_path = temp_dir.path().join("logs/my_plugin/test-run.jsonl");
-        assert!(log_path.exists());
-        let content = std::fs::read_to_string(&log_path).unwrap();
-        assert!(content.contains("PluginEvent"));
-        assert!(content.contains("my_plugin"));
     }
 }

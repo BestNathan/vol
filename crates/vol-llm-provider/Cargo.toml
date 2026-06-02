@@ -14,3 +14,11 @@ tracing = { workspace = true }
 toml = { workspace = true }
 vol-llm-core = { path = "../vol-llm-core" }
 futures-util = "0.3"
+dirs = "5"
+
+[dev-dependencies]
+tempfile = "3"
+
+[[example]]
+name = "provider_toml_chat"
+required-features = []

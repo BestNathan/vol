@@ -2,63 +2,134 @@
 //! resume swaps the agent session — only resume modifies the conversation.
 
 use dioxus::prelude::*;
+use gloo_timers::future::TimeoutFuture;
 
-use crate::state::{ActiveTab, ConversationEntry, ConversationState, SessionsState};
+use crate::state::{AgentSubTab, AgentsState, ConversationEntry, ConversationState, SessionsState};
 use crate::web::client::{JsonRpcClient, SessionEntry};
 
+fn truncate_for_log(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len])
+    }
+}
+
 /// Convert raw session entries to ConversationEntry for display.
-fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<ConversationEntry> {
-    entries.into_iter().filter_map(|e| {
-        match e.entry_type.as_str() {
+pub(crate) fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<ConversationEntry> {
+    entries.into_iter().flat_map(|e| {
+        let entry_type = e.entry_type.clone();
+        let data_debug = serde_json::to_string(&e.data).unwrap_or_default();
+        let result: Vec<ConversationEntry> = match e.entry_type.as_str() {
             "message" => {
                 let data = &e.data;
-                if let Some(msg) = data.get("message") {
-                    if let Some(role) = msg.get("role").and_then(|v| v.as_str()) {
-                        let text = msg.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                        match role {
-                            "user" => Some(ConversationEntry::UserInput { text }),
-                            "assistant" => Some(ConversationEntry::AgentAnswer { text }),
-                            "tool" => {
-                                let tool_name = msg.get("name").and_then(|v| v.as_str()).unwrap_or("tool").to_string();
-                                Some(ConversationEntry::ToolResult {
-                                    tool_name,
-                                    preview: text,
-                                    success: true,
-                                })
+                // data.message is SessionMessage wrapper
+                if let Some(session_msg) = data.get("message").and_then(|m| m.get("message")) {
+                    // session_msg.message is the actual vol_llm_core::Message with role/content
+                    if let Some(msg) = session_msg.get("message") {
+                        if let Some(role) = msg.get("role").and_then(|v| v.as_str()) {
+                            let text = match msg.get("content") {
+                                Some(serde_json::Value::String(s)) => s.clone(),
+                                Some(serde_json::Value::Array(parts)) => {
+                                    parts.iter().filter_map(|p| {
+                                        p.get("text").and_then(|v| v.as_str())
+                                            .or_else(|| p.get("type").and_then(|v| v.as_str()))
+                                    }).collect::<Vec<_>>().join("\n")
+                                }
+                                other => {
+                                    log::warn!("session entry message content unexpected type: {:?}", other);
+                                    String::new()
+                                }
+                            };
+                            match role {
+                                "user" => vec![ConversationEntry::UserInput { text }],
+                                "assistant" => {
+                                    let mut entries = Vec::new();
+                                    // Extract thinking if present, so resumed sessions show thinking blocks
+                                    if let Some(thinking) = msg.get("thinking").and_then(|v| v.as_str()) {
+                                        if !thinking.is_empty() {
+                                            entries.push(ConversationEntry::Thinking { content: thinking.to_string() });
+                                        }
+                                    }
+                                    // Extract tool_calls if present
+                                    if let Some(tool_calls) = msg.get("tool_calls").and_then(|v| v.as_array()) {
+                                        for tc in tool_calls {
+                                            let tc_name = tc.get("name").and_then(|v| v.as_str()).unwrap_or("tool").to_string();
+                                            let arguments = tc.get("arguments").and_then(|v| v.as_str()).unwrap_or("{}").to_string();
+                                            let arg_preview = crate::state::format_tool_args(&arguments);
+                                            entries.push(ConversationEntry::ToolCall {
+                                                tool_name: tc_name,
+                                                arg_preview,
+                                                full_arguments: arguments,
+                                            });
+                                        }
+                                    }
+                                    entries.push(ConversationEntry::AgentAnswer { text });
+                                    entries
+                                }
+                                "tool" => {
+                                    let tool_name = msg.get("name").and_then(|v| v.as_str()).unwrap_or("tool").to_string();
+                                    let preview = crate::state::truncate_preview(&text, 200);
+                                    vec![ConversationEntry::ToolResult {
+                                        tool_name,
+                                        preview,
+                                        full_result: text,
+                                        success: true,
+                                    }]
+                                }
+                                _ => {
+                                    log::warn!("session entry unknown role: {role}");
+                                    vec![]
+                                }
                             }
-                            _ => None,
+                        } else {
+                            log::warn!("session entry message missing role, data: {}", truncate_for_log(&data_debug, 200));
+                            vec![]
                         }
                     } else {
-                        None
+                        log::warn!("session entry data missing inner message, data: {}", truncate_for_log(&data_debug, 200));
+                        vec![]
                     }
                 } else {
-                    None
+                    log::warn!("session entry data missing message wrapper, data: {}", truncate_for_log(&data_debug, 200));
+                    vec![]
                 }
             }
             "checkpoint" => {
-                let reason = e.data.get("reason")
+                let reason = e.data.get("checkpoint")
+                    .and_then(|c| c.get("reason"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("Checkpoint")
                     .to_string();
-                let note = e.data.get("note").and_then(|v| v.as_str()).map(|s| s.to_string());
-                Some(ConversationEntry::EntryCheckpoint { reason, note, created_at: e.created_at })
+                let note = e.data.get("checkpoint")
+                    .and_then(|c| c.get("note"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                vec![ConversationEntry::EntryCheckpoint { reason, note, created_at: e.created_at }]
             }
             "summary" => {
-                Some(ConversationEntry::RunSummary {
+                vec![ConversationEntry::RunSummary {
                     iterations: 0,
                     tool_calls: 0,
                     elapsed_ms: 0,
-                })
+                }]
             }
-            _ => None,
+            _ => {
+                log::warn!("session entry unknown entry_type: {entry_type}, data: {}", truncate_for_log(&data_debug, 100));
+                vec![]
+            }
+        };
+        if result.is_empty() {
+            log::warn!("session entry dropped: type={entry_type}, data_preview={}", truncate_for_log(&data_debug, 100));
         }
+        result
     }).collect()
 }
 
 /// Format a Unix timestamp as a human-readable age label.
 fn format_age(ts: i64) -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    let now = web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64;
     let diff = (now - ts).max(0);
@@ -89,12 +160,14 @@ fn SessionDetailOverlay(
     entries: Signal<Vec<ConversationEntry>>,
     loading: Signal<bool>,
     show: Signal<bool>,
+    had_parse_failure: Signal<bool>,
 ) -> Element {
     if !*show.read() {
         return VNode::empty();
     }
 
     let is_loading = *loading.read();
+    let has_error = *had_parse_failure.read();
     let items: Vec<Element> = entries.read().iter().map(|entry| {
         let e = entry.clone();
         rsx! {
@@ -108,7 +181,7 @@ fn SessionDetailOverlay(
                 ConversationEntry::AgentAnswer { text } => rsx! {
                     div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#e0e0e0] leading-[1.5]", {text} }
                 },
-                ConversationEntry::ToolResult { tool_name, preview, success } => {
+                ConversationEntry::ToolResult { tool_name, preview, success, .. } => {
                     let cls = if success {
                         "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#1a2a1a] border-l-[3px] border-[#40c040]"
                     } else {
@@ -135,6 +208,11 @@ fn SessionDetailOverlay(
                     let tw = if tool_calls == 1 { "tool call" } else { "tool calls" };
                     rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-[#80c080] font-bold py-1.5", "Done | {iterations} {iw} | {tool_calls} {tw} | {elapsed_ms}ms" } }
                 }
+                ConversationEntry::RunningBanner { run_id } => rsx! {
+                    div { class: "mb-2 px-3 py-2 rounded-md bg-[#1a2a44] border border-[#3a5a7a] text-sm",
+                        span { class: "text-[#c0d0e0]", "\u{2b24} Running  [{run_id}]" }
+                    }
+                },
                 _ => rsx! { div { class: "mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap", "Entry" } },
             }
         }
@@ -157,6 +235,13 @@ fn SessionDetailOverlay(
                 }
                 if is_loading {
                     div { class: "flex items-center justify-center flex-1 text-[#666]", "Loading..." }
+                } else if has_error && entries.read().is_empty() {
+                    div { class: "flex-1 flex items-center justify-center flex-col text-[#ff6060] p-5 text-center",
+                        div { class: "text-[14px] font-semibold mb-2", "Failed to parse session entries" }
+                        div { class: "text-[12px] text-[#888]", "Check browser console (F12) for details" }
+                    }
+                } else if entries.read().is_empty() {
+                    div { class: "flex items-center justify-center flex-1 text-[#666]", "No entries" }
                 } else {
                     div { class: "flex-1 overflow-y-auto p-2",
                         {items.into_iter()}
@@ -175,6 +260,116 @@ fn truncate_lines(s: &str, max_lines: usize, max_chars: usize) -> String {
     } else { result }
 }
 
+/// Mobile card for a single session (sm:hidden).
+#[component]
+fn SessionCard(
+    session_id: String,
+    entry_count: usize,
+    created_at: i64,
+    rpc: crate::web::client::JsonRpcClient,
+    conversation_signal: Signal<ConversationState>,
+    agents_signal: Signal<AgentsState>,
+) -> Element {
+    let mut show_detail = use_signal(|| false);
+    let entries = use_signal(|| Vec::<ConversationEntry>::new());
+    let mut loading = use_signal(|| false);
+    let is_resuming = use_signal(|| false);
+    let had_parse_failure = use_signal(|| false);
+
+    let rpc_view = rpc.clone();
+    let sid_view = session_id.clone();
+    let rpc_resume = rpc.clone();
+    let sid_resume = session_id.clone();
+    let conv_resume = conversation_signal;
+    let agents_resume = agents_signal;
+
+    rsx! {
+        div {
+            class: "cursor-pointer rounded-lg border border-[#333355] bg-[#20203a] p-3 active:bg-[#2a2a44]",
+            onclick: move |_: Event<MouseData>| {
+                if entries.read().is_empty() && !*loading.read() {
+                    loading.set(true);
+                    let rpc = rpc_view.clone();
+                    let sid = sid_view.clone();
+                    let mut ent = entries;
+                    let mut ld = loading;
+                    let mut parse_fail = had_parse_failure;
+                    rpc.session_entries(&sid, move |result| {
+                        match result {
+                            Ok(e) => {
+                                let converted = session_entries_to_conversation(e.clone());
+                                if e.len() > 0 && converted.is_empty() {
+                                    parse_fail.set(true);
+                                }
+                                ent.set(converted);
+                            }
+                            Err(e) => {
+                                log::error!("Failed to load session entries: {e}");
+                                parse_fail.set(true);
+                            }
+                        }
+                        ld.set(false);
+                    });
+                }
+                show_detail.set(true);
+            },
+            div { class: "flex items-center justify-between",
+                span { class: "font-mono text-[13px] text-[#e0e0e0] font-semibold truncate",
+                    "{truncate_id(&session_id)}"
+                }
+                span { class: "bg-[#2a2a44] text-[#aaa] rounded-full px-2 py-0.5 text-[11px] flex-shrink-0 ml-2",
+                    "{entry_count} entries"
+                }
+            }
+            div { class: "flex items-center justify-between mt-1.5",
+                span { class: "text-[11px] text-[#666]", "{format_age(created_at)}" }
+                button {
+                    class: "px-2.5 py-0.5 bg-[#408040] text-[#e0e0e0] border-none rounded-[3px] cursor-pointer text-[12px] hover:bg-[#50a050] disabled:bg-[#333355] disabled:cursor-not-allowed",
+                    disabled: *is_resuming.read(),
+                    onclick: move |evt: Event<MouseData>| {
+                        evt.stop_propagation();
+                        let mut resuming = is_resuming;
+                        let _ = resuming.set(true);
+                        let rpc = rpc_resume.clone();
+                        let sid = sid_resume.clone();
+                        let mut conv = conv_resume;
+                        let mut agents = agents_resume;
+                        let agent_id = agents.read().selected.clone();
+                        rpc.session_resume(&sid, agent_id.as_deref(), move |result| {
+                            match result {
+                                Ok(resp) => {
+                                    let conv_entries = session_entries_to_conversation(resp.entries);
+                                    let active_id = agents.read().selected.clone().unwrap_or_default();
+                                    conv.with_mut(|s| {
+                                        let ac = s.get_or_create(&active_id);
+                                        ac.entries = conv_entries;
+                                    });
+                                    agents.with_mut(|a| a.sub_tab = AgentSubTab::Conversation);
+                                }
+                                Err(e) => log::error!("Failed to resume session: {e}"),
+                            }
+                            let _ = resuming.set(false);
+                        });
+                        let mut resuming_timeout = is_resuming;
+                        wasm_bindgen_futures::spawn_local(async move {
+                            TimeoutFuture::new(15_000).await;
+                            let _ = resuming_timeout.set(false);
+                        });
+                    },
+                    if *is_resuming.read() { "Resuming..." } else { "Resume" }
+                }
+            }
+        }
+        SessionDetailOverlay {
+            session_id,
+            entries,
+            loading,
+            show: show_detail,
+            had_parse_failure,
+        }
+    }
+}
+
 /// Session item component — click to view in overlay, resume to swap agent session.
 #[component]
 fn SessionItem(
@@ -183,12 +378,13 @@ fn SessionItem(
     created_at: i64,
     rpc: JsonRpcClient,
     conversation_signal: Signal<ConversationState>,
-    active_tab: Signal<ActiveTab>,
+    agents_signal: Signal<AgentsState>,
 ) -> Element {
     let mut show_detail = use_signal(|| false);
     let entries = use_signal(|| Vec::<ConversationEntry>::new());
     let mut loading = use_signal(|| false);
     let is_resuming = use_signal(|| false);
+    let had_parse_failure = use_signal(|| false);
 
     // Pre-clone for the view onclick handler.
     let rpc_view = rpc.clone();
@@ -198,7 +394,7 @@ fn SessionItem(
     let rpc_resume = rpc.clone();
     let sid_resume = session_id.clone();
     let conv_resume = conversation_signal;
-    let tab_resume = active_tab;
+    let agents_resume = agents_signal;
 
     rsx! {
         div {
@@ -210,10 +406,20 @@ fn SessionItem(
                     let sid = sid_view.clone();
                     let mut ent = entries;
                     let mut ld = loading;
+                    let mut parse_fail = had_parse_failure;
                     rpc.session_entries(&sid, move |result| {
                         match result {
-                            Ok(e) => ent.set(session_entries_to_conversation(e)),
-                            Err(e) => log::error!("Failed to load session entries: {e}"),
+                            Ok(e) => {
+                                let converted = session_entries_to_conversation(e.clone());
+                                if e.len() > 0 && converted.is_empty() {
+                                    parse_fail.set(true);
+                                }
+                                ent.set(converted);
+                            }
+                            Err(e) => {
+                                log::error!("Failed to load session entries: {e}");
+                                parse_fail.set(true);
+                            }
                         }
                         ld.set(false);
                     });
@@ -229,21 +435,32 @@ fn SessionItem(
                 onclick: move |evt: Event<MouseData>| {
                     evt.stop_propagation();
                     let mut resuming = is_resuming;
-                    resuming.set(true);
+                    let _ = resuming.set(true);
                     let rpc = rpc_resume.clone();
                     let sid = sid_resume.clone();
                     let mut conv = conv_resume;
-                    let mut tab = tab_resume;
-                    rpc.session_resume(&sid, move |result| {
+                    let mut agents = agents_resume;
+                    let agent_id = agents.read().selected.clone();
+                    rpc.session_resume(&sid, agent_id.as_deref(), move |result| {
                         match result {
                             Ok(resp) => {
                                 let conv_entries = session_entries_to_conversation(resp.entries);
-                                conv.with_mut(|s| { s.entries = conv_entries; });
-                                tab.set(ActiveTab::Conversation);
+                                let active_id = agents.read().selected.clone().unwrap_or_default();
+                                conv.with_mut(|s| {
+                                    let ac = s.get_or_create(&active_id);
+                                    ac.entries = conv_entries;
+                                });
+                                agents.with_mut(|a| a.sub_tab = AgentSubTab::Conversation);
                             }
                             Err(e) => log::error!("Failed to resume session: {e}"),
                         }
-                        resuming.set(false);
+                        let _ = resuming.set(false);
+                    });
+                    // Safety timeout — reset button state if response never arrives
+                    let mut resuming_timeout = is_resuming;
+                    wasm_bindgen_futures::spawn_local(async move {
+                        TimeoutFuture::new(15_000).await;
+                        let _ = resuming_timeout.set(false);
                     });
                 },
                 if *is_resuming.read() { "Resuming..." } else { "Resume" }
@@ -255,6 +472,7 @@ fn SessionItem(
             entries,
             loading,
             show: show_detail,
+            had_parse_failure,
         }
     }
 }
@@ -265,19 +483,23 @@ pub fn SessionsPanel() -> Element {
     let app: super::app::AppState = use_context();
     let sessions_signal: Signal<SessionsState> = use_context();
     let conversation_signal: Signal<ConversationState> = use_context();
+    let agents_signal: Signal<AgentsState> = use_context();
     let rpc_for_load = app.rpc_client.clone();
     let rpc_for_items = app.rpc_client.clone();
 
     // Load sessions on mount
+    let agents_for_hook = agents_signal;
     use_hook(move || {
         let mut sig = sessions_signal;
+        let agents = agents_for_hook;
 
         sig.with_mut(|s| {
             s.loading = true;
             s.error = None;
         });
 
-        rpc_for_load.session_list(move |result| {
+        let agent_id = agents.read().selected.clone();
+        rpc_for_load.session_list(agent_id.as_deref(), move |result| {
             sig.with_mut(|s| {
                 s.loading = false;
                 match result {
@@ -321,7 +543,20 @@ pub fn SessionsPanel() -> Element {
         };
     }
 
-    let items: Vec<Element> = sessions.iter().map(|session| {
+    let mobile_items: Vec<Element> = sessions.iter().map(|session| {
+        rsx! {
+            SessionCard {
+                session_id: session.id.clone(),
+                entry_count: session.entry_count,
+                created_at: session.created_at,
+                rpc: rpc_for_items.clone(),
+                conversation_signal,
+                agents_signal,
+            }
+        }
+    }).collect();
+
+    let desktop_items: Vec<Element> = sessions.iter().map(|session| {
         rsx! {
             SessionItem {
                 session_id: session.id.clone(),
@@ -329,7 +564,7 @@ pub fn SessionsPanel() -> Element {
                 created_at: session.created_at,
                 rpc: rpc_for_items.clone(),
                 conversation_signal,
-                active_tab: app.active_tab,
+                agents_signal,
             }
         }
     }).collect();
@@ -337,7 +572,12 @@ pub fn SessionsPanel() -> Element {
     rsx! {
         div { class: "flex-1 overflow-y-auto p-2",
             div { class: "px-2.5 pt-1 pb-2 text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]", "Sessions" }
-            {items.into_iter()}
+            div { class: "sm:hidden flex flex-col gap-2",
+                {mobile_items.into_iter()}
+            }
+            div { class: "hidden sm:block",
+                {desktop_items.into_iter()}
+            }
         }
     }
 }

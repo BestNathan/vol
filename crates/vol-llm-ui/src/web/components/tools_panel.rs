@@ -1,8 +1,24 @@
-//! Left panel showing tool calls with status indicators.
+//! Left panel showing system tools and tool call history.
 
 use dioxus::prelude::*;
 use crate::state::{ToolState, ToolCallEntry, ToolCallStatus, UiEvent, UiEventKind, SubscriptionSet};
+use crate::web::client::JsonRpcClient;
 use crate::web::components::app::AppState;
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct ToolDef {
+    name: String,
+    description: Option<String>,
+    #[allow(dead_code)]
+    parameters: Option<serde_json::Value>,
+}
+
+struct ToolPanelState {
+    tools: Vec<ToolDef>,
+    loading: bool,
+    error: Option<String>,
+    call_result: Option<String>,
+}
 
 fn update_status(calls: &mut Vec<ToolCallEntry>, name: &str, status: ToolCallStatus, dur: Option<u64>) {
     for e in calls.iter_mut().rev() {
@@ -47,14 +63,70 @@ fn reduce_tool_state(s: &mut ToolState, event: &UiEvent) {
 #[component]
 pub fn ToolsPanel() -> Element {
     let app_state: AppState = use_context();
-    let signal = use_signal(|| ToolState::new());
+    let call_signal = use_signal(|| ToolState::new());
+    let tool_signal = use_signal(|| ToolPanelState { tools: vec![], loading: false, error: None, call_result: None });
+    let client: JsonRpcClient = app_state.rpc_client.clone();
 
+    // Load tools on mount (follow sessions panel pattern: use_hook, not use_effect)
+    let client_for_load = client.clone();
     use_hook(move || {
-        let bus = app_state.event_bus.clone();
-        let mut set = SubscriptionSet::new(bus.clone());
+        let mut sig = tool_signal.clone();
+
+        sig.with_mut(|s| {
+            s.loading = true;
+            s.error = None;
+        });
+
+        client_for_load.tool_list(move |result| {
+            let mut sig = sig;
+            sig.with_mut(|s| {
+                s.loading = false;
+                match result {
+                    Ok(tools) => {
+                        s.tools = tools.iter()
+                            .filter_map(|t| serde_json::from_value::<ToolDef>(t.clone()).ok())
+                            .collect();
+                    }
+                    Err(e) => {
+                        s.error = Some(e);
+                    }
+                }
+            });
+        });
+    });
+
+    // Subscribe to WsConnected for re-fetch on reconnect
+    let event_bus = app_state.event_bus.clone();
+    let client_for_reconnect = client.clone();
+    let ts_for_reconnect = tool_signal.clone();
+    use_hook(move || {
+        let _sub = event_bus.subscribe(UiEventKind::WsConnected, move |_| {
+            let cl = client_for_reconnect.clone();
+            let sig_reconnect = ts_for_reconnect.clone();
+            cl.tool_list(move |result| {
+                let mut sig = sig_reconnect.clone();
+                sig.with_mut(|s| {
+                    s.loading = false;
+                    match result {
+                        Ok(tools) => {
+                            s.tools = tools.iter()
+                                .filter_map(|t| serde_json::from_value::<ToolDef>(t.clone()).ok())
+                                .collect();
+                        }
+                        Err(e) => { s.error = Some(e); }
+                    }
+                });
+            });
+        });
+    });
+
+    // Subscribe to tool call events
+    let event_bus2 = app_state.event_bus.clone();
+    use_hook(move || {
+        let mut set = SubscriptionSet::new(event_bus2.clone());
         for kind in [UiEventKind::ToolCallBegin, UiEventKind::ToolCallComplete, UiEventKind::ToolCallError, UiEventKind::ToolCallSkipped] {
-            set.subscribe(&bus, kind, {
-                let signal = signal.clone();
+            set.subscribe(&event_bus2, kind, {
+                let signal = call_signal.clone();
                 move |event| {
                     reduce_tool_state(&mut *signal.write_unchecked(), event);
                 }
@@ -63,15 +135,113 @@ pub fn ToolsPanel() -> Element {
         std::sync::Arc::new(set)
     });
 
-    let count = signal.read().calls.len();
+    // Read state for rendering
+    let (tools, loading, error, call_result) = {
+        let s = tool_signal.read();
+        (s.tools.clone(), s.loading, s.error.clone(), s.call_result.clone())
+    };
+    let call_count = call_signal.read().calls.len();
+
     rsx! {
         div { class: "flex-1 overflow-y-auto p-2",
-            div { class: "px-2.5 pt-1 pb-2 text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]", "Tools Called ({count})" }
-            div { class: "font-mono text-[13px]",
-                if count == 0 {
-                    div { class: "p-2.5 text-[#666] text-center", "No tool calls yet" }
-                } else {
-                    {(0..count).map(|idx| { let s = signal.clone(); rsx! { ToolItem { signal: s, index: idx } } }).collect::<Vec<Element>>().into_iter()}
+            // System Tools section
+            div { class: "mb-3",
+                div { class: "flex items-center justify-between mb-2",
+                    div { class: "px-2.5 pt-1 pb-2 text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]",
+                        "System Tools ({tools.len()})"
+                    }
+                    button {
+                        class: "px-2 py-0.5 text-[12px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#4a4a65]",
+                        onclick: {
+                            let client = client.clone();
+                            let ts = tool_signal.clone();
+                            move |_| {
+                                let mut ts_mut = ts.clone();
+                                ts_mut.with_mut(|s| { s.loading = true; s.error = None; });
+                                let ts2 = ts.clone();
+                                client.tool_list(move |result| {
+                                    let mut ts2 = ts2;
+                                    ts2.with_mut(|s| {
+                                        s.loading = false;
+                                        match result {
+                                            Ok(tools) => {
+                                                s.tools = tools.iter()
+                                                    .filter_map(|t| serde_json::from_value::<ToolDef>(t.clone()).ok())
+                                                    .collect();
+                                            }
+                                            Err(e) => { s.error = Some(e); }
+                                        }
+                                    });
+                                });
+                            }
+                        },
+                        "Refresh"
+                    }
+                }
+                if loading {
+                    div { class: "text-[12px] text-[#888] px-2", "Loading..." }
+                }
+                if let Some(ref e) = error {
+                    div { class: "text-[12px] text-[#c04040] px-2 break-words", "Error: {e}" }
+                }
+                for tool in &tools {
+                    div { class: "border-b border-[#2a2a44] py-1 px-2",
+                        div { class: "flex items-center justify-between",
+                            div {
+                                span { class: "text-[13px] font-semibold text-[#e0e0e0]", "{tool.name}" }
+                                if let Some(ref desc) = tool.description {
+                                    span { class: "text-[12px] text-[#888] ml-2", " - {desc}" }
+                                }
+                            }
+                            button {
+                                class: "px-1.5 py-0.5 text-[11px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#5a5a75]",
+                                onclick: {
+                                    let client = client.clone();
+                                    let ts = tool_signal.clone();
+                                    let name = tool.name.clone();
+                                    move |_| {
+                                        let args_val = serde_json::json!({});
+                                        let ts2 = ts.clone();
+                                        client.tool_call(&name, &args_val, move |result| {
+                                            let mut ts2 = ts2;
+                                            ts2.with_mut(|s| {
+                                                match result {
+                                                    Ok(val) => s.call_result = Some(
+                                                        serde_json::to_string_pretty(&val).unwrap_or_else(|_| val.to_string())
+                                                    ),
+                                                    Err(e) => s.call_result = Some(format!("Error: {e}")),
+                                                }
+                                            });
+                                        });
+                                    }
+                                },
+                                "Run"
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Call result display
+            if let Some(ref result) = call_result {
+                div { class: "mb-2",
+                    div { class: "text-[12px] font-semibold text-[#888] mb-1", "Call Result" }
+                    pre { class: "text-[12px] font-mono text-[#ccc] bg-[#1a1a2e] p-2 rounded overflow-x-auto whitespace-pre-wrap", "{result}" }
+                }
+            }
+
+            // Divider
+            div { class: "border-t border-[#333] my-2" }
+
+            // Call History section
+            div {
+                div { class: "px-2.5 pt-1 pb-2 text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]", "Call History ({call_count})" }
+                div { class: "font-mono text-[13px]",
+                    if call_count == 0 {
+                        div { class: "p-2.5 text-[#666] text-center", "No tool calls yet" }
+                    } else {
+                        {(0..call_count).map(|idx| { let s = call_signal.clone(); rsx! { ToolItem { signal: s, index: idx } } }).collect::<Vec<Element>>().into_iter()}
+                    }
                 }
             }
         }

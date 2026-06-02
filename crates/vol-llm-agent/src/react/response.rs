@@ -51,9 +51,15 @@ pub enum AgentError {
     #[error("Invalid tool response: {0}")]
     InvalidToolResponse(String),
 
+    #[error("Invalid agent input: {0}")]
+    InvalidInput(String),
+
     #[error("Context error: {0}")]
     Context(String),
 
     #[error("Session error: {0}")]
     SessionError(String),
+
+    #[error("agent is already running — concurrent run_input() rejected")]
+    AlreadyRunning,
 }

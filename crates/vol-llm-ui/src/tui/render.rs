@@ -62,6 +62,8 @@ fn render_right_panel(frame: &mut Frame, area: Rect, state: &UiState) {
         ActiveTab::Skills => render_skills(frame, chunks[1], state),
         ActiveTab::Agents => render_agents_panel(frame, chunks[1], state),
         ActiveTab::Sessions => render_sessions_panel(frame, chunks[1], state),
+        ActiveTab::Mcp => render_mcp(frame, chunks[1], state),
+        ActiveTab::Tasks => render_tasks_placeholder(frame, chunks[1]),
     }
 
     render_input_area(frame, chunks[2], state);
@@ -117,6 +119,8 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &UiState) {
         Span::styled(" Skills ", style(ActiveTab::Skills)),
         Span::raw(" "),
         Span::styled(" Logs ", style(ActiveTab::Logs)),
+        Span::raw(" "),
+        Span::styled(" Tasks ", style(ActiveTab::Tasks)),
         Span::raw(" "),
         Span::styled(" Agents ", style(ActiveTab::Agents)),
         Span::raw(" "),
@@ -226,7 +230,7 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                     }
                 }
             }
-            ConversationEntry::ToolCall { tool_name, arg_preview } => {
+            ConversationEntry::ToolCall { tool_name, arg_preview, .. } => {
                 lines.push(Line::from(vec![
                     Span::styled(format!("[{}]", tool_name), Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
                 ]));
@@ -238,7 +242,7 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                     }
                 }
             }
-            ConversationEntry::ToolResult { tool_name, preview, success } => {
+            ConversationEntry::ToolResult { tool_name, preview, success, .. } => {
                 let status = if *success { "OK" } else { "ERR" };
                 let color = if *success { Color::Green } else { Color::Red };
                 lines.push(Line::from(vec![
@@ -286,6 +290,14 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                 lines.push(Line::from(vec![
                     Span::styled(label,
                         Style::default().fg(Color::Yellow).add_modifier(Modifier::DIM)),
+                ]));
+            }
+            ConversationEntry::RunningBanner { run_id } => {
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("\u{2b24} Agent running  [{}]", run_id),
+                        Style::default().fg(Color::LightBlue).add_modifier(Modifier::BOLD),
+                    ),
                 ]));
             }
         }
@@ -540,7 +552,7 @@ fn render_skills(frame: &mut Frame, area: Rect, state: &UiState) {
     frame.render_widget(Paragraph::new(Text::from(lines)), inner);
 }
 
-fn render_agents_panel(frame: &mut Frame, area: Rect, state: &UiState) {
+fn render_agents_panel(frame: &mut Frame, area: Rect, _state: &UiState) {
     let block = Block::default().borders(Borders::ALL).title(" Agents ");
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -559,6 +571,34 @@ fn render_sessions_panel(frame: &mut Frame, area: Rect, _state: &UiState) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let text = Text::raw("No sessions (TUI)");
+    let paragraph = Paragraph::new(text)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(paragraph, inner);
+}
+
+fn render_mcp(frame: &mut Frame, area: Rect, _state: &UiState) {
+    let block = Block::default()
+        .title("MCP Servers")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::DarkGray));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let text = Text::raw("MCP tab (TUI)");
+    let paragraph = Paragraph::new(text)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(paragraph, inner);
+}
+
+fn render_tasks_placeholder(frame: &mut Frame, area: Rect) {
+    let block = Block::default()
+        .title("Tasks")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::DarkGray));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let text = Text::raw("Tasks tab (TUI — coming soon)");
     let paragraph = Paragraph::new(text)
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::DarkGray));

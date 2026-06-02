@@ -53,6 +53,8 @@ pub struct SkillDef {
     pub content: String,
     /// Relative file paths within the skill directory
     pub file_listing: Vec<String>,
+    /// Absolute path to the skill directory (for resolving file_listing paths)
+    pub directory: String,
 }
 
 impl SkillDef {
@@ -68,6 +70,7 @@ impl SkillDef {
             triggers: Vec::new(),
             content: content_str,
             file_listing: Vec::new(),
+            directory: String::new(),
         }
     }
 

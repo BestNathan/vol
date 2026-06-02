@@ -35,6 +35,8 @@ impl PptAgent {
                 model: "qwen3.5-plus".to_string(),
                 api_key: vol_llm_provider::Secret::literal(api_key),
                 base_url: "https://coding.dashscope.aliyuncs.com/apps/anthropic".to_string(),
+                body: None,
+                headers: None,
             },
         };
 

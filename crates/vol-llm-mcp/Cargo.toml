@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-rmcp = { version = "1.6", features = ["client", "transport-io", "transport-child-process"] }
+rmcp = { version = "1.6", features = ["client", "transport-io", "transport-child-process", "transport-streamable-http-client-reqwest", "reqwest-native-tls"] }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -12,3 +12,5 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tokio-util = "0.7"
 dirs = "5.0"
+reqwest = { version = "0.13", features = ["json", "rustls"] }
+http = "1"

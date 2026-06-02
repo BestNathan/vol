@@ -1,0 +1,23 @@
+[package]
+name = "vol-llm-runtime"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+async-trait = { workspace = true }
+
+vol-llm-core = { path = "../vol-llm-core" }
+vol-llm-tool = { path = "../vol-llm-tool" }
+vol-llm-agent = { path = "../vol-llm-agent" }
+vol-llm-task = { path = "../vol-llm-task" }
+vol-llm-provider = { path = "../vol-llm-provider" }
+vol-llm-mcp = { path = "../vol-llm-mcp" }
+vol-llm-skill = { path = "../vol-llm-skill" }
+vol-llm-tools-builtin = { path = "../vol-llm-tools-builtin" }
+vol-session = { path = "../vol-session" }

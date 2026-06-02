@@ -3,14 +3,14 @@ type: concept
 category: pattern
 tags: [dioxus, web, frontend, component, wasm]
 created: 2026-05-08
-updated: 2026-05-12 (tailwind-css-full-migration)
-source_count: 6
+updated: 2026-05-18 (mobile-file-tree-rail)
+source_count: 18
 ---
 
 # Dioxus Web Pattern
 
 **Category:** Web frontend architecture
-**Related:** [[vol-llm-ui-crate]], [[dioxus-signal-pattern]], [[ratatui-tui-pattern]], [[human-in-the-loop]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]]
+**Related:** [[vol-llm-ui-crate]], [[dioxus-signal-pattern]], [[ratatui-tui-pattern]], [[human-in-the-loop]], [[workspace-tree-pattern]], [[drawer-ui-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[mcp-state-types]], [[frontend-auto-reconnect]], [[file-tree-sidebar-scroll-fix]], [[mobile-file-tree-rail]], [[mobile-ui-refinements]]
 
 ## Definition
 
@@ -20,7 +20,8 @@ Component architecture for a browser-based UI built with Dioxus 0.6, compiled to
 
 - Dioxus 0.6 via `dioxus::launch(App)` in binary entry point
 - Feature gated: `#[cfg(feature = "web")]` in `lib.rs`, binary requires `--features web`
-- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `TreeNode`, `ToolsTabContent`, `FileContentView`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`
+- Components: `App`, `StatusBar`, `ToolsPanel`, `ConversationView`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `TreeNode`, `ToolsTabContent`, `FileContentView`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel`, `McpPanel` (placeholder), `ToolCallDialog`, `SchemaForm`, `SkillDetailDialog` [[tool-call-dialog-component]], [[schemaform-toolcall-dialog]], [[skills-panel-content]]
+- `App()` spawns multiple `wasm_bindgen_futures::spawn_local` async tasks: WS event loop, reconnect watcher with exponential backoff, session restoration watcher [[frontend-auto-reconnect]]
 - Global CSS embedded as `const GLOBAL_CSS: &str`, injected via `<style>` element
 - Dark theme with flexbox layout: status bar (top), tools panel (left), tab content (right), input area (bottom)
 - Tab routing: `TabContent` matches on `ActiveTab` enum to render the active panel
@@ -43,7 +44,7 @@ pub struct AppState {
 ```
 
 `App()` also creates and provides via `use_context_provider`:
-- `Signal<GlobalState>` — shared run/session/connection info
+- `Signal<GlobalState>` — shared run/session/connection info, extended with `ConnectionStatus` for connection state tracking [[connection-state-dashboard]], further extended with `reconnecting`/`reconnect_attempts`/`reconnect_delay_secs`/`reconnect_maxed` for reconnect state [[frontend-auto-reconnect]]
 - `Signal<ApprovalUiState>` — shared HITL approval state
 - `Signal<AgentsState>` — agents panel state
 - `Signal<SessionsState>` — sessions panel state [[sessions-ui-pattern]]
@@ -62,25 +63,38 @@ All state was centralized in one big signal. Replaced by EventBus pattern [[even
 
 ```
 App
-├── StatusBar          (agent status, duration, mode)
+├── StatusBar          (agent status, duration, mode, ConnectionIndicator with reconnect)
+├── spawn_local: WS event loop
+├── spawn_local: reconnect watcher (exponential backoff, 10 max retries)
+├── spawn_local: session restoration (session.list → session.resume → session.entries)
 ├── main-layout
 │   ├── ToolsPanel     (tool call history, left sidebar)
 │   └── right-panel
-│       ├── TabBar     (Conversation | Sessions | Workspace | Skills | Logs | Agents)
+│       ├── TabBar     (Conversation | Sessions | Workspace | Skills | Mcp | Logs | Agents)
 │       ├── TabContent (routed by ActiveTab)
 │       │   ├── ConversationView
 │       │   ├── SessionsPanel
 │       │   ├── WorkspacePanel
 │       │   ├── SkillsPanel
+│       │   ├── McpPanel (placeholder)
 │       │   ├── LogViewer
 │       │   └── AgentsPanel
 │       └── InputArea  (text input + send button)
 └── ApprovalDialog     (modal overlay)
+└── ToolCallDialog     (modal overlay, conditional on McpState.tool_call_dialog)
+    └── SchemaForm     (auto-generated form fields from JSON Schema)
+└── SkillDetailDialog  (modal overlay, conditional on SkillDialogState.open)
 ```
 
 ## FileTree Component
 
-The `FileTree` component renders a `WorkspaceTreeNode` tree in the left sidebar. Each node is a reactive `#[component] TreeNode` — not a plain function — enabling Dioxus reactivity when children are populated via `Signal::with_mut()`. Directories fetch children on-demand via JSON-RPC `file.list`, with a refresh button (⟳) for re-fetching. See [[workspace-tree-pattern]] for the full pattern.
+The `FileTree` component renders a `WorkspaceTreeNode` tree in the left sidebar. Each node is a reactive `#[component] TreeNode` — not a plain function — enabling Dioxus reactivity when children are populated via `Signal::with_mut()`. Directories fetch children on-demand via JSON-RPC `file.list`, with a refresh button (⟳) for re-fetching.
+
+`FileTree` also owns its mobile drawer affordance. On mobile closed state it remains in the flex layout as a `w-10` rail; tapping the rail sets `file_tree_drawer_open = true` and opens the drawer/backdrop as `absolute` overlays inside the main content area below `StatusBar`. `App` should only render `FileTree {}` and a `min-w-0 flex-1` content column, not a separate floating drawer button. The desktop sidebar is a bounded flex column (`sm:flex sm:h-full sm:min-h-0`) and its tree body is `min-h-0 flex-1 overflow-y-auto`, so long file trees scroll inside the sidebar. See [[workspace-tree-pattern]], [[drawer-ui-pattern]], [[mobile-file-tree-rail]], [[mobile-ui-refinements]], and [[file-tree-sidebar-scroll-fix]] for the full pattern.
+
+## Mobile Form And List Patterns
+
+Mobile text inputs should use at least `text-[16px]` at the base breakpoint to avoid browser zoom on focus, then may step down at `sm:` for desktop density. Repeated tabular data should use cards on mobile and tables from `sm:` upward. `SkillsPanel` follows this split by rendering `SkillCard` entries in `sm:hidden flex flex-col gap-2` and preserving the table as `hidden sm:table w-full`. See [[mobile-ui-refinements]] and [[skills-panel-json-rpc]].
 
 ## Build Command
 
@@ -122,7 +136,22 @@ Both frontends share `UiState` / `UiEvent` / `ActiveTab` types and the same conn
 - [[file-tab-pattern]]: Tabbed file viewer rendered in Workspace tab
 - [[workspace-tree-pattern]]: WorkspaceTreeNode tree structure and lazy-loading pattern
 - [[lazy-load-dir-tree]]: Source documenting the directory tree implementation
+- [[drawer-ui-pattern]]: Mobile file tree rail/drawer pattern
 - [[split-signal-state]]: Source documenting the EventBus refactoring
 - [[task-6-sessions-tab-wiring]]: Source documenting Sessions tab wiring, SessionDialog removal, checkpoint CSS
 - [[sessions-ui-pattern]]: Session browsing as a dedicated tab with SessionsState signal management
 - [[tailwind-css-migration]]: Systematic migration from global CSS to Tailwind utility classes
+- [[connection-state-dashboard]]: Real-time connection status display via EventBus subscription
+- [[mcp-state-types]]: State types for MCP server/tool/resource/prompt display in web frontend
+- [[tool-call-dialog-component]]: Source documenting the ToolCallDialog modal component
+- [[schemaform-toolcall-dialog]]: Source documenting SchemaForm integration into ToolCallDialog
+- [[schema-form-pattern]]: Pattern for auto-generated form fields from JSON Schema
+- [[skills-panel-content]]: Source documenting SkillsPanel RPC fetch + SkillDetailDialog modal
+- [[skills-panel-json-rpc]]: Pattern for exposing skill discovery via JSON-RPC
+- [[file-tree-sidebar-scroll-fix]]: FileTree desktop scroll containment and compact controls
+- [[mobile-file-tree-rail]]: FileTree mobile rail and app-level floating button removal
+- [[mobile-ui-refinements]]: Status-safe drawer positioning, mobile-safe input font size, and Skills mobile cards
+
+## Dialog Sizing Pattern
+
+Modal dialogs should use a fixed-size outer container (e.g., `w-[800px] h-[80vh] flex flex-col overflow-hidden`) placed inside a backdrop with no padding. The inner content area uses `flex-1 min-h-0 overflow-y-auto` to scroll independently. The header uses `flex-shrink-0` to stay fixed. This prevents long content (descriptions, code blocks) from pushing the dialog beyond the viewport. Use `stop_propagation` on the inner container and `onclick` on the backdrop to enable click-outside-to-close. See [[skills-panel-content]] for the `SkillDetailDialog` implementation and [[tool-call-dialog-component]] for `ToolCallDialog` (`w-[600px] h-[70vh]`).

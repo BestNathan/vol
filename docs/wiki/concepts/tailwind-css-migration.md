@@ -3,14 +3,14 @@ type: concept
 category: pattern
 tags: [tailwind, css, frontend, web, styling, migration]
 created: 2026-05-12
-updated: 2026-05-12 (tailwind-css-full-migration)
-source_count: 2
+updated: 2026-05-18 (mobile-file-tree-rail)
+source_count: 5
 ---
 
 # Tailwind CSS Migration
 
 **Category:** Web frontend styling migration
-**Related:** [[dioxus-web-pattern]], [[vol-llm-ui-crate]]
+**Related:** [[dioxus-web-pattern]], [[vol-llm-ui-crate]], [[file-tree-sidebar-scroll-fix]], [[mobile-file-tree-rail]], [[drawer-ui-pattern]], [[mobile-ui-refinements]]
 
 ## Definition
 
@@ -73,7 +73,7 @@ The original color scheme is maintained using Tailwind's arbitrary value syntax:
 
 ### Build Pipeline
 
-`rebuild-web.sh` runs `npx @tailwindcss/cli` to generate `tailwind.css` before WASM build. Output: 59KB minified CSS.
+`make web-css` runs `npx @tailwindcss/cli -i crates/vol-llm-ui/assets/input.css -o crates/vol-llm-ui/assets/tailwind.css` before WASM build. `CLAUDE.md` requires using this Makefile command for web development so new utility classes such as `sm:h-full`, `sm:min-h-0`, `group-hover:opacity-100`, `w-10`, `hover:bg-[#20203a]`, `sm:table`, and `text-[16px]` are present in the checked-in CSS. See [[file-tree-sidebar-scroll-fix]], [[mobile-file-tree-rail]], and [[mobile-ui-refinements]].
 
 ## Migration Order (Complete)
 
@@ -108,3 +108,6 @@ The original color scheme is maintained using Tailwind's arbitrary value syntax:
 - [[vol-llm-ui-crate]]: Shared UI crate
 - [[conversation-tailwind-migration]]: First completed migration — conversation.rs
 - [[tailwind-css-full-migration]]: Full migration completion — all 16 components
+- [[file-tree-sidebar-scroll-fix]]: Example of regenerating CSS after adding FileTree layout/control utilities
+- [[mobile-file-tree-rail]]: Example of regenerating CSS after adding mobile rail utilities
+- [[mobile-ui-refinements]]: Example of regenerating CSS after adding mobile input and skill-card utilities
