@@ -66,14 +66,14 @@ fn clear_running_banner(entries: &mut Vec<ConversationEntry>) {
 pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
     let conv = s.active_mut();
     match event {
-        UiEvent::AgentStart { input } => {
+        UiEvent::AgentStart { input, .. } => {
             conv.entries.push(ConversationEntry::UserInput { text: input.clone() });
         }
         UiEvent::AgentComplete { .. } => {
             flush_pending_content(&mut conv.entries);
             clear_running_banner(&mut conv.entries);
         }
-        UiEvent::AgentAborted { reason } | UiEvent::AgentError { message: reason } => {
+        UiEvent::AgentAborted { reason, .. } | UiEvent::AgentError { message: reason, .. } => {
             flush_pending_content(&mut conv.entries);
             clear_running_banner(&mut conv.entries);
             conv.entries.push(ConversationEntry::Error { message: reason.clone() });
@@ -173,7 +173,7 @@ pub fn ConversationView() -> Element {
     }
 
     let entries = guard.active_entries().to_vec();
-    let is_running = global.read().is_running;
+    let is_running = global.read().is_running();
     let messages: Vec<Element> = (0..count).map(|index| {
         let entry = entries[index].clone();
         let is_last = index == count - 1;
@@ -331,7 +331,7 @@ fn TimelineEntry(
         div { class: "flex gap-3",
             div { class: "flex flex-col items-center w-3 shrink-0 pt-1.5",
                 if is_user {
-                    div { class: "text-white text-sm leading-none font-bold", "\u{2776}" }
+                    div { class: "text-white text-sm leading-none font-bold", "❯" }
                 } else {
                     div { class: dot_class }
                 }
@@ -339,7 +339,7 @@ fn TimelineEntry(
                     div { class: "w-px flex-1 bg-[#333] min-h-[16px]" }
                 }
             }
-            div { class: "flex-1 pb-3 min-w-0 break-words",
+            div { class: "flex-1 pb-3 min-w-0 break-words pt-1.5",
                 {content}
             }
         }

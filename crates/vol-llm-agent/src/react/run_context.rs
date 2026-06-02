@@ -2,8 +2,7 @@
 //!
 //! Encapsulates all state and resources for a single `run()` invocation.
 
-use vol_session::{Session, SessionContributor, SessionMessage};
-use vol_llm_context::ContextBuilderBuilder;
+use vol_session::{Session, SessionMessage};
 use super::plugin::PluginDecision;
 use super::state::{ReasoningStep, ToolCallRecord};
 use super::stream::AgentStreamEvent;
@@ -202,23 +201,11 @@ impl RunContext {
 
     /// Build the full LLM context for a run iteration.
     ///
-    /// Combines:
-    /// 1. Base contributors from config (e.g., system prompt, project context)
-    /// 2. SessionContributor (Middle zone) — historical messages from session
-    ///
-    /// Call this at the start of each iteration to get the current message list.
+    /// SessionContributor is a permanent contributor on config.context_builder,
+    /// so we clone the builder and build directly.
     pub async fn get_context(&self) -> Result<Vec<Message>, crate::AgentError> {
-        let context_builder = ContextBuilderBuilder::new(
-            self.config.context_builder.token_budget().total,
-        )
-        .add_contributors_from(&self.config.context_builder)
-        .add_contributor(Box::new(SessionContributor::new(
-            Arc::new(tokio::sync::Mutex::new((*self.session).clone())),
-            self.max_history_messages(),
-        )))
-        .build();
-
-        let output = context_builder.build().await.map_err(|e| {
+        let cb = self.config.context_builder.read().unwrap().clone();
+        let output = cb.build().await.map_err(|e| {
             crate::AgentError::Context(format!("Failed to build context: {}", e))
         })?;
         Ok(output.messages)
@@ -465,6 +452,7 @@ impl Clone for RunContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vol_llm_context::ContextBuilderBuilder;
     use vol_session::{InMemoryEntryStore, SessionMessage};
     use vol_llm_core::{MessageContent, MessageRole};
 
@@ -565,7 +553,7 @@ mod tests {
             .build();
 
         let config = Arc::new(AgentConfig {
-            context_builder,
+            context_builder: std::sync::RwLock::new(context_builder),
             ..Default::default()
         });
 
@@ -591,10 +579,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_context_history() {
         use vol_llm_context::builtin::SimpleContributor;
-
-        let context_builder = ContextBuilderBuilder::new(128_000)
-            .add_contributor(Box::new(SimpleContributor::system("System".to_string())))
-            .build();
+        use vol_session::SessionContributor;
 
         let session = Arc::new(Session::new(
             Arc::new(InMemoryEntryStore::new()),
@@ -607,8 +592,17 @@ mod tests {
         );
         session.add_message(history_msg).await.unwrap();
 
+        // Build context_builder with SessionContributor after session has messages
+        let context_builder = ContextBuilderBuilder::new(128_000)
+            .add_contributor(Box::new(SimpleContributor::system("System".to_string())))
+            .add_contributor(Box::new(SessionContributor::new(
+                Arc::new(tokio::sync::Mutex::new((*session).clone())),
+                50,
+            )))
+            .build();
+
         let config = Arc::new(AgentConfig {
-            context_builder,
+            context_builder: std::sync::RwLock::new(context_builder),
             session: std::sync::RwLock::new(session),
             ..Default::default()
         });
@@ -635,17 +629,23 @@ mod tests {
     #[tokio::test]
     async fn test_get_context_user_message_from_session() {
         use vol_llm_context::builtin::SimpleContributor;
-
-        let context_builder = ContextBuilderBuilder::new(128_000)
-            .add_contributor(Box::new(SimpleContributor::system("System".to_string())))
-            .build();
+        use vol_session::SessionContributor;
 
         let session = Arc::new(Session::new(
             Arc::new(InMemoryEntryStore::new()),
         ));
 
+        // Build context_builder with SessionContributor (session is empty for now)
+        let context_builder = ContextBuilderBuilder::new(128_000)
+            .add_contributor(Box::new(SimpleContributor::system("System".to_string())))
+            .add_contributor(Box::new(SessionContributor::new(
+                Arc::new(tokio::sync::Mutex::new((*session).clone())),
+                50,
+            )))
+            .build();
+
         let config = Arc::new(AgentConfig {
-            context_builder,
+            context_builder: std::sync::RwLock::new(context_builder),
             session: std::sync::RwLock::new(session.clone()),
             ..Default::default()
         });
@@ -677,10 +677,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_context_consistent() {
         use vol_llm_context::builtin::SimpleContributor;
-
-        let context_builder = ContextBuilderBuilder::new(128_000)
-            .add_contributor(Box::new(SimpleContributor::system("System".to_string())))
-            .build();
+        use vol_session::SessionContributor;
 
         let session = Arc::new(Session::new(
             Arc::new(InMemoryEntryStore::new()),
@@ -690,8 +687,17 @@ mod tests {
         let history_msg = SessionMessage::new(session.id.clone(), Message::user("History"));
         session.add_message(history_msg).await.unwrap();
 
+        // Build context_builder with SessionContributor after session has messages
+        let context_builder = ContextBuilderBuilder::new(128_000)
+            .add_contributor(Box::new(SimpleContributor::system("System".to_string())))
+            .add_contributor(Box::new(SessionContributor::new(
+                Arc::new(tokio::sync::Mutex::new((*session).clone())),
+                50,
+            )))
+            .build();
+
         let config = Arc::new(AgentConfig {
-            context_builder,
+            context_builder: std::sync::RwLock::new(context_builder),
             session: std::sync::RwLock::new(session),
             ..Default::default()
         });

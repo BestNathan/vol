@@ -12,7 +12,7 @@ pub fn InputArea() -> Element {
     let approval: Signal<ApprovalUiState> = use_context();
     let agents: Signal<AgentsState> = use_context();
     let conv: Signal<ConversationState> = use_context();
-    let is_running = global.read().is_running;
+    let is_running = global.read().is_running();
     let has_approval = approval.read().has_pending();
 
     let mut input_text = use_signal(|| String::new());

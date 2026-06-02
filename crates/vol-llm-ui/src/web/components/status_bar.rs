@@ -17,14 +17,14 @@ pub fn StatusBar() -> Element {
     let debug = use_context::<Signal<DebugState>>();
     let gs = g.read();
 
-    let elapsed = if gs.is_running {
+    let elapsed = if gs.is_running() {
         gs.run_start.map(|s: web_time::Instant| s.elapsed()).unwrap_or_default()
     } else {
         gs.run_elapsed
     };
     let time_str = format_elapsed(elapsed);
-    let status = if gs.is_running { "Running" } else { "Idle" };
-    let badge_cls = if gs.is_running {
+    let status = if gs.is_running() { "Running" } else { "Idle" };
+    let badge_cls = if gs.is_running() {
         "px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#3a3a20] text-[#f0c040]"
     } else {
         "px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#203a20] text-[#80c080]"
@@ -33,7 +33,7 @@ pub fn StatusBar() -> Element {
     let run_count = gs.run_count;
     let iteration = gs.iteration;
     let tool_call_count = gs.tool_call_count;
-    let is_running = gs.is_running;
+    let is_running = gs.is_running();
     let is_exiting = gs.exiting;
     let unsafe_mode = gs.unsafe_mode;
     let ws_connected = gs.ws_connected;

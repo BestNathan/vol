@@ -114,9 +114,15 @@ impl AgentRuntime {
         let session_store = Arc::new(FileSessionEntryStore::new(&sessions_dir));
         let session = Arc::new(Session::new(session_store));
 
-        let mut config = AgentConfig::new(llm, self.tool_registry.clone(), session);
-        config.def = Some(def.clone());
-        config.working_dir = agent_dir;
+        let mut config = AgentConfig::builder()
+            .with_def(def.clone())
+            .with_llm(llm)
+            .with_tools(self.tool_registry.clone())
+            .with_session(session)
+            .with_working_dir(agent_dir.clone())
+            .build()
+            .expect("AgentConfig build failed — all required fields provided");
+
         config.mcp_manager = Some(self.mcp_manager.clone());
 
         let agent = ReActAgent::new(config);

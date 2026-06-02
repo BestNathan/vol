@@ -3,7 +3,7 @@
 use super::{AgentInput, AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext};
 use crate::react::state::ToolCallRecord;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use vol_llm_context::{ContextBuilder, ContextBuilderBuilder, ContextContributor, ContextError, ContextMessage, ContributorInfo};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData,
@@ -11,7 +11,7 @@ use vol_llm_core::{
 };
 use vol_llm_mcp::McpManager;
 use vol_llm_tool::ToolContext;
-use vol_session::{InMemoryEntryStore, Session};
+use vol_session::{InMemoryEntryStore, Session, SessionContributor};
 
 /// Agent configuration — single source of truth for ReActAgent.
 ///
@@ -30,7 +30,7 @@ pub struct AgentConfig {
     pub sandbox: Option<SandboxRef>,
 
     // === Context and plugins ===
-    pub(crate) context_builder: ContextBuilder,
+    pub(crate) context_builder: RwLock<ContextBuilder>,
     pub plugin_registry: PluginRegistry,
 
     // === MCP ===
@@ -50,17 +50,19 @@ impl AgentConfig {
 
     /// Add a context contributor.
     pub fn add_contributor(&mut self, contributor: Box<dyn ContextContributor>) {
-        self.context_builder.add_contributor(contributor);
+        self.context_builder.write().unwrap().add_contributor(contributor);
     }
 
     /// List contributor info (for RPC / UI queries).
     pub async fn contributor_infos(&self) -> Result<Vec<ContributorInfo>, ContextError> {
-        self.context_builder.contributor_infos().await
+        let cb = self.context_builder.read().unwrap().clone();
+        cb.contributor_infos().await
     }
 
     /// Get message snapshot from a specific contributor.
     pub async fn snapshot_by_name(&self, name: &str) -> Result<Vec<ContextMessage>, ContextError> {
-        self.context_builder.snapshot_by_name(name).await
+        let cb = self.context_builder.read().unwrap().clone();
+        cb.snapshot_by_name(name).await
     }
 }
 
@@ -72,7 +74,7 @@ impl Default for AgentConfig {
             tools: Arc::new(vol_llm_tool::ToolRegistry::new()),
             session: std::sync::RwLock::new(Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())))),
             sandbox: None,
-            context_builder: ContextBuilderBuilder::new(128_000).build(),
+            context_builder: RwLock::new(ContextBuilderBuilder::new(128_000).build()),
             plugin_registry: PluginRegistry::new(),
             mcp_manager: None,
             agent_id: generate_agent_id(),
@@ -178,13 +180,11 @@ impl ReActAgent {
     // ── Contributor API ──
 
     /// Add a context contributor at runtime.
-    /// Panics if config has been shared (cloned) because `Arc::get_mut` requires
-    /// a unique strong reference. This is safe when called during setup before
-    /// the agent is shared across threads.
     pub fn add_contributor(&mut self, contributor: Box<dyn ContextContributor>) {
-        Arc::get_mut(&mut self.config)
-            .expect("add_contributor called after config was shared")
+        self.config
             .context_builder
+            .write()
+            .unwrap()
             .add_contributor(contributor);
     }
 
@@ -218,13 +218,23 @@ impl ReActAgent {
     // ── Mutation (gated by is_running) ──
 
     /// Replace the session. Rejected if agent is running.
+    /// Also replaces the SessionContributor with a new one pointing to the new session.
     pub fn set_session(&self, session: Arc<Session>) -> Result<(), AgentBusyError> {
         if self.is_running() {
             return Err(AgentBusyError {
                 agent_id: self.config.agent_id.clone(),
             });
         }
+        let max_history = self.config.def.as_ref()
+            .and_then(|d| d.max_history_messages)
+            .unwrap_or(50);
+        let session_contributor = Box::new(SessionContributor::new(
+            Arc::new(tokio::sync::Mutex::new((*session).clone())),
+            max_history,
+        ));
         *self.config.session.write().unwrap() = session;
+        self.config.context_builder.write().unwrap()
+            .replace_contributor("session", session_contributor);
         Ok(())
     }
 
@@ -790,11 +800,12 @@ mod tests {
     }
 
     fn make_config() -> AgentConfig {
-        AgentConfig::new(
-            Arc::new(MockLlm),
-            Arc::new(ToolRegistry::new()),
-            Arc::new(Session::new(Arc::new(InMemoryEntryStore::new()))),
-        )
+        AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(Arc::new(ToolRegistry::new()))
+            .with_session(Arc::new(Session::new(Arc::new(InMemoryEntryStore::new()))))
+            .build()
+            .expect("Test config build failed")
     }
 
     #[test]

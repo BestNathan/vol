@@ -42,6 +42,16 @@ impl ContextBuilder {
         self.contributors.push(contributor);
     }
 
+    /// Replace a contributor by name. If no contributor with the given name
+    /// exists, adds the new contributor as a fallback.
+    pub fn replace_contributor(&mut self, name: &str, contributor: Box<dyn ContextContributor>) {
+        if let Some(pos) = self.contributors.iter().position(|c| c.name() == name) {
+            self.contributors[pos] = contributor;
+        } else {
+            self.contributors.push(contributor);
+        }
+    }
+
     /// Get a reference to the token budget.
     pub fn token_budget(&self) -> &TokenBudget {
         &self.token_budget

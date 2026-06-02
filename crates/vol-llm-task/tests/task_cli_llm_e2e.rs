@@ -21,6 +21,8 @@ fn create_test_llm() -> Arc<dyn vol_llm_core::LLMClient> {
             model: "qwen3.6-plus".to_string(),
             api_key: Secret::literal("not-needed"),
             base_url: "http://192.168.2.162:31693".to_string(),
+            body: None,
+            headers: None,
         },
     };
     let registry = LLMProviderRegistry::from_configs(&[llm_config]).unwrap();

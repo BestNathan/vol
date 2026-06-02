@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use vol_llm_agent::react::AgentConfig;
 use vol_llm_core::LLMClient;
 use vol_llm_mcp::McpConfig;
 use vol_llm_mcp::McpManager;
@@ -179,14 +180,16 @@ impl AgentServerCore {
         let session_store = Arc::new(FileSessionEntryStore::new(&sessions_dir));
         let session = Arc::new(vol_session::Session::new(session_store));
 
-        let mut config = vol_llm_agent::react::AgentConfig::new(llm, tools, session);
-        config.def = Some(def);
-        // AgentConfig.working_dir 控制日志等内部路径 → agent 私有目录
-        config.working_dir = agent_dir.clone();
-        config.mcp_manager = Some(mcp);
+        let mut config = AgentConfig::builder()
+            .with_def(def.clone())
+            .with_llm(llm)
+            .with_tools(tools)
+            .with_session(session)
+            .with_working_dir(agent_dir.clone())
+            .build()
+            .expect("AgentConfig build failed — LLM, tools, and session are all provided");
 
-        // Populate context builder with standard contributors
-        config.init_standard_contributors(&self.skill_loader);
+        config.mcp_manager = Some(mcp);
 
         let holder = ConnectionHolder::new(
             agent_id.clone(),
@@ -490,7 +493,12 @@ impl AgentServerCore {
 
             let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
             let tools: Arc<vol_llm_tool::ToolRegistry> = Arc::new(vol_llm_tool::ToolRegistry::new());
-            let config = AgentConfig::new(Arc::new(TestLlm), tools, session);
+            let config = AgentConfig::builder()
+                .with_llm(Arc::new(TestLlm))
+                .with_tools(tools)
+                .with_session(session)
+                .build()
+                .expect("AgentConfig build failed for test");
             let agent = ReActAgent::new(config);
             let dispatcher = Arc::new(AgentDispatcher::new(agent));
             let holder = Arc::new(ConnectionHolder::new("test_agent".to_string(), "client".to_string(), None));

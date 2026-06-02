@@ -11,7 +11,7 @@ use vol_llm_core::SandboxRef;
 use vol_llm_mcp::{McpConfig, McpManager};
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::{ExecutableTool, ToolRegistry};
-use vol_session::{InMemoryEntryStore, Session};
+use vol_session::{InMemoryEntryStore, Session, SessionContributor};
 
 /// Builder for AgentConfig.
 pub struct AgentConfigBuilder {
@@ -224,6 +224,15 @@ impl AgentConfigBuilder {
             // 2. SkillInjector — always
             b = b.add_contributor(Box::new(SkillInjector::new(skill_loader)));
 
+            // 2.5. SessionContributor — always, points to current session
+            let max_history = self.def.as_ref()
+                .and_then(|d| d.max_history_messages)
+                .unwrap_or(50);
+            b = b.add_contributor(Box::new(SessionContributor::new(
+                Arc::new(tokio::sync::Mutex::new((*session).clone())),
+                max_history,
+            )));
+
             // 3. Clone existing context_builder contributors (if any)
             if let Some(ref cb) = self.context_builder {
                 b = b.add_contributors_from(cb);
@@ -243,7 +252,7 @@ impl AgentConfigBuilder {
             tools: Arc::new(tools),
             session: std::sync::RwLock::new(session),
             sandbox: self.sandbox,
-            context_builder,
+            context_builder: std::sync::RwLock::new(context_builder),
             plugin_registry: self.plugin_registry,
             mcp_manager: self.mcp_manager,
             agent_id: working_dir
@@ -340,7 +349,8 @@ mod tests {
             .with_system_prompt("You are a helpful assistant.".to_string())
             .build()
             .unwrap();
-        let names = config.context_builder.contributor_names();
+        let guard = config.context_builder.read().unwrap();
+        let names = guard.contributor_names();
         assert!(names.contains(&"system"));
     }
 
@@ -376,7 +386,8 @@ mod tests {
             .build()
             .unwrap();
         // SkillInjector should always be added to context builder
-        let names = config.context_builder.contributor_names();
+        let cb = config.context_builder.read().unwrap();
+        let names: Vec<&str> = cb.contributor_names();
         assert!(names.iter().any(|n| n.contains("skill")), "SkillInjector should be present, got: {:?}", names);
     }
 
