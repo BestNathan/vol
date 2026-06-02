@@ -160,9 +160,9 @@ data:
     [[notifications]]
     id = "feishu-alerts"
     type = "feishu"
-    app_id = "cli_a936b13197385bde"
-    app_secret = "JnWnFrrOvzHi4deDmFY9kd1NMGbiWuNz"
-    receive_id = "oc_c29208d94757e2aefd97bfa5f57e0b26"
+    app_id = "<your-feishu-app-id>"
+    app_secret = "<your-feishu-app-secret>"
+    receive_id = "<your-feishu-receive-id>"
     enabled = true
 
     [[notifications]]

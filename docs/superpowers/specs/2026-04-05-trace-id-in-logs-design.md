@@ -132,7 +132,7 @@ fmt::layer()
 2026-04-05T12:00:00.000Z INFO [tr_0000018c9a62f3d0] vol_datasource::volatility: received ticker crates/vol-datasource/src/volatility.rs:198 symbol=BTC instrument_name=BTC-5APR24-70000-C iv=0.65 dte=5
 2026-04-05T12:00:00.001Z INFO [tr_0000018c9a62f3d0] vol_engine::engine: rule evaluated crates/vol-engine/src/engine.rs:163 rule_id=absolute-iv-btc rule_type=absolute-iv tenor=short
 2026-04-05T12:00:00.002Z INFO [tr_0000018c9a62f3d0] vol_alert::absolute_iv: alert triggered crates/vol-alert/src/absolute_iv.rs:45 alert_type=absolute-iv symbol=BTC threshold=0.55 actual=0.65
-2026-04-05T12:00:00.003Z INFO [tr_0000018c9a62f3d0] vol_notification::feishu: notification sent crates/vol-notification/src/feishu.rs:301 trace_id=tr_0000018c9a62f3d0 recipient=oc_c29208d94757e2aefd97bfa5f57e0b26
+2026-04-05T12:00:00.003Z INFO [tr_0000018c9a62f3d0] vol_notification::feishu: notification sent crates/vol-notification/src/feishu.rs:301 trace_id=tr_0000018c9a62f3d0 recipient=oc_example_chat_id
 ```
 
 ### File JSON Output (After)

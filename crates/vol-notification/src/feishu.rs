@@ -458,7 +458,7 @@ mod tests {
         let config_oc = FeishuConfig {
             app_id: Some("test".to_string()),
             app_secret: Some("test".to_string()),
-            receive_id: Some("oc_c29208d94757e2aefd97bfa5f57e0b26".to_string()),
+            receive_id: Some("oc_example_chat_id".to_string()),
             message_template: "test".to_string(),
         };
         let handler_oc = FeishuNotification::new(config_oc).unwrap();

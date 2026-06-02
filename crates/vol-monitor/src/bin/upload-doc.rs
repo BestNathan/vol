@@ -11,9 +11,10 @@ use std::fs;
 use tracing::{error, info, warn};
 use tracing_subscriber::{self, EnvFilter};
 
-// Feishu credentials from config
-const APP_ID: &str = "cli_a936b13197385bde";
-const APP_SECRET: &str = "JnWnFrrOvzHi4deDmFY9kd1NMGbiWuNz";
+// Feishu credentials are read from the environment at runtime.
+// Set FEISHU_APP_ID and FEISHU_APP_SECRET before running:
+//   export FEISHU_APP_ID="cli_xxx"
+//   export FEISHU_APP_SECRET="xxx"
 // Note: Folder token should start with "fldcn" or "fltdcn"
 // Using root folder for now - user should manually move file
 const PARENT_FOLDER_TOKEN: &str = ""; // Empty means root folder
@@ -151,9 +152,9 @@ Content-Type: application/json
 
 ```toml
 [notifications.feishu]
-app_id = "cli_a936b13197385bde"
-app_secret = "JnWnFrrOvzHi4deDmFY9kd1NMGbiWuNz"
-receive_id = "oc_c29208d94757e2aefd97bfa5f57e0b26"
+app_id = "<your-feishu-app-id>"
+app_secret = "<your-feishu-app-secret>"
+receive_id = "<your-feishu-receive-id>"
 message_template = "🚨 {tenor} {alert_type}: {symbol} | IV={value:.1}%"
 ```
 
@@ -234,9 +235,14 @@ cargo build --release
 async fn get_access_token(client: &Client) -> Result<String, Box<dyn std::error::Error>> {
     let url = "https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal";
 
+    let app_id = std::env::var("FEISHU_APP_ID")
+        .map_err(|_| "FEISHU_APP_ID environment variable is not set")?;
+    let app_secret = std::env::var("FEISHU_APP_SECRET")
+        .map_err(|_| "FEISHU_APP_SECRET environment variable is not set")?;
+
     let body = json!({
-        "app_id": APP_ID,
-        "app_secret": APP_SECRET
+        "app_id": app_id,
+        "app_secret": app_secret
     });
 
     let response: reqwest::Response = client
