@@ -14,6 +14,7 @@ pub mod skill_detail_dialog;
 pub mod status_bar;
 pub mod tools_panel;
 pub mod tasks_panel;
+pub mod task_dep_graph;
 pub mod tools_tab;
 pub mod mcp_panel;
 pub mod mcp_tool_dialog;
