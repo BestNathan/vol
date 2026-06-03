@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 use crate::state::TaskState;
 
-fn status_color(status: &str) -> &'static str {
+pub(crate) fn status_color(status: &str) -> &'static str {
     match status {
         "pending" => "#888",
         "running" => "#4080ff",

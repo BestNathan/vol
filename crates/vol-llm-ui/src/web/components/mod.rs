@@ -44,6 +44,7 @@ pub use skill_detail_dialog::SkillDetailDialog;
 pub use status_bar::StatusBar;
 pub use tools_panel::ToolsPanel;
 pub use tasks_panel::TasksPanel;
+pub use task_dep_graph::TaskDepGraph;
 pub use tools_tab::ToolsTabContent;
 pub use debug_panel::DebugPanel;
 pub use workspace::WorkspacePanel;

@@ -48,7 +48,7 @@ pub struct AgentListEntry {
     pub scope: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TaskEntry {
     pub id: u64,
     pub status: String,
