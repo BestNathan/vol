@@ -1263,7 +1263,7 @@ mod tests {
 
     #[test]
     fn test_ui_event_agent_start_serializes() {
-        let event = UiEvent::AgentStart { input: "hello".into() };
+        let event = UiEvent::AgentStart { run_id: "test-run".into(), input: "hello".into() };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""type":"agent_start""#));
         assert!(json.contains(r#""input":"hello""#));
@@ -1303,7 +1303,7 @@ mod tests {
     #[test]
     fn test_ui_state_apply_agent_start() {
         let mut state = UiState::new("sess-1".into(), ".", "local");
-        state.apply(UiEvent::AgentStart { input: "fix the bug".into() });
+        state.apply(UiEvent::AgentStart { run_id: "test-run".into(), input: "fix the bug".into() });
         assert!(state.is_running);
         assert_eq!(state.run_count, 1);
         assert_eq!(state.conversation.len(), 1);
@@ -1367,7 +1367,7 @@ mod tests {
 
     #[test]
     fn test_ui_event_kind_mapping() {
-        assert_eq!(UiEvent::AgentStart { input: "hi".into() }.kind(), UiEventKind::AgentStart);
+        assert_eq!(UiEvent::AgentStart { run_id: "test-run".into(), input: "hi".into() }.kind(), UiEventKind::AgentStart);
         assert_eq!(UiEvent::WsConnected.kind(), UiEventKind::WsConnected);
         assert_eq!(UiEvent::WsDisconnected { reason: None }.kind(), UiEventKind::WsDisconnected);
         assert_eq!(UiEvent::ToolCallBegin { tool_name: "x".into(), arguments: "{}".into() }.kind(), UiEventKind::ToolCallBegin);
