@@ -37,25 +37,27 @@ pub struct GraphLayout {
 pub fn build_graph_layout(tasks: &[TaskEntry], center: u64) -> GraphLayout {
     let index: HashMap<u64, &TaskEntry> = tasks.iter().map(|t| (t.id, t)).collect();
 
-    let mut layer_of: HashMap<u64, i32> = HashMap::new();
+    // Phase 1: discover the node set and classify each node's direction
+    // relative to the center: -1 = upstream (reached via `dependencies`),
+    // +1 = downstream (reached via `blocks`), 0 = center. A shared `visited`
+    // set makes discovery cycle-safe.
+    let mut dir_of: HashMap<u64, i32> = HashMap::new();
     let mut known_of: HashMap<u64, bool> = HashMap::new();
     let mut visited: HashSet<u64> = HashSet::new();
     let mut discovery: Vec<u64> = Vec::new();
 
-    // Center task is layer 0.
     visited.insert(center);
-    layer_of.insert(center, 0);
+    dir_of.insert(center, 0);
     known_of.insert(center, index.contains_key(&center));
     discovery.push(center);
 
-    // Upstream BFS along `dependencies` (one layer up per hop).
+    // Upstream discovery via `dependencies`.
     let mut up: VecDeque<u64> = VecDeque::from([center]);
     while let Some(cur) = up.pop_front() {
         if let Some(task) = index.get(&cur) {
-            let cur_layer = layer_of[&cur];
             for &dep in &task.dependencies {
                 if visited.insert(dep) {
-                    layer_of.insert(dep, cur_layer - 1);
+                    dir_of.insert(dep, -1);
                     let known = index.contains_key(&dep);
                     known_of.insert(dep, known);
                     discovery.push(dep);
@@ -67,14 +69,13 @@ pub fn build_graph_layout(tasks: &[TaskEntry], center: u64) -> GraphLayout {
         }
     }
 
-    // Downstream BFS along `blocks` (one layer down per hop).
+    // Downstream discovery via `blocks`.
     let mut down: VecDeque<u64> = VecDeque::from([center]);
     while let Some(cur) = down.pop_front() {
         if let Some(task) = index.get(&cur) {
-            let cur_layer = layer_of[&cur];
             for &blk in &task.blocks {
                 if visited.insert(blk) {
-                    layer_of.insert(blk, cur_layer + 1);
+                    dir_of.insert(blk, 1);
                     let known = index.contains_key(&blk);
                     known_of.insert(blk, known);
                     discovery.push(blk);
@@ -83,6 +84,43 @@ pub fn build_graph_layout(tasks: &[TaskEntry], center: u64) -> GraphLayout {
                     }
                 }
             }
+        }
+    }
+
+    // Phase 2: longest-path layering so a node sits below ALL of its upstream
+    // dependencies and above ALL of its downstream dependents — every edge then
+    // points one or more layers downward. Relaxation is order-independent at the
+    // fixpoint; it is capped at the node count so it terminates even if the
+    // (normally acyclic) graph happens to contain a cycle.
+    let mut layer_of: HashMap<u64, i32> = HashMap::new();
+    for &id in &discovery {
+        layer_of.insert(id, dir_of[&id]);
+    }
+    layer_of.insert(center, 0);
+
+    for _ in 0..discovery.len() {
+        let mut changed = false;
+        for &id in &discovery {
+            if let Some(task) = index.get(&id) {
+                let here = layer_of[&id];
+                // Push each downstream block to at least one layer below `id`.
+                for &blk in &task.blocks {
+                    if dir_of.get(&blk).copied() == Some(1) && here + 1 > layer_of[&blk] {
+                        layer_of.insert(blk, here + 1);
+                        changed = true;
+                    }
+                }
+                // Push each upstream dependency to at least one layer above `id`.
+                for &dep in &task.dependencies {
+                    if dir_of.get(&dep).copied() == Some(-1) && here - 1 < layer_of[&dep] {
+                        layer_of.insert(dep, here - 1);
+                        changed = true;
+                    }
+                }
+            }
+        }
+        if !changed {
+            break;
         }
     }
 
@@ -96,8 +134,9 @@ pub fn build_graph_layout(tasks: &[TaskEntry], center: u64) -> GraphLayout {
         nodes.push(GraphNode { id: *id, layer, order, known: known_of[id] });
     }
 
-    // Edges (deduped). `dependencies` and `blocks` are inverse relations, so
-    // pulling from both and deduping covers edges to unknown nodes too.
+    // Edges (deduped). `dependencies` and `blocks` are inverse relations, and
+    // iterating `discovery` (which includes unknown referenced ids) means edges
+    // to unknown nodes are emitted too.
     let mut seen: HashSet<(u64, u64)> = HashSet::new();
     let mut edges: Vec<GraphEdge> = Vec::new();
     for id in &discovery {
@@ -182,6 +221,26 @@ mod tests {
         assert!(has_edge(&layout, 2, 4));
         assert!(has_edge(&layout, 3, 4));
         assert_ne!(node(&layout, 2).order, node(&layout, 3).order);
+    }
+
+    #[test]
+    fn asymmetric_paths_use_longest_path_layer() {
+        // 1 blocks 2 and 4 directly; 2 -> 3 -> 4 is a longer path to 4.
+        let tasks = vec![
+            t(1, vec![], vec![2, 4]),
+            t(2, vec![1], vec![3]),
+            t(3, vec![2], vec![4]),
+            t(4, vec![1, 3], vec![]),
+        ];
+        let layout = build_graph_layout(&tasks, 1);
+        assert_eq!(node(&layout, 1).layer, 0);
+        assert_eq!(node(&layout, 2).layer, 1);
+        assert_eq!(node(&layout, 3).layer, 2);
+        // 4 is reachable at depth 1 (1->4) and depth 3 (1->2->3->4); longest-path
+        // layering must place it at the deeper layer so 3->4 points downward.
+        assert_eq!(node(&layout, 4).layer, 3);
+        assert!(has_edge(&layout, 1, 4));
+        assert!(has_edge(&layout, 3, 4));
     }
 
     #[test]
