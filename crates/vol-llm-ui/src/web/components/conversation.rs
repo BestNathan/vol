@@ -9,6 +9,43 @@ use crate::state::{
     ConversationEntry, ConversationState, GlobalState, UiEvent,
 };
 
+/// Escapes the five HTML-significant characters so a raw string is safe to
+/// embed inside `<pre data-md-raw>...</pre>` without breaking parsing.
+///
+/// Used by [`markdown_container`] to wrap LLM-produced markdown for the
+/// JS-side renderer (`assets/markdown.js`).
+pub fn html_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Renders a container that `assets/markdown.js` picks up and replaces with
+/// rendered markdown. The `<pre data-md-raw>` wrapper preserves whitespace
+/// and acts as a plain-text fallback if the JS pipeline is unavailable.
+///
+/// See `docs/superpowers/specs/2026-06-04-rich-text-conversation-design.md`.
+fn markdown_container(text: &str, extra_class: &str) -> Element {
+    let raw_html = format!("<pre data-md-raw>{}</pre>", html_escape(text));
+    let class = format!("text-[#e0e0e0] leading-[1.5] {}", extra_class);
+    rsx! {
+        div {
+            class: "{class}",
+            "data-md": "1",
+            dangerous_inner_html: "{raw_html}"
+        }
+    }
+}
+
 /// Data for the tool call detail modal.
 #[derive(Debug, Clone, PartialEq)]
 struct ToolDetail {
@@ -180,7 +217,13 @@ pub fn ConversationView() -> Element {
         rsx! { TimelineEntry { entry, is_last, is_running, index, entries: entries.clone(), detail } }
     }).collect();
 
-    // Auto-scroll
+    // Auto-scroll: read current state so VNode always reflects it
+    let auto_scroll = guard.active_agent.as_ref()
+        .and_then(|id| guard.agents.get(id))
+        .map(|a| a.auto_scroll)
+        .unwrap_or(true);
+    drop(guard);
+
     let signal_clone = signal.clone();
     use_effect(move || {
         let auto_scroll = signal_clone.with(|s| {
@@ -191,7 +234,7 @@ pub fn ConversationView() -> Element {
         });
         if auto_scroll {
             let _ = dioxus::document::eval(
-                "setTimeout(()=>{const e=document.querySelector('[data-scroll]');if(e)e.scrollTop=e.scrollHeight;},30)"
+                "setTimeout(()=>{const e=document.querySelector('[data-scroll]');if(e&&e.getAttribute('data-auto-scroll')!=='0'){e.setAttribute('data-scroll-programmatic','1');e.scrollTop=e.scrollHeight;}},30)"
             );
         }
     });
@@ -202,21 +245,34 @@ pub fn ConversationView() -> Element {
             if let Some(doc) = window.document() {
                 if let Some(el) = doc.query_selector("[data-scroll]").ok().flatten() {
                     if let Ok(el) = el.dyn_into::<HtmlElement>() {
-                        let at_bottom = el.scroll_top() + el.client_height() >= el.scroll_height() - 50;
+                        // Skip scroll events triggered by our own JS (auto-scroll)
+                        let programmatic = el.get_attribute("data-scroll-programmatic")
+                            .map(|v| v == "1")
+                            .unwrap_or(false);
+                        if programmatic {
+                            let _ = el.set_attribute("data-scroll-programmatic", "0");
+                            return;
+                        }
+                        // User-initiated scroll: tight 2px threshold — any scroll up cancels stick
+                        let at_bottom = el.scroll_top() + el.client_height() >= el.scroll_height() - 2;
                         let mut s = signal_scroll.write_unchecked();
                         let agent_id = s.active_agent.clone().unwrap_or_default();
                         let ac = s.get_or_create(&agent_id);
                         ac.auto_scroll = at_bottom;
+                        let _ = el.set_attribute("data-auto-scroll", if at_bottom { "1" } else { "0" });
                     }
                 }
             }
         }
     };
 
+    let auto_scroll_attr = if auto_scroll { "1" } else { "0" };
+
     rsx! {
         div {
             class: "flex-1 overflow-y-auto p-1.5 sm:p-2.5 min-h-0",
             "data-scroll": "1",
+            "data-auto-scroll": auto_scroll_attr,
             onscroll: on_scroll,
             {messages.into_iter()}
         }
@@ -254,7 +310,7 @@ fn TimelineEntry(
             if content.is_empty() {
                 rsx! { div { class: "text-[#888]", "Generating..." } }
             } else {
-                rsx! { div { class: "text-[#e0e0e0]", {content} } }
+                markdown_container(&content, "")
             }
         }
         ConversationEntry::ToolCall { tool_name, ref arg_preview, .. } => {
@@ -294,12 +350,14 @@ fn TimelineEntry(
                         span { class: "text-[#aaa] whitespace-nowrap", "{tool_name}" }
                         span { class: "text-[#666] text-[10px] opacity-0 group-hover:opacity-100 ml-auto whitespace-nowrap", "\u{67e5}\u{770b}\u{00bb}" }
                     }
-                    div { class: "text-[#888] text-xs mt-0.5 font-mono line-clamp-2 overflow-hidden", "{preview}" }
+                    div { class: "text-[#888] text-xs mt-0.5 line-clamp-2 overflow-hidden",
+                        {markdown_container(&preview, "font-mono")}
+                    }
                 }
             }
         }
         ConversationEntry::AgentAnswer { text } => {
-            rsx! { div { class: "text-[#e0e0e0] whitespace-pre-wrap leading-[1.5]", {text} } }
+            markdown_container(&text, "")
         }
         ConversationEntry::RunSummary { iterations, tool_calls, elapsed_ms } => {
             let iw = if iterations == 1 { "iteration" } else { "iterations" };
@@ -392,8 +450,8 @@ fn ToolDetailModal(detail: ToolDetail, detail_signal: Signal<Option<ToolDetail>>
                     if let Some(ref res) = result_display {
                         div {
                             div { class: "text-[#888] text-xs mb-1 font-bold", "Result" }
-                            div { class: "text-[#ccc] font-mono text-xs bg-[#111128] rounded p-2.5 whitespace-pre-wrap break-all max-h-[240px] overflow-y-auto",
-                                "{res}"
+                            div { class: "text-[#ccc] text-xs bg-[#111128] rounded p-2.5 break-all max-h-[240px] overflow-y-auto",
+                                {markdown_container(res, "font-mono text-xs")}
                             }
                         }
                     } else if detail.result.is_none() && detail.success.is_none() {
@@ -411,5 +469,30 @@ fn format_json_pretty(raw: &str) -> String {
         serde_json::to_string_pretty(&val).unwrap_or_else(|_| raw.to_string())
     } else {
         raw.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_html_escape_special_chars() {
+        assert_eq!(html_escape("a & b"), "a &amp; b");
+        assert_eq!(html_escape("<script>"), "&lt;script&gt;");
+        assert_eq!(html_escape("a \"quoted\" word"), "a &quot;quoted&quot; word");
+        assert_eq!(html_escape("'apostrophe'"), "&#39;apostrophe&#39;");
+    }
+
+    #[test]
+    fn test_html_escape_plain_text() {
+        assert_eq!(html_escape("hello world"), "hello world");
+        assert_eq!(html_escape(""), "");
+        assert_eq!(html_escape("中文"), "中文");
+    }
+
+    #[test]
+    fn test_html_escape_no_double_escape() {
+        assert_eq!(html_escape("&amp;"), "&amp;amp;");
     }
 }
