@@ -2557,6 +2557,13 @@
       }
     }
   }
+  .hover\:text-\[\#a0c0ff\] {
+    &:hover {
+      @media (hover: hover) {
+        color: #a0c0ff;
+      }
+    }
+  }
   .hover\:text-\[\#aaa\] {
     &:hover {
       @media (hover: hover) {
@@ -2596,6 +2603,13 @@
     &:hover {
       @media (hover: hover) {
         color: #ff6060;
+      }
+    }
+  }
+  .hover\:text-\[\#fff\] {
+    &:hover {
+      @media (hover: hover) {
+        color: #fff;
       }
     }
   }
