@@ -3,15 +3,15 @@ type: entity
 category: product
 tags: [crate, ui, tui, web, rust, frontend]
 created: 2026-05-08
-updated: 2026-05-29 (remove-vol-agent-manager)
-source_count: 23
+updated: 2026-06-04 (task-dependency-graph-view)
+source_count: 24
 ---
 
 # vol-llm-ui Crate
 
 **Category:** Rust crate — Shared UI state model and connection abstraction, with TUI and Web frontends including FileContentView file tabs
 
-**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[tailwind-css-migration]], [[connection-state-dashboard]], [[mcp-state-types]], [[schema-form-pattern]], [[skills-panel-json-rpc]], [[drawer-ui-pattern]], [[file-tree-sidebar-scroll-fix]], [[mobile-file-tree-rail]], [[mobile-ui-refinements]], [[file-tree-single-click-expand-fix]], [[file-tree-collapsed-state-follow-up]], [[file-tree-chevron-glyph-refinement]]
+**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[tailwind-css-migration]], [[connection-state-dashboard]], [[mcp-state-types]], [[schema-form-pattern]], [[skills-panel-json-rpc]], [[drawer-ui-pattern]], [[file-tree-sidebar-scroll-fix]], [[mobile-file-tree-rail]], [[mobile-ui-refinements]], [[file-tree-single-click-expand-fix]], [[file-tree-collapsed-state-follow-up]], [[file-tree-chevron-glyph-refinement]], [[dependency-graph-visualization]]
 
 ## Overview
 
@@ -38,7 +38,8 @@ Both modes implement the same trait interfaces, so TUI (ratatui) and Web (Dioxus
 - `make web-css` is the canonical persistent Tailwind CSS watcher for web development [[web-dev-environment-claudemd]]
 - Project skill `.claude/skills/vol-web-dev/SKILL.md` documents the three-service startup and common debugging workflow [[web-dev-environment-claudemd]]
 - Web startup requires three services: Tailwind CSS compilation/watch, Dioxus dev server on port 8080, and JSON-RPC backend on port 3001 [[web-dev-environment-claudemd]]
-- Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView`, `TreeNode`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel`, `McpPanel`, `ToolCallDialog`, `SkillDetailDialog` [[task-8-dioxus-web-frontend]], [[task-5-file-content-view]], [[lazy-load-dir-tree]], [[task-6-sessions-tab-wiring]], [[connection-state-dashboard]], [[tool-call-dialog-component]], [[skills-panel-content]]
+- Web components: `App`, `StatusBar`, `ConversationView`, `ToolsPanel`, `InputArea`, `WorkspacePanel`, `SkillsPanel`, `LogViewer`, `ApprovalDialog`, `FileTree`, `ToolsTabContent`, `FileContentView`, `TreeNode`, `TabBar`, `TabContent`, `SessionsPanel`, `AgentsPanel`, `ConnectionStatePanel`, `McpPanel`, `ToolCallDialog`, `SkillDetailDialog`, `TasksPanel`, `TaskDepGraph` [[task-8-dioxus-web-frontend]], [[task-5-file-content-view]], [[lazy-load-dir-tree]], [[task-6-sessions-tab-wiring]], [[connection-state-dashboard]], [[tool-call-dialog-component]], [[skills-panel-content]], [[task-dependency-graph-view]]
+- `TasksPanel` Tasks tab renders the task list (read-only, via `task.list`/`task.get`); each row has a "⇄ deps" button opening the `TaskDepGraph` modal — an SVG node-link dependency graph of the task's transitive closure [[dependency-graph-visualization]], [[task-dependency-graph-view]]
 - `JsonRpcClient` gains `reconnect()` method — swaps internal WebSocket at runtime while preserving pending callbacks and event channels [[frontend-auto-reconnect]]
 - Web state: `EventBus` with `UiEventKind` routing, per-component local `Signal<T>`, shared `Signal<GlobalState>` / `Signal<ApprovalUiState>` via `use_context_provider` [[dioxus-signal-pattern]], [[event-bus-pattern]], [[split-signal-state]]
 - `SubscriptionSet` with `Drop` impl for automatic cleanup on component unmount [[event-bus-pattern]]
@@ -91,3 +92,4 @@ FileOperations trait ───┬── LocalConnection (direct filesystem)
 - **2026-05-18**: FileTree chevron glyph refinement — directory expand/collapse control now uses a CSS-drawn chevron, points right when collapsed, and rotates downward when expanded [[file-tree-chevron-glyph-refinement]]
 - **2026-05-28**: Web development environment guidance added to `CLAUDE.md` and `.claude/skills/vol-web-dev/SKILL.md`; `make web-css` now runs Tailwind in persistent watch mode with `--watch=always`; required tools include Dioxus CLI 0.6.x, `cargo-watch`, Node/npm, `wasm32-unknown-unknown`, and `crates/vol-llm-ui` npm dependencies; Dioxus 404 fallback uses `dx serve --platform web` [[web-dev-environment-claudemd]]
 - **2026-05-29**: Legacy React `frontend/` and obsolete `vol-agent-manager` backend removed; `crates/vol-llm-ui` remains the sole active web frontend, backed by `vol-llm-agent-channel`'s JSON-RPC service [[remove-vol-agent-manager]]
+- **2026-06-04**: `TaskDepGraph` component added — per-row "⇄ deps" button in `TasksPanel` opens a modal rendering an SVG node-link dependency graph (full transitive closure, longest-path layered) centered on the task; status-colored nodes, gold ★ center, gray dashed "(not loaded)" nodes, click-to-detail panel; panel-local `graph_target: Signal<Option<u64>>`, no global state; `TaskEntry` gained `PartialEq`, `status_color` promoted to `pub(crate)`; pure `build_graph_layout` with 7 unit tests [[dependency-graph-visualization]], [[task-dependency-graph-view]]

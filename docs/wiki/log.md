@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-06-04] ingest | Task Dependency Graph View
+- Created sources: [[task-dependency-graph-view]]
+- Created concepts: [[dependency-graph-visualization]]
+- Updated entities: [[vol-llm-ui-crate]] (TasksPanel/TaskDepGraph components, "⇄ deps" button, TaskEntry PartialEq, pub(crate) status_color, timeline entry, source_count 23→24)
+- Updated index: new concept + source entries, updated date
+- Cross-references added: 8
+- Changes: Added a per-row "⇄ deps" button to the Tasks tab that opens an SVG node-link dependency-graph modal (`TaskDepGraph`) centered on the task. Pure `build_graph_layout` uses longest-path (Sugiyama-style) layering of the full transitive closure (upstream `dependencies` above, downstream `blocks` below), is cycle-safe, marks not-loaded nodes, and skips self-loops; 7 unit tests. Read-only, frontend-only — no backend changes (data already on the wire). Panel-local `graph_target` signal; modal reuses the approval_dialog shell.
+
 ## [2026-05-29] ingest | Remove vol-agent-manager and Legacy Frontend
 - Created sources: [[remove-vol-agent-manager]]
 - Updated entities: [[vol-llm-ui-crate]], [[vol-llm-agent-channel-crate]]

@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-05-29 (remove-vol-agent-manager)
+Last updated: 2026-06-04 (task-dependency-graph-view)
 
 ## Entities
 
@@ -23,6 +23,7 @@ Last updated: 2026-05-29 (remove-vol-agent-manager)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[dependency-graph-visualization]] | Layered SVG node-link graph of task dependencies: pure layout fn + Dioxus component | active | 2026-06-04 |
 | [[react-pattern]] | Reason-Act-Observe agent execution loop | active | 2026-05-04 |
 | [[agent-plugin-system]] | Event stream interception architecture for cross-cutting concerns | active | 2026-05-04 |
 | [[plugin-actions]] | Plugin return types: Continue, ShortCircuit, Skip, Abort | active | 2026-05-04 |
@@ -79,6 +80,7 @@ Last updated: 2026-05-29 (remove-vol-agent-manager)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[task-dependency-graph-view]] | Tasks tab "⇄ deps" button + SVG dependency-graph modal (read-only, frontend-only) | active | 2026-06-04 |
 | [[agent-channel-examples]] | WS + HTTP service examples using channel primitives | active | 2026-05-07 |
 | [[react-agent-docs]] | ReAct Agent plugin system documentation and test report | active | 2026-05-04 |
 | [[agent-tool-design]] | AI Agent tool design: Tool trait, registry, built-in tools, ReAct loop | active | 2026-05-04 |
