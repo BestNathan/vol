@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-06-04 (task-dependency-graph-view)
+Last updated: 2026-06-04 (rich-text-conversation)
 
 ## Entities
 
@@ -23,6 +23,7 @@ Last updated: 2026-06-04 (task-dependency-graph-view)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[rich-text-conversation]] | Markdown rendering for chat (Dioxus handoff to marked.js + DOMPurify + highlight.js) | active | 2026-06-04 |
 | [[dependency-graph-visualization]] | Layered SVG node-link graph of task dependencies: pure layout fn + Dioxus component | active | 2026-06-04 |
 | [[react-pattern]] | Reason-Act-Observe agent execution loop | active | 2026-05-04 |
 | [[agent-plugin-system]] | Event stream interception architecture for cross-cutting concerns | active | 2026-05-04 |
@@ -80,6 +81,7 @@ Last updated: 2026-06-04 (task-dependency-graph-view)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[rich-text-conversation-design]] | Design spec for markdown rendering in chat (Dioxus + marked.js) | active | 2026-06-04 |
 | [[task-dependency-graph-view]] | Tasks tab "⇄ deps" button + SVG dependency-graph modal (read-only, frontend-only) | active | 2026-06-04 |
 | [[agent-channel-examples]] | WS + HTTP service examples using channel primitives | active | 2026-05-07 |
 | [[react-agent-docs]] | ReAct Agent plugin system documentation and test report | active | 2026-05-04 |

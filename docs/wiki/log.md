@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-06-04] ingest | Rich Text Conversation Rendering
+- Created sources: [[rich-text-conversation-design]]
+- Created concepts: [[rich-text-conversation]]
+- Updated entities: [[vol-llm-ui-crate]] (conversation.rs: html_escape, markdown_container, 4 render sites; app.rs: include_str embed; index.html: CDN scripts; new assets: markdown.js, markdown.css)
+- Updated index: new concept + source entries, updated date
+- Cross-references added: 6
+- Changes: Added markdown rendering pipeline for agent answers and tool results. Dioxus emits <div data-md="1"><pre data-md-raw>...</pre></div>; embedded markdown.js (MutationObserver + 100ms debounce) renders via marked + DOMPurify + highlight.js. CDN scripts loaded synchronously in index.html. 10 pre-registered languages for syntax highlighting. 2px scroll threshold for stick-to-bottom escape.
+
 ## [2026-06-04] ingest | Task Dependency Graph View
 - Created sources: [[task-dependency-graph-view]]
 - Created concepts: [[dependency-graph-visualization]]
