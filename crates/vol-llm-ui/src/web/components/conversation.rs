@@ -351,7 +351,7 @@ fn TimelineEntry(
                         span { class: "text-[#666] text-[10px] opacity-0 group-hover:opacity-100 ml-auto whitespace-nowrap", "\u{67e5}\u{770b}\u{00bb}" }
                     }
                     div { class: "text-[#888] text-xs mt-0.5 line-clamp-2 overflow-hidden",
-                        {markdown_container(&preview, "font-mono")}
+                        {markdown_container(preview, "font-mono")}
                     }
                 }
             }
