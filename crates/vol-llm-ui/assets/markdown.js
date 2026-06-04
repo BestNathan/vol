@@ -71,6 +71,19 @@
         return String(h);
     }
 
+    /**
+     * If the conversation scroll container has data-auto-scroll="1" (user is
+     * sticky-at-bottom), scroll it to the bottom. Sets data-scroll-programmatic
+     * so the Rust onscroll handler skips this event without toggling state.
+     */
+    function maybeStickToBottom() {
+        const el = document.querySelector('[data-scroll]');
+        if (!el) return;
+        if (el.getAttribute('data-auto-scroll') === '0') return;
+        el.setAttribute('data-scroll-programmatic', '1');
+        el.scrollTop = el.scrollHeight;
+    }
+
     function render(node) {
         try {
             const rawEl = node.querySelector('pre[data-md-raw]');
@@ -90,6 +103,8 @@
                 try { hljs.highlightElement(codeEl); }
                 catch (e) { console.warn('[markdown] hljs failed on block:', e); }
             });
+
+            maybeStickToBottom();
         } catch (e) {
             console.error('[markdown] render error:', e);
             node.classList.add('markdown-error');
