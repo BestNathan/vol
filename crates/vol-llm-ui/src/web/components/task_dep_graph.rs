@@ -144,12 +144,12 @@ pub fn build_graph_layout(tasks: &[TaskEntry], center: u64) -> GraphLayout {
     for id in &discovery {
         if let Some(task) = index.get(id) {
             for &dep in &task.dependencies {
-                if layer_of.contains_key(&dep) && seen.insert((dep, *id)) {
+                if dep != *id && layer_of.contains_key(&dep) && seen.insert((dep, *id)) {
                     edges.push(GraphEdge { from: dep, to: *id });
                 }
             }
             for &blk in &task.blocks {
-                if layer_of.contains_key(&blk) && seen.insert((*id, blk)) {
+                if blk != *id && layer_of.contains_key(&blk) && seen.insert((*id, blk)) {
                     edges.push(GraphEdge { from: *id, to: blk });
                 }
             }
