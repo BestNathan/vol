@@ -231,7 +231,7 @@ impl ReActAgent {
         let session_contributor = Box::new(SessionContributor::new(
             Arc::new(tokio::sync::Mutex::new((*session).clone())),
             max_history,
-            AttentionAnchor::Middle(0),
+            AttentionAnchor::Tail(0),
         ));
         *self.config.session.write().unwrap() = session;
         self.config.context_builder.write().unwrap()
