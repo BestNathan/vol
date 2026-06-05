@@ -63,6 +63,10 @@ pub struct AgentDef {
     pub prompt: String,
     /// Working directory for skill/agent discovery scope.
     pub working_dir: Option<PathBuf>,
+    /// Custom context files injected into the Middle zone.
+    /// Each path is relative to the agent's working directory.
+    /// Files are loaded in array order: first file → Middle(0), second → Middle(1), etc.
+    pub context_files: Vec<String>,
 }
 
 impl AgentDef {
@@ -82,6 +86,7 @@ impl AgentDef {
             max_history_messages: None,
             prompt: content_str,
             working_dir: None,
+            context_files: vec![],
         }
     }
 
@@ -124,6 +129,12 @@ impl AgentDef {
     /// Set the working directory for skill discovery scope.
     pub fn with_working_dir(mut self, dir: PathBuf) -> Self {
         self.working_dir = Some(dir);
+        self
+    }
+
+    /// Set custom context files to inject into the Middle zone.
+    pub fn with_context_files(mut self, files: Vec<String>) -> Self {
+        self.context_files = files;
         self
     }
 }
