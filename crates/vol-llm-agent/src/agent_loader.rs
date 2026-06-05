@@ -98,6 +98,7 @@ impl AgentLoader {
                     max_history_messages: fm.max_history_messages,
                     prompt: doc.body,
                     working_dir: fm.working_dir.as_ref().map(PathBuf::from),
+                    context_files: fm.context_files.clone().unwrap_or_default(),
                 };
 
                 match agents_map.entry(doc.frontmatter.name) {

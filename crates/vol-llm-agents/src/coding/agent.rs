@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::{ToolRegistry, ToolConfig};
 use vol_llm_agent::{ReActAgent, AgentConfig};
-use vol_llm_context::ContextBuilder;
+use vol_llm_context::{AttentionAnchor, ContextBuilder};
 use vol_session::Session;
 use vol_llm_provider::{LLMProviderConfig, LLMProviderRegistry};
 use crate::coding::config::CodingAgentConfig;
@@ -94,7 +94,7 @@ impl CodingAgent {
         tool_registry.register(SkillTool::new(loader.clone()));
 
         // Build context with skill injector
-        let injector = SkillInjector::new(loader);
+        let injector = SkillInjector::new(loader, AttentionAnchor::Head(0));
         let context_builder = vol_llm_context::ContextBuilderBuilder::new(128_000)
             .add_contributor(Box::new(vol_llm_context::builtin::SimpleContributor::system(
                 "You are an expert coding assistant. Help users understand, modify, and improve their codebase.".to_string(),

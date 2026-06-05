@@ -39,6 +39,9 @@ pub struct AgentFrontmatter {
     /// Optional. Working directory root for skill/agent discovery.
     #[serde(default)]
     pub working_dir: Option<String>,
+    /// Optional. Context files to inject into the Middle zone (relative to working_dir).
+    #[serde(default)]
+    pub context_files: Option<Vec<String>>,
 }
 
 impl AgentFrontmatter {
@@ -132,6 +135,7 @@ mod tests {
             max_turns: None,
             max_history_messages: None,
             working_dir: None,
+            context_files: None,
         };
         assert_eq!(fm.resolve_type(), "my-agent");
     }
@@ -149,6 +153,7 @@ mod tests {
             max_turns: None,
             max_history_messages: None,
             working_dir: None,
+            context_files: None,
         };
         assert_eq!(fm.resolve_type(), "code-reviewer");
     }
@@ -166,6 +171,7 @@ mod tests {
             max_turns: Some(20),
             max_history_messages: None,
             working_dir: None,
+            context_files: None,
         };
         assert_eq!(fm.resolve_max_iterations(), Some(10));
     }
@@ -183,6 +189,7 @@ mod tests {
             max_turns: Some(20),
             max_history_messages: None,
             working_dir: None,
+            context_files: None,
         };
         assert_eq!(fm.resolve_max_iterations(), Some(20));
     }
@@ -200,6 +207,7 @@ mod tests {
             max_turns: None,
             max_history_messages: None,
             working_dir: None,
+            context_files: None,
         };
         assert!(fm.resolve_max_iterations().is_none());
     }

@@ -8,7 +8,7 @@ tags: [skills, json-rpc, web-ui, dioxus, backend]
 
 # Skills Panel Content — Backend JSON-RPC + Web UI Detail Dialog
 
-**Authors/Creators:** nq-deribit team
+**Authors/Creators:** vol team
 **Date:** 2026-05-16
 **Link:** docs/superpowers/specs/2026-05-16-skills-panel-content-design.md
 

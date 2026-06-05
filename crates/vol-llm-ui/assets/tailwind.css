@@ -406,6 +406,9 @@
   .my-2 {
     margin-block: calc(var(--spacing) * 2);
   }
+  .mt-0 {
+    margin-top: calc(var(--spacing) * 0);
+  }
   .mt-0\.5 {
     margin-top: calc(var(--spacing) * 0.5);
   }
@@ -2557,6 +2560,13 @@
       }
     }
   }
+  .hover\:text-\[\#a0c0ff\] {
+    &:hover {
+      @media (hover: hover) {
+        color: #a0c0ff;
+      }
+    }
+  }
   .hover\:text-\[\#aaa\] {
     &:hover {
       @media (hover: hover) {
@@ -2596,6 +2606,13 @@
     &:hover {
       @media (hover: hover) {
         color: #ff6060;
+      }
+    }
+  }
+  .hover\:text-\[\#fff\] {
+    &:hover {
+      @media (hover: hover) {
+        color: #fff;
       }
     }
   }

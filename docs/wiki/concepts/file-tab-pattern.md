@@ -59,4 +59,5 @@ When a tab is closed:
 - [[dioxus-signal-pattern]]: State management and version bumping
 - [[vol-llm-ui-crate]]: `OpenFileTab` struct definition
 - [[workspace-tree-pattern]]: File tree that opens files into tabs
+- [[dependency-graph-visualization]]: Sibling read-only Tasks-tab view in the same crate
 - [[lazy-load-dir-tree]]: Source documenting the tree implementation

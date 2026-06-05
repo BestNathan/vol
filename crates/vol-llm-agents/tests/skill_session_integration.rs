@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use vol_llm_context::{ContextBuilderBuilder, ContextContributor};
+use vol_llm_context::{AttentionAnchor, ContextBuilderBuilder, ContextContributor};
 use vol_llm_context::builtin::{SimpleContributor, UserInputContributor};
 use vol_llm_core::Message;
 use vol_llm_skill::SkillInjector;
@@ -65,7 +65,7 @@ async fn test_context_with_skills_and_session() {
     let tmp_dir = make_workdir_with_skills();
     let workdir = tmp_dir.path().to_path_buf();
 
-    let skill_injector = SkillInjector::from_workdir(&workdir).await;
+    let skill_injector = SkillInjector::from_workdir(&workdir, AttentionAnchor::Head(0)).await;
     let session = make_session(3).await;
 
     let context_builder = ContextBuilderBuilder::new(128_000)
@@ -73,7 +73,7 @@ async fn test_context_with_skills_and_session() {
             "You are an expert coding assistant.".to_string(),
         )))
         .add_contributor(Box::new(skill_injector))
-        .add_contributor(Box::new(SessionContributor::new(session, 10)))
+        .add_contributor(Box::new(SessionContributor::new(session, 10, AttentionAnchor::Middle(0))))
         .add_contributor(Box::new(UserInputContributor::new(
             "Write a function".to_string(),
         )))
@@ -100,7 +100,7 @@ async fn test_context_zone_ordering() {
     let tmp_dir = make_workdir_with_skills();
     let workdir = tmp_dir.path().to_path_buf();
 
-    let skill_injector = SkillInjector::from_workdir(&workdir).await;
+    let skill_injector = SkillInjector::from_workdir(&workdir, AttentionAnchor::Head(0)).await;
     let session = make_session(2).await;
 
     let context_builder = ContextBuilderBuilder::new(128_000)
@@ -108,7 +108,7 @@ async fn test_context_zone_ordering() {
             "System prompt.".to_string(),
         )))
         .add_contributor(Box::new(skill_injector))
-        .add_contributor(Box::new(SessionContributor::new(session, 10)))
+        .add_contributor(Box::new(SessionContributor::new(session, 10, AttentionAnchor::Middle(0))))
         .add_contributor(Box::new(UserInputContributor::new(
             "User input".to_string(),
         )))
@@ -136,7 +136,7 @@ async fn test_context_empty_session_with_skills() {
     let tmp_dir = make_workdir_with_skills();
     let workdir = tmp_dir.path().to_path_buf();
 
-    let skill_injector = SkillInjector::from_workdir(&workdir).await;
+    let skill_injector = SkillInjector::from_workdir(&workdir, AttentionAnchor::Head(0)).await;
     let empty_session = make_session(0).await;
 
     let context_builder = ContextBuilderBuilder::new(128_000)
@@ -144,7 +144,7 @@ async fn test_context_empty_session_with_skills() {
             "System.".to_string(),
         )))
         .add_contributor(Box::new(skill_injector))
-        .add_contributor(Box::new(SessionContributor::new(empty_session, 10)))
+        .add_contributor(Box::new(SessionContributor::new(empty_session, 10, AttentionAnchor::Middle(0))))
         .add_contributor(Box::new(UserInputContributor::new(
             "Hello".to_string(),
         )))
@@ -177,7 +177,7 @@ async fn test_skill_injector_from_workdir_path_resolution() {
     let tmp_dir = make_workdir_with_skills();
     let workdir = tmp_dir.path().to_path_buf();
 
-    let injector = SkillInjector::from_workdir(&workdir).await;
+    let injector = SkillInjector::from_workdir(&workdir, AttentionAnchor::Head(0)).await;
     let blocks = injector.contribute().await.unwrap();
 
     // Should have found and loaded the skill

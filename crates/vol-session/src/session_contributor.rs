@@ -14,14 +14,22 @@ pub struct SessionContributor {
     session: Arc<tokio::sync::Mutex<Session>>,
     max_history: usize,
     compressor: Arc<dyn MessageCompressor>,
+    anchor: AttentionAnchor,
+    cached_size: tokio::sync::Mutex<usize>,
 }
 
 impl SessionContributor {
-    pub fn new(session: Arc<tokio::sync::Mutex<Session>>, max_history: usize) -> Self {
+    pub fn new(
+        session: Arc<tokio::sync::Mutex<Session>>,
+        max_history: usize,
+        anchor: AttentionAnchor,
+    ) -> Self {
         Self {
             session,
             max_history,
             compressor: Arc::new(PositionSampleCompressor::default()),
+            anchor,
+            cached_size: tokio::sync::Mutex::new(0),
         }
     }
 
@@ -48,6 +56,7 @@ impl ContextContributor for SessionContributor {
             .unwrap_or_default();
 
         if history.is_empty() {
+            *self.cached_size.lock().await = 0;
             return Ok(vec![]);
         }
 
@@ -58,7 +67,11 @@ impl ContextContributor for SessionContributor {
             messages = messages.split_off(messages.len() - self.max_history);
         }
 
-        let block = ContextBlock::new(messages, AttentionAnchor::Middle(0));
+        // Compute total estimated tokens
+        let total_tokens: usize = messages.iter().map(vol_llm_context::estimate_tokens).sum();
+        *self.cached_size.lock().await = total_tokens;
+
+        let block = ContextBlock::new(messages, self.anchor.clone());
         Ok(vec![block])
     }
 
@@ -123,8 +136,7 @@ impl ContextContributor for SessionContributor {
     }
 
     fn estimate_size(&self) -> usize {
-        // Best-effort unknown without reading Session
-        0
+        self.cached_size.try_lock().map(|g| *g).unwrap_or(0)
     }
 
     fn clone_box(&self) -> Box<dyn ContextContributor> {
@@ -132,6 +144,8 @@ impl ContextContributor for SessionContributor {
             session: self.session.clone(),
             max_history: self.max_history,
             compressor: self.compressor.clone(),
+            anchor: self.anchor.clone(),
+            cached_size: tokio::sync::Mutex::new(0), // fresh cache for clone
         })
     }
 }
@@ -149,7 +163,7 @@ mod tests {
         let session_msg = SessionMessage::new(session.id.clone(), Message::user("hello"));
         session.add_message(session_msg).await.unwrap();
 
-        let contributor = SessionContributor::new(Arc::new(tokio::sync::Mutex::new(session)), 10);
+        let contributor = SessionContributor::new(Arc::new(tokio::sync::Mutex::new(session)), 10, AttentionAnchor::Middle(0));
         let blocks = contributor.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].messages.len(), 1);
@@ -165,7 +179,7 @@ mod tests {
             session.add_message(msg).await.unwrap();
         }
 
-        let contributor = SessionContributor::new(Arc::new(tokio::sync::Mutex::new(session)), 3);
+        let contributor = SessionContributor::new(Arc::new(tokio::sync::Mutex::new(session)), 3, AttentionAnchor::Middle(0));
         let blocks = contributor.contribute().await.unwrap();
         assert_eq!(blocks[0].messages.len(), 3);
     }
@@ -175,7 +189,7 @@ mod tests {
         let entry_store = Arc::new(InMemoryEntryStore::new());
         let session = Session::new(entry_store);
 
-        let contributor = SessionContributor::new(Arc::new(tokio::sync::Mutex::new(session)), 10);
+        let contributor = SessionContributor::new(Arc::new(tokio::sync::Mutex::new(session)), 10, AttentionAnchor::Middle(0));
         let blocks = contributor.contribute().await.unwrap();
         assert!(blocks.is_empty());
     }
@@ -191,7 +205,7 @@ mod tests {
         }
 
         let session = Arc::new(tokio::sync::Mutex::new(session));
-        let mut contributor = SessionContributor::new(session.clone(), 10);
+        let mut contributor = SessionContributor::new(session.clone(), 10, AttentionAnchor::Middle(0));
 
         // Before compression
         let blocks = contributor.contribute().await.unwrap();
@@ -213,7 +227,7 @@ mod tests {
         let session = Session::new(entry_store);
         let session = Arc::new(tokio::sync::Mutex::new(session));
 
-        let mut contributor = SessionContributor::new(session.clone(), 10);
+        let mut contributor = SessionContributor::new(session.clone(), 10, AttentionAnchor::Middle(0));
 
         // Compress on empty session — no-op
         contributor.compress().await;

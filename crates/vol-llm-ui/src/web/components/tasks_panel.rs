@@ -1,8 +1,9 @@
 use dioxus::prelude::*;
 
 use crate::state::TaskState;
+use super::task_dep_graph::TaskDepGraph;
 
-fn status_color(status: &str) -> &'static str {
+pub(crate) fn status_color(status: &str) -> &'static str {
     match status {
         "pending" => "#888",
         "running" => "#4080ff",
@@ -17,6 +18,7 @@ fn status_color(status: &str) -> &'static str {
 pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
     let app: crate::web::components::app::AppState = use_context();
     let task_state = use_signal(|| TaskState::new());
+    let graph_target = use_signal(|| None::<u64>);
 
     let rpc = app.rpc_client.clone();
     let sig = task_state;
@@ -161,6 +163,8 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
                         let color = status_color(&task.status);
                         let task_id = task.id;
                         let task_id2 = task.id;
+                        let task_id3 = task.id;
+                        let mut graph_open = graph_target;
                         rsx! {
                             div {
                                 key: "{task.id}",
@@ -181,8 +185,19 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
                                         "{task.status}"
                                     }
                                     span { class: "text-[13px] text-[#e0e0e0] truncate", "{task.subject}" }
-                                    if let Some(ref assignee) = task.assignee {
-                                        span { class: "text-[11px] text-[#666] ml-auto whitespace-nowrap", "{assignee}" }
+                                    div { class: "flex items-center gap-2 ml-auto",
+                                        if let Some(ref assignee) = task.assignee {
+                                            span { class: "text-[11px] text-[#666] whitespace-nowrap", "{assignee}" }
+                                        }
+                                        button {
+                                            class: "text-[11px] text-[#80a0ff] hover:text-[#a0c0ff] px-1 rounded whitespace-nowrap",
+                                            title: "View dependency graph",
+                                            onclick: move |evt| {
+                                                evt.stop_propagation();
+                                                graph_open.set(Some(task_id3));
+                                            },
+                                            "⇄ deps"
+                                        }
                                     }
                                 }
                                 // Expanded detail
@@ -212,6 +227,18 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+            if let Some(center) = graph_target() {
+                {
+                    let mut graph_close = graph_target;
+                    rsx! {
+                        TaskDepGraph {
+                            tasks: tasks.clone(),
+                            center,
+                            on_close: move |_| graph_close.set(None),
                         }
                     }
                 }

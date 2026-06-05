@@ -6,7 +6,7 @@ use crate::agent_def::AgentDef;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use vol_llm_context::{ContextBuilderBuilder, ContextContributor};
+use vol_llm_context::{AttentionAnchor, ContextBuilderBuilder, ContextContributor};
 use vol_llm_core::SandboxRef;
 use vol_llm_mcp::{McpConfig, McpManager};
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
@@ -196,8 +196,12 @@ impl AgentConfigBuilder {
             Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())))
         });
 
-        // Build context builder — system prompt first (if agent def has one),
-        // then SkillInjector, then any manual contributors.
+        // Build context builder with standardized ordering:
+        //
+        //   Head(0)       — Agent Prompt   (always present, empty placeholder if unset)
+        //   Head(1)       — Skills         (always present)
+        //   Middle(0..n)  — Custom Files   (from AgentDef.context_files, array order)
+        //   Tail(0)       — Session        (conversation history)
         let context_builder = {
             let (total, head_size, tail_size) = self
                 .context_builder
@@ -208,40 +212,77 @@ impl AgentConfigBuilder {
                 })
                 .unwrap_or((128_000, 0, 0));
 
+            // Pre-compute values borrowed from self.def
+            let prompt = self
+                .def
+                .as_ref()
+                .map(|d| d.prompt.clone())
+                .unwrap_or_default();
+            let max_history = self
+                .def
+                .as_ref()
+                .and_then(|d| d.max_history_messages)
+                .unwrap_or(50);
+            let context_files: Vec<vol_llm_context::builtin::FileSpec> = self
+                .def
+                .as_ref()
+                .map(|d| {
+                    let working_dir = d.working_dir.as_ref();
+                    d.context_files
+                        .iter()
+                        .enumerate()
+                        .map(|(i, path)| {
+                            let full_path = working_dir
+                                .map(|d| d.join(path))
+                                .unwrap_or_else(|| PathBuf::from(path));
+                            let path_str = full_path.to_string_lossy().to_string();
+                            vol_llm_context::builtin::FileSpec::new(
+                                path_str,
+                                AttentionAnchor::Middle(i as u32),
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
             let mut b = ContextBuilderBuilder::new(total)
                 .head_size(head_size)
                 .tail_size(tail_size);
 
-            // 1. System prompt from AgentDef.prompt (first, Head(0))
-            if let Some(ref def) = self.def {
-                if !def.prompt.is_empty() {
-                    b = b.add_contributor(Box::new(
-                        vol_llm_context::builtin::SimpleContributor::system(def.prompt.clone()),
-                    ));
-                }
-            }
+            // 1. Agent Prompt — always Head(0), empty if unset
+            b = b.add_contributor(Box::new(
+                vol_llm_context::builtin::SimpleContributor::system(prompt),
+            ));
 
-            // 2. SkillInjector — always
-            b = b.add_contributor(Box::new(SkillInjector::new(skill_loader)));
-
-            // 2.5. SessionContributor — always, points to current session
-            let max_history = self.def.as_ref()
-                .and_then(|d| d.max_history_messages)
-                .unwrap_or(50);
-            b = b.add_contributor(Box::new(SessionContributor::new(
-                Arc::new(tokio::sync::Mutex::new((*session).clone())),
-                max_history,
+            // 2. Skills — always Head(1)
+            b = b.add_contributor(Box::new(SkillInjector::new(
+                skill_loader,
+                AttentionAnchor::Head(1),
             )));
 
-            // 3. Clone existing context_builder contributors (if any)
+            // 3. Custom Files — Middle(0..n) from AgentDef.context_files
+            if !context_files.is_empty() {
+                b = b.add_contributor(Box::new(
+                    vol_llm_context::builtin::FileContributor::new(context_files),
+                ));
+            }
+
+            // 4. Clone existing context_builder contributors (if any)
             if let Some(ref cb) = self.context_builder {
                 b = b.add_contributors_from(cb);
             }
 
-            // 4. Manual contributors from with_system_prompt / with_contributor
+            // 5. Manual contributors from with_system_prompt / with_contributor
             for c in self.contributors {
                 b = b.add_contributor(c);
             }
+
+            // 6. Session — always Tail(0)
+            b = b.add_contributor(Box::new(SessionContributor::new(
+                Arc::new(tokio::sync::Mutex::new((*session).clone())),
+                max_history,
+                AttentionAnchor::Tail(0),
+            )));
 
             b.build()
         };

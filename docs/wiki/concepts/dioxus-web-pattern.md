@@ -132,6 +132,7 @@ Both frontends share `UiState` / `UiEvent` / `ActiveTab` types and the same conn
 - [[event-bus-pattern]]: EventBus with UiEventKind routing replacing centralized state
 - [[ratatui-tui-pattern]]: Terminal frontend counterpart
 - [[human-in-the-loop]]: Approval dialog component implements HITL workflow
+- [[dependency-graph-visualization]]: SVG node-link graph component reusing the modal shell and `status_color`
 - [[vol-llm-ui-crate]]: Shared crate defining state types and connection traits
 - [[file-tab-pattern]]: Tabbed file viewer rendered in Workspace tab
 - [[workspace-tree-pattern]]: WorkspaceTreeNode tree structure and lazy-loading pattern

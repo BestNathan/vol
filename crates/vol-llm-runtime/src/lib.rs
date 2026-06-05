@@ -194,6 +194,8 @@ impl AgentRuntime {
         vol_llm_tools_builtin::register_all(&mut tool_registry);
         let task_store: Arc<dyn TaskStore> = Arc::new(vol_llm_task::InMemoryTaskStore::new());
         vol_llm_task::tools::register_all(&mut tool_registry, task_store.clone());
+        // Also register the unified CLI-style `task` tool (agents using `tools: [task]`).
+        vol_llm_task::tools::register_cli(&mut tool_registry, task_store.clone());
         let tool_registry = Arc::new(tool_registry);
         let mcp_manager = Arc::new(McpManager::new(vec![]));
         let skill_loader = Arc::new(SkillLoader::new_empty());
@@ -269,6 +271,8 @@ impl AgentRuntimeBuilder {
         let mut tool_registry = ToolRegistry::new();
         vol_llm_tools_builtin::register_all(&mut tool_registry);
         vol_llm_task::tools::register_all(&mut tool_registry, task_store.clone());
+        // Also register the unified CLI-style `task` tool (agents using `tools: [task]`).
+        vol_llm_task::tools::register_cli(&mut tool_registry, task_store.clone());
         let tool_config = vol_llm_tool::ToolConfig::default();
         vol_llm_tools_builtin::register_web_all(&mut tool_registry, &tool_config);
         tool_registry.register(SkillTool::new(skill_loader.clone()));

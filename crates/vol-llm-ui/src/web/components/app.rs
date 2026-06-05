@@ -572,12 +572,24 @@ pub fn App() -> Element {
     use_context_provider(|| skill_dialog_signal);
     use_context_provider(|| debug_signal);
 
+    // Bootstrap markdown.js — run once on mount.
+    // CDN scripts (marked, DOMPurify, hljs) are loaded synchronously in
+    // index.html before WASM, so they are available when this eval runs.
+    {
+        let md_js: &'static str = include_str!("../../../assets/markdown.js");
+        let _ = dioxus::document::eval(md_js);
+    }
+
     rsx! {
         // The Stylesheet component inserts a style link into the head of the document
         document::Stylesheet {
             // Urls are relative to your Cargo.toml file
             href: asset!("/assets/tailwind.css")
         }
+        // Register custom assets so dx serve / web-serve picks them up.
+        // The index.html already has <link>/<script> tags; these asset!()
+        // calls are the compile-time registration so the dev server serves them.
+        document::Stylesheet { href: asset!("/assets/markdown.css") }
         div { class: "relative h-[100dvh] w-[100vw] font-[system-ui] text-[14px] text-[#e0e0e0] bg-[#1a1a2e]",
             div { class: "flex flex-col h-full w-full overflow-hidden",
                 StatusBar {}

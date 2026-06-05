@@ -7,7 +7,7 @@ updated: 2026-05-19
 source_count: 1
 ---
 
-# nq-deribit Repository
+# vol Repository
 
 **Category:** Rust Cargo workspace — Deribit volatility monitoring and LLM agent tooling
 
@@ -15,7 +15,7 @@ source_count: 1
 
 ## Overview
 
-`nq-deribit` is a Rust workspace that combines a Deribit volatility monitoring service with a broader LLM agent platform. The monitoring side follows an event-driven pipeline: configuration feeds data sources, data sources publish through an event bus, alert handlers evaluate conditions, and notification handlers deliver alerts.
+`vol` is a Rust workspace that combines a Deribit volatility monitoring service with a broader LLM agent platform. The monitoring side follows an event-driven pipeline: configuration feeds data sources, data sources publish through an event bus, alert handlers evaluate conditions, and notification handlers deliver alerts.
 
 ## Key Facts
 

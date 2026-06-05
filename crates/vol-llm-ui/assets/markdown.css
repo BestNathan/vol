@@ -1,0 +1,109 @@
+/* Rich text styles for rendered markdown inside [data-md] containers.
+ * Applied AFTER markdown.js replaces the <pre data-md-raw> with parsed HTML.
+ */
+
+/* Container — neutral text color matches surrounding chat */
+[data-md] {
+    color: #e0e0e0;
+    line-height: 1.55;
+    font-size: 14px;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+}
+
+/* Headings */
+[data-md] h1, [data-md] h2, [data-md] h3,
+[data-md] h4, [data-md] h5, [data-md] h6 {
+    color: #f0f0f0;
+    font-weight: 700;
+    line-height: 1.3;
+    margin: 1em 0 0.5em;
+}
+[data-md] h1 { font-size: 1.5em; border-bottom: 1px solid #333; padding-bottom: 0.3em; }
+[data-md] h2 { font-size: 1.3em; border-bottom: 1px solid #2a2a44; padding-bottom: 0.2em; }
+[data-md] h3 { font-size: 1.15em; }
+[data-md] h4 { font-size: 1.05em; }
+[data-md] h5, [data-md] h6 { font-size: 1em; color: #ccc; }
+
+/* Paragraphs */
+[data-md] p { margin: 0.6em 0; }
+
+/* Lists */
+[data-md] ul, [data-md] ol { margin: 0.5em 0; padding-left: 1.8em; }
+[data-md] li { margin: 0.2em 0; }
+[data-md] li > ul, [data-md] li > ol { margin: 0.2em 0; }
+
+/* Inline code */
+[data-md] :not(pre) > code {
+    background: #2a2a44;
+    color: #f0c060;
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.92em;
+}
+
+/* Fenced code blocks (highlight.js applies its own theme via atom-one-dark.css) */
+[data-md] pre {
+    background: #1a1a2a;
+    border: 1px solid #2a2a44;
+    border-radius: 5px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    margin: 0.8em 0;
+    font-size: 0.9em;
+    line-height: 1.45;
+}
+[data-md] pre code { background: transparent; padding: 0; color: inherit; font-size: inherit; }
+
+/* Blockquotes */
+[data-md] blockquote {
+    border-left: 3px solid #4a5a8a;
+    margin: 0.6em 0;
+    padding: 0.2em 0 0.2em 0.9em;
+    color: #aaa;
+    font-style: italic;
+}
+
+/* Tables */
+[data-md] table {
+    border-collapse: collapse;
+    margin: 0.8em 0;
+    font-size: 0.92em;
+    overflow-x: auto;
+    display: block;
+    max-width: 100%;
+}
+[data-md] th, [data-md] td {
+    border: 1px solid #333;
+    padding: 6px 10px;
+    text-align: left;
+}
+[data-md] th { background: #2a2a44; font-weight: 600; }
+
+/* Links */
+[data-md] a { color: #6080ff; text-decoration: underline; }
+[data-md] a:hover { color: #80a0ff; }
+
+/* Horizontal rule */
+[data-md] hr { border: none; border-top: 1px solid #333; margin: 1em 0; }
+
+/* Misc */
+[data-md] strong { color: #f0f0f0; font-weight: 700; }
+[data-md] em { color: inherit; font-style: italic; }
+[data-md] del { color: #888; text-decoration: line-through; }
+
+/* Fallback: shown when CDN libs failed to load OR rendering errored on one node */
+body.markdown-fallback [data-md] pre[data-md-raw],
+[data-md].markdown-error pre[data-md-raw] {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    color: #e0e0e0;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-x: visible;
+}

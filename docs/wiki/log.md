@@ -1,5 +1,21 @@
 # Change Log
 
+## [2026-06-04] ingest | Rich Text Conversation Rendering
+- Created sources: [[rich-text-conversation-design]]
+- Created concepts: [[rich-text-conversation]]
+- Updated entities: [[vol-llm-ui-crate]] (conversation.rs: html_escape, markdown_container, 4 render sites; app.rs: include_str embed; index.html: CDN scripts; new assets: markdown.js, markdown.css)
+- Updated index: new concept + source entries, updated date
+- Cross-references added: 6
+- Changes: Added markdown rendering pipeline for agent answers and tool results. Dioxus emits <div data-md="1"><pre data-md-raw>...</pre></div>; embedded markdown.js (MutationObserver + 100ms debounce) renders via marked + DOMPurify + highlight.js. CDN scripts loaded synchronously in index.html. 10 pre-registered languages for syntax highlighting. 2px scroll threshold for stick-to-bottom escape.
+
+## [2026-06-04] ingest | Task Dependency Graph View
+- Created sources: [[task-dependency-graph-view]]
+- Created concepts: [[dependency-graph-visualization]]
+- Updated entities: [[vol-llm-ui-crate]] (TasksPanel/TaskDepGraph components, "⇄ deps" button, TaskEntry PartialEq, pub(crate) status_color, timeline entry, source_count 23→24)
+- Updated index: new concept + source entries, updated date
+- Cross-references added: 8
+- Changes: Added a per-row "⇄ deps" button to the Tasks tab that opens an SVG node-link dependency-graph modal (`TaskDepGraph`) centered on the task. Pure `build_graph_layout` uses longest-path (Sugiyama-style) layering of the full transitive closure (upstream `dependencies` above, downstream `blocks` below), is cycle-safe, marks not-loaded nodes, and skips self-loops; 7 unit tests. Read-only, frontend-only — no backend changes (data already on the wire). Panel-local `graph_target` signal; modal reuses the approval_dialog shell.
+
 ## [2026-05-29] ingest | Remove vol-agent-manager and Legacy Frontend
 - Created sources: [[remove-vol-agent-manager]]
 - Updated entities: [[vol-llm-ui-crate]], [[vol-llm-agent-channel-crate]]
@@ -12,7 +28,7 @@
 - Updated entities: [[vol-llm-ui-crate]] (web development prerequisites, persistent Makefile CSS watcher, project web-dev skill, startup services, troubleshooting)
 - Updated index: new source entry, vol-llm-ui summary/date, updated date
 - Cross-references added: 7
-- Changes: CLAUDE.md now documents web-only prerequisites: Dioxus CLI 0.6.x, cargo-watch, Node/npm, wasm32 target, vol-llm-ui npm dependencies, Tailwind --watch=always, and dx --platform web fallback for Dioxus 404. `make web-css` now runs persistent Tailwind watch mode, and `.claude/skills/nq-web-dev/SKILL.md` is tracked as the project-specific web startup/debug guide.
+- Changes: CLAUDE.md now documents web-only prerequisites: Dioxus CLI 0.6.x, cargo-watch, Node/npm, wasm32 target, vol-llm-ui npm dependencies, Tailwind --watch=always, and dx --platform web fallback for Dioxus 404. `make web-css` now runs persistent Tailwind watch mode, and `.claude/skills/vol-web-dev/SKILL.md` is tracked as the project-specific web startup/debug guide.
 
 ## [2026-05-23] ingest | Per-Agent Conversation State
 - Created sources: [[per-agent-conversation]]

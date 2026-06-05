@@ -4,7 +4,7 @@ use super::{AgentInput, AgentResponse, AgentStreamEvent, PluginDecision, PluginR
 use crate::react::state::ToolCallRecord;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use vol_llm_context::{ContextBuilder, ContextBuilderBuilder, ContextContributor, ContextError, ContextMessage, ContributorInfo};
+use vol_llm_context::{AttentionAnchor, ContextBuilder, ContextBuilderBuilder, ContextContributor, ContextError, ContextMessage, ContributorInfo};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData,
     StreamReceiver, ToolChoice,
@@ -231,6 +231,7 @@ impl ReActAgent {
         let session_contributor = Box::new(SessionContributor::new(
             Arc::new(tokio::sync::Mutex::new((*session).clone())),
             max_history,
+            AttentionAnchor::Tail(0),
         ));
         *self.config.session.write().unwrap() = session;
         self.config.context_builder.write().unwrap()
