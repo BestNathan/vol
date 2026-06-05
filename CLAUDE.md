@@ -190,3 +190,27 @@ lark-cli docs +update \
     --markdown "$(cat path/to/markdown.md)" \
     --doc "{doc url or token}"
 ```
+
+## Context Ordering Standard
+
+Agent context is assembled by `ContextBuilder` in the following fixed order:
+
+| Zone | Position | Name | Source | Required |
+|------|----------|------|--------|----------|
+| Head | 0 | Agent Prompt | `AgentDef.prompt` | Yes (empty placeholder if unset) |
+| Head | 1 | Skills | `SkillInjector` | Yes (empty block if no skills loaded) |
+| Middle | 0..n | Custom Files | `AgentDef.context_files` (paths relative to work_dir) | No |
+| Tail | 0 | Session | `SessionContributor` (conversation history) | Yes |
+
+**Rules:**
+
+- Head and Tail sections are fixed-position — always present, never dropped on budget overflow.
+- Custom Files are loaded from disk in array order: first file → `Middle(0)`, second → `Middle(1)`, etc.
+- Middle blocks are eligible for budget-driven truncation (highest position dropped first).
+- All new contributors MUST declare their zone and position explicitly.
+
+**Implementation:**
+
+- `AgentConfigBuilder::build()` in `crates/vol-llm-agent/src/react/config_builder.rs` enforces this order.
+- Head/Tail contributors are always registered (with empty content if no source data).
+- `SkillInjector` and `SessionContributor` accept `AttentionAnchor` in their constructors — the anchor is NOT hardcoded.
