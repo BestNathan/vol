@@ -10,11 +10,16 @@ use crate::loader::SkillLoader;
 pub struct SkillInjector {
     loader: Arc<SkillLoader>,
     anchor: AttentionAnchor,
+    cached_size: tokio::sync::Mutex<usize>,
 }
 
 impl SkillInjector {
     pub fn new(loader: Arc<SkillLoader>, anchor: AttentionAnchor) -> Self {
-        Self { loader, anchor }
+        Self {
+            loader,
+            anchor,
+            cached_size: tokio::sync::Mutex::new(0),
+        }
     }
 
     /// Create a SkillInjector that loads skills from `{working_dir}/.agents/skills`.
@@ -60,10 +65,15 @@ impl ContextContributor for SkillInjector {
     async fn contribute(&self) -> Result<Vec<ContextBlock>, ContextError> {
         let metadata_text = self.format_metadata().await;
         if metadata_text.is_empty() {
+            // Cache 0 for empty skills
+            *self.cached_size.lock().await = 0;
             // Return empty placeholder block to maintain fixed Head slot
             return Ok(vec![ContextBlock::new(vec![], self.anchor.clone())]);
         }
         let msg = Message::user(metadata_text);
+        // Cache the actual estimate
+        let size = vol_llm_context::estimate_tokens(&msg);
+        *self.cached_size.lock().await = size;
         Ok(vec![ContextBlock::new(vec![msg], self.anchor.clone())])
     }
 
@@ -72,13 +82,15 @@ impl ContextContributor for SkillInjector {
     }
 
     fn estimate_size(&self) -> usize {
-        0
+        // Try to read cached value without blocking; fall back to 0
+        self.cached_size.try_lock().map(|g| *g).unwrap_or(0)
     }
 
     fn clone_box(&self) -> Box<dyn ContextContributor> {
         Box::new(SkillInjector {
             loader: self.loader.clone(),
             anchor: self.anchor.clone(),
+            cached_size: tokio::sync::Mutex::new(0), // fresh cache for clone
         })
     }
 }

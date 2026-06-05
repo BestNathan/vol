@@ -15,6 +15,7 @@ pub struct SessionContributor {
     max_history: usize,
     compressor: Arc<dyn MessageCompressor>,
     anchor: AttentionAnchor,
+    cached_size: tokio::sync::Mutex<usize>,
 }
 
 impl SessionContributor {
@@ -28,6 +29,7 @@ impl SessionContributor {
             max_history,
             compressor: Arc::new(PositionSampleCompressor::default()),
             anchor,
+            cached_size: tokio::sync::Mutex::new(0),
         }
     }
 
@@ -54,6 +56,7 @@ impl ContextContributor for SessionContributor {
             .unwrap_or_default();
 
         if history.is_empty() {
+            *self.cached_size.lock().await = 0;
             return Ok(vec![]);
         }
 
@@ -63,6 +66,10 @@ impl ContextContributor for SessionContributor {
         if messages.len() > self.max_history {
             messages = messages.split_off(messages.len() - self.max_history);
         }
+
+        // Compute total estimated tokens
+        let total_tokens: usize = messages.iter().map(vol_llm_context::estimate_tokens).sum();
+        *self.cached_size.lock().await = total_tokens;
 
         let block = ContextBlock::new(messages, self.anchor.clone());
         Ok(vec![block])
@@ -129,8 +136,7 @@ impl ContextContributor for SessionContributor {
     }
 
     fn estimate_size(&self) -> usize {
-        // Best-effort unknown without reading Session
-        0
+        self.cached_size.try_lock().map(|g| *g).unwrap_or(0)
     }
 
     fn clone_box(&self) -> Box<dyn ContextContributor> {
@@ -139,6 +145,7 @@ impl ContextContributor for SessionContributor {
             max_history: self.max_history,
             compressor: self.compressor.clone(),
             anchor: self.anchor.clone(),
+            cached_size: tokio::sync::Mutex::new(0), // fresh cache for clone
         })
     }
 }
