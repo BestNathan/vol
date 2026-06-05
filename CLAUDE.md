@@ -158,6 +158,8 @@ The model service is available at:
 - When finished a development task, you **MUST** use skill `wiki-ingest` to add or update project wiki at `docs/wiki`
 
 - When `docs/superpowers/*` add or update docs you **MUST** upload the doc to lark wiki space **7630485291026910436**
+
+- **Frontend verification**: When developing vol-llm-ui (Dioxus/WASM frontend) or any change that affects the web UI, you **MUST** verify with Playwright headless mode before completing. Start the web services (`make web-backend` + `make web-dev`), navigate to the relevant page, and confirm the UI renders and behaves correctly.
 ```bash
 # create wiki doc
 lark-cli docs +create \

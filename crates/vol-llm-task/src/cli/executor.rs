@@ -234,8 +234,48 @@ pub(crate) async fn execute(
             })
         }
 
-        ParsedCommand::Output { id, json: _ } => {
+        ParsedCommand::Output {
+            id,
+            block,
+            timeout_ms,
+            json: _,
+        } => {
             let task_id = TaskId(id);
+
+            if block {
+                let start = std::time::Instant::now();
+                loop {
+                    let task = store
+                        .get(&task_id)
+                        .await
+                        .map_err(|e| format!("Failed to get task: {}", e))?
+                        .ok_or_else(|| format!("Task {} not found", task_id))?;
+
+                    match task.status {
+                        TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Killed => break,
+                        _ => {
+                            if start.elapsed().as_millis() as u64 >= timeout_ms {
+                                return Ok(ToolResult {
+                                    success: false,
+                                    content: format!(
+                                        "Timeout waiting for task {} ({}ms)",
+                                        task_id, timeout_ms
+                                    ),
+                                    error: Some("timeout".to_string()),
+                                    data: Some(serde_json::json!({
+                                        "taskId": id.to_string(),
+                                        "status": task.status.to_string()
+                                    })),
+                                    call_id: String::new(),
+                                });
+                            }
+                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                        }
+                    }
+                }
+            }
+
+            // Read output
             let task = store
                 .get(&task_id)
                 .await

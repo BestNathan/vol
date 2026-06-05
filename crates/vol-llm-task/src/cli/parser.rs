@@ -157,6 +157,19 @@ pub(crate) fn build_cli() -> Command {
                         .required(true)
                         .value_parser(value_parser!(u64))
                         .help("Task ID"),
+                )
+                .arg(
+                    Arg::new("block")
+                        .long("block")
+                        .action(ArgAction::SetTrue)
+                        .help("Wait for task to complete before returning output"),
+                )
+                .arg(
+                    Arg::new("timeout")
+                        .long("timeout")
+                        .value_parser(value_parser!(u64))
+                        .default_value("30000")
+                        .help("Max wait time in milliseconds (default 30000)"),
                 ),
         )
         .subcommand(
@@ -277,6 +290,8 @@ pub(crate) fn parse(input: &str) -> Result<ParsedCommand, String> {
         }),
         Some(("output", m)) => Ok(ParsedCommand::Output {
             id: *m.get_one::<u64>("id").unwrap_or(&0),
+            block: m.get_flag("block"),
+            timeout_ms: *m.get_one::<u64>("timeout").unwrap_or(&30000),
             json,
         }),
         Some(("claim", m)) => Ok(ParsedCommand::Claim {
@@ -412,6 +427,31 @@ mod tests {
         let cmd = parse("output --id 7").unwrap();
         match cmd {
             ParsedCommand::Output { id, .. } => assert_eq!(id, 7),
+            _ => panic!("expected Output"),
+        }
+    }
+
+    #[test]
+    fn test_parse_output_with_block() {
+        let cmd = parse("output --id 7 --block").unwrap();
+        match cmd {
+            ParsedCommand::Output { id, block, .. } => {
+                assert_eq!(id, 7);
+                assert!(block);
+            }
+            _ => panic!("expected Output"),
+        }
+    }
+
+    #[test]
+    fn test_parse_output_with_block_and_timeout() {
+        let cmd = parse("output --id 7 --block --timeout 60000").unwrap();
+        match cmd {
+            ParsedCommand::Output { id, block, timeout_ms, .. } => {
+                assert_eq!(id, 7);
+                assert!(block);
+                assert_eq!(timeout_ms, 60000);
+            }
             _ => panic!("expected Output"),
         }
     }
