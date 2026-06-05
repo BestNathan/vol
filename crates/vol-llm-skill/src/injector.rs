@@ -9,19 +9,20 @@ use crate::loader::SkillLoader;
 /// Formats skill metadata for system prompt injection.
 pub struct SkillInjector {
     loader: Arc<SkillLoader>,
+    anchor: AttentionAnchor,
 }
 
 impl SkillInjector {
-    pub fn new(loader: Arc<SkillLoader>) -> Self {
-        Self { loader }
+    pub fn new(loader: Arc<SkillLoader>, anchor: AttentionAnchor) -> Self {
+        Self { loader, anchor }
     }
 
     /// Create a SkillInjector that loads skills from `{working_dir}/.agents/skills`.
     ///
     /// Skills are discovered lazily on first access.
-    pub async fn from_workdir(working_dir: &std::path::Path) -> Self {
+    pub async fn from_workdir(working_dir: &std::path::Path, anchor: AttentionAnchor) -> Self {
         let loader = Arc::new(crate::loader::SkillLoader::new(Some(working_dir.to_path_buf())));
-        Self::new(loader)
+        Self::new(loader, anchor)
     }
 
     /// Discover skills from the configured roots.
@@ -59,10 +60,11 @@ impl ContextContributor for SkillInjector {
     async fn contribute(&self) -> Result<Vec<ContextBlock>, ContextError> {
         let metadata_text = self.format_metadata().await;
         if metadata_text.is_empty() {
-            return Ok(vec![]);
+            // Return empty placeholder block to maintain fixed Head slot
+            return Ok(vec![ContextBlock::new(vec![], self.anchor.clone())]);
         }
         let msg = Message::user(metadata_text);
-        Ok(vec![ContextBlock::new(vec![msg], AttentionAnchor::Head(0))])
+        Ok(vec![ContextBlock::new(vec![msg], self.anchor.clone())])
     }
 
     async fn compress(&mut self) {
@@ -76,6 +78,7 @@ impl ContextContributor for SkillInjector {
     fn clone_box(&self) -> Box<dyn ContextContributor> {
         Box::new(SkillInjector {
             loader: self.loader.clone(),
+            anchor: self.anchor.clone(),
         })
     }
 }
@@ -89,7 +92,7 @@ mod tests {
     #[tokio::test]
     async fn test_format_metadata_empty() {
         let loader = SkillLoader::new_empty();
-        let injector = SkillInjector::new(Arc::new(loader));
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
         let output = injector.format_metadata().await;
         assert!(output.is_empty());
     }
@@ -103,7 +106,7 @@ mod tests {
         skill.id = "user:rust-conventions".to_string();
         loader.register(skill).await;
 
-        let injector = SkillInjector::new(Arc::new(loader));
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
         let output = injector.format_metadata().await;
 
         assert!(output.contains("Available skills:"));
@@ -115,9 +118,10 @@ mod tests {
     #[tokio::test]
     async fn test_skill_injector_contribute_empty() {
         let loader = SkillLoader::new_empty();
-        let injector = SkillInjector::new(Arc::new(loader));
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
         let blocks = injector.contribute().await.unwrap();
-        assert!(blocks.is_empty());
+        assert_eq!(blocks.len(), 1);
+        assert!(blocks[0].messages.is_empty());
     }
 
     #[tokio::test]
@@ -129,7 +133,7 @@ mod tests {
         skill.id = "user:rust-conventions".to_string();
         loader.register(skill).await;
 
-        let injector = SkillInjector::new(Arc::new(loader));
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
         let blocks = injector.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
         assert!(blocks[0].messages[0].content.as_ref().unwrap().as_str().contains("Available skills:"));
@@ -139,7 +143,7 @@ mod tests {
     #[tokio::test]
     async fn test_skill_injector_compress_noop() {
         let loader = SkillLoader::new(None);
-        let mut injector = SkillInjector::new(Arc::new(loader));
+        let mut injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
         injector.compress().await;
         // No panic, no state change — compress is a no-op
     }
@@ -147,7 +151,7 @@ mod tests {
     #[tokio::test]
     async fn test_skill_injector_clone_box() {
         let loader = SkillLoader::new(None);
-        let injector = SkillInjector::new(Arc::new(loader));
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
         let cloned = injector.clone_box();
         assert_eq!(cloned.name(), "skills");
     }
@@ -161,7 +165,7 @@ mod tests {
         skill.id = "user:test-skill".to_string();
         loader.register(skill).await;
 
-        let injector = SkillInjector::new(Arc::new(loader));
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
         let original = injector.contribute().await.unwrap();
         let cloned = injector.clone_box();
         let cloned_result = cloned.contribute().await.unwrap();

@@ -93,7 +93,7 @@ async fn test_injector_formats_prompt() {
     skill2.id = "user:python".to_string();
     loader.register(skill2).await;
 
-    let injector = SkillInjector::new(Arc::new(loader));
+    let injector = SkillInjector::new(Arc::new(loader), vol_llm_context::AttentionAnchor::Head(0));
     let output = injector.format_metadata().await;
 
     assert!(output.contains("Available skills:"));
