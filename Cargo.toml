@@ -32,6 +32,7 @@ members = [
     "crates/vol-llm-wiki",
     "crates/vol-llm-yaml-agent",
     "crates/vol-llm-agent-channel",
+    "crates/vol-agent-server",
     "crates/vol-llm-ui",
     "crates/md-frontmatter",
     "crates/vol-mcp-servers",
@@ -85,7 +86,7 @@ anyhow = "1.0"
 
 # Logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # Tracing & Observability
 tracing-appender = "0.2"
