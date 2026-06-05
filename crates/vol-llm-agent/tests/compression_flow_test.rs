@@ -3,6 +3,7 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use vol_llm_agent::react::ContextContributor;
+use vol_llm_context::AttentionAnchor;
 use vol_llm_core::Message;
 use vol_session::{InMemoryEntryStore, Session, SessionContributor, SessionMessage};
 
@@ -25,7 +26,7 @@ async fn test_session_contributor_compress_flow() {
     let session = make_session_with_messages(10).await;
 
     // Create SessionContributor with max_history=10
-    let mut contributor = SessionContributor::new(session.clone(), 10);
+    let mut contributor = SessionContributor::new(session.clone(), 10, AttentionAnchor::Middle(0));
 
     // First contribute: should get all 10 messages
     let blocks = contributor.contribute().await.unwrap();
@@ -52,7 +53,7 @@ async fn test_session_contributor_empty_session_compress() {
     let session = Session::new(entry_store);
     let session = Arc::new(Mutex::new(session));
 
-    let mut contributor = SessionContributor::new(session.clone(), 10);
+    let mut contributor = SessionContributor::new(session.clone(), 10, AttentionAnchor::Middle(0));
 
     // Contribute from empty session
     let blocks = contributor.contribute().await.unwrap();

@@ -452,7 +452,7 @@ impl Clone for RunContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_llm_context::ContextBuilderBuilder;
+    use vol_llm_context::{AttentionAnchor, ContextBuilderBuilder};
     use vol_session::{InMemoryEntryStore, SessionMessage};
     use vol_llm_core::{MessageContent, MessageRole};
 
@@ -598,6 +598,7 @@ mod tests {
             .add_contributor(Box::new(SessionContributor::new(
                 Arc::new(tokio::sync::Mutex::new((*session).clone())),
                 50,
+                AttentionAnchor::Middle(0),
             )))
             .build();
 
@@ -641,6 +642,7 @@ mod tests {
             .add_contributor(Box::new(SessionContributor::new(
                 Arc::new(tokio::sync::Mutex::new((*session).clone())),
                 50,
+                AttentionAnchor::Middle(0),
             )))
             .build();
 
@@ -693,6 +695,7 @@ mod tests {
             .add_contributor(Box::new(SessionContributor::new(
                 Arc::new(tokio::sync::Mutex::new((*session).clone())),
                 50,
+                AttentionAnchor::Middle(0),
             )))
             .build();
 

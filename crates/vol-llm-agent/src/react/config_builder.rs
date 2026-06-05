@@ -6,7 +6,7 @@ use crate::agent_def::AgentDef;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use vol_llm_context::{ContextBuilderBuilder, ContextContributor};
+use vol_llm_context::{AttentionAnchor, ContextBuilderBuilder, ContextContributor};
 use vol_llm_core::SandboxRef;
 use vol_llm_mcp::{McpConfig, McpManager};
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
@@ -222,7 +222,7 @@ impl AgentConfigBuilder {
             }
 
             // 2. SkillInjector — always
-            b = b.add_contributor(Box::new(SkillInjector::new(skill_loader)));
+            b = b.add_contributor(Box::new(SkillInjector::new(skill_loader, AttentionAnchor::Head(0))));
 
             // 2.5. SessionContributor — always, points to current session
             let max_history = self.def.as_ref()
@@ -231,6 +231,7 @@ impl AgentConfigBuilder {
             b = b.add_contributor(Box::new(SessionContributor::new(
                 Arc::new(tokio::sync::Mutex::new((*session).clone())),
                 max_history,
+                AttentionAnchor::Middle(0),
             )));
 
             // 3. Clone existing context_builder contributors (if any)
