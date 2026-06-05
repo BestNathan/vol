@@ -25,6 +25,18 @@ pub enum TaskStatus {
     Killed,
 }
 
+impl std::fmt::Display for TaskStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TaskStatus::Pending => write!(f, "pending"),
+            TaskStatus::Running => write!(f, "running"),
+            TaskStatus::Completed => write!(f, "completed"),
+            TaskStatus::Failed => write!(f, "failed"),
+            TaskStatus::Killed => write!(f, "killed"),
+        }
+    }
+}
+
 /// Type of task
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum TaskKind {
