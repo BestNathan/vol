@@ -47,7 +47,7 @@ pub struct AgentFrontmatter {
     pub sandbox: Option<String>,
     /// Optional. Per-tool configuration. Key = tool name, value = tool config (can include `sandbox` key).
     #[serde(default)]
-    pub tool_config: Option<std::collections::HashMap<String, toml::Value>>,
+    pub tool_config: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 impl AgentFrontmatter {

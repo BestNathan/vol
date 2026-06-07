@@ -90,6 +90,9 @@ pub struct AgentServerCore {
     router: AgentRouter,
     holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
 
+    // === Sandbox registry (from runtime) ===
+    sandbox_registry: Arc<vol_llm_sandbox::registry::SandboxRegistry>,
+
     // === Agent definitions (from runtime) ===
     agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>>,
 
@@ -185,6 +188,7 @@ impl AgentServerCore {
             .with_llm(llm)
             .with_tools(tools)
             .with_session(session)
+            .with_sandbox_registry(self.sandbox_registry.clone())
             .with_working_dir(agent_dir.clone())
             .build()
             .expect("AgentConfig build failed — LLM, tools, and session are all provided");
@@ -329,6 +333,7 @@ impl AgentServerCoreBuilder {
         let skill_loader = runtime.skill_loader.clone();
         let agent_defs = runtime.agent_defs.clone();
         let agent_status = runtime.agent_status.clone();
+        let sandbox_registry = runtime.sandbox_registry.clone();
 
         // Tool registry already includes SkillTool from AgentRuntime
         let tool_registry = runtime.tool_registry.clone();
@@ -390,6 +395,7 @@ impl AgentServerCoreBuilder {
             mcp_manager,
             skill_loader,
             tool_registry,
+            sandbox_registry,
             llm,
             router,
             holders,
@@ -529,6 +535,7 @@ impl AgentServerCore {
         ))).ok();
 
         let runtime = AgentRuntime::for_test().await;
+        let sandbox_registry = runtime.sandbox_registry.clone();
 
         AgentServerCore {
             runtime,
@@ -537,6 +544,7 @@ impl AgentServerCore {
             mcp_manager: Arc::new(McpManager::new(vec![])),
             skill_loader: Arc::new(SkillLoader::new_empty()),
             tool_registry: Arc::new(ToolRegistry::new()),
+            sandbox_registry,
             llm: Arc::new(TestLlm),
             router,
             holders,

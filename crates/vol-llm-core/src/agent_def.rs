@@ -72,7 +72,7 @@ pub struct AgentDef {
     pub sandbox: Option<String>,
     /// Per-tool configurations. Key is the tool name (e.g. "bash"), value is a
     /// TOML table that may include a `sandbox` key and tool-specific fields.
-    pub tool_config: Option<HashMap<String, toml::Value>>,
+    pub tool_config: Option<HashMap<String, serde_json::Value>>,
 }
 
 impl AgentDef {
@@ -153,7 +153,7 @@ impl AgentDef {
     }
 
     /// Set per-tool configurations.
-    pub fn with_tool_config(mut self, config: HashMap<String, toml::Value>) -> Self {
+    pub fn with_tool_config(mut self, config: HashMap<String, serde_json::Value>) -> Self {
         self.tool_config = Some(config);
         self
     }

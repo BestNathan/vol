@@ -6749,6 +6749,7 @@ dependencies = [
  "vol-llm-mcp",
  "vol-llm-provider",
  "vol-llm-runtime",
+ "vol-llm-sandbox",
  "vol-llm-skill",
  "vol-llm-task",
  "vol-llm-tool",

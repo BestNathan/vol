@@ -75,10 +75,14 @@ impl ToolConfig {
 
     /// Populate tool configurations from an `AgentDef.tool_config` map.
     ///
-    /// Each entry is inserted directly into the tool config store by name.
-    pub fn populate_from_agent_def(&mut self, tool_config_map: &HashMap<String, toml::Value>) {
+    /// Converts `serde_json::Value` entries (from YAML frontmatter) into
+    /// `toml::Value` for internal storage.
+    pub fn populate_from_agent_def(&mut self, tool_config_map: &HashMap<String, serde_json::Value>) {
         for (name, value) in tool_config_map {
-            self.tools.insert(name.clone(), value.clone());
+            // Convert serde_json::Value → toml::Value via serde deserialization
+            if let Ok(toml_val) = serde_json::from_value::<toml::Value>(value.clone()) {
+                self.tools.insert(name.clone(), toml_val);
+            }
         }
     }
 }
