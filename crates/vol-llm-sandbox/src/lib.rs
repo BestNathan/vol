@@ -150,3 +150,16 @@ pub enum SandboxError {
 }
 
 pub type SandboxResult<T> = Result<T, SandboxError>;
+
+/// Normalize a path by resolving `.` and `..` components without touching the filesystem.
+pub fn normalize_path(path: &Path) -> PathBuf {
+    let mut result = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => { result.pop(); }
+            std::path::Component::CurDir => {}
+            _ => result.push(component),
+        }
+    }
+    result
+}

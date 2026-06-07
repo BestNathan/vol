@@ -58,8 +58,8 @@ impl Sandbox for LocalSandbox {
             return Err(SandboxError::PathTraversal(rel.to_string()));
         }
         let resolved = self.root_path.join(rel);
-        let normalized = normalize_path(&resolved);
-        let normalized_root = normalize_path(&self.root_path);
+        let normalized = crate::normalize_path(&resolved);
+        let normalized_root = crate::normalize_path(&self.root_path);
         if !normalized.starts_with(&normalized_root) {
             return Err(SandboxError::PathTraversal(rel.to_string()));
         }
@@ -199,19 +199,6 @@ impl Sandbox for LocalSandbox {
             file_type,
         })
     }
-}
-
-/// Normalize a path by resolving `.` and `..` components without touching the filesystem.
-fn normalize_path(path: &Path) -> PathBuf {
-    let mut result = PathBuf::new();
-    for component in path.components() {
-        match component {
-            std::path::Component::ParentDir => { result.pop(); }
-            std::path::Component::CurDir => {}
-            _ => result.push(component),
-        }
-    }
-    result
 }
 
 #[cfg(test)]
