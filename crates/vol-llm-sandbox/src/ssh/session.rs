@@ -71,27 +71,43 @@ impl SshSession {
         req: &crate::CommandRequest,
     ) -> SandboxResult<crate::CommandOutput> {
         use std::io::Read;
-        let guard = self.inner.blocking_lock();
-        let inner = guard.as_ref().ok_or(crate::SandboxError::NotStarted)?;
+        use std::io::Write;
 
-        let cmd_line = if req.args.is_empty() {
-            req.program.clone()
-        } else {
-            format!("{} {}", req.program, req.args.join(" "))
+        // Open channel under lock, then release — channel operates independently
+        let mut channel = {
+            let guard = self.inner.blocking_lock();
+            let inner = guard.as_ref().ok_or(crate::SandboxError::NotStarted)?;
+            inner
+                .sess
+                .channel_session()
+                .map_err(|e| SandboxError::Ssh(e.to_string()))?
         };
-
-        let mut channel = inner
-            .sess
-            .channel_session()
-            .map_err(|e| SandboxError::Ssh(e.to_string()))?;
 
         for (k, v) in &req.env {
             channel.setenv(k, v).ok();
         }
 
+        // Shell-quote arguments to prevent re-parsing through sh -c
+        let cmd_line = if req.args.is_empty() {
+            req.program.clone()
+        } else {
+            let quoted_args: Vec<String> = req.args.iter()
+                .map(|a| shell_quote(a))
+                .collect();
+            format!("{} {}", req.program, quoted_args.join(" "))
+        };
+
         channel
             .exec(&cmd_line)
             .map_err(|e| SandboxError::Ssh(e.to_string()))?;
+
+        // Write stdin if provided
+        if let Some(ref stdin_data) = req.stdin {
+            channel.write_all(stdin_data)
+                .map_err(|e| SandboxError::Ssh(format!("stdin write failed: {}", e)))?;
+        }
+        channel.send_eof()
+            .map_err(|e| SandboxError::Ssh(format!("send_eof failed: {}", e)))?;
 
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
@@ -256,4 +272,19 @@ fn authenticate(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxResul
 fn base64_encode(data: &[u8]) -> String {
     use base64::Engine;
     base64::engine::general_purpose::STANDARD.encode(data)
+}
+
+/// Quote a string for safe use in a shell command line.
+/// Wraps in single quotes, escaping any embedded single quotes.
+fn shell_quote(s: &str) -> String {
+    if s.is_empty() {
+        return "''".to_string();
+    }
+    // If no special chars, return as-is
+    if !s.chars().any(|c| matches!(c, ' ' | '\t' | '\n' | '"' | '\'' | '\\' | '$' | '`' | '!' | '*' | '?' | '[' | ']' | '{' | '}' | '|' | '&' | ';' | '<' | '>' | '(' | ')' | '#' | '~')) {
+        return s.to_string();
+    }
+    // Wrap in single quotes, escape embedded single quotes: ' -> '\''
+    let escaped = s.replace('\'', r"'\''");
+    format!("'{}'", escaped)
 }

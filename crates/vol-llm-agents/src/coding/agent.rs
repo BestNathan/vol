@@ -226,10 +226,6 @@ impl CodingAgent {
             react_agent = react_agent.with_sandbox(sandbox.clone());
         }
 
-        if let Some(ref sandbox) = self.sandbox {
-            react_agent = react_agent.with_sandbox(sandbox.clone());
-        }
-
         // Run the ReActAgent
         // Note: ObserverPlugin receives all events via PluginRegistry,
         // including AgentStart and AgentComplete emitted by ReActAgent itself.
