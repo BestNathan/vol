@@ -305,18 +305,8 @@ impl AgentConfigBuilder {
         // Build tool_config: start empty, populate from AgentDef if available
         let mut tool_config = ToolConfig::new();
         if let Some(ref def) = self.def {
-            tracing::info!(
-                agent_name = %def.name,
-                has_tool_config = def.tool_config.is_some(),
-                tool_config_keys = ?def.tool_config.as_ref().map(|tc| tc.keys().collect::<Vec<_>>()),
-                agent_sandbox = ?def.sandbox,
-                "Building tool_config from AgentDef"
-            );
             if let Some(ref tc) = def.tool_config {
                 tool_config.populate_from_agent_def(tc);
-                // Verify: check what sandbox bash resolves to
-                let bash_sandbox = tool_config.get_sandbox("bash");
-                tracing::info!(?bash_sandbox, "bash sandbox from tool_config after populate");
             }
         }
 
