@@ -11,7 +11,7 @@ use crate::{SandboxError, SandboxResult};
 
 /// Internal configuration passed from SSHSandbox to the session.
 #[derive(Debug, Clone)]
-pub(crate) struct SshSandboxConfig {
+pub struct SshSandboxConfig {
     pub name: String,
     pub work_dir: String,
     pub host: String,
@@ -26,7 +26,7 @@ pub(crate) struct SshSandboxConfig {
 }
 
 /// A managed SSH session with auto-reconnect capability.
-pub(crate) struct SshSession {
+pub struct SshSession {
     inner: tokio::sync::Mutex<Option<InnerSession>>,
     config: Arc<SshSandboxConfig>,
 }
