@@ -4,8 +4,6 @@ use async_trait::async_trait;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-#[cfg(unix)]
-use std::os::unix::process::CommandExt as _;
 
 use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity};
 
@@ -18,9 +16,6 @@ const MAX_OUTPUT_SIZE: usize = 1024 * 1024;
 
 /// Default timeout in milliseconds (120 seconds)
 const DEFAULT_TIMEOUT_MS: u64 = 120_000;
-
-/// Grace period after SIGTERM before escalating to SIGKILL.
-const SIGTERM_GRACE_PERIOD: Duration = Duration::from_secs(5);
 
 /// Dangerous command patterns that are blocked
 const DANGEROUS_PATTERNS: &[&str] = &[
@@ -175,107 +170,19 @@ impl ExecutableTool for BashTool {
             .map(Duration::from_millis)
             .unwrap_or(self.default_timeout);
 
-        // Spawn on a blocking thread using std::process so we get reliable
-        // pipe-based output collection. We create a new process group so we
-        // can kill the entire process tree on timeout.
-        let output = tokio::task::spawn_blocking({
-            let timeout_duration = timeout_duration;
-            let command_str = params.command.clone();
-            let working_dir = params.working_dir.clone();
-            let sandbox_root = context.sandbox.as_ref().map(|s| s.root_path().to_path_buf());
-            move || -> Result<std::process::Output, String> {
-                let mut std_cmd = std::process::Command::new("bash");
-                std_cmd.arg("-c").arg(&command_str);
+        // Build a CommandRequest for the sandbox
+        let req = vol_llm_sandbox::CommandRequest {
+            program: "bash".to_string(),
+            args: vec!["-c".to_string(), params.command.clone()],
+            env: std::collections::HashMap::new(),
+            cwd: params.working_dir.map(std::path::PathBuf::from),
+            stdin: None,
+            timeout: timeout_duration,
+        };
 
-                #[cfg(unix)]
-                std_cmd.process_group(0);
-
-                if let Some(ref wd) = working_dir {
-                    std_cmd.current_dir(wd);
-                } else if let Some(ref root) = sandbox_root {
-                    std_cmd.current_dir(root);
-                }
-
-                std_cmd.stdout(std::process::Stdio::piped());
-                std_cmd.stderr(std::process::Stdio::piped());
-
-                let mut child = std_cmd.spawn().map_err(|e| format!("Failed to spawn command: {}", e))?;
-                let pgid = child.id() as i32;
-
-                // Poll with try_wait to implement timeout
-                let deadline = std::time::Instant::now() + timeout_duration;
-                loop {
-                    match child.try_wait() {
-                        Ok(Some(_)) => {
-                            // Exited normally — collect output
-                            return Ok(child.wait_with_output().unwrap_or_else(|_| std::process::Output {
-                                status: std::process::ExitStatus::default(),
-                                stdout: Vec::new(),
-                                stderr: Vec::new(),
-                            }));
-                        }
-                        Ok(None) => {
-                            if std::time::Instant::now() >= deadline {
-                                // Timeout: SIGTERM the process group
-                                let _ = nix::sys::signal::kill(
-                                    nix::unistd::Pid::from_raw(-pgid),
-                                    nix::sys::signal::Signal::SIGTERM,
-                                );
-
-                                // Wait for graceful exit during grace period
-                                let grace_start = std::time::Instant::now();
-                                let mut exited = false;
-                                loop {
-                                    if grace_start.elapsed() > SIGTERM_GRACE_PERIOD {
-                                        break;
-                                    }
-                                    match child.try_wait() {
-                                        Ok(Some(_)) => {
-                                            exited = true;
-                                            break;
-                                        }
-                                        Ok(None) => {
-                                            std::thread::sleep(Duration::from_millis(100));
-                                        }
-                                        Err(_) => break,
-                                    }
-                                }
-
-                                if exited {
-                                    let _output = child.wait_with_output().unwrap_or_else(|_| std::process::Output {
-                                        status: std::process::ExitStatus::default(),
-                                        stdout: Vec::new(),
-                                        stderr: Vec::new(),
-                                    });
-                                    return Err(format!(
-                                        "Command timed out after {:?}. Sent SIGTERM to process group {}, process exited.",
-                                        timeout_duration, pgid
-                                    ));
-                                } else {
-                                    // Still running — SIGKILL
-                                    let _ = nix::sys::signal::kill(
-                                        nix::unistd::Pid::from_raw(-pgid),
-                                        nix::sys::signal::Signal::SIGKILL,
-                                    );
-                                    let _ = child.wait();
-                                    return Err(format!(
-                                        "Command timed out after {:?}. Sent SIGTERM then SIGKILL to process group {}.",
-                                        timeout_duration, pgid
-                                    ));
-                                }
-                            }
-                            std::thread::sleep(Duration::from_millis(100));
-                        }
-                        Err(e) => {
-                            return Err(format!("Failed to wait for command: {}", e));
-                        }
-                    }
-                }
-            }
-        })
-        .await
-        .map_err(|e| ToolError::ExecutionFailed(format!("Blocking task panicked: {}", e)))?
-        .map_err(|e| ToolError::ExecutionFailed(e))?;
+        let output = context.sandbox.execute(req).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!("Command execution failed: {}", e))
+        })?;
 
         // Convert output to strings
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
