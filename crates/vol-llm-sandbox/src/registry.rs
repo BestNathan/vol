@@ -15,6 +15,8 @@ pub struct SandboxConfig {
     pub work_dir: Option<String>,
     #[serde(default)]
     pub ssh: Option<SshConfig>,
+    #[serde(default)]
+    pub firecracker: Option<FirecrackerConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -39,6 +41,50 @@ pub struct SshConfig {
 fn default_port() -> u16 { 22 }
 fn default_idle_timeout() -> u64 { 300 }
 fn default_connect_timeout() -> u64 { 10 }
+
+/// Configuration for a Firecracker microVM sandbox.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct FirecrackerConfig {
+    /// Path to the uncompressed ELF kernel image (vmlinux).
+    pub kernel_image: String,
+    /// Path to the ext4 rootfs image.
+    pub rootfs_image: String,
+    /// If true, mount rootfs read-only (writes go to tmpfs overlay).
+    #[serde(default)]
+    pub rootfs_readonly: bool,
+    /// Number of pre-warmed idle microVMs in the pool.
+    #[serde(default = "default_pool_size")]
+    pub pool_size: usize,
+    /// Seconds before an idle VM is reclaimed.
+    #[serde(default = "default_idle_timeout_fc")]
+    pub idle_timeout_secs: u64,
+    /// Seconds to wait for SSH to become available in the guest.
+    #[serde(default = "default_connect_timeout_fc")]
+    pub connect_timeout_secs: u64,
+    /// Path to firecracker binary. If unset, looks up "firecracker" on PATH.
+    #[serde(default)]
+    pub firecracker_binary: Option<String>,
+    /// IP address assigned to the guest VM for SSH access.
+    #[serde(default = "default_guest_ip")]
+    pub guest_ip: String,
+    /// SSH port inside the guest VM.
+    #[serde(default = "default_guest_ssh_port")]
+    pub guest_ssh_port: u16,
+    /// Host tap device name for the VM's network interface.
+    pub tap_device: String,
+    /// Path to an SSH keypair for guest access (the private key).
+    /// The corresponding public key must be in the guest's ~/.ssh/authorized_keys.
+    pub ssh_identity_file: String,
+    /// Optional passphrase for the SSH identity file.
+    #[serde(default)]
+    pub ssh_passphrase: Option<String>,
+}
+
+fn default_pool_size() -> usize { 1 }
+fn default_idle_timeout_fc() -> u64 { 300 }
+fn default_connect_timeout_fc() -> u64 { 10 }
+fn default_guest_ip() -> String { "172.16.0.2".to_string() }
+fn default_guest_ssh_port() -> u16 { 22 }
 
 /// Registry of named sandbox instances.
 /// Always contains a built-in "local" sandbox. Additional sandboxes
