@@ -77,13 +77,13 @@ impl ExecutableTool for WriteTool {
         // Create parent directories if they don't exist
         if let Some(parent) = file_path.parent() {
             if !parent.as_os_str().is_empty() {
-                tokio::fs::create_dir_all(parent).await
-                    .map_err(|e| ToolError::ExecutionFailed(format!("Failed to create parent directory: {}", e)))?;
+                context.sandbox.create_dir_all(parent).await
+                    .map_err(|e| ToolError::ExecutionFailed(format!("Failed to create directory: {}", e)))?;
             }
         }
 
         // Write file content
-        tokio::fs::write(&file_path, &params.content)
+        context.sandbox.write_file(&file_path, params.content.as_bytes())
             .await
             .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write file: {}", e)))?;
 
