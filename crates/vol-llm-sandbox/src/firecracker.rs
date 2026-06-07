@@ -24,7 +24,7 @@ use crate::{DirEntry, FileMetadata, Sandbox, SandboxError, SandboxResult};
 /// Send an HTTP PUT request with a JSON body to a Unix socket.
 fn unix_socket_put(socket_path: &Path, uri: &str, body: &str) -> SandboxResult<()> {
     let mut stream = UnixStream::connect(socket_path)
-        .map_err(|e| SandboxError::Ssh(format!("connect to api socket: {}", e)))?;
+        .map_err(|e| SandboxError::Firecracker(format!("connect to api socket: {}", e)))?;
 
     let request = format!(
         "PUT {} HTTP/1.1\r\n\
@@ -41,15 +41,15 @@ fn unix_socket_put(socket_path: &Path, uri: &str, body: &str) -> SandboxResult<(
 
     stream
         .write_all(request.as_bytes())
-        .map_err(|e| SandboxError::Ssh(format!("api write: {}", e)))?;
+        .map_err(|e| SandboxError::Firecracker(format!("api write: {}", e)))?;
 
     let mut response = String::new();
     stream
         .read_to_string(&mut response)
-        .map_err(|e| SandboxError::Ssh(format!("api read: {}", e)))?;
+        .map_err(|e| SandboxError::Firecracker(format!("api read: {}", e)))?;
 
     if !response.contains("204") && !response.contains("200") {
-        return Err(SandboxError::Ssh(format!(
+        return Err(SandboxError::Firecracker(format!(
             "firecracker API error: {}",
             response
         )));
@@ -86,7 +86,7 @@ impl FirecrackerVM {
             .stderr(Stdio::null())
             .spawn()
             .map_err(|e| {
-                SandboxError::Ssh(format!(
+                SandboxError::Firecracker(format!(
                     "failed to spawn firecracker: {} (is it installed?)",
                     e
                 ))
@@ -114,7 +114,7 @@ impl FirecrackerVM {
         let start = Instant::now();
         while !self.api_socket.exists() {
             if start.elapsed() > timeout {
-                return Err(SandboxError::Ssh(
+                return Err(SandboxError::Firecracker(
                     "firecracker API socket did not appear".to_string(),
                 ));
             }
@@ -167,7 +167,7 @@ impl FirecrackerVM {
             if std::net::TcpStream::connect_timeout(
                 &addr
                     .parse()
-                    .map_err(|e| SandboxError::Ssh(format!("bad address: {}", e)))?,
+                    .map_err(|e| SandboxError::Firecracker(format!("bad address: {}", e)))?,
                 Duration::from_secs(1),
             )
             .is_ok()
@@ -176,7 +176,7 @@ impl FirecrackerVM {
             }
             std::thread::sleep(Duration::from_millis(200));
         }
-        Err(SandboxError::Ssh(format!(
+        Err(SandboxError::Firecracker(format!(
             "guest SSH not reachable at {} after {:?}",
             addr, timeout
         )))
@@ -259,7 +259,7 @@ impl FirecrackerPool {
         // Pre-warm the pool
         let pool_clone = Arc::clone(&pool);
         runtime.spawn(async move {
-            if let Err(e) = pool_clone.replenish(pool_size) {
+            if let Err(e) = pool_clone.replenish_async(pool_size).await {
                 tracing::warn!("Firecracker pool pre-warm failed: {}", e);
             }
         });
@@ -323,6 +323,8 @@ impl FirecrackerPool {
     }
 
     /// Ensure the pool has at least `target` idle VMs.
+    /// Synchronous version for use in non-async contexts.
+    #[allow(dead_code)]
     fn replenish(&self, target: usize) -> SandboxResult<()> {
         let needed = {
             let inner = self.inner.lock().unwrap();
@@ -359,18 +361,61 @@ impl FirecrackerPool {
         Ok(())
     }
 
+    /// Async version of `replenish` that wraps blocking VM spawn in `spawn_blocking`.
+    async fn replenish_async(&self, target: usize) -> SandboxResult<()> {
+        let (needed, config) = {
+            let inner = self.inner.lock().unwrap();
+            let n = target.saturating_sub(inner.idle.len());
+            let c = inner.config.clone();
+            (n, c)
+        };
+
+        for _ in 0..needed {
+            let cfg = config.clone();
+            let vm = tokio::task::spawn_blocking(move || {
+                let vm = FirecrackerVM::spawn(&cfg)?;
+                vm.wait_for_ssh_ready(Duration::from_secs(cfg.connect_timeout_secs))?;
+                Ok::<_, SandboxError>(vm)
+            })
+            .await
+            .map_err(|e| SandboxError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))??;
+
+            let mut inner = self.inner.lock().unwrap();
+            inner.idle.push_back((vm, Instant::now()));
+        }
+        Ok(())
+    }
+
+    /// Remove idle VMs that have exceeded the idle timeout, returning them for cleanup.
+    /// The caller is responsible for killing the returned VMs (e.g. via spawn_blocking).
+    fn drain_expired(&self) -> Vec<FirecrackerVM> {
+        let mut inner = self.inner.lock().unwrap();
+        let timeout = inner.idle_timeout;
+        let mut expired = Vec::new();
+        loop {
+            match inner.idle.front() {
+                Some((_, since)) if since.elapsed() > timeout => {
+                    let (vm, _) = inner.idle.pop_front().unwrap();
+                    expired.push(vm);
+                }
+                _ => break,
+            }
+        }
+        expired
+    }
+
     /// Background loop: kill returned VMs, replenish idle, shrink stale.
     async fn maintenance_loop(&self) {
         loop {
             tokio::time::sleep(Duration::from_secs(5)).await;
 
-            // Drain returned VMs and kill them
+            // Drain returned VMs and kill them in a blocking thread
             let returned: Vec<FirecrackerVM> = {
                 let mut inner = self.inner.lock().unwrap();
                 std::mem::take(&mut inner.returned).into_iter().collect()
             };
             for vm in returned {
-                let _ = vm.kill();
+                let _ = tokio::task::spawn_blocking(move || vm.kill()).await;
             }
 
             // Replenish if below pool_size
@@ -383,30 +428,14 @@ impl FirecrackerPool {
                 inner.idle.len()
             };
             if idle_count < target {
-                let _ = self.replenish(target);
+                let _ = self.replenish_async(target).await;
             }
 
-            // Shrink stale idle VMs
-            self.shrink();
-        }
-    }
-
-    /// Remove idle VMs that have exceeded the idle timeout.
-    fn shrink(&self) {
-        let mut inner = self.inner.lock().unwrap();
-        let timeout = inner.idle_timeout;
-        loop {
-            let expired = match inner.idle.front() {
-                Some((_, since)) => since.elapsed() > timeout,
-                None => break,
-            };
-            if !expired {
-                break;
+            // Shrink stale idle VMs — kill expired VMs in a blocking thread
+            let expired = self.drain_expired();
+            for vm in expired {
+                let _ = tokio::task::spawn_blocking(move || vm.kill()).await;
             }
-            let (vm, _) = inner.idle.pop_front().unwrap();
-            drop(inner);
-            let _ = vm.kill();
-            inner = self.inner.lock().unwrap();
         }
     }
 }
@@ -443,15 +472,18 @@ impl FirecrackerSandbox {
     /// Lazily ensure we have a VM handle. Returns an `Arc` clone of the inner
     /// [`SSHSandbox`] so callers can borrow it without holding the mutex.
     async fn ssh(&self) -> SandboxResult<Arc<crate::ssh::SSHSandbox>> {
-        let need_acquire = { self.handle.lock().unwrap().is_none() };
-        if need_acquire {
-            let handle = self.pool.acquire()?;
-            let mut guard = self.handle.lock().unwrap();
-            if guard.is_none() {
-                *guard = Some(handle);
+        {
+            let guard = self.handle.lock().unwrap();
+            if let Some(ref handle) = *guard {
+                return Ok(handle.ssh.clone());
             }
         }
-        let guard = self.handle.lock().unwrap();
+        // Lock released -- safe to do potentially-slow acquire
+        let handle = self.pool.acquire()?;
+        let mut guard = self.handle.lock().unwrap();
+        if guard.is_none() {
+            *guard = Some(handle);
+        }
         Ok(guard.as_ref().unwrap().ssh.clone())
     }
 }

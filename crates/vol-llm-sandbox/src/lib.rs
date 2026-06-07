@@ -138,6 +138,10 @@ pub enum SandboxError {
     #[error("SSH error: {0}")]
     Ssh(String),
 
+    #[cfg(feature = "firecracker")]
+    #[error("Firecracker error: {0}")]
+    Firecracker(String),
+
     #[error("Command timed out after {0:?}")]
     Timeout(Duration),
 
