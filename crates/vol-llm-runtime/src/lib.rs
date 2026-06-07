@@ -59,6 +59,7 @@ pub struct AgentRuntime {
     pub tool_registry: Arc<ToolRegistry>,
     pub task_store: Arc<dyn TaskStore>,
     pub mcp_manager: Arc<McpManager>,
+    pub sandbox_registry: Arc<vol_llm_sandbox::registry::SandboxRegistry>,
     pub skill_loader: Arc<SkillLoader>,
     pub agent_defs: Arc<std::sync::RwLock<HashMap<String, AgentDef>>>,
     pub agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>>,
@@ -184,7 +185,7 @@ impl AgentRuntime {
 
 impl AgentRuntime {
     #[doc(hidden)]
-    pub fn for_test() -> Self {
+    pub async fn for_test() -> Self {
         let store_dir = PathBuf::from("/tmp/vol-llm-runtime-test");
         let working_dir = PathBuf::from(".");
 
@@ -197,6 +198,14 @@ impl AgentRuntime {
         vol_llm_task::tools::register_cli(&mut tool_registry, task_store.clone());
         let tool_registry = Arc::new(tool_registry);
         let mcp_manager = Arc::new(McpManager::new(vec![]));
+        let sandbox_registry = {
+            let tmp = std::env::temp_dir().join("vol-llm-runtime-test-sandboxes");
+            let _ = std::fs::create_dir_all(&tmp);
+            Arc::new(
+                vol_llm_sandbox::registry::SandboxRegistry::load(&tmp).await
+                    .expect("SandboxRegistry init in for_test")
+            )
+        };
         let skill_loader = Arc::new(SkillLoader::new_empty());
 
         AgentRuntime {
@@ -206,6 +215,7 @@ impl AgentRuntime {
             tool_registry,
             task_store,
             mcp_manager,
+            sandbox_registry,
             skill_loader,
             agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),
             agent_status: Arc::new(std::sync::RwLock::new(HashMap::new())),
@@ -251,6 +261,12 @@ impl AgentRuntimeBuilder {
             Arc::new(manager)
         };
 
+        let sandbox_registry = {
+            let sandboxes_dir = self.working_dir.join(".agents").join("sandboxes");
+            vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir).await
+                .map_err(|e| format!("Sandbox registry init failed: {}", e))?
+        };
+        let sandbox_registry = Arc::new(sandbox_registry);
         let skill_loader = {
             let loader = Arc::new(SkillLoader::new(Some(self.working_dir.clone())));
             let ld = Arc::clone(&loader);
@@ -287,6 +303,7 @@ impl AgentRuntimeBuilder {
             tool_registry,
             task_store,
             mcp_manager,
+            sandbox_registry,
             skill_loader,
             agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),
             agent_status: Arc::new(std::sync::RwLock::new(HashMap::new())),

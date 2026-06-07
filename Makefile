@@ -14,7 +14,7 @@ web-serve: ## Build release WASM + serve w/ cache headers (phone testing, port 8
 	@python3 scripts/serve-web.py target/dx/vol-llm-ui-web/release/web/public --port 8080
 
 web-backend: ## Start backend JSON-RPC agent service (port 3001)
-	ANTHROPIC_AUTH_TOKEN=sk cargo watch -x "run --example jsonrpc_agent_service -p vol-llm-agent-channel"
+	ANTHROPIC_AUTH_TOKEN=sk cargo watch -x "run -p vol-agent-server"
 
 web-check: ## cargo check (web only)
 	cargo check -p vol-llm-ui --no-default-features --features web

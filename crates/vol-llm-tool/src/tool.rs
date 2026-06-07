@@ -1,7 +1,10 @@
 //! Tool trait and types.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use vol_llm_core::{Message, SandboxRef, ToolDefinition};
+use vol_llm_core::{Message, ToolDefinition};
+use vol_llm_sandbox::SandboxRef;
 
 use std::error::Error;
 
@@ -39,18 +42,28 @@ impl ToolResult {
 }
 
 /// Tool execution context
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct ToolContext {
     pub messages: Vec<Message>,
-    pub sandbox: Option<SandboxRef>,
+    pub sandbox: SandboxRef,                               // Always set
     pub agent_def: Option<vol_llm_core::AgentDef>,
+}
+
+impl Default for ToolContext {
+    fn default() -> Self {
+        Self {
+            messages: Vec::new(),
+            sandbox: Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None)),
+            agent_def: None,
+        }
+    }
 }
 
 impl std::fmt::Debug for ToolContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ToolContext")
             .field("messages", &self.messages)
-            .field("sandbox", &self.sandbox.as_ref().map(|_| "<sandbox>"))
+            .field("sandbox", &format_args!("{}:{}", self.sandbox.kind(), self.sandbox.name()))
             .field("agent_def", &self.agent_def)
             .finish()
     }
@@ -59,7 +72,7 @@ impl std::fmt::Debug for ToolContext {
 impl ToolContext {
     /// Set the sandbox for this tool context
     pub fn with_sandbox(mut self, sandbox: SandboxRef) -> Self {
-        self.sandbox = Some(sandbox);
+        self.sandbox = sandbox;
         self
     }
 
@@ -69,12 +82,9 @@ impl ToolContext {
         self
     }
 
-    /// Resolve a path through the sandbox, or return unchanged if no sandbox.
+    /// Resolve a path through the sandbox.
     pub fn resolve_path(&self, rel: &str) -> std::result::Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
-        match &self.sandbox {
-            Some(sandbox) => sandbox.resolve_path(rel).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>),
-            None => Ok(std::path::PathBuf::from(rel)),
-        }
+        self.sandbox.resolve_path(rel).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
 }
 
@@ -184,10 +194,10 @@ impl<T: ?Sized + ExecutableTool + Send + Sync> Tool for T {
         self.execute(&json_args, context)
             .await
             .map_err(|e| -> Box<dyn Error + Send> {
-                Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Tool execution failed: {}", e),
-                ))
+                Box::new(std::io::Error::other(format!(
+                    "Tool execution failed: {}",
+                    e
+                )))
             })
     }
 }

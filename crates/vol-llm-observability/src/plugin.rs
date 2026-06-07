@@ -224,7 +224,7 @@ mod tests {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
             "test input".to_string(),
-            AgentConfig::default(),
+            AgentConfig::default().into(),
         );
         ctx
     }

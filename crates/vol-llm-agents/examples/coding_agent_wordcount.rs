@@ -1,7 +1,7 @@
 //! Coding Agent - Write a CLI word count tool (fixed output path).
 
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, HTMLReporter, LocalSandbox};
-use vol_llm_core::Sandbox;
+use vol_llm_sandbox::Sandbox;
 use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
 use vol_llm_core::LLMProvider;
 use std::sync::Arc;
@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let sandbox = Arc::new(LocalSandbox::new(Some(work_dir.clone())));
-    sandbox.start()?;
+    sandbox.start().await?;
 
     let agent = CodingAgent::new(config)?;
 
@@ -82,7 +82,7 @@ Use only standard library (no external crates except clap). Create the files usi
 
     let result = agent.run(task).await;
 
-    sandbox.cleanup()?;
+    sandbox.cleanup().await?;
 
     let result = result?;
 

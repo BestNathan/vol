@@ -5,13 +5,13 @@ edition.workspace = true
 
 [dependencies]
 vol-llm-tool = { workspace = true }
+vol-llm-sandbox = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["process", "time", "sync"] }
 regex = "1.10"
-nix = { version = "0.29", features = ["signal"] }
 
 [dev-dependencies]
 tempfile = "3.10"
+tokio = { workspace = true, features = ["rt", "macros"] }

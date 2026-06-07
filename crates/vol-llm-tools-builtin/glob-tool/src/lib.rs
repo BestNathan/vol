@@ -1,8 +1,9 @@
 //! vol-llm-tools-builtin-glob: Glob tool implementation.
 
 use async_trait::async_trait;
+use glob::Pattern;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use vol_llm_sandbox::FileType;
 use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult};
 
 /// Error type for builtin tools
@@ -65,34 +66,46 @@ impl ExecutableTool for GlobTool {
     async fn execute(
         &self,
         args: &serde_json::Value,
-        _context: &ToolContext,
+        context: &ToolContext,
     ) -> vol_llm_tool::ToolResultType<ToolResult> {
         // Parse arguments
         let params: GlobParams = serde_json::from_value(args.clone()).map_err(|e| {
             ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
         })?;
 
-        // Build full pattern from search_path + pattern
         let search_path = params.path.unwrap_or_else(|| ".".to_string());
-        let full_pattern = PathBuf::from(&search_path)
-            .join(&params.pattern)
-            .to_string_lossy()
-            .to_string();
+        let resolved_path = context.resolve_path(&search_path).map_err(|e| {
+            ToolError::ExecutionFailed(format!("Path resolution failed: {}", e))
+        })?;
 
-        // Execute glob using glob crate
-        let mut results: Vec<(PathBuf, std::time::SystemTime)> = Vec::new();
+        // Build glob pattern matcher (matches against relative paths from search root)
+        let glob_pattern = Pattern::new(&params.pattern).map_err(|e| {
+            ToolError::ExecutionFailed(format!("Invalid glob pattern: {}", e))
+        })?;
 
-        for entry in glob::glob(&full_pattern).map_err(|e| {
-            ToolError::ExecutionFailed(format!("Glob pattern error: {}", e))
-        })? {
-            let path = entry.map_err(|e| {
-                ToolError::ExecutionFailed(format!("Path error: {}", e))
+        // Walk directory tree using sandbox.read_dir()
+        let mut results: Vec<(String, u64)> = Vec::new();
+        let mut dirs_to_visit = vec![resolved_path.clone()];
+
+        while let Some(dir) = dirs_to_visit.pop() {
+            let entries = context.sandbox.read_dir(&dir).await.map_err(|e| {
+                ToolError::ExecutionFailed(format!("Failed to read directory: {}", e))
             })?;
 
-            // Get modification time for sorting
-            if let Ok(metadata) = std::fs::metadata(&path) {
-                if let Ok(mtime) = metadata.modified() {
-                    results.push((path, mtime));
+            for entry in entries {
+                let entry_path = dir.join(&entry.name);
+
+                if entry.file_type == FileType::Directory {
+                    dirs_to_visit.push(entry_path.clone());
+                }
+
+                // Check if the relative path from search root matches the glob pattern
+                if let Ok(relative) = entry_path.strip_prefix(&resolved_path) {
+                    if glob_pattern.matches(&relative.to_string_lossy()) {
+                        if let Ok(metadata) = context.sandbox.metadata(&entry_path).await {
+                            results.push((entry_path.to_string_lossy().to_string(), metadata.mtime));
+                        }
+                    }
                 }
             }
         }
@@ -104,10 +117,7 @@ impl ExecutableTool for GlobTool {
         if results.is_empty() {
             Ok(ToolResult::success("No files matched the pattern.".to_string()))
         } else {
-            let paths: Vec<String> = results
-                .into_iter()
-                .map(|(path, _)| path.to_string_lossy().to_string())
-                .collect();
+            let paths: Vec<String> = results.into_iter().map(|(p, _)| p).collect();
             Ok(ToolResult::success(paths.join("\n")))
         }
     }

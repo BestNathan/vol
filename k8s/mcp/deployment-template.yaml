@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${MCP_NAME}
+  namespace: mcp
+  labels:
+    app: ${MCP_NAME}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${MCP_NAME}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ${MCP_NAME}
+    spec:
+      restartPolicy: Always
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      imagePullSecrets:
+      - name: acr-registry-secret
+      containers:
+      - name: ${MCP_NAME}
+        image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:${MCP_NAME}
+        imagePullPolicy: Always
+        args:
+          - "--http"
+          - "0.0.0.0:8080"
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+        env:
+        - name: RUST_LOG
+          value: "info"
+        - name: HTTPS_PROXY
+          value: "http://192.168.2.98:8890"
+        - name: HTTP_PROXY
+          value: "http://192.168.2.98:8890"
+        - name: NO_PROXY
+          value: "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,kubernetes.default.svc,.svc.cluster.local,docs.rs,crates.io"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${MCP_NAME}
+  namespace: mcp
+  labels:
+    app: ${MCP_NAME}
+spec:
+  selector:
+    app: ${MCP_NAME}
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  type: ClusterIP

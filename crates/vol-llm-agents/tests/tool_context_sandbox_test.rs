@@ -1,5 +1,5 @@
 use vol_llm_tool::ToolContext;
-use vol_llm_core::SandboxRef;
+use vol_llm_sandbox::SandboxRef;
 use vol_llm_agents::coding::LocalSandbox;
 use std::sync::Arc;
 use tempfile::tempdir;

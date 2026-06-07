@@ -32,12 +32,14 @@ members = [
     "crates/vol-llm-wiki",
     "crates/vol-llm-yaml-agent",
     "crates/vol-llm-agent-channel",
+    "crates/vol-agent-server",
     "crates/vol-llm-ui",
     "crates/md-frontmatter",
     "crates/vol-mcp-servers",
     "crates/vol-llm-mcp",
     "crates/vol-llm-runtime",
     "crates/vol-observability",
+    "crates/vol-llm-sandbox",
 ]
 
 [workspace.package]
@@ -85,7 +87,7 @@ anyhow = "1.0"
 
 # Logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # Tracing & Observability
 tracing-appender = "0.2"
@@ -135,6 +137,10 @@ vol-mcp-servers = { path = "crates/vol-mcp-servers" }
 vol-llm-mcp = { path = "crates/vol-llm-mcp" }
 dirs = "5.0"
 vol-observability = { path = "crates/vol-observability" }
+vol-llm-sandbox = { path = "crates/vol-llm-sandbox" }
+
+# SSH
+ssh2 = { version = "0.9", features = ["vendored-openssl"] }
 
 [profile]
 

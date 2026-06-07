@@ -19,10 +19,29 @@ pub struct ToolConfig {
     tools: HashMap<String, toml::Value>,
 }
 
+/// Common configuration shared by all tools.
+///
+/// Every tool entry in `ToolConfig` may include an optional `sandbox` key
+/// to route that tool's execution to a specific sandbox.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct CommonToolConfig {
+    #[serde(default)]
+    pub sandbox: Option<String>,
+}
+
 impl ToolConfig {
     /// Create an empty tool configuration container.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Get the sandbox name configured for a tool (if any).
+    ///
+    /// Reads the `sandbox` key from the tool's config table.
+    /// Returns `None` if the tool is not configured or has no sandbox key.
+    pub fn get_sandbox(&self, tool_name: &str) -> Option<String> {
+        self.get::<CommonToolConfig>(tool_name)
+            .and_then(|c| c.sandbox)
     }
 
     /// Get a typed configuration for the tool with the given name.
@@ -51,6 +70,19 @@ impl ToolConfig {
     pub fn set<T: serde::Serialize>(&mut self, name: &str, config: T) {
         if let Ok(value) = toml::Value::try_from(config) {
             self.tools.insert(name.to_string(), value);
+        }
+    }
+
+    /// Populate tool configurations from an `AgentDef.tool_config` map.
+    ///
+    /// Converts `serde_json::Value` entries (from YAML frontmatter) into
+    /// `toml::Value` for internal storage.
+    pub fn populate_from_agent_def(&mut self, tool_config_map: &HashMap<String, serde_json::Value>) {
+        for (name, value) in tool_config_map {
+            // Convert serde_json::Value → toml::Value via serde deserialization
+            if let Ok(toml_val) = serde_json::from_value::<toml::Value>(value.clone()) {
+                self.tools.insert(name.clone(), toml_val);
+            }
         }
     }
 }

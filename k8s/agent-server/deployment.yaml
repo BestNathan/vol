@@ -1,0 +1,112 @@
+# k8s/deployment-agent-server.yaml - Agent Server deployment + service
+# =============================================================================
+# Deploy:
+#   kubectl apply -f k8s/configmap-agent-server.yaml
+#   kubectl apply -f k8s/secret-agent-server.yaml
+#   kubectl apply -f k8s/deployment-agent-server.yaml
+# =============================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-server
+  namespace: deribit
+  labels:
+    app: agent-server
+spec:
+  selector:
+    app: agent-server
+  ports:
+  - name: ws
+    port: 3001
+    targetPort: 3001
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-server
+  namespace: deribit
+  labels:
+    app: agent-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-server
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: agent-server
+    spec:
+      restartPolicy: Always
+      # Run on arm64 since we built the Alpine image natively (Apple Silicon)
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      containers:
+      - name: agent-server
+        image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server:alpine
+        imagePullPolicy: Always
+        workingDir: /app
+        args:
+          - "--config"
+          - "/etc/agent-server/agent-server.toml"
+        ports:
+        - containerPort: 3001
+          name: ws
+          protocol: TCP
+        volumeMounts:
+        # Main config
+        - name: config
+          mountPath: /etc/agent-server
+          readOnly: true
+        # Provider definitions (mounted as .agents/providers/)
+        - name: providers
+          mountPath: /app/.agents/providers
+          readOnly: true
+        env:
+        # LLM auth token
+        - name: ANTHROPIC_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: agent-server-secrets
+              key: ANTHROPIC_AUTH_TOKEN
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: agent-server-secrets
+              key: OPENAI_API_KEY
+        # Proxy (for restricted network environments)
+        - name: HTTPS_PROXY
+          value: "http://192.168.2.98:8890"
+        - name: HTTP_PROXY
+          value: "http://192.168.2.98:8890"
+        - name: NO_PROXY
+          value: "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,kubernetes.default.svc,.svc.cluster.local"
+        # Logging
+        - name: RUST_LOG
+          value: "info"
+      volumes:
+      - name: config
+        configMap:
+          name: agent-server-config
+          items:
+          - key: agent-server.toml
+            path: agent-server.toml
+          defaultMode: 0644
+      - name: providers
+        configMap:
+          name: agent-server-config
+          items:
+          - key: anthropic-dashscope.toml
+            path: anthropic-dashscope.toml
+          - key: openai-example.toml
+            path: openai-example.toml
+          defaultMode: 0644

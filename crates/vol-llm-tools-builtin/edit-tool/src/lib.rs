@@ -96,16 +96,11 @@ impl ExecutableTool for EditTool {
             ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e))
         })?;
 
-        // Read file contents
-        let content = tokio::fs::read_to_string(&file_path)
-            .await
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::NotFound {
-                    ToolError::NotFound(params.file_path.clone())
-                } else {
-                    ToolError::ExecutionFailed(format!("Failed to read file: {}", e))
-                }
-            })?;
+        // Read file contents via sandbox
+        let raw = context.sandbox.read_file(&file_path, None, None).await
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file: {}", e)))?;
+
+        let content = String::from_utf8_lossy(&raw).to_string();
 
         // Count occurrences of old_string
         let count = content.matches(&params.old_string).count();
@@ -133,8 +128,8 @@ impl ExecutableTool for EditTool {
             content.replacen(&params.old_string, &params.new_string, 1)
         };
 
-        // Write back to file
-        tokio::fs::write(&file_path, &new_content)
+        // Write back to file via sandbox
+        context.sandbox.write_file(&file_path, new_content.as_bytes())
             .await
             .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write file: {}", e)))?;
 

@@ -14,3 +14,4 @@ reqwest = { workspace = true }
 toml = { workspace = true }
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-mcp = { path = "../vol-llm-mcp" }
+vol-llm-sandbox = { workspace = true }

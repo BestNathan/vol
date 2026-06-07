@@ -1,0 +1,54 @@
+# k8s/configmap-agent-server.yaml - Agent Server configuration
+# =============================================================================
+# Contains:
+#   1. agent-server.toml — server/runtime/tracing config
+#   2. anthropic-dashscope.toml — LLM provider definition
+#   3. openai-example.toml — OpenAI-compatible provider definition
+# =============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-server-config
+  namespace: deribit
+  labels:
+    app: agent-server
+data:
+  # ── Main server config ───────────────────────────────────────────────────
+  agent-server.toml: |
+    [server]
+    host = "0.0.0.0"
+    port = 3001
+
+    [runtime]
+    working_dir = "/app"
+    store_dir = "/app/data"
+
+    [tracing]
+    level = "info"
+    format = "text"
+
+  # ── LLM Provider: Anthropic via DashScope proxy ──────────────────────────
+  anthropic-dashscope.toml: |
+    provider = "anthropic"
+    model = "qwen3.6-plus"
+    api_key = "${ANTHROPIC_AUTH_TOKEN}"
+    base_url = "http://192.168.2.162:31693"
+
+    [body]
+    max_tokens = 8192
+    temperature = 0.7
+
+    [headers]
+    "anthropic-version" = "2023-06-01"
+
+  # ── LLM Provider: OpenAI-compatible local service ────────────────────────
+  openai-example.toml: |
+    provider = "openai"
+    model = "glm5.1"
+    api_key = "${OPENAI_API_KEY}"
+    base_url = "http://k8s.nhome.local:31693"
+
+    [body]
+    max_tokens = 2048
+    temperature = 0.7

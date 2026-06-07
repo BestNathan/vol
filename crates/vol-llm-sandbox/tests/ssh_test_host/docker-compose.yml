@@ -1,0 +1,7 @@
+services:
+  ssh-sandbox:
+    build: .
+    ports:
+      - "2222:22"
+    volumes:
+      - ./id_ed25519.pub:/home/agent/.ssh/authorized_keys:ro

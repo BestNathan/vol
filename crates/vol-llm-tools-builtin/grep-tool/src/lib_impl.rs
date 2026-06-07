@@ -7,6 +7,7 @@ use std::sync::Arc;
 use grep_regex::RegexMatcher;
 use grep_searcher::Searcher;
 use ignore::WalkBuilder;
+use vol_llm_sandbox::Sandbox;
 
 use crate::backend::GrepBackend;
 use crate::{GrepParams, SearchResult};
@@ -32,11 +33,7 @@ impl RustLibBackend {
 
 #[async_trait::async_trait]
 impl GrepBackend for RustLibBackend {
-    fn is_available() -> bool {
-        true // Always available as a pure-Rust library
-    }
-
-    async fn search(params: &GrepParams, root: &Path) -> Result<Vec<SearchResult>, String> {
+    async fn search(params: &GrepParams, root: &Path, _sandbox: &dyn Sandbox) -> Result<Vec<SearchResult>, String> {
         let pattern = params.pattern.clone();
         let case_sensitive = params.case_sensitive;
         let glob = params.glob.clone();
@@ -93,13 +90,13 @@ fn search_blocking(
         let path = entry.path();
         let file_type = entry.file_type();
 
-        if !file_type.map_or(false, |ft| ft.is_file()) {
+        if !file_type.is_some_and(|ft| ft.is_file()) {
             continue;
         }
 
         // Apply glob filter on file name or relative path
         if let Some(ref re) = glob_regex {
-            let target = if glob.as_ref().map_or(false, |g| g.contains("**")) {
+            let target = if glob.as_ref().is_some_and(|g| g.contains("**")) {
                 match path.strip_prefix(root) {
                     Ok(rel) => rel.to_string_lossy().to_string(),
                     Err(_) => path.to_string_lossy().to_string(),
@@ -169,6 +166,7 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use tempfile::tempdir;
+    use vol_llm_sandbox::local::LocalSandbox;
 
     fn make_params(pattern: &str, glob: Option<&str>, output_mode: &str) -> GrepParams {
         GrepParams {
@@ -188,8 +186,9 @@ mod tests {
         writeln!(f1, "foo bar").unwrap();
         writeln!(f1, "hello again").unwrap();
 
+        let sb = LocalSandbox::new(Some(dir.path().to_path_buf()));
         let params = make_params("hello", None, "files_with_matches");
-        let results = RustLibBackend::search(&params, dir.path()).await.unwrap();
+        let results = RustLibBackend::search(&params, dir.path(), &sb).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].path.ends_with("test.txt"));
     }
@@ -200,8 +199,9 @@ mod tests {
         let mut f1 = fs::File::create(dir.path().join("test.txt")).unwrap();
         writeln!(f1, "hello world").unwrap();
 
+        let sb = LocalSandbox::new(Some(dir.path().to_path_buf()));
         let params = make_params("nonexistent", None, "files_with_matches");
-        let results = RustLibBackend::search(&params, dir.path()).await.unwrap();
+        let results = RustLibBackend::search(&params, dir.path(), &sb).await.unwrap();
         assert!(results.is_empty());
     }
 
@@ -213,8 +213,9 @@ mod tests {
         let mut f2 = fs::File::create(dir.path().join("test.txt")).unwrap();
         writeln!(f2, "hello world").unwrap();
 
+        let sb = LocalSandbox::new(Some(dir.path().to_path_buf()));
         let params = make_params("hello", Some("*.rs"), "files_with_matches");
-        let results = RustLibBackend::search(&params, dir.path()).await.unwrap();
+        let results = RustLibBackend::search(&params, dir.path(), &sb).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(
             results[0].path.to_string_lossy().ends_with(".rs"),
@@ -231,8 +232,9 @@ mod tests {
         writeln!(f1, "hello").unwrap();
         writeln!(f1, "world").unwrap();
 
+        let sb = LocalSandbox::new(Some(dir.path().to_path_buf()));
         let params = make_params("hello", None, "count");
-        let results = RustLibBackend::search(&params, dir.path()).await.unwrap();
+        let results = RustLibBackend::search(&params, dir.path(), &sb).await.unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].match_count, 2);
     }
@@ -245,8 +247,9 @@ mod tests {
         writeln!(f1, "hello world").unwrap();
         writeln!(f1, "line 3").unwrap();
 
+        let sb = LocalSandbox::new(Some(dir.path().to_path_buf()));
         let params = make_params("hello", None, "content");
-        let results = RustLibBackend::search(&params, dir.path()).await.unwrap();
+        let results = RustLibBackend::search(&params, dir.path(), &sb).await.unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].line_numbers, vec![2]);
     }

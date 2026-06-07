@@ -42,6 +42,12 @@ pub struct AgentFrontmatter {
     /// Optional. Context files to inject into the Middle zone (relative to working_dir).
     #[serde(default)]
     pub context_files: Option<Vec<String>>,
+    /// Optional. Default sandbox for this agent (registry name).
+    #[serde(default)]
+    pub sandbox: Option<String>,
+    /// Optional. Per-tool configuration. Key = tool name, value = tool config (can include `sandbox` key).
+    #[serde(default)]
+    pub tool_config: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 impl AgentFrontmatter {
@@ -136,6 +142,8 @@ mod tests {
             max_history_messages: None,
             working_dir: None,
             context_files: None,
+            sandbox: None,
+            tool_config: None,
         };
         assert_eq!(fm.resolve_type(), "my-agent");
     }
@@ -154,6 +162,8 @@ mod tests {
             max_history_messages: None,
             working_dir: None,
             context_files: None,
+            sandbox: None,
+            tool_config: None,
         };
         assert_eq!(fm.resolve_type(), "code-reviewer");
     }
@@ -172,6 +182,8 @@ mod tests {
             max_history_messages: None,
             working_dir: None,
             context_files: None,
+            sandbox: None,
+            tool_config: None,
         };
         assert_eq!(fm.resolve_max_iterations(), Some(10));
     }
@@ -190,6 +202,8 @@ mod tests {
             max_history_messages: None,
             working_dir: None,
             context_files: None,
+            sandbox: None,
+            tool_config: None,
         };
         assert_eq!(fm.resolve_max_iterations(), Some(20));
     }
@@ -208,6 +222,8 @@ mod tests {
             max_history_messages: None,
             working_dir: None,
             context_files: None,
+            sandbox: None,
+            tool_config: None,
         };
         assert!(fm.resolve_max_iterations().is_none());
     }

@@ -83,27 +83,19 @@ impl ExecutableTool for ReadTool {
             ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
         })?;
 
-        // If absolute path, read directly; if relative, resolve through sandbox
-        let file_path = if std::path::Path::new(&params.file_path).is_absolute() {
-            std::path::PathBuf::from(&params.file_path)
-        } else {
-            context.resolve_path(&params.file_path).map_err(|e| {
-                ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e))
-            })?
-        };
+        // Resolve path through sandbox
+        let file_path = context.resolve_path(&params.file_path).map_err(|e| {
+            ToolError::ExecutionFailed(format!("Path resolution failed: {}", e))
+        })?;
 
-        // Read file contents
-        let content = match tokio::fs::read_to_string(&file_path).await {
-            Ok(content) => content,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Err(ToolError::NotFound(file_path.display().to_string()));
-            }
-            Err(e) => {
-                return Err(ToolError::ExecutionFailed(e.to_string()));
-            }
-        };
+        // Read file contents via sandbox (read full file; offset/limit applied by line below)
+        let raw = context.sandbox.read_file(&file_path, None, None).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to read file: {}", e))
+        })?;
 
-        // Apply offset and limit
+        let content = String::from_utf8_lossy(&raw).to_string();
+
+        // Apply offset and limit (line-level)
         let lines: Vec<&str> = content.lines().collect();
         let start = params.offset.min(lines.len());
         let end = (start + params.limit).min(lines.len());

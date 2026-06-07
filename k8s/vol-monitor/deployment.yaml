@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vol-monitor
+  namespace: deribit
+  labels:
+    app: vol-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vol-monitor
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: vol-monitor
+    spec:
+      restartPolicy: Always
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      containers:
+      - name: vol-monitor
+        image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:latest
+        imagePullPolicy: Always
+        workingDir: /etc/vol-monitor
+        args:
+          - "--config"
+          - "config.toml"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/vol-monitor
+          readOnly: true
+        env:
+        # Deribit API credentials (from Secrets)
+        - name: DERIBIT_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: vol-monitor-secrets
+              key: DERIBIT_CLIENT_ID
+        - name: DERIBIT_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: vol-monitor-secrets
+              key: DERIBIT_CLIENT_SECRET
+
+        # Feishu credentials (from Secrets)
+        - name: FEISHU_APP_ID
+          valueFrom:
+            secretKeyRef:
+              name: vol-monitor-secrets
+              key: FEISHU_APP_ID
+        - name: FEISHU_APP_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: vol-monitor-secrets
+              key: FEISHU_APP_SECRET
+        - name: FEISHU_RECEIVE_ID
+          valueFrom:
+            secretKeyRef:
+              name: vol-monitor-secrets
+              key: FEISHU_RECEIVE_ID
+
+        # Tracing
+        - name: OTEL_ENDPOINT
+          value: "http://jaeger-collector.observability.svc.cluster.local:4317"
+        # Logging
+        - name: RUST_LOG
+          value: "info"
+        # Network (required in restricted environment)
+        - name: HTTPS_PROXY
+          value: "http://192.168.2.98:8890"
+        - name: HTTP_PROXY
+          value: "http://192.168.2.98:8890"
+        - name: NO_PROXY
+          value: "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,kubernetes.default.svc,.svc.cluster.local"
+      volumes:
+      - name: config
+        configMap:
+          name: vol-monitor-config
+          items:
+          - key: config.toml
+            path: config.toml
+          defaultMode: 0644

@@ -99,6 +99,8 @@ impl AgentLoader {
                     prompt: doc.body,
                     working_dir: fm.working_dir.as_ref().map(PathBuf::from),
                     context_files: fm.context_files.clone().unwrap_or_default(),
+                    sandbox: fm.sandbox.clone(),
+                    tool_config: fm.tool_config.clone(),
                 };
 
                 match agents_map.entry(doc.frontmatter.name) {

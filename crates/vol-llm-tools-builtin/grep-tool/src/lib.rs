@@ -16,7 +16,6 @@ use crate::lib_impl::RustLibBackend;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType};
@@ -53,25 +52,11 @@ pub struct SearchResult {
     pub line_numbers: Vec<usize>,
 }
 
-pub struct GrepTool {
-    has_rg: AtomicBool,
-    rg_checked: AtomicBool,
-}
+pub struct GrepTool;
 
 impl GrepTool {
     pub fn new() -> Self {
-        Self {
-            has_rg: AtomicBool::new(false),
-            rg_checked: AtomicBool::new(false),
-        }
-    }
-
-    fn ensure_checked(&self) {
-        if !self.rg_checked.load(Ordering::Acquire) {
-            self.rg_checked.store(true, Ordering::Release);
-            let available = RgCliBackend::is_available();
-            self.has_rg.store(available, Ordering::Release);
-        }
+        Self
     }
 }
 
@@ -124,7 +109,7 @@ impl ExecutableTool for GrepTool {
     async fn execute(
         &self,
         args: &serde_json::Value,
-        _context: &ToolContext,
+        context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         let params: GrepParams = serde_json::from_value(args.clone()).map_err(|e| {
             ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
@@ -138,29 +123,29 @@ impl ExecutableTool for GrepTool {
             )));
         }
 
-        self.ensure_checked();
-
         let search_root = PathBuf::from(params.path.clone().unwrap_or_else(|| ".".to_string()));
 
-        let search_future = if self.has_rg.load(Ordering::Acquire) {
-            RgCliBackend::search(&params, &search_root)
-        } else {
-            RustLibBackend::search(&params, &search_root)
+        // Try rg via sandbox first, fall back to Rust library
+        let results = match tokio::time::timeout(Duration::from_secs(SEARCH_TIMEOUT_SECS), RgCliBackend::search(&params, &search_root, &*context.sandbox)).await {
+            Ok(Ok(results)) => results,
+            Ok(Err(_rg_err)) => {
+                tokio::time::timeout(Duration::from_secs(SEARCH_TIMEOUT_SECS), RustLibBackend::search(&params, &search_root, &*context.sandbox)).await
+                    .map_err(|_| ToolError::ExecutionFailed("Search timed out after 30 seconds. Try a narrower path or glob.".to_string()))?
+                    .map_err(ToolError::ExecutionFailed)?
+            }
+            Err(_) => {
+                // rg timed out or was unavailable, use library fallback
+                tokio::time::timeout(Duration::from_secs(SEARCH_TIMEOUT_SECS), RustLibBackend::search(&params, &search_root, &*context.sandbox)).await
+                    .map_err(|_| ToolError::ExecutionFailed("Search timed out after 30 seconds. Try a narrower path or glob.".to_string()))?
+                    .map_err(ToolError::ExecutionFailed)?
+            }
         };
 
-        match tokio::time::timeout(Duration::from_secs(SEARCH_TIMEOUT_SECS), search_future).await {
-            Ok(Ok(results)) => {
-                let content = format_results(&params.output_mode, &results);
-                if content.is_empty() {
-                    Ok(ToolResult::success("No matches found."))
-                } else {
-                    Ok(ToolResult::success(content))
-                }
-            }
-            Ok(Err(e)) => Err(ToolError::ExecutionFailed(e)),
-            Err(_) => Err(ToolError::ExecutionFailed(
-                "Search timed out after 30 seconds. Try a narrower path or glob.".to_string(),
-            )),
+        let content = format_results(&params.output_mode, &results);
+        if content.is_empty() {
+            Ok(ToolResult::success("No matches found."))
+        } else {
+            Ok(ToolResult::success(content))
         }
     }
 }

@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+toml = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
@@ -26,6 +27,7 @@ vol-session = { path = "../vol-session" }
 vol-llm-context = { path = "../vol-llm-context" }
 vol-llm-skill = { path = "../vol-llm-skill" }
 vol-llm-mcp = { path = "../vol-llm-mcp" }
+vol-llm-sandbox = { workspace = true }
 vol-tracing = { path = "../vol-tracing" }
 
 # Optional HTTP channel support

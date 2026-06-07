@@ -7,10 +7,11 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use vol_llm_context::{AttentionAnchor, ContextBuilderBuilder, ContextContributor};
-use vol_llm_core::SandboxRef;
+use vol_llm_sandbox::registry::SandboxRegistry;
+use vol_llm_sandbox::SandboxRef;
 use vol_llm_mcp::{McpConfig, McpManager};
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
-use vol_llm_tool::{ExecutableTool, ToolRegistry};
+use vol_llm_tool::{ExecutableTool, ToolConfig, ToolRegistry};
 use vol_session::{InMemoryEntryStore, Session, SessionContributor};
 
 /// Builder for AgentConfig.
@@ -26,6 +27,8 @@ pub struct AgentConfigBuilder {
     contributors: Vec<Box<dyn ContextContributor>>,
     mcp_manager: Option<Arc<McpManager>>,
     working_dir: Option<PathBuf>,
+    sandbox_registry: Option<Arc<SandboxRegistry>>,
+    default_sandbox: Option<String>,
 }
 
 impl AgentConfigBuilder {
@@ -42,6 +45,8 @@ impl AgentConfigBuilder {
             contributors: Vec::new(),
             mcp_manager: None,
             working_dir: None,
+            sandbox_registry: None,
+            default_sandbox: None,
         }
     }
 
@@ -77,6 +82,16 @@ impl AgentConfigBuilder {
 
     pub fn with_sandbox(mut self, sandbox: SandboxRef) -> Self {
         self.sandbox = Some(sandbox);
+        self
+    }
+
+    pub fn with_sandbox_registry(mut self, registry: Arc<SandboxRegistry>) -> Self {
+        self.sandbox_registry = Some(registry);
+        self
+    }
+
+    pub fn with_default_sandbox(mut self, name: impl Into<String>) -> Self {
+        self.default_sandbox = Some(name.into());
         self
     }
 
@@ -287,12 +302,28 @@ impl AgentConfigBuilder {
             b.build()
         };
 
+        // Build tool_config: start empty, populate from AgentDef if available
+        let mut tool_config = ToolConfig::new();
+        if let Some(ref def) = self.def {
+            if let Some(ref tc) = def.tool_config {
+                tool_config.populate_from_agent_def(tc);
+            }
+        }
+
+        // Resolve default_sandbox: explicit builder override > AgentDef.sandbox
+        let effective_default_sandbox = self.default_sandbox.or_else(|| {
+            self.def.as_ref().and_then(|d| d.sandbox.clone())
+        });
+
         Ok(AgentConfig {
             def: self.def,
             llm,
             tools: Arc::new(tools),
             session: std::sync::RwLock::new(session),
             sandbox: self.sandbox,
+            sandbox_registry: self.sandbox_registry,
+            default_sandbox: effective_default_sandbox,
+            tool_config,
             context_builder: std::sync::RwLock::new(context_builder),
             plugin_registry: self.plugin_registry,
             mcp_manager: self.mcp_manager,
