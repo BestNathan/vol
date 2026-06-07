@@ -194,7 +194,7 @@ This resolution happens in `ToolContext` construction before `tool.execute()` is
 | Absolute path in sandbox I/O | Reject with error (paths must be relative to root_path) |
 | Path traversal (`../`) | Reject with error. Checked **locally** by `resolve_path()` before any remote I/O — path is normalized and verified to stay within `root_path()`. Note: local-side checking cannot detect remote symlinks pointing outside root_path; this is an accepted limitation for v1. |
 | Large file read/write | Read entire file into memory (for now); streaming is future work |
-| Concurrent commands on same SSH sandbox | Serialize via connection mutex or open multiple SSH channels on same session |
+| Concurrent commands on same SSH sandbox | Open multiple SSH channels on a single TCP connection (multiplex). Each `execute()` gets its own channel; no head-of-line blocking |
 | Remote work_dir doesn't exist | `start()` creates it on sandbox initialization |
 | Sandbox config references unknown sandbox type | Error at registry load time: "unknown sandbox type: xxx" |
 | Tool specifies sandbox that doesn't exist in registry | Error at tool execution time |
@@ -205,8 +205,10 @@ This resolution happens in `ToolContext` construction before `tool.execute()` is
 
 ## Open Questions
 
-1. **Concurrent SSH commands**: Should multiple concurrent `execute()` calls on the same SSHSandbox share one SSH connection (multiplex channels) or serialize? Leaning: serialize with a connection-scoped mutex for simplicity.
-2. **File metadata type**: What fields does `FileMetadata` need beyond `mtime`, `size`, `is_dir`, `is_file`? For now: just those four, matching what `glob` tool uses.
+*(All resolved)*
+
+1. ~~**Concurrent SSH commands**~~ → **Resolved**: Open multiple SSH channels on a single connection (multiplex). Concurrent `execute()` calls share one TCP connection but use independent channels, avoiding serialization bottlenecks.
+2. ~~**File metadata type**~~ → **Resolved**: `FileMetadata` fields: `mtime`, `size`, `is_dir`, `is_file`.
 
 ## Version History
 
