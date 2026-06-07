@@ -8,13 +8,23 @@ use vol_llm_core::{ToolCall, ToolDefinition};
 /// Tool registry
 pub struct ToolRegistry {
     tools: HashMap<String, Arc<dyn ExecutableTool>>,
+    tool_sandboxes: HashMap<String, String>,  // tool_name → sandbox_name
 }
 
 impl ToolRegistry {
     pub fn new() -> Self {
         Self {
             tools: HashMap::new(),
+            tool_sandboxes: HashMap::new(),
         }
+    }
+
+    pub fn set_tool_sandbox(&mut self, tool_name: &str, sandbox_name: &str) {
+        self.tool_sandboxes.insert(tool_name.to_string(), sandbox_name.to_string());
+    }
+
+    pub fn get_tool_sandbox(&self, tool_name: &str) -> Option<&str> {
+        self.tool_sandboxes.get(tool_name).map(|s| s.as_str())
     }
 
     pub fn register<T: ExecutableTool + 'static>(&mut self, tool: T) {
@@ -100,7 +110,7 @@ impl ToolRegistry {
             }
         };
 
-        Arc::new(Self { tools })
+        Arc::new(Self { tools, tool_sandboxes: self.tool_sandboxes.clone() })
     }
 
     /// Discover and register all MCP tools from an McpManager.
@@ -138,6 +148,7 @@ impl Clone for ToolRegistry {
     fn clone(&self) -> Self {
         Self {
             tools: self.tools.clone(),
+            tool_sandboxes: self.tool_sandboxes.clone(),
         }
     }
 }

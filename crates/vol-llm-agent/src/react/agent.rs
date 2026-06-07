@@ -10,6 +10,7 @@ use vol_llm_core::{
     StreamReceiver, ToolChoice,
 };
 use vol_llm_mcp::McpManager;
+use vol_llm_sandbox::registry::SandboxRegistry;
 use vol_llm_sandbox::SandboxRef;
 use vol_llm_tool::ToolContext;
 use vol_session::{InMemoryEntryStore, Session, SessionContributor};
@@ -29,6 +30,8 @@ pub struct AgentConfig {
     /// write via agent.set_session() (gated by is_running).
     pub(crate) session: std::sync::RwLock<Arc<Session>>,
     pub sandbox: Option<SandboxRef>,
+    pub sandbox_registry: Option<Arc<SandboxRegistry>>,
+    pub default_sandbox: Option<String>,
 
     // === Context and plugins ===
     pub(crate) context_builder: RwLock<ContextBuilder>,
@@ -75,6 +78,8 @@ impl Default for AgentConfig {
             tools: Arc::new(vol_llm_tool::ToolRegistry::new()),
             session: std::sync::RwLock::new(Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())))),
             sandbox: None,
+            sandbox_registry: None,
+            default_sandbox: None,
             context_builder: RwLock::new(ContextBuilderBuilder::new(128_000).build()),
             plugin_registry: PluginRegistry::new(),
             mcp_manager: None,
@@ -480,10 +485,19 @@ impl ReActAgent {
                             }
                         }
 
-                        // Execute tool
-                        let sandbox_ref = match &sandbox {
-                            Some(sb) => sb.clone(),
-                            None => Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None)),
+                        // Resolve sandbox: tool override > agent default > registry default > local
+                        let sandbox_ref = if let Some(ref registry) = run_ctx.config.sandbox_registry {
+                            let sandbox_name = run_ctx
+                                .tools
+                                .get_tool_sandbox(&call.name)
+                                .or(run_ctx.config.default_sandbox.as_deref())
+                                .unwrap_or("local");
+                            registry.get(sandbox_name).unwrap_or_else(|| registry.default())
+                        } else {
+                            match &sandbox {
+                                Some(sb) => sb.clone(),
+                                None => Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None)),
+                            }
                         };
                         let mut tool_ctx = ToolContext::default().with_sandbox(sandbox_ref);
                         if let Some(ref def) = agent_def {
