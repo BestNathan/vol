@@ -1,9 +1,10 @@
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use async_trait::async_trait;
 #[cfg(unix)]
-use std::os::unix::process::CommandExt;
+use std::os::unix::process::{CommandExt, ExitStatusExt};
 use crate::{CommandOutput, DirEntry, FileMetadata, FileType, Sandbox, SandboxError, SandboxResult};
 
 /// Counter to guarantee unique temp directory names across parallel tests.
@@ -66,71 +67,80 @@ impl Sandbox for LocalSandbox {
     }
 
     async fn execute(&self, req: crate::CommandRequest) -> SandboxResult<CommandOutput> {
-        let mut cmd = std::process::Command::new(&req.program);
-        cmd.args(&req.args);
-        for (k, v) in &req.env {
-            cmd.env(k, v);
-        }
-        let cwd = req.cwd.map(|p| self.root_path.join(p))
-            .unwrap_or_else(|| self.root_path.clone());
-        cmd.current_dir(&cwd);
-        cmd.stdin(std::process::Stdio::piped());
-        cmd.stdout(std::process::Stdio::piped());
-        cmd.stderr(std::process::Stdio::piped());
-
-        #[cfg(unix)]
-        { cmd.process_group(0); }
-
-        let mut child = cmd.spawn().map_err(SandboxError::Io)?;
-
-        if let Some(stdin_data) = &req.stdin {
-            use std::io::Write;
-            if let Some(ref mut stdin) = child.stdin {
-                let _ = stdin.write_all(stdin_data);
+        let root = self.root_path.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut cmd = std::process::Command::new(&req.program);
+            cmd.args(&req.args);
+            for (k, v) in &req.env {
+                cmd.env(k, v);
             }
-            // Drop stdin so the child sees EOF
+            let cwd = req.cwd.map(|p| root.join(p))
+                .unwrap_or_else(|| root.clone());
+            cmd.current_dir(&cwd);
+            cmd.stdin(std::process::Stdio::piped());
+            cmd.stdout(std::process::Stdio::piped());
+            cmd.stderr(std::process::Stdio::piped());
+
+            #[cfg(unix)]
+            { cmd.process_group(0); }
+
+            let mut child = cmd.spawn().map_err(SandboxError::Io)?;
+
+            // Write stdin data if provided
+            if let Some(ref stdin_data) = req.stdin {
+                if let Some(ref mut stdin) = child.stdin {
+                    let _ = stdin.write_all(stdin_data);
+                }
+            }
+            // Always close stdin so the child sees EOF
             drop(child.stdin.take());
-        }
 
-        // Wait with timeout
-        let timeout = req.timeout;
-        let pid = child.id();
-        let start = std::time::Instant::now();
-        loop {
-            match child.try_wait().map_err(SandboxError::Io)? {
-                Some(status) => {
-                    let output = child.wait_with_output().map_err(SandboxError::Io)?;
-                    return Ok(CommandOutput {
-                        stdout: output.stdout,
-                        stderr: output.stderr,
-                        exit_code: status.code().unwrap_or(-1),
-                        killed_by_signal: None,
-                    });
-                }
-                None => {
-                    if start.elapsed() > timeout {
+            // Wait with timeout
+            let timeout = req.timeout;
+            let pid = child.id();
+            let start = std::time::Instant::now();
+            loop {
+                match child.try_wait().map_err(SandboxError::Io)? {
+                    Some(status) => {
+                        let output = child.wait_with_output().map_err(SandboxError::Io)?;
                         #[cfg(unix)]
-                        {
-                            use std::process::Command as KillCommand;
-                            // Send SIGTERM to the process group (negative pid)
-                            let _ = KillCommand::new("kill")
-                                .arg("-TERM")
-                                .arg(format!("-{}", pid))
-                                .status();
-                            std::thread::sleep(Duration::from_secs(5));
-                            // Send SIGKILL if still alive
-                            let _ = KillCommand::new("kill")
-                                .arg("-KILL")
-                                .arg(format!("-{}", pid))
-                                .status();
-                        }
-                        let _ = child.wait();
-                        return Err(SandboxError::Timeout(timeout));
+                        let killed_by_signal = status.signal();
+                        #[cfg(not(unix))]
+                        let killed_by_signal = None;
+                        return Ok(CommandOutput {
+                            stdout: output.stdout,
+                            stderr: output.stderr,
+                            exit_code: status.code().unwrap_or(-1),
+                            killed_by_signal,
+                        });
                     }
-                    std::thread::sleep(Duration::from_millis(100));
+                    None => {
+                        if start.elapsed() > timeout {
+                            #[cfg(unix)]
+                            {
+                                use std::process::Command as KillCommand;
+                                // Send SIGTERM to the process group (negative pid)
+                                let _ = KillCommand::new("kill")
+                                    .arg("-TERM")
+                                    .arg(format!("-{}", pid))
+                                    .status();
+                                std::thread::sleep(Duration::from_secs(5));
+                                // Send SIGKILL if still alive
+                                let _ = KillCommand::new("kill")
+                                    .arg("-KILL")
+                                    .arg(format!("-{}", pid))
+                                    .status();
+                            }
+                            let _ = child.wait();
+                            return Err(SandboxError::Timeout(timeout));
+                        }
+                        std::thread::sleep(Duration::from_millis(100));
+                    }
                 }
             }
-        }
+        })
+        .await
+        .map_err(|e| SandboxError::Io(std::io::Error::other(e.to_string())))?
     }
 
     async fn read_file(&self, path: &Path, offset: Option<u64>, limit: Option<u64>)
