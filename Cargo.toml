@@ -39,6 +39,7 @@ members = [
     "crates/vol-llm-mcp",
     "crates/vol-llm-runtime",
     "crates/vol-observability",
+    "crates/vol-llm-sandbox",
 ]
 
 [workspace.package]
@@ -136,6 +137,10 @@ vol-mcp-servers = { path = "crates/vol-mcp-servers" }
 vol-llm-mcp = { path = "crates/vol-llm-mcp" }
 dirs = "5.0"
 vol-observability = { path = "crates/vol-observability" }
+vol-llm-sandbox = { path = "crates/vol-llm-sandbox" }
+
+# SSH
+ssh2 = { version = "0.9", features = ["vendored-openssl"] }
 
 [profile]
 
