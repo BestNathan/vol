@@ -21,7 +21,7 @@ use vol_llm_tool::ToolConfig;
 use vol_llm_tools_builtin::{WebFetchConfig, ProxyConfig};
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, CodingAgentResponse, ChannelledEventObserver, LocalSandbox};
 use vol_llm_agent::AgentStreamEvent;
-use vol_llm_core::Sandbox;
+use vol_llm_sandbox::Sandbox;
 
 /// Helper to configure web_fetch in ToolConfig with proxy
 fn configure_web_fetch(tool_config: &mut ToolConfig) {
@@ -73,7 +73,7 @@ async fn test_coding_agent_develops_deribit_ws_client() {
 
     // Set up a sandbox so relative paths resolve inside the temp directory
     let sandbox = LocalSandbox::new(Some(temp_dir.path().to_path_buf()));
-    sandbox.start().expect("Sandbox should start");
+    sandbox.start().await.expect("Sandbox should start");
     let agent = agent.with_sandbox(Arc::new(sandbox));
 
     // Run the development task

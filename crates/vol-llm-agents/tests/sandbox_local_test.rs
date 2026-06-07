@@ -1,51 +1,51 @@
 use vol_llm_agents::coding::LocalSandbox;
-use vol_llm_core::Sandbox;
+use vol_llm_sandbox::Sandbox;
 use tempfile::tempdir;
 
-#[test]
-fn test_local_sandbox_new_with_path() {
+#[tokio::test]
+async fn test_local_sandbox_new_with_path() {
     let dir = tempdir().unwrap();
     let sandbox = LocalSandbox::new(Some(dir.path().to_path_buf()));
     assert_eq!(sandbox.kind(), "local");
     assert_eq!(sandbox.root_path(), dir.path());
 }
 
-#[test]
-fn test_local_sandbox_new_temp() {
+#[tokio::test]
+async fn test_local_sandbox_new_temp() {
     let sandbox = LocalSandbox::new(None);
     assert_eq!(sandbox.kind(), "local");
     assert!(sandbox.root_path().to_string_lossy().contains("sandbox"));
 }
 
-#[test]
-fn test_local_sandbox_start_creates_dir() {
+#[tokio::test]
+async fn test_local_sandbox_start_creates_dir() {
     let dir = tempdir().unwrap();
     let new_path = dir.path().join("new-sandbox");
     let sandbox = LocalSandbox::new(Some(new_path.clone()));
     assert!(!new_path.exists());
 
-    sandbox.start().unwrap();
+    sandbox.start().await.unwrap();
     assert!(new_path.exists());
 
     // caller-owned dirs are NOT deleted on cleanup (even if start created them)
-    sandbox.cleanup().unwrap();
+    sandbox.cleanup().await.unwrap();
     assert!(new_path.exists());
 }
 
-#[test]
-fn test_local_sandbox_start_existing_dir() {
+#[tokio::test]
+async fn test_local_sandbox_start_existing_dir() {
     let dir = tempdir().unwrap();
     let sandbox = LocalSandbox::new(Some(dir.path().to_path_buf()));
 
-    sandbox.start().unwrap();
+    sandbox.start().await.unwrap();
     assert!(dir.path().exists());
 
-    sandbox.cleanup().unwrap();
+    sandbox.cleanup().await.unwrap();
     assert!(dir.path().exists()); // caller-owned dirs NOT deleted
 }
 
-#[test]
-fn test_local_sandbox_resolve_path() {
+#[tokio::test]
+async fn test_local_sandbox_resolve_path() {
     let dir = tempdir().unwrap();
     let sandbox = LocalSandbox::new(Some(dir.path().to_path_buf()));
 
@@ -59,8 +59,8 @@ fn test_local_sandbox_resolve_path() {
     assert!(sandbox.resolve_path("/etc/passwd").is_err());
 }
 
-#[test]
-fn test_local_sandbox_resolve_path_traversal_blocked() {
+#[tokio::test]
+async fn test_local_sandbox_resolve_path_traversal_blocked() {
     let dir = tempdir().unwrap();
     let sandbox = LocalSandbox::new(Some(dir.path().to_path_buf()));
 
@@ -69,13 +69,13 @@ fn test_local_sandbox_resolve_path_traversal_blocked() {
     assert!(sandbox.resolve_path("foo/../../escape.txt").is_err());
 }
 
-#[test]
-fn test_local_sandbox_temp_cleanup() {
+#[tokio::test]
+async fn test_local_sandbox_temp_cleanup() {
     let sandbox = LocalSandbox::new(None);
-    sandbox.start().unwrap();
+    sandbox.start().await.unwrap();
     let path = sandbox.root_path().to_path_buf();
     assert!(path.exists());
 
-    sandbox.cleanup().unwrap();
+    sandbox.cleanup().await.unwrap();
     assert!(!path.exists());
 }

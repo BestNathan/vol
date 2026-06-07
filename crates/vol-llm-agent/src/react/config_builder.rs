@@ -7,7 +7,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use vol_llm_context::{AttentionAnchor, ContextBuilderBuilder, ContextContributor};
-use vol_llm_core::SandboxRef;
+use vol_llm_sandbox::SandboxRef;
 use vol_llm_mcp::{McpConfig, McpManager};
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::{ExecutableTool, ToolRegistry};

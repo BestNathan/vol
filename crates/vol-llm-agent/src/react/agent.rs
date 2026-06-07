@@ -6,10 +6,11 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use vol_llm_context::{AttentionAnchor, ContextBuilder, ContextBuilderBuilder, ContextContributor, ContextError, ContextMessage, ContributorInfo};
 use vol_llm_core::{
-    ConversationRequest, ConversationResponse, LLMClient, Message, SandboxRef, StreamEventData,
+    ConversationRequest, ConversationResponse, LLMClient, Message, StreamEventData,
     StreamReceiver, ToolChoice,
 };
 use vol_llm_mcp::McpManager;
+use vol_llm_sandbox::SandboxRef;
 use vol_llm_tool::ToolContext;
 use vol_session::{InMemoryEntryStore, Session, SessionContributor};
 
@@ -480,10 +481,11 @@ impl ReActAgent {
                         }
 
                         // Execute tool
-                        let mut tool_ctx = match &sandbox {
-                            Some(sandbox) => ToolContext::default().with_sandbox(sandbox.clone()),
-                            None => ToolContext::default(),
+                        let sandbox_ref = match &sandbox {
+                            Some(sb) => sb.clone(),
+                            None => Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None)),
                         };
+                        let mut tool_ctx = ToolContext::default().with_sandbox(sandbox_ref);
                         if let Some(ref def) = agent_def {
                             tool_ctx = tool_ctx.with_agent_def(def.clone());
                         }

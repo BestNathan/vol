@@ -12,7 +12,8 @@ use crate::coding::config::CodingAgentConfig;
 use crate::coding::error::CodingAgentError;
 use crate::coding::observer::EventObserver;
 use crate::coding::observer_plugin::ObserverPlugin;
-use vol_llm_core::{Sandbox, LLMProvider};
+use vol_llm_sandbox::Sandbox;
+use vol_llm_core::LLMProvider;
 use crate::coding::sandbox::LocalSandbox;
 
 /// Coding Agent response
@@ -31,7 +32,7 @@ pub struct CodingAgent {
     tool_registry: Arc<ToolRegistry>,
     context_builder: ContextBuilder,
     observer: Option<Arc<dyn EventObserver>>,
-    sandbox: Option<vol_llm_core::SandboxRef>,
+    sandbox: Option<vol_llm_sandbox::SandboxRef>,
 }
 
 impl CodingAgent {
@@ -106,15 +107,17 @@ impl CodingAgent {
     }
 
     /// Initialize sandbox if working_dir is not ".".
-    fn init_sandbox(working_dir: &PathBuf) -> Result<Option<vol_llm_core::SandboxRef>, CodingAgentError> {
+    fn init_sandbox(working_dir: &PathBuf) -> Result<Option<vol_llm_sandbox::SandboxRef>, CodingAgentError> {
         if working_dir == &PathBuf::from(".") {
             return Ok(None);
         }
-        let sandbox = LocalSandbox::new(Some(working_dir.clone()));
-        sandbox.start().map_err(|e| CodingAgentError::Config(
-            format!("Failed to start sandbox at {:?}: {}", working_dir, e)
+        let sandbox = Arc::new(LocalSandbox::new(Some(working_dir.clone())));
+        // Ensure the directory exists (start is async in the new Sandbox trait,
+        // so we create the dir directly here in this sync constructor).
+        std::fs::create_dir_all(working_dir).map_err(|e| CodingAgentError::Config(
+            format!("Failed to create working directory {:?}: {}", working_dir, e)
         ))?;
-        Ok(Some(Arc::new(sandbox)))
+        Ok(Some(sandbox))
     }
 
 
@@ -160,7 +163,7 @@ impl CodingAgent {
     }
 
     /// Set the sandbox for tool execution (overrides auto-init from working_dir)
-    pub fn with_sandbox(mut self, sandbox: vol_llm_core::SandboxRef) -> Self {
+    pub fn with_sandbox(mut self, sandbox: vol_llm_sandbox::SandboxRef) -> Self {
         self.sandbox = Some(sandbox);
         self
     }
@@ -283,7 +286,7 @@ impl CodingAgent {
 /// Builder pattern for CodingAgent
 pub struct CodingAgentBuilder {
     config: CodingAgentConfig,
-    sandbox: Option<vol_llm_core::SandboxRef>,
+    sandbox: Option<vol_llm_sandbox::SandboxRef>,
     store_dir_set: bool,
 }
 
@@ -333,7 +336,7 @@ impl CodingAgentBuilder {
         self
     }
 
-    pub fn sandbox(mut self, sandbox: vol_llm_core::SandboxRef) -> Self {
+    pub fn sandbox(mut self, sandbox: vol_llm_sandbox::SandboxRef) -> Self {
         self.sandbox = Some(sandbox);
         self
     }

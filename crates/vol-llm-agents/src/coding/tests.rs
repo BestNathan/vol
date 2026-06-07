@@ -2,7 +2,7 @@
 
 use crate::coding::*;
 use std::sync::Arc;
-use vol_llm_core::Sandbox;
+use vol_llm_sandbox::Sandbox;
 use vol_llm_agent::react::AgentPlugin;
 
 // Dummy LLM client for builder/agent construction tests
@@ -244,12 +244,12 @@ fn test_local_sandbox_new_with_path() {
     assert_eq!(sandbox.root_path(), path);
 }
 
-#[test]
-fn test_local_sandbox_start() {
+#[tokio::test]
+async fn test_local_sandbox_start() {
     let tmp_dir = tempfile::tempdir().unwrap();
     let path = tmp_dir.path().join("new_sandbox_dir");
     let sandbox = LocalSandbox::new(Some(path.clone()));
-    sandbox.start().unwrap();
+    sandbox.start().await.unwrap();
     assert!(path.exists());
 }
 
