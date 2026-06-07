@@ -1,10 +1,11 @@
-//! RgCliBackend — delegates to the `rg` (ripgrep) binary.
+//! RgCliBackend — delegates to the `rg` (ripgrep) binary via sandbox.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Command;
-use std::process::Stdio;
-use std::sync::OnceLock;
+use std::time::Duration;
+
+use vol_llm_sandbox::{CommandRequest, Sandbox};
 
 use crate::backend::GrepBackend;
 use crate::GrepParams;
@@ -13,89 +14,63 @@ use crate::MODE_COUNT;
 use crate::MODE_CONTENT;
 use crate::MODE_FILES;
 
-static RG_AVAILABLE: OnceLock<bool> = OnceLock::new();
-
 pub struct RgCliBackend;
-
-impl RgCliBackend {
-    fn detect() -> bool {
-        *RG_AVAILABLE.get_or_init(|| {
-            Command::new("rg")
-                .arg("--version")
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false)
-        })
-    }
-}
 
 #[async_trait::async_trait]
 impl GrepBackend for RgCliBackend {
-    fn is_available() -> bool {
-        Self::detect()
-    }
-
-    async fn search(params: &GrepParams, root: &Path) -> Result<Vec<SearchResult>, String> {
-        let mut cmd = Command::new("rg");
-        cmd.args([
-            "--no-heading",
-            "--with-filename",
-            "--color",
-            "never",
-            "--max-depth",
-            "50",
-            "--max-filesize",
-            "10M",
-        ]);
+    async fn search(params: &GrepParams, root: &Path, sandbox: &dyn Sandbox) -> Result<Vec<SearchResult>, String> {
+        let mut args: Vec<String> = vec![
+            "--no-heading".to_string(),
+            "--with-filename".to_string(),
+            "--color".to_string(),
+            "never".to_string(),
+            "--max-depth".to_string(),
+            "50".to_string(),
+            "--max-filesize".to_string(),
+            "10M".to_string(),
+        ];
 
         // Output mode flag
         match params.output_mode.as_str() {
-            MODE_FILES => {
-                cmd.arg("-l");
-            }
-            MODE_COUNT => {
-                cmd.arg("-c");
-            }
-            MODE_CONTENT => {
-                cmd.arg("-n");
-            }
+            MODE_FILES => args.push("-l".to_string()),
+            MODE_COUNT => args.push("-c".to_string()),
+            MODE_CONTENT => args.push("-n".to_string()),
             _ => unreachable!(),
         };
 
         // Case sensitivity
         if params.case_sensitive {
-            cmd.arg("-s");
+            args.push("-s".to_string());
         } else {
-            cmd.arg("-i");
+            args.push("-i".to_string());
         }
 
         // Glob filter
         if let Some(ref glob) = params.glob {
-            cmd.arg("-g").arg(glob);
+            args.push("-g".to_string());
+            args.push(glob.clone());
         }
 
         // Pattern and path
-        cmd.arg("--")
-            .arg(&params.pattern)
-            .arg(root);
+        args.push("--".to_string());
+        args.push(params.pattern.clone());
+        args.push(root.to_string_lossy().to_string());
 
-        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        let req = CommandRequest {
+            program: "rg".to_string(),
+            args,
+            env: HashMap::new(),
+            cwd: None,
+            stdin: None,
+            timeout: Duration::from_secs(30),
+        };
 
-        let child = cmd
-            .spawn()
-            .map_err(|e| format!("Failed to spawn rg process: {}", e))?;
+        let output = sandbox.execute(req).await.map_err(|e| format!("rg execution failed: {}", e))?;
 
-        let output = tokio::task::spawn_blocking(move || child.wait_with_output())
-            .await
-            .map_err(|e| format!("rg process join error: {}", e))?
-            .map_err(|e| format!("rg process error: {}", e))?;
-
-        if !output.status.success() {
+        if output.exit_code != 0 {
             let stderr = String::from_utf8_lossy(&output.stderr);
             // Exit code 1 means no matches — not an error for grep
-            if output.status.code() == Some(1) {
+            if output.exit_code == 1 {
                 return Ok(vec![]);
             }
             return Err(format!("rg failed: {}", stderr.trim()));

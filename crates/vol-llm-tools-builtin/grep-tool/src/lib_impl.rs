@@ -7,6 +7,7 @@ use std::sync::Arc;
 use grep_regex::RegexMatcher;
 use grep_searcher::Searcher;
 use ignore::WalkBuilder;
+use vol_llm_sandbox::Sandbox;
 
 use crate::backend::GrepBackend;
 use crate::{GrepParams, SearchResult};
@@ -32,11 +33,7 @@ impl RustLibBackend {
 
 #[async_trait::async_trait]
 impl GrepBackend for RustLibBackend {
-    fn is_available() -> bool {
-        true // Always available as a pure-Rust library
-    }
-
-    async fn search(params: &GrepParams, root: &Path) -> Result<Vec<SearchResult>, String> {
+    async fn search(params: &GrepParams, root: &Path, _sandbox: &dyn Sandbox) -> Result<Vec<SearchResult>, String> {
         let pattern = params.pattern.clone();
         let case_sensitive = params.case_sensitive;
         let glob = params.glob.clone();
