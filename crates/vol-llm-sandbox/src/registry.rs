@@ -65,7 +65,7 @@ impl SandboxRegistry {
             for entry in std::fs::read_dir(sandboxes_dir).map_err(SandboxError::Io)? {
                 let entry = entry.map_err(SandboxError::Io)?;
                 let path = entry.path();
-                if path.extension().map_or(false, |ext| ext == "toml") {
+                if path.extension().is_some_and(|ext| ext == "toml") {
                     let content = std::fs::read_to_string(&path).map_err(SandboxError::Io)?;
                     let config: SandboxConfig = toml::from_str(&content)
                         .map_err(|e| SandboxError::UnknownType(format!(

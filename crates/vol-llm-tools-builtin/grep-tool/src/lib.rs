@@ -131,13 +131,13 @@ impl ExecutableTool for GrepTool {
             Ok(Err(_rg_err)) => {
                 tokio::time::timeout(Duration::from_secs(SEARCH_TIMEOUT_SECS), RustLibBackend::search(&params, &search_root, &*context.sandbox)).await
                     .map_err(|_| ToolError::ExecutionFailed("Search timed out after 30 seconds. Try a narrower path or glob.".to_string()))?
-                    .map_err(|e| ToolError::ExecutionFailed(e))?
+                    .map_err(ToolError::ExecutionFailed)?
             }
             Err(_) => {
                 // rg timed out or was unavailable, use library fallback
                 tokio::time::timeout(Duration::from_secs(SEARCH_TIMEOUT_SECS), RustLibBackend::search(&params, &search_root, &*context.sandbox)).await
                     .map_err(|_| ToolError::ExecutionFailed("Search timed out after 30 seconds. Try a narrower path or glob.".to_string()))?
-                    .map_err(|e| ToolError::ExecutionFailed(e))?
+                    .map_err(ToolError::ExecutionFailed)?
             }
         };
 

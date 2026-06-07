@@ -568,6 +568,8 @@ mod tests {
             api_key: "test-key".to_string(),
             model: "claude-test".to_string(),
             base_url: "https://example.test".to_string(),
+            body_defaults: HashMap::new(),
+            headers: HashMap::new(),
         }
     }
 

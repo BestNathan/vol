@@ -6908,6 +6908,7 @@ dependencies = [
  "vol-llm-core",
  "vol-llm-mcp",
  "vol-llm-provider",
+ "vol-llm-sandbox",
  "vol-llm-skill",
  "vol-llm-task",
  "vol-llm-tool",
@@ -7029,6 +7030,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 1.0.69",
+ "tokio",
  "vol-llm-sandbox",
  "vol-llm-tool",
 ]

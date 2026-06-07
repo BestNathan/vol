@@ -194,10 +194,10 @@ impl<T: ?Sized + ExecutableTool + Send + Sync> Tool for T {
         self.execute(&json_args, context)
             .await
             .map_err(|e| -> Box<dyn Error + Send> {
-                Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Tool execution failed: {}", e),
-                ))
+                Box::new(std::io::Error::other(format!(
+                    "Tool execution failed: {}",
+                    e
+                )))
             })
     }
 }
