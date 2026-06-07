@@ -499,7 +499,7 @@ impl ReActAgent {
                                 .get_sandbox(&call.name)
                                 .or_else(|| run_ctx.config.default_sandbox.clone())
                                 .unwrap_or_else(|| "local".to_string());
-                            registry.get(&sandbox_name).unwrap_or_else(|| registry.default())
+                            registry.acquire(&sandbox_name).unwrap_or_else(|| registry.default())
                         } else {
                             match &sandbox {
                                 Some(sb) => sb.clone(),

@@ -92,6 +92,9 @@ fn default_guest_ssh_port() -> u16 { 22 }
 pub struct SandboxRegistry {
     sandboxes: HashMap<String, Arc<dyn Sandbox>>,
     default_name: String,
+    /// Pool-based sandbox factories. acquire() creates fresh instances from these.
+    #[cfg(feature = "firecracker")]
+    firecracker_pools: HashMap<String, Arc<crate::firecracker::FirecrackerPool>>,
 }
 
 impl SandboxRegistry {
@@ -105,6 +108,10 @@ impl SandboxRegistry {
         // Always register LocalSandbox (hardcoded, no config file needed)
         let local = Arc::new(LocalSandbox::new(None)) as Arc<dyn Sandbox>;
         sandboxes.insert("local".to_string(), local);
+
+        #[cfg(feature = "firecracker")]
+        #[allow(unused_mut)]
+        let mut firecracker_pools: HashMap<String, Arc<crate::firecracker::FirecrackerPool>> = HashMap::new();
 
         // Load *.toml files
         if sandboxes_dir.exists() {
@@ -142,17 +149,83 @@ impl SandboxRegistry {
                             sandbox.start().await?;
                             sandboxes.insert(config.name.clone(), sandbox);
                         }
+                        #[cfg(feature = "firecracker")]
+                        "firecracker" => {
+                            let fc_config = config.firecracker.ok_or_else(|| {
+                                SandboxError::UnknownType(
+                                    "Firecracker sandbox requires [sandbox.firecracker] section".to_string()
+                                )
+                            })?;
+
+                            #[cfg(target_os = "linux")]
+                            {
+                                let pool = crate::firecracker::FirecrackerPool::new(
+                                    fc_config.clone(),
+                                    tokio::runtime::Handle::current(),
+                                );
+                                let sandbox: Arc<dyn Sandbox> = Arc::new(
+                                    crate::firecracker::FirecrackerSandbox::new(
+                                        config.name.clone(),
+                                        std::path::PathBuf::from(
+                                            config.work_dir.as_deref().unwrap_or("/tmp/fc-sandbox")
+                                        ),
+                                        pool.clone(),
+                                    )
+                                );
+                                sandboxes.insert(config.name.clone(), sandbox);
+                                firecracker_pools.insert(config.name.clone(), pool);
+                            }
+
+                            #[cfg(not(target_os = "linux"))]
+                            {
+                                let _ = fc_config;
+                                tracing::warn!(
+                                    "Firecracker sandbox '{}' requires Linux/KVM — skipping registration",
+                                    config.name
+                                );
+                            }
+                        }
                         other => return Err(SandboxError::UnknownType(other.to_string())),
                     }
                 }
             }
         }
 
-        Ok(Self { sandboxes, default_name: "local".to_string() })
+        Ok(Self {
+            sandboxes,
+            default_name: "local".to_string(),
+            #[cfg(feature = "firecracker")]
+            firecracker_pools,
+        })
     }
 
     /// Get a sandbox by its registry name.
     pub fn get(&self, name: &str) -> Option<Arc<dyn Sandbox>> {
+        self.sandboxes.get(name).cloned()
+    }
+
+    /// Acquire a sandbox instance by name.
+    ///
+    /// For pool-based sandboxes (firecracker), creates a fresh instance
+    /// backed by a VM from the pool. For singletons (local, ssh, wasm),
+    /// returns a clone of the shared Arc.
+    pub fn acquire(&self, name: &str) -> Option<Arc<dyn Sandbox>> {
+        #[cfg(feature = "firecracker")]
+        {
+            if let Some(pool) = self.firecracker_pools.get(name) {
+                let work_dir = self.sandboxes.get(name)
+                    .map(|sb| sb.root_path().to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("/tmp/fc-sandbox"));
+                return Some(Arc::new(
+                    crate::firecracker::FirecrackerSandbox::new(
+                        name.to_string(),
+                        work_dir,
+                        pool.clone(),
+                    )
+                ));
+            }
+        }
+
         self.sandboxes.get(name).cloned()
     }
 
