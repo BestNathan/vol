@@ -2,6 +2,7 @@
 //! Moved from vol-llm-agent to resolve circular dependency: vol-llm-tool needs AgentDef
 //! for ToolContext, but vol-llm-tool cannot depend on vol-llm-agent.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
 
@@ -67,6 +68,11 @@ pub struct AgentDef {
     /// Each path is relative to the agent's working directory.
     /// Files are loaded in array order: first file → Middle(0), second → Middle(1), etc.
     pub context_files: Vec<String>,
+    /// Default sandbox name (registry key). Overrides the global default ("local").
+    pub sandbox: Option<String>,
+    /// Per-tool configurations. Key is the tool name (e.g. "bash"), value is a
+    /// TOML table that may include a `sandbox` key and tool-specific fields.
+    pub tool_config: Option<HashMap<String, toml::Value>>,
 }
 
 impl AgentDef {
@@ -87,6 +93,8 @@ impl AgentDef {
             prompt: content_str,
             working_dir: None,
             context_files: vec![],
+            sandbox: None,
+            tool_config: None,
         }
     }
 
@@ -135,6 +143,18 @@ impl AgentDef {
     /// Set custom context files to inject into the Middle zone.
     pub fn with_context_files(mut self, files: Vec<String>) -> Self {
         self.context_files = files;
+        self
+    }
+
+    /// Set the default sandbox for this agent.
+    pub fn with_sandbox(mut self, sandbox: impl Into<String>) -> Self {
+        self.sandbox = Some(sandbox.into());
+        self
+    }
+
+    /// Set per-tool configurations.
+    pub fn with_tool_config(mut self, config: HashMap<String, toml::Value>) -> Self {
+        self.tool_config = Some(config);
         self
     }
 }

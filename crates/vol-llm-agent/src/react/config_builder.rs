@@ -11,7 +11,7 @@ use vol_llm_sandbox::registry::SandboxRegistry;
 use vol_llm_sandbox::SandboxRef;
 use vol_llm_mcp::{McpConfig, McpManager};
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
-use vol_llm_tool::{ExecutableTool, ToolRegistry};
+use vol_llm_tool::{ExecutableTool, ToolConfig, ToolRegistry};
 use vol_session::{InMemoryEntryStore, Session, SessionContributor};
 
 /// Builder for AgentConfig.
@@ -302,6 +302,19 @@ impl AgentConfigBuilder {
             b.build()
         };
 
+        // Build tool_config: start empty, populate from AgentDef if available
+        let mut tool_config = ToolConfig::new();
+        if let Some(ref def) = self.def {
+            if let Some(ref tc) = def.tool_config {
+                tool_config.populate_from_agent_def(tc);
+            }
+        }
+
+        // Resolve default_sandbox: explicit builder override > AgentDef.sandbox
+        let effective_default_sandbox = self.default_sandbox.or_else(|| {
+            self.def.as_ref().and_then(|d| d.sandbox.clone())
+        });
+
         Ok(AgentConfig {
             def: self.def,
             llm,
@@ -309,7 +322,8 @@ impl AgentConfigBuilder {
             session: std::sync::RwLock::new(session),
             sandbox: self.sandbox,
             sandbox_registry: self.sandbox_registry,
-            default_sandbox: self.default_sandbox,
+            default_sandbox: effective_default_sandbox,
+            tool_config,
             context_builder: std::sync::RwLock::new(context_builder),
             plugin_registry: self.plugin_registry,
             mcp_manager: self.mcp_manager,

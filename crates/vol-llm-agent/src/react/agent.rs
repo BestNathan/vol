@@ -12,7 +12,7 @@ use vol_llm_core::{
 use vol_llm_mcp::McpManager;
 use vol_llm_sandbox::registry::SandboxRegistry;
 use vol_llm_sandbox::SandboxRef;
-use vol_llm_tool::ToolContext;
+use vol_llm_tool::{ToolConfig, ToolContext};
 use vol_session::{InMemoryEntryStore, Session, SessionContributor};
 
 /// Agent configuration — single source of truth for ReActAgent.
@@ -32,6 +32,8 @@ pub struct AgentConfig {
     pub sandbox: Option<SandboxRef>,
     pub sandbox_registry: Option<Arc<SandboxRegistry>>,
     pub default_sandbox: Option<String>,
+    /// Per-tool configuration (includes sandbox overrides, tool-specific settings).
+    pub tool_config: ToolConfig,
 
     // === Context and plugins ===
     pub(crate) context_builder: RwLock<ContextBuilder>,
@@ -80,6 +82,7 @@ impl Default for AgentConfig {
             sandbox: None,
             sandbox_registry: None,
             default_sandbox: None,
+            tool_config: ToolConfig::new(),
             context_builder: RwLock::new(ContextBuilderBuilder::new(128_000).build()),
             plugin_registry: PluginRegistry::new(),
             mcp_manager: None,
@@ -485,14 +488,18 @@ impl ReActAgent {
                             }
                         }
 
-                        // Resolve sandbox: tool override > agent default > registry default > local
+                        // Resolve sandbox:
+                        //   1. ToolConfig.get_sandbox(tool_name) — per-tool override
+                        //   2. AgentDef.sandbox — agent default
+                        //   3. Registry default ("local")
                         let sandbox_ref = if let Some(ref registry) = run_ctx.config.sandbox_registry {
                             let sandbox_name = run_ctx
-                                .tools
-                                .get_tool_sandbox(&call.name)
-                                .or(run_ctx.config.default_sandbox.as_deref())
-                                .unwrap_or("local");
-                            registry.get(sandbox_name).unwrap_or_else(|| registry.default())
+                                .config
+                                .tool_config
+                                .get_sandbox(&call.name)
+                                .or_else(|| run_ctx.config.default_sandbox.clone())
+                                .unwrap_or_else(|| "local".to_string());
+                            registry.get(&sandbox_name).unwrap_or_else(|| registry.default())
                         } else {
                             match &sandbox {
                                 Some(sb) => sb.clone(),
