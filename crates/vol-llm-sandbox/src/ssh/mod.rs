@@ -41,7 +41,7 @@ impl SSHSandbox {
     ///
     /// `ssh_config` provides connection details; the session is lazily
     /// connected on first use (via [`start`](Sandbox::start)).
-    pub(crate) fn new(
+    pub fn new(
         name: String,
         work_dir: Option<String>,
         ssh_config: SshConfig,
