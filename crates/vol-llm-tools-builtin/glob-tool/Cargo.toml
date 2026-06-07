@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 vol-llm-tool = { workspace = true }
+vol-llm-sandbox = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
