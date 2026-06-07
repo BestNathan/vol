@@ -13,6 +13,8 @@ pub mod local;
 pub mod registry;
 #[cfg(feature = "ssh")]
 pub mod ssh;
+#[cfg(feature = "firecracker")]
+pub mod firecracker;
 
 /// Reference to a sandbox instance.
 pub type SandboxRef = Arc<dyn Sandbox>;

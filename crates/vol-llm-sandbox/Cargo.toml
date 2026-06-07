@@ -18,3 +18,4 @@ tracing = { workspace = true }
 [features]
 default = []
 ssh = ["ssh2"]
+firecracker = []
