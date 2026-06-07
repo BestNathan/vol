@@ -179,6 +179,10 @@ fn verify_host_key(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxRe
         .ok_or_else(|| SandboxError::Ssh("no host key from server".to_string()))?;
 
     if let Some(ref fingerprint) = config.host_key {
+        // Empty string = accept any host key (used by Firecracker for local microVMs)
+        if fingerprint.is_empty() {
+            return Ok(());
+        }
         let hash = sess
             .host_key_hash(ssh2::HashType::Sha256)
             .ok_or_else(|| SandboxError::Ssh("failed to hash host key".to_string()))?;
