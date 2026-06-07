@@ -528,7 +528,7 @@ impl AgentServerCore {
             Arc::new(vol_llm_task::InMemoryTaskStore::new()),
         ))).ok();
 
-        let runtime = AgentRuntime::for_test();
+        let runtime = AgentRuntime::for_test().await;
 
         AgentServerCore {
             runtime,
