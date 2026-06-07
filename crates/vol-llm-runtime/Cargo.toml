@@ -19,6 +19,6 @@ vol-llm-task = { path = "../vol-llm-task" }
 vol-llm-provider = { path = "../vol-llm-provider" }
 vol-llm-mcp = { path = "../vol-llm-mcp" }
 vol-llm-skill = { path = "../vol-llm-skill" }
-vol-llm-sandbox = { workspace = true }
+vol-llm-sandbox = { workspace = true, features = ["ssh"] }
 vol-llm-tools-builtin = { path = "../vol-llm-tools-builtin" }
 vol-session = { path = "../vol-session" }

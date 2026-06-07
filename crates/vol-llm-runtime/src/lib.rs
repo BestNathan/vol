@@ -262,7 +262,7 @@ impl AgentRuntimeBuilder {
         };
 
         let sandbox_registry = {
-            let sandboxes_dir = self.working_dir.join(".agent").join("sandboxes");
+            let sandboxes_dir = self.working_dir.join(".agents").join("sandboxes");
             vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir).await
                 .map_err(|e| format!("Sandbox registry init failed: {}", e))?
         };
