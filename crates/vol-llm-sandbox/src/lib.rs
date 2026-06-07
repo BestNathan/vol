@@ -18,6 +18,13 @@ pub mod ssh;
 pub type SandboxRef = Arc<dyn Sandbox>;
 
 /// Trait for isolated execution environments.
+///
+/// # Interior Mutability
+///
+/// All methods take `&self` rather than `&mut self` because `Sandbox` instances are
+/// shared via `Arc<dyn Sandbox>` (`SandboxRef`). Implementations that need mutable
+/// state (e.g., SSH connection pools) must use interior mutability (`Mutex`,
+/// `tokio::sync::RwLock`, etc.).
 #[async_trait]
 pub trait Sandbox: Send + Sync {
     /// Sandbox type identifier: "local", "ssh"
@@ -86,12 +93,20 @@ pub struct CommandOutput {
     pub killed_by_signal: Option<i32>,
 }
 
+/// The type of a filesystem entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FileType {
+    File,
+    Directory,
+    Symlink,
+    Other,
+}
+
 /// Directory entry returned by `read_dir`.
 #[derive(Debug, Clone)]
 pub struct DirEntry {
     pub name: String,
-    pub is_dir: bool,
-    pub is_file: bool,
+    pub file_type: FileType,
 }
 
 /// File metadata returned by `metadata`.
@@ -99,8 +114,7 @@ pub struct DirEntry {
 pub struct FileMetadata {
     pub size: u64,
     pub mtime: u64,      // unix timestamp, milliseconds
-    pub is_dir: bool,
-    pub is_file: bool,
+    pub file_type: FileType,
 }
 
 /// Sandbox error types.
