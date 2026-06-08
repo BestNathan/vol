@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-06-09 (runtime-database-task-store-construction)
+Last updated: 2026-06-09 (task-database-store-implementation)
 
 ## Entities
 
@@ -16,7 +16,7 @@ Last updated: 2026-06-09 (runtime-database-task-store-construction)
 | [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager | stable | 2026-05-21 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with Anthropic multipart text/image conversion | stable | 2026-05-21 |
 | [[vol-session]] | Session message store and entry persistence | active | 2026-05-04 |
-| [[vol-llm-agent-channel-crate]] | Agent communication channel layer and active JSON-RPC web backend service | active | 2026-05-29 |
+| [[vol-llm-agent-channel-crate]] | Agent communication channel layer and active JSON-RPC web backend service with task-store config pass-through | active | 2026-06-09 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 | [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support | active | 2026-05-10 |
@@ -26,7 +26,7 @@ Last updated: 2026-06-09 (runtime-database-task-store-construction)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[runtime-task-store-configuration]] | Shared `[runtime.task_store]` TOML contract for selecting file or database task persistence | active | 2026-06-09 |
+| [[runtime-task-store-configuration]] | Shared `[runtime.task_store]` TOML contract and single global runtime store behavior for file/database task persistence | active | 2026-06-09 |
 | [[rich-text-conversation]] | Markdown rendering for chat (Dioxus handoff to marked.js + DOMPurify + highlight.js) | active | 2026-06-04 |
 | [[dependency-graph-visualization]] | Layered SVG node-link graph of task dependencies: pure layout fn + Dioxus component | active | 2026-06-04 |
 | [[react-pattern]] | Reason-Act-Observe agent execution loop | active | 2026-05-04 |
@@ -85,6 +85,7 @@ Last updated: 2026-06-09 (runtime-database-task-store-construction)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[task-database-store-implementation]] | End-to-end implementation of global SQLx SQLite database-backed task store | active | 2026-06-09 |
 | [[runtime-database-task-store-construction]] | AgentRuntime database task-store construction and persistence test hardening | active | 2026-06-09 |
 | [[task-store-sqlite-embedded-migrations]] | SQLite task-store migrations embedded into the `vol-llm-task` binary via SQLx macros | active | 2026-06-09 |
 | [[task-store-config-parsing]] | Runtime task store config parsing and validation for `[runtime.task_store]` | active | 2026-06-09 |

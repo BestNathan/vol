@@ -4,7 +4,7 @@ category: service
 tags: [server, config, json-rpc, task-store]
 created: 2026-06-09
 updated: 2026-06-09
-source_count: 1
+source_count: 2
 ---
 
 # vol-agent-server Crate
@@ -18,7 +18,7 @@ source_count: 1
 - The crate depends on [[vol-llm-runtime-crate]] for shared task store config types.
 
 ## Runtime Task Store Config Parsing
-Source: [[task-store-config-parsing]]
+Sources: [[task-store-config-parsing]], [[task-database-store-implementation]]
 
 `RuntimeSection` now includes optional `task_store: Option<vol_llm_runtime::TaskStoreConfig>`. When omitted, config defaults preserve the existing file-backed task store path.
 
@@ -30,7 +30,10 @@ Covered test cases:
 - Rejects `type = "file"` with `url`.
 - Rejects unknown database scheme such as `oracle://`.
 
+`vol-agent-server` logs whether it is using the default file task store or a configured store type, then passes `config.runtime.task_store.clone()` into `AgentServerCore::builder(...).with_task_store_config(...)`.
+
 ## Related
 - [[vol-llm-runtime-crate]]
 - [[runtime-task-store-configuration]]
 - [[task-store-config-parsing]]
+- [[task-database-store-implementation]]

@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-06-09] ingest | Task Database Store Implementation
+- Created sources: [[task-database-store-implementation]]
+- Updated entities: [[vol-llm-task-crate]] (DatabaseTaskStore CRUD, ready-task behavior, crate-root export), [[vol-llm-runtime-crate]] (single global runtime task store construction), [[vol-agent-server-crate]] (server config pass-through and startup logging), [[vol-llm-agent-channel-crate]] (builder pass-through and shared TaskHandler store semantics)
+- Updated concepts: [[runtime-task-store-configuration]] (completed file/database runtime behavior and non-goals)
+- Updated index: new end-to-end implementation source entry, refreshed task-store concept and agent-channel summaries
+- Cross-references added: 18
+- Changes: Documented the completed implementation of `[runtime.task_store] type = "database"`: SQLx SQLite `DatabaseTaskStore` with embedded migrations, config validation, runtime construction, task tool/RPC sharing of one global `runtime.task_store`, final verification commands, and explicit exclusion of `.agents/task-providers` or per-agent stores.
+
 ## [2026-06-09] ingest | Runtime Database Task Store Construction
 - Created sources: [[runtime-database-task-store-construction]]
 - Updated entities: [[vol-llm-runtime-crate]] (runtime database task-store construction and persistence test coverage)
