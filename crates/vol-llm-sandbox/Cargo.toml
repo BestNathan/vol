@@ -18,6 +18,9 @@ toml = { workspace = true }
 tracing = { workspace = true }
 tempfile = "3"
 
+[dev-dependencies]
+wat = "1"
+
 [features]
 default = []
 ssh = ["ssh2"]
