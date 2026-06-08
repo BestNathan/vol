@@ -15,7 +15,7 @@ use vol_llm_agent::AgentLoader;
 use vol_llm_mcp::{McpConfig, McpManager};
 use vol_llm_provider::{create_provider, ProviderLoader};
 use vol_llm_skill::{SkillLoader, SkillTool};
-use vol_llm_task::FileTaskStore;
+use vol_llm_task::{DatabaseTaskStore, FileTaskStore};
 use vol_llm_task::TaskStore;
 use vol_llm_tool::ToolRegistry;
 use vol_session::file_store::FileSessionEntryStore;
@@ -337,10 +337,7 @@ impl AgentRuntimeBuilder {
             None => build_file_task_store(&store_dir).await?,
             Some(config) if config.store_type == TaskStoreType::File => build_file_task_store(&store_dir).await?,
             Some(config) if config.store_type == TaskStoreType::Database => {
-                return Err(format!(
-                    "database task store is not implemented yet for url scheme: {}",
-                    config.required_url()?.split_once(':').map(|(scheme, _)| scheme).unwrap_or("<missing>")
-                ));
+                build_database_task_store(config.required_url()?).await?
             }
             Some(_) => return Err("unsupported task store configuration".to_string()),
         };
@@ -383,6 +380,13 @@ async fn build_file_task_store(store_dir: &std::path::Path) -> Result<Arc<dyn Ta
     Ok(Arc::new(store))
 }
 
+async fn build_database_task_store(url: &str) -> Result<Arc<dyn TaskStore>, String> {
+    let store = DatabaseTaskStore::connect(url)
+        .await
+        .map_err(|e| format!("failed to create database task store: {e}"))?;
+    Ok(Arc::new(store))
+}
+
 fn expand_tilde(path: PathBuf) -> PathBuf {
     let s = path.to_string_lossy().to_string();
     if s.starts_with('~') {
@@ -391,5 +395,68 @@ fn expand_tilde(path: PathBuf) -> PathBuf {
         PathBuf::from(format!("{}/{}", home, rest))
     } else {
         path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn builder_accepts_database_task_store_config_until_provider_requirement() {
+        let temp = tempfile::tempdir().unwrap();
+        let providers_dir = temp.path().join(".agents/providers");
+        std::fs::create_dir_all(&providers_dir).unwrap();
+        std::fs::write(
+            providers_dir.join("test.toml"),
+            r#"
+provider = "anthropic"
+model = "claude-test"
+api_key = "sk-test"
+base_url = "https://api.test.com"
+"#,
+        )
+        .unwrap();
+
+        let db_url = format!("sqlite://{}", temp.path().join("tasks.db").display());
+        let config = TaskStoreConfig {
+            store_type: TaskStoreType::Database,
+            url: Some(db_url),
+        };
+
+        let runtime = AgentRuntime::builder(temp.path(), temp.path())
+            .with_task_store_config(Some(config.clone()))
+            .build()
+            .await
+            .expect("runtime should build with valid provider and database task store config");
+
+        let mut task = vol_llm_task::Task::new(
+            vol_llm_task::TaskKind::Manual,
+            "runtime database task store test".to_string(),
+            Vec::new(),
+        );
+        task.description = "created through AgentRuntime::task_store".to_string();
+        let task_id = runtime
+            .task_store
+            .create(task)
+            .await
+            .expect("database task store should create tasks");
+        drop(runtime);
+
+        let runtime = AgentRuntime::builder(temp.path(), temp.path())
+            .with_task_store_config(Some(config))
+            .build()
+            .await
+            .expect("runtime should reconnect to configured database task store");
+        let persisted = runtime
+            .task_store
+            .get(&task_id)
+            .await
+            .expect("database task store should get tasks")
+            .expect("created task should persist across runtime rebuilds");
+
+        assert_eq!(persisted.id, task_id);
+        assert_eq!(persisted.subject, "runtime database task store test");
+        assert_eq!(persisted.description, "created through AgentRuntime::task_store");
     }
 }

@@ -4,7 +4,7 @@ category: service
 tags: [runtime, agents, tools, task-store]
 created: 2026-06-09
 updated: 2026-06-09
-source_count: 1
+source_count: 2
 ---
 
 # vol-llm-runtime Crate
@@ -29,7 +29,14 @@ Validation rules:
 - `type = "file"` must not include `url`.
 - `type = "database"` must include `url` and use a recognized scheme.
 
+## Runtime Database Task Store
+Source: [[runtime-database-task-store-construction]]
+
+`AgentRuntimeBuilder::build()` now maps `TaskStoreType::Database` to `DatabaseTaskStore::connect(url)` and exposes the result through `runtime.task_store` as `Arc<dyn TaskStore>`. The runtime builder test uses valid provider config, creates a task through the database-backed store, rebuilds the runtime against the same SQLite URL, and verifies the task persists.
+
 ## Related
 - [[vol-agent-server-crate]]
+- [[vol-llm-task-crate]]
 - [[runtime-task-store-configuration]]
 - [[task-store-config-parsing]]
+- [[runtime-database-task-store-construction]]

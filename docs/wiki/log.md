@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-06-09] ingest | Runtime Database Task Store Construction
+- Created sources: [[runtime-database-task-store-construction]]
+- Updated entities: [[vol-llm-runtime-crate]] (runtime database task-store construction and persistence test coverage)
+- Updated concepts: [[runtime-task-store-configuration]] (database config now maps to real runtime construction)
+- Updated index: new runtime database construction source entry
+- Cross-references added: 8
+- Changes: Documented Task 6 runtime database store wiring and the review fix that made the builder test require successful runtime construction plus task create/get persistence across SQLite-backed runtime rebuilds.
+
 ## [2026-06-09] ingest | Task Store SQLite Embedded Migrations
 - Created sources: [[task-store-sqlite-embedded-migrations]]
 - Created entities: [[vol-llm-task-crate]]

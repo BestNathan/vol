@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-06-09 (task-store-sqlite-embedded-migrations)
+Last updated: 2026-06-09 (runtime-database-task-store-construction)
 
 ## Entities
 
@@ -85,6 +85,7 @@ Last updated: 2026-06-09 (task-store-sqlite-embedded-migrations)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[runtime-database-task-store-construction]] | AgentRuntime database task-store construction and persistence test hardening | active | 2026-06-09 |
 | [[task-store-sqlite-embedded-migrations]] | SQLite task-store migrations embedded into the `vol-llm-task` binary via SQLx macros | active | 2026-06-09 |
 | [[task-store-config-parsing]] | Runtime task store config parsing and validation for `[runtime.task_store]` | active | 2026-06-09 |
 | [[rich-text-conversation-design]] | Design spec for markdown rendering in chat (Dioxus + marked.js) | active | 2026-06-04 |

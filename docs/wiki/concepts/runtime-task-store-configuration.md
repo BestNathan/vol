@@ -4,7 +4,7 @@ category: architecture
 tags: [task-store, configuration, runtime, validation]
 created: 2026-06-09
 updated: 2026-06-09
-source_count: 2
+source_count: 3
 ---
 
 # Runtime Task Store Configuration
@@ -44,7 +44,12 @@ This is intentionally SQL-independent. Config parsing and validation can land be
 
 SQLite database task-store initialization is covered by [[task-store-sqlite-embedded-migrations]]: the `vol-llm-task` SQLite migrator is embedded at compile time so runtime database selection does not require source-tree migration files to be deployed.
 
+Runtime construction is covered by [[runtime-database-task-store-construction]]: `AgentRuntimeBuilder::build()` now turns database config into a real `DatabaseTaskStore`, and the builder test asserts task persistence across runtime rebuilds instead of accepting database construction failures.
+
 ## Related
 - [[vol-llm-runtime-crate]]
+- [[vol-llm-task-crate]]
 - [[vol-agent-server-crate]]
 - [[task-store-config-parsing]]
+- [[task-store-sqlite-embedded-migrations]]
+- [[runtime-database-task-store-construction]]

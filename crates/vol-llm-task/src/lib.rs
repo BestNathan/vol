@@ -13,4 +13,4 @@ pub(crate) mod cli;
 pub use model::{Task, TaskId, TaskKind, TaskResult, TaskStatus};
 pub use scheduler::TaskScheduler;
 pub use store::{Result, StoreError, TaskStore};
-pub use stores::{FileTaskStore, InMemoryTaskStore};
+pub use stores::{DatabaseTaskStore, FileTaskStore, InMemoryTaskStore};
