@@ -13,6 +13,10 @@ pub mod local;
 pub mod registry;
 #[cfg(feature = "ssh")]
 pub mod ssh;
+#[cfg(feature = "firecracker")]
+pub mod firecracker;
+#[cfg(feature = "wasm")]
+pub mod wasm;
 
 /// Reference to a sandbox instance.
 pub type SandboxRef = Arc<dyn Sandbox>;
@@ -136,6 +140,14 @@ pub enum SandboxError {
     #[error("SSH error: {0}")]
     Ssh(String),
 
+    #[cfg(feature = "firecracker")]
+    #[error("Firecracker error: {0}")]
+    Firecracker(String),
+
+    #[cfg(feature = "wasm")]
+    #[error("Wasm error: {0}")]
+    Wasm(String),
+
     #[error("Command timed out after {0:?}")]
     Timeout(Duration),
 
@@ -150,3 +162,16 @@ pub enum SandboxError {
 }
 
 pub type SandboxResult<T> = Result<T, SandboxError>;
+
+/// Normalize a path by resolving `.` and `..` components without touching the filesystem.
+pub fn normalize_path(path: &Path) -> PathBuf {
+    let mut result = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => { result.pop(); }
+            std::path::Component::CurDir => {}
+            _ => result.push(component),
+        }
+    }
+    result
+}
