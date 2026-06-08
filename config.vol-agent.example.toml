@@ -27,9 +27,23 @@ port = 3001
 # Project root for agent discovery (.agents/ dirs, .mcp.json, etc.)
 working_dir = "."
 
-# Data store directory (sessions, tasks, logs)
+# Data store directory (sessions, file-backed tasks, logs)
 # Supports ~ tilde expansion
 store_dir = "~/.vol"
+
+# Optional task store backend. If omitted, the server uses the file task store
+# rooted under runtime.store_dir.
+#
+# Explicit file store:
+# [runtime.task_store]
+# type = "file"
+#
+# Database store. The concrete database is inferred from the URL scheme.
+# Currently SQLite is implemented; postgres/postgresql and mysql schemes are
+# recognized for clear errors until those backends are added.
+# [runtime.task_store]
+# type = "database"
+# url = "sqlite://./data/tasks.db"
 
 # =============================================================================
 # Tracing — logging configuration

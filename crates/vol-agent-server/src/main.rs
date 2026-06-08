@@ -68,6 +68,12 @@ async fn main() {
         tracing::info!("Using built-in defaults (no config file found)");
     }
 
+    if let Some(task_store) = &config.runtime.task_store {
+        tracing::info!(task_store_type = ?task_store.store_type, "Using configured task store");
+    } else {
+        tracing::info!("Using default file task store");
+    }
+
     // --- Build core ---
     tracing::info!(
         working_dir = %config.runtime.working_dir,
