@@ -1,12 +1,13 @@
 # Wiki Index
 
-Last updated: 2026-06-09 (task-store-config-parsing)
+Last updated: 2026-06-09 (task-store-sqlite-embedded-migrations)
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
 | [[vol-llm-runtime-crate]] | AgentRuntime owner of shared agent resources and runtime task store config types | active | 2026-06-09 |
+| [[vol-llm-task-crate]] | Task models and persistence stores, including SQLx SQLite store with embedded migrations | active | 2026-06-09 |
 | [[vol-agent-server-crate]] | Standalone agent server crate with TOML parsing and `[runtime.task_store]` validation | active | 2026-06-09 |
 | [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with Dioxus as the sole active web frontend | active | 2026-05-29 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API | active | 2026-05-21 |
@@ -84,6 +85,7 @@ Last updated: 2026-06-09 (task-store-config-parsing)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[task-store-sqlite-embedded-migrations]] | SQLite task-store migrations embedded into the `vol-llm-task` binary via SQLx macros | active | 2026-06-09 |
 | [[task-store-config-parsing]] | Runtime task store config parsing and validation for `[runtime.task_store]` | active | 2026-06-09 |
 | [[rich-text-conversation-design]] | Design spec for markdown rendering in chat (Dioxus + marked.js) | active | 2026-06-04 |
 | [[task-dependency-graph-view]] | Tasks tab "⇄ deps" button + SVG dependency-graph modal (read-only, frontend-only) | active | 2026-06-04 |

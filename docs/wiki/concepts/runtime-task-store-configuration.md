@@ -4,7 +4,7 @@ category: architecture
 tags: [task-store, configuration, runtime, validation]
 created: 2026-06-09
 updated: 2026-06-09
-source_count: 1
+source_count: 2
 ---
 
 # Runtime Task Store Configuration
@@ -41,6 +41,8 @@ url = "sqlite:///tmp/vol-agent/tasks.db"
 
 ## Design Notes
 This is intentionally SQL-independent. Config parsing and validation can land before SQLx dependencies, database migrations, or runtime database store construction. Later tasks can wire the validated config through builders and instantiate concrete stores without changing the TOML contract.
+
+SQLite database task-store initialization is covered by [[task-store-sqlite-embedded-migrations]]: the `vol-llm-task` SQLite migrator is embedded at compile time so runtime database selection does not require source-tree migration files to be deployed.
 
 ## Related
 - [[vol-llm-runtime-crate]]

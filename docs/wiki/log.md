@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-06-09] ingest | Task Store SQLite Embedded Migrations
+- Created sources: [[task-store-sqlite-embedded-migrations]]
+- Created entities: [[vol-llm-task-crate]]
+- Updated concepts: [[runtime-task-store-configuration]] (linked SQLite database-store initialization to embedded migrations)
+- Updated index: new task crate entity and embedded migrations source entries
+- Cross-references added: 5
+- Changes: Documented the Task 4 review fix: `DatabaseTaskStore` now uses a compile-time SQLx migrator for SQLite migrations, and the workspace `sqlx` dependency enables macros so release binaries/containers do not need source-tree migration files at runtime.
+
 ## [2026-06-09] ingest | Runtime Task Store Config Parsing
 - Created sources: [[task-store-config-parsing]]
 - Created entities: [[vol-llm-runtime-crate]], [[vol-agent-server-crate]]
