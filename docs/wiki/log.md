@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-06-09] ingest | Runtime Task Store Config Parsing
+- Created sources: [[task-store-config-parsing]]
+- Created entities: [[vol-llm-runtime-crate]], [[vol-agent-server-crate]]
+- Created concepts: [[runtime-task-store-configuration]]
+- Updated index: new runtime/server entities, task store configuration concept, and source entry
+- Cross-references added: 9
+- Changes: Added wiki coverage for Task 1 of the database task store plan: runtime-owned `TaskStoreType`/`TaskStoreConfig`, SQL-independent database URL scheme validation, server `[runtime.task_store]` parsing, load-time validation, and config tests.
+
 ## [2026-06-04] ingest | Rich Text Conversation Rendering
 - Created sources: [[rich-text-conversation-design]]
 - Created concepts: [[rich-text-conversation]]

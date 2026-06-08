@@ -1,0 +1,35 @@
+---
+type: entity
+category: service
+tags: [runtime, agents, tools, task-store]
+created: 2026-06-09
+updated: 2026-06-09
+source_count: 1
+---
+
+# vol-llm-runtime Crate
+
+## Overview
+`vol-llm-runtime` provides `AgentRuntime`, the authoritative owner of shared agent resources: LLM providers, tool registry, task store, MCP manager, sandbox registry, skills, agent definitions, and agent status tracking.
+
+## Key Facts
+- `AgentRuntimeBuilder::build()` is the primary assembly point for runtime resources.
+- Tool registration belongs in the runtime builder so transport wrappers inherit the same registry.
+- Runtime task store config primitives are defined here, not in the server crate, so downstream server/channel code can share one config contract.
+
+## Task Store Configuration
+Source: [[task-store-config-parsing]]
+
+The crate defines SQL-independent configuration types:
+- `TaskStoreType`: `File` or `Database`.
+- `TaskStoreConfig`: serde-deserializable config with renamed `type` field and optional `url`.
+- `validate_database_url_scheme`: accepts `sqlite`, `postgres`, `postgresql`, and `mysql`; rejects missing or unsupported schemes with explicit messages.
+
+Validation rules:
+- `type = "file"` must not include `url`.
+- `type = "database"` must include `url` and use a recognized scheme.
+
+## Related
+- [[vol-agent-server-crate]]
+- [[runtime-task-store-configuration]]
+- [[task-store-config-parsing]]

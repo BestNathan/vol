@@ -1,11 +1,13 @@
 # Wiki Index
 
-Last updated: 2026-06-04 (rich-text-conversation)
+Last updated: 2026-06-09 (task-store-config-parsing)
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[vol-llm-runtime-crate]] | AgentRuntime owner of shared agent resources and runtime task store config types | active | 2026-06-09 |
+| [[vol-agent-server-crate]] | Standalone agent server crate with TOML parsing and `[runtime.task_store]` validation | active | 2026-06-09 |
 | [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with Dioxus as the sole active web frontend | active | 2026-05-29 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API | active | 2026-05-21 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
@@ -23,6 +25,7 @@ Last updated: 2026-06-04 (rich-text-conversation)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[runtime-task-store-configuration]] | Shared `[runtime.task_store]` TOML contract for selecting file or database task persistence | active | 2026-06-09 |
 | [[rich-text-conversation]] | Markdown rendering for chat (Dioxus handoff to marked.js + DOMPurify + highlight.js) | active | 2026-06-04 |
 | [[dependency-graph-visualization]] | Layered SVG node-link graph of task dependencies: pure layout fn + Dioxus component | active | 2026-06-04 |
 | [[react-pattern]] | Reason-Act-Observe agent execution loop | active | 2026-05-04 |
@@ -81,6 +84,7 @@ Last updated: 2026-06-04 (rich-text-conversation)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[task-store-config-parsing]] | Runtime task store config parsing and validation for `[runtime.task_store]` | active | 2026-06-09 |
 | [[rich-text-conversation-design]] | Design spec for markdown rendering in chat (Dioxus + marked.js) | active | 2026-06-04 |
 | [[task-dependency-graph-view]] | Tasks tab "⇄ deps" button + SVG dependency-graph modal (read-only, frontend-only) | active | 2026-06-04 |
 | [[agent-channel-examples]] | WS + HTTP service examples using channel primitives | active | 2026-05-07 |
