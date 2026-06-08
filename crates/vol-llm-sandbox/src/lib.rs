@@ -15,6 +15,8 @@ pub mod registry;
 pub mod ssh;
 #[cfg(feature = "firecracker")]
 pub mod firecracker;
+#[cfg(feature = "wasm")]
+pub mod wasm;
 
 /// Reference to a sandbox instance.
 pub type SandboxRef = Arc<dyn Sandbox>;
@@ -141,6 +143,10 @@ pub enum SandboxError {
     #[cfg(feature = "firecracker")]
     #[error("Firecracker error: {0}")]
     Firecracker(String),
+
+    #[cfg(feature = "wasm")]
+    #[error("Wasm error: {0}")]
+    Wasm(String),
 
     #[error("Command timed out after {0:?}")]
     Timeout(Duration),

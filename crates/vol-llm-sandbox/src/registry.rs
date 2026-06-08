@@ -17,6 +17,8 @@ pub struct SandboxConfig {
     pub ssh: Option<SshConfig>,
     #[serde(default)]
     pub firecracker: Option<FirecrackerConfig>,
+    #[serde(default)]
+    pub wasm: Option<WasmConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -79,6 +81,35 @@ pub struct FirecrackerConfig {
     #[serde(default)]
     pub ssh_passphrase: Option<String>,
 }
+
+/// Configuration for a Wasm sandbox.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct WasmConfig {
+    /// Max linear memory per module instance, in bytes.
+    #[serde(default = "default_wasm_memory")]
+    pub max_memory_bytes: u64,
+    /// Per-execution timeout in milliseconds.
+    #[serde(default = "default_wasm_timeout")]
+    pub max_execution_ms: u64,
+    /// Wasm modules to precompile and serve.
+    #[serde(default)]
+    pub modules: Vec<WasmModuleConfig>,
+}
+
+/// A single Wasm module registered in the sandbox.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct WasmModuleConfig {
+    /// Logical name — used as `program` in `CommandRequest`.
+    pub name: String,
+    /// Path to the `.wasm` file on disk.
+    pub path: String,
+    /// If true, register this module as a named agent tool.
+    #[serde(default)]
+    pub expose_as_tool: bool,
+}
+
+fn default_wasm_memory() -> u64 { 134_217_728 }    // 128 MB
+fn default_wasm_timeout() -> u64 { 30_000 }         // 30 seconds
 
 fn default_pool_size() -> usize { 1 }
 fn default_idle_timeout_fc() -> u64 { 300 }
@@ -184,6 +215,24 @@ impl SandboxRegistry {
                                     config.name
                                 );
                             }
+                        }
+                        #[cfg(feature = "wasm")]
+                        "wasm" => {
+                            let wasm_config = config.wasm.ok_or_else(|| {
+                                SandboxError::UnknownType(
+                                    "Wasm sandbox requires [wasm] section".to_string()
+                                )
+                            })?;
+
+                            let sb = crate::wasm::WasmSandbox::new(
+                                config.name.clone(),
+                                std::path::PathBuf::from(
+                                    config.work_dir.as_deref().unwrap_or("/tmp/wasm-sandbox")
+                                ),
+                                wasm_config,
+                            )?;
+                            let sandbox: Arc<dyn Sandbox> = Arc::new(sb);
+                            sandboxes.insert(config.name.clone(), sandbox);
                         }
                         other => return Err(SandboxError::UnknownType(other.to_string())),
                     }
