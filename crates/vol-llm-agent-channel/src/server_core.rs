@@ -22,7 +22,7 @@ use vol_llm_mcp::McpManager;
 use vol_llm_provider::{create_provider, ProviderLoader};
 use vol_llm_skill::SkillLoader;
 use vol_llm_tool::ToolRegistry;
-use vol_llm_runtime::AgentRuntime;
+use vol_llm_runtime::{AgentRuntime, TaskStoreConfig};
 use vol_session::file_store::FileSessionEntryStore;
 
 use crate::connection::ConnectionHolder;
@@ -295,6 +295,7 @@ impl AgentServerCore {
 pub struct AgentServerCoreBuilder {
     working_dir: PathBuf,
     store_dir: PathBuf,
+    task_store_config: Option<TaskStoreConfig>,
     extra_handlers: Vec<Arc<dyn crate::domain::handler::DomainHandler>>,
 }
 
@@ -303,6 +304,7 @@ impl Default for AgentServerCoreBuilder {
         Self {
             working_dir: PathBuf::new(),
             store_dir: PathBuf::new(),
+            task_store_config: None,
             extra_handlers: Vec::new(),
         }
     }
@@ -310,7 +312,12 @@ impl Default for AgentServerCoreBuilder {
 
 impl AgentServerCoreBuilder {
     pub fn new(working_dir: PathBuf, store_dir: PathBuf) -> Self {
-        Self { working_dir, store_dir, extra_handlers: Vec::new() }
+        Self { working_dir, store_dir, task_store_config: None, extra_handlers: Vec::new() }
+    }
+
+    pub fn with_task_store_config(mut self, config: Option<TaskStoreConfig>) -> Self {
+        self.task_store_config = config;
+        self
     }
 
     /// Register an external domain handler.
@@ -323,6 +330,7 @@ impl AgentServerCoreBuilder {
     pub async fn build(self) -> Result<AgentServerCore, String> {
         // Build AgentRuntime (owns all shared resources)
         let runtime = AgentRuntime::builder(self.working_dir.clone(), self.store_dir.clone())
+            .with_task_store_config(self.task_store_config.clone())
             .build()
             .await?;
 

@@ -281,11 +281,17 @@ pub fn validate_database_url_scheme(url: &str) -> Result<(), String> {
 pub struct AgentRuntimeBuilder {
     working_dir: PathBuf,
     store_dir: PathBuf,
+    task_store_config: Option<TaskStoreConfig>,
 }
 
 impl AgentRuntimeBuilder {
     pub fn new(working_dir: PathBuf, store_dir: PathBuf) -> Self {
-        Self { working_dir, store_dir }
+        Self { working_dir, store_dir, task_store_config: None }
+    }
+
+    pub fn with_task_store_config(mut self, config: Option<TaskStoreConfig>) -> Self {
+        self.task_store_config = config;
+        self
     }
 
     pub async fn build(self) -> Result<AgentRuntime, String> {
@@ -327,14 +333,17 @@ impl AgentRuntimeBuilder {
             loader
         };
 
-        let tasks_dir = store_dir.join("tasks");
-        std::fs::create_dir_all(&tasks_dir)
-            .map_err(|e| format!("failed to create tasks dir: {e}"))?;
-        let task_store: Arc<dyn TaskStore> = Arc::new(
-            FileTaskStore::new(&tasks_dir)
-                .await
-                .map_err(|e| format!("failed to create task store: {e}"))?
-        );
+        let task_store: Arc<dyn TaskStore> = match self.task_store_config.as_ref() {
+            None => build_file_task_store(&store_dir).await?,
+            Some(config) if config.store_type == TaskStoreType::File => build_file_task_store(&store_dir).await?,
+            Some(config) if config.store_type == TaskStoreType::Database => {
+                return Err(format!(
+                    "database task store is not implemented yet for url scheme: {}",
+                    config.required_url()?.split_once(':').map(|(scheme, _)| scheme).unwrap_or("<missing>")
+                ));
+            }
+            Some(_) => return Err("unsupported task store configuration".to_string()),
+        };
 
         let mut tool_registry = ToolRegistry::new();
         vol_llm_tools_builtin::register_all(&mut tool_registry);
@@ -362,6 +371,16 @@ impl AgentRuntimeBuilder {
             agent_status: Arc::new(std::sync::RwLock::new(HashMap::new())),
         })
     }
+}
+
+async fn build_file_task_store(store_dir: &std::path::Path) -> Result<Arc<dyn TaskStore>, String> {
+    let tasks_dir = store_dir.join("tasks");
+    std::fs::create_dir_all(&tasks_dir)
+        .map_err(|e| format!("failed to create tasks dir: {e}"))?;
+    let store = FileTaskStore::new(&tasks_dir)
+        .await
+        .map_err(|e| format!("failed to create file task store: {e}"))?;
+    Ok(Arc::new(store))
 }
 
 fn expand_tilde(path: PathBuf) -> PathBuf {

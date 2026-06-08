@@ -75,7 +75,9 @@ async fn main() {
         "Building AgentServerCore"
     );
 
-    let core = AgentServerCore::new(&config.runtime.working_dir, &config.runtime.store_dir)
+    let core = AgentServerCore::builder(&config.runtime.working_dir, &config.runtime.store_dir)
+        .with_task_store_config(config.runtime.task_store.clone())
+        .build()
         .await
         .unwrap_or_else(|e| {
             tracing::error!("Failed to build AgentServerCore: {}", e);
