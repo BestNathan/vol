@@ -225,6 +225,59 @@ impl AgentRuntime {
 
 // === Builder ===
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TaskStoreType {
+    File,
+    Database,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TaskStoreConfig {
+    #[serde(rename = "type")]
+    pub store_type: TaskStoreType,
+    pub url: Option<String>,
+}
+
+impl TaskStoreConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        match self.store_type {
+            TaskStoreType::File => {
+                if self.url.is_some() {
+                    return Err("runtime.task_store.url is not valid when type = \"file\"".to_string());
+                }
+                Ok(())
+            }
+            TaskStoreType::Database => {
+                let url = self
+                    .url
+                    .as_deref()
+                    .ok_or_else(|| "runtime.task_store.url is required when type = \"database\"".to_string())?;
+                validate_database_url_scheme(url)
+            }
+        }
+    }
+
+    pub fn required_url(&self) -> Result<&str, String> {
+        self.url
+            .as_deref()
+            .ok_or_else(|| "runtime.task_store.url is required when type = \"database\"".to_string())
+    }
+}
+
+pub fn validate_database_url_scheme(url: &str) -> Result<(), String> {
+    let scheme = url
+        .split_once(':')
+        .map(|(scheme, _)| scheme)
+        .unwrap_or_default();
+
+    match scheme {
+        "sqlite" | "postgres" | "postgresql" | "mysql" => Ok(()),
+        "" => Err("unsupported task store database url scheme: <missing>".to_string()),
+        other => Err(format!("unsupported task store database url scheme: {other}")),
+    }
+}
+
 pub struct AgentRuntimeBuilder {
     working_dir: PathBuf,
     store_dir: PathBuf,

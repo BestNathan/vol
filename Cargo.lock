@@ -7187,6 +7187,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "vol-llm-agent-channel",
+ "vol-llm-runtime",
 ]
 
 [[package]]

@@ -16,3 +16,4 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 axum = { workspace = true }
 vol-llm-agent-channel = { path = "../vol-llm-agent-channel" }
+vol-llm-runtime = { path = "../vol-llm-runtime" }
