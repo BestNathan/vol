@@ -358,9 +358,26 @@ impl TaskStore for DatabaseTaskStore {
     }
 
     async fn get_ready_tasks(&self) -> Result<Vec<TaskId>> {
-        Err(StoreError::Internal(
-            "database task ready query is not implemented".to_string(),
-        ))
+        let tasks = self.list(None).await?;
+        let completed_ids: std::collections::HashSet<TaskId> = tasks
+            .iter()
+            .filter(|task| task.status == TaskStatus::Completed)
+            .map(|task| task.id)
+            .collect();
+
+        let ready = tasks
+            .iter()
+            .filter(|task| {
+                task.status == TaskStatus::Pending
+                    && task
+                        .dependencies
+                        .iter()
+                        .all(|id| completed_ids.contains(id))
+            })
+            .map(|task| task.id)
+            .collect();
+
+        Ok(ready)
     }
 }
 
@@ -512,5 +529,84 @@ mod tests {
         let completed = store.list(Some(TaskStatus::Completed)).await.unwrap();
         assert_eq!(completed.len(), 1);
         assert_eq!(completed[0].id, id2);
+    }
+
+    #[tokio::test]
+    async fn get_ready_tasks_returns_pending_tasks_without_dependencies() {
+        let (store, _dir) = temp_store().await;
+        let id1 = store
+            .create(Task::new(TaskKind::Agent, "one".to_string(), vec![]))
+            .await
+            .unwrap();
+        let id2 = store
+            .create(Task::new(TaskKind::Agent, "two".to_string(), vec![]))
+            .await
+            .unwrap();
+
+        let ready = store.get_ready_tasks().await.unwrap();
+        assert_eq!(ready, vec![id1, id2]);
+    }
+
+    #[tokio::test]
+    async fn get_ready_tasks_excludes_incomplete_dependencies() {
+        let (store, _dir) = temp_store().await;
+        let dependency_id = store
+            .create(Task::new(TaskKind::Agent, "dependency".to_string(), vec![]))
+            .await
+            .unwrap();
+        let blocked_id = store
+            .create(Task::new(
+                TaskKind::Agent,
+                "blocked".to_string(),
+                vec![dependency_id],
+            ))
+            .await
+            .unwrap();
+
+        let ready = store.get_ready_tasks().await.unwrap();
+        assert_eq!(ready, vec![dependency_id]);
+        assert!(!ready.contains(&blocked_id));
+    }
+
+    #[tokio::test]
+    async fn get_ready_tasks_includes_task_after_dependency_completes() {
+        let (store, _dir) = temp_store().await;
+        let dependency_id = store
+            .create(Task::new(TaskKind::Agent, "dependency".to_string(), vec![]))
+            .await
+            .unwrap();
+        let blocked_id = store
+            .create(Task::new(
+                TaskKind::Agent,
+                "blocked".to_string(),
+                vec![dependency_id],
+            ))
+            .await
+            .unwrap();
+
+        let mut dependency = store.get(&dependency_id).await.unwrap().unwrap();
+        dependency.status = TaskStatus::Completed;
+        store.update(dependency).await.unwrap();
+
+        let ready = store.get_ready_tasks().await.unwrap();
+        assert_eq!(ready, vec![blocked_id]);
+    }
+
+    #[tokio::test]
+    async fn tasks_persist_across_reconnect() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("tasks.db");
+        let url = format!("sqlite://{}", db_path.display());
+
+        let store = DatabaseTaskStore::connect(&url).await.unwrap();
+        let id = store
+            .create(Task::new(TaskKind::Agent, "persisted".to_string(), vec![]))
+            .await
+            .unwrap();
+        drop(store);
+
+        let reopened = DatabaseTaskStore::connect(&url).await.unwrap();
+        let got = reopened.get(&id).await.unwrap().unwrap();
+        assert_eq!(got.subject, "persisted");
     }
 }
