@@ -145,37 +145,76 @@ fn sqlite_file_path(url: &str) -> Option<PathBuf> {
 
 #[async_trait::async_trait]
 impl crate::store::TaskStore for DatabaseTaskStore {
-    async fn create(&self, _task: crate::model::Task) -> Result<crate::model::TaskId> {
-        Err(StoreError::Internal(
-            "SeaORM database task create is not implemented".to_string(),
-        ))
+    async fn create(&self, task: crate::model::Task) -> Result<crate::model::TaskId> {
+        use sea_orm::ActiveModelTrait;
+
+        let mut active = mapping::task_to_active_model(task)?;
+        active.id = sea_orm::ActiveValue::NotSet;
+        let inserted = active
+            .insert(&self.db)
+            .await
+            .map_err(|e| StoreError::Database(format!("failed to create task: {e}")))?;
+        mapping::task_id_from_db(inserted.id)
     }
 
-    async fn get(&self, _task_id: &crate::model::TaskId) -> Result<Option<crate::model::Task>> {
-        Err(StoreError::Internal(
-            "SeaORM database task get is not implemented".to_string(),
-        ))
+    async fn get(&self, task_id: &crate::model::TaskId) -> Result<Option<crate::model::Task>> {
+        use sea_orm::EntityTrait;
+
+        let id = mapping::task_id_to_db(*task_id)?;
+        let model = entity::Entity::find_by_id(id)
+            .one(&self.db)
+            .await
+            .map_err(|e| StoreError::Database(format!("failed to get task {}: {e}", task_id)))?;
+        model.map(mapping::model_to_task).transpose()
     }
 
-    async fn update(&self, _task: crate::model::Task) -> Result<()> {
-        Err(StoreError::Internal(
-            "SeaORM database task update is not implemented".to_string(),
-        ))
+    async fn update(&self, task: crate::model::Task) -> Result<()> {
+        use sea_orm::{ActiveModelTrait, EntityTrait};
+
+        let id = mapping::task_id_to_db(task.id)?;
+        let exists = entity::Entity::find_by_id(id)
+            .one(&self.db)
+            .await
+            .map_err(|e| {
+                StoreError::Database(format!("failed to get task {} for update: {e}", task.id))
+            })?;
+        if exists.is_none() {
+            return Err(StoreError::NotFound(format!("Task {}", task.id)));
+        }
+
+        mapping::task_to_active_model(task.clone())?
+            .update(&self.db)
+            .await
+            .map_err(|e| StoreError::Database(format!("failed to update task {}: {e}", task.id)))?;
+        Ok(())
     }
 
-    async fn delete(&self, _task_id: &crate::model::TaskId) -> Result<()> {
-        Err(StoreError::Internal(
-            "SeaORM database task delete is not implemented".to_string(),
-        ))
+    async fn delete(&self, task_id: &crate::model::TaskId) -> Result<()> {
+        use sea_orm::EntityTrait;
+
+        let id = mapping::task_id_to_db(*task_id)?;
+        entity::Entity::delete_by_id(id)
+            .exec(&self.db)
+            .await
+            .map_err(|e| StoreError::Database(format!("failed to delete task {}: {e}", task_id)))?;
+        Ok(())
     }
 
     async fn list(
         &self,
-        _status: Option<crate::model::TaskStatus>,
+        status: Option<crate::model::TaskStatus>,
     ) -> Result<Vec<crate::model::Task>> {
-        Err(StoreError::Internal(
-            "SeaORM database task list is not implemented".to_string(),
-        ))
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+
+        let mut query = entity::Entity::find().order_by_asc(entity::Column::Id);
+        if let Some(status) = status {
+            query = query.filter(entity::Column::Status.eq(mapping::status_to_db(status)));
+        }
+        let models = query
+            .all(&self.db)
+            .await
+            .map_err(|e| StoreError::Database(format!("failed to list tasks: {e}")))?;
+        models.into_iter().map(mapping::model_to_task).collect()
     }
 
     async fn get_ready_tasks(&self) -> Result<Vec<crate::model::TaskId>> {
@@ -208,6 +247,117 @@ mod tests {
             ))
             .await
             .unwrap();
+    }
+
+    async fn sqlite_store() -> (DatabaseTaskStore, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("tasks.db");
+        let url = format!("sqlite://{}", db_path.display());
+        let store = DatabaseTaskStore::connect(&url).await.unwrap();
+        clear_store(&store).await;
+        (store, dir)
+    }
+
+    async fn postgres_store() -> DatabaseTaskStore {
+        let store = DatabaseTaskStore::connect(POSTGRES_TEST_URL).await.unwrap();
+        clear_store(&store).await;
+        store
+    }
+
+    async fn assert_create_get(store: &DatabaseTaskStore) {
+        use crate::model::{Task, TaskKind, TaskStatus};
+        use crate::store::TaskStore;
+
+        let mut task = Task::new(TaskKind::Agent, "database task".to_string(), vec![]);
+        task.description = "stored with seaorm".to_string();
+        task.publisher = Some("planner".to_string());
+        task.assignee = Some("worker".to_string());
+        task.active_form = Some("Working".to_string());
+
+        let id = store.create(task).await.unwrap();
+        assert!(id.0 > 0);
+
+        let got = store.get(&id).await.unwrap().unwrap();
+        assert_eq!(got.id, id);
+        assert_eq!(got.subject, "database task");
+        assert_eq!(got.description, "stored with seaorm");
+        assert_eq!(got.publisher.as_deref(), Some("planner"));
+        assert_eq!(got.assignee.as_deref(), Some("worker"));
+        assert_eq!(got.active_form.as_deref(), Some("Working"));
+        assert_eq!(got.status, TaskStatus::Pending);
+    }
+
+    #[tokio::test]
+    async fn sqlite_create_assigns_id_and_get_retrieves_task() {
+        let (store, _dir) = sqlite_store().await;
+        assert_create_get(&store).await;
+    }
+
+    #[tokio::test]
+    async fn postgres_create_assigns_id_and_get_retrieves_task() {
+        let store = postgres_store().await;
+        assert_create_get(&store).await;
+    }
+
+    async fn assert_update_delete_list(store: &DatabaseTaskStore) {
+        use crate::model::{Task, TaskKind, TaskResult, TaskStatus};
+        use crate::store::TaskStore;
+        use std::path::PathBuf;
+        use std::time::SystemTime;
+
+        let id1 = store
+            .create(Task::new(TaskKind::Agent, "first".to_string(), vec![]))
+            .await
+            .unwrap();
+        let id2 = store
+            .create(Task::new(TaskKind::Manual, "second".to_string(), vec![]))
+            .await
+            .unwrap();
+
+        let mut second = store.get(&id2).await.unwrap().unwrap();
+        second.status = TaskStatus::Completed;
+        second.subject = "updated".to_string();
+        second.description = "done".to_string();
+        second.summary = Some("summary".to_string());
+        second.output_file = Some(PathBuf::from("/tmp/output.txt"));
+        second.result = Some(TaskResult {
+            success: true,
+            output_truncated: "ok".to_string(),
+            output_file: PathBuf::from("/tmp/result.txt"),
+        });
+        second.completed_at = Some(SystemTime::now());
+        store.update(second).await.unwrap();
+
+        let updated = store.get(&id2).await.unwrap().unwrap();
+        assert_eq!(updated.status, TaskStatus::Completed);
+        assert_eq!(updated.subject, "updated");
+        assert_eq!(updated.summary.as_deref(), Some("summary"));
+        assert!(updated.result.as_ref().unwrap().success);
+
+        let all = store.list(None).await.unwrap();
+        assert_eq!(
+            all.iter().map(|task| task.id).collect::<Vec<_>>(),
+            vec![id1, id2]
+        );
+        let completed = store.list(Some(TaskStatus::Completed)).await.unwrap();
+        assert_eq!(completed.len(), 1);
+        assert_eq!(completed[0].id, id2);
+
+        store.delete(&id1).await.unwrap();
+        assert!(store.get(&id1).await.unwrap().is_none());
+        store.delete(&id1).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sqlite_update_delete_list() {
+        let (store, _dir) = sqlite_store().await;
+        assert_update_delete_list(&store).await;
+    }
+
+    #[tokio::test]
+    async fn postgres_update_delete_list() {
+        let store = postgres_store().await;
+        assert_update_delete_list(&store).await;
     }
 
     #[tokio::test]
