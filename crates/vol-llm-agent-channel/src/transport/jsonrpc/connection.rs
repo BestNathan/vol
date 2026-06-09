@@ -11,23 +11,26 @@ use axum::extract::ws::{Message as WsMessage, WebSocket};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 
-use crate::agent_server_protocol::{AgentOperation, AgentPayload, AgentServerMessage, ErrorPayload, MessageKind, Operation, Payload};
+use crate::agent_server_protocol::{
+    AgentOperation, AgentPayload, AgentServerMessage, Operation, Payload,
+};
 use crate::connection::Connection;
 use crate::error::ConnectionError;
-
-use super::serde_helpers::to_jsonrpc_error;
 
 /// JSON-RPC connection over WebSocket.
 pub struct JsonRpcConnection {
     ws_tx: Arc<tokio::sync::Mutex<futures::stream::SplitSink<WebSocket, WsMessage>>>,
-    msg_rx: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Result<AgentServerMessage, ConnectionError>>>,
+    msg_rx: tokio::sync::Mutex<
+        tokio::sync::mpsc::Receiver<Result<AgentServerMessage, ConnectionError>>,
+    >,
 }
 
 impl JsonRpcConnection {
     /// Create a new `JsonRpcConnection` and start the background reader.
     pub fn new(ws: WebSocket) -> Self {
         let (ws_tx, ws_rx) = ws.split();
-        let (tx, rx) = tokio::sync::mpsc::channel::<Result<AgentServerMessage, ConnectionError>>(64);
+        let (tx, rx) =
+            tokio::sync::mpsc::channel::<Result<AgentServerMessage, ConnectionError>>(64);
 
         // Spawn background reader task.
         tokio::spawn(Self::reader(tx, ws_rx));
@@ -91,23 +94,12 @@ impl Connection for JsonRpcConnection {
     }
 
     async fn send(&self, msg: AgentServerMessage) -> Result<(), ConnectionError> {
-        match (&msg.kind, &msg.operation, &msg.payload) {
-            (MessageKind::Error, _, Payload::Error(ErrorPayload { message, .. })) => {
-                let text = to_jsonrpc_error(None, -32000, message.clone());
-                let mut tx = self.ws_tx.lock().await;
-                tx.send(WsMessage::Text(text))
-                    .await
-                    .map_err(|e| ConnectionError::WsSendError(e.to_string()))
-            }
-            _ => {
-                let text = crate::transport::jsonrpc::codec::encode_jsonrpc_message(msg)
-                    .map_err(|e| ConnectionError::WsSendError(e.to_string()))?;
-                let mut tx = self.ws_tx.lock().await;
-                tx.send(WsMessage::Text(text))
-                    .await
-                    .map_err(|e| ConnectionError::WsSendError(e.to_string()))
-            }
-        }
+        let text = crate::transport::jsonrpc::codec::encode_jsonrpc_message(msg)
+            .map_err(|e| ConnectionError::WsSendError(e.to_string()))?;
+        let mut tx = self.ws_tx.lock().await;
+        tx.send(WsMessage::Text(text))
+            .await
+            .map_err(|e| ConnectionError::WsSendError(e.to_string()))
     }
 }
 
