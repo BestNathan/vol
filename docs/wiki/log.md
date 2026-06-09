@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-06-10] ingest | Session Database Store Implementation
+- Created sources: [[session-database-store-implementation]]
+- Created concepts: [[runtime-session-store-configuration]]
+- Updated entities: [[vol-session]] (SessionManager, DatabaseSessionEntryStore, DatabaseSessionManager, SeaORM sessions/session_entries schema), [[vol-llm-runtime-crate]] (runtime-owned `session_manager` and `[runtime.session_store]` config), [[vol-llm-agent-channel-crate]] (SessionHandler/register_agent use runtime session manager; JSON-RPC error payload preservation), [[vol-agent-server-crate]] (server parses, validates, logs, and forwards session store config)
+- Updated concepts: [[session-as-ssot]] (file/database backend selection preserves Session SSOT model)
+- Updated index: new source and concept entries, refreshed session/runtime/server/channel summaries
+- Cross-references added: 28
+- Changes: Documented the completed database-backed session store implementation: SeaORM SQLite/Postgres persistence with compiled migrations, scoped session manager APIs, runtime/server config, channel JSON-RPC integration, Postgres test isolation, and final verification caveats for unrelated workspace checks.
+
 ## [2026-06-09] ingest | File Session Agent ID Validation
 - Created sources: [[file-session-agent-id-validation]]
 - Updated entities: [[vol-session]] (`FileSessionManager` validates agent IDs, `StoreError::InvalidInput` added, invalid infallible stores use encoded quarantine paths)

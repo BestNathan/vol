@@ -1,22 +1,22 @@
 # Wiki Index
 
-Last updated: 2026-06-09 (file-session-agent-id-validation)
+Last updated: 2026-06-10 (session-database-store-implementation)
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[vol-llm-runtime-crate]] | AgentRuntime owner of shared agent resources and runtime task store config types | active | 2026-06-09 |
+| [[vol-llm-runtime-crate]] | AgentRuntime owner of shared agent resources and runtime task/session store config types | active | 2026-06-10 |
 | [[vol-llm-task-crate]] | Task models and persistence stores, including SeaORM database store for SQLite and Postgres with compiled migrations | active | 2026-06-09 |
-| [[vol-agent-server-crate]] | Standalone agent server crate with TOML parsing and `[runtime.task_store]` validation | active | 2026-06-09 |
+| [[vol-agent-server-crate]] | Standalone agent server crate with TOML parsing and `[runtime.task_store]` / `[runtime.session_store]` validation | active | 2026-06-10 |
 | [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with Dioxus as the sole active web frontend | active | 2026-05-29 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API | active | 2026-05-21 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions, including provider-neutral multipart message content | stable | 2026-05-21 |
 | [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager | stable | 2026-05-21 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with Anthropic multipart text/image conversion | stable | 2026-05-21 |
-| [[vol-session]] | Session message store and entry persistence, including hardened file-manager agent-id path validation | active | 2026-06-09 |
-| [[vol-llm-agent-channel-crate]] | Agent communication channel layer and active JSON-RPC web backend service with task-store config pass-through | active | 2026-06-09 |
+| [[vol-session]] | Session message store and entry persistence, including file and SeaORM database-backed session managers | active | 2026-06-10 |
+| [[vol-llm-agent-channel-crate]] | Agent communication channel layer and active JSON-RPC web backend service with task/session store config pass-through | active | 2026-06-10 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 | [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support | active | 2026-05-10 |
@@ -26,6 +26,7 @@ Last updated: 2026-06-09 (file-session-agent-id-validation)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[runtime-session-store-configuration]] | Shared `[runtime.session_store]` TOML contract and runtime `SessionManager` behavior for file/database session persistence | active | 2026-06-10 |
 | [[runtime-task-store-configuration]] | Shared `[runtime.task_store]` TOML contract and single global runtime store behavior for file/database task persistence | active | 2026-06-09 |
 | [[rich-text-conversation]] | Markdown rendering for chat (Dioxus handoff to marked.js + DOMPurify + highlight.js) | active | 2026-06-04 |
 | [[dependency-graph-visualization]] | Layered SVG node-link graph of task dependencies: pure layout fn + Dioxus component | active | 2026-06-04 |
@@ -85,6 +86,7 @@ Last updated: 2026-06-09 (file-session-agent-id-validation)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[session-database-store-implementation]] | End-to-end file/database session-store implementation: SessionManager, SeaORM SQLite/Postgres store, runtime/server config, channel JSON-RPC integration | active | 2026-06-10 |
 | [[file-session-agent-id-validation]] | FileSessionManager agent-id path traversal hardening with validation, InvalidInput errors, and encoded quarantine stores | active | 2026-06-09 |
 | [[seaorm-task-database-store-implementation]] | End-to-end replacement of SQLx task store with SeaORM + SeaORM Migration for SQLite and Postgres | active | 2026-06-09 |
 | [[seaorm-postgres-test-url-env-fix]] | SeaORM Postgres task-store test URL hardening: mandatory `VOL_AGENT_POSTGRES_TEST_URL`, clear unset failure, and placeholder docs DSN | active | 2026-06-09 |
