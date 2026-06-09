@@ -20,6 +20,16 @@ pub enum StoreError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Database error: {0}")]
+    Database(String),
+
+    #[error("Session agent scope conflict for {session_id}: expected {expected}, actual {actual}")]
+    SessionAgentScopeConflict {
+        session_id: String,
+        expected: String,
+        actual: String,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, StoreError>;
