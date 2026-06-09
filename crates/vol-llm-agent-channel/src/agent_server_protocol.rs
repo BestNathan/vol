@@ -8,6 +8,8 @@ pub enum ProtocolError {
     UnknownMethod(String),
     #[error("payload decode failed for {0}")]
     PayloadDecodeFailed(&'static str),
+    #[error("payload decode failed: {0}")]
+    PayloadDecodeFailedOwned(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -252,7 +254,9 @@ impl Payload {
                 }
                 let p: P = serde_json::from_value(value)
                     .map_err(|_| ProtocolError::PayloadDecodeFailed("agent.status"))?;
-                Ok(Payload::Agent(AgentPayload::Status { agent_id: p.agent_id }))
+                Ok(Payload::Agent(AgentPayload::Status {
+                    agent_id: p.agent_id,
+                }))
             }
             Operation::Agent(AgentOperation::ContextConfig) => {
                 #[derive(Deserialize)]
@@ -261,7 +265,9 @@ impl Payload {
                 }
                 let p: P = serde_json::from_value(value)
                     .map_err(|_| ProtocolError::PayloadDecodeFailed("agent.context_config"))?;
-                Ok(Payload::Agent(AgentPayload::ContextConfig { agent_id: p.agent_id }))
+                Ok(Payload::Agent(AgentPayload::ContextConfig {
+                    agent_id: p.agent_id,
+                }))
             }
             Operation::Agent(AgentOperation::ContextSnapshot) => {
                 #[derive(Deserialize)]
@@ -317,7 +323,9 @@ impl Payload {
                 }
                 let p: P = serde_json::from_value(value)
                     .map_err(|_| ProtocolError::PayloadDecodeFailed("session.list"))?;
-                Ok(Payload::Session(SessionPayload::List { agent_id: p.agent_id }))
+                Ok(Payload::Session(SessionPayload::List {
+                    agent_id: p.agent_id,
+                }))
             }
             Operation::Session(SessionOperation::Resume) => {
                 #[derive(Deserialize)]
@@ -463,9 +471,7 @@ impl Payload {
             }
             Operation::Skill(SkillOperation::Refresh) => Ok(Payload::Skill(SkillPayload::Refresh)),
             // ── Tool ──
-            Operation::Tool(ToolOperation::List) => {
-                Ok(Payload::Tool(ToolPayload::List))
-            }
+            Operation::Tool(ToolOperation::List) => Ok(Payload::Tool(ToolPayload::List)),
             Operation::Tool(ToolOperation::Call) => {
                 #[derive(Deserialize)]
                 struct P {
