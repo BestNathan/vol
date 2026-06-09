@@ -4,7 +4,7 @@ category: service
 tags: [runtime, agents, tools, task-store]
 created: 2026-06-09
 updated: 2026-06-09
-source_count: 3
+source_count: 4
 ---
 
 # vol-llm-runtime Crate
@@ -36,6 +36,8 @@ Sources: [[runtime-database-task-store-construction]], [[task-database-store-imp
 
 The runtime builder test uses valid provider config, creates a task through the database-backed store, rebuilds the runtime against the same SQLite URL, and verifies the task persists.
 
+For Postgres integration coverage, [[seaorm-postgres-test-isolation-fix]] adds a shared cross-process lock with `vol-llm-task` database tests plus marker-based cleanup before and after runtime rebuild assertions.
+
 ## Related
 - [[vol-agent-server-crate]]
 - [[vol-llm-task-crate]]
@@ -43,3 +45,4 @@ The runtime builder test uses valid provider config, creates a task through the 
 - [[task-store-config-parsing]]
 - [[runtime-database-task-store-construction]]
 - [[task-database-store-implementation]]
+- [[seaorm-postgres-test-isolation-fix]]

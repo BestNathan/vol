@@ -402,6 +402,28 @@ fn expand_tilde(path: PathBuf) -> PathBuf {
 mod tests {
     use super::*;
 
+    struct PostgresTestLock(std::fs::File);
+
+    impl PostgresTestLock {
+        fn acquire() -> Self {
+            let path = std::env::temp_dir().join("vol-agent-postgres-task-store-test.lock");
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .read(true)
+                .write(true)
+                .open(path)
+                .expect("postgres test lock file should open");
+            file.lock().expect("postgres test lock should be acquired");
+            Self(file)
+        }
+    }
+
+    impl Drop for PostgresTestLock {
+        fn drop(&mut self) {
+            self.0.unlock().expect("postgres test lock should release");
+        }
+    }
+
     #[tokio::test]
     async fn builder_accepts_database_task_store_config_until_provider_requirement() {
         let temp = tempfile::tempdir().unwrap();
@@ -461,7 +483,8 @@ base_url = "https://api.test.com"
     }
 
     #[tokio::test]
-    async fn builder_accepts_postgres_database_task_store_config() {
+    async fn builder_accepts_postgres_database_task_store_config() -> anyhow::Result<()> {
+        let _guard = PostgresTestLock::acquire();
         let temp = tempfile::tempdir().unwrap();
         let providers_dir = temp.path().join(".agents/providers");
         std::fs::create_dir_all(&providers_dir).unwrap();
@@ -480,48 +503,57 @@ base_url = "https://api.test.com"
             store_type: TaskStoreType::Database,
             url: Some("postgres://postgres:postgres@192.168.2.106/vol".to_string()),
         };
+        let subject = format!(
+            "runtime postgres database task store test {} {}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        );
+
+        async fn cleanup_marker(store: &dyn vol_llm_task::TaskStore, subject: &str) -> anyhow::Result<()> {
+            for task in store.list(None).await? {
+                if task.subject == subject {
+                    store.delete(&task.id).await?;
+                }
+            }
+            Ok(())
+        }
 
         let runtime = AgentRuntime::builder(temp.path(), temp.path())
             .with_task_store_config(Some(config.clone()))
             .build()
             .await
-            .expect("runtime should build with postgres database task store config");
+            .map_err(anyhow::Error::msg)?;
+        let cleanup_store = runtime.task_store.clone();
+        cleanup_marker(cleanup_store.as_ref(), &subject).await?;
 
-        let subject = format!(
-            "runtime postgres database task store test {}",
-            std::process::id()
-        );
         let mut task = vol_llm_task::Task::new(
             vol_llm_task::TaskKind::Manual,
             subject.clone(),
             Vec::new(),
         );
         task.description = "created through AgentRuntime::task_store using postgres".to_string();
-        let task_id = runtime
-            .task_store
-            .create(task)
-            .await
-            .expect("postgres database task store should create tasks");
+        let task_id = runtime.task_store.create(task).await?;
         drop(runtime);
 
-        let runtime = AgentRuntime::builder(temp.path(), temp.path())
-            .with_task_store_config(Some(config))
-            .build()
-            .await
-            .expect("runtime should reconnect to postgres database task store");
-        let persisted = runtime
-            .task_store
-            .get(&task_id)
-            .await
-            .expect("postgres database task store should get tasks")
-            .expect("created task should persist across runtime rebuilds");
+        let result = async {
+            let runtime = AgentRuntime::builder(temp.path(), temp.path())
+                .with_task_store_config(Some(config))
+                .build()
+                .await
+                .map_err(anyhow::Error::msg)?;
+            let persisted = runtime
+                .task_store
+                .get(&task_id)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("created task should persist across runtime rebuilds"))?;
 
-        assert_eq!(persisted.id, task_id);
-        assert_eq!(persisted.subject, subject);
-        runtime
-            .task_store
-            .delete(&task_id)
-            .await
-            .expect("postgres database task store should clean up created task");
+            anyhow::ensure!(persisted.id == task_id, "persisted task id should match");
+            anyhow::ensure!(persisted.subject == subject, "persisted task subject should match");
+            Ok::<_, anyhow::Error>(())
+        }
+        .await;
+
+        cleanup_marker(cleanup_store.as_ref(), &subject).await?;
+        result
     }
 }

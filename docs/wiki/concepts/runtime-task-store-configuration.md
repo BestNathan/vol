@@ -4,7 +4,7 @@ category: architecture
 tags: [task-store, configuration, runtime, validation]
 created: 2026-06-09
 updated: 2026-06-09
-source_count: 5
+source_count: 6
 ---
 
 # Runtime Task Store Configuration
@@ -47,6 +47,8 @@ SQLite database task-store initialization is covered by [[task-store-sqlite-embe
 SQLite URL normalization must append create mode only when no exact `mode` query key is present. [[seaorm-sqlite-url-normalization-fix]] documents the SeaORM skeleton review fix that made `journal_mode=wal` coexist with an appended `mode=rwc`.
 
 Runtime construction is covered by [[runtime-database-task-store-construction]] and [[task-database-store-implementation]]: `AgentRuntimeBuilder::build()` now turns database config into a real `DatabaseTaskStore`, and the builder test asserts task persistence across runtime rebuilds instead of accepting database construction failures.
+
+[[seaorm-postgres-test-isolation-fix]] documents the Postgres-specific review hardening: runtime and task-store Postgres tests share an OS temp-dir lock, runtime rows are marked with a UUID subject, and cleanup runs before and after the test through the public `TaskStore` API.
 
 The completed implementation keeps one global task store. `AgentServerCoreBuilder` only forwards config into runtime construction; it does not create per-agent stores or patch the tool registry. The unified `task` tool and JSON-RPC `TaskHandler` both share `runtime.task_store`.
 

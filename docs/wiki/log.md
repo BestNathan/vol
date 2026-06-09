@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-06-09] ingest | SeaORM Postgres Test Isolation Fix
+- Created sources: [[seaorm-postgres-test-isolation-fix]]
+- Updated entities: [[vol-llm-runtime-crate]] (runtime Postgres task-store test marker cleanup and cross-process lock), [[vol-llm-task-crate]] (Postgres database tests share the same temp-dir lock)
+- Updated concepts: [[runtime-task-store-configuration]] (Postgres test isolation and cleanup expectations)
+- Updated index: new SeaORM Postgres test isolation source entry
+- Cross-references added: 9
+- Changes: Documented the SeaORM Task 6 review fix: runtime and task-store Postgres tests coordinate through a shared OS file lock, runtime test rows use a UUID subject marker with before/after cleanup through `TaskStore`, and the example Postgres DSN is now a placeholder.
+
 ## [2026-06-09] ingest | SeaORM SQLite URL Normalization Fix
 - Created sources: [[seaorm-sqlite-url-normalization-fix]]
 - Updated entities: [[vol-llm-task-crate]] (SeaORM SQLite URL normalization exact `mode` query-key behavior)

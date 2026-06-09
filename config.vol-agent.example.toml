@@ -48,7 +48,7 @@ store_dir = "~/.vol"
 # Postgres example:
 # [runtime.task_store]
 # type = "database"
-# url = "postgres://postgres:postgres@192.168.2.106/vol"
+# url = "postgres://USER:PASSWORD@HOST:5432/DATABASE"
 
 # =============================================================================
 # Tracing — logging configuration

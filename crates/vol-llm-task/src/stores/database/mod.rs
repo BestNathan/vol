@@ -244,10 +244,30 @@ impl crate::store::TaskStore for DatabaseTaskStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::sync::Mutex;
 
     const POSTGRES_TEST_URL: &str = "postgres://postgres:postgres@192.168.2.106/vol";
-    static POSTGRES_TEST_LOCK: Mutex<()> = Mutex::const_new(());
+
+    struct PostgresTestLock(std::fs::File);
+
+    impl PostgresTestLock {
+        fn acquire() -> Self {
+            let path = std::env::temp_dir().join("vol-agent-postgres-task-store-test.lock");
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .read(true)
+                .write(true)
+                .open(path)
+                .expect("postgres test lock file should open");
+            file.lock().expect("postgres test lock should be acquired");
+            Self(file)
+        }
+    }
+
+    impl Drop for PostgresTestLock {
+        fn drop(&mut self) {
+            self.0.unlock().expect("postgres test lock should release");
+        }
+    }
 
     async fn clear_store(store: &DatabaseTaskStore) {
         use sea_orm::{ConnectionTrait, Statement};
@@ -314,7 +334,7 @@ mod tests {
 
     #[tokio::test]
     async fn postgres_create_assigns_id_and_get_retrieves_task() {
-        let _guard = POSTGRES_TEST_LOCK.lock().await;
+        let _guard = PostgresTestLock::acquire();
         let store = postgres_store().await;
         assert_create_get(&store).await;
     }
@@ -376,7 +396,7 @@ mod tests {
 
     #[tokio::test]
     async fn postgres_update_delete_list() {
-        let _guard = POSTGRES_TEST_LOCK.lock().await;
+        let _guard = PostgresTestLock::acquire();
         let store = postgres_store().await;
         assert_update_delete_list(&store).await;
     }
@@ -418,7 +438,7 @@ mod tests {
 
     #[tokio::test]
     async fn postgres_ready_tasks() {
-        let _guard = POSTGRES_TEST_LOCK.lock().await;
+        let _guard = PostgresTestLock::acquire();
         let store = postgres_store().await;
         assert_ready_tasks(&store).await;
     }
@@ -446,7 +466,7 @@ mod tests {
 
     #[tokio::test]
     async fn postgres_tasks_persist_across_reconnect() {
-        let _guard = POSTGRES_TEST_LOCK.lock().await;
+        let _guard = PostgresTestLock::acquire();
         use crate::model::{Task, TaskKind};
         use crate::store::TaskStore;
 
@@ -491,7 +511,7 @@ mod tests {
 
     #[tokio::test]
     async fn postgres_connect_runs_migration() {
-        let _guard = POSTGRES_TEST_LOCK.lock().await;
+        let _guard = PostgresTestLock::acquire();
         use sea_orm::{ConnectionTrait, Statement};
 
         let store = DatabaseTaskStore::connect(POSTGRES_TEST_URL).await.unwrap();
