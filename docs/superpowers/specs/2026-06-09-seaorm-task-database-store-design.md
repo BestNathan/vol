@@ -15,7 +15,7 @@ The runtime continues to own exactly one global task store. The `task` tool, sch
 - Run SeaORM Rust migrations automatically during `DatabaseTaskStore::connect`.
 - Preserve current task schema semantics: scalar columns plus JSON text for dependencies, blocks, and result.
 - Keep the existing single global runtime task store model.
-- Require Postgres tests against `postgres://postgres:postgres@192.168.2.106/vol`.
+- Require Postgres tests to read the mandatory URL from `VOL_AGENT_POSTGRES_TEST_URL` (for example `postgres://USER:PASSWORD@HOST:5432/DATABASE`).
 
 ## Non-goals
 
@@ -42,7 +42,7 @@ Postgres uses the same contract:
 ```toml
 [runtime.task_store]
 type = "database"
-url = "postgres://postgres:postgres@192.168.2.106/vol"
+url = "postgres://USER:PASSWORD@HOST:5432/DATABASE"
 ```
 
 Omitting `[runtime.task_store]` still selects the file task store. Explicit file store configuration remains valid:
@@ -281,7 +281,7 @@ Add explicit id conversion checks:
 Postgres is a first-class supported backend in this change.
 
 - Supported schemes: `postgres://` and `postgresql://`.
-- Test URL: `postgres://postgres:postgres@192.168.2.106/vol`.
+- Test URL comes from `VOL_AGENT_POSTGRES_TEST_URL` (for example `postgres://USER:PASSWORD@HOST:5432/DATABASE`).
 - The database must already exist.
 - Migration runs automatically on connect.
 - JSON-like fields remain text columns for SQLite/Postgres compatibility.
@@ -300,7 +300,7 @@ SQLite setup:
 
 Postgres setup:
 
-- Use the fixed URL `postgres://postgres:postgres@192.168.2.106/vol`.
+- Read the mandatory URL from `VOL_AGENT_POSTGRES_TEST_URL` (for example `postgres://USER:PASSWORD@HOST:5432/DATABASE`).
 - Postgres is mandatory. Tests must fail if the database is unreachable.
 - Clean the `tasks` table before each Postgres test after running migrations. A simple `DELETE FROM tasks` is sufficient because this table is only for task-store tests.
 
@@ -320,7 +320,7 @@ Required behavior coverage for both backends:
 
 Keep the existing runtime builder SQLite persistence test.
 
-Add a Postgres runtime builder test using `postgres://postgres:postgres@192.168.2.106/vol` that:
+Add a Postgres runtime builder test using `VOL_AGENT_POSTGRES_TEST_URL` (for example `postgres://USER:PASSWORD@HOST:5432/DATABASE`) that:
 
 1. Creates valid fake provider config.
 2. Builds runtime with Postgres database task store config.

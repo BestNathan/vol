@@ -6,7 +6,7 @@
 
 **Architecture:** `vol-llm-task` keeps exporting `DatabaseTaskStore`, but its internals move from SQLx raw queries to private SeaORM entity, migration, and mapping modules. Runtime/server/channel wiring stays unchanged: `[runtime.task_store] type = "database"` still builds one global `runtime.task_store`, and the task tool plus JSON-RPC task handler share it.
 
-**Tech Stack:** Rust, Tokio, SeaORM 1.x, SeaORM Migration 1.x, SQLite, mandatory Postgres test database at `postgres://postgres:postgres@192.168.2.106/vol`, existing `TaskStore` trait.
+**Tech Stack:** Rust, Tokio, SeaORM 1.x, SeaORM Migration 1.x, SQLite, mandatory Postgres test database configured by `VOL_AGENT_POSTGRES_TEST_URL` (for example `postgres://USER:PASSWORD@HOST:5432/DATABASE`), existing `TaskStore` trait.
 
 ---
 
@@ -393,7 +393,7 @@ git commit -m "refactor(task): replace SQLx store skeleton with SeaORM" -m "Co-A
 Add these tests to `crates/vol-llm-task/src/stores/database/mod.rs` inside the test module:
 
 ```rust
-const POSTGRES_TEST_URL: &str = "postgres://postgres:postgres@192.168.2.106/vol";
+const POSTGRES_TEST_URL: &str = "postgres://USER:PASSWORD@HOST:5432/DATABASE";
 
 async fn clear_store(store: &DatabaseTaskStore) {
     use sea_orm::{ConnectionTrait, Statement};
@@ -1306,7 +1306,7 @@ base_url = "https://api.test.com"
 
     let config = TaskStoreConfig {
         store_type: TaskStoreType::Database,
-        url: Some("postgres://postgres:postgres@192.168.2.106/vol".to_string()),
+        url: Some("postgres://USER:PASSWORD@HOST:5432/DATABASE".to_string()),
     };
 
     let runtime = AgentRuntime::builder(temp.path(), temp.path())
@@ -1381,7 +1381,7 @@ with:
 # Postgres example:
 # [runtime.task_store]
 # type = "database"
-# url = "postgres://postgres:postgres@192.168.2.106/vol"
+# url = "postgres://USER:PASSWORD@HOST:5432/DATABASE"
 ```
 
 - [ ] **Step 4: Run runtime and server checks**
@@ -1461,7 +1461,7 @@ Ingest the SeaORM task database store replacement from:
 - crates/vol-llm-runtime/src/lib.rs
 - config.vol-agent.example.toml
 
-Context: SQLx direct task-store implementation was replaced with SeaORM + SeaORM Migration. SQLite and Postgres are implemented. Postgres tests use postgres://postgres:postgres@192.168.2.106/vol. MySQL remains recognized but not enabled. Single global runtime.task_store semantics are unchanged.
+Context: SQLx direct task-store implementation was replaced with SeaORM + SeaORM Migration. SQLite and Postgres are implemented. Postgres tests use the mandatory `VOL_AGENT_POSTGRES_TEST_URL` environment variable (for example `postgres://USER:PASSWORD@HOST:5432/DATABASE`). MySQL remains recognized but not enabled. Single global runtime.task_store semantics are unchanged.
 ```
 
 - [ ] **Step 5: Commit wiki updates**

@@ -4,7 +4,7 @@ category: service
 tags: [task-store, persistence, sqlite, sqlx, seaorm]
 created: 2026-06-09
 updated: 2026-06-09
-source_count: 4
+source_count: 5
 ---
 
 # vol-llm-task Crate
@@ -32,8 +32,11 @@ Task data is stored in a single `tasks` table. `dependencies`, `blocks`, and `Ta
 
 [[seaorm-postgres-test-isolation-fix]] updates the Postgres database tests to use the same temp-dir file lock as the runtime Postgres test, preventing table-wide cleanup from racing across cargo test processes.
 
+[[seaorm-postgres-test-url-env-fix]] removes the live Postgres DSN from committed task-store tests. Postgres remains mandatory: tests read `VOL_AGENT_POSTGRES_TEST_URL` and fail with `VOL_AGENT_POSTGRES_TEST_URL must be set for mandatory Postgres task-store tests` when it is absent.
+
 ## Related
 - [[runtime-task-store-configuration]]
 - [[task-store-sqlite-embedded-migrations]]
 - [[task-database-store-implementation]]
 - [[seaorm-postgres-test-isolation-fix]]
+- [[seaorm-postgres-test-url-env-fix]]

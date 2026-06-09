@@ -402,6 +402,14 @@ fn expand_tilde(path: PathBuf) -> PathBuf {
 mod tests {
     use super::*;
 
+    const POSTGRES_TEST_URL_ENV: &str = "VOL_AGENT_POSTGRES_TEST_URL";
+    const POSTGRES_TEST_URL_REQUIRED: &str =
+        "VOL_AGENT_POSTGRES_TEST_URL must be set for mandatory Postgres task-store tests";
+
+    fn postgres_test_url() -> String {
+        std::env::var(POSTGRES_TEST_URL_ENV).expect(POSTGRES_TEST_URL_REQUIRED)
+    }
+
     struct PostgresTestLock(std::fs::File);
 
     impl PostgresTestLock {
@@ -501,7 +509,7 @@ base_url = "https://api.test.com"
 
         let config = TaskStoreConfig {
             store_type: TaskStoreType::Database,
-            url: Some("postgres://postgres:postgres@192.168.2.106/vol".to_string()),
+            url: Some(postgres_test_url()),
         };
         let subject = format!(
             "runtime postgres database task store test {} {}",

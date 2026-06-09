@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-06-09] ingest | SeaORM Postgres Test URL Env Var Fix
+- Created sources: [[seaorm-postgres-test-url-env-fix]]
+- Updated entities: [[vol-llm-task-crate]] (mandatory Postgres tests read `VOL_AGENT_POSTGRES_TEST_URL`), [[vol-llm-runtime-crate]] (runtime Postgres builder test uses the same env var)
+- Updated concepts: [[runtime-task-store-configuration]] (credential hygiene and mandatory env-var behavior for Postgres tests)
+- Updated sources: [[seaorm-postgres-test-isolation-fix]] (removed outdated claim that the fixed live URL remains in test code)
+- Updated index: new SeaORM Postgres test URL env-var source entry
+- Cross-references added: 10
+- Changes: Documented the review fix that removed the live Postgres DSN from committed test source and docs. Mandatory Postgres tests now fail clearly if `VOL_AGENT_POSTGRES_TEST_URL` is unset, and docs use `postgres://USER:PASSWORD@HOST:5432/DATABASE` as the placeholder DSN.
+
 ## [2026-06-09] ingest | SeaORM Postgres Test Isolation Fix
 - Created sources: [[seaorm-postgres-test-isolation-fix]]
 - Updated entities: [[vol-llm-runtime-crate]] (runtime Postgres task-store test marker cleanup and cross-process lock), [[vol-llm-task-crate]] (Postgres database tests share the same temp-dir lock)

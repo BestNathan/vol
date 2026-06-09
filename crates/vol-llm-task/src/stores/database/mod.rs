@@ -245,7 +245,13 @@ impl crate::store::TaskStore for DatabaseTaskStore {
 mod tests {
     use super::*;
 
-    const POSTGRES_TEST_URL: &str = "postgres://postgres:postgres@192.168.2.106/vol";
+    const POSTGRES_TEST_URL_ENV: &str = "VOL_AGENT_POSTGRES_TEST_URL";
+    const POSTGRES_TEST_URL_REQUIRED: &str =
+        "VOL_AGENT_POSTGRES_TEST_URL must be set for mandatory Postgres task-store tests";
+
+    fn postgres_test_url() -> String {
+        std::env::var(POSTGRES_TEST_URL_ENV).expect(POSTGRES_TEST_URL_REQUIRED)
+    }
 
     struct PostgresTestLock(std::fs::File);
 
@@ -298,7 +304,7 @@ mod tests {
     }
 
     async fn postgres_store() -> DatabaseTaskStore {
-        let store = DatabaseTaskStore::connect(POSTGRES_TEST_URL).await.unwrap();
+        let store = DatabaseTaskStore::connect(&postgres_test_url()).await.unwrap();
         clear_store(&store).await;
         store
     }
@@ -470,7 +476,7 @@ mod tests {
         use crate::model::{Task, TaskKind};
         use crate::store::TaskStore;
 
-        let store = DatabaseTaskStore::connect(POSTGRES_TEST_URL).await.unwrap();
+        let store = DatabaseTaskStore::connect(&postgres_test_url()).await.unwrap();
         clear_store(&store).await;
         let id = store
             .create(Task::new(
@@ -482,7 +488,7 @@ mod tests {
             .unwrap();
         drop(store);
 
-        let reopened = DatabaseTaskStore::connect(POSTGRES_TEST_URL)
+        let reopened = DatabaseTaskStore::connect(&postgres_test_url())
             .await
             .unwrap();
         let got = reopened.get(&id).await.unwrap().unwrap();
@@ -514,7 +520,7 @@ mod tests {
         let _guard = PostgresTestLock::acquire();
         use sea_orm::{ConnectionTrait, Statement};
 
-        let store = DatabaseTaskStore::connect(POSTGRES_TEST_URL).await.unwrap();
+        let store = DatabaseTaskStore::connect(&postgres_test_url()).await.unwrap();
         clear_store(&store).await;
         let rows = store
             .db

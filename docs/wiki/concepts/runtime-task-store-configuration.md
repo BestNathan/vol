@@ -4,7 +4,7 @@ category: architecture
 tags: [task-store, configuration, runtime, validation]
 created: 2026-06-09
 updated: 2026-06-09
-source_count: 6
+source_count: 7
 ---
 
 # Runtime Task Store Configuration
@@ -50,6 +50,8 @@ Runtime construction is covered by [[runtime-database-task-store-construction]] 
 
 [[seaorm-postgres-test-isolation-fix]] documents the Postgres-specific review hardening: runtime and task-store Postgres tests share an OS temp-dir lock, runtime rows are marked with a UUID subject, and cleanup runs before and after the test through the public `TaskStore` API.
 
+[[seaorm-postgres-test-url-env-fix]] documents credential hygiene for mandatory Postgres tests: committed code and docs use `VOL_AGENT_POSTGRES_TEST_URL` plus the placeholder `postgres://USER:PASSWORD@HOST:5432/DATABASE` instead of a live DSN. Tests fail rather than skip when the env var is missing.
+
 The completed implementation keeps one global task store. `AgentServerCoreBuilder` only forwards config into runtime construction; it does not create per-agent stores or patch the tool registry. The unified `task` tool and JSON-RPC `TaskHandler` both share `runtime.task_store`.
 
 ## Related
@@ -60,3 +62,5 @@ The completed implementation keeps one global task store. `AgentServerCoreBuilde
 - [[task-store-sqlite-embedded-migrations]]
 - [[runtime-database-task-store-construction]]
 - [[task-database-store-implementation]]
+- [[seaorm-postgres-test-isolation-fix]]
+- [[seaorm-postgres-test-url-env-fix]]

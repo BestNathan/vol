@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-06-09 (seaorm-postgres-test-isolation-fix)
+Last updated: 2026-06-09 (seaorm-postgres-test-url-env-fix)
 
 ## Entities
 
@@ -85,6 +85,7 @@ Last updated: 2026-06-09 (seaorm-postgres-test-isolation-fix)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[seaorm-postgres-test-url-env-fix]] | SeaORM Postgres task-store test URL hardening: mandatory `VOL_AGENT_POSTGRES_TEST_URL`, clear unset failure, and placeholder docs DSN | active | 2026-06-09 |
 | [[seaorm-postgres-test-isolation-fix]] | SeaORM Postgres task-store test isolation: shared temp-dir file lock, UUID marker cleanup, and placeholder config DSN | active | 2026-06-09 |
 | [[seaorm-sqlite-url-normalization-fix]] | SeaORM SQLite URL normalization fix: exact `mode` query-key detection so `journal_mode=wal` still appends `mode=rwc` | active | 2026-06-09 |
 | [[task-database-store-implementation]] | End-to-end implementation of global SQLx SQLite database-backed task store | active | 2026-06-09 |
