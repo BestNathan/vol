@@ -104,7 +104,6 @@ impl DatabaseBackend {
 #[derive(Clone)]
 pub struct DatabaseSessionManager {
     pub(crate) db: DatabaseConnection,
-    backend: DatabaseBackend,
 }
 
 pub struct DatabaseSessionEntryStore {
@@ -149,7 +148,7 @@ impl DatabaseSessionManager {
             ))
         })?;
 
-        Ok(Self { db, backend })
+        Ok(Self { db })
     }
 
     fn scoped_store(&self, agent_id: &str) -> DatabaseSessionEntryStore {
@@ -168,50 +167,86 @@ impl DatabaseSessionEntryStore {
     ) -> Result<()> {
         use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
 
-        let existing = entity::sessions::Entity::find_by_id(entry.session_id.clone())
+        if entity::sessions::Entity::find_by_id(entry.session_id.clone())
             .one(txn)
             .await
-            .map_err(|e| StoreError::Database(format!("failed to load session metadata: {e}")))?;
-
-        match existing {
-            Some(model) => {
-                if model.agent_id != self.agent_id {
-                    return Err(StoreError::SessionAgentScopeConflict {
-                        session_id: entry.session_id.clone(),
-                        expected: model.agent_id,
-                        actual: self.agent_id.clone(),
-                    });
-                }
-                Ok(())
+            .map_err(|e| StoreError::Database(format!("failed to load session metadata: {e}")))?
+            .is_none()
+        {
+            let insert_result = entity::sessions::ActiveModel {
+                id: ActiveValue::Set(entry.session_id.clone()),
+                agent_id: ActiveValue::Set(self.agent_id.clone()),
+                created_at: ActiveValue::Set(entry.created_at),
+                updated_at: ActiveValue::Set(entry.created_at),
+                entry_count: ActiveValue::Set(0),
+                metadata: ActiveValue::Set("{}".to_string()),
             }
-            None => {
-                entity::sessions::ActiveModel {
-                    id: ActiveValue::Set(entry.session_id.clone()),
-                    agent_id: ActiveValue::Set(self.agent_id.clone()),
-                    created_at: ActiveValue::Set(entry.created_at),
-                    updated_at: ActiveValue::Set(entry.created_at),
-                    entry_count: ActiveValue::Set(0),
-                    metadata: ActiveValue::Set("{}".to_string()),
+            .insert(txn)
+            .await;
+
+            if let Err(insert_err) = insert_result {
+                let was_created_by_racing_writer = entity::sessions::Entity::find_by_id(entry.session_id.clone())
+                    .one(txn)
+                    .await
+                    .map_err(|e| {
+                        StoreError::Database(format!(
+                            "failed to reload session metadata after create race: {e}; insert error: {insert_err}"
+                        ))
+                    })?
+                    .is_some();
+                if !was_created_by_racing_writer {
+                    return Err(StoreError::Database(format!(
+                        "failed to create session metadata: {insert_err}"
+                    )));
                 }
-                .insert(txn)
-                .await
-                .map_err(|e| StoreError::Database(format!("failed to create session metadata: {e}")))?;
-                Ok(())
             }
         }
+
+        self.load_owned_session(txn, &entry.session_id)
+            .await
+            .map(|_| ())
+    }
+
+    async fn load_owned_session<C>(
+        &self,
+        db: &C,
+        session_id: &str,
+    ) -> Result<entity::sessions::Model>
+    where
+        C: sea_orm::ConnectionTrait,
+    {
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
+        let session = entity::sessions::Entity::find()
+            .filter(entity::sessions::Column::Id.eq(session_id.to_string()))
+            .one(db)
+            .await
+            .map_err(|e| StoreError::Database(format!("failed to load session metadata: {e}")))?
+            .ok_or_else(|| StoreError::NotFound(format!("session {session_id}")))?;
+
+        if session.agent_id != self.agent_id {
+            return Err(StoreError::SessionAgentScopeConflict {
+                session_id: session_id.to_string(),
+                expected: session.agent_id,
+                actual: self.agent_id.clone(),
+            });
+        }
+
+        Ok(session)
     }
 }
 
 #[async_trait]
 impl SessionEntryStore for DatabaseSessionEntryStore {
     async fn save(&self, entry: crate::entry::SessionEntry) -> Result<()> {
-        use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, TransactionTrait};
+        use sea_orm::{
+            sea_query::Expr, ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter,
+            TransactionTrait,
+        };
 
-        let txn = self
-            .db
-            .begin()
-            .await
-            .map_err(|e| StoreError::Database(format!("failed to begin session entry transaction: {e}")))?;
+        let txn = self.db.begin().await.map_err(|e| {
+            StoreError::Database(format!("failed to begin session entry transaction: {e}"))
+        })?;
 
         self.ensure_session_for_entry(&txn, &entry).await?;
 
@@ -220,29 +255,31 @@ impl SessionEntryStore for DatabaseSessionEntryStore {
             .await
             .map_err(|e| StoreError::Database(format!("failed to insert session entry: {e}")))?;
 
-        let session = entity::sessions::Entity::find_by_id(entry.session_id.clone())
-            .one(&txn)
-            .await
-            .map_err(|e| StoreError::Database(format!("failed to reload session metadata: {e}")))?
-            .ok_or_else(|| StoreError::NotFound(format!("session {}", entry.session_id)))?;
-
-        let next_count = session.entry_count + 1;
-        let mut active: entity::sessions::ActiveModel = session.into();
-        active.updated_at = ActiveValue::Set(entry.created_at);
-        active.entry_count = ActiveValue::Set(next_count);
-        active
-            .update(&txn)
+        entity::sessions::Entity::update_many()
+            .col_expr(
+                entity::sessions::Column::EntryCount,
+                Expr::col(entity::sessions::Column::EntryCount).add(1),
+            )
+            .col_expr(
+                entity::sessions::Column::UpdatedAt,
+                Expr::value(entry.created_at),
+            )
+            .filter(entity::sessions::Column::Id.eq(entry.session_id.clone()))
+            .filter(entity::sessions::Column::AgentId.eq(self.agent_id.clone()))
+            .exec(&txn)
             .await
             .map_err(|e| StoreError::Database(format!("failed to update session metadata: {e}")))?;
 
-        txn.commit()
-            .await
-            .map_err(|e| StoreError::Database(format!("failed to commit session entry transaction: {e}")))?;
+        txn.commit().await.map_err(|e| {
+            StoreError::Database(format!("failed to commit session entry transaction: {e}"))
+        })?;
         Ok(())
     }
 
     async fn get_entries(&self, session_id: &str) -> Result<Vec<crate::entry::SessionEntry>> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+
+        self.load_owned_session(&self.db, session_id).await?;
 
         let models = entity::session_entries::Entity::find()
             .filter(entity::session_entries::Column::SessionId.eq(session_id.to_string()))
@@ -255,28 +292,42 @@ impl SessionEntryStore for DatabaseSessionEntryStore {
         models.into_iter().map(mapping::model_to_entry).collect()
     }
 
-    async fn get_after(&self, session_id: &str, after: i64) -> Result<Vec<crate::entry::SessionEntry>> {
+    async fn get_after(
+        &self,
+        session_id: &str,
+        after: i64,
+    ) -> Result<Vec<crate::entry::SessionEntry>> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+
+        self.load_owned_session(&self.db, session_id).await?;
 
         let models = entity::session_entries::Entity::find()
             .filter(entity::session_entries::Column::SessionId.eq(session_id.to_string()))
-            .filter(entity::session_entries::Column::CreatedAt.gt(after))
+            .filter(entity::session_entries::Column::CreatedAt.gte(after))
             .order_by_asc(entity::session_entries::Column::CreatedAt)
             .order_by_asc(entity::session_entries::Column::Id)
             .all(&self.db)
             .await
-            .map_err(|e| StoreError::Database(format!("failed to get session entries after {after}: {e}")))?;
+            .map_err(|e| {
+                StoreError::Database(format!("failed to get session entries after {after}: {e}"))
+            })?;
 
         models.into_iter().map(mapping::model_to_entry).collect()
     }
 
-    async fn find_latest_checkpoint(&self, session_id: &str) -> Result<Option<crate::entry::SessionEntry>> {
+    async fn find_latest_checkpoint(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<crate::entry::SessionEntry>> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+
+        self.load_owned_session(&self.db, session_id).await?;
 
         let model = entity::session_entries::Entity::find()
             .filter(entity::session_entries::Column::SessionId.eq(session_id.to_string()))
             .filter(entity::session_entries::Column::EntryType.eq("checkpoint"))
             .order_by_desc(entity::session_entries::Column::CreatedAt)
+            .order_by_desc(entity::session_entries::Column::Id)
             .one(&self.db)
             .await
             .map_err(|e| StoreError::Database(format!("failed to find latest checkpoint: {e}")))?;
@@ -287,11 +338,11 @@ impl SessionEntryStore for DatabaseSessionEntryStore {
     async fn delete_session(&self, session_id: &str) -> Result<()> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, TransactionTrait};
 
-        let txn = self
-            .db
-            .begin()
-            .await
-            .map_err(|e| StoreError::Database(format!("failed to begin delete session transaction: {e}")))?;
+        let txn = self.db.begin().await.map_err(|e| {
+            StoreError::Database(format!("failed to begin delete session transaction: {e}"))
+        })?;
+
+        self.load_owned_session(&txn, session_id).await?;
 
         entity::session_entries::Entity::delete_many()
             .filter(entity::session_entries::Column::SessionId.eq(session_id.to_string()))
@@ -304,14 +355,16 @@ impl SessionEntryStore for DatabaseSessionEntryStore {
             .await
             .map_err(|e| StoreError::Database(format!("failed to delete session metadata: {e}")))?;
 
-        txn.commit()
-            .await
-            .map_err(|e| StoreError::Database(format!("failed to commit delete session transaction: {e}")))?;
+        txn.commit().await.map_err(|e| {
+            StoreError::Database(format!("failed to commit delete session transaction: {e}"))
+        })?;
         Ok(())
     }
 
     async fn get_count(&self, session_id: &str) -> Result<usize> {
         use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
+
+        self.load_owned_session(&self.db, session_id).await?;
 
         let count = entity::session_entries::Entity::find()
             .filter(entity::session_entries::Column::SessionId.eq(session_id.to_string()))
@@ -331,7 +384,8 @@ impl SessionManager for DatabaseSessionManager {
     async fn list_sessions(&self, agent_id: Option<&str>) -> Result<Vec<SessionInfo>> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 
-        let mut query = entity::sessions::Entity::find().order_by_desc(entity::sessions::Column::UpdatedAt);
+        let mut query =
+            entity::sessions::Entity::find().order_by_desc(entity::sessions::Column::UpdatedAt);
         if let Some(agent_id) = agent_id {
             query = query.filter(entity::sessions::Column::AgentId.eq(agent_id.to_string()));
         }
@@ -340,7 +394,10 @@ impl SessionManager for DatabaseSessionManager {
             .all(&self.db)
             .await
             .map_err(|e| StoreError::Database(format!("failed to list sessions: {e}")))?;
-        Ok(models.into_iter().map(mapping::session_model_to_info).collect())
+        Ok(models
+            .into_iter()
+            .map(mapping::session_model_to_info)
+            .collect())
     }
 
     async fn session_exists(&self, agent_id: Option<&str>, session_id: &str) -> Result<bool> {
@@ -398,7 +455,7 @@ impl SessionManager for DatabaseSessionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entry::{SessionEntry, SessionEntryData, SessionEntryType};
+    use crate::entry::{CheckpointReason, SessionEntry, SessionEntryData, SessionEntryType};
 
     fn test_entry(session_id: &str, id: &str, created_at: i64) -> SessionEntry {
         SessionEntry {
@@ -407,7 +464,23 @@ mod tests {
             created_at,
             parent_id: None,
             r#type: SessionEntryType::Summary,
-            data: SessionEntryData::Summary { summary: format!("summary-{id}") },
+            data: SessionEntryData::Summary {
+                summary: format!("summary-{id}"),
+            },
+        }
+    }
+
+    fn checkpoint_entry(session_id: &str, id: &str, created_at: i64) -> SessionEntry {
+        SessionEntry {
+            id: id.to_string(),
+            session_id: session_id.to_string(),
+            created_at,
+            parent_id: None,
+            r#type: SessionEntryType::Checkpoint,
+            data: SessionEntryData::Checkpoint {
+                reason: CheckpointReason::Manual,
+                note: Some(format!("checkpoint-{id}")),
+            },
         }
     }
 
@@ -422,8 +495,14 @@ mod tests {
     async fn sqlite_save_get_and_count_round_trip() {
         let (_temp, manager) = sqlite_manager().await;
         let store = manager.entry_store_for_agent("alpha");
-        store.save(test_entry("session-a", "entry-1", 10)).await.unwrap();
-        store.save(test_entry("session-a", "entry-2", 20)).await.unwrap();
+        store
+            .save(test_entry("session-a", "entry-1", 10))
+            .await
+            .unwrap();
+        store
+            .save(test_entry("session-a", "entry-2", 20))
+            .await
+            .unwrap();
 
         let entries = store.get_entries("session-a").await.unwrap();
         assert_eq!(entries.len(), 2);
@@ -436,8 +515,14 @@ mod tests {
     async fn sqlite_list_sessions_reads_sessions_table() {
         let (_temp, manager) = sqlite_manager().await;
         let store = manager.entry_store_for_agent("alpha");
-        store.save(test_entry("session-a", "entry-1", 10)).await.unwrap();
-        store.save(test_entry("session-a", "entry-2", 20)).await.unwrap();
+        store
+            .save(test_entry("session-a", "entry-1", 10))
+            .await
+            .unwrap();
+        store
+            .save(test_entry("session-a", "entry-2", 20))
+            .await
+            .unwrap();
 
         let sessions = manager.list_sessions(Some("alpha")).await.unwrap();
         assert_eq!(sessions.len(), 1);
@@ -452,12 +537,128 @@ mod tests {
     async fn sqlite_delete_session_removes_metadata_and_entries() {
         let (_temp, manager) = sqlite_manager().await;
         let store = manager.entry_store_for_agent("alpha");
-        store.save(test_entry("session-a", "entry-1", 10)).await.unwrap();
+        store
+            .save(test_entry("session-a", "entry-1", 10))
+            .await
+            .unwrap();
 
         store.delete_session("session-a").await.unwrap();
 
-        assert_eq!(store.get_entries("session-a").await.unwrap().len(), 0);
-        assert!(!manager.session_exists(Some("alpha"), "session-a").await.unwrap());
+        let err = store.get_entries("session-a").await.unwrap_err();
+        assert!(err.to_string().contains("Not found: session session-a"));
+        assert!(!manager
+            .session_exists(Some("alpha"), "session-a")
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn sqlite_scoped_store_denies_cross_agent_reads_and_delete() {
+        let (_temp, manager) = sqlite_manager().await;
+        let alpha_store = manager.entry_store_for_agent("alpha");
+        let beta_store = manager.entry_store_for_agent("beta");
+        alpha_store
+            .save(test_entry("session-a", "entry-1", 10))
+            .await
+            .unwrap();
+
+        let read_err = beta_store.get_entries("session-a").await.unwrap_err();
+        assert!(read_err
+            .to_string()
+            .contains("Session agent scope conflict"));
+        let after_err = beta_store.get_after("session-a", 10).await.unwrap_err();
+        assert!(after_err
+            .to_string()
+            .contains("Session agent scope conflict"));
+        let checkpoint_err = beta_store
+            .find_latest_checkpoint("session-a")
+            .await
+            .unwrap_err();
+        assert!(checkpoint_err
+            .to_string()
+            .contains("Session agent scope conflict"));
+        let count_err = beta_store.get_count("session-a").await.unwrap_err();
+        assert!(count_err
+            .to_string()
+            .contains("Session agent scope conflict"));
+        let delete_err = beta_store.delete_session("session-a").await.unwrap_err();
+        assert!(delete_err
+            .to_string()
+            .contains("Session agent scope conflict"));
+
+        assert!(manager
+            .session_exists(Some("alpha"), "session-a")
+            .await
+            .unwrap());
+        assert_eq!(alpha_store.get_entries("session-a").await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn sqlite_concurrent_saves_preserve_entry_count() {
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("alpha");
+        let saves = (0..20).map(|idx| {
+            let store = Arc::clone(&store);
+            tokio::spawn(async move {
+                store
+                    .save(test_entry("session-a", &format!("entry-{idx:02}"), idx))
+                    .await
+                    .unwrap();
+            })
+        });
+
+        for save in saves {
+            save.await.unwrap();
+        }
+
+        assert_eq!(store.get_count("session-a").await.unwrap(), 20);
+        let sessions = manager.list_sessions(Some("alpha")).await.unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].entry_count, 20);
+    }
+
+    #[tokio::test]
+    async fn sqlite_get_after_includes_equal_timestamp() {
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("alpha");
+        store
+            .save(test_entry("session-a", "entry-1", 10))
+            .await
+            .unwrap();
+        store
+            .save(test_entry("session-a", "entry-2", 20))
+            .await
+            .unwrap();
+
+        let entries = store.get_after("session-a", 10).await.unwrap();
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["entry-1", "entry-2"]
+        );
+    }
+
+    #[tokio::test]
+    async fn sqlite_latest_checkpoint_tie_breaks_by_id_desc() {
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("alpha");
+        store
+            .save(checkpoint_entry("session-a", "checkpoint-a", 10))
+            .await
+            .unwrap();
+        store
+            .save(checkpoint_entry("session-a", "checkpoint-z", 10))
+            .await
+            .unwrap();
+
+        let checkpoint = store
+            .find_latest_checkpoint("session-a")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(checkpoint.id, "checkpoint-z");
     }
 
     #[tokio::test]
