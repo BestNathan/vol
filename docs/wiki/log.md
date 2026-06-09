@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-06-09] ingest | SeaORM Task Database Store Implementation
+- Created sources: [[seaorm-task-database-store-implementation]]
+- Updated entities: [[vol-llm-task-crate]] (SeaORM entity/migration/mapping replaces SQLx, SQLite + Postgres implemented, crate-root export), [[vol-llm-runtime-crate]] (SeaORM runtime database store construction and Postgres builder test with env-var DSN), [[vol-agent-server-crate]] (server config pass-through and startup logging; no changes needed)
+- Updated concepts: [[runtime-task-store-configuration]] (completed SeaORM file/database runtime behavior, credential hygiene, non-goals)
+- Updated index: new SeaORM task database store implementation source entry, refreshed task crate summary
+- Cross-references added: 20
+- Changes: Documented the completed SeaORM replacement of the SQLx database task store: `DatabaseTaskStore` uses SeaORM entity (`tasks`), SeaORM Rust migrator compiled into the binary, mapping helpers, SQLite/Postgres CRUD, ready-task behavior, cross-process test lock, mandatory `VOL_AGENT_POSTGRES_TEST_URL`, single global `runtime.task_store` semantics, and explicit exclusion of `.agents/task-providers` or per-agent stores.
+
 ## [2026-06-09] ingest | SeaORM Postgres Test URL Env Var Fix
 - Created sources: [[seaorm-postgres-test-url-env-fix]]
 - Updated entities: [[vol-llm-task-crate]] (mandatory Postgres tests read `VOL_AGENT_POSTGRES_TEST_URL`), [[vol-llm-runtime-crate]] (runtime Postgres builder test uses the same env var)

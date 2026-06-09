@@ -30,11 +30,11 @@ Validation rules:
 - `type = "database"` must include `url` and use a recognized scheme.
 
 ## Runtime Database Task Store
-Sources: [[runtime-database-task-store-construction]], [[task-database-store-implementation]]
+Sources: [[runtime-database-task-store-construction]], [[seaorm-task-database-store-implementation]]
 
 `AgentRuntimeBuilder::build()` now maps `TaskStoreType::Database` to `DatabaseTaskStore::connect(url)` and exposes the result through `runtime.task_store` as `Arc<dyn TaskStore>`. The same `runtime.task_store` is passed to the unified `task` tool and to transport-layer task handlers, preserving a single global task store rather than adding per-agent routing.
 
-The runtime builder test uses valid provider config, creates a task through the database-backed store, rebuilds the runtime against the same SQLite URL, and verifies the task persists.
+The runtime builder test uses valid provider config, creates a task through the database-backed store, rebuilds the runtime against the same database URL, and verifies the task persists.
 
 For Postgres integration coverage, [[seaorm-postgres-test-isolation-fix]] adds a shared cross-process lock with `vol-llm-task` database tests plus marker-based cleanup before and after runtime rebuild assertions. [[seaorm-postgres-test-url-env-fix]] removes the committed live DSN from this runtime test; it now reads `VOL_AGENT_POSTGRES_TEST_URL` and fails clearly if the mandatory Postgres URL is absent.
 
@@ -44,6 +44,6 @@ For Postgres integration coverage, [[seaorm-postgres-test-isolation-fix]] adds a
 - [[runtime-task-store-configuration]]
 - [[task-store-config-parsing]]
 - [[runtime-database-task-store-construction]]
-- [[task-database-store-implementation]]
+- [[seaorm-task-database-store-implementation]]
 - [[seaorm-postgres-test-isolation-fix]]
 - [[seaorm-postgres-test-url-env-fix]]

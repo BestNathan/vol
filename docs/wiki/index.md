@@ -1,13 +1,13 @@
 # Wiki Index
 
-Last updated: 2026-06-09 (seaorm-postgres-test-url-env-fix)
+Last updated: 2026-06-09 (seaorm-task-database-store-implementation)
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
 | [[vol-llm-runtime-crate]] | AgentRuntime owner of shared agent resources and runtime task store config types | active | 2026-06-09 |
-| [[vol-llm-task-crate]] | Task models and persistence stores, including SQLx SQLite store with embedded migrations | active | 2026-06-09 |
+| [[vol-llm-task-crate]] | Task models and persistence stores, including SeaORM database store for SQLite and Postgres with compiled migrations | active | 2026-06-09 |
 | [[vol-agent-server-crate]] | Standalone agent server crate with TOML parsing and `[runtime.task_store]` validation | active | 2026-06-09 |
 | [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with Dioxus as the sole active web frontend | active | 2026-05-29 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API | active | 2026-05-21 |
@@ -85,6 +85,7 @@ Last updated: 2026-06-09 (seaorm-postgres-test-url-env-fix)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[seaorm-task-database-store-implementation]] | End-to-end replacement of SQLx task store with SeaORM + SeaORM Migration for SQLite and Postgres | active | 2026-06-09 |
 | [[seaorm-postgres-test-url-env-fix]] | SeaORM Postgres task-store test URL hardening: mandatory `VOL_AGENT_POSTGRES_TEST_URL`, clear unset failure, and placeholder docs DSN | active | 2026-06-09 |
 | [[seaorm-postgres-test-isolation-fix]] | SeaORM Postgres task-store test isolation: shared temp-dir file lock, UUID marker cleanup, and placeholder config DSN | active | 2026-06-09 |
 | [[seaorm-sqlite-url-normalization-fix]] | SeaORM SQLite URL normalization fix: exact `mode` query-key detection so `journal_mode=wal` still appends `mode=rwc` | active | 2026-06-09 |
