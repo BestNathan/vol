@@ -677,4 +677,62 @@ mod tests {
             .unwrap_err();
         assert!(err.to_string().contains("Session agent scope conflict"));
     }
+
+    const POSTGRES_TEST_URL_ENV: &str = "VOL_AGENT_POSTGRES_TEST_URL";
+
+    struct PostgresTestLock(std::fs::File);
+
+    impl PostgresTestLock {
+        fn acquire() -> Self {
+            use fd_lock::RwLock;
+            let path = std::env::temp_dir().join("vol-agent-postgres-session-store-test.lock");
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .read(true)
+                .write(true)
+                .open(path)
+                .expect("postgres session test lock file should open");
+            file.lock().expect("postgres session test lock should be acquired");
+            Self(file)
+        }
+    }
+
+    impl Drop for PostgresTestLock {
+        fn drop(&mut self) {
+            use fd_lock::RwLock;
+            self.0.unlock().expect("postgres session test lock should release");
+        }
+    }
+
+    async fn clean_postgres(manager: &DatabaseSessionManager) {
+        use sea_orm::EntityTrait;
+        entity::session_entries::Entity::delete_many().exec(&manager.db).await.unwrap();
+        entity::sessions::Entity::delete_many().exec(&manager.db).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn postgres_save_list_and_reconnect_when_configured() {
+        let Ok(url) = std::env::var(POSTGRES_TEST_URL_ENV) else {
+            eprintln!("skipping postgres session store test: {POSTGRES_TEST_URL_ENV} is not set");
+            return;
+        };
+
+        let _lock = PostgresTestLock::acquire();
+        let manager = DatabaseSessionManager::connect(&url).await.unwrap();
+        clean_postgres(&manager).await;
+
+        manager
+            .entry_store_for_agent("alpha")
+            .save(test_entry("pg-session-a", "pg-entry-1", 100))
+            .await
+            .unwrap();
+
+        let reconnected = DatabaseSessionManager::connect(&url).await.unwrap();
+        let sessions = reconnected.list_sessions(Some("alpha")).await.unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].session_id, "pg-session-a");
+        assert_eq!(sessions[0].entry_count, 1);
+
+        clean_postgres(&reconnected).await;
+    }
 }
