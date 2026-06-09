@@ -19,11 +19,10 @@ use vol_llm_agent::react::AgentConfig;
 use vol_llm_core::LLMClient;
 use vol_llm_mcp::McpConfig;
 use vol_llm_mcp::McpManager;
-use vol_llm_provider::{ProviderLoader, create_provider};
+use vol_llm_provider::{create_provider, ProviderLoader};
 use vol_llm_runtime::{AgentRuntime, SessionStoreConfig, TaskStoreConfig};
 use vol_llm_skill::SkillLoader;
 use vol_llm_tool::ToolRegistry;
-use vol_session::file_store::FileSessionEntryStore;
 
 use crate::connection::ConnectionHolder;
 use crate::dispatcher::AgentDispatcher;
@@ -179,15 +178,17 @@ impl AgentServerCore {
     ) -> Result<(), String> {
         let agent_id = agent_id.into();
         let agent_dir = self.store_dir.join("agents").join(&agent_id);
-        let sessions_dir = agent_dir.join("sessions");
-        std::fs::create_dir_all(&sessions_dir)
+        std::fs::create_dir_all(&agent_dir)
             .map_err(|e| format!("failed to create agent dirs: {e}"))?;
 
         let llm = self.llm.clone();
         let tools = self.tool_registry.clone();
         let mcp = self.mcp_manager.clone();
 
-        let session_store = Arc::new(FileSessionEntryStore::new(&sessions_dir));
+        let session_store = self
+            .runtime
+            .session_manager
+            .entry_store_for_agent(&agent_id);
         let session = Arc::new(vol_session::Session::new(session_store));
 
         let mut config = AgentConfig::builder()
@@ -555,8 +556,8 @@ impl AgentServerCore {
         // Register a test agent dispatcher so submit flow works.
         {
             use crate::dispatcher::AgentDispatcher;
-            use vol_llm_agent::ReActAgent;
             use vol_llm_agent::react::AgentConfig;
+            use vol_llm_agent::ReActAgent;
             use vol_session::InMemoryEntryStore;
             use vol_session::Session;
 

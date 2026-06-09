@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use vol_session::{Session, SessionManager};
+use vol_session::{Session, SessionManager, StoreError};
 
 use crate::agent_server_protocol::{
-    AgentServerMessage, Operation, Payload, ProtocolError, SessionOperation, SessionPayload,
+    AgentServerMessage, ErrorPayload, Operation, Payload, ProtocolError, SessionOperation,
+    SessionPayload,
 };
 use crate::domain::handler::DomainHandler;
 use crate::router::AgentRouter;
@@ -24,6 +25,25 @@ impl SessionHandler {
             session_manager,
             router,
         }
+    }
+}
+
+fn session_store_error_payload(error: StoreError, fallback_code: &'static str) -> ErrorPayload {
+    let message = error.to_string();
+    let code = match &error {
+        StoreError::NotFound(_) => "session_not_found",
+        StoreError::InvalidInput(_) => "invalid_request",
+        StoreError::SessionAgentScopeConflict { .. } => "session_scope_conflict",
+        StoreError::Internal(detail) if detail.contains("ambiguous session") => "ambiguous_session",
+        StoreError::Database(_) => "session_store_failed",
+        _ => fallback_code,
+    };
+
+    ErrorPayload {
+        code: code.to_string(),
+        message,
+        detail: None,
+        terminal: true,
     }
 }
 
@@ -51,24 +71,31 @@ impl DomainHandler for SessionHandler {
         };
         match (op, message.payload) {
             (SessionOperation::List, Payload::Session(SessionPayload::List { agent_id })) => {
-                let sessions = self
+                let sessions = match self
                     .session_manager
                     .list_sessions(agent_id.as_deref())
                     .await
-                    .map_err(|e| {
-                        ProtocolError::PayloadDecodeFailedOwned(format!("session.list: {e}"))
-                    })?
-                    .into_iter()
-                    .map(|s| {
-                        serde_json::json!({
-                            "id": s.id,
-                            "agent_id": s.agent_id,
-                            "session_id": s.session_id,
-                            "entry_count": s.entry_count,
-                            "created_at": s.created_at,
-                        })
+                {
+                    Ok(sessions) => sessions,
+                    Err(e) => {
+                        return Ok(vec![AgentServerMessage::new_error(
+                            message.message_id,
+                            Operation::Session(SessionOperation::List),
+                            session_store_error_payload(e, "session_list_failed"),
+                        )]);
+                    }
+                }
+                .into_iter()
+                .map(|s| {
+                    serde_json::json!({
+                        "id": s.id,
+                        "agent_id": s.agent_id,
+                        "session_id": s.session_id,
+                        "entry_count": s.entry_count,
+                        "created_at": s.created_at,
                     })
-                    .collect();
+                })
+                .collect();
 
                 Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
@@ -93,12 +120,7 @@ impl DomainHandler for SessionHandler {
                         return Ok(vec![AgentServerMessage::new_error(
                             message.message_id,
                             Operation::Session(SessionOperation::Resume),
-                            crate::agent_server_protocol::ErrorPayload {
-                                code: "session_not_found".to_string(),
-                                message: format!("Session not found: {e}"),
-                                detail: None,
-                                terminal: true,
-                            },
+                            session_store_error_payload(e, "session_resume_failed"),
                         )]);
                     }
                 };
@@ -113,12 +135,7 @@ impl DomainHandler for SessionHandler {
                         return Ok(vec![AgentServerMessage::new_error(
                             message.message_id,
                             Operation::Session(SessionOperation::Resume),
-                            crate::agent_server_protocol::ErrorPayload {
-                                code: "session_not_found".to_string(),
-                                message: format!("Session not found: {e}"),
-                                detail: None,
-                                terminal: true,
-                            },
+                            session_store_error_payload(e, "session_resume_failed"),
                         )]);
                     }
                 };
@@ -153,6 +170,16 @@ impl DomainHandler for SessionHandler {
                             }
                             Err(e) => {
                                 tracing::warn!(%session_id, %resolved_agent_id, %e, "session entries loaded but resume failed");
+                                return Ok(vec![AgentServerMessage::new_error(
+                                    message.message_id,
+                                    Operation::Session(SessionOperation::Resume),
+                                    ErrorPayload {
+                                        code: "session_resume_failed".to_string(),
+                                        message: format!("Failed to resume session: {e}"),
+                                        detail: None,
+                                        terminal: true,
+                                    },
+                                )]);
                             }
                         }
 
@@ -175,12 +202,7 @@ impl DomainHandler for SessionHandler {
                     Err(e) => Ok(vec![AgentServerMessage::new_error(
                         message.message_id,
                         Operation::Session(SessionOperation::Resume),
-                        crate::agent_server_protocol::ErrorPayload {
-                            code: "session_not_found".to_string(),
-                            message: format!("Session not found: {e}"),
-                            detail: None,
-                            terminal: true,
-                        },
+                        session_store_error_payload(e, "session_resume_failed"),
                     )]),
                 }
             }
@@ -201,12 +223,7 @@ impl DomainHandler for SessionHandler {
                         return Ok(vec![AgentServerMessage::new_error(
                             message.message_id,
                             Operation::Session(SessionOperation::Entries),
-                            crate::agent_server_protocol::ErrorPayload {
-                                code: "session_not_found".to_string(),
-                                message: format!("Session not found: {e}"),
-                                detail: None,
-                                terminal: true,
-                            },
+                            session_store_error_payload(e, "session_entries_failed"),
                         )]);
                     }
                 };
@@ -228,12 +245,7 @@ impl DomainHandler for SessionHandler {
                     Err(e) => Ok(vec![AgentServerMessage::new_error(
                         message.message_id,
                         Operation::Session(SessionOperation::Entries),
-                        crate::agent_server_protocol::ErrorPayload {
-                            code: "session_not_found".to_string(),
-                            message: format!("Session not found: {e}"),
-                            detail: None,
-                            terminal: true,
-                        },
+                        session_store_error_payload(e, "session_entries_failed"),
                     )]),
                 }
             }

@@ -2,11 +2,11 @@
 //! verifying full handler registry dispatch for all 22 methods.
 
 use vol_llm_agent::AgentInput;
-use vol_llm_agent_channel::AgentServerCore;
 use vol_llm_agent_channel::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, FileOperation, LogOperation, McpOperation,
     MessageKind, Operation, Payload, SessionOperation, SkillOperation,
 };
+use vol_llm_agent_channel::AgentServerCore;
 use vol_llm_core::AgentDef;
 
 fn command(id: &str, op: Operation, payload: Payload) -> AgentServerMessage {
@@ -66,6 +66,51 @@ async fn session_domain_works_with_sqlite_session_store() {
     assert_eq!(sessions[0]["agent_id"], "alpha");
     assert_eq!(sessions[0]["session_id"], "session-a");
     assert_eq!(sessions[0]["entry_count"], 1);
+}
+
+#[tokio::test]
+async fn register_agent_uses_configured_sqlite_session_manager() {
+    let temp = tempfile::tempdir().unwrap();
+    let db_url = format!("sqlite://{}", temp.path().join("sessions.db").display());
+
+    let core = match AgentServerCore::builder(temp.path(), temp.path())
+        .with_session_store_config(Some(vol_llm_runtime::SessionStoreConfig {
+            store_type: vol_llm_runtime::SessionStoreType::Database,
+            url: Some(db_url),
+        }))
+        .build()
+        .await
+    {
+        Ok(core) => core,
+        Err(e) if e.contains("No LLM provider configured") => return,
+        Err(e) => panic!("failed to build AgentServerCore: {e}"),
+    };
+
+    let def = AgentDef::new("registered-agent", "You are a test agent.").with_type("test-agent");
+    core.register_agent("registered-agent", def).await.unwrap();
+
+    let agent = core
+        .router()
+        .get_agent("registered-agent")
+        .await
+        .expect("registered agent should be routed");
+    let session_id = agent.session().id.clone();
+    agent
+        .session()
+        .add_summary("summary written through registered agent session".to_string())
+        .await
+        .unwrap();
+
+    let sessions = core
+        .runtime
+        .session_manager
+        .list_sessions(Some("registered-agent"))
+        .await
+        .unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].agent_id, "registered-agent");
+    assert_eq!(sessions[0].session_id, session_id);
+    assert_eq!(sessions[0].entry_count, 1);
 }
 
 #[tokio::test]
