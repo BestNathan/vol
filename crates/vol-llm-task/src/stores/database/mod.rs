@@ -248,6 +248,84 @@ mod tests {
     }
 
     #[test]
+    fn mapping_rejects_task_id_larger_than_i64() {
+        let err = mapping::task_id_to_db(crate::model::TaskId(i64::MAX as u64 + 1)).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("task id exceeds database i64 range"));
+    }
+
+    #[test]
+    fn mapping_rejects_negative_database_id() {
+        let err = mapping::task_id_from_db(-1).unwrap_err();
+        assert!(err.to_string().contains("negative task id"));
+    }
+
+    #[test]
+    fn mapping_roundtrips_task_model_fields() {
+        use crate::model::{Task, TaskKind, TaskResult, TaskStatus};
+        use std::path::PathBuf;
+        use std::time::{Duration, UNIX_EPOCH};
+
+        let mut task = Task::new(
+            TaskKind::Agent,
+            "mapped".to_string(),
+            vec![crate::model::TaskId(7)],
+        );
+        task.id = crate::model::TaskId(42);
+        task.status = TaskStatus::Running;
+        task.publisher = Some("publisher".to_string());
+        task.assignee = Some("assignee".to_string());
+        task.description = "description".to_string();
+        task.active_form = Some("Mapping".to_string());
+        task.blocks = vec![crate::model::TaskId(9)];
+        task.result = Some(TaskResult {
+            success: true,
+            output_truncated: "ok".to_string(),
+            output_file: PathBuf::from("/tmp/result.txt"),
+        });
+        task.summary = Some("summary".to_string());
+        task.output_file = Some(PathBuf::from("/tmp/output.txt"));
+        task.created_at = UNIX_EPOCH + Duration::from_secs(11);
+        task.started_at = Some(UNIX_EPOCH + Duration::from_secs(12));
+        task.completed_at = Some(UNIX_EPOCH + Duration::from_secs(13));
+
+        let active = mapping::task_to_active_model(task.clone()).unwrap();
+        let model = entity::Model {
+            id: 42,
+            status: active.status.unwrap(),
+            kind: active.kind.unwrap(),
+            publisher: active.publisher.unwrap(),
+            assignee: active.assignee.unwrap(),
+            subject: active.subject.unwrap(),
+            description: active.description.unwrap(),
+            active_form: active.active_form.unwrap(),
+            dependencies_json: active.dependencies_json.unwrap(),
+            blocks_json: active.blocks_json.unwrap(),
+            result_json: active.result_json.unwrap(),
+            summary: active.summary.unwrap(),
+            output_file: active.output_file.unwrap(),
+            created_at_secs: active.created_at_secs.unwrap(),
+            started_at_secs: active.started_at_secs.unwrap(),
+            completed_at_secs: active.completed_at_secs.unwrap(),
+        };
+
+        let roundtripped = mapping::model_to_task(model).unwrap();
+        assert_eq!(roundtripped.id, task.id);
+        assert_eq!(roundtripped.status, task.status);
+        assert_eq!(roundtripped.subject, task.subject);
+        assert_eq!(roundtripped.description, task.description);
+        assert_eq!(roundtripped.dependencies, task.dependencies);
+        assert_eq!(roundtripped.blocks, task.blocks);
+        assert!(roundtripped.result.unwrap().success);
+        assert_eq!(roundtripped.summary, task.summary);
+        assert_eq!(roundtripped.output_file, task.output_file);
+        assert_eq!(roundtripped.created_at, task.created_at);
+        assert_eq!(roundtripped.started_at, task.started_at);
+        assert_eq!(roundtripped.completed_at, task.completed_at);
+    }
+
+    #[test]
     fn infer_backend_from_sqlite_url() {
         assert_eq!(
             infer_backend("sqlite:///tmp/tasks.db").unwrap(),
