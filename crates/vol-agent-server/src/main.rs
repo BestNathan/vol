@@ -74,6 +74,12 @@ async fn main() {
         tracing::info!("Using default file task store");
     }
 
+    if let Some(session_store) = &config.runtime.session_store {
+        tracing::info!(session_store_type = ?session_store.store_type, "Using configured session store");
+    } else {
+        tracing::info!("Using default file session store");
+    }
+
     // --- Build core ---
     tracing::info!(
         working_dir = %config.runtime.working_dir,
@@ -83,6 +89,7 @@ async fn main() {
 
     let core = AgentServerCore::builder(&config.runtime.working_dir, &config.runtime.store_dir)
         .with_task_store_config(config.runtime.task_store.clone())
+        .with_session_store_config(config.runtime.session_store.clone())
         .build()
         .await
         .unwrap_or_else(|e| {

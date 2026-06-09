@@ -50,6 +50,21 @@ store_dir = "~/.vol"
 # type = "database"
 # url = "postgres://USER:PASSWORD@HOST:5432/DATABASE"
 
+# Session store configuration.
+# Defaults to file-backed JSONL sessions under the agent store directory.
+[runtime.session_store]
+type = "file"
+
+# SQLite session database example:
+# [runtime.session_store]
+# type = "database"
+# url = "sqlite://data/sessions.db"
+
+# Postgres session database example:
+# [runtime.session_store]
+# type = "database"
+# url = "postgres://vol_agent:vol_agent@localhost:5432/vol_agent_sessions"
+
 # =============================================================================
 # Tracing — logging configuration
 # =============================================================================

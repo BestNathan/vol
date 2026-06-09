@@ -32,6 +32,8 @@ pub struct RuntimeSection {
     pub store_dir: String,
     #[serde(default)]
     pub task_store: Option<vol_llm_runtime::TaskStoreConfig>,
+    #[serde(default)]
+    pub session_store: Option<vol_llm_runtime::SessionStoreConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -85,6 +87,7 @@ impl Default for RuntimeSection {
             working_dir: default_working_dir(),
             store_dir: default_store_dir(),
             task_store: None,
+            session_store: None,
         }
     }
 }
@@ -124,6 +127,9 @@ impl ServerConfig {
     pub fn validate(&self) -> Result<(), String> {
         if let Some(task_store) = &self.runtime.task_store {
             task_store.validate()?;
+        }
+        if let Some(session_store) = &self.runtime.session_store {
+            session_store.validate()?;
         }
         Ok(())
     }
@@ -271,6 +277,34 @@ url = "sqlite:///tmp/vol-agent/tasks.db"
         let task_store = config.runtime.task_store.as_ref().unwrap();
         assert_eq!(task_store.store_type, vol_llm_runtime::TaskStoreType::Database);
         assert_eq!(task_store.url.as_deref(), Some("sqlite:///tmp/vol-agent/tasks.db"));
+    }
+
+    #[test]
+    fn parses_database_session_store_config() {
+        let toml = r#"
+[runtime]
+working_dir = "."
+store_dir = ".vol-test"
+
+[runtime.session_store]
+type = "database"
+url = "sqlite://data/sessions.db"
+"#;
+        let config: ServerConfig = toml::from_str(toml).unwrap();
+        let session_store = config.runtime.session_store.unwrap();
+        assert_eq!(session_store.store_type, vol_llm_runtime::SessionStoreType::Database);
+        assert_eq!(session_store.url.as_deref(), Some("sqlite://data/sessions.db"));
+    }
+
+    #[test]
+    fn validates_session_store_config() {
+        let toml = r#"
+[runtime.session_store]
+type = "database"
+"#;
+        let config: ServerConfig = toml::from_str(toml).unwrap();
+        let err = config.validate().unwrap_err();
+        assert!(err.contains("runtime.session_store.url is required"));
     }
 
     #[test]
