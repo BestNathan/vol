@@ -17,6 +17,7 @@ The session persistence path now supports a configurable database backend. `vol-
 
 ## Key Takeaways
 - `DatabaseSessionEntryStore` stores session metadata in `sessions` and entries in `session_entries` using SeaORM and compiled migrations.
+- Session metadata creation uses SeaORM `ON CONFLICT(id) DO NOTHING` before ownership validation, avoiding Postgres aborted-transaction failures during concurrent first writes.
 - `SessionManager` gives runtime/channel code a backend-neutral API for scoped stores, session listing, existence checks, and session-to-agent resolution.
 - `FileSessionManager` preserves existing JSONL behavior while validating agent IDs and preventing path traversal.
 - `[runtime.session_store]` mirrors task-store configuration: `type = "file"` or `type = "database"` with SQLite/Postgres URL support.
@@ -43,7 +44,7 @@ The database schema uses two tables:
 | `sessions` | Session metadata: `id`, `agent_id`, `created_at`, `updated_at`, `entry_count`, `metadata`. |
 | `session_entries` | Entry stream: `id`, `session_id`, `created_at`, `parent_id`, `entry_type`, `data`. |
 
-`save()` uses transactional get-or-create session metadata, validates agent scope, inserts the entry, and atomically increments `entry_count`. Reads, counts, checkpoint lookup, and deletes validate the scoped `agent_id` before touching entries. `get_after` is inclusive (`created_at >= after`) to match existing file/in-memory store behavior.
+`save()` uses transactional get-or-create session metadata, validates agent scope, inserts the entry, and atomically increments `entry_count`. Session metadata creation uses an upsert/do-nothing path rather than catching duplicate insert errors inside a transaction, which is required for Postgres because unique-constraint errors abort the current transaction. Reads, counts, checkpoint lookup, and deletes validate the scoped `agent_id` before touching entries. `get_after` is inclusive (`created_at >= after`) to match existing file/in-memory store behavior.
 
 ### Runtime and server configuration
 `vol-llm-runtime` now defines `SessionStoreType` and `SessionStoreConfig`, validates database URL schemes, and builds `Arc<dyn SessionManager>` in `AgentRuntimeBuilder::build()`. Default behavior remains file-backed sessions.
@@ -66,7 +67,7 @@ Added tests cover:
 
 - File manager listing, scoped resolution, ambiguity, and invalid agent-id handling.
 - SQLite database save/list/read/count/delete/scope-conflict behavior.
-- Concurrent database saves preserving `entry_count`.
+- Concurrent database saves preserving `entry_count`, including a Postgres-gated concurrent first-save regression.
 - Inclusive `get_after` behavior.
 - Deterministic latest checkpoint tie-breaking.
 - Postgres coverage when `VOL_AGENT_POSTGRES_TEST_URL` is configured, with test-row cleanup scoped to a session-id prefix.

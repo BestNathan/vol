@@ -165,42 +165,24 @@ impl DatabaseSessionEntryStore {
         txn: &sea_orm::DatabaseTransaction,
         entry: &crate::entry::SessionEntry,
     ) -> Result<()> {
-        use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
+        use sea_orm::{sea_query::OnConflict, ActiveValue, EntityTrait};
 
-        if entity::sessions::Entity::find_by_id(entry.session_id.clone())
-            .one(txn)
-            .await
-            .map_err(|e| StoreError::Database(format!("failed to load session metadata: {e}")))?
-            .is_none()
-        {
-            let insert_result = entity::sessions::ActiveModel {
-                id: ActiveValue::Set(entry.session_id.clone()),
-                agent_id: ActiveValue::Set(self.agent_id.clone()),
-                created_at: ActiveValue::Set(entry.created_at),
-                updated_at: ActiveValue::Set(entry.created_at),
-                entry_count: ActiveValue::Set(0),
-                metadata: ActiveValue::Set("{}".to_string()),
-            }
-            .insert(txn)
-            .await;
-
-            if let Err(insert_err) = insert_result {
-                let was_created_by_racing_writer = entity::sessions::Entity::find_by_id(entry.session_id.clone())
-                    .one(txn)
-                    .await
-                    .map_err(|e| {
-                        StoreError::Database(format!(
-                            "failed to reload session metadata after create race: {e}; insert error: {insert_err}"
-                        ))
-                    })?
-                    .is_some();
-                if !was_created_by_racing_writer {
-                    return Err(StoreError::Database(format!(
-                        "failed to create session metadata: {insert_err}"
-                    )));
-                }
-            }
-        }
+        entity::sessions::Entity::insert(entity::sessions::ActiveModel {
+            id: ActiveValue::Set(entry.session_id.clone()),
+            agent_id: ActiveValue::Set(self.agent_id.clone()),
+            created_at: ActiveValue::Set(entry.created_at),
+            updated_at: ActiveValue::Set(entry.created_at),
+            entry_count: ActiveValue::Set(0),
+            metadata: ActiveValue::Set("{}".to_string()),
+        })
+        .on_conflict(
+            OnConflict::column(entity::sessions::Column::Id)
+                .do_nothing()
+                .to_owned(),
+        )
+        .exec_without_returning(txn)
+        .await
+        .map_err(|e| StoreError::Database(format!("failed to ensure session metadata: {e}")))?;
 
         self.load_owned_session(txn, &entry.session_id)
             .await
@@ -694,7 +676,8 @@ mod tests {
                 .write(true)
                 .open(path)
                 .expect("postgres session test lock file should open");
-            file.lock().expect("postgres session test lock should be acquired");
+            file.lock()
+                .expect("postgres session test lock should be acquired");
             Self(file)
         }
     }
@@ -702,7 +685,9 @@ mod tests {
     impl Drop for PostgresTestLock {
         fn drop(&mut self) {
             use fd_lock::RwLock;
-            self.0.unlock().expect("postgres session test lock should release");
+            self.0
+                .unlock()
+                .expect("postgres session test lock should release");
         }
     }
 
@@ -757,5 +742,57 @@ mod tests {
         assert_eq!(sessions[0].entry_count, 1);
 
         clean_postgres(&reconnected).await;
+    }
+
+    #[tokio::test]
+    async fn postgres_concurrent_first_saves_when_configured() {
+        // CI should set VOL_AGENT_POSTGRES_TEST_URL so Postgres session-store coverage is exercised.
+        let Ok(url) = std::env::var(POSTGRES_TEST_URL_ENV) else {
+            eprintln!(
+                "SKIPPED: VOL_AGENT_POSTGRES_TEST_URL is not set; Postgres session-store coverage was not exercised"
+            );
+            return;
+        };
+
+        let _lock = PostgresTestLock::acquire();
+        let manager = DatabaseSessionManager::connect(&url).await.unwrap();
+        clean_postgres(&manager).await;
+
+        let test_agent_id = format!("{POSTGRES_TEST_AGENT_PREFIX}{}", uuid::Uuid::new_v4());
+        let test_session_id = format!("{POSTGRES_TEST_SESSION_PREFIX}{}", uuid::Uuid::new_v4());
+        let save_count = 8;
+
+        let saves = (0..save_count).map(|idx| {
+            let store = manager.entry_store_for_agent(&test_agent_id);
+            let session_id = test_session_id.clone();
+            tokio::spawn(async move {
+                store
+                    .save(test_entry(
+                        &session_id,
+                        &format!("pg-concurrent-entry-{idx:02}"),
+                        idx,
+                    ))
+                    .await
+            })
+        });
+
+        for save in saves {
+            save.await.unwrap().unwrap();
+        }
+
+        let store = manager.entry_store_for_agent(&test_agent_id);
+        let entries = store.get_entries(&test_session_id).await.unwrap();
+        assert_eq!(entries.len(), save_count as usize);
+        assert_eq!(
+            store.get_count(&test_session_id).await.unwrap(),
+            save_count as usize
+        );
+
+        let sessions = manager.list_sessions(Some(&test_agent_id)).await.unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].session_id, test_session_id);
+        assert_eq!(sessions[0].entry_count, save_count as usize);
+
+        clean_postgres(&manager).await;
     }
 }
