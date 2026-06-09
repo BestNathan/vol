@@ -227,8 +227,10 @@ impl crate::store::TaskStore for DatabaseTaskStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::sync::Mutex;
 
     const POSTGRES_TEST_URL: &str = "postgres://postgres:postgres@192.168.2.106/vol";
+    static POSTGRES_TEST_LOCK: Mutex<()> = Mutex::const_new(());
 
     async fn clear_store(store: &DatabaseTaskStore) {
         use sea_orm::{ConnectionTrait, Statement};
@@ -295,6 +297,7 @@ mod tests {
 
     #[tokio::test]
     async fn postgres_create_assigns_id_and_get_retrieves_task() {
+        let _guard = POSTGRES_TEST_LOCK.lock().await;
         let store = postgres_store().await;
         assert_create_get(&store).await;
     }
@@ -356,6 +359,7 @@ mod tests {
 
     #[tokio::test]
     async fn postgres_update_delete_list() {
+        let _guard = POSTGRES_TEST_LOCK.lock().await;
         let store = postgres_store().await;
         assert_update_delete_list(&store).await;
     }
@@ -381,6 +385,7 @@ mod tests {
 
     #[tokio::test]
     async fn postgres_connect_runs_migration() {
+        let _guard = POSTGRES_TEST_LOCK.lock().await;
         use sea_orm::{ConnectionTrait, Statement};
 
         let store = DatabaseTaskStore::connect(POSTGRES_TEST_URL).await.unwrap();
