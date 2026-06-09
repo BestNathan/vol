@@ -138,6 +138,7 @@ vol-llm-agent-channel = { path = "crates/vol-llm-agent-channel" }
 vol-mcp-servers = { path = "crates/vol-mcp-servers" }
 vol-llm-mcp = { path = "crates/vol-llm-mcp" }
 dirs = "5.0"
+fd-lock = "4"
 vol-observability = { path = "crates/vol-observability" }
 vol-llm-sandbox = { path = "crates/vol-llm-sandbox" }
 
