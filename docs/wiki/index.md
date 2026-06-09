@@ -1,11 +1,14 @@
 # Wiki Index
 
-Last updated: 2026-06-04 (rich-text-conversation)
+Last updated: 2026-06-09 (seaorm-task-database-store-implementation)
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[vol-llm-runtime-crate]] | AgentRuntime owner of shared agent resources and runtime task store config types | active | 2026-06-09 |
+| [[vol-llm-task-crate]] | Task models and persistence stores, including SeaORM database store for SQLite and Postgres with compiled migrations | active | 2026-06-09 |
+| [[vol-agent-server-crate]] | Standalone agent server crate with TOML parsing and `[runtime.task_store]` validation | active | 2026-06-09 |
 | [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with Dioxus as the sole active web frontend | active | 2026-05-29 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API | active | 2026-05-21 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
@@ -13,7 +16,7 @@ Last updated: 2026-06-04 (rich-text-conversation)
 | [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager | stable | 2026-05-21 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with Anthropic multipart text/image conversion | stable | 2026-05-21 |
 | [[vol-session]] | Session message store and entry persistence | active | 2026-05-04 |
-| [[vol-llm-agent-channel-crate]] | Agent communication channel layer and active JSON-RPC web backend service | active | 2026-05-29 |
+| [[vol-llm-agent-channel-crate]] | Agent communication channel layer and active JSON-RPC web backend service with task-store config pass-through | active | 2026-06-09 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 | [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support | active | 2026-05-10 |
@@ -23,6 +26,7 @@ Last updated: 2026-06-04 (rich-text-conversation)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[runtime-task-store-configuration]] | Shared `[runtime.task_store]` TOML contract and single global runtime store behavior for file/database task persistence | active | 2026-06-09 |
 | [[rich-text-conversation]] | Markdown rendering for chat (Dioxus handoff to marked.js + DOMPurify + highlight.js) | active | 2026-06-04 |
 | [[dependency-graph-visualization]] | Layered SVG node-link graph of task dependencies: pure layout fn + Dioxus component | active | 2026-06-04 |
 | [[react-pattern]] | Reason-Act-Observe agent execution loop | active | 2026-05-04 |
@@ -81,6 +85,14 @@ Last updated: 2026-06-04 (rich-text-conversation)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[seaorm-task-database-store-implementation]] | End-to-end replacement of SQLx task store with SeaORM + SeaORM Migration for SQLite and Postgres | active | 2026-06-09 |
+| [[seaorm-postgres-test-url-env-fix]] | SeaORM Postgres task-store test URL hardening: mandatory `VOL_AGENT_POSTGRES_TEST_URL`, clear unset failure, and placeholder docs DSN | active | 2026-06-09 |
+| [[seaorm-postgres-test-isolation-fix]] | SeaORM Postgres task-store test isolation: shared temp-dir file lock, UUID marker cleanup, and placeholder config DSN | active | 2026-06-09 |
+| [[seaorm-sqlite-url-normalization-fix]] | SeaORM SQLite URL normalization fix: exact `mode` query-key detection so `journal_mode=wal` still appends `mode=rwc` | active | 2026-06-09 |
+| [[task-database-store-implementation]] | End-to-end implementation of global SQLx SQLite database-backed task store | active | 2026-06-09 |
+| [[runtime-database-task-store-construction]] | AgentRuntime database task-store construction and persistence test hardening | active | 2026-06-09 |
+| [[task-store-sqlite-embedded-migrations]] | SQLite task-store migrations embedded into the `vol-llm-task` binary via SQLx macros | active | 2026-06-09 |
+| [[task-store-config-parsing]] | Runtime task store config parsing and validation for `[runtime.task_store]` | active | 2026-06-09 |
 | [[rich-text-conversation-design]] | Design spec for markdown rendering in chat (Dioxus + marked.js) | active | 2026-06-04 |
 | [[task-dependency-graph-view]] | Tasks tab "⇄ deps" button + SVG dependency-graph modal (read-only, frontend-only) | active | 2026-06-04 |
 | [[agent-channel-examples]] | WS + HTTP service examples using channel primitives | active | 2026-05-07 |

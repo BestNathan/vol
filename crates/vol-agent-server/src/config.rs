@@ -30,6 +30,8 @@ pub struct RuntimeSection {
     pub working_dir: String,
     #[serde(default = "default_store_dir")]
     pub store_dir: String,
+    #[serde(default)]
+    pub task_store: Option<vol_llm_runtime::TaskStoreConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -82,6 +84,7 @@ impl Default for RuntimeSection {
         Self {
             working_dir: default_working_dir(),
             store_dir: default_store_dir(),
+            task_store: None,
         }
     }
 }
@@ -112,8 +115,17 @@ impl ServerConfig {
     pub fn load(path: &std::path::Path) -> Result<Self, String> {
         let content = std::fs::read_to_string(path)
             .map_err(|e| format!("Failed to read config file {:?}: {}", path, e))?;
-        toml::from_str(&content)
-            .map_err(|e| format!("Failed to parse config {:?}: {}", path, e))
+        let config: Self = toml::from_str(&content)
+            .map_err(|e| format!("Failed to parse config {:?}: {}", path, e))?;
+        config.validate()?;
+        Ok(config)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if let Some(task_store) = &self.runtime.task_store {
+            task_store.validate()?;
+        }
+        Ok(())
     }
 
     /// Load from explicit path, or fall back to default path, or use pure defaults.
@@ -241,5 +253,61 @@ format = "json"
         assert_eq!(config.runtime.store_dir, "/data");
         assert_eq!(config.tracing.level, "debug");
         assert_eq!(config.tracing.format, "json");
+    }
+
+    #[test]
+    fn test_parse_database_task_store_config() {
+        let toml_str = r#"
+[runtime]
+working_dir = "/app"
+store_dir = "/data"
+
+[runtime.task_store]
+type = "database"
+url = "sqlite:///tmp/vol-agent/tasks.db"
+"#;
+
+        let config: ServerConfig = toml::from_str(toml_str).unwrap();
+        let task_store = config.runtime.task_store.as_ref().unwrap();
+        assert_eq!(task_store.store_type, vol_llm_runtime::TaskStoreType::Database);
+        assert_eq!(task_store.url.as_deref(), Some("sqlite:///tmp/vol-agent/tasks.db"));
+    }
+
+    #[test]
+    fn test_database_task_store_requires_url() {
+        let toml_str = r#"
+[runtime.task_store]
+type = "database"
+"#;
+
+        let config: ServerConfig = toml::from_str(toml_str).unwrap();
+        let err = config.validate().unwrap_err();
+        assert_eq!(err, "runtime.task_store.url is required when type = \"database\"");
+    }
+
+    #[test]
+    fn test_file_task_store_rejects_url() {
+        let toml_str = r#"
+[runtime.task_store]
+type = "file"
+url = "sqlite:///tmp/tasks.db"
+"#;
+
+        let config: ServerConfig = toml::from_str(toml_str).unwrap();
+        let err = config.validate().unwrap_err();
+        assert_eq!(err, "runtime.task_store.url is not valid when type = \"file\"");
+    }
+
+    #[test]
+    fn test_database_task_store_rejects_unknown_scheme() {
+        let toml_str = r#"
+[runtime.task_store]
+type = "database"
+url = "oracle://localhost/tasks"
+"#;
+
+        let config: ServerConfig = toml::from_str(toml_str).unwrap();
+        let err = config.validate().unwrap_err();
+        assert_eq!(err, "unsupported task store database url scheme: oracle");
     }
 }

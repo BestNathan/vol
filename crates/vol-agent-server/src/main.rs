@@ -68,6 +68,12 @@ async fn main() {
         tracing::info!("Using built-in defaults (no config file found)");
     }
 
+    if let Some(task_store) = &config.runtime.task_store {
+        tracing::info!(task_store_type = ?task_store.store_type, "Using configured task store");
+    } else {
+        tracing::info!("Using default file task store");
+    }
+
     // --- Build core ---
     tracing::info!(
         working_dir = %config.runtime.working_dir,
@@ -75,7 +81,9 @@ async fn main() {
         "Building AgentServerCore"
     );
 
-    let core = AgentServerCore::new(&config.runtime.working_dir, &config.runtime.store_dir)
+    let core = AgentServerCore::builder(&config.runtime.working_dir, &config.runtime.store_dir)
+        .with_task_store_config(config.runtime.task_store.clone())
+        .build()
         .await
         .unwrap_or_else(|e| {
             tracing::error!("Failed to build AgentServerCore: {}", e);

@@ -15,7 +15,7 @@ use vol_llm_agent::AgentLoader;
 use vol_llm_mcp::{McpConfig, McpManager};
 use vol_llm_provider::{create_provider, ProviderLoader};
 use vol_llm_skill::{SkillLoader, SkillTool};
-use vol_llm_task::FileTaskStore;
+use vol_llm_task::{DatabaseTaskStore, FileTaskStore};
 use vol_llm_task::TaskStore;
 use vol_llm_tool::ToolRegistry;
 use vol_session::file_store::FileSessionEntryStore;
@@ -225,14 +225,73 @@ impl AgentRuntime {
 
 // === Builder ===
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TaskStoreType {
+    File,
+    Database,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TaskStoreConfig {
+    #[serde(rename = "type")]
+    pub store_type: TaskStoreType,
+    pub url: Option<String>,
+}
+
+impl TaskStoreConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        match self.store_type {
+            TaskStoreType::File => {
+                if self.url.is_some() {
+                    return Err("runtime.task_store.url is not valid when type = \"file\"".to_string());
+                }
+                Ok(())
+            }
+            TaskStoreType::Database => {
+                let url = self
+                    .url
+                    .as_deref()
+                    .ok_or_else(|| "runtime.task_store.url is required when type = \"database\"".to_string())?;
+                validate_database_url_scheme(url)
+            }
+        }
+    }
+
+    pub fn required_url(&self) -> Result<&str, String> {
+        self.url
+            .as_deref()
+            .ok_or_else(|| "runtime.task_store.url is required when type = \"database\"".to_string())
+    }
+}
+
+pub fn validate_database_url_scheme(url: &str) -> Result<(), String> {
+    let scheme = url
+        .split_once(':')
+        .map(|(scheme, _)| scheme)
+        .unwrap_or_default();
+
+    match scheme {
+        "sqlite" | "postgres" | "postgresql" | "mysql" => Ok(()),
+        "" => Err("unsupported task store database url scheme: <missing>".to_string()),
+        other => Err(format!("unsupported task store database url scheme: {other}")),
+    }
+}
+
 pub struct AgentRuntimeBuilder {
     working_dir: PathBuf,
     store_dir: PathBuf,
+    task_store_config: Option<TaskStoreConfig>,
 }
 
 impl AgentRuntimeBuilder {
     pub fn new(working_dir: PathBuf, store_dir: PathBuf) -> Self {
-        Self { working_dir, store_dir }
+        Self { working_dir, store_dir, task_store_config: None }
+    }
+
+    pub fn with_task_store_config(mut self, config: Option<TaskStoreConfig>) -> Self {
+        self.task_store_config = config;
+        self
     }
 
     pub async fn build(self) -> Result<AgentRuntime, String> {
@@ -274,14 +333,14 @@ impl AgentRuntimeBuilder {
             loader
         };
 
-        let tasks_dir = store_dir.join("tasks");
-        std::fs::create_dir_all(&tasks_dir)
-            .map_err(|e| format!("failed to create tasks dir: {e}"))?;
-        let task_store: Arc<dyn TaskStore> = Arc::new(
-            FileTaskStore::new(&tasks_dir)
-                .await
-                .map_err(|e| format!("failed to create task store: {e}"))?
-        );
+        let task_store: Arc<dyn TaskStore> = match self.task_store_config.as_ref() {
+            None => build_file_task_store(&store_dir).await?,
+            Some(config) if config.store_type == TaskStoreType::File => build_file_task_store(&store_dir).await?,
+            Some(config) if config.store_type == TaskStoreType::Database => {
+                build_database_task_store(config.required_url()?).await?
+            }
+            Some(_) => return Err("unsupported task store configuration".to_string()),
+        };
 
         let mut tool_registry = ToolRegistry::new();
         vol_llm_tools_builtin::register_all(&mut tool_registry);
@@ -311,6 +370,23 @@ impl AgentRuntimeBuilder {
     }
 }
 
+async fn build_file_task_store(store_dir: &std::path::Path) -> Result<Arc<dyn TaskStore>, String> {
+    let tasks_dir = store_dir.join("tasks");
+    std::fs::create_dir_all(&tasks_dir)
+        .map_err(|e| format!("failed to create tasks dir: {e}"))?;
+    let store = FileTaskStore::new(&tasks_dir)
+        .await
+        .map_err(|e| format!("failed to create file task store: {e}"))?;
+    Ok(Arc::new(store))
+}
+
+async fn build_database_task_store(url: &str) -> Result<Arc<dyn TaskStore>, String> {
+    let store = DatabaseTaskStore::connect(url)
+        .await
+        .map_err(|e| format!("failed to create database task store: {e}"))?;
+    Ok(Arc::new(store))
+}
+
 fn expand_tilde(path: PathBuf) -> PathBuf {
     let s = path.to_string_lossy().to_string();
     if s.starts_with('~') {
@@ -319,5 +395,173 @@ fn expand_tilde(path: PathBuf) -> PathBuf {
         PathBuf::from(format!("{}/{}", home, rest))
     } else {
         path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const POSTGRES_TEST_URL_ENV: &str = "VOL_AGENT_POSTGRES_TEST_URL";
+    const POSTGRES_TEST_URL_REQUIRED: &str =
+        "VOL_AGENT_POSTGRES_TEST_URL must be set for mandatory Postgres task-store tests";
+
+    fn postgres_test_url() -> String {
+        std::env::var(POSTGRES_TEST_URL_ENV).expect(POSTGRES_TEST_URL_REQUIRED)
+    }
+
+    struct PostgresTestLock(std::fs::File);
+
+    impl PostgresTestLock {
+        fn acquire() -> Self {
+            let path = std::env::temp_dir().join("vol-agent-postgres-task-store-test.lock");
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .read(true)
+                .write(true)
+                .open(path)
+                .expect("postgres test lock file should open");
+            file.lock().expect("postgres test lock should be acquired");
+            Self(file)
+        }
+    }
+
+    impl Drop for PostgresTestLock {
+        fn drop(&mut self) {
+            self.0.unlock().expect("postgres test lock should release");
+        }
+    }
+
+    #[tokio::test]
+    async fn builder_accepts_database_task_store_config_until_provider_requirement() {
+        let temp = tempfile::tempdir().unwrap();
+        let providers_dir = temp.path().join(".agents/providers");
+        std::fs::create_dir_all(&providers_dir).unwrap();
+        std::fs::write(
+            providers_dir.join("test.toml"),
+            r#"
+provider = "anthropic"
+model = "claude-test"
+api_key = "sk-test"
+base_url = "https://api.test.com"
+"#,
+        )
+        .unwrap();
+
+        let db_url = format!("sqlite://{}", temp.path().join("tasks.db").display());
+        let config = TaskStoreConfig {
+            store_type: TaskStoreType::Database,
+            url: Some(db_url),
+        };
+
+        let runtime = AgentRuntime::builder(temp.path(), temp.path())
+            .with_task_store_config(Some(config.clone()))
+            .build()
+            .await
+            .expect("runtime should build with valid provider and database task store config");
+
+        let mut task = vol_llm_task::Task::new(
+            vol_llm_task::TaskKind::Manual,
+            "runtime database task store test".to_string(),
+            Vec::new(),
+        );
+        task.description = "created through AgentRuntime::task_store".to_string();
+        let task_id = runtime
+            .task_store
+            .create(task)
+            .await
+            .expect("database task store should create tasks");
+        drop(runtime);
+
+        let runtime = AgentRuntime::builder(temp.path(), temp.path())
+            .with_task_store_config(Some(config))
+            .build()
+            .await
+            .expect("runtime should reconnect to configured database task store");
+        let persisted = runtime
+            .task_store
+            .get(&task_id)
+            .await
+            .expect("database task store should get tasks")
+            .expect("created task should persist across runtime rebuilds");
+
+        assert_eq!(persisted.id, task_id);
+        assert_eq!(persisted.subject, "runtime database task store test");
+        assert_eq!(persisted.description, "created through AgentRuntime::task_store");
+    }
+
+    #[tokio::test]
+    async fn builder_accepts_postgres_database_task_store_config() -> anyhow::Result<()> {
+        let _guard = PostgresTestLock::acquire();
+        let temp = tempfile::tempdir().unwrap();
+        let providers_dir = temp.path().join(".agents/providers");
+        std::fs::create_dir_all(&providers_dir).unwrap();
+        std::fs::write(
+            providers_dir.join("test.toml"),
+            r#"
+provider = "anthropic"
+model = "claude-test"
+api_key = "sk-test"
+base_url = "https://api.test.com"
+"#,
+        )
+        .unwrap();
+
+        let config = TaskStoreConfig {
+            store_type: TaskStoreType::Database,
+            url: Some(postgres_test_url()),
+        };
+        let subject = format!(
+            "runtime postgres database task store test {} {}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        );
+
+        async fn cleanup_marker(store: &dyn vol_llm_task::TaskStore, subject: &str) -> anyhow::Result<()> {
+            for task in store.list(None).await? {
+                if task.subject == subject {
+                    store.delete(&task.id).await?;
+                }
+            }
+            Ok(())
+        }
+
+        let runtime = AgentRuntime::builder(temp.path(), temp.path())
+            .with_task_store_config(Some(config.clone()))
+            .build()
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let cleanup_store = runtime.task_store.clone();
+        cleanup_marker(cleanup_store.as_ref(), &subject).await?;
+
+        let mut task = vol_llm_task::Task::new(
+            vol_llm_task::TaskKind::Manual,
+            subject.clone(),
+            Vec::new(),
+        );
+        task.description = "created through AgentRuntime::task_store using postgres".to_string();
+        let task_id = runtime.task_store.create(task).await?;
+        drop(runtime);
+
+        let result = async {
+            let runtime = AgentRuntime::builder(temp.path(), temp.path())
+                .with_task_store_config(Some(config))
+                .build()
+                .await
+                .map_err(anyhow::Error::msg)?;
+            let persisted = runtime
+                .task_store
+                .get(&task_id)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("created task should persist across runtime rebuilds"))?;
+
+            anyhow::ensure!(persisted.id == task_id, "persisted task id should match");
+            anyhow::ensure!(persisted.subject == subject, "persisted task subject should match");
+            Ok::<_, anyhow::Error>(())
+        }
+        .await;
+
+        cleanup_marker(cleanup_store.as_ref(), &subject).await?;
+        result
     }
 }

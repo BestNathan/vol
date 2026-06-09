@@ -3,14 +3,14 @@ type: entity
 category: product
 tags: [crate, agent, transport, rust, json-rpc]
 created: 2026-05-05
-updated: 2026-05-29 (remove-vol-agent-manager)
-source_count: 11
+updated: 2026-06-09
+source_count: 12
 ---
 
 # vol-llm-agent-channel Crate
 
 **Category:** Rust crate — Agent communication channel layer
-**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]], [[agentinput-multimodal-run]], [[agentinput-channel-unification]]
+**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]], [[agentinput-multimodal-run]], [[agentinput-channel-unification]], [[task-database-store-implementation]], [[runtime-task-store-configuration]]
 
 ## Overview
 
@@ -28,6 +28,7 @@ The `vol-llm-agent-channel` crate provides the communication layer between exter
 - All JSON-RPC transport code consolidated under `transport/jsonrpc/` — server, connection, codec, and serde helpers [[jsonrpc-transport-consolidation]]
 - 12 JSON-RPC methods: `agent.submit` (with optional `target`), `cancel`, `subscribe`, `unsubscribe`, `approve`, `file.list`, `file.read`, `log.list`, `log.read`, `session.list`, `session.resume` [[jsonrpc-transport]]
 - Current web backend startup path: `make web-backend` runs `examples/jsonrpc_agent_service.rs` from this crate on port 3001 [[remove-vol-agent-manager]]
+- `AgentServerCoreBuilder` accepts optional `TaskStoreConfig` and forwards it into `AgentRuntimeBuilder`, while `TaskHandler` continues to use the single shared `runtime.task_store` [[task-database-store-implementation]]
 - 49 integration tests for JSON-RPC serialization and parsing [[task-5-jsonrpc-integration-tests]]
 
 ## Transport Comparison
@@ -71,3 +72,4 @@ Client → Transport (WS/HTTP/JSON-RPC/Memory) → Connection → ConnectionHold
 - **2026-05-09**: JSON-RPC transport refactoring — `JsonRpcConnection` implements `Connection` trait, `EventBridgePlugin` deleted, `JsonRpcServer` with multi-agent support, 49 integration tests [[jsonrpc-transport-refactoring]]
 - **2026-05-23**: Agent directory discovery — `discover_agents()` replaces manual registration, `agent.list` returns type/description/scope metadata [[agent-directory-discovery]]
 - **2026-05-29**: Obsolete `vol-agent-manager` service removed; this crate's `examples/jsonrpc_agent_service.rs` remains the active web backend via `make web-backend` [[remove-vol-agent-manager]]
+- **2026-06-09**: `AgentServerCoreBuilder` forwards optional runtime task-store config into `AgentRuntimeBuilder`; task JSON-RPC handling still reads the single shared `runtime.task_store` [[task-database-store-implementation]]

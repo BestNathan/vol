@@ -1,5 +1,70 @@
 # Change Log
 
+## [2026-06-09] ingest | SeaORM Task Database Store Implementation
+- Created sources: [[seaorm-task-database-store-implementation]]
+- Updated entities: [[vol-llm-task-crate]] (SeaORM entity/migration/mapping replaces SQLx, SQLite + Postgres implemented, crate-root export), [[vol-llm-runtime-crate]] (SeaORM runtime database store construction and Postgres builder test with env-var DSN), [[vol-agent-server-crate]] (server config pass-through and startup logging; no changes needed)
+- Updated concepts: [[runtime-task-store-configuration]] (completed SeaORM file/database runtime behavior, credential hygiene, non-goals)
+- Updated index: new SeaORM task database store implementation source entry, refreshed task crate summary
+- Cross-references added: 20
+- Changes: Documented the completed SeaORM replacement of the SQLx database task store: `DatabaseTaskStore` uses SeaORM entity (`tasks`), SeaORM Rust migrator compiled into the binary, mapping helpers, SQLite/Postgres CRUD, ready-task behavior, cross-process test lock, mandatory `VOL_AGENT_POSTGRES_TEST_URL`, single global `runtime.task_store` semantics, and explicit exclusion of `.agents/task-providers` or per-agent stores.
+
+## [2026-06-09] ingest | SeaORM Postgres Test URL Env Var Fix
+- Created sources: [[seaorm-postgres-test-url-env-fix]]
+- Updated entities: [[vol-llm-task-crate]] (mandatory Postgres tests read `VOL_AGENT_POSTGRES_TEST_URL`), [[vol-llm-runtime-crate]] (runtime Postgres builder test uses the same env var)
+- Updated concepts: [[runtime-task-store-configuration]] (credential hygiene and mandatory env-var behavior for Postgres tests)
+- Updated sources: [[seaorm-postgres-test-isolation-fix]] (removed outdated claim that the fixed live URL remains in test code)
+- Updated index: new SeaORM Postgres test URL env-var source entry
+- Cross-references added: 10
+- Changes: Documented the review fix that removed the live Postgres DSN from committed test source and docs. Mandatory Postgres tests now fail clearly if `VOL_AGENT_POSTGRES_TEST_URL` is unset, and docs use `postgres://USER:PASSWORD@HOST:5432/DATABASE` as the placeholder DSN.
+
+## [2026-06-09] ingest | SeaORM Postgres Test Isolation Fix
+- Created sources: [[seaorm-postgres-test-isolation-fix]]
+- Updated entities: [[vol-llm-runtime-crate]] (runtime Postgres task-store test marker cleanup and cross-process lock), [[vol-llm-task-crate]] (Postgres database tests share the same temp-dir lock)
+- Updated concepts: [[runtime-task-store-configuration]] (Postgres test isolation and cleanup expectations)
+- Updated index: new SeaORM Postgres test isolation source entry
+- Cross-references added: 9
+- Changes: Documented the SeaORM Task 6 review fix: runtime and task-store Postgres tests coordinate through a shared OS file lock, runtime test rows use a UUID subject marker with before/after cleanup through `TaskStore`, and the example Postgres DSN is now a placeholder.
+
+## [2026-06-09] ingest | SeaORM SQLite URL Normalization Fix
+- Created sources: [[seaorm-sqlite-url-normalization-fix]]
+- Updated entities: [[vol-llm-task-crate]] (SeaORM SQLite URL normalization exact `mode` query-key behavior)
+- Updated concepts: [[runtime-task-store-configuration]] (SQLite create-mode normalization edge case)
+- Updated index: new SeaORM SQLite URL normalization source entry
+- Cross-references added: 6
+- Changes: Documented the SeaORM Task 1 review fix where `normalize_sqlite_url` parses query parameters and checks for an exact `mode` key, ensuring `journal_mode=wal` still appends `mode=rwc` while explicit `mode=rwc` remains unchanged.
+
+## [2026-06-09] ingest | Task Database Store Implementation
+- Created sources: [[task-database-store-implementation]]
+- Updated entities: [[vol-llm-task-crate]] (DatabaseTaskStore CRUD, ready-task behavior, crate-root export), [[vol-llm-runtime-crate]] (single global runtime task store construction), [[vol-agent-server-crate]] (server config pass-through and startup logging), [[vol-llm-agent-channel-crate]] (builder pass-through and shared TaskHandler store semantics)
+- Updated concepts: [[runtime-task-store-configuration]] (completed file/database runtime behavior and non-goals)
+- Updated index: new end-to-end implementation source entry, refreshed task-store concept and agent-channel summaries
+- Cross-references added: 18
+- Changes: Documented the completed implementation of `[runtime.task_store] type = "database"`: SQLx SQLite `DatabaseTaskStore` with embedded migrations, config validation, runtime construction, task tool/RPC sharing of one global `runtime.task_store`, final verification commands, and explicit exclusion of `.agents/task-providers` or per-agent stores.
+
+## [2026-06-09] ingest | Runtime Database Task Store Construction
+- Created sources: [[runtime-database-task-store-construction]]
+- Updated entities: [[vol-llm-runtime-crate]] (runtime database task-store construction and persistence test coverage)
+- Updated concepts: [[runtime-task-store-configuration]] (database config now maps to real runtime construction)
+- Updated index: new runtime database construction source entry
+- Cross-references added: 8
+- Changes: Documented Task 6 runtime database store wiring and the review fix that made the builder test require successful runtime construction plus task create/get persistence across SQLite-backed runtime rebuilds.
+
+## [2026-06-09] ingest | Task Store SQLite Embedded Migrations
+- Created sources: [[task-store-sqlite-embedded-migrations]]
+- Created entities: [[vol-llm-task-crate]]
+- Updated concepts: [[runtime-task-store-configuration]] (linked SQLite database-store initialization to embedded migrations)
+- Updated index: new task crate entity and embedded migrations source entries
+- Cross-references added: 5
+- Changes: Documented the Task 4 review fix: `DatabaseTaskStore` now uses a compile-time SQLx migrator for SQLite migrations, and the workspace `sqlx` dependency enables macros so release binaries/containers do not need source-tree migration files at runtime.
+
+## [2026-06-09] ingest | Runtime Task Store Config Parsing
+- Created sources: [[task-store-config-parsing]]
+- Created entities: [[vol-llm-runtime-crate]], [[vol-agent-server-crate]]
+- Created concepts: [[runtime-task-store-configuration]]
+- Updated index: new runtime/server entities, task store configuration concept, and source entry
+- Cross-references added: 9
+- Changes: Added wiki coverage for Task 1 of the database task store plan: runtime-owned `TaskStoreType`/`TaskStoreConfig`, SQL-independent database URL scheme validation, server `[runtime.task_store]` parsing, load-time validation, and config tests.
+
 ## [2026-06-04] ingest | Rich Text Conversation Rendering
 - Created sources: [[rich-text-conversation-design]]
 - Created concepts: [[rich-text-conversation]]

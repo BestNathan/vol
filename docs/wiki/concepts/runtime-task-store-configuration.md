@@ -1,0 +1,66 @@
+---
+type: concept
+category: architecture
+tags: [task-store, configuration, runtime, validation]
+created: 2026-06-09
+updated: 2026-06-09
+source_count: 7
+---
+
+# Runtime Task Store Configuration
+
+## Definition
+Runtime task store configuration is the shared `[runtime.task_store]` TOML contract used to select the global task persistence backend for the agent runtime.
+
+## How It Works
+Source: [[task-store-config-parsing]]
+
+The config is defined in [[vol-llm-runtime-crate]] and parsed by [[vol-agent-server-crate]]. This keeps the backend selection contract close to the runtime that owns the task store while allowing the server to validate user config early.
+
+Supported shape:
+
+```toml
+[runtime.task_store]
+type = "file"
+```
+
+or:
+
+```toml
+[runtime.task_store]
+type = "database"
+url = "sqlite:///tmp/vol-agent/tasks.db"
+```
+
+## Validation Rules
+- Omitted `[runtime.task_store]` means default file store behavior remains active.
+- `type = "file"` rejects `url` because file store location is derived from `runtime.store_dir`.
+- `type = "database"` requires `url`.
+- Database URL schemes accepted at config time: `sqlite`, `postgres`, `postgresql`, `mysql`.
+- Unknown or missing schemes produce explicit errors.
+
+## Design Notes
+This is intentionally SQL-independent. Config parsing and validation can land before any database implementation. Later tasks wire the validated config through builders and instantiate concrete stores without changing the TOML contract.
+
+The completed implementation uses SeaORM + SeaORM Migration for database task stores. [[seaorm-task-database-store-implementation]] documents the full SeaORM replacement: entity, Rust migrator compiled into the binary, mapping helpers, SQLite/Postgres CRUD, ready-task behavior, and test matrix.
+
+SQLite URL normalization must append create mode only when no exact `mode` query key is present. [[seaorm-sqlite-url-normalization-fix]] documents the SeaORM skeleton review fix that made `journal_mode=wal` coexist with an appended `mode=rwc`.
+
+Runtime construction is covered by [[runtime-database-task-store-construction]] and [[seaorm-task-database-store-implementation]]: `AgentRuntimeBuilder::build()` now turns database config into a real `DatabaseTaskStore`, and the builder test asserts task persistence across runtime rebuilds instead of accepting database construction failures.
+
+[[seaorm-postgres-test-isolation-fix]] documents the Postgres-specific review hardening: runtime and task-store Postgres tests share an OS temp-dir lock, runtime rows are marked with a UUID subject, and cleanup runs before and after the test through the public `TaskStore` API.
+
+[[seaorm-postgres-test-url-env-fix]] documents credential hygiene for mandatory Postgres tests: committed code and docs use `VOL_AGENT_POSTGRES_TEST_URL` plus the placeholder `postgres://USER:PASSWORD@HOST:5432/DATABASE` instead of a live DSN. Tests fail rather than skip when the env var is missing.
+
+The completed implementation keeps one global task store. `AgentServerCoreBuilder` only forwards config into runtime construction; it does not create per-agent stores or patch the tool registry. The unified `task` tool and JSON-RPC `TaskHandler` both share `runtime.task_store`.
+
+## Related
+- [[vol-llm-runtime-crate]]
+- [[vol-llm-task-crate]]
+- [[vol-agent-server-crate]]
+- [[task-store-config-parsing]]
+- [[runtime-database-task-store-construction]]
+- [[seaorm-task-database-store-implementation]]
+- [[seaorm-sqlite-url-normalization-fix]]
+- [[seaorm-postgres-test-isolation-fix]]
+- [[seaorm-postgres-test-url-env-fix]]
