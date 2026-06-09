@@ -189,6 +189,64 @@ impl crate::store::TaskStore for DatabaseTaskStore {
 mod tests {
     use super::*;
 
+    const POSTGRES_TEST_URL: &str = "postgres://postgres:postgres@192.168.2.106/vol";
+
+    async fn clear_store(store: &DatabaseTaskStore) {
+        use sea_orm::{ConnectionTrait, Statement};
+
+        let backend = match store.backend {
+            DatabaseBackend::Sqlite => sea_orm::DatabaseBackend::Sqlite,
+            DatabaseBackend::Postgres => sea_orm::DatabaseBackend::Postgres,
+            DatabaseBackend::MySql => unreachable!("mysql is not enabled"),
+        };
+
+        store
+            .db
+            .execute(Statement::from_string(
+                backend,
+                "DELETE FROM tasks".to_string(),
+            ))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn sqlite_connect_runs_migration() {
+        use sea_orm::{ConnectionTrait, Statement};
+
+        let dir = tempfile::tempdir().unwrap();
+        let url = format!("sqlite://{}", dir.path().join("tasks.db").display());
+        let store = DatabaseTaskStore::connect(&url).await.unwrap();
+        let rows = store
+            .db
+            .query_all(Statement::from_string(
+                sea_orm::DatabaseBackend::Sqlite,
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tasks'"
+                    .to_string(),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn postgres_connect_runs_migration() {
+        use sea_orm::{ConnectionTrait, Statement};
+
+        let store = DatabaseTaskStore::connect(POSTGRES_TEST_URL).await.unwrap();
+        clear_store(&store).await;
+        let rows = store
+            .db
+            .query_all(Statement::from_string(
+                sea_orm::DatabaseBackend::Postgres,
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'tasks'"
+                    .to_string(),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+    }
+
     #[test]
     fn infer_backend_from_sqlite_url() {
         assert_eq!(
