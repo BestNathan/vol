@@ -1,0 +1,12 @@
+//! SeaORM migration for persisted tasks.
+
+use sea_orm_migration::prelude::*;
+
+pub(super) struct Migrator;
+
+#[async_trait::async_trait]
+impl MigratorTrait for Migrator {
+    fn migrations() -> Vec<Box<dyn MigrationTrait>> {
+        Vec::new()
+    }
+}

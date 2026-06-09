@@ -9,7 +9,8 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
-sqlx = { workspace = true }
+sea-orm = { workspace = true }
+sea-orm-migration = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 chrono = { workspace = true }
 dashmap = { workspace = true }
