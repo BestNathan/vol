@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-06-09] ingest | SeaORM SQLite URL Normalization Fix
+- Created sources: [[seaorm-sqlite-url-normalization-fix]]
+- Updated entities: [[vol-llm-task-crate]] (SeaORM SQLite URL normalization exact `mode` query-key behavior)
+- Updated concepts: [[runtime-task-store-configuration]] (SQLite create-mode normalization edge case)
+- Updated index: new SeaORM SQLite URL normalization source entry
+- Cross-references added: 6
+- Changes: Documented the SeaORM Task 1 review fix where `normalize_sqlite_url` parses query parameters and checks for an exact `mode` key, ensuring `journal_mode=wal` still appends `mode=rwc` while explicit `mode=rwc` remains unchanged.
+
 ## [2026-06-09] ingest | Task Database Store Implementation
 - Created sources: [[task-database-store-implementation]]
 - Updated entities: [[vol-llm-task-crate]] (DatabaseTaskStore CRUD, ready-task behavior, crate-root export), [[vol-llm-runtime-crate]] (single global runtime task store construction), [[vol-agent-server-crate]] (server config pass-through and startup logging), [[vol-llm-agent-channel-crate]] (builder pass-through and shared TaskHandler store semantics)

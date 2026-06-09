@@ -85,6 +85,7 @@ Last updated: 2026-06-09 (task-database-store-implementation)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[seaorm-sqlite-url-normalization-fix]] | SeaORM SQLite URL normalization fix: exact `mode` query-key detection so `journal_mode=wal` still appends `mode=rwc` | active | 2026-06-09 |
 | [[task-database-store-implementation]] | End-to-end implementation of global SQLx SQLite database-backed task store | active | 2026-06-09 |
 | [[runtime-database-task-store-construction]] | AgentRuntime database task-store construction and persistence test hardening | active | 2026-06-09 |
 | [[task-store-sqlite-embedded-migrations]] | SQLite task-store migrations embedded into the `vol-llm-task` binary via SQLx macros | active | 2026-06-09 |

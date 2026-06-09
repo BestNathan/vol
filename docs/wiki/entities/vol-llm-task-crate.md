@@ -1,10 +1,10 @@
 ---
 type: entity
 category: service
-tags: [task-store, persistence, sqlite, sqlx]
+tags: [task-store, persistence, sqlite, sqlx, seaorm]
 created: 2026-06-09
 updated: 2026-06-09
-source_count: 2
+source_count: 3
 ---
 
 # vol-llm-task Crate
@@ -20,9 +20,11 @@ source_count: 2
 - Database CRUD and ready-task behavior are verified with tests for create/get/update/delete/list, dependency readiness, and persistence across reconnect.
 
 ## SQLite Database Store
-Sources: [[task-store-sqlite-embedded-migrations]], [[task-database-store-implementation]]
+Sources: [[task-store-sqlite-embedded-migrations]], [[task-database-store-implementation]], [[seaorm-sqlite-url-normalization-fix]]
 
 The SQLite database store opens SQLx SQLite pools with `create_if_missing(true)`, creates parent directories for file-backed SQLite URLs, and runs an embedded static SQLx migrator during connection setup.
+
+The SeaORM database skeleton normalizes SQLite URLs by appending `mode=rwc` unless an exact query parameter key named `mode` already exists. The query-key check prevents options like `journal_mode=wal` from accidentally suppressing `mode=rwc`.
 
 The migrator is compiled into the crate with `sqlx::migrate!("./migrations/sqlite")`, avoiding runtime dependence on a source-tree `migrations/sqlite` directory. This makes release binaries and containers self-contained for SQLite task-store initialization.
 

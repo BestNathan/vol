@@ -4,7 +4,7 @@ category: architecture
 tags: [task-store, configuration, runtime, validation]
 created: 2026-06-09
 updated: 2026-06-09
-source_count: 4
+source_count: 5
 ---
 
 # Runtime Task Store Configuration
@@ -43,6 +43,8 @@ url = "sqlite:///tmp/vol-agent/tasks.db"
 This is intentionally SQL-independent. Config parsing and validation can land before SQLx dependencies, database migrations, or runtime database store construction. Later tasks can wire the validated config through builders and instantiate concrete stores without changing the TOML contract.
 
 SQLite database task-store initialization is covered by [[task-store-sqlite-embedded-migrations]]: the `vol-llm-task` SQLite migrator is embedded at compile time so runtime database selection does not require source-tree migration files to be deployed.
+
+SQLite URL normalization must append create mode only when no exact `mode` query key is present. [[seaorm-sqlite-url-normalization-fix]] documents the SeaORM skeleton review fix that made `journal_mode=wal` coexist with an appended `mode=rwc`.
 
 Runtime construction is covered by [[runtime-database-task-store-construction]] and [[task-database-store-implementation]]: `AgentRuntimeBuilder::build()` now turns database config into a real `DatabaseTaskStore`, and the builder test asserts task persistence across runtime rebuilds instead of accepting database construction failures.
 
