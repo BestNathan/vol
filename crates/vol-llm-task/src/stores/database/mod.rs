@@ -218,9 +218,26 @@ impl crate::store::TaskStore for DatabaseTaskStore {
     }
 
     async fn get_ready_tasks(&self) -> Result<Vec<crate::model::TaskId>> {
-        Err(StoreError::Internal(
-            "SeaORM database task ready query is not implemented".to_string(),
-        ))
+        let tasks = self.list(None).await?;
+        let completed_ids: std::collections::HashSet<crate::model::TaskId> = tasks
+            .iter()
+            .filter(|task| task.status == crate::model::TaskStatus::Completed)
+            .map(|task| task.id)
+            .collect();
+
+        let ready = tasks
+            .iter()
+            .filter(|task| {
+                task.status == crate::model::TaskStatus::Pending
+                    && task
+                        .dependencies
+                        .iter()
+                        .all(|id| completed_ids.contains(id))
+            })
+            .map(|task| task.id)
+            .collect();
+
+        Ok(ready)
     }
 }
 
@@ -362,6 +379,95 @@ mod tests {
         let _guard = POSTGRES_TEST_LOCK.lock().await;
         let store = postgres_store().await;
         assert_update_delete_list(&store).await;
+    }
+
+    async fn assert_ready_tasks(store: &DatabaseTaskStore) {
+        use crate::model::{Task, TaskKind, TaskStatus};
+        use crate::store::TaskStore;
+
+        let dependency_id = store
+            .create(Task::new(TaskKind::Agent, "dependency".to_string(), vec![]))
+            .await
+            .unwrap();
+        let blocked_id = store
+            .create(Task::new(
+                TaskKind::Agent,
+                "blocked".to_string(),
+                vec![dependency_id],
+            ))
+            .await
+            .unwrap();
+
+        let ready = store.get_ready_tasks().await.unwrap();
+        assert_eq!(ready, vec![dependency_id]);
+        assert!(!ready.contains(&blocked_id));
+
+        let mut dependency = store.get(&dependency_id).await.unwrap().unwrap();
+        dependency.status = TaskStatus::Completed;
+        store.update(dependency).await.unwrap();
+
+        let ready = store.get_ready_tasks().await.unwrap();
+        assert_eq!(ready, vec![blocked_id]);
+    }
+
+    #[tokio::test]
+    async fn sqlite_ready_tasks() {
+        let (store, _dir) = sqlite_store().await;
+        assert_ready_tasks(&store).await;
+    }
+
+    #[tokio::test]
+    async fn postgres_ready_tasks() {
+        let _guard = POSTGRES_TEST_LOCK.lock().await;
+        let store = postgres_store().await;
+        assert_ready_tasks(&store).await;
+    }
+
+    #[tokio::test]
+    async fn sqlite_tasks_persist_across_reconnect() {
+        use crate::model::{Task, TaskKind};
+        use crate::store::TaskStore;
+
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("tasks.db");
+        let url = format!("sqlite://{}", db_path.display());
+        let store = DatabaseTaskStore::connect(&url).await.unwrap();
+        clear_store(&store).await;
+        let id = store
+            .create(Task::new(TaskKind::Agent, "persisted".to_string(), vec![]))
+            .await
+            .unwrap();
+        drop(store);
+
+        let reopened = DatabaseTaskStore::connect(&url).await.unwrap();
+        let got = reopened.get(&id).await.unwrap().unwrap();
+        assert_eq!(got.subject, "persisted");
+    }
+
+    #[tokio::test]
+    async fn postgres_tasks_persist_across_reconnect() {
+        let _guard = POSTGRES_TEST_LOCK.lock().await;
+        use crate::model::{Task, TaskKind};
+        use crate::store::TaskStore;
+
+        let store = DatabaseTaskStore::connect(POSTGRES_TEST_URL).await.unwrap();
+        clear_store(&store).await;
+        let id = store
+            .create(Task::new(
+                TaskKind::Agent,
+                "persisted pg".to_string(),
+                vec![],
+            ))
+            .await
+            .unwrap();
+        drop(store);
+
+        let reopened = DatabaseTaskStore::connect(POSTGRES_TEST_URL)
+            .await
+            .unwrap();
+        let got = reopened.get(&id).await.unwrap().unwrap();
+        assert_eq!(got.subject, "persisted pg");
+        clear_store(&reopened).await;
     }
 
     #[tokio::test]
