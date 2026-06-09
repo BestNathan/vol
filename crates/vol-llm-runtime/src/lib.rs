@@ -459,4 +459,69 @@ base_url = "https://api.test.com"
         assert_eq!(persisted.subject, "runtime database task store test");
         assert_eq!(persisted.description, "created through AgentRuntime::task_store");
     }
+
+    #[tokio::test]
+    async fn builder_accepts_postgres_database_task_store_config() {
+        let temp = tempfile::tempdir().unwrap();
+        let providers_dir = temp.path().join(".agents/providers");
+        std::fs::create_dir_all(&providers_dir).unwrap();
+        std::fs::write(
+            providers_dir.join("test.toml"),
+            r#"
+provider = "anthropic"
+model = "claude-test"
+api_key = "sk-test"
+base_url = "https://api.test.com"
+"#,
+        )
+        .unwrap();
+
+        let config = TaskStoreConfig {
+            store_type: TaskStoreType::Database,
+            url: Some("postgres://postgres:postgres@192.168.2.106/vol".to_string()),
+        };
+
+        let runtime = AgentRuntime::builder(temp.path(), temp.path())
+            .with_task_store_config(Some(config.clone()))
+            .build()
+            .await
+            .expect("runtime should build with postgres database task store config");
+
+        let subject = format!(
+            "runtime postgres database task store test {}",
+            std::process::id()
+        );
+        let mut task = vol_llm_task::Task::new(
+            vol_llm_task::TaskKind::Manual,
+            subject.clone(),
+            Vec::new(),
+        );
+        task.description = "created through AgentRuntime::task_store using postgres".to_string();
+        let task_id = runtime
+            .task_store
+            .create(task)
+            .await
+            .expect("postgres database task store should create tasks");
+        drop(runtime);
+
+        let runtime = AgentRuntime::builder(temp.path(), temp.path())
+            .with_task_store_config(Some(config))
+            .build()
+            .await
+            .expect("runtime should reconnect to postgres database task store");
+        let persisted = runtime
+            .task_store
+            .get(&task_id)
+            .await
+            .expect("postgres database task store should get tasks")
+            .expect("created task should persist across runtime rebuilds");
+
+        assert_eq!(persisted.id, task_id);
+        assert_eq!(persisted.subject, subject);
+        runtime
+            .task_store
+            .delete(&task_id)
+            .await
+            .expect("postgres database task store should clean up created task");
+    }
 }

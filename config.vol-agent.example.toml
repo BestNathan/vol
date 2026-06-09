@@ -39,11 +39,16 @@ store_dir = "~/.vol"
 # type = "file"
 #
 # Database store. The concrete database is inferred from the URL scheme.
-# Currently SQLite is implemented; postgres/postgresql and mysql schemes are
-# recognized for clear errors until those backends are added.
+# SQLite and Postgres are implemented; mysql is recognized for a clear
+# not-enabled error until that backend is added.
 # [runtime.task_store]
 # type = "database"
 # url = "sqlite://./data/tasks.db"
+#
+# Postgres example:
+# [runtime.task_store]
+# type = "database"
+# url = "postgres://postgres:postgres@192.168.2.106/vol"
 
 # =============================================================================
 # Tracing — logging configuration
