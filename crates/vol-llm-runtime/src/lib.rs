@@ -611,23 +611,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn runtime_builds_with_sqlite_session_store() {
+    async fn builds_sqlite_session_manager() {
         let temp = tempfile::tempdir().unwrap();
         let db_url = format!("sqlite://{}", temp.path().join("sessions.db").display());
-        let runtime = AgentRuntime::builder(temp.path().to_path_buf(), temp.path().join("store"))
-            .with_session_store_config(Some(SessionStoreConfig {
-                store_type: SessionStoreType::Database,
-                url: Some(db_url),
-            }))
-            .build()
-            .await;
+        let manager = build_database_session_manager(&db_url).await.unwrap();
+        let store = manager.entry_store_for_agent("alpha");
 
-        if let Err(err) = &runtime {
-            if err.contains("No LLM provider configured") {
-                return;
-            }
-        }
-        assert!(runtime.is_ok());
+        store
+            .save(vol_session::SessionEntry::new_summary(
+                "session-a".to_string(),
+                "summary".to_string(),
+            ))
+            .await
+            .unwrap();
+
+        let sessions = manager.list_sessions(Some("alpha")).await.unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].session_id, "session-a");
+        assert_eq!(sessions[0].entry_count, 1);
     }
 
     #[tokio::test]
