@@ -15,6 +15,9 @@ pub enum StoreError {
     #[error("Serialization error: {0}")]
     Serialization(String),
 
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
     #[error("Not found: {0}")]
     NotFound(String),
 

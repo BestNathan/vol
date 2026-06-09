@@ -1,6 +1,6 @@
 //! Session manager abstractions for listing and resolving session stores.
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -45,8 +45,45 @@ pub struct FileSessionManager {
 }
 
 impl FileSessionManager {
+    const INVALID_AGENT_ID_SENTINEL: &'static str = ".invalid-agent-id";
+
     pub fn new<P: AsRef<Path>>(agents_root: P) -> Self {
-        Self { agents_root: agents_root.as_ref().to_path_buf() }
+        Self {
+            agents_root: agents_root.as_ref().to_path_buf(),
+        }
+    }
+
+    fn validate_agent_id(agent_id: &str) -> StoreResult<&str> {
+        if agent_id.is_empty() {
+            return Err(StoreError::InvalidInput(
+                "invalid agent_id: must not be empty".to_string(),
+            ));
+        }
+
+        let path = Path::new(agent_id);
+        let mut components = path.components();
+        match (components.next(), components.next()) {
+            (Some(Component::Normal(component)), None)
+                if component.to_str().is_some() && agent_id != "." && agent_id != ".." =>
+            {
+                Ok(agent_id)
+            }
+            _ => Err(StoreError::InvalidInput(format!(
+                "invalid agent_id {agent_id:?}: must be a single normal path component"
+            ))),
+        }
+    }
+
+    fn invalid_agent_sessions_dir(&self, agent_id: &str) -> PathBuf {
+        let encoded = agent_id
+            .as_bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        self.agents_root
+            .join(Self::INVALID_AGENT_ID_SENTINEL)
+            .join(encoded)
+            .join("sessions")
     }
 
     fn agent_sessions_dir(&self, agent_id: &str) -> PathBuf {
@@ -78,9 +115,12 @@ impl FileSessionManager {
     }
 
     fn session_matches(&self, agent_id: &str, session_id: &str) -> StoreResult<bool> {
+        let agent_id = Self::validate_agent_id(agent_id)?;
         let store = self.file_store(agent_id);
         let summaries = store.list_sessions().map_err(StoreError::Io)?;
-        Ok(summaries.iter().any(|summary| summary.session_id == session_id))
+        Ok(summaries
+            .iter()
+            .any(|summary| summary.session_id == session_id))
     }
 
     fn resolve_agent_for_session(
@@ -118,12 +158,18 @@ impl FileSessionManager {
 #[async_trait]
 impl SessionManager for FileSessionManager {
     fn entry_store_for_agent(&self, agent_id: &str) -> Arc<dyn SessionEntryStore> {
-        Arc::new(self.file_store(agent_id))
+        if Self::validate_agent_id(agent_id).is_ok() {
+            Arc::new(self.file_store(agent_id))
+        } else {
+            Arc::new(FileSessionEntryStore::new(
+                self.invalid_agent_sessions_dir(agent_id),
+            ))
+        }
     }
 
     async fn list_sessions(&self, agent_id: Option<&str>) -> StoreResult<Vec<SessionInfo>> {
         let agent_ids = match agent_id {
-            Some(agent_id) => vec![agent_id.to_string()],
+            Some(agent_id) => vec![Self::validate_agent_id(agent_id)?.to_string()],
             None => self.agent_ids()?,
         };
 
@@ -183,7 +229,9 @@ mod tests {
             created_at,
             parent_id: None,
             r#type: SessionEntryType::Summary,
-            data: SessionEntryData::Summary { summary: format!("summary-{id}") },
+            data: SessionEntryData::Summary {
+                summary: format!("summary-{id}"),
+            },
         }
     }
 
@@ -234,13 +282,70 @@ mod tests {
             .await
             .unwrap();
 
-        let err = match manager
-            .entry_store_for_session(None, "same-session")
-            .await
-        {
+        let err = match manager.entry_store_for_session(None, "same-session").await {
             Ok(_) => panic!("expected ambiguous session error"),
             Err(err) => err,
         };
         assert!(err.to_string().contains("ambiguous session same-session"));
+    }
+
+    #[tokio::test]
+    async fn file_manager_rejects_invalid_agent_id_for_list_sessions() {
+        let temp = tempfile::tempdir().unwrap();
+        let manager = FileSessionManager::new(temp.path().join("agents"));
+
+        let err = manager.list_sessions(Some("../evil")).await.unwrap_err();
+
+        assert!(matches!(err, StoreError::InvalidInput(_)));
+        assert!(err.to_string().contains("invalid agent_id"));
+    }
+
+    #[tokio::test]
+    async fn file_manager_rejects_invalid_agent_id_for_session_exists() {
+        let temp = tempfile::tempdir().unwrap();
+        let manager = FileSessionManager::new(temp.path().join("agents"));
+
+        let err = manager
+            .session_exists(Some("../evil"), "session-a")
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, StoreError::InvalidInput(_)));
+        assert!(err.to_string().contains("invalid agent_id"));
+    }
+
+    #[tokio::test]
+    async fn file_manager_rejects_invalid_agent_id_for_entry_store_for_session() {
+        let temp = tempfile::tempdir().unwrap();
+        let manager = FileSessionManager::new(temp.path().join("agents"));
+
+        let err = match manager
+            .entry_store_for_session(Some("../evil"), "session-a")
+            .await
+        {
+            Ok(_) => panic!("expected invalid agent_id error"),
+            Err(err) => err,
+        };
+
+        assert!(matches!(err, StoreError::InvalidInput(_)));
+        assert!(err.to_string().contains("invalid agent_id"));
+    }
+
+    #[tokio::test]
+    async fn file_manager_entry_store_for_agent_with_invalid_id_does_not_escape_agents_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let agents_root = temp.path().join("agents");
+        let manager = FileSessionManager::new(&agents_root);
+
+        manager
+            .entry_store_for_agent("../evil")
+            .save(entry("session-a", "entry-a", 10))
+            .await
+            .unwrap();
+
+        assert!(!temp.path().join("evil/sessions/session-a.jsonl").exists());
+        assert!(agents_root
+            .join(".invalid-agent-id/2e2e2f6576696c/sessions/session-a.jsonl")
+            .exists());
     }
 }

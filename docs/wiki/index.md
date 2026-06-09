@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-06-09 (seaorm-task-database-store-implementation)
+Last updated: 2026-06-09 (file-session-agent-id-validation)
 
 ## Entities
 
@@ -15,7 +15,7 @@ Last updated: 2026-06-09 (seaorm-task-database-store-implementation)
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions, including provider-neutral multipart message content | stable | 2026-05-21 |
 | [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager | stable | 2026-05-21 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with Anthropic multipart text/image conversion | stable | 2026-05-21 |
-| [[vol-session]] | Session message store and entry persistence | active | 2026-05-04 |
+| [[vol-session]] | Session message store and entry persistence, including hardened file-manager agent-id path validation | active | 2026-06-09 |
 | [[vol-llm-agent-channel-crate]] | Agent communication channel layer and active JSON-RPC web backend service with task-store config pass-through | active | 2026-06-09 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
@@ -85,6 +85,7 @@ Last updated: 2026-06-09 (seaorm-task-database-store-implementation)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[file-session-agent-id-validation]] | FileSessionManager agent-id path traversal hardening with validation, InvalidInput errors, and encoded quarantine stores | active | 2026-06-09 |
 | [[seaorm-task-database-store-implementation]] | End-to-end replacement of SQLx task store with SeaORM + SeaORM Migration for SQLite and Postgres | active | 2026-06-09 |
 | [[seaorm-postgres-test-url-env-fix]] | SeaORM Postgres task-store test URL hardening: mandatory `VOL_AGENT_POSTGRES_TEST_URL`, clear unset failure, and placeholder docs DSN | active | 2026-06-09 |
 | [[seaorm-postgres-test-isolation-fix]] | SeaORM Postgres task-store test isolation: shared temp-dir file lock, UUID marker cleanup, and placeholder config DSN | active | 2026-06-09 |
