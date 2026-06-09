@@ -679,6 +679,8 @@ mod tests {
     }
 
     const POSTGRES_TEST_URL_ENV: &str = "VOL_AGENT_POSTGRES_TEST_URL";
+    const POSTGRES_TEST_AGENT_PREFIX: &str = "vol-agent-postgres-session-test-agent-";
+    const POSTGRES_TEST_SESSION_PREFIX: &str = "vol-agent-postgres-session-test-session-";
 
     struct PostgresTestLock(std::fs::File);
 
@@ -705,15 +707,30 @@ mod tests {
     }
 
     async fn clean_postgres(manager: &DatabaseSessionManager) {
-        use sea_orm::EntityTrait;
-        entity::session_entries::Entity::delete_many().exec(&manager.db).await.unwrap();
-        entity::sessions::Entity::delete_many().exec(&manager.db).await.unwrap();
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
+        entity::session_entries::Entity::delete_many()
+            .filter(
+                entity::session_entries::Column::SessionId
+                    .starts_with(POSTGRES_TEST_SESSION_PREFIX),
+            )
+            .exec(&manager.db)
+            .await
+            .unwrap();
+        entity::sessions::Entity::delete_many()
+            .filter(entity::sessions::Column::Id.starts_with(POSTGRES_TEST_SESSION_PREFIX))
+            .exec(&manager.db)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn postgres_save_list_and_reconnect_when_configured() {
+        // CI should set VOL_AGENT_POSTGRES_TEST_URL so Postgres session-store coverage is exercised.
         let Ok(url) = std::env::var(POSTGRES_TEST_URL_ENV) else {
-            eprintln!("skipping postgres session store test: {POSTGRES_TEST_URL_ENV} is not set");
+            eprintln!(
+                "SKIPPED: VOL_AGENT_POSTGRES_TEST_URL is not set; Postgres session-store coverage was not exercised"
+            );
             return;
         };
 
@@ -721,16 +738,22 @@ mod tests {
         let manager = DatabaseSessionManager::connect(&url).await.unwrap();
         clean_postgres(&manager).await;
 
+        let test_agent_id = format!("{POSTGRES_TEST_AGENT_PREFIX}{}", uuid::Uuid::new_v4());
+        let test_session_id = format!("{POSTGRES_TEST_SESSION_PREFIX}{}", uuid::Uuid::new_v4());
+
         manager
-            .entry_store_for_agent("alpha")
-            .save(test_entry("pg-session-a", "pg-entry-1", 100))
+            .entry_store_for_agent(&test_agent_id)
+            .save(test_entry(&test_session_id, "pg-entry-1", 100))
             .await
             .unwrap();
 
         let reconnected = DatabaseSessionManager::connect(&url).await.unwrap();
-        let sessions = reconnected.list_sessions(Some("alpha")).await.unwrap();
+        let sessions = reconnected
+            .list_sessions(Some(&test_agent_id))
+            .await
+            .unwrap();
         assert_eq!(sessions.len(), 1);
-        assert_eq!(sessions[0].session_id, "pg-session-a");
+        assert_eq!(sessions[0].session_id, test_session_id);
         assert_eq!(sessions[0].entry_count, 1);
 
         clean_postgres(&reconnected).await;
