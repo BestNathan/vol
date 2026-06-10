@@ -1,10 +1,10 @@
 ---
 type: entity
 category: service
-tags: [server, config, json-rpc, task-store]
+tags: [server, config, json-rpc, task-store, session-store]
 created: 2026-06-09
-updated: 2026-06-09
-source_count: 2
+updated: 2026-06-10
+source_count: 3
 ---
 
 # vol-agent-server Crate
@@ -15,7 +15,7 @@ source_count: 2
 ## Key Facts
 - Config is loaded from an explicit path, `~/.vol/agent-server.toml`, or defaults.
 - Runtime path settings include `working_dir` and `store_dir` with tilde expansion.
-- The crate depends on [[vol-llm-runtime-crate]] for shared task store config types.
+- The crate depends on [[vol-llm-runtime-crate]] for shared task store and session store config types.
 
 ## Runtime Task Store Config Parsing
 Sources: [[task-store-config-parsing]], [[task-database-store-implementation]]
@@ -32,8 +32,17 @@ Covered test cases:
 
 `vol-agent-server` logs whether it is using the default file task store or a configured store type, then passes `config.runtime.task_store.clone()` into `AgentServerCore::builder(...).with_task_store_config(...)`.
 
+## Runtime Session Store Config Parsing
+Source: [[session-database-store-implementation]]
+
+`RuntimeSection` now includes optional `session_store: Option<vol_llm_runtime::SessionStoreConfig>`. Server validation delegates to `SessionStoreConfig::validate`, so invalid `[runtime.session_store]` TOML is rejected before server startup.
+
+Covered test cases include parsing a SQLite database session-store URL and rejecting `type = "database"` when `url` is missing. Startup logging mirrors task-store logging and the builder chain passes `config.runtime.session_store.clone()` into `AgentServerCore::builder(...).with_session_store_config(...)`.
+
 ## Related
 - [[vol-llm-runtime-crate]]
 - [[runtime-task-store-configuration]]
+- [[runtime-session-store-configuration]]
+- [[session-database-store-implementation]]
 - [[task-store-config-parsing]]
 - [[task-database-store-implementation]]

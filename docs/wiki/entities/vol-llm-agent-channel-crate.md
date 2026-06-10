@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, agent, transport, rust, json-rpc]
 created: 2026-05-05
-updated: 2026-06-09
-source_count: 12
+updated: 2026-06-10
+source_count: 13
 ---
 
 # vol-llm-agent-channel Crate
@@ -29,6 +29,8 @@ The `vol-llm-agent-channel` crate provides the communication layer between exter
 - 12 JSON-RPC methods: `agent.submit` (with optional `target`), `cancel`, `subscribe`, `unsubscribe`, `approve`, `file.list`, `file.read`, `log.list`, `log.read`, `session.list`, `session.resume` [[jsonrpc-transport]]
 - Current web backend startup path: `make web-backend` runs `examples/jsonrpc_agent_service.rs` from this crate on port 3001 [[remove-vol-agent-manager]]
 - `AgentServerCoreBuilder` accepts optional `TaskStoreConfig` and forwards it into `AgentRuntimeBuilder`, while `TaskHandler` continues to use the single shared `runtime.task_store` [[task-database-store-implementation]]
+- `AgentServerCoreBuilder` also forwards optional `SessionStoreConfig`; `SessionHandler` and `register_agent` use the runtime-owned `SessionManager` so file/database session backends stay consistent [[session-database-store-implementation]]
+- `JsonRpcConnection::send` preserves structured `ErrorPayload` values and request IDs by routing error messages through the JSON-RPC codec [[session-database-store-implementation]]
 - 49 integration tests for JSON-RPC serialization and parsing [[task-5-jsonrpc-integration-tests]]
 
 ## Transport Comparison
@@ -73,3 +75,4 @@ Client → Transport (WS/HTTP/JSON-RPC/Memory) → Connection → ConnectionHold
 - **2026-05-23**: Agent directory discovery — `discover_agents()` replaces manual registration, `agent.list` returns type/description/scope metadata [[agent-directory-discovery]]
 - **2026-05-29**: Obsolete `vol-agent-manager` service removed; this crate's `examples/jsonrpc_agent_service.rs` remains the active web backend via `make web-backend` [[remove-vol-agent-manager]]
 - **2026-06-09**: `AgentServerCoreBuilder` forwards optional runtime task-store config into `AgentRuntimeBuilder`; task JSON-RPC handling still reads the single shared `runtime.task_store` [[task-database-store-implementation]]
+- **2026-06-10**: Session-domain JSON-RPC operations and registered agent session creation were rewired to use `runtime.session_manager`, with database-backed SQLite coverage and JSON-RPC error payload preservation [[session-database-store-implementation]]

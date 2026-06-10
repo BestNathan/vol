@@ -1,8 +1,8 @@
 //! Integration tests for ChannelledEventObserver with concurrent sends
 
+use std::sync::Arc;
 use vol_llm_agents::coding::{ChannelledEventObserver, EventObserver};
 use vol_llm_core::AgentStreamEvent;
-use std::sync::Arc;
 
 #[tokio::test]
 async fn test_concurrent_on_event_receives_all_events() {
@@ -47,12 +47,37 @@ async fn test_sequential_on_event_preserves_exact_order() {
 
     // Send events sequentially with small delays
     let events_in: Vec<AgentStreamEvent> = vec![
-        AgentStreamEvent::AgentStart { input: "1".to_string(), timestamp: chrono::Utc::now() },
-        AgentStreamEvent::ThinkingComplete { thinking: "2".to_string(), timestamp: chrono::Utc::now() },
-        AgentStreamEvent::ToolCallBegin { timestamp: chrono::Utc::now(), tool_call_id: "3".to_string(), tool_name: "3".to_string(), arguments: "".to_string() },
-        AgentStreamEvent::ToolCallComplete { timestamp: chrono::Utc::now(), tool_call_id: "4".to_string(), tool_name: "4".to_string(), result: "".to_string(), duration_ms: None },
-        AgentStreamEvent::IterationComplete { timestamp: chrono::Utc::now(), iteration: 5, tool_calls: vec![], final_answer: None },
-        AgentStreamEvent::AgentComplete { response: None, timestamp: chrono::Utc::now() },
+        AgentStreamEvent::AgentStart {
+            input: "1".to_string(),
+            timestamp: chrono::Utc::now(),
+        },
+        AgentStreamEvent::ThinkingComplete {
+            thinking: "2".to_string(),
+            timestamp: chrono::Utc::now(),
+        },
+        AgentStreamEvent::ToolCallBegin {
+            timestamp: chrono::Utc::now(),
+            tool_call_id: "3".to_string(),
+            tool_name: "3".to_string(),
+            arguments: "".to_string(),
+        },
+        AgentStreamEvent::ToolCallComplete {
+            timestamp: chrono::Utc::now(),
+            tool_call_id: "4".to_string(),
+            tool_name: "4".to_string(),
+            result: "".to_string(),
+            duration_ms: None,
+        },
+        AgentStreamEvent::IterationComplete {
+            timestamp: chrono::Utc::now(),
+            iteration: 5,
+            tool_calls: vec![],
+            final_answer: None,
+        },
+        AgentStreamEvent::AgentComplete {
+            response: None,
+            timestamp: chrono::Utc::now(),
+        },
     ];
 
     for event in &events_in {
@@ -68,11 +93,26 @@ async fn test_sequential_on_event_preserves_exact_order() {
 
     // Verify exact order
     assert!(matches!(events_out[0], AgentStreamEvent::AgentStart { .. }));
-    assert!(matches!(events_out[1], AgentStreamEvent::ThinkingComplete { .. }));
-    assert!(matches!(events_out[2], AgentStreamEvent::ToolCallBegin { .. }));
-    assert!(matches!(events_out[3], AgentStreamEvent::ToolCallComplete { .. }));
-    assert!(matches!(events_out[4], AgentStreamEvent::IterationComplete { .. }));
-    assert!(matches!(events_out[5], AgentStreamEvent::AgentComplete { .. }));
+    assert!(matches!(
+        events_out[1],
+        AgentStreamEvent::ThinkingComplete { .. }
+    ));
+    assert!(matches!(
+        events_out[2],
+        AgentStreamEvent::ToolCallBegin { .. }
+    ));
+    assert!(matches!(
+        events_out[3],
+        AgentStreamEvent::ToolCallComplete { .. }
+    ));
+    assert!(matches!(
+        events_out[4],
+        AgentStreamEvent::IterationComplete { .. }
+    ));
+    assert!(matches!(
+        events_out[5],
+        AgentStreamEvent::AgentComplete { .. }
+    ));
 }
 
 #[tokio::test]

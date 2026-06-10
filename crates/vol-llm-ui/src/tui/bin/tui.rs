@@ -6,25 +6,24 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crossterm::{
+    event::{Event, EventStream},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    event::{Event, EventStream},
 };
 use futures::StreamExt;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use tokio::sync::RwLock;
 use vol_llm_agents::coding::CodingAgentConfig;
-use vol_llm_ui::AgentConnection;
-use vol_llm_ui::LocalConnection;
 use vol_llm_ui::state::UiState;
 use vol_llm_ui::tui::{handle_key, render_ui, InputAction};
+use vol_llm_ui::AgentConnection;
+use vol_llm_ui::LocalConnection;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Verify API key
-    let _api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
-        .expect("ANTHROPIC_AUTH_TOKEN must be set");
+    let _api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").expect("ANTHROPIC_AUTH_TOKEN must be set");
 
     // Parse args
     let working_dir = std::env::current_dir().unwrap_or_default();
@@ -32,11 +31,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .file_name()
         .unwrap_or(std::ffi::OsStr::new("default"))
         .to_string_lossy();
-    let store_dir =
-        PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into()))
-            .join(".vol-coding")
-            .join(project.as_ref())
-            .join("sessions");
+    let store_dir = PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into()))
+        .join(".vol-coding")
+        .join(project.as_ref())
+        .join("sessions");
 
     // Create shared state
     let session_id = uuid::Uuid::new_v4().to_string();

@@ -1,12 +1,12 @@
 //! Skills panel widget — scrollable table of loaded skills.
 
-use crate::app::SkillDisplayEntry;
 use crate::app::AppState;
-use ratatui::Frame;
+use crate::app::SkillDisplayEntry;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::text::{Line, Span, Text};
+use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::Frame;
 
 /// Render the skills panel.
 pub fn render_skills(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -18,8 +18,8 @@ pub fn render_skills(frame: &mut Frame, area: Rect, state: &AppState) {
     frame.render_widget(block, area);
 
     if state.skills.is_empty() {
-        let empty = Paragraph::new("No skills discovered")
-            .style(Style::default().fg(Color::DarkGray));
+        let empty =
+            Paragraph::new("No skills discovered").style(Style::default().fg(Color::DarkGray));
         frame.render_widget(empty, inner);
         return;
     }
@@ -31,7 +31,8 @@ pub fn render_skills(frame: &mut Frame, area: Rect, state: &AppState) {
     let scope_width = 10.min(max_width.saturating_sub(name_width + version_width + 4));
     let desc_width = max_width.saturating_sub(name_width + version_width + scope_width + 4);
 
-    let lines: Vec<Line> = state.skills
+    let lines: Vec<Line> = state
+        .skills
         .iter()
         .map(|entry| render_skill_row(entry, name_width, version_width, scope_width, desc_width))
         .collect();
@@ -60,7 +61,12 @@ fn render_skill_row(
     };
 
     Line::from(vec![
-        Span::styled(name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            name,
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" | "),
         Span::styled(version, Style::default().fg(Color::DarkGray)),
         Span::raw(" | "),

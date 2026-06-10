@@ -3,8 +3,8 @@
 //! Defines the AgentPlugin trait, PluginDecision, and PluginRegistry.
 //! RunContext (defined in run_context.rs) is the context type passed to plugin hooks.
 
-pub use vol_llm_core::AgentStreamEvent;
 pub use super::run_context::RunContext;
+pub use vol_llm_core::AgentStreamEvent;
 
 /// Plugin unique identifier
 pub type PluginId = String;
@@ -48,7 +48,9 @@ pub struct PluginRegistry {
 
 impl PluginRegistry {
     pub fn new() -> Self {
-        Self { plugins: Vec::new() }
+        Self {
+            plugins: Vec::new(),
+        }
     }
 
     pub fn register<P: AgentPlugin + 'static>(&mut self, plugin: P) {

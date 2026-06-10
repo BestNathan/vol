@@ -314,8 +314,10 @@ mod tests {
         let t2 = Task::new(TaskKind::Agent, "original 2".to_string(), vec![]);
         let id2 = store.create(t2).await.unwrap();
 
-        let mtime_before =
-            std::fs::metadata(tasks_dir.join("1.json")).unwrap().modified().unwrap();
+        let mtime_before = std::fs::metadata(tasks_dir.join("1.json"))
+            .unwrap()
+            .modified()
+            .unwrap();
 
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
@@ -323,8 +325,10 @@ mod tests {
         updated.subject = "modified 2".to_string();
         store.update(updated).await.unwrap();
 
-        let mtime_after =
-            std::fs::metadata(tasks_dir.join("1.json")).unwrap().modified().unwrap();
+        let mtime_after = std::fs::metadata(tasks_dir.join("1.json"))
+            .unwrap()
+            .modified()
+            .unwrap();
         assert_eq!(mtime_before, mtime_after);
     }
 
@@ -337,11 +341,7 @@ mod tests {
             .map(|i| {
                 let store = std::sync::Arc::clone(&store);
                 tokio::spawn(async move {
-                    let task = Task::new(
-                        TaskKind::Agent,
-                        format!("concurrent task {}", i),
-                        vec![],
-                    );
+                    let task = Task::new(TaskKind::Agent, format!("concurrent task {}", i), vec![]);
                     store.create(task).await.unwrap()
                 })
             })
@@ -354,7 +354,11 @@ mod tests {
 
         ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), 10, "all 10 concurrent creates must have unique IDs");
+        assert_eq!(
+            ids.len(),
+            10,
+            "all 10 concurrent creates must have unique IDs"
+        );
     }
 
     #[tokio::test]

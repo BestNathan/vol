@@ -8,8 +8,8 @@ use serde_json::{json, Value};
 use vol_llm_agent::react::{AgentPlugin, PluginDecision, RunContext};
 use vol_llm_core::stream::AgentStreamEvent;
 
-use crate::run_log::logger::LogEntry;
 use crate::run_log::append_log;
+use crate::run_log::logger::LogEntry;
 
 /// Writes all agent events to JSONL files.
 ///
@@ -35,9 +35,11 @@ impl LoggerPlugin {
 
     pub fn log_path(&self, event: &AgentStreamEvent, run_id: &str) -> PathBuf {
         match event {
-            AgentStreamEvent::PluginEvent { name, .. } => {
-                self.base_dir.join("logs").join(name).join(format!("{run_id}.jsonl"))
-            }
+            AgentStreamEvent::PluginEvent { name, .. } => self
+                .base_dir
+                .join("logs")
+                .join(name)
+                .join(format!("{run_id}.jsonl")),
             _ => self.base_dir.join("logs").join(format!("{run_id}.jsonl")),
         }
     }
@@ -64,20 +66,31 @@ impl LoggerPlugin {
             AgentStreamEvent::AgentAborted { reason, .. } => {
                 json!({ "reason": reason })
             }
-            AgentStreamEvent::LLMCallStart { iteration, messages, .. } => {
+            AgentStreamEvent::LLMCallStart {
+                iteration,
+                messages,
+                ..
+            } => {
                 let last_n: Vec<_> = messages.iter().rev().take(5).rev().collect();
-                let msgs: Vec<Value> = last_n.iter().map(|m| {
-                    let content = m.content.as_ref().map(|c| {
-                        let s = c.as_str();
-                        if s.chars().count() > 100 {
-                            let truncated: String = s.chars().take(100).collect();
-                            format!("{}...", truncated)
-                        } else {
-                            s.to_string()
-                        }
-                    }).unwrap_or_default();
-                    json!({ "role": m.role, "content": content })
-                }).collect();
+                let msgs: Vec<Value> = last_n
+                    .iter()
+                    .map(|m| {
+                        let content = m
+                            .content
+                            .as_ref()
+                            .map(|c| {
+                                let s = c.as_str();
+                                if s.chars().count() > 100 {
+                                    let truncated: String = s.chars().take(100).collect();
+                                    format!("{}...", truncated)
+                                } else {
+                                    s.to_string()
+                                }
+                            })
+                            .unwrap_or_default();
+                        json!({ "role": m.role, "content": content })
+                    })
+                    .collect();
                 json!({ "iteration": iteration, "message_count": messages.len(), "messages": msgs })
             }
             AgentStreamEvent::LLMCallComplete { model, usage, .. } => {
@@ -98,27 +111,58 @@ impl LoggerPlugin {
             AgentStreamEvent::ContentComplete { content, .. } => {
                 json!({ "content": content })
             }
-            AgentStreamEvent::ToolCallBegin { tool_call_id, tool_name, arguments, .. } => {
+            AgentStreamEvent::ToolCallBegin {
+                tool_call_id,
+                tool_name,
+                arguments,
+                ..
+            } => {
                 json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "arguments": arguments })
             }
-            AgentStreamEvent::ToolCallComplete { tool_call_id, tool_name, result, duration_ms, .. } => {
+            AgentStreamEvent::ToolCallComplete {
+                tool_call_id,
+                tool_name,
+                result,
+                duration_ms,
+                ..
+            } => {
                 json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "result": result, "duration_ms": duration_ms })
             }
-            AgentStreamEvent::ToolCallError { tool_call_id, tool_name, error, duration_ms, .. } => {
+            AgentStreamEvent::ToolCallError {
+                tool_call_id,
+                tool_name,
+                error,
+                duration_ms,
+                ..
+            } => {
                 json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "error": error, "duration_ms": duration_ms })
             }
-            AgentStreamEvent::ToolCallSkipped { tool_call_id, tool_name, reason, duration_ms, .. } => {
+            AgentStreamEvent::ToolCallSkipped {
+                tool_call_id,
+                tool_name,
+                reason,
+                duration_ms,
+                ..
+            } => {
                 json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "reason": reason, "duration_ms": duration_ms })
             }
-            AgentStreamEvent::IterationComplete { iteration, tool_calls, final_answer, .. } => {
-                let tc: Vec<Value> = tool_calls.iter().map(|tc| {
-                    json!({
-                        "id": &tc.id,
-                        "name": &tc.name,
-                        "arguments": &tc.arguments,
-                        "type": &tc.r#type,
+            AgentStreamEvent::IterationComplete {
+                iteration,
+                tool_calls,
+                final_answer,
+                ..
+            } => {
+                let tc: Vec<Value> = tool_calls
+                    .iter()
+                    .map(|tc| {
+                        json!({
+                            "id": &tc.id,
+                            "name": &tc.name,
+                            "arguments": &tc.arguments,
+                            "type": &tc.r#type,
+                        })
                     })
-                }).collect();
+                    .collect();
                 json!({ "iteration": iteration, "tool_calls": tc, "final_answer": final_answer })
             }
             AgentStreamEvent::PluginEvent { name, data, .. } => {
@@ -129,7 +173,11 @@ impl LoggerPlugin {
                 }
                 Value::Object(map)
             }
-            AgentStreamEvent::MaxIterationsReached { current_iteration, max_iterations, .. } => {
+            AgentStreamEvent::MaxIterationsReached {
+                current_iteration,
+                max_iterations,
+                ..
+            } => {
                 json!({ "current_iteration": current_iteration, "max_iterations": max_iterations })
             }
             AgentStreamEvent::IterationContinued { from_iteration, .. } => {
@@ -248,28 +296,36 @@ mod tests {
         assert!(LoggerPlugin::should_log(&AgentStreamEvent::ThinkingStart {
             timestamp: Utc::now(),
         }));
-        assert!(!LoggerPlugin::should_log(&AgentStreamEvent::ThinkingDelta {
-            timestamp: Utc::now(),
-            delta: "chunk".to_string(),
-        }));
-        assert!(LoggerPlugin::should_log(&AgentStreamEvent::ThinkingComplete {
-            timestamp: Utc::now(),
-            thinking: "done".to_string(),
-        }));
+        assert!(!LoggerPlugin::should_log(
+            &AgentStreamEvent::ThinkingDelta {
+                timestamp: Utc::now(),
+                delta: "chunk".to_string(),
+            }
+        ));
+        assert!(LoggerPlugin::should_log(
+            &AgentStreamEvent::ThinkingComplete {
+                timestamp: Utc::now(),
+                thinking: "done".to_string(),
+            }
+        ));
         assert!(!LoggerPlugin::should_log(&AgentStreamEvent::ContentDelta {
             timestamp: Utc::now(),
             delta: "partial".to_string(),
         }));
-        assert!(LoggerPlugin::should_log(&AgentStreamEvent::ContentComplete {
-            timestamp: Utc::now(),
-            content: "full".to_string(),
-        }));
-        assert!(!LoggerPlugin::should_log(&AgentStreamEvent::ToolCallArgumentDelta {
-            timestamp: Utc::now(),
-            tool_call_id: "c1".to_string(),
-            tool_name: "bash".to_string(),
-            delta: "arg".to_string(),
-        }));
+        assert!(LoggerPlugin::should_log(
+            &AgentStreamEvent::ContentComplete {
+                timestamp: Utc::now(),
+                content: "full".to_string(),
+            }
+        ));
+        assert!(!LoggerPlugin::should_log(
+            &AgentStreamEvent::ToolCallArgumentDelta {
+                timestamp: Utc::now(),
+                tool_call_id: "c1".to_string(),
+                tool_name: "bash".to_string(),
+                delta: "arg".to_string(),
+            }
+        ));
         assert!(LoggerPlugin::should_log(&AgentStreamEvent::ToolCallBegin {
             timestamp: Utc::now(),
             tool_call_id: "c1".to_string(),
@@ -333,12 +389,16 @@ mod tests {
                 timestamp: Utc::now(),
                 error: "timeout".to_string(),
             },
-            AgentStreamEvent::ThinkingStart { timestamp: Utc::now() },
+            AgentStreamEvent::ThinkingStart {
+                timestamp: Utc::now(),
+            },
             AgentStreamEvent::ThinkingComplete {
                 timestamp: Utc::now(),
                 thinking: "done".to_string(),
             },
-            AgentStreamEvent::ContentStart { timestamp: Utc::now() },
+            AgentStreamEvent::ContentStart {
+                timestamp: Utc::now(),
+            },
             AgentStreamEvent::ContentComplete {
                 timestamp: Utc::now(),
                 content: "final".to_string(),

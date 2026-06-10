@@ -11,8 +11,13 @@ use vol_llm_task::{InMemoryTaskStore, TaskStatus, TaskStore};
 use vol_llm_tool::{ExecutableTool, ToolContext, ToolResult};
 
 /// Helper: execute a CLI command string through TaskCliTool.
-async fn run(tool: &TaskCliTool, ctx: &ToolContext, command: &str) -> Result<ToolResult, vol_llm_tool::ToolError> {
-    tool.execute(&serde_json::json!({"command": command}), ctx).await
+async fn run(
+    tool: &TaskCliTool,
+    ctx: &ToolContext,
+    command: &str,
+) -> Result<ToolResult, vol_llm_tool::ToolError> {
+    tool.execute(&serde_json::json!({"command": command}), ctx)
+        .await
 }
 
 /// Simulate a full agent session using CLI-style task commands.
@@ -39,7 +44,9 @@ async fn test_full_agent_session_with_cli_tool() {
 
     // Turn 3: Agent quick-creates two more tasks
     for name in &["Write tests", "Update docs"] {
-        let r = run(&tool, &ctx, &format!("+task --name '{}'", name)).await.unwrap();
+        let r = run(&tool, &ctx, &format!("+task --name '{}'", name))
+            .await
+            .unwrap();
         println!("[T3 +task] {}", r.content);
         assert!(r.success);
         assert!(r.content.contains(name));
@@ -61,7 +68,9 @@ async fn test_full_agent_session_with_cli_tool() {
     assert!(r.content.contains("--id"));
 
     // Turn 6: Agent updates task 1 to Running
-    let r = run(&tool, &ctx, "update --id 1 --status running").await.unwrap();
+    let r = run(&tool, &ctx, "update --id 1 --status running")
+        .await
+        .unwrap();
     println!("[T6 update] {}", r.content);
     assert!(r.success);
     assert!(r.content.contains("Task t1 updated"));
@@ -100,10 +109,16 @@ async fn test_full_agent_session_with_cli_tool() {
     tasks.sort_by_key(|t| t.id);
     assert_eq!(tasks.len(), 3);
     assert_eq!(tasks[0].status, TaskStatus::Completed); // t1: +done
-    // t2 and t3: one was +claimed (Running), the other still Pending
+                                                        // t2 and t3: one was +claimed (Running), the other still Pending
     let statuses: Vec<_> = tasks.iter().skip(1).map(|t| t.status).collect();
-    assert!(statuses.contains(&TaskStatus::Running), "expected one Running task");
-    assert!(statuses.contains(&TaskStatus::Pending), "expected one Pending task");
+    assert!(
+        statuses.contains(&TaskStatus::Running),
+        "expected one Running task"
+    );
+    assert!(
+        statuses.contains(&TaskStatus::Pending),
+        "expected one Pending task"
+    );
 }
 
 /// Simulate a full session using JSON output mode.
@@ -114,7 +129,13 @@ async fn test_json_output_mode() {
     let ctx = ToolContext::default();
 
     // Create with --json flag
-    let r = run(&tool, &ctx, "create --name 'JSON task' --desc 'test' --json").await.unwrap();
+    let r = run(
+        &tool,
+        &ctx,
+        "create --name 'JSON task' --desc 'test' --json",
+    )
+    .await
+    .unwrap();
     assert!(r.success);
     let v: serde_json::Value = serde_json::from_str(&r.content).unwrap();
     assert_eq!(v["subject"], "JSON task");
@@ -180,8 +201,11 @@ async fn test_sensitivity_rules() {
 #[test]
 fn test_agent_definition_exists() {
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent().unwrap()
-        .join(".agents").join("agents").join("task-cli-test.md");
+        .parent()
+        .unwrap()
+        .join(".agents")
+        .join("agents")
+        .join("task-cli-test.md");
 
     if !path.exists() {
         eprintln!("Skipping agent def check: {} not found", path.display());
@@ -202,7 +226,9 @@ async fn test_scheme_all_subcommands() {
     let tool = TaskCliTool::new(store);
     let ctx = ToolContext::default();
 
-    for sub in &["create", "update", "get", "list", "stop", "output", "claim", "+task", "+done", "+claim"] {
+    for sub in &[
+        "create", "update", "get", "list", "stop", "output", "claim", "+task", "+done", "+claim",
+    ] {
         let r = run(&tool, &ctx, &format!("scheme {}", sub)).await.unwrap();
         assert!(r.success, "scheme {} failed: {}", sub, r.content);
         assert!(!r.content.is_empty(), "scheme {} returned empty", sub);

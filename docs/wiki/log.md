@@ -1,5 +1,21 @@
 # Change Log
 
+## [2026-06-10] ingest | Session Database Store Implementation
+- Created sources: [[session-database-store-implementation]]
+- Created concepts: [[runtime-session-store-configuration]]
+- Updated entities: [[vol-session]] (SessionManager, DatabaseSessionEntryStore, DatabaseSessionManager, SeaORM sessions/session_entries schema), [[vol-llm-runtime-crate]] (runtime-owned `session_manager` and `[runtime.session_store]` config), [[vol-llm-agent-channel-crate]] (SessionHandler/register_agent use runtime session manager; JSON-RPC error payload preservation), [[vol-agent-server-crate]] (server parses, validates, logs, and forwards session store config)
+- Updated concepts: [[session-as-ssot]] (file/database backend selection preserves Session SSOT model)
+- Updated index: new source and concept entries, refreshed session/runtime/server/channel summaries
+- Cross-references added: 28
+- Changes: Documented the completed database-backed session store implementation: SeaORM SQLite/Postgres persistence with compiled migrations, scoped session manager APIs, runtime/server config, channel JSON-RPC integration, Postgres test isolation, and final verification caveats for unrelated workspace checks.
+
+## [2026-06-09] ingest | File Session Agent ID Validation
+- Created sources: [[file-session-agent-id-validation]]
+- Updated entities: [[vol-session]] (`FileSessionManager` validates agent IDs, `StoreError::InvalidInput` added, invalid infallible stores use encoded quarantine paths)
+- Updated index: new source entry and refreshed `vol-session` summary/date
+- Cross-references added: 8
+- Changes: Documented the Task 1 code-quality fix for filesystem path traversal risk in file-backed session manager agent IDs. Fallible APIs reject invalid IDs, while `entry_store_for_agent` safely roots invalid IDs under `agents_root/.invalid-agent-id/<hex>/sessions`; `cargo test -p vol-session` passed with 66 tests.
+
 ## [2026-06-09] ingest | SeaORM Task Database Store Implementation
 - Created sources: [[seaorm-task-database-store-implementation]]
 - Updated entities: [[vol-llm-task-crate]] (SeaORM entity/migration/mapping replaces SQLx, SQLite + Postgres implemented, crate-root export), [[vol-llm-runtime-crate]] (SeaORM runtime database store construction and Postgres builder test with env-var DSN), [[vol-agent-server-crate]] (server config pass-through and startup logging; no changes needed)

@@ -41,11 +41,7 @@ impl HandlerRegistry {
     }
 
     /// Register a custom handler with explicit method name strings.
-    pub fn register_custom(
-        &mut self,
-        handler: HandlerRef,
-        methods: &[&str],
-    ) -> Result<(), String> {
+    pub fn register_custom(&mut self, handler: HandlerRef, methods: &[&str]) -> Result<(), String> {
         let idx = self.handlers.len();
         for method in methods {
             if self.method_index.contains_key(*method) {
@@ -92,8 +88,12 @@ mod tests {
 
     #[async_trait]
     impl DomainHandler for TestHandler {
-        fn name(&self) -> &str { self.name }
-        fn operations(&self) -> Vec<Operation> { self.ops.clone() }
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn operations(&self) -> Vec<Operation> {
+            self.ops.clone()
+        }
         async fn handle(
             &self,
             msg: AgentServerMessage,

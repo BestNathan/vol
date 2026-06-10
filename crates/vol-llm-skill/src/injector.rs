@@ -26,7 +26,9 @@ impl SkillInjector {
     ///
     /// Skills are discovered lazily on first access.
     pub async fn from_workdir(working_dir: &std::path::Path, anchor: AttentionAnchor) -> Self {
-        let loader = Arc::new(crate::loader::SkillLoader::new(Some(working_dir.to_path_buf())));
+        let loader = Arc::new(crate::loader::SkillLoader::new(Some(
+            working_dir.to_path_buf(),
+        )));
         Self::new(loader, anchor)
     }
 
@@ -148,8 +150,18 @@ mod tests {
         let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
         let blocks = injector.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
-        assert!(blocks[0].messages[0].content.as_ref().unwrap().as_str().contains("Available skills:"));
-        assert!(blocks[0].messages[0].content.as_ref().unwrap().as_str().contains("rust-conventions"));
+        assert!(blocks[0].messages[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("Available skills:"));
+        assert!(blocks[0].messages[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("rust-conventions"));
     }
 
     #[tokio::test]
@@ -185,7 +197,11 @@ mod tests {
         assert_eq!(original.len(), cloned_result.len());
         assert_eq!(
             original[0].messages[0].content.as_ref().unwrap().as_str(),
-            cloned_result[0].messages[0].content.as_ref().unwrap().as_str()
+            cloned_result[0].messages[0]
+                .content
+                .as_ref()
+                .unwrap()
+                .as_str()
         );
     }
 }

@@ -12,7 +12,9 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt().with_writer(std::io::stderr).init();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
     let cli = Cli::parse();
     let ct = CancellationToken::new();
     let server = DocsRsServer::new();

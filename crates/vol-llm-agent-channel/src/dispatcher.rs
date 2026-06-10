@@ -92,7 +92,10 @@ impl AgentDispatcher {
     }
 
     /// Atomically replace the agent's session. Fails if agent is running.
-    pub fn swap_session(&self, new_session: Arc<Session>) -> Result<(), vol_llm_agent::AgentBusyError> {
+    pub fn swap_session(
+        &self,
+        new_session: Arc<Session>,
+    ) -> Result<(), vol_llm_agent::AgentBusyError> {
         let agent = self.agent.read().unwrap();
         agent.set_session(new_session)
     }
@@ -216,20 +219,14 @@ mod tests {
         let state = DispatcherState::new();
 
         let (tx1, _rx1) = oneshot::channel::<RunResult>();
-        let req1 = AgentRequest::new(
-            "agent_a",
-            AgentInput::text("hello").with_run_id("run-1"),
-        );
+        let req1 = AgentRequest::new("agent_a", AgentInput::text("hello").with_run_id("run-1"));
         state.queue.lock().await.push_back(PendingRequest {
             request: req1,
             tx: tx1,
         });
 
         let (tx2, _rx2) = oneshot::channel::<RunResult>();
-        let req2 = AgentRequest::new(
-            "agent_a",
-            AgentInput::text("world").with_run_id("run-2"),
-        );
+        let req2 = AgentRequest::new("agent_a", AgentInput::text("world").with_run_id("run-2"));
         state.queue.lock().await.push_back(PendingRequest {
             request: req2,
             tx: tx2,
@@ -247,10 +244,7 @@ mod tests {
         drop(pending.tx);
 
         assert_eq!(queue.len(), 1);
-        assert_eq!(
-            queue[0].request.input.run_id.as_deref(),
-            Some("run-2")
-        );
+        assert_eq!(queue[0].request.input.run_id.as_deref(), Some("run-2"));
     }
 
     #[tokio::test]

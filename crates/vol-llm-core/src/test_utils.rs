@@ -2,13 +2,13 @@
 //!
 //! Gated behind `#[cfg(feature = "test-utils")]`.
 
-use std::sync::Arc;
 use async_trait::async_trait;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::{
-    ConversationRequest, ConversationResponse, LLMClient, LLMProvider,
-    StreamReceiver, StreamEvent, SupportedParam,
+    ConversationRequest, ConversationResponse, LLMClient, LLMProvider, StreamEvent, StreamReceiver,
+    SupportedParam,
 };
 
 struct MockState {
@@ -92,11 +92,10 @@ impl LLMClient for MockLlmClient {
         &[]
     }
 
-    async fn converse(
-        &self,
-        request: ConversationRequest,
-    ) -> crate::Result<ConversationResponse> {
-        let count = self.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    async fn converse(&self, request: ConversationRequest) -> crate::Result<ConversationResponse> {
+        let count = self
+            .call_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut state = self.state.lock().await;
         state.call_log.push(request);
 
@@ -106,18 +105,18 @@ impl LLMClient for MockLlmClient {
             }
         }
 
-        state.converse_response.clone().ok_or_else(|| {
-            crate::LLMError::Timeout("mock converse_response not set".to_string())
-        })
+        state
+            .converse_response
+            .clone()
+            .ok_or_else(|| crate::LLMError::Timeout("mock converse_response not set".to_string()))
     }
 
-    async fn converse_stream(
-        &self,
-        request: ConversationRequest,
-    ) -> crate::Result<StreamReceiver> {
+    async fn converse_stream(&self, request: ConversationRequest) -> crate::Result<StreamReceiver> {
         use tokio::sync::mpsc;
 
-        let count = self.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let count = self
+            .call_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut state = self.state.lock().await;
         state.call_log.push(request);
 
@@ -190,11 +189,15 @@ mod tests {
         let events = vec![
             StreamEvent {
                 id: "e1".to_string(),
-                data: StreamEventData::ContentDelta { delta: "Hello".to_string() },
+                data: StreamEventData::ContentDelta {
+                    delta: "Hello".to_string(),
+                },
             },
             StreamEvent {
                 id: "e2".to_string(),
-                data: StreamEventData::ContentComplete { content: "Hello World".to_string() },
+                data: StreamEventData::ContentComplete {
+                    content: "Hello World".to_string(),
+                },
             },
         ];
         mock.set_stream_events(events).await;

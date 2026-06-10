@@ -52,7 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = LLMProviderRegistry::from_loader(&loader)?;
 
     // Pick the first provider
-    let provider_id = env::var("LLM_PROVIDER_ID").ok()
+    let provider_id = env::var("LLM_PROVIDER_ID")
+        .ok()
         .or_else(|| loader.ids().first().map(|s| s.to_string()))
         .unwrap();
     let client = registry

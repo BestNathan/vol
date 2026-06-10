@@ -101,7 +101,9 @@ impl DomainHandler for TaskHandler {
                 Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Task(TaskOperation::Get),
-                    Payload::Task(TaskPayload::GetResult { task: task_json.unwrap_or(serde_json::Value::Null) }),
+                    Payload::Task(TaskPayload::GetResult {
+                        task: task_json.unwrap_or(serde_json::Value::Null),
+                    }),
                 )])
             }
             (TaskOperation::List, _) => Err(ProtocolError::PayloadDecodeFailed("task.list")),

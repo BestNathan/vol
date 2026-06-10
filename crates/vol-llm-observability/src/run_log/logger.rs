@@ -28,14 +28,50 @@ impl LogEntry {
 
     pub fn format_event_summary(&self) -> String {
         match self.event.as_str() {
-            "AgentStart" => format!("Agent started - input: {:?}", self.data.get("input").and_then(|v| v.as_str()).unwrap_or("")),
+            "AgentStart" => format!(
+                "Agent started - input: {:?}",
+                self.data
+                    .get("input")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+            ),
             "ThinkingComplete" => "Thinking complete".to_string(),
-            "ToolCallBegin" => format!("Tool call: {}", self.data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("unknown")),
-            "ToolCallComplete" => format!("Tool result: {}", self.data.get("result").and_then(|v| v.as_str()).unwrap_or("")),
-            "IterationComplete" => format!("Iteration {} complete", self.data.get("iteration").and_then(|v| v.as_u64()).unwrap_or(0)),
+            "ToolCallBegin" => format!(
+                "Tool call: {}",
+                self.data
+                    .get("tool_name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+            ),
+            "ToolCallComplete" => format!(
+                "Tool result: {}",
+                self.data
+                    .get("result")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+            ),
+            "IterationComplete" => format!(
+                "Iteration {} complete",
+                self.data
+                    .get("iteration")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
+            ),
             "AgentComplete" => "Agent completed".to_string(),
-            "AgentAborted" => format!("Agent aborted: {}", self.data.get("reason").and_then(|v| v.as_str()).unwrap_or("unknown")),
-            "PluginEvent" => format!("Plugin event: {}", self.data.get("name").and_then(|v| v.as_str()).unwrap_or("unknown")),
+            "AgentAborted" => format!(
+                "Agent aborted: {}",
+                self.data
+                    .get("reason")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+            ),
+            "PluginEvent" => format!(
+                "Plugin event: {}",
+                self.data
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+            ),
             _ => self.event.clone(),
         }
     }

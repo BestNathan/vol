@@ -1,16 +1,16 @@
 //! PPT Agent 核心实现。
 
-use std::sync::Arc;
-use std::path::PathBuf;
-use vol_llm_core::LLMClient;
-use vol_llm_provider::{LLMProviderRegistry, LLMProviderConfig};
-use crate::ppt::{PptAgentConfig, PptInput, PptOutput, StructuredRequirement, PptTemplate};
-use crate::ppt::template::TemplateRegistry;
+use crate::ppt::analysis::{AnalysisError, AnalysisModule};
 use crate::ppt::renderer::{PptxRenderer, RendererError};
-use crate::ppt::analysis::{AnalysisModule, AnalysisError};
-use crate::ppt::tools::outline::{OutlineGeneratorTool, OutlineError};
-use crate::ppt::tools::content::{ContentGeneratorTool, ContentError};
+use crate::ppt::template::TemplateRegistry;
+use crate::ppt::tools::content::{ContentError, ContentGeneratorTool};
+use crate::ppt::tools::outline::{OutlineError, OutlineGeneratorTool};
+use crate::ppt::{PptAgentConfig, PptInput, PptOutput, PptTemplate, StructuredRequirement};
 use chrono::Local;
+use std::path::PathBuf;
+use std::sync::Arc;
+use vol_llm_core::LLMClient;
+use vol_llm_provider::{LLMProviderConfig, LLMProviderRegistry};
 
 /// PPT Agent
 pub struct PptAgent {
@@ -22,7 +22,10 @@ pub struct PptAgent {
 impl PptAgent {
     /// 创建新的 PPT Agent
     pub async fn new(config: PptAgentConfig) -> Result<Self, PptAgentError> {
-        eprintln!("DEBUG: config.llm_provider_id = '{}'", config.llm_provider_id);
+        eprintln!(
+            "DEBUG: config.llm_provider_id = '{}'",
+            config.llm_provider_id
+        );
 
         // Initialize LLM from config
         let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
@@ -43,14 +46,19 @@ impl PptAgent {
         let registry = LLMProviderRegistry::from_configs(&[llm_config])
             .map_err(|e| PptAgentError::ConfigError(format!("Failed to initialize LLM: {}", e)))?;
 
-        let llm = registry.get(&config.llm_provider_id)
-            .ok_or_else(|| PptAgentError::ConfigError(format!("LLM provider '{}' not found", config.llm_provider_id)))?;
+        let llm = registry.get(&config.llm_provider_id).ok_or_else(|| {
+            PptAgentError::ConfigError(format!(
+                "LLM provider '{}' not found",
+                config.llm_provider_id
+            ))
+        })?;
 
         // Initialize template registry
         let mut template_registry = TemplateRegistry::new();
         if let Some(template_dir) = &config.template_dir {
-            template_registry.load_from_dir(template_dir)
-                .map_err(|e| PptAgentError::ConfigError(format!("Failed to load templates: {}", e)))?;
+            template_registry.load_from_dir(template_dir).map_err(|e| {
+                PptAgentError::ConfigError(format!("Failed to load templates: {}", e))
+            })?;
         }
 
         Ok(Self {
@@ -64,7 +72,10 @@ impl PptAgent {
     pub async fn generate(&self, input: PptInput) -> Result<PptOutput, PptAgentError> {
         // 1. Extract topic and context
         let (description, context) = match &input {
-            PptInput::Text { description, context } => (description.as_str(), context.as_deref()),
+            PptInput::Text {
+                description,
+                context,
+            } => (description.as_str(), context.as_deref()),
         };
 
         // 2. Analyze requirements
@@ -73,12 +84,14 @@ impl PptAgent {
 
         // 3. Generate outline
         let outline_tool = OutlineGeneratorTool::new(self.llm.clone());
-        let mut outline = outline_tool.generate(
-            &requirements.topic,
-            requirements.audience.as_deref(),
-            requirements.style.as_deref(),
-            requirements.purpose.as_deref()
-        ).await?;
+        let mut outline = outline_tool
+            .generate(
+                &requirements.topic,
+                requirements.audience.as_deref(),
+                requirements.style.as_deref(),
+                requirements.purpose.as_deref(),
+            )
+            .await?;
 
         // 4. Expand content
         let content_tool = ContentGeneratorTool::new(self.llm.clone());
@@ -98,7 +111,9 @@ impl PptAgent {
             output_path,
             slide_count: outline.slides.len() + 2, // +2 for title and TOC
             template_id: template.id.clone(),
-            slides: outline.slides.iter()
+            slides: outline
+                .slides
+                .iter()
                 .map(|s| s.to_slide(crate::ppt::SlideLayout::TitleAndContent))
                 .collect(),
         })
@@ -114,20 +129,31 @@ impl PptAgent {
             keywords.push(audience.clone());
         }
 
-        self.template_registry.match_template(&keywords)
+        self.template_registry
+            .match_template(&keywords)
             .cloned()
-            .unwrap_or_else(|| self.template_registry.list_templates().first()
-                .expect("No templates available")
-                .clone())
+            .unwrap_or_else(|| {
+                self.template_registry
+                    .list_templates()
+                    .first()
+                    .expect("No templates available")
+                    .clone()
+            })
     }
 
     /// 生成输出路径
     fn generate_output_path(&self, topic: &str) -> PathBuf {
         let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
-        let topic_slug = topic.split_whitespace().take(3).collect::<Vec<_>>().join("_");
+        let topic_slug = topic
+            .split_whitespace()
+            .take(3)
+            .collect::<Vec<_>>()
+            .join("_");
         let filename = format!("{}_{}.pptx", timestamp, topic_slug);
 
-        self.config.default_output_dir.clone()
+        self.config
+            .default_output_dir
+            .clone()
             .unwrap_or_else(|| PathBuf::from("."))
             .join(filename)
     }

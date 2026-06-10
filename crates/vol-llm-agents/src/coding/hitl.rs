@@ -1,7 +1,7 @@
 //! HITL (Human In The Loop) confirmation mechanism.
 
-use serde::{Deserialize, Serialize};
 use crate::coding::error::HITLError;
+use serde::{Deserialize, Serialize};
 
 /// HITL decision
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,7 +53,7 @@ impl HITLHandler {
                 "rm -rf",
                 "rm -fr",
                 "rm -r /",
-                ":(){:|:&};:",  // fork bomb
+                ":(){:|:&};:", // fork bomb
                 "mkfs",
                 "dd of=/dev/",
                 "> /dev/sd",

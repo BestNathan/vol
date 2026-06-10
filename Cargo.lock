@@ -8609,6 +8609,9 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "fd-lock",
+ "sea-orm",
+ "sea-orm-migration",
  "serde",
  "serde_json",
  "tempfile",

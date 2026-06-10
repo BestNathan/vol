@@ -67,7 +67,9 @@ impl DomainHandler for FileHandler {
                         list.sort_by(|a, b| {
                             let a_dir = a["is_dir"].as_bool().unwrap_or(false);
                             let b_dir = b["is_dir"].as_bool().unwrap_or(false);
-                            b_dir.cmp(&a_dir).then_with(|| a["name"].as_str().cmp(&b["name"].as_str()))
+                            b_dir
+                                .cmp(&a_dir)
+                                .then_with(|| a["name"].as_str().cmp(&b["name"].as_str()))
                         });
                         Ok(vec![AgentServerMessage::new_result(
                             message.message_id,

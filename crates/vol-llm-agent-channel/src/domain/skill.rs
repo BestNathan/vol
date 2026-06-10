@@ -46,16 +46,19 @@ impl DomainHandler for SkillHandler {
                 let skills = match &self.skill_loader {
                     Some(loader) => {
                         let metadata = loader.list_metadata().await;
-                        metadata.iter().map(|m| {
-                            serde_json::json!({
-                                "id": m.id,
-                                "name": m.name,
-                                "version": m.version,
-                                "scope": m.scope.to_string(),
-                                "description": m.description,
-                                "triggers": m.triggers,
+                        metadata
+                            .iter()
+                            .map(|m| {
+                                serde_json::json!({
+                                    "id": m.id,
+                                    "name": m.name,
+                                    "version": m.version,
+                                    "scope": m.scope.to_string(),
+                                    "description": m.description,
+                                    "triggers": m.triggers,
+                                })
                             })
-                        }).collect()
+                            .collect()
                     }
                     None => vec![],
                 };
@@ -67,16 +70,18 @@ impl DomainHandler for SkillHandler {
             }
             (SkillOperation::Get, Payload::Skill(SkillPayload::Get { name })) => {
                 let skill = match &self.skill_loader {
-                    Some(loader) => loader.get(&name).await.map(|s| serde_json::json!({
-                        "name": s.name,
-                        "version": s.version,
-                        "scope": s.scope.to_string(),
-                        "description": s.description,
-                        "triggers": s.triggers,
-                        "content": s.content,
-                        "file_listing": s.file_listing,
-                        "directory": s.directory,
-                    })),
+                    Some(loader) => loader.get(&name).await.map(|s| {
+                        serde_json::json!({
+                            "name": s.name,
+                            "version": s.version,
+                            "scope": s.scope.to_string(),
+                            "description": s.description,
+                            "triggers": s.triggers,
+                            "content": s.content,
+                            "file_listing": s.file_listing,
+                            "directory": s.directory,
+                        })
+                    }),
                     None => None,
                 };
                 match skill {
@@ -99,23 +104,21 @@ impl DomainHandler for SkillHandler {
             }
             (SkillOperation::Refresh, Payload::Skill(SkillPayload::Refresh)) => {
                 let discovered = match &self.skill_loader {
-                    Some(loader) => {
-                        match loader.discover_all().await {
-                            Ok(()) => loader.list_metadata().await.len(),
-                            Err(e) => {
-                                return Ok(vec![AgentServerMessage::new_error(
-                                    message.message_id,
-                                    Operation::Skill(SkillOperation::Refresh),
-                                    crate::agent_server_protocol::ErrorPayload {
-                                        code: "skill_refresh_failed".to_string(),
-                                        message: e.to_string(),
-                                        detail: None,
-                                        terminal: false,
-                                    },
-                                )]);
-                            }
+                    Some(loader) => match loader.discover_all().await {
+                        Ok(()) => loader.list_metadata().await.len(),
+                        Err(e) => {
+                            return Ok(vec![AgentServerMessage::new_error(
+                                message.message_id,
+                                Operation::Skill(SkillOperation::Refresh),
+                                crate::agent_server_protocol::ErrorPayload {
+                                    code: "skill_refresh_failed".to_string(),
+                                    message: e.to_string(),
+                                    detail: None,
+                                    terminal: false,
+                                },
+                            )]);
                         }
-                    }
+                    },
                     None => 0,
                 };
                 Ok(vec![AgentServerMessage::new_result(
@@ -126,7 +129,9 @@ impl DomainHandler for SkillHandler {
             }
             (SkillOperation::List, _) => Err(ProtocolError::PayloadDecodeFailed("skill.list")),
             (SkillOperation::Get, _) => Err(ProtocolError::PayloadDecodeFailed("skill.get")),
-            (SkillOperation::Refresh, _) => Err(ProtocolError::PayloadDecodeFailed("skill.refresh")),
+            (SkillOperation::Refresh, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("skill.refresh"))
+            }
         }
     }
 }

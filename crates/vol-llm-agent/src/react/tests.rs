@@ -10,11 +10,27 @@ use vol_llm_core::{ConversationRequest, ConversationResponse, StreamReceiver, Su
 struct DummyLlm;
 #[async_trait::async_trait]
 impl LLMClient for DummyLlm {
-    fn provider(&self) -> vol_llm_core::LLMProvider { vol_llm_core::LLMProvider::Anthropic }
-    fn model(&self) -> &str { "dummy" }
-    fn supported_params(&self) -> &[SupportedParam] { &[] }
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> { unimplemented!() }
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> { unimplemented!() }
+    fn provider(&self) -> vol_llm_core::LLMProvider {
+        vol_llm_core::LLMProvider::Anthropic
+    }
+    fn model(&self) -> &str {
+        "dummy"
+    }
+    fn supported_params(&self) -> &[SupportedParam] {
+        &[]
+    }
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
+        unimplemented!()
+    }
+    async fn converse_stream(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<StreamReceiver> {
+        unimplemented!()
+    }
 }
 
 // ========================
@@ -34,9 +50,9 @@ async fn test_builder_with_methods() {
     let llm = Arc::new(DummyLlm);
     let tmp_dir = tempfile::tempdir().unwrap();
     let _tmp_dir = tmp_dir; // kept for future test expansion
-    let session = Arc::new(vol_session::Session::new(
-        Arc::new(vol_session::InMemoryEntryStore::new()),
-    ));
+    let session = Arc::new(vol_session::Session::new(Arc::new(
+        vol_session::InMemoryEntryStore::new(),
+    )));
     // Build succeeds with all builder methods chained
     let result = AgentConfig::builder()
         .with_llm(llm)
@@ -61,9 +77,15 @@ async fn test_build_with_plugin() {
     struct DummyPlugin;
     #[async_trait::async_trait]
     impl plugin::AgentPlugin for DummyPlugin {
-        fn id(&self) -> plugin::PluginId { "dummy".to_string() }
-        fn priority(&self) -> u32 { 50 }
-        async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision { plugin::PluginDecision::Continue }
+        fn id(&self) -> plugin::PluginId {
+            "dummy".to_string()
+        }
+        fn priority(&self) -> u32 {
+            50
+        }
+        async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision {
+            plugin::PluginDecision::Continue
+        }
         async fn listen(&self, _: &AgentStreamEvent, _: &RunContext) {}
     }
 
@@ -185,7 +207,9 @@ async fn test_agent_stream_receiver_recv() {
     let (tx, rx) = tokio::sync::mpsc::channel(10);
     let mut receiver = AgentStreamReceiver::new(rx);
 
-    tx.send(Ok(AgentStreamEvent::agent_start("test".to_string()))).await.unwrap();
+    tx.send(Ok(AgentStreamEvent::agent_start("test".to_string())))
+        .await
+        .unwrap();
     drop(tx);
 
     let event = receiver.recv().await;
@@ -204,8 +228,12 @@ async fn test_run_interceptor_loop_continue_decision() {
     struct ContinuePlugin;
     #[async_trait::async_trait]
     impl plugin::AgentPlugin for ContinuePlugin {
-        fn id(&self) -> plugin::PluginId { "continue".to_string() }
-        fn priority(&self) -> u32 { 10 }
+        fn id(&self) -> plugin::PluginId {
+            "continue".to_string()
+        }
+        fn priority(&self) -> u32 {
+            10
+        }
         async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision {
             plugin::PluginDecision::Continue
         }
@@ -221,14 +249,23 @@ async fn test_run_interceptor_loop_continue_decision() {
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(ContinuePlugin)];
 
-    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, run_ctx.without_plugin_event_tx()));
+    let interceptor = tokio::spawn(run_interceptor_loop(
+        plugin_rx,
+        plugins,
+        run_ctx.without_plugin_event_tx(),
+    ));
 
     // Send an intercept request
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-    plugin_tx.send(PluginRequest::Intercept {
-        event: vol_tracing::TracedEvent::without_span(AgentStreamEvent::agent_start("test".to_string())),
-        tx: reply_tx,
-    }).await.unwrap();
+    plugin_tx
+        .send(PluginRequest::Intercept {
+            event: vol_tracing::TracedEvent::without_span(AgentStreamEvent::agent_start(
+                "test".to_string(),
+            )),
+            tx: reply_tx,
+        })
+        .await
+        .unwrap();
 
     let decision = reply_rx.await.unwrap();
     assert!(matches!(decision, plugin::PluginDecision::Continue));
@@ -243,8 +280,12 @@ async fn test_run_interceptor_loop_skip_decision() {
     struct SkipPlugin;
     #[async_trait::async_trait]
     impl plugin::AgentPlugin for SkipPlugin {
-        fn id(&self) -> plugin::PluginId { "skip".to_string() }
-        fn priority(&self) -> u32 { 10 }
+        fn id(&self) -> plugin::PluginId {
+            "skip".to_string()
+        }
+        fn priority(&self) -> u32 {
+            10
+        }
         async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision {
             plugin::PluginDecision::Skip
         }
@@ -260,13 +301,22 @@ async fn test_run_interceptor_loop_skip_decision() {
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![Arc::new(SkipPlugin)];
 
-    let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, run_ctx.without_plugin_event_tx()));
+    let interceptor = tokio::spawn(run_interceptor_loop(
+        plugin_rx,
+        plugins,
+        run_ctx.without_plugin_event_tx(),
+    ));
 
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-    plugin_tx.send(PluginRequest::Intercept {
-        event: vol_tracing::TracedEvent::without_span(AgentStreamEvent::agent_start("test".to_string())),
-        tx: reply_tx,
-    }).await.unwrap();
+    plugin_tx
+        .send(PluginRequest::Intercept {
+            event: vol_tracing::TracedEvent::without_span(AgentStreamEvent::agent_start(
+                "test".to_string(),
+            )),
+            tx: reply_tx,
+        })
+        .await
+        .unwrap();
 
     let decision = reply_rx.await.unwrap();
     assert!(matches!(decision, plugin::PluginDecision::Skip));
@@ -331,7 +381,9 @@ fn test_hitl_config_with_triggers() {
             hitl::ApprovalTrigger::BeforeFinalAnswer,
         ],
         timeout_secs: 30,
-        on_timeout: hitl::TimeoutBehavior::Reject { reason: "timed out".to_string() },
+        on_timeout: hitl::TimeoutBehavior::Reject {
+            reason: "timed out".to_string(),
+        },
         timeout_message: Some("Please respond within 30 seconds".to_string()),
     };
 
@@ -346,8 +398,12 @@ async fn test_spawn_listener_tasks_shutdown_on_close() {
     }
     #[async_trait::async_trait]
     impl plugin::AgentPlugin for ListenPlugin {
-        fn id(&self) -> plugin::PluginId { "listen".to_string() }
-        fn priority(&self) -> u32 { 100 }
+        fn id(&self) -> plugin::PluginId {
+            "listen".to_string()
+        }
+        fn priority(&self) -> u32 {
+            100
+        }
         async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision {
             plugin::PluginDecision::Continue
         }
@@ -366,18 +422,28 @@ async fn test_spawn_listener_tasks_shutdown_on_close() {
     let count2 = Arc::new(AtomicUsize::new(0));
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![
-        Arc::new(ListenPlugin { count: count1.clone() }),
-        Arc::new(ListenPlugin { count: count2.clone() }),
+        Arc::new(ListenPlugin {
+            count: count1.clone(),
+        }),
+        Arc::new(ListenPlugin {
+            count: count2.clone(),
+        }),
     ];
 
     // Emit an event while listeners are running
-    run_ctx.emit(AgentStreamEvent::agent_start("test".to_string())).await;
+    run_ctx
+        .emit(AgentStreamEvent::agent_start("test".to_string()))
+        .await;
 
     // Spawn listeners
     let mut listener_set = spawn_listener_tasks(plugins, run_ctx.clone());
 
     // Emit another event
-    run_ctx.emit(AgentStreamEvent::agent_complete_with_response(serde_json::json!({}))).await;
+    run_ctx
+        .emit(AgentStreamEvent::agent_complete_with_response(
+            serde_json::json!({}),
+        ))
+        .await;
 
     // Give listeners a moment to process
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -391,10 +457,16 @@ async fn test_spawn_listener_tasks_shutdown_on_close() {
     }
 
     // Both plugins should have processed events
-    assert!(count1.load(Ordering::SeqCst) > 0,
-        "Plugin 1 should have processed events, got {}", count1.load(Ordering::SeqCst));
-    assert!(count2.load(Ordering::SeqCst) > 0,
-        "Plugin 2 should have processed events, got {}", count2.load(Ordering::SeqCst));
+    assert!(
+        count1.load(Ordering::SeqCst) > 0,
+        "Plugin 1 should have processed events, got {}",
+        count1.load(Ordering::SeqCst)
+    );
+    assert!(
+        count2.load(Ordering::SeqCst) > 0,
+        "Plugin 2 should have processed events, got {}",
+        count2.load(Ordering::SeqCst)
+    );
 }
 
 /// Simulates the full shutdown sequence from agent.rs:
@@ -410,8 +482,12 @@ async fn test_listener_set_drains_and_exits_cleanly() {
     }
     #[async_trait::async_trait]
     impl plugin::AgentPlugin for EventCollector {
-        fn id(&self) -> plugin::PluginId { "collector".to_string() }
-        fn priority(&self) -> u32 { 100 }
+        fn id(&self) -> plugin::PluginId {
+            "collector".to_string()
+        }
+        fn priority(&self) -> u32 {
+            100
+        }
         async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision {
             plugin::PluginDecision::Continue
         }
@@ -420,7 +496,10 @@ async fn test_listener_set_drains_and_exits_cleanly() {
             let desc = match event {
                 AgentStreamEvent::AgentStart { .. } => "agent_start".to_string(),
                 AgentStreamEvent::ThinkingStart { .. } => "thinking_start".to_string(),
-                AgentStreamEvent::ContentComplete { content, .. } => format!("content_complete({})", content.chars().take(10).collect::<String>()),
+                AgentStreamEvent::ContentComplete { content, .. } => format!(
+                    "content_complete({})",
+                    content.chars().take(10).collect::<String>()
+                ),
                 AgentStreamEvent::AgentComplete { .. } => "agent_complete".to_string(),
                 _ => format!("{:?}", event),
             };
@@ -438,21 +517,31 @@ async fn test_listener_set_drains_and_exits_cleanly() {
     let events2 = Arc::new(std::sync::Mutex::new(Vec::new()));
 
     let plugins: Vec<Arc<dyn plugin::AgentPlugin>> = vec![
-        Arc::new(EventCollector { events: events1.clone() }),
-        Arc::new(EventCollector { events: events2.clone() }),
+        Arc::new(EventCollector {
+            events: events1.clone(),
+        }),
+        Arc::new(EventCollector {
+            events: events2.clone(),
+        }),
     ];
 
     // Spawn listeners (simulating agent.rs Phase 2.6)
     let mut listener_set = spawn_listener_tasks(plugins, run_ctx.clone());
 
     // Simulate agent loop emitting events
-    run_ctx.emit(AgentStreamEvent::agent_start("test input".to_string())).await;
+    run_ctx
+        .emit(AgentStreamEvent::agent_start("test input".to_string()))
+        .await;
     tokio::time::sleep(Duration::from_millis(10)).await;
 
     run_ctx.emit(AgentStreamEvent::thinking_start()).await;
     tokio::time::sleep(Duration::from_millis(10)).await;
 
-    run_ctx.emit(AgentStreamEvent::content_complete("final answer here".to_string())).await;
+    run_ctx
+        .emit(AgentStreamEvent::content_complete(
+            "final answer here".to_string(),
+        ))
+        .await;
     tokio::time::sleep(Duration::from_millis(10)).await;
 
     run_ctx.emit(AgentStreamEvent::agent_complete()).await;
@@ -465,7 +554,10 @@ async fn test_listener_set_drains_and_exits_cleanly() {
     // Await all listener tasks — they should drain buffers and exit naturally
     let mut exit_count = 0;
     while let Some(result) = listener_set.join_next().await {
-        assert!(result.is_ok(), "Listener task should exit cleanly, not panic");
+        assert!(
+            result.is_ok(),
+            "Listener task should exit cleanly, not panic"
+        );
         exit_count += 1;
     }
     assert_eq!(exit_count, 2, "Both listener tasks should have exited");
@@ -473,8 +565,18 @@ async fn test_listener_set_drains_and_exits_cleanly() {
     // Verify all 4 events were processed by each listener
     let e1 = events1.lock().unwrap();
     let e2 = events2.lock().unwrap();
-    assert_eq!(e1.len(), 4, "Listener 1 should have processed all 4 events, got: {:?}", e1);
-    assert_eq!(e2.len(), 4, "Listener 2 should have processed all 4 events, got: {:?}", e2);
+    assert_eq!(
+        e1.len(),
+        4,
+        "Listener 1 should have processed all 4 events, got: {:?}",
+        e1
+    );
+    assert_eq!(
+        e2.len(),
+        4,
+        "Listener 2 should have processed all 4 events, got: {:?}",
+        e2
+    );
 
     // Verify event order
     assert!(e1[0].starts_with("agent_start"));
@@ -490,8 +592,12 @@ async fn test_listener_set_exits_with_no_events() {
     struct NoOpPlugin;
     #[async_trait::async_trait]
     impl plugin::AgentPlugin for NoOpPlugin {
-        fn id(&self) -> plugin::PluginId { "noop".to_string() }
-        fn priority(&self) -> u32 { 0 }
+        fn id(&self) -> plugin::PluginId {
+            "noop".to_string()
+        }
+        fn priority(&self) -> u32 {
+            0
+        }
         async fn intercept(&self, _: &AgentStreamEvent, _: &RunContext) -> plugin::PluginDecision {
             plugin::PluginDecision::Continue
         }
@@ -519,20 +625,25 @@ async fn test_listener_set_exits_with_no_events() {
     run_ctx.event_tx.take();
 
     // All listeners should exit quickly
-    let timeout = tokio::time::timeout(
-        Duration::from_secs(5),
-        async {
-            let mut count = 0;
-            while let Some(result) = listener_set.join_next().await {
-                assert!(result.is_ok(), "Listener should exit cleanly");
-                count += 1;
-            }
-            count
-        },
-    ).await;
+    let timeout = tokio::time::timeout(Duration::from_secs(5), async {
+        let mut count = 0;
+        while let Some(result) = listener_set.join_next().await {
+            assert!(result.is_ok(), "Listener should exit cleanly");
+            count += 1;
+        }
+        count
+    })
+    .await;
 
-    assert!(timeout.is_ok(), "Listeners should exit within timeout even with no events");
-    assert_eq!(timeout.unwrap(), 3, "All 3 listener tasks should have exited");
+    assert!(
+        timeout.is_ok(),
+        "Listeners should exit within timeout even with no events"
+    );
+    assert_eq!(
+        timeout.unwrap(),
+        3,
+        "All 3 listener tasks should have exited"
+    );
 }
 
 #[test]

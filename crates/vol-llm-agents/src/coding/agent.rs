@@ -1,20 +1,20 @@
 //! CodingAgent - AI-powered code assistant.
 
-use std::sync::Arc;
-use std::path::PathBuf;
-use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
-use vol_llm_tool::{ToolRegistry, ToolConfig};
-use vol_llm_agent::{ReActAgent, AgentConfig};
-use vol_llm_context::{AttentionAnchor, ContextBuilder};
-use vol_session::Session;
-use vol_llm_provider::{LLMProviderConfig, LLMProviderRegistry};
 use crate::coding::config::CodingAgentConfig;
 use crate::coding::error::CodingAgentError;
 use crate::coding::observer::EventObserver;
 use crate::coding::observer_plugin::ObserverPlugin;
-use vol_llm_sandbox::Sandbox;
-use vol_llm_core::LLMProvider;
 use crate::coding::sandbox::LocalSandbox;
+use std::path::PathBuf;
+use std::sync::Arc;
+use vol_llm_agent::{AgentConfig, ReActAgent};
+use vol_llm_context::{AttentionAnchor, ContextBuilder};
+use vol_llm_core::LLMProvider;
+use vol_llm_provider::{LLMProviderConfig, LLMProviderRegistry};
+use vol_llm_sandbox::Sandbox;
+use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
+use vol_llm_tool::{ToolConfig, ToolRegistry};
+use vol_session::Session;
 
 /// Coding Agent response
 #[derive(Debug, Clone)]
@@ -56,15 +56,18 @@ impl CodingAgent {
     }
 
     /// Resolve LLM from config or create from env.
-    fn resolve_llm(config: &CodingAgentConfig) -> Result<Arc<dyn vol_llm_core::LLMClient>, CodingAgentError> {
+    fn resolve_llm(
+        config: &CodingAgentConfig,
+    ) -> Result<Arc<dyn vol_llm_core::LLMClient>, CodingAgentError> {
         if let Some(llm) = &config.llm {
             return Ok(llm.clone());
         }
 
-        let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
-            .map_err(|_| CodingAgentError::Config(
-                "ANTHROPIC_AUTH_TOKEN not set and no LLM client provided".to_string()
-            ))?;
+        let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").map_err(|_| {
+            CodingAgentError::Config(
+                "ANTHROPIC_AUTH_TOKEN not set and no LLM client provided".to_string(),
+            )
+        })?;
         let llm_config = LLMProviderConfig {
             id: config.llm_provider_id.clone(),
             config: vol_llm_provider::LLMConfig {
@@ -78,15 +81,21 @@ impl CodingAgent {
         };
         let registry = LLMProviderRegistry::from_configs(&[llm_config])
             .map_err(|e| CodingAgentError::Config(format!("LLM provider error: {}", e)))?;
-        registry.get(&config.llm_provider_id)
-            .ok_or_else(|| CodingAgentError::Config(
-                format!("LLM provider '{}' not found", config.llm_provider_id)
-            ))
+        registry
+            .get(&config.llm_provider_id)
+            .ok_or_else(|| {
+                CodingAgentError::Config(format!(
+                    "LLM provider '{}' not found",
+                    config.llm_provider_id
+                ))
+            })
             .map(|llm| llm.clone())
     }
 
     /// Build tool registry and context builder together.
-    fn build_tools_and_context(config: &CodingAgentConfig) -> Result<(Arc<ToolRegistry>, ContextBuilder), CodingAgentError> {
+    fn build_tools_and_context(
+        config: &CodingAgentConfig,
+    ) -> Result<(Arc<ToolRegistry>, ContextBuilder), CodingAgentError> {
         let mut tool_registry = ToolRegistry::new();
         Self::register_coding_tools(&mut tool_registry, &config.tool_config);
 
@@ -107,28 +116,32 @@ impl CodingAgent {
     }
 
     /// Initialize sandbox if working_dir is not ".".
-    fn init_sandbox(working_dir: &PathBuf) -> Result<Option<vol_llm_sandbox::SandboxRef>, CodingAgentError> {
+    fn init_sandbox(
+        working_dir: &PathBuf,
+    ) -> Result<Option<vol_llm_sandbox::SandboxRef>, CodingAgentError> {
         if working_dir == &PathBuf::from(".") {
             return Ok(None);
         }
         let sandbox = Arc::new(LocalSandbox::new(Some(working_dir.clone())));
         // Ensure the directory exists (start is async in the new Sandbox trait,
         // so we create the dir directly here in this sync constructor).
-        std::fs::create_dir_all(working_dir).map_err(|e| CodingAgentError::Config(
-            format!("Failed to create working directory {:?}: {}", working_dir, e)
-        ))?;
+        std::fs::create_dir_all(working_dir).map_err(|e| {
+            CodingAgentError::Config(format!(
+                "Failed to create working directory {:?}: {}",
+                working_dir, e
+            ))
+        })?;
         Ok(Some(sandbox))
     }
 
-
     /// Register coding tools and web tools to the tool registry
     fn register_coding_tools(registry: &mut ToolRegistry, tool_config: &ToolConfig) {
-        use vol_llm_tools_builtin::read_tool::ReadTool;
-        use vol_llm_tools_builtin::write_tool::WriteTool;
+        use vol_llm_tools_builtin::bash_tool::BashTool;
         use vol_llm_tools_builtin::edit_tool::EditTool;
         use vol_llm_tools_builtin::glob_tool::GlobTool;
         use vol_llm_tools_builtin::grep_tool::GrepTool;
-        use vol_llm_tools_builtin::bash_tool::BashTool;
+        use vol_llm_tools_builtin::read_tool::ReadTool;
+        use vol_llm_tools_builtin::write_tool::WriteTool;
 
         registry.register(ReadTool::new());
         registry.register(WriteTool::new());
@@ -145,7 +158,9 @@ impl CodingAgent {
     pub fn with_observer(mut self, observer: Arc<dyn EventObserver>) -> Self {
         // Register plugin with config's plugin_registry
         let mut new_config = self.config.clone();
-        new_config.plugin_registry.register(ObserverPlugin::new(observer.clone()));
+        new_config
+            .plugin_registry
+            .register(ObserverPlugin::new(observer.clone()));
         self.config = new_config;
 
         self.observer = Some(observer);
@@ -229,12 +244,16 @@ impl CodingAgent {
         // Run the ReActAgent
         // Note: ObserverPlugin receives all events via PluginRegistry,
         // including AgentStart and AgentComplete emitted by ReActAgent itself.
-        let response = react_agent.run(task).await
+        let response = react_agent
+            .run(task)
+            .await
             .map_err(|e| CodingAgentError::Agent(e))?;
 
         // Signal completion to observer (for report generation)
         if let Some(ref observer) = self.observer {
-            observer.on_complete().await
+            observer
+                .on_complete()
+                .await
                 .map_err(|e| CodingAgentError::Observer(e))?;
         }
 
@@ -261,17 +280,14 @@ impl CodingAgent {
         use vol_session::{FileSessionEntryStore, InMemoryEntryStore};
 
         let session_dir = self.config.store_dir.join("sessions");
-        let entry_store: Arc<dyn vol_session::SessionEntryStore> =
-            if session_dir.exists() {
-                Arc::new(FileSessionEntryStore::new(&session_dir))
-            } else {
-                Arc::new(InMemoryEntryStore::new())
-            };
+        let entry_store: Arc<dyn vol_session::SessionEntryStore> = if session_dir.exists() {
+            Arc::new(FileSessionEntryStore::new(&session_dir))
+        } else {
+            Arc::new(InMemoryEntryStore::new())
+        };
         let session = match Session::resume(session_id.to_string(), entry_store).await {
             Ok(s) => Arc::new(s),
-            Err(_) => {
-                Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())))
-            }
+            Err(_) => Arc::new(Session::new(Arc::new(InMemoryEntryStore::new()))),
         };
 
         self.config.session = Some(session);
@@ -313,8 +329,9 @@ impl CodingAgentBuilder {
                 .unwrap_or(std::ffi::OsStr::new("default"))
                 .to_string_lossy();
             let home = std::env::var("HOME").unwrap_or_default();
-            self.config.store_dir =
-                PathBuf::from(home).join(".vol-coding").join(basename.as_ref());
+            self.config.store_dir = PathBuf::from(home)
+                .join(".vol-coding")
+                .join(basename.as_ref());
         }
         self
     }

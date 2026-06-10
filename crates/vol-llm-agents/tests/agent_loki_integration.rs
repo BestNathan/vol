@@ -11,8 +11,7 @@ use vol_llm_agent::agent_def::AgentScope;
 use vol_llm_agent::agent_loader::AgentLoader;
 use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
 use vol_llm_core::{
-    LLMClient, LLMProvider,
-    StreamEvent, StreamEventData, StreamReceiver, SupportedParam,
+    LLMClient, LLMProvider, StreamEvent, StreamEventData, StreamReceiver, SupportedParam,
 };
 use vol_llm_observability::LokiPlugin;
 use vol_llm_tool::ToolRegistry;
@@ -89,7 +88,10 @@ async fn test_agent_file_loaded_with_loki_plugin() {
     loader.add_root(AgentScope::User, agents_dir);
     loader.discover_all().await.unwrap();
 
-    let def = loader.get("test_agent").await.expect("test_agent should be loaded");
+    let def = loader
+        .get("test_agent")
+        .await
+        .expect("test_agent should be loaded");
     assert_eq!(def.r#type, "test_agent");
     assert_eq!(def.name, "test_agent");
 

@@ -20,18 +20,17 @@ use vol_llm_core::LLMClient;
 use vol_llm_mcp::McpConfig;
 use vol_llm_mcp::McpManager;
 use vol_llm_provider::{create_provider, ProviderLoader};
+use vol_llm_runtime::{AgentRuntime, SessionStoreConfig, TaskStoreConfig};
 use vol_llm_skill::SkillLoader;
 use vol_llm_tool::ToolRegistry;
-use vol_llm_runtime::{AgentRuntime, TaskStoreConfig};
-use vol_session::file_store::FileSessionEntryStore;
 
 use crate::connection::ConnectionHolder;
 use crate::dispatcher::AgentDispatcher;
 use crate::domain::registry::HandlerRegistry;
 use crate::domain::{
-    agent::AgentHandler, file::FileHandler, log::LogHandler,
-    mcp::McpHandler, session::SessionHandler, skill::SkillHandler, system::SystemHandler,
-    task::TaskHandler, tool::ToolHandler,
+    agent::AgentHandler, file::FileHandler, log::LogHandler, mcp::McpHandler,
+    session::SessionHandler, skill::SkillHandler, system::SystemHandler, task::TaskHandler,
+    tool::ToolHandler,
 };
 use crate::router::AgentRouter;
 
@@ -108,12 +107,18 @@ impl AgentServerCore {
     ///
     /// All internal registries (LLM, MCP, skills, tools, sessions) are
     /// derived automatically from working_dir and store_dir.
-    pub async fn new(working_dir: impl Into<PathBuf>, store_dir: impl Into<PathBuf>) -> Result<Self, String> {
+    pub async fn new(
+        working_dir: impl Into<PathBuf>,
+        store_dir: impl Into<PathBuf>,
+    ) -> Result<Self, String> {
         Self::builder(working_dir, store_dir).build().await
     }
 
     /// Create a builder for optional override.
-    pub fn builder(working_dir: impl Into<PathBuf>, store_dir: impl Into<PathBuf>) -> AgentServerCoreBuilder {
+    pub fn builder(
+        working_dir: impl Into<PathBuf>,
+        store_dir: impl Into<PathBuf>,
+    ) -> AgentServerCoreBuilder {
         AgentServerCoreBuilder::new(working_dir.into(), store_dir.into())
     }
 
@@ -173,14 +178,17 @@ impl AgentServerCore {
     ) -> Result<(), String> {
         let agent_id = agent_id.into();
         let agent_dir = self.store_dir.join("agents").join(&agent_id);
-        let sessions_dir = agent_dir.join("sessions");
-        std::fs::create_dir_all(&sessions_dir).map_err(|e| format!("failed to create agent dirs: {e}"))?;
+        std::fs::create_dir_all(&agent_dir)
+            .map_err(|e| format!("failed to create agent dirs: {e}"))?;
 
         let llm = self.llm.clone();
         let tools = self.tool_registry.clone();
         let mcp = self.mcp_manager.clone();
 
-        let session_store = Arc::new(FileSessionEntryStore::new(&sessions_dir));
+        let session_store = self
+            .runtime
+            .session_manager
+            .entry_store_for_agent(&agent_id);
         let session = Arc::new(vol_session::Session::new(session_store));
 
         let mut config = AgentConfig::builder()
@@ -206,7 +214,10 @@ impl AgentServerCore {
         let dispatcher = Arc::new(AgentDispatcher::new(agent));
 
         self.router.register(agent_id.clone(), dispatcher).await;
-        self.holders.lock().unwrap().insert(agent_id, Arc::new(holder));
+        self.holders
+            .lock()
+            .unwrap()
+            .insert(agent_id, Arc::new(holder));
 
         Ok(())
     }
@@ -225,10 +236,16 @@ impl AgentServerCore {
         for meta in agents {
             if let Some(def) = loader.get(&meta.name).await {
                 // Store def for metadata queries
-                self.agent_defs.write().unwrap().insert(meta.name.clone(), (*def).clone());
+                self.agent_defs
+                    .write()
+                    .unwrap()
+                    .insert(meta.name.clone(), (*def).clone());
                 let arc_def = Arc::try_unwrap(def).unwrap_or_else(|arc| (*arc).clone());
                 self.register_agent(&meta.name, arc_def).await?;
-                self.agent_status.write().unwrap().insert(meta.name.clone(), AgentStatus::idle());
+                self.agent_status
+                    .write()
+                    .unwrap()
+                    .insert(meta.name.clone(), AgentStatus::idle());
             }
         }
         Ok(())
@@ -238,7 +255,10 @@ impl AgentServerCore {
     pub async fn handle(
         &self,
         message: crate::agent_server_protocol::AgentServerMessage,
-    ) -> Result<Vec<crate::agent_server_protocol::AgentServerMessage>, crate::agent_server_protocol::ProtocolError> {
+    ) -> Result<
+        Vec<crate::agent_server_protocol::AgentServerMessage>,
+        crate::agent_server_protocol::ProtocolError,
+    > {
         self.handler_registry.dispatch(message).await
     }
 
@@ -249,9 +269,7 @@ impl AgentServerCore {
     pub async fn serve(&self, conn: impl crate::connection::Connection) {
         // Attach to all holders so agent events are pushed to this connection.
         let conn: Arc<dyn crate::connection::Connection> = Arc::new(conn);
-        let holders: Vec<_> = {
-            self.holders.lock().unwrap().values().cloned().collect()
-        };
+        let holders: Vec<_> = { self.holders.lock().unwrap().values().cloned().collect() };
         for holder in &holders {
             holder.attach(conn.clone()).await;
         }
@@ -296,6 +314,7 @@ pub struct AgentServerCoreBuilder {
     working_dir: PathBuf,
     store_dir: PathBuf,
     task_store_config: Option<TaskStoreConfig>,
+    session_store_config: Option<SessionStoreConfig>,
     extra_handlers: Vec<Arc<dyn crate::domain::handler::DomainHandler>>,
 }
 
@@ -305,6 +324,7 @@ impl Default for AgentServerCoreBuilder {
             working_dir: PathBuf::new(),
             store_dir: PathBuf::new(),
             task_store_config: None,
+            session_store_config: None,
             extra_handlers: Vec::new(),
         }
     }
@@ -312,7 +332,13 @@ impl Default for AgentServerCoreBuilder {
 
 impl AgentServerCoreBuilder {
     pub fn new(working_dir: PathBuf, store_dir: PathBuf) -> Self {
-        Self { working_dir, store_dir, task_store_config: None, extra_handlers: Vec::new() }
+        Self {
+            working_dir,
+            store_dir,
+            task_store_config: None,
+            session_store_config: None,
+            extra_handlers: Vec::new(),
+        }
     }
 
     pub fn with_task_store_config(mut self, config: Option<TaskStoreConfig>) -> Self {
@@ -320,8 +346,16 @@ impl AgentServerCoreBuilder {
         self
     }
 
+    pub fn with_session_store_config(mut self, config: Option<SessionStoreConfig>) -> Self {
+        self.session_store_config = config;
+        self
+    }
+
     /// Register an external domain handler.
-    pub fn register_handler(mut self, handler: Arc<dyn crate::domain::handler::DomainHandler>) -> Self {
+    pub fn register_handler(
+        mut self,
+        handler: Arc<dyn crate::domain::handler::DomainHandler>,
+    ) -> Self {
         self.extra_handlers.push(handler);
         self
     }
@@ -331,6 +365,7 @@ impl AgentServerCoreBuilder {
         // Build AgentRuntime (owns all shared resources)
         let runtime = AgentRuntime::builder(self.working_dir.clone(), self.store_dir.clone())
             .with_task_store_config(self.task_store_config.clone())
+            .with_session_store_config(self.session_store_config.clone())
             .build()
             .await?;
 
@@ -341,6 +376,7 @@ impl AgentServerCoreBuilder {
         let skill_loader = runtime.skill_loader.clone();
         let agent_defs = runtime.agent_defs.clone();
         let agent_status = runtime.agent_status.clone();
+        let session_manager = runtime.session_manager.clone();
         let sandbox_registry = runtime.sandbox_registry.clone();
 
         // Tool registry already includes SkillTool from AgentRuntime
@@ -368,7 +404,10 @@ impl AgentServerCoreBuilder {
             .register(Arc::new(FileHandler::new(self.working_dir.clone())))
             .map_err(|e| format!("failed to register FileHandler: {e}"))?;
         handler_registry
-            .register(Arc::new(SessionHandler::new(agents_root, router.clone())))
+            .register(Arc::new(SessionHandler::new(
+                session_manager,
+                router.clone(),
+            )))
             .map_err(|e| format!("failed to register SessionHandler: {e}"))?;
         handler_registry
             .register(Arc::new(McpHandler::new(Some(mcp_manager.clone()))))
@@ -444,7 +483,10 @@ fn derive_llm_client(working_dir: &std::path::Path) -> Result<Arc<dyn LLMClient>
             Err(e) => errors.push(format!("{}: {}", id, e)),
         }
     }
-    Err(format!("No usable LLM provider found. Errors: {}", errors.join("; ")))
+    Err(format!(
+        "No usable LLM provider found. Errors: {}",
+        errors.join("; ")
+    ))
 }
 
 fn derive_skill_loader(working_dir: &std::path::Path) -> Arc<SkillLoader> {
@@ -485,13 +527,27 @@ impl AgentServerCore {
         struct TestLlm;
         #[async_trait::async_trait]
         impl LLMClient for TestLlm {
-            fn provider(&self) -> vol_llm_core::LLMProvider { vol_llm_core::LLMProvider::Anthropic }
-            fn model(&self) -> &str { "test" }
-            fn supported_params(&self) -> &[vol_llm_core::SupportedParam] { &[] }
-            async fn converse(&self, _request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
-                Err(vol_llm_core::LLMError::Parse("test LLM not implemented".into()))
+            fn provider(&self) -> vol_llm_core::LLMProvider {
+                vol_llm_core::LLMProvider::Anthropic
             }
-            async fn converse_stream(&self, _request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::StreamReceiver> {
+            fn model(&self) -> &str {
+                "test"
+            }
+            fn supported_params(&self) -> &[vol_llm_core::SupportedParam] {
+                &[]
+            }
+            async fn converse(
+                &self,
+                _request: vol_llm_core::ConversationRequest,
+            ) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
+                Err(vol_llm_core::LLMError::Parse(
+                    "test LLM not implemented".into(),
+                ))
+            }
+            async fn converse_stream(
+                &self,
+                _request: vol_llm_core::ConversationRequest,
+            ) -> vol_llm_core::Result<vol_llm_core::StreamReceiver> {
                 let (_tx, rx) = tokio::sync::mpsc::channel(1);
                 Ok(vol_llm_core::StreamReceiver::new(rx))
             }
@@ -500,13 +556,14 @@ impl AgentServerCore {
         // Register a test agent dispatcher so submit flow works.
         {
             use crate::dispatcher::AgentDispatcher;
-            use vol_llm_agent::ReActAgent;
             use vol_llm_agent::react::AgentConfig;
-            use vol_session::Session;
+            use vol_llm_agent::ReActAgent;
             use vol_session::InMemoryEntryStore;
+            use vol_session::Session;
 
             let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
-            let tools: Arc<vol_llm_tool::ToolRegistry> = Arc::new(vol_llm_tool::ToolRegistry::new());
+            let tools: Arc<vol_llm_tool::ToolRegistry> =
+                Arc::new(vol_llm_tool::ToolRegistry::new());
             let config = AgentConfig::builder()
                 .with_llm(Arc::new(TestLlm))
                 .with_tools(tools)
@@ -515,9 +572,16 @@ impl AgentServerCore {
                 .expect("AgentConfig build failed for test");
             let agent = ReActAgent::new(config);
             let dispatcher = Arc::new(AgentDispatcher::new(agent));
-            let holder = Arc::new(ConnectionHolder::new("test_agent".to_string(), "client".to_string(), None));
+            let holder = Arc::new(ConnectionHolder::new(
+                "test_agent".to_string(),
+                "client".to_string(),
+                None,
+            ));
             router.register("test_agent".to_string(), dispatcher).await;
-            holders.lock().unwrap().insert("test_agent".to_string(), holder);
+            holders
+                .lock()
+                .unwrap()
+                .insert("test_agent".to_string(), holder);
         }
 
         let agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>> =
@@ -525,24 +589,41 @@ impl AgentServerCore {
         let agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>> =
             Arc::new(std::sync::RwLock::new(HashMap::new()));
         let mut handler_registry = HandlerRegistry::new();
-        handler_registry.register(Arc::new(AgentHandler::new(
-            router.clone(),
-            Arc::clone(&holders),
-            agent_defs.clone(),
-            agent_status.clone(),
-        ))).ok();
-        handler_registry.register(Arc::new(FileHandler::new(PathBuf::from(".")))).ok();
-        handler_registry.register(Arc::new(SessionHandler::new(agents_root, router.clone()))).ok();
-        handler_registry.register(Arc::new(McpHandler::new(None))).ok();
-        handler_registry.register(Arc::new(SkillHandler::new(None))).ok();
-        handler_registry.register(Arc::new(ToolHandler::new(Arc::new(ToolRegistry::new())))).ok();
+        handler_registry
+            .register(Arc::new(AgentHandler::new(
+                router.clone(),
+                Arc::clone(&holders),
+                agent_defs.clone(),
+                agent_status.clone(),
+            )))
+            .ok();
+        handler_registry
+            .register(Arc::new(FileHandler::new(PathBuf::from("."))))
+            .ok();
+        let runtime = AgentRuntime::for_test().await;
+        handler_registry
+            .register(Arc::new(SessionHandler::new(
+                runtime.session_manager.clone(),
+                router.clone(),
+            )))
+            .ok();
+        handler_registry
+            .register(Arc::new(McpHandler::new(None)))
+            .ok();
+        handler_registry
+            .register(Arc::new(SkillHandler::new(None)))
+            .ok();
+        handler_registry
+            .register(Arc::new(ToolHandler::new(Arc::new(ToolRegistry::new()))))
+            .ok();
         handler_registry.register(Arc::new(LogHandler)).ok();
         handler_registry.register(Arc::new(SystemHandler)).ok();
-        handler_registry.register(Arc::new(TaskHandler::new(
-            Arc::new(vol_llm_task::InMemoryTaskStore::new()),
-        ))).ok();
+        handler_registry
+            .register(Arc::new(TaskHandler::new(Arc::new(
+                vol_llm_task::InMemoryTaskStore::new(),
+            ))))
+            .ok();
 
-        let runtime = AgentRuntime::for_test().await;
         let sandbox_registry = runtime.sandbox_registry.clone();
 
         AgentServerCore {

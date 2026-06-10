@@ -3,9 +3,9 @@
 use std::sync::Arc;
 
 use vol_llm_agent::ReActAgent;
-use vol_llm_core::{LLMClient, LLMProvider};
 use vol_llm_context::ContextBuilder;
-use vol_llm_provider::{LLMProviderConfig, LLMProviderRegistry, LLMConfig, Secret};
+use vol_llm_core::{LLMClient, LLMProvider};
+use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
 use vol_llm_tool::ToolRegistry;
 
 use crate::config::WikiAgentConfig;
@@ -49,10 +49,11 @@ impl WikiAgent {
             return Ok(llm.clone());
         }
 
-        let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
-            .map_err(|_| WikiAgentError::Config(
+        let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").map_err(|_| {
+            WikiAgentError::Config(
                 "ANTHROPIC_AUTH_TOKEN not set and no LLM client provided".to_string(),
-            ))?;
+            )
+        })?;
 
         let llm_config = LLMProviderConfig {
             id: config.llm_provider_id.clone(),
@@ -68,23 +69,27 @@ impl WikiAgent {
         let registry = LLMProviderRegistry::from_configs(&[llm_config])
             .map_err(|e| WikiAgentError::Config(format!("LLM provider error: {}", e)))?;
 
-        let llm = registry.get(&config.llm_provider_id)
-            .ok_or_else(|| WikiAgentError::Config(
-                format!("LLM provider '{}' not found", config.llm_provider_id),
-            ))?;
+        let llm = registry.get(&config.llm_provider_id).ok_or_else(|| {
+            WikiAgentError::Config(format!(
+                "LLM provider '{}' not found",
+                config.llm_provider_id
+            ))
+        })?;
         Ok(Arc::clone(&llm))
     }
 
     /// Build tool registry and context builder.
-    fn build_tools_and_context(config: &WikiAgentConfig) -> Result<(Arc<ToolRegistry>, ContextBuilder), WikiAgentError> {
+    fn build_tools_and_context(
+        config: &WikiAgentConfig,
+    ) -> Result<(Arc<ToolRegistry>, ContextBuilder), WikiAgentError> {
         let mut tool_registry = ToolRegistry::new();
         Self::register_wiki_tools(&mut tool_registry);
 
         let wiki_dir = config.working_dir.join(".agent").join("wikis");
         let context_builder = vol_llm_context::ContextBuilderBuilder::new(128_000)
-            .add_contributor(Box::new(vol_llm_context::builtin::SimpleContributor::system(
-                Self::system_prompt(&wiki_dir),
-            )))
+            .add_contributor(Box::new(
+                vol_llm_context::builtin::SimpleContributor::system(Self::system_prompt(&wiki_dir)),
+            ))
             .build();
 
         Ok((Arc::new(tool_registry), context_builder))
@@ -92,11 +97,11 @@ impl WikiAgent {
 
     /// Register tools for wiki operations.
     fn register_wiki_tools(registry: &mut ToolRegistry) {
-        use vol_llm_tools_builtin::read_tool::ReadTool;
-        use vol_llm_tools_builtin::write_tool::WriteTool;
         use vol_llm_tools_builtin::edit_tool::EditTool;
         use vol_llm_tools_builtin::glob_tool::GlobTool;
         use vol_llm_tools_builtin::grep_tool::GrepTool;
+        use vol_llm_tools_builtin::read_tool::ReadTool;
+        use vol_llm_tools_builtin::write_tool::WriteTool;
 
         registry.register(ReadTool::new());
         registry.register(WriteTool::new());
@@ -143,7 +148,12 @@ impl WikiAgent {
                     vol_llm_core::MessageRole::System => "System",
                     vol_llm_core::MessageRole::Tool => "Tool",
                 };
-                let content = m.message.content.as_ref().map(|c| c.as_str()).unwrap_or("(empty)");
+                let content = m
+                    .message
+                    .content
+                    .as_ref()
+                    .map(|c| c.as_str())
+                    .unwrap_or("(empty)");
                 format!("[{}] {}", role, content)
             })
             .collect::<Vec<_>>()
@@ -196,7 +206,9 @@ impl WikiAgent {
     }
 
     fn walk_files(dir: &std::path::Path, files: &mut Vec<String>) {
-        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {

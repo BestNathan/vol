@@ -7,7 +7,7 @@
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use vol_llm_agent::react::{AgentPlugin, RunContext, PluginDecision};
+use vol_llm_agent::react::{AgentPlugin, PluginDecision, RunContext};
 use vol_llm_agent::{AgentConfig, AgentStreamEvent, ReActAgent};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, LLMProvider, StreamEvent, StreamEventData,
@@ -184,11 +184,7 @@ async fn test_plugin_skip_stops_current_event() {
             10
         }
 
-        async fn intercept(
-            &self,
-            event: &AgentStreamEvent,
-            _ctx: &RunContext,
-        ) -> PluginDecision {
+        async fn intercept(&self, event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
             let count = self.call_count.fetch_add(1, Ordering::SeqCst);
 
             // Skip the first event (AgentStart)
@@ -246,11 +242,7 @@ async fn test_listener_parallel_execution() {
             100
         }
 
-        async fn intercept(
-            &self,
-            _event: &AgentStreamEvent,
-            _ctx: &RunContext,
-        ) -> PluginDecision {
+        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
             PluginDecision::Continue
         }
 

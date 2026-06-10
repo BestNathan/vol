@@ -3,9 +3,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::agent_server_protocol::{
-    AgentServerMessage, Operation, ProtocolError,
-};
+use crate::agent_server_protocol::{AgentServerMessage, Operation, ProtocolError};
 
 /// Trait for domain handlers registered into AgentServerCore.
 #[async_trait]

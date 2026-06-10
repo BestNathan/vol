@@ -14,15 +14,17 @@ pub mod router;
 pub mod server_core;
 pub mod transport;
 
-pub use agent_server_protocol::{AgentServerMessage, FileOperation, MessageKind, MessageMeta, Operation, Payload, ProtocolError};
+pub use agent_server_protocol::{
+    AgentServerMessage, FileOperation, MessageKind, MessageMeta, Operation, Payload, ProtocolError,
+};
 pub use connection::{Connection, ConnectionHolder};
 pub use dispatcher::AgentDispatcher;
+pub use domain::handler::DomainHandler;
+pub use domain::registry::HandlerRegistry;
 pub use error::{ChannelError, ConnectionError};
-pub use transport::jsonrpc::JsonRpcServer;
 pub use operation_codec::{decode_payload, method_to_operation};
 pub use request::{AgentRequest, RunResult};
 pub use router::AgentRouter;
-pub use domain::handler::DomainHandler;
-pub use domain::registry::HandlerRegistry;
 pub use server_core::AgentServerCore;
+pub use transport::jsonrpc::JsonRpcServer;
 pub use transport::{HttpTransport, MemoryConnection, MemoryHandle, WsConnection, WsServer};

@@ -1,15 +1,14 @@
 //! E2E test: CodingAgent writes a Rust CLI tool to count .log file lines
 //! and verifies the HTML report shows events in correct order.
 
+use std::sync::Arc;
+use tempfile::tempdir;
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, HTMLReporter};
 use vol_llm_core::{LLMClient, LLMProvider};
 use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
-use std::sync::Arc;
-use tempfile::tempdir;
 
 fn create_test_llm() -> Arc<dyn LLMClient> {
-    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
-        .expect("ANTHROPIC_AUTH_TOKEN must be set");
+    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").expect("ANTHROPIC_AUTH_TOKEN must be set");
     let llm_config = LLMProviderConfig {
         id: "anthropic-main".to_string(),
         config: LLMConfig {
@@ -35,7 +34,11 @@ async fn test_coding_agent_writes_log_counter_cli() {
 
     // Create some test .log files
     std::fs::write(work_dir.join("app.log"), "line 1\nline 2\nline 3\n").unwrap();
-    std::fs::write(work_dir.join("error.log"), "error 1\nerror 2\nerror 3\nerror 4\nerror 5\n").unwrap();
+    std::fs::write(
+        work_dir.join("error.log"),
+        "error 1\nerror 2\nerror 3\nerror 4\nerror 5\n",
+    )
+    .unwrap();
     std::fs::write(work_dir.join("debug.log"), "debug 1\n").unwrap();
 
     let config = CodingAgentConfig {
@@ -74,18 +77,36 @@ Use clap for CLI parsing. Create Cargo.toml and src/main.rs."#;
     let content = std::fs::read_to_string(&report_path).unwrap();
 
     // Check for timeline section
-    assert!(content.contains("Timeline"), "Report should have Timeline section");
+    assert!(
+        content.contains("Timeline"),
+        "Report should have Timeline section"
+    );
 
     // Check for expected event types in order
-    let start_pos = content.find("Agent started").expect("Should have AgentStart");
-    let thinking_pos = content.find("Thinking").expect("Should have ThinkingComplete");
+    let start_pos = content
+        .find("Agent started")
+        .expect("Should have AgentStart");
+    let thinking_pos = content
+        .find("Thinking")
+        .expect("Should have ThinkingComplete");
     let tool_call_pos = content.find("Tool Call").expect("Should have ToolCall");
-    let complete_pos = content.find("Agent completed").expect("Should have AgentComplete");
+    let complete_pos = content
+        .find("Agent completed")
+        .expect("Should have AgentComplete");
 
     // Verify rough order (start < thinking < tool_call < complete)
-    assert!(start_pos < thinking_pos, "Start should come before Thinking");
-    assert!(thinking_pos < tool_call_pos, "Thinking should come before ToolCall");
-    assert!(tool_call_pos < complete_pos, "ToolCall should come before Complete");
+    assert!(
+        start_pos < thinking_pos,
+        "Start should come before Thinking"
+    );
+    assert!(
+        thinking_pos < tool_call_pos,
+        "Thinking should come before ToolCall"
+    );
+    assert!(
+        tool_call_pos < complete_pos,
+        "ToolCall should come before Complete"
+    );
 
     // Verify the CLI tool was created
     let cargo_toml = work_dir.join("Cargo.toml");
@@ -131,7 +152,10 @@ async fn test_html_report_shows_ordered_timeline() {
     ));
     let agent = agent.with_observer(observer);
 
-    let result = agent.run("List all files in the current directory").await.unwrap();
+    let result = agent
+        .run("List all files in the current directory")
+        .await
+        .unwrap();
 
     assert!(result.success);
     assert!(report_path.exists());
@@ -154,7 +178,9 @@ async fn test_html_report_shows_ordered_timeline() {
             assert!(
                 *pos >= last_pos,
                 "Event '{}' at position {} should come after previous event at {}",
-                name, pos, last_pos
+                name,
+                pos,
+                last_pos
             );
             last_pos = *pos;
         }

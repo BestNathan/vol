@@ -18,11 +18,11 @@ path = "/opt/test.wasm"
     let config: SandboxConfig = toml::from_str(toml_str).unwrap();
     let wasm = config.wasm.unwrap();
     assert_eq!(wasm.max_memory_bytes, 134_217_728); // 128 MB default
-    assert_eq!(wasm.max_execution_ms, 30_000);      // 30s default
+    assert_eq!(wasm.max_execution_ms, 30_000); // 30s default
     assert_eq!(wasm.modules.len(), 1);
     assert_eq!(wasm.modules[0].name, "test");
     assert_eq!(wasm.modules[0].path, "/opt/test.wasm");
-    assert!(!wasm.modules[0].expose_as_tool);         // default false
+    assert!(!wasm.modules[0].expose_as_tool); // default false
 }
 
 #[test]
@@ -70,11 +70,8 @@ fn test_wasm_sandbox_rejects_nonexistent_module() {
         }],
     };
 
-    let result = vol_llm_sandbox::wasm::WasmSandbox::new(
-        "test".to_string(),
-        work_dir.clone(),
-        config,
-    );
+    let result =
+        vol_llm_sandbox::wasm::WasmSandbox::new("test".to_string(), work_dir.clone(), config);
     assert!(result.is_err(), "Should fail: module file does not exist");
 
     let _ = std::fs::remove_dir_all(&work_dir);
@@ -88,7 +85,8 @@ fn test_wasm_sandbox_smoke() {
     std::fs::create_dir_all(&work_dir).unwrap();
 
     // Minimal WASI module: just exit 0
-    let wasm_bytes = wat::parse_str(r#"
+    let wasm_bytes = wat::parse_str(
+        r#"
         (module
             (import "wasi_snapshot_preview1" "proc_exit" (func $exit (param i32)))
             (func $main (export "_start")
@@ -96,7 +94,9 @@ fn test_wasm_sandbox_smoke() {
                 call $exit
             )
         )
-    "#).expect("wat parse failed");
+    "#,
+    )
+    .expect("wat parse failed");
 
     let wasm_path = work_dir.join("smoke.wasm");
     std::fs::write(&wasm_path, &wasm_bytes).unwrap();
@@ -111,11 +111,9 @@ fn test_wasm_sandbox_smoke() {
         }],
     };
 
-    let sandbox = vol_llm_sandbox::wasm::WasmSandbox::new(
-        "test".to_string(),
-        work_dir.clone(),
-        config,
-    ).expect("Should create sandbox with valid wasm module");
+    let sandbox =
+        vol_llm_sandbox::wasm::WasmSandbox::new("test".to_string(), work_dir.clone(), config)
+            .expect("Should create sandbox with valid wasm module");
 
     assert_eq!(sandbox.kind(), "wasm");
     assert_eq!(sandbox.name(), "test");

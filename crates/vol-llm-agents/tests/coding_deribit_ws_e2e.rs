@@ -17,11 +17,13 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tempfile::tempdir;
-use vol_llm_tool::ToolConfig;
-use vol_llm_tools_builtin::{WebFetchConfig, ProxyConfig};
-use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, CodingAgentResponse, ChannelledEventObserver, LocalSandbox};
 use vol_llm_agent::AgentStreamEvent;
+use vol_llm_agents::coding::{
+    ChannelledEventObserver, CodingAgent, CodingAgentConfig, CodingAgentResponse, LocalSandbox,
+};
 use vol_llm_sandbox::Sandbox;
+use vol_llm_tool::ToolConfig;
+use vol_llm_tools_builtin::{ProxyConfig, WebFetchConfig};
 
 /// Helper to configure web_fetch in ToolConfig with proxy
 fn configure_web_fetch(tool_config: &mut ToolConfig) {
@@ -55,7 +57,7 @@ async fn test_coding_agent_develops_deribit_ws_client() {
     eprintln!("Working directory: {}", project_dir.display());
 
     let config = CodingAgentConfig {
-        max_iterations: 15, // Only need file creation, no build
+        max_iterations: 15,                         // Only need file creation, no build
         working_dir: temp_dir.path().to_path_buf(), // Agent root — will create project inside
         html_report_path: None,
         llm_provider_id: "anthropic-main".to_string(),
@@ -106,13 +108,18 @@ async fn test_coding_agent_develops_deribit_ws_client() {
     let events = observer.events().await;
 
     // Collect tool call info for diagnostics
-    let tool_calls: Vec<_> = events.iter().filter_map(|e| {
-        match e {
-            AgentStreamEvent::ToolCallBegin { tool_name, .. } => Some(format!("Called: {}", tool_name)),
-            AgentStreamEvent::ToolCallComplete { tool_name, .. } => Some(format!("Completed: {}", tool_name)),
+    let tool_calls: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            AgentStreamEvent::ToolCallBegin { tool_name, .. } => {
+                Some(format!("Called: {}", tool_name))
+            }
+            AgentStreamEvent::ToolCallComplete { tool_name, .. } => {
+                Some(format!("Completed: {}", tool_name))
+            }
             _ => None,
-        }
-    }).collect();
+        })
+        .collect();
     eprintln!("Tool calls made: {:#?}", tool_calls);
 
     // === Main assertions ===
@@ -139,22 +146,35 @@ async fn test_coding_agent_develops_deribit_ws_client() {
     // 3. Agent should have completed, hit max iterations, or timed out on a tool call
     // (all acceptable for a long task where files were created)
     let completed_successfully = result.is_ok();
-    let hit_max_iterations = result.as_ref().err()
+    let hit_max_iterations = result
+        .as_ref()
+        .err()
         .map(|e| format!("{:?}", e).contains("MaxIterationsReached"))
         .unwrap_or(false);
-    let tool_timeout = result.as_ref().err()
-        .map(|e| format!("{:?}", e).contains("timed out") || format!("{:?}", e).contains("Execution failed"))
+    let tool_timeout = result
+        .as_ref()
+        .err()
+        .map(|e| {
+            format!("{:?}", e).contains("timed out")
+                || format!("{:?}", e).contains("Execution failed")
+        })
         .unwrap_or(false);
 
     if completed_successfully {
-        eprintln!("Agent completed in {} iterations with {} tool calls",
-            result.as_ref().unwrap().iterations, result.as_ref().unwrap().tool_calls);
+        eprintln!(
+            "Agent completed in {} iterations with {} tool calls",
+            result.as_ref().unwrap().iterations,
+            result.as_ref().unwrap().tool_calls
+        );
     } else if hit_max_iterations {
         eprintln!("Agent hit max iterations after extensive work");
     } else if tool_timeout {
         eprintln!("Agent hit a tool timeout (acceptable if files were created)");
     } else {
-        panic!("Agent should complete or hit max iterations/timeout: {:?}", result);
+        panic!(
+            "Agent should complete or hit max iterations/timeout: {:?}",
+            result
+        );
     }
 
     // Check if the agent created the project structure
@@ -166,19 +186,35 @@ async fn test_coding_agent_develops_deribit_ws_client() {
     eprintln!("Temp dir: {}", temp_dir.path().display());
     if let Ok(entries) = std::fs::read_dir(temp_dir.path()) {
         for entry in entries.flatten() {
-            eprintln!("  {} (is_dir: {})", entry.path().display(), entry.file_type().map(|t| t.is_dir()).unwrap_or(false));
+            eprintln!(
+                "  {} (is_dir: {})",
+                entry.path().display(),
+                entry.file_type().map(|t| t.is_dir()).unwrap_or(false)
+            );
             if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                 if let Ok(sub) = std::fs::read_dir(entry.path()) {
                     for s in sub.flatten() {
-                        eprintln!("    {} (is_dir: {})", s.path().display(), s.file_type().map(|t| t.is_dir()).unwrap_or(false));
+                        eprintln!(
+                            "    {} (is_dir: {})",
+                            s.path().display(),
+                            s.file_type().map(|t| t.is_dir()).unwrap_or(false)
+                        );
                     }
                 }
             }
         }
     }
 
-    assert!(cargo_path.exists(), "Cargo.toml should exist at {}", cargo_path.display());
-    assert!(main_path.exists(), "src/main.rs should exist at {}", main_path.display());
+    assert!(
+        cargo_path.exists(),
+        "Cargo.toml should exist at {}",
+        cargo_path.display()
+    );
+    assert!(
+        main_path.exists(),
+        "src/main.rs should exist at {}",
+        main_path.display()
+    );
     eprintln!("Cargo.toml exists on disk: true");
     eprintln!("src/main.rs exists on disk: true");
 
@@ -200,8 +236,14 @@ async fn test_coding_agent_develops_deribit_ws_client() {
         // Fix common issue: missing `jsonrpc` field in WsResponse pattern matching
         let main_content = std::fs::read_to_string(&main_path).unwrap_or_default();
         let fixed_content = main_content
-            .replace("WsResponse::Subscription { method, params })", "WsResponse::Subscription { method, params, .. })")
-            .replace("WsResponse::Subscription { channel, data })", "WsResponse::Subscription { channel, data, .. })");
+            .replace(
+                "WsResponse::Subscription { method, params })",
+                "WsResponse::Subscription { method, params, .. })",
+            )
+            .replace(
+                "WsResponse::Subscription { channel, data })",
+                "WsResponse::Subscription { channel, data, .. })",
+            );
 
         if fixed_content != main_content {
             std::fs::write(&main_path, &fixed_content).expect("Failed to write fixed main.rs");
@@ -267,7 +309,10 @@ async fn test_coding_agent_develops_deribit_ws_client() {
     let _ = child.kill();
     let _ = child.wait();
 
-    eprintln!("Client ran for {:.1} seconds", start.elapsed().as_secs_f64());
+    eprintln!(
+        "Client ran for {:.1} seconds",
+        start.elapsed().as_secs_f64()
+    );
     eprintln!("Received data: {}", received_data);
 }
 
@@ -284,12 +329,21 @@ async fn test_verify_deribit_ws_client_output() {
         .expect("DERIBIT_WS_CLIENT_DIR must be set to the temp dir from development test");
 
     let cargo_path = Path::new(&client_dir).join("Cargo.toml");
-    assert!(cargo_path.exists(), "Cargo.toml not found at {}", cargo_path.display());
+    assert!(
+        cargo_path.exists(),
+        "Cargo.toml not found at {}",
+        cargo_path.display()
+    );
 
     // Build first
     eprintln!("Building client at {}...", cargo_path.display());
     let build = std::process::Command::new("cargo")
-        .args(["build", "--manifest-path", cargo_path.to_str().unwrap(), "--release"])
+        .args([
+            "build",
+            "--manifest-path",
+            cargo_path.to_str().unwrap(),
+            "--release",
+        ])
         .output()
         .expect("Failed to build");
 
@@ -301,7 +355,12 @@ async fn test_verify_deribit_ws_client_output() {
     // Run for 15 seconds and collect output
     eprintln!("\n=== Running client for 15 seconds ===");
     let mut child = std::process::Command::new("cargo")
-        .args(["run", "--release", "--manifest-path", cargo_path.to_str().unwrap()])
+        .args([
+            "run",
+            "--release",
+            "--manifest-path",
+            cargo_path.to_str().unwrap(),
+        ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -345,9 +404,19 @@ pub fn generate_test_report(
 ) -> String {
     let mut report = String::new();
     report.push_str("# Coding Agent: Deribit WebSocket Client 开发测试报告\n\n");
-    report.push_str(&format!("**日期**: {}\n", chrono::Local::now().format("%Y-%m-%d %H:%M:%S")));
+    report.push_str(&format!(
+        "**日期**: {}\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+    ));
     report.push_str("**测试类型**: 端到端开发测试\n");
-    report.push_str(&format!("**状态**: {}\n\n", if agent_result.is_ok() { "完成" } else { "失败" }));
+    report.push_str(&format!(
+        "**状态**: {}\n\n",
+        if agent_result.is_ok() {
+            "完成"
+        } else {
+            "失败"
+        }
+    ));
 
     report.push_str("## 测试目标\n\n");
     report.push_str("验证 CodingAgent 能否：\n");
@@ -374,7 +443,14 @@ pub fn generate_test_report(
     let research_called = events.iter().any(|e| {
         matches!(e, AgentStreamEvent::ToolCallBegin { tool_name, .. } if tool_name == "web_fetch" || tool_name == "web_search")
     });
-    report.push_str(&format!("- web research: {}\n", if research_called { "已调用" } else { "未调用" }));
+    report.push_str(&format!(
+        "- web research: {}\n",
+        if research_called {
+            "已调用"
+        } else {
+            "未调用"
+        }
+    ));
 
     let write_calls: usize = events.iter().filter(|e| {
         matches!(e, AgentStreamEvent::ToolCallBegin { tool_name, .. } if tool_name == "write_file")

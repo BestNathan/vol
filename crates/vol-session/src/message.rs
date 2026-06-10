@@ -2,8 +2,8 @@
 //!
 //! Wraps `vol_llm_core::Message` with session-related fields.
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use vol_llm_core::Message;
 
 /// Session message wrapper

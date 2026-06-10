@@ -1,7 +1,7 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use vol_llm_skill::{SkillDef, SkillLoader, SkillScope, SkillInjector, SkillTool};
+use vol_llm_skill::{SkillDef, SkillInjector, SkillLoader, SkillScope, SkillTool};
 use vol_llm_tool::{ExecutableTool, ToolContext};
 
 #[tokio::test]
@@ -39,7 +39,9 @@ async fn test_full_skill_lifecycle() {
 
     let skill = loader.get("rust-conventions").await.unwrap();
     assert!(skill.file_listing.contains(&"SKILL.md".to_string()));
-    assert!(skill.file_listing.contains(&"references/style.md".to_string()));
+    assert!(skill
+        .file_listing
+        .contains(&"references/style.md".to_string()));
     assert!(skill.content.contains("# Rust Conventions"));
     assert!(skill.content.contains("snake_case"));
 
@@ -83,13 +85,11 @@ async fn test_skill_tool_loads_skill() {
 async fn test_injector_formats_prompt() {
     let loader = SkillLoader::new(None);
 
-    let mut skill1 = SkillDef::new("rust", "# Rust")
-        .with_description("Rust conventions");
+    let mut skill1 = SkillDef::new("rust", "# Rust").with_description("Rust conventions");
     skill1.id = "user:rust".to_string();
     loader.register(skill1).await;
 
-    let mut skill2 = SkillDef::new("python", "# Python")
-        .with_description("Python conventions");
+    let mut skill2 = SkillDef::new("python", "# Python").with_description("Python conventions");
     skill2.id = "user:python".to_string();
     loader.register(skill2).await;
 
@@ -122,8 +122,8 @@ async fn test_mixed_file_and_code_skills() {
     loader.add_root(SkillScope::User, skills_dir.clone());
     loader.discover_all().await.unwrap();
 
-    let mut code_skill = SkillDef::new("code-skill", "# Code Skill")
-        .with_description("From code registration");
+    let mut code_skill =
+        SkillDef::new("code-skill", "# Code Skill").with_description("From code registration");
     code_skill.id = "code:code-skill".to_string();
     loader.register(code_skill).await;
 

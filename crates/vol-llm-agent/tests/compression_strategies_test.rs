@@ -5,8 +5,7 @@
 
 use vol_llm_core::{Message, MessageRole};
 use vol_session::{
-    PositionSampleCompressor, RoleFilterCompressor,
-    SessionMessage, MessageCompressor,
+    MessageCompressor, PositionSampleCompressor, RoleFilterCompressor, SessionMessage,
 };
 
 // ─── Helper: create a realistic conversation ────────────────────────────────
@@ -70,16 +69,21 @@ async fn test_position_sample_compressor_small_input() {
 #[tokio::test]
 async fn test_role_filter_compressor_removes_tool_messages() {
     let conversation = make_conversation(10);
-    let tool_count = conversation.iter()
+    let tool_count = conversation
+        .iter()
         .filter(|m| m.message.role == MessageRole::Tool)
         .count();
-    assert!(tool_count > 0, "Test conversation should have Tool messages");
+    assert!(
+        tool_count > 0,
+        "Test conversation should have Tool messages"
+    );
 
     let compressor = RoleFilterCompressor::default();
     let result = compressor.compress(conversation.clone()).await;
 
     // No Tool messages should survive
-    let remaining_tool = result.iter()
+    let remaining_tool = result
+        .iter()
         .filter(|m| m.message.role == MessageRole::Tool)
         .count();
     assert_eq!(remaining_tool, 0);

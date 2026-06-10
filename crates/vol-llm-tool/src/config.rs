@@ -55,9 +55,7 @@ impl ToolConfig {
     /// let config: WebSearchConfig = tool_config.get("web_search")?;
     /// ```
     pub fn get<T: DeserializeOwned>(&self, name: &str) -> Option<T> {
-        self.tools
-            .get(name)
-            .and_then(|v| v.clone().try_into().ok())
+        self.tools.get(name).and_then(|v| v.clone().try_into().ok())
     }
 
     /// Set a configuration for the tool with the given name.
@@ -77,7 +75,10 @@ impl ToolConfig {
     ///
     /// Converts `serde_json::Value` entries (from YAML frontmatter) into
     /// `toml::Value` for internal storage.
-    pub fn populate_from_agent_def(&mut self, tool_config_map: &HashMap<String, serde_json::Value>) {
+    pub fn populate_from_agent_def(
+        &mut self,
+        tool_config_map: &HashMap<String, serde_json::Value>,
+    ) {
         for (name, value) in tool_config_map {
             // Convert serde_json::Value → toml::Value via serde deserialization
             if let Ok(toml_val) = serde_json::from_value::<toml::Value>(value.clone()) {

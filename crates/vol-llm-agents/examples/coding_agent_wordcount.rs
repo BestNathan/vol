@@ -1,16 +1,14 @@
 //! Coding Agent - Write a CLI word count tool (fixed output path).
 
-use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, HTMLReporter, LocalSandbox};
-use vol_llm_sandbox::Sandbox;
-use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
-use vol_llm_core::LLMProvider;
 use std::sync::Arc;
+use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, HTMLReporter, LocalSandbox};
+use vol_llm_core::LLMProvider;
+use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
+use vol_llm_sandbox::Sandbox;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .init();
+    tracing_subscriber::fmt().with_env_filter("info").init();
 
     let work_dir = std::path::PathBuf::from("/tmp/wordcount-work");
     std::fs::create_dir_all(&work_dir)?;
@@ -26,8 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let report_path = work_dir.join("report.html");
 
     // Construct LLM externally
-    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
-        .expect("ANTHROPIC_AUTH_TOKEN must be set");
+    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").expect("ANTHROPIC_AUTH_TOKEN must be set");
     let llm_config = LLMProviderConfig {
         id: "anthropic-main".to_string(),
         config: LLMConfig {
@@ -40,7 +37,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     };
     let registry = LLMProviderRegistry::from_configs(&[llm_config])?;
-    let llm = registry.get("anthropic-main").expect("LLM provider not found").clone();
+    let llm = registry
+        .get("anthropic-main")
+        .expect("LLM provider not found")
+        .clone();
 
     let config = CodingAgentConfig {
         max_iterations: 20,
@@ -87,7 +87,10 @@ Use only standard library (no external crates except clap). Create the files usi
     let result = result?;
 
     println!("\n=== Task Complete ===");
-    println!("Iterations: {}, Tool calls: {}", result.iterations, result.tool_calls);
+    println!(
+        "Iterations: {}, Tool calls: {}",
+        result.iterations, result.tool_calls
+    );
     println!("Summary: {}", result.summary);
     println!("\nReport: {}", report_path.display());
 
@@ -104,16 +107,17 @@ Use only standard library (no external crates except clap). Create the files usi
         if output.status.success() {
             println!("Build successful!");
             println!("\n--- Running on sample.txt ---");
-            let run_output = std::process::Command::new(
-                work_dir.join("target/release/wordcount"),
-            )
-            .arg(work_dir.join("sample.txt"))
-            .output()?;
+            let run_output = std::process::Command::new(work_dir.join("target/release/wordcount"))
+                .arg(work_dir.join("sample.txt"))
+                .output()?;
 
             if run_output.status.success() {
                 println!("{}", String::from_utf8_lossy(&run_output.stdout));
             } else {
-                println!("Run failed: {}", String::from_utf8_lossy(&run_output.stderr));
+                println!(
+                    "Run failed: {}",
+                    String::from_utf8_lossy(&run_output.stderr)
+                );
             }
         } else {
             println!("Build failed:\n{}", String::from_utf8_lossy(&output.stderr));

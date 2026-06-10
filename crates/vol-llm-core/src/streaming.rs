@@ -16,11 +16,18 @@ pub enum ParsedEvent {
         id: Option<String>,
         name: Option<String>,
     },
-    ToolCallDelta { index: usize, delta: String },
+    ToolCallDelta {
+        index: usize,
+        delta: String,
+    },
     ToolCallComplete(ToolCall),
     Usage(TokenUsage),
-    ResponseStart { model: String },
-    ResponseComplete { finish_reason: FinishReason },
+    ResponseStart {
+        model: String,
+    },
+    ResponseComplete {
+        finish_reason: FinishReason,
+    },
     /// Signals end of a content block; apply() finalizes pending tool_call/thinking
     ContentBlockStop,
 }
@@ -78,7 +85,9 @@ impl StreamingSession {
                 self.content_buffer.push_str(text);
                 vec![Ok(StreamEvent {
                     id: self.next_id(),
-                    data: StreamEventData::ContentDelta { delta: text.clone() },
+                    data: StreamEventData::ContentDelta {
+                        delta: text.clone(),
+                    },
                 })]
             }
             ParsedEvent::ContentComplete(content) => {
@@ -152,7 +161,9 @@ impl StreamingSession {
             ParsedEvent::ResponseStart { model } => {
                 vec![Ok(StreamEvent {
                     id: self.next_id(),
-                    data: StreamEventData::ResponseStart { model: model.clone() },
+                    data: StreamEventData::ResponseStart {
+                        model: model.clone(),
+                    },
                 })]
             }
             ParsedEvent::ContentBlockStop => {
@@ -276,7 +287,9 @@ impl StreamProtocol for AnthropicProtocol {
                     "tool_use" => Some(Ok(ParsedEvent::ToolCallStart {
                         index: 0,
                         id: data["content_block"]["id"].as_str().map(|s| s.to_string()),
-                        name: data["content_block"]["name"].as_str().map(|s| s.to_string()),
+                        name: data["content_block"]["name"]
+                            .as_str()
+                            .map(|s| s.to_string()),
                     })),
                     _ => None,
                 }
@@ -405,7 +418,9 @@ mod tests {
         assert!(session.process_sse(&protocol, "").is_empty());
         assert!(session.process_sse(&protocol, "   ").is_empty());
         assert!(session.process_sse(&protocol, ": ping").is_empty());
-        assert!(session.process_sse(&protocol, "data: {invalid json}").is_empty());
+        assert!(session
+            .process_sse(&protocol, "data: {invalid json}")
+            .is_empty());
     }
 
     #[test]
@@ -429,11 +444,12 @@ mod tests {
 
         assert!(!events.is_empty(), "Expected ToolCallArgumentDelta event");
         if let Ok(StreamEvent {
-            data: StreamEventData::ToolCallArgumentDelta {
-                tool_call_id,
-                tool_name,
-                delta,
-            },
+            data:
+                StreamEventData::ToolCallArgumentDelta {
+                    tool_call_id,
+                    tool_name,
+                    delta,
+                },
             ..
         }) = &events[0]
         {

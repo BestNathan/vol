@@ -21,8 +21,7 @@ use opentelemetry_sdk::{
 };
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
-    fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
-    Registry,
+    fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer, Registry,
 };
 
 use vol_config::{LoggingConfig, OpenTelemetryConfig, TracingConfig};
@@ -42,16 +41,19 @@ pub fn init_otel_logs(
 > {
     use opentelemetry::KeyValue;
 
-    let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
-        .unwrap_or_else(|_| config.endpoint.clone());
-    let service_name = std::env::var("OTEL_SERVICE_NAME")
-        .unwrap_or_else(|_| config.service_name.clone());
+    let endpoint =
+        std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_else(|_| config.endpoint.clone());
+    let service_name =
+        std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| config.service_name.clone());
 
     let resource = Resource::builder()
         .with_service_name(service_name.clone())
         .with_attributes([
             KeyValue::new("service.namespace", config.service_namespace.clone()),
-            KeyValue::new("deployment.environment", config.deployment_environment.clone()),
+            KeyValue::new(
+                "deployment.environment",
+                config.deployment_environment.clone(),
+            ),
         ])
         .build();
 
@@ -217,11 +219,10 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
         // OpenTelemetry disabled - use simple init
         let error_appender = create_error_appender(&config.logging);
 
-        type OtelLogLayer =
-            opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge<
-                opentelemetry_sdk::logs::SdkLoggerProvider,
-                opentelemetry_sdk::logs::SdkLogger,
-            >;
+        type OtelLogLayer = opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge<
+            opentelemetry_sdk::logs::SdkLoggerProvider,
+            opentelemetry_sdk::logs::SdkLogger,
+        >;
 
         if config.logging.error_file {
             let error_filter = tracing_subscriber::filter::LevelFilter::ERROR;

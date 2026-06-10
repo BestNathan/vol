@@ -73,9 +73,9 @@ impl AgentRouter {
         let dispatcher = dispatchers
             .get(agent_id)
             .ok_or_else(|| ChannelError::AgentNotFound(agent_id.to_string()))?;
-        dispatcher.swap_session(session).map_err(|e| {
-            ChannelError::AgentBusy(e.to_string())
-        })
+        dispatcher
+            .swap_session(session)
+            .map_err(|e| ChannelError::AgentBusy(e.to_string()))
     }
 
     /// List all registered agent IDs.
@@ -95,9 +95,7 @@ impl AgentRouter {
     /// Check if an agent is currently running.
     pub async fn is_agent_running(&self, agent_id: &str) -> bool {
         let dispatchers = self.dispatchers.read().await;
-        dispatchers
-            .get(agent_id)
-            .map_or(false, |d| d.is_busy())
+        dispatchers.get(agent_id).map_or(false, |d| d.is_busy())
     }
 }
 

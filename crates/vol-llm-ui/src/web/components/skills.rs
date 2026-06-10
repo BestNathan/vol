@@ -1,8 +1,8 @@
 //! Skills panel showing available skills.
 
-use dioxus::prelude::*;
 use crate::state::{SkillDialogState, SkillsState, UiEventKind};
 use crate::web::components::app::AppState;
+use dioxus::prelude::*;
 
 /// Safely write to a Signal in an async callback.
 /// When a component unmounts, its signals are dropped.
@@ -10,7 +10,8 @@ use crate::web::components::app::AppState;
 fn safe_write<T>(mut sig: Signal<T>, f: impl FnOnce(&mut T)) -> bool {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         sig.with_mut(f);
-    })).is_ok()
+    }))
+    .is_ok()
 }
 
 #[component]
@@ -25,20 +26,24 @@ pub fn SkillsPanel(mut dialog_signal: Signal<SkillDialogState>) -> Element {
     use_effect(move || {
         let client = rpc_client_for_effect.clone();
         let mut sig = signal;
-        sig.with_mut(|s| { s.loading = true; s.error = None; });
+        sig.with_mut(|s| {
+            s.loading = true;
+            s.error = None;
+        });
         client.skill_list(move |result| {
             safe_write(sig, |s| {
                 s.loading = false;
                 match result {
                     Ok(entries) => {
-                        s.skills = entries.iter().map(|e| {
-                            crate::state::SkillDisplayEntry {
+                        s.skills = entries
+                            .iter()
+                            .map(|e| crate::state::SkillDisplayEntry {
                                 name: e.name.clone(),
                                 version: e.version.clone(),
                                 scope: e.scope.clone(),
                                 description: e.description.clone(),
-                            }
-                        }).collect();
+                            })
+                            .collect();
                         s.error = None;
                     }
                     Err(e) => {
@@ -57,23 +62,29 @@ pub fn SkillsPanel(mut dialog_signal: Signal<SkillDialogState>) -> Element {
         let _sub = event_bus.subscribe(UiEventKind::WsConnected, move |_| {
             let cl = client_for_reconnect.clone();
             let sig = sig_for_reconnect;
-            safe_write(sig, |s| { s.loading = true; s.error = None; });
+            safe_write(sig, |s| {
+                s.loading = true;
+                s.error = None;
+            });
             cl.skill_list(move |result| {
                 safe_write(sig, |s| {
                     s.loading = false;
                     match result {
                         Ok(entries) => {
-                            s.skills = entries.iter().map(|e| {
-                                crate::state::SkillDisplayEntry {
+                            s.skills = entries
+                                .iter()
+                                .map(|e| crate::state::SkillDisplayEntry {
                                     name: e.name.clone(),
                                     version: e.version.clone(),
                                     scope: e.scope.clone(),
                                     description: e.description.clone(),
-                                }
-                            }).collect();
+                                })
+                                .collect();
                             s.error = None;
                         }
-                        Err(e) => { s.error = Some(e); }
+                        Err(e) => {
+                            s.error = Some(e);
+                        }
                     }
                 });
             });
@@ -207,9 +218,15 @@ fn SkillCard(
     index: usize,
 ) -> Element {
     let skill = signal.read().skills.get(index).cloned();
-    let Some(skill) = skill else { return rsx! {}; };
+    let Some(skill) = skill else {
+        return rsx! {};
+    };
 
-    let color = match skill.scope.as_str() { "User" => "#40c040", "Repo" => "#4080ff", _ => "#c0c040" };
+    let color = match skill.scope.as_str() {
+        "User" => "#40c040",
+        "Repo" => "#4080ff",
+        _ => "#c0c040",
+    };
 
     rsx! {
         div {
@@ -259,9 +276,15 @@ fn SkillRow(
     index: usize,
 ) -> Element {
     let skill = signal.read().skills.get(index).cloned();
-    let Some(skill) = skill else { return rsx! {}; };
+    let Some(skill) = skill else {
+        return rsx! {};
+    };
 
-    let color = match skill.scope.as_str() { "User" => "#40c040", "Repo" => "#4080ff", _ => "#c0c040" };
+    let color = match skill.scope.as_str() {
+        "User" => "#40c040",
+        "Repo" => "#4080ff",
+        _ => "#c0c040",
+    };
 
     rsx! {
         tr {

@@ -1,11 +1,11 @@
 //! Log viewer tab rendering.
 
 use crate::app::{AppState, LogLine};
-use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::Frame;
 
 pub fn render_log_viewer(frame: &mut Frame, area: Rect, state: &AppState) {
     if state.log_viewer.selected_run.is_some() {
@@ -60,10 +60,8 @@ fn render_run_list(frame: &mut Frame, area: Rect, state: &AppState) {
         Style::default().fg(Color::DarkGray),
     )));
 
-    let paragraph = Paragraph::new(lines)
-        .block(Block::default()
-            .title(" Log Runs ")
-            .borders(Borders::ALL));
+    let paragraph =
+        Paragraph::new(lines).block(Block::default().title(" Log Runs ").borders(Borders::ALL));
 
     frame.render_widget(paragraph, area);
 }
@@ -79,9 +77,14 @@ fn render_log_entries(frame: &mut Frame, area: Rect, state: &AppState) {
     );
 
     let paragraph = Paragraph::new(lines)
-        .block(Block::default()
-            .title(format!(" Log: {} ", state.log_viewer.selected_run.as_deref().unwrap_or("")))
-            .borders(Borders::ALL))
+        .block(
+            Block::default()
+                .title(format!(
+                    " Log: {} ",
+                    state.log_viewer.selected_run.as_deref().unwrap_or("")
+                ))
+                .borders(Borders::ALL),
+        )
         .scroll((scroll, 0));
 
     frame.render_widget(paragraph, area);
@@ -98,10 +101,7 @@ fn build_log_lines(entries: &[LogLine]) -> Vec<Line<'static>> {
                     Style::default().fg(Color::DarkGray),
                 ),
                 Span::styled(entry.event_type.clone(), Style::default().fg(color)),
-                Span::styled(
-                    format!(" — {}", entry.summary),
-                    Style::default().fg(color),
-                ),
+                Span::styled(format!(" — {}", entry.summary), Style::default().fg(color)),
             ])
         })
         .collect()

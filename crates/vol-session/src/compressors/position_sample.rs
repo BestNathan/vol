@@ -95,6 +95,16 @@ mod tests {
         // Expected: [1, 2, 3, 6, 9, 10]
         assert_eq!(result.len(), 6);
         assert_eq!(result[0].message.content.as_ref().unwrap().as_str(), "1");
-        assert_eq!(result.last().unwrap().message.content.as_ref().unwrap().as_str(), "10");
+        assert_eq!(
+            result
+                .last()
+                .unwrap()
+                .message
+                .content
+                .as_ref()
+                .unwrap()
+                .as_str(),
+            "10"
+        );
     }
 }

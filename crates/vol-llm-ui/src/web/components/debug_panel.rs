@@ -1,17 +1,25 @@
 //! Debug panel — WS message inspector and development tools.
 
-use dioxus::prelude::*;
 use crate::state::{DebugState, DebugTab, WsDirection};
+use dioxus::prelude::*;
 
 fn format_elapsed(ms: u64) -> String {
     let secs = ms / 1000;
     let mins = secs / 60;
     let hours = mins / 60;
-    format!("{:02}:{:02}:{:02}.{:03}", hours, mins % 60, secs % 60, ms % 1000)
+    format!(
+        "{:02}:{:02}:{:02}.{:03}",
+        hours,
+        mins % 60,
+        secs % 60,
+        ms % 1000
+    )
 }
 
 fn format_json_pretty(raw: &str) -> String {
-    if raw.is_empty() { return String::new(); }
+    if raw.is_empty() {
+        return String::new();
+    }
     if let Ok(val) = serde_json::from_str::<serde_json::Value>(raw) {
         serde_json::to_string_pretty(&val).unwrap_or_else(|_| raw.to_string())
     } else {
@@ -34,7 +42,9 @@ pub fn DebugPanel() -> Element {
     let active_tab = guard.active_tab;
     drop(guard);
 
-    if !open { return rsx! { div {} }; }
+    if !open {
+        return rsx! { div {} };
+    }
 
     rsx! {
         div { class: "fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4",
@@ -106,7 +116,11 @@ fn WsTab(messages: Vec<crate::state::WsMessage>) -> Element {
 }
 
 #[component]
-fn WsMessageRow(index: usize, message: crate::state::WsMessage, expanded: Signal<Option<usize>>) -> Element {
+fn WsMessageRow(
+    index: usize,
+    message: crate::state::WsMessage,
+    expanded: Signal<Option<usize>>,
+) -> Element {
     let is_expanded = *expanded.read() == Some(index);
     let arrow = match message.direction {
         WsDirection::In => "\u{2190}",

@@ -15,11 +15,24 @@ pub enum StoreError {
     #[error("Serialization error: {0}")]
     Serialization(String),
 
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
     #[error("Not found: {0}")]
     NotFound(String),
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Database error: {0}")]
+    Database(String),
+
+    #[error("Session agent scope conflict for {session_id}: expected {expected}, actual {actual}")]
+    SessionAgentScopeConflict {
+        session_id: String,
+        expected: String,
+        actual: String,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, StoreError>;

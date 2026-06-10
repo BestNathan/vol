@@ -51,11 +51,10 @@ pub fn parse<T: DeserializeOwned>(content: &str) -> Result<ParsedDoc<T>> {
 
 /// Reconstruct full markdown from a ParsedDoc.
 pub fn to_string<T: Serialize>(doc: &ParsedDoc<T>) -> Result<String> {
-    let yaml = serde_yaml::to_string(&doc.frontmatter)
-        .map_err(|e| MdFmError::ParseError {
-            line: 0,
-            message: e.to_string(),
-        })?;
+    let yaml = serde_yaml::to_string(&doc.frontmatter).map_err(|e| MdFmError::ParseError {
+        line: 0,
+        message: e.to_string(),
+    })?;
     Ok(format!("---\n{}---\n{}", yaml, doc.body))
 }
 
@@ -183,10 +182,13 @@ mod tests {
         let mut doc = parse::<TestFm>(content).unwrap();
         assert_eq!(doc.body, "\n\n# Body\nContent");
 
-        update_frontmatter(&mut doc, &TestFm {
-            title: "New".to_string(),
-            tags: vec!["new".to_string()],
-        });
+        update_frontmatter(
+            &mut doc,
+            &TestFm {
+                title: "New".to_string(),
+                tags: vec!["new".to_string()],
+            },
+        );
 
         assert_eq!(doc.frontmatter.title, "New");
         assert_eq!(doc.frontmatter.tags, vec!["new"]);

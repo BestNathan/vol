@@ -28,7 +28,11 @@ async fn test_bash_rm_rf_blocked() {
     let err = result.unwrap_err();
     // The security violation should cause the command to be blocked
     let err_str = format!("{}", err);
-    assert!(err_str.contains("blocked") || err_str.contains("Security") || err_str.contains("SecurityViolation"));
+    assert!(
+        err_str.contains("blocked")
+            || err_str.contains("Security")
+            || err_str.contains("SecurityViolation")
+    );
 }
 
 #[tokio::test]
@@ -42,7 +46,11 @@ async fn test_bash_fork_bomb_blocked() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     let err_str = format!("{}", err);
-    assert!(err_str.contains("blocked") || err_str.contains("Security") || err_str.contains("SecurityViolation"));
+    assert!(
+        err_str.contains("blocked")
+            || err_str.contains("Security")
+            || err_str.contains("SecurityViolation")
+    );
 }
 
 #[tokio::test]
@@ -58,7 +66,11 @@ async fn test_bash_rm_file_allowed() {
     // Should not error due to security - may succeed or fail due to file not existing
     let err_str = result.map_or_else(|e| format!("{}", e), |r| r.content.clone());
     // The key is that it's NOT a security block - either it succeeds or fails with "No such file"
-    assert!(!err_str.contains("SecurityViolation") || err_str.contains("No such file") || err_str.contains("nonexistent"));
+    assert!(
+        !err_str.contains("SecurityViolation")
+            || err_str.contains("No such file")
+            || err_str.contains("nonexistent")
+    );
 }
 
 #[tokio::test]
@@ -82,7 +94,11 @@ async fn test_bash_timeout_kills_process() {
     use tokio::process::Command;
 
     // Kill any existing sleep 10 from previous test runs
-    let _ = Command::new("pkill").arg("-f").arg("sleep 10").output().await;
+    let _ = Command::new("pkill")
+        .arg("-f")
+        .arg("sleep 10")
+        .output()
+        .await;
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     let tool = BashTool::new();
@@ -95,7 +111,11 @@ async fn test_bash_timeout_kills_process() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     let err_str = format!("{}", err);
-    assert!(err_str.contains("timed out"), "Expected timeout error, got: {}", err_str);
+    assert!(
+        err_str.contains("timed out"),
+        "Expected timeout error, got: {}",
+        err_str
+    );
 
     // Give the kill sequence time to complete
     tokio::time::sleep(Duration::from_millis(200)).await;

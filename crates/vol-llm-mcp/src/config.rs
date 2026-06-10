@@ -160,28 +160,30 @@ fn read_config(path: &Path) -> Result<Option<RawMcpConfig>, McpError> {
             })
         }
     };
-    let config: RawMcpConfig = serde_json::from_str(&content).map_err(|e| McpError::ConfigParse {
-        path: path.display().to_string(),
-        detail: e.to_string(),
-    })?;
+    let config: RawMcpConfig =
+        serde_json::from_str(&content).map_err(|e| McpError::ConfigParse {
+            path: path.display().to_string(),
+            detail: e.to_string(),
+        })?;
     Ok(Some(config))
 }
 
 fn load_project_config(working_dir: Option<&Path>) -> Result<Option<RawMcpConfig>, McpError> {
-    let dir = working_dir.map(|p| p.to_path_buf()).or_else(|| std::env::current_dir().ok());
+    let dir = working_dir
+        .map(|p| p.to_path_buf())
+        .or_else(|| std::env::current_dir().ok());
     let Some(dir) = dir else { return Ok(None) };
     read_config(&dir.join(".mcp.json"))
 }
 
 fn load_user_config() -> Result<Option<RawMcpConfig>, McpError> {
-    let Some(home) = dirs::home_dir() else { return Ok(None) };
+    let Some(home) = dirs::home_dir() else {
+        return Ok(None);
+    };
     read_config(&home.join(".mcp.json"))
 }
 
-fn merge_configs(
-    project: Option<RawMcpConfig>,
-    user: Option<RawMcpConfig>,
-) -> McpConfig {
+fn merge_configs(project: Option<RawMcpConfig>, user: Option<RawMcpConfig>) -> McpConfig {
     let mut merged: HashMap<String, serde_json::Value> = HashMap::new();
 
     // User-level first (lower priority)
@@ -215,8 +217,9 @@ mod tests {
     #[test]
     fn test_load_user_config_only() {
         let user: RawMcpConfig = serde_json::from_str(
-            r#"{"mcpServers":{"test":{"type":"stdio","command":"echo","args":["hello"]}}}"#
-        ).unwrap();
+            r#"{"mcpServers":{"test":{"type":"stdio","command":"echo","args":["hello"]}}}"#,
+        )
+        .unwrap();
         let merged = merge_configs(None, Some(user));
         assert_eq!(merged.servers.len(), 1);
         assert_eq!(merged.servers[0].name, "test");
@@ -260,9 +263,9 @@ mod tests {
     #[test]
     fn test_merge_empty_user() {
         let user: RawMcpConfig = serde_json::from_str(r#"{"mcpServers":{}}"#).unwrap();
-        let project: RawMcpConfig = serde_json::from_str(
-            r#"{"mcpServers":{"test":{"type":"stdio","command":"echo"}}}"#
-        ).unwrap();
+        let project: RawMcpConfig =
+            serde_json::from_str(r#"{"mcpServers":{"test":{"type":"stdio","command":"echo"}}}"#)
+                .unwrap();
         let merged = merge_configs(Some(project), Some(user));
         assert_eq!(merged.servers.len(), 1);
         assert_eq!(merged.servers[0].name, "test");
@@ -281,8 +284,9 @@ mod tests {
             r#"{"mcpServers":{
                 "stdio-srv":{"type":"stdio","command":"echo","args":["hi"]},
                 "http-srv":{"url":"http://localhost:3000","transport":"sse"}
-            }}"#
-        ).unwrap();
+            }}"#,
+        )
+        .unwrap();
         let merged = merge_configs(None, Some(user));
         assert_eq!(merged.servers.len(), 1);
         assert_eq!(merged.servers[0].name, "stdio-srv");
@@ -295,11 +299,13 @@ mod tests {
             r#"{"mcpServers":{
                 "my-srv":{"type":"stdio","command":"npx","args":["srv"]},
                 "http-srv":{"url":"http://example.com"}
-            }}"#
-        ).unwrap();
+            }}"#,
+        )
+        .unwrap();
         let project: RawMcpConfig = serde_json::from_str(
-            r#"{"mcpServers":{"my-srv":{"type":"stdio","command":"uv","args":["run","srv.py"]}}}"#
-        ).unwrap();
+            r#"{"mcpServers":{"my-srv":{"type":"stdio","command":"uv","args":["run","srv.py"]}}}"#,
+        )
+        .unwrap();
 
         let merged = merge_configs(Some(project), Some(user));
         assert_eq!(merged.servers.len(), 1);
@@ -313,9 +319,8 @@ mod tests {
 
     #[test]
     fn test_parse_stdio_type() {
-        let value: serde_json::Value = serde_json::from_str(
-            r#"{"type":"stdio","command":"echo","args":["hello"]}"#
-        ).unwrap();
+        let value: serde_json::Value =
+            serde_json::from_str(r#"{"type":"stdio","command":"echo","args":["hello"]}"#).unwrap();
         let parsed = try_parse_server("test-srv", &value).unwrap();
         assert!(matches!(parsed.transport, McpTransport::Stdio { .. }));
         assert_eq!(parsed.name, "test-srv");
@@ -323,9 +328,8 @@ mod tests {
 
     #[test]
     fn test_parse_http_type() {
-        let value: serde_json::Value = serde_json::from_str(
-            r#"{"type":"http","url":"http://localhost:3000/mcp"}"#
-        ).unwrap();
+        let value: serde_json::Value =
+            serde_json::from_str(r#"{"type":"http","url":"http://localhost:3000/mcp"}"#).unwrap();
         let parsed = try_parse_server("http-srv", &value).unwrap();
         assert!(matches!(parsed.transport, McpTransport::Http { .. }));
         assert_eq!(parsed.name, "http-srv");
@@ -363,18 +367,15 @@ mod tests {
 
     #[test]
     fn test_missing_type_is_skipped() {
-        let value: serde_json::Value = serde_json::from_str(
-            r#"{"command":"echo"}"#
-        ).unwrap();
+        let value: serde_json::Value = serde_json::from_str(r#"{"command":"echo"}"#).unwrap();
         let result = try_parse_server("no-type-srv", &value);
         assert!(result.is_none());
     }
 
     #[test]
     fn test_unrecognized_type_is_skipped() {
-        let value: serde_json::Value = serde_json::from_str(
-            r#"{"type":"websocket","url":"ws://localhost:3000"}"#
-        ).unwrap();
+        let value: serde_json::Value =
+            serde_json::from_str(r#"{"type":"websocket","url":"ws://localhost:3000"}"#).unwrap();
         let result = try_parse_server("ws-srv", &value);
         assert!(result.is_none());
     }
@@ -385,8 +386,9 @@ mod tests {
             r#"{"mcpServers":{
                 "stdio-srv":{"type":"stdio","command":"echo","args":["hi"]},
                 "http-srv":{"type":"http","url":"http://localhost:3000"}
-            }}"#
-        ).unwrap();
+            }}"#,
+        )
+        .unwrap();
         let merged = merge_configs(None, Some(user));
         assert_eq!(merged.servers.len(), 2);
     }

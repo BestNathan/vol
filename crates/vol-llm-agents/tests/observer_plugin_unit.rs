@@ -1,13 +1,12 @@
 //! Unit tests for ObserverPlugin
 
-use vol_llm_agents::coding::{ObserverPlugin, EventObserver, ObserverError};
-use vol_llm_agent::react::{AgentPlugin, RunContext};
-use vol_llm_core::AgentStreamEvent;
 use std::sync::Arc;
+use vol_llm_agent::react::{AgentPlugin, RunContext};
+use vol_llm_agents::coding::{EventObserver, ObserverError, ObserverPlugin};
+use vol_llm_core::AgentStreamEvent;
 
 fn create_test_context_builder() -> vol_llm_context::ContextBuilder {
-    vol_llm_context::ContextBuilderBuilder::new(128_000)
-        .build()
+    vol_llm_context::ContextBuilderBuilder::new(128_000).build()
 }
 
 struct MockObserver {
@@ -83,13 +82,19 @@ async fn test_observer_plugin_forwards_multiple_events() {
 
     // Send multiple events
     let events = vec![
-        AgentStreamEvent::AgentStart { input: "task".to_string(), timestamp: chrono::Utc::now() },
-        AgentStreamEvent::ThinkingComplete { thinking: "thinking...".to_string(), timestamp: chrono::Utc::now() },
+        AgentStreamEvent::AgentStart {
+            input: "task".to_string(),
+            timestamp: chrono::Utc::now(),
+        },
+        AgentStreamEvent::ThinkingComplete {
+            thinking: "thinking...".to_string(),
+            timestamp: chrono::Utc::now(),
+        },
         AgentStreamEvent::ToolCallBegin {
             timestamp: chrono::Utc::now(),
             tool_call_id: "call_1".to_string(),
             tool_name: "read_file".to_string(),
-            arguments: r#"{"file": "test.txt"}"#.to_string()
+            arguments: r#"{"file": "test.txt"}"#.to_string(),
         },
         AgentStreamEvent::ToolCallComplete {
             timestamp: chrono::Utc::now(),
@@ -104,7 +109,10 @@ async fn test_observer_plugin_forwards_multiple_events() {
             tool_calls: vec![],
             final_answer: None,
         },
-        AgentStreamEvent::AgentComplete { response: None, timestamp: chrono::Utc::now() },
+        AgentStreamEvent::AgentComplete {
+            response: None,
+            timestamp: chrono::Utc::now(),
+        },
     ];
 
     for event in events {
@@ -123,13 +131,25 @@ fn create_test_context() -> RunContext {
     struct MockLlm;
     #[async_trait::async_trait]
     impl LLMClient for MockLlm {
-        fn provider(&self) -> vol_llm_core::LLMProvider { vol_llm_core::LLMProvider::Anthropic }
-        fn model(&self) -> &str { "mock" }
-        fn supported_params(&self) -> &[vol_llm_core::SupportedParam] { &[] }
-        async fn converse(&self, _: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
+        fn provider(&self) -> vol_llm_core::LLMProvider {
+            vol_llm_core::LLMProvider::Anthropic
+        }
+        fn model(&self) -> &str {
+            "mock"
+        }
+        fn supported_params(&self) -> &[vol_llm_core::SupportedParam] {
+            &[]
+        }
+        async fn converse(
+            &self,
+            _: vol_llm_core::ConversationRequest,
+        ) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
             unimplemented!()
         }
-        async fn converse_stream(&self, _: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::StreamReceiver> {
+        async fn converse_stream(
+            &self,
+            _: vol_llm_core::ConversationRequest,
+        ) -> vol_llm_core::Result<vol_llm_core::StreamReceiver> {
             let (_tx, rx) = tokio::sync::mpsc::channel(10);
             Ok(vol_llm_core::StreamReceiver::new(rx))
         }

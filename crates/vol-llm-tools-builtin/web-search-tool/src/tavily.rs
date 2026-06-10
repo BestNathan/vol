@@ -43,7 +43,9 @@ impl TavilySearchProvider {
     }
 
     /// Create a new Tavily provider from configuration.
-    pub fn from_config(config: &TavilyConfig) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn from_config(
+        config: &TavilyConfig,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = build_client(&config.proxy.proxy_url)?;
         Ok(Self {
             api_key: config.api_key.clone(),
@@ -65,11 +67,7 @@ fn build_client(
 
 #[async_trait]
 impl SearchFn for TavilySearchProvider {
-    async fn search(
-        &self,
-        query: &str,
-        opts: SearchOptions,
-    ) -> Result<SearchResult, SearchError> {
+    async fn search(&self, query: &str, opts: SearchOptions) -> Result<SearchResult, SearchError> {
         let num_results = opts.num_results.unwrap_or(5);
 
         let mut body = serde_json::json!({

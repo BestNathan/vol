@@ -4,10 +4,10 @@ pub mod tavily;
 
 use async_trait::async_trait;
 use serde::Deserialize;
+use std::sync::Arc;
 use vol_llm_tool::web::fetch::{FetchFn, FetchOptions};
 use vol_llm_tool::web::search::{SearchFn, SearchOptions};
 use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType};
-use std::sync::Arc;
 
 // ==================== WebSearchTool ====================
 

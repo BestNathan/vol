@@ -22,7 +22,7 @@ use vol_llm_agent::agent_def::AgentScope;
 use vol_llm_agent::agent_loader::AgentLoader;
 use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
 use vol_llm_observability::{init_otel_logs, LokiPlugin};
-use vol_llm_provider::{LLMConfig, anthropic::AnthropicProvider};
+use vol_llm_provider::{anthropic::AnthropicProvider, LLMConfig};
 use vol_llm_tools_builtin::register_all;
 
 #[tokio::main]
@@ -30,8 +30,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing with OTel log export
     let otel_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:4317".to_string());
-    init_otel_logs(&otel_endpoint, "k8s-ops-agent")
-        .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn std::error::Error>)?;
+    init_otel_logs(&otel_endpoint, "k8s-ops-agent").map_err(|e| {
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            e.to_string(),
+        )) as Box<dyn std::error::Error>
+    })?;
 
     println!("═══════════════════════════════════════════════════════════");
     println!("  K8s Ops Agent — File-Loaded with Loki Observability");

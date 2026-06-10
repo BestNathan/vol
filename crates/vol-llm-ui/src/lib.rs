@@ -18,14 +18,13 @@ pub mod web;
 
 // Re-export commonly used types at crate root.
 pub use state::{
-    UiState, UiEvent, ConversationEntry, ToolCallEntry, ToolCallStatus,
-    WorkspaceTreeNode, ActiveTab, ApprovalState,
-    SkillDisplayEntry, LogRunSummary, SessionDialogEntry,
+    ActiveTab, ApprovalState, ConversationEntry, LogRunSummary, SessionDialogEntry,
+    SkillDisplayEntry, ToolCallEntry, ToolCallStatus, UiEvent, UiState, WorkspaceTreeNode,
 };
 
-#[cfg(feature = "tui")]
-pub use connection::{AgentConnection, FileOperations, FileEntry, LogRunInfo, SessionInfo};
 #[cfg(feature = "tui")]
 pub use connection::local::LocalConnection;
 #[cfg(feature = "tui")]
 pub use connection::remote::RemoteConnection;
+#[cfg(feature = "tui")]
+pub use connection::{AgentConnection, FileEntry, FileOperations, LogRunInfo, SessionInfo};

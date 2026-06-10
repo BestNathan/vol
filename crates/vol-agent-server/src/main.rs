@@ -22,17 +22,15 @@ use config::ServerConfig;
 #[tokio::main]
 async fn main() {
     // --- Parse --config flag ---
-    let explicit_config = std::env::args()
-        .nth(1)
-        .and_then(|arg| {
-            if arg == "--config" {
-                std::env::args().nth(2)
-            } else if arg.starts_with("--config=") {
-                Some(arg.trim_start_matches("--config=").to_string())
-            } else {
-                None
-            }
-        });
+    let explicit_config = std::env::args().nth(1).and_then(|arg| {
+        if arg == "--config" {
+            std::env::args().nth(2)
+        } else if arg.starts_with("--config=") {
+            Some(arg.trim_start_matches("--config=").to_string())
+        } else {
+            None
+        }
+    });
 
     // --- Load config ---
     let (mut config, config_path) = ServerConfig::load_or_default(explicit_config.as_deref())
@@ -44,9 +42,7 @@ async fn main() {
 
     // --- Init tracing ---
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| {
-            tracing_subscriber::EnvFilter::new(&config.tracing.level)
-        });
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.tracing.level));
 
     match config.tracing.format.as_str() {
         "json" => {
@@ -56,9 +52,7 @@ async fn main() {
                 .init();
         }
         _ => {
-            tracing_subscriber::fmt()
-                .with_env_filter(env_filter)
-                .init();
+            tracing_subscriber::fmt().with_env_filter(env_filter).init();
         }
     }
 
@@ -74,6 +68,12 @@ async fn main() {
         tracing::info!("Using default file task store");
     }
 
+    if let Some(session_store) = &config.runtime.session_store {
+        tracing::info!(session_store_type = ?session_store.store_type, "Using configured session store");
+    } else {
+        tracing::info!("Using default file session store");
+    }
+
     // --- Build core ---
     tracing::info!(
         working_dir = %config.runtime.working_dir,
@@ -83,6 +83,7 @@ async fn main() {
 
     let core = AgentServerCore::builder(&config.runtime.working_dir, &config.runtime.store_dir)
         .with_task_store_config(config.runtime.task_store.clone())
+        .with_session_store_config(config.runtime.session_store.clone())
         .build()
         .await
         .unwrap_or_else(|e| {
@@ -91,12 +92,10 @@ async fn main() {
         });
 
     // --- Discover agents ---
-    core.discover_agents()
-        .await
-        .unwrap_or_else(|e| {
-            tracing::error!("Failed to discover agents: {}", e);
-            std::process::exit(1);
-        });
+    core.discover_agents().await.unwrap_or_else(|e| {
+        tracing::error!("Failed to discover agents: {}", e);
+        std::process::exit(1);
+    });
 
     // --- Start server ---
     let server = JsonRpcServer::new(Arc::new(core));
@@ -120,10 +119,8 @@ async fn main() {
     tracing::info!("           skill.list, skill.get");
     tracing::info!("           task.list, task.output");
 
-    axum::serve(listener, app)
-        .await
-        .unwrap_or_else(|e| {
-            tracing::error!("Server error: {}", e);
-            std::process::exit(1);
-        });
+    axum::serve(listener, app).await.unwrap_or_else(|e| {
+        tracing::error!("Server error: {}", e);
+        std::process::exit(1);
+    });
 }

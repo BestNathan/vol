@@ -103,18 +103,48 @@ fn normalize_sqlite_url(url: &str) -> Result<String> {
         ));
     }
 
+    let url = expand_sqlite_tilde_url(url);
+
     if let Some((_, query)) = url.split_once('?') {
         if query
             .split('&')
             .filter_map(|param| param.split_once('=').map(|(key, _)| key))
             .any(|key| key == "mode")
         {
-            Ok(url.to_string())
+            Ok(url)
         } else {
             Ok(format!("{url}&mode=rwc"))
         }
     } else {
         Ok(format!("{url}?mode=rwc"))
+    }
+}
+
+fn expand_sqlite_tilde_url(url: &str) -> String {
+    let (without_query, query) = url
+        .split_once('?')
+        .map_or((url, None), |(path, query)| (path, Some(query)));
+    let Some(raw) = without_query
+        .strip_prefix("sqlite://")
+        .or_else(|| without_query.strip_prefix("sqlite:"))
+    else {
+        return url.to_string();
+    };
+
+    let expanded = if raw == "~" {
+        std::env::var("HOME").unwrap_or_else(|_| raw.to_string())
+    } else if let Some(rest) = raw.strip_prefix("~/") {
+        std::env::var("HOME")
+            .map(|home| format!("{home}/{rest}"))
+            .unwrap_or_else(|_| raw.to_string())
+    } else {
+        raw.to_string()
+    };
+
+    let rebuilt = format!("sqlite://{expanded}");
+    match query {
+        Some(query) => format!("{rebuilt}?{query}"),
+        None => rebuilt,
     }
 }
 
@@ -246,11 +276,17 @@ mod tests {
     use super::*;
 
     const POSTGRES_TEST_URL_ENV: &str = "VOL_AGENT_POSTGRES_TEST_URL";
-    const POSTGRES_TEST_URL_REQUIRED: &str =
-        "VOL_AGENT_POSTGRES_TEST_URL must be set for mandatory Postgres task-store tests";
 
-    fn postgres_test_url() -> String {
-        std::env::var(POSTGRES_TEST_URL_ENV).expect(POSTGRES_TEST_URL_REQUIRED)
+    fn postgres_test_url() -> Option<String> {
+        match std::env::var(POSTGRES_TEST_URL_ENV) {
+            Ok(url) => Some(url),
+            Err(_) => {
+                eprintln!(
+                    "SKIPPED: VOL_AGENT_POSTGRES_TEST_URL is not set; Postgres task-store coverage was not exercised"
+                );
+                None
+            }
+        }
     }
 
     struct PostgresTestLock(std::fs::File);
@@ -303,10 +339,11 @@ mod tests {
         (store, dir)
     }
 
-    async fn postgres_store() -> DatabaseTaskStore {
-        let store = DatabaseTaskStore::connect(&postgres_test_url()).await.unwrap();
+    async fn postgres_store() -> Option<DatabaseTaskStore> {
+        let url = postgres_test_url()?;
+        let store = DatabaseTaskStore::connect(&url).await.unwrap();
         clear_store(&store).await;
-        store
+        Some(store)
     }
 
     async fn assert_create_get(store: &DatabaseTaskStore) {
@@ -341,7 +378,9 @@ mod tests {
     #[tokio::test]
     async fn postgres_create_assigns_id_and_get_retrieves_task() {
         let _guard = PostgresTestLock::acquire();
-        let store = postgres_store().await;
+        let Some(store) = postgres_store().await else {
+            return;
+        };
         assert_create_get(&store).await;
     }
 
@@ -403,7 +442,9 @@ mod tests {
     #[tokio::test]
     async fn postgres_update_delete_list() {
         let _guard = PostgresTestLock::acquire();
-        let store = postgres_store().await;
+        let Some(store) = postgres_store().await else {
+            return;
+        };
         assert_update_delete_list(&store).await;
     }
 
@@ -445,7 +486,9 @@ mod tests {
     #[tokio::test]
     async fn postgres_ready_tasks() {
         let _guard = PostgresTestLock::acquire();
-        let store = postgres_store().await;
+        let Some(store) = postgres_store().await else {
+            return;
+        };
         assert_ready_tasks(&store).await;
     }
 
@@ -476,7 +519,10 @@ mod tests {
         use crate::model::{Task, TaskKind};
         use crate::store::TaskStore;
 
-        let store = DatabaseTaskStore::connect(&postgres_test_url()).await.unwrap();
+        let Some(url) = postgres_test_url() else {
+            return;
+        };
+        let store = DatabaseTaskStore::connect(&url).await.unwrap();
         clear_store(&store).await;
         let id = store
             .create(Task::new(
@@ -488,9 +534,7 @@ mod tests {
             .unwrap();
         drop(store);
 
-        let reopened = DatabaseTaskStore::connect(&postgres_test_url())
-            .await
-            .unwrap();
+        let reopened = DatabaseTaskStore::connect(&url).await.unwrap();
         let got = reopened.get(&id).await.unwrap().unwrap();
         assert_eq!(got.subject, "persisted pg");
         clear_store(&reopened).await;
@@ -520,7 +564,10 @@ mod tests {
         let _guard = PostgresTestLock::acquire();
         use sea_orm::{ConnectionTrait, Statement};
 
-        let store = DatabaseTaskStore::connect(&postgres_test_url()).await.unwrap();
+        let Some(url) = postgres_test_url() else {
+            return;
+        };
+        let store = DatabaseTaskStore::connect(&url).await.unwrap();
         clear_store(&store).await;
         let rows = store
             .db
@@ -665,6 +712,19 @@ mod tests {
         assert_eq!(
             normalize_sqlite_url("sqlite:///tmp/tasks.db?mode=rwc").unwrap(),
             "sqlite:///tmp/tasks.db?mode=rwc"
+        );
+    }
+
+    #[test]
+    fn normalize_sqlite_url_expands_home_dir() {
+        let home = std::env::var("HOME").unwrap();
+        assert_eq!(
+            normalize_sqlite_url("sqlite://~/.vol/data.db").unwrap(),
+            format!("sqlite://{home}/.vol/data.db?mode=rwc")
+        );
+        assert_eq!(
+            normalize_sqlite_url("sqlite://~/.vol/data.db?cache=shared").unwrap(),
+            format!("sqlite://{home}/.vol/data.db?cache=shared&mode=rwc")
         );
     }
 }

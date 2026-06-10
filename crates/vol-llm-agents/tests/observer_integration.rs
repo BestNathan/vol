@@ -1,16 +1,15 @@
 //! Integration test for ObserverPlugin with CodingAgent
 
+use std::sync::Arc;
+use tempfile::tempdir;
+use vol_llm_agent::react::AgentPlugin;
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, HTMLReporter, ObserverPlugin};
 use vol_llm_core::{AgentStreamEvent, LLMClient, LLMProvider};
 use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
-use vol_llm_agent::react::AgentPlugin;
-use std::sync::Arc;
-use tempfile::tempdir;
 
 /// Helper to construct the LLM client for tests.
 fn create_test_llm() -> Arc<dyn LLMClient> {
-    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
-        .expect("ANTHROPIC_AUTH_TOKEN must be set");
+    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").expect("ANTHROPIC_AUTH_TOKEN must be set");
     let llm_config = LLMProviderConfig {
         id: "anthropic-main".to_string(),
         config: LLMConfig {
@@ -35,8 +34,14 @@ async fn test_observer_plugin_receives_all_events() {
 
     #[async_trait::async_trait]
     impl vol_llm_agents::coding::EventObserver for EventTracker {
-        async fn on_event(&self, event: &AgentStreamEvent) -> Result<(), vol_llm_agents::coding::ObserverError> {
-            self.events.lock().await.push(Self::event_name(event).to_string());
+        async fn on_event(
+            &self,
+            event: &AgentStreamEvent,
+        ) -> Result<(), vol_llm_agents::coding::ObserverError> {
+            self.events
+                .lock()
+                .await
+                .push(Self::event_name(event).to_string());
             Ok(())
         }
 
@@ -47,7 +52,9 @@ async fn test_observer_plugin_receives_all_events() {
 
     impl EventTracker {
         fn new() -> Self {
-            Self { events: tokio::sync::Mutex::new(Vec::new()) }
+            Self {
+                events: tokio::sync::Mutex::new(Vec::new()),
+            }
         }
 
         fn event_name(event: &AgentStreamEvent) -> &'static str {
@@ -113,7 +120,8 @@ async fn test_coding_agent_generates_complete_html_report() {
     ));
     let agent = agent.with_observer(observer);
 
-    let result = agent.run("What files are in the current directory?")
+    let result = agent
+        .run("What files are in the current directory?")
         .await
         .unwrap();
 

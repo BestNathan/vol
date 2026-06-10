@@ -11,12 +11,12 @@
 
 use std::sync::Arc;
 use tempfile::tempdir;
-use vol_llm_tool::ToolConfig;
-use vol_llm_tools_builtin::{WebFetchConfig, ProxyConfig};
-use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, ChannelledEventObserver};
+use vol_llm_agent::AgentStreamEvent;
+use vol_llm_agents::coding::{ChannelledEventObserver, CodingAgent, CodingAgentConfig};
 use vol_llm_core::{LLMClient, LLMProvider};
 use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
-use vol_llm_agent::AgentStreamEvent;
+use vol_llm_tool::ToolConfig;
+use vol_llm_tools_builtin::{ProxyConfig, WebFetchConfig};
 
 /// Helper to configure web_fetch in ToolConfig
 fn configure_web_fetch(tool_config: &mut ToolConfig) {
@@ -29,8 +29,7 @@ fn configure_web_fetch(tool_config: &mut ToolConfig) {
 
 /// Helper to construct the LLM client for tests.
 fn create_test_llm() -> Arc<dyn LLMClient> {
-    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
-        .expect("ANTHROPIC_AUTH_TOKEN must be set");
+    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").expect("ANTHROPIC_AUTH_TOKEN must be set");
     let llm_config = LLMProviderConfig {
         id: "anthropic-main".to_string(),
         config: LLMConfig {
@@ -75,13 +74,14 @@ async fn test_coding_agent_uses_web_fetch_for_deribit_docs() {
     let agent = agent.with_observer(observer.clone());
 
     // Run the task — ask agent to fetch Deribit docs
-    let result = agent.run(
-        "根据链接 https://docs.deribit.com 的内容，\
+    let result = agent
+        .run(
+            "根据链接 https://docs.deribit.com 的内容，\
          了解 Deribit API 的 WebSocket 连接方式，\
-         总结连接步骤并写一个简要说明。"
-    )
-    .await
-    .expect("Agent run should succeed");
+         总结连接步骤并写一个简要说明。",
+        )
+        .await
+        .expect("Agent run should succeed");
 
     assert!(result.success, "Agent should complete successfully");
 
@@ -94,13 +94,18 @@ async fn test_coding_agent_uses_web_fetch_for_deribit_docs() {
             if tool_name == "web_fetch")
     });
 
-    let tool_calls: Vec<_> = events.iter().filter_map(|e| {
-        match e {
-            AgentStreamEvent::ToolCallBegin { tool_name, .. } => Some(format!("Called: {}", tool_name)),
-            AgentStreamEvent::ToolCallComplete { tool_name, .. } => Some(format!("Completed: {}", tool_name)),
+    let tool_calls: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            AgentStreamEvent::ToolCallBegin { tool_name, .. } => {
+                Some(format!("Called: {}", tool_name))
+            }
+            AgentStreamEvent::ToolCallComplete { tool_name, .. } => {
+                Some(format!("Completed: {}", tool_name))
+            }
             _ => None,
-        }
-    }).collect();
+        })
+        .collect();
 
     assert!(
         web_fetch_called,
@@ -120,8 +125,10 @@ async fn test_coding_agent_uses_web_fetch_for_deribit_docs() {
         result.summary
     );
 
-    eprintln!("Agent completed in {} iterations with {} tool calls",
-        result.iterations, result.tool_calls);
+    eprintln!(
+        "Agent completed in {} iterations with {} tool calls",
+        result.iterations, result.tool_calls
+    );
 }
 
 /// Test that without web_fetch config, the agent only has core tools available.
@@ -150,7 +157,8 @@ async fn test_coding_agent_without_web_fetch_has_core_tools_only() {
     let observer = Arc::new(ChannelledEventObserver::new());
     let agent = agent.with_observer(observer.clone());
 
-    let result = agent.run("Read hello.txt and tell me what it says")
+    let result = agent
+        .run("Read hello.txt and tell me what it says")
         .await
         .expect("Agent run should succeed");
 

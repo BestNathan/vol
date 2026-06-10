@@ -231,8 +231,15 @@ impl LLMClient for AnthropicProvider {
 
     async fn converse(&self, request: ConversationRequest) -> Result<ConversationResponse> {
         // max_tokens is required for Anthropic
-        let max_tokens = request.model_config.max_tokens
-            .or_else(|| self.body_defaults.get("max_tokens").and_then(|v| v.as_u64()).map(|v| v as u32))
+        let max_tokens = request
+            .model_config
+            .max_tokens
+            .or_else(|| {
+                self.body_defaults
+                    .get("max_tokens")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+            })
             .unwrap_or(8192);
 
         // Convert messages
@@ -295,10 +302,7 @@ impl LLMClient for AnthropicProvider {
             req = req.header(key, value);
         }
 
-        let response = req
-            .send()
-            .await
-            .map_err(LLMError::Network)?;
+        let response = req.send().await.map_err(LLMError::Network)?;
 
         // Handle response
         if !response.status().is_success() {
@@ -399,8 +403,15 @@ impl LLMClient for AnthropicProvider {
 
     async fn converse_stream(&self, request: ConversationRequest) -> Result<StreamReceiver> {
         // max_tokens is required for Anthropic
-        let max_tokens = request.model_config.max_tokens
-            .or_else(|| self.body_defaults.get("max_tokens").and_then(|v| v.as_u64()).map(|v| v as u32))
+        let max_tokens = request
+            .model_config
+            .max_tokens
+            .or_else(|| {
+                self.body_defaults
+                    .get("max_tokens")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+            })
             .unwrap_or(8192);
 
         // Convert messages
@@ -464,10 +475,7 @@ impl LLMClient for AnthropicProvider {
             req = req.header(key, value);
         }
 
-        let response = req
-            .send()
-            .await
-            .map_err(LLMError::Network)?;
+        let response = req.send().await.map_err(LLMError::Network)?;
 
         // Handle non-success status
         if !response.status().is_success() {

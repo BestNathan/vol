@@ -20,7 +20,11 @@ pub struct ApprovalRequest {
 
 impl ApprovalRequest {
     pub fn new(tool_name: String, reason: String, metadata: serde_json::Value) -> Self {
-        Self { tool_name, reason, metadata }
+        Self {
+            tool_name,
+            reason,
+            metadata,
+        }
     }
 }
 
@@ -32,8 +36,12 @@ pub enum ApprovalResponse {
 }
 
 impl ApprovalResponse {
-    pub fn approved() -> Self { Self::Approved }
-    pub fn rejected(reason: String) -> Self { Self::Rejected { reason } }
+    pub fn approved() -> Self {
+        Self::Approved
+    }
+    pub fn rejected(reason: String) -> Self {
+        Self::Rejected { reason }
+    }
 }
 
 /// Approval channel trait - pluggable transport for approval requests
@@ -246,7 +254,11 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
     /// Listener hook - logs HITL events for audit
     async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
         match event {
-            AgentStreamEvent::ToolCallBegin { tool_call_id, tool_name, .. } => {
+            AgentStreamEvent::ToolCallBegin {
+                tool_call_id,
+                tool_name,
+                ..
+            } => {
                 if self.needs_tool_approval(tool_name) {
                     tracing::info!(
                         run_id = %ctx.run_id,

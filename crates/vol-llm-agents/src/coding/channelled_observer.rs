@@ -5,8 +5,8 @@ use std::time::Duration;
 use tokio::sync::{mpsc, oneshot, Mutex};
 use vol_llm_core::AgentStreamEvent;
 
-use crate::coding::observer::EventObserver;
 use crate::coding::error::ObserverError;
+use crate::coding::observer::EventObserver;
 
 /// ChannelledEventObserver - wraps mpsc channel + single consumer task for ordered event processing.
 ///

@@ -213,6 +213,10 @@ async fn test_grep_recursive_glob() {
     let result = tool.execute(&args, &ToolContext::default()).await.unwrap();
     assert!(result.success);
     let content = &result.content;
-    assert!(content.contains("nested.rs"), "expected nested.rs in: {}", content);
+    assert!(
+        content.contains("nested.rs"),
+        "expected nested.rs in: {}",
+        content
+    );
     assert!(!content.contains("top.txt"));
 }

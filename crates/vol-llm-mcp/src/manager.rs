@@ -3,7 +3,7 @@
 //! Tracks per-server connection state, spawns background reconnect tasks
 //! on failure, and caches discovered capabilities at connect time.
 
-use rmcp::model::{ClientInfo, Tool, Resource, ResourceTemplate, Prompt};
+use rmcp::model::{ClientInfo, Prompt, Resource, ResourceTemplate, Tool};
 use rmcp::service::{RoleClient, RunningService, ServiceExt};
 use rmcp::transport::TokioChildProcess;
 use std::collections::HashMap;
@@ -103,7 +103,16 @@ impl McpManager {
     async fn connect_single(
         config: &McpServerConfig,
         cancel_token: &CancellationToken,
-    ) -> Result<(RunningService<RoleClient, ClientInfo>, Vec<Tool>, Vec<Resource>, Vec<ResourceTemplate>, Vec<Prompt>), McpError> {
+    ) -> Result<
+        (
+            RunningService<RoleClient, ClientInfo>,
+            Vec<Tool>,
+            Vec<Resource>,
+            Vec<ResourceTemplate>,
+            Vec<Prompt>,
+        ),
+        McpError,
+    > {
         let service = match &config.transport {
             McpTransport::Stdio { command, args, env } => {
                 connect_stdio(command, args, env, config, cancel_token).await?
@@ -125,10 +134,17 @@ impl McpManager {
             Vec::new()
         });
 
-        let resource_templates = peer.list_all_resource_templates().await.unwrap_or_else(|e| {
-            tracing::warn!("Failed to list resource templates for '{}': {}", config.name, e);
-            Vec::new()
-        });
+        let resource_templates = peer
+            .list_all_resource_templates()
+            .await
+            .unwrap_or_else(|e| {
+                tracing::warn!(
+                    "Failed to list resource templates for '{}': {}",
+                    config.name,
+                    e
+                );
+                Vec::new()
+            });
 
         let prompts = peer.list_all_prompts().await.unwrap_or_else(|e| {
             tracing::warn!("Failed to list prompts for '{}': {}", config.name, e);
@@ -159,7 +175,9 @@ impl McpManager {
         let backoff_max;
         let cancel_token = {
             let mut servers = self.servers.write().await;
-            let Some(state) = servers.get_mut(name) else { return };
+            let Some(state) = servers.get_mut(name) else {
+                return;
+            };
             state.status = ServerStatus::Connecting;
             state.cancel_token = CancellationToken::new();
             let ct = state.cancel_token.clone();
@@ -175,11 +193,14 @@ impl McpManager {
                 let mut servers = self.servers.write().await;
                 if let Some(state) = servers.get_mut(name) {
                     state.running_service = Some(service);
-                    state.cached_tools = tools.iter().map(|t| McpToolInfo {
-                        name: t.name.to_string(),
-                        description: t.description.as_ref().map(|s| s.to_string()),
-                        input_schema: Some(t.schema_as_json_value()),
-                    }).collect();
+                    state.cached_tools = tools
+                        .iter()
+                        .map(|t| McpToolInfo {
+                            name: t.name.to_string(),
+                            description: t.description.as_ref().map(|s| s.to_string()),
+                            input_schema: Some(t.schema_as_json_value()),
+                        })
+                        .collect();
                     state.cached_resources = resources;
                     state.cached_resource_templates = resource_templates;
                     state.cached_prompts = prompts;
@@ -196,7 +217,11 @@ impl McpManager {
                     if state.retry_count >= max_retries {
                         state.clear_caches();
                         state.status = ServerStatus::Error("max retries exceeded".to_string());
-                        tracing::error!(server = name, retries = state.retry_count, "MCP server max retries exceeded");
+                        tracing::error!(
+                            server = name,
+                            retries = state.retry_count,
+                            "MCP server max retries exceeded"
+                        );
                     } else {
                         state.status = ServerStatus::Error(e.to_string());
                         self.spawn_reconnect(name, max_retries, backoff_min, backoff_max);
@@ -224,7 +249,9 @@ impl McpManager {
             loop {
                 let (config, cancel_token, current_retry) = {
                     let mut srv = servers.write().await;
-                    let Some(state) = srv.get_mut(&name) else { break };
+                    let Some(state) = srv.get_mut(&name) else {
+                        break;
+                    };
                     if state.retry_count >= max_retries {
                         state.clear_caches();
                         state.status = ServerStatus::Error("max retries exceeded".to_string());
@@ -252,11 +279,14 @@ impl McpManager {
                         let mut srv = servers.write().await;
                         if let Some(state) = srv.get_mut(&name) {
                             state.running_service = Some(service);
-                            state.cached_tools = tools.iter().map(|t| McpToolInfo {
-                                name: t.name.to_string(),
-                                description: t.description.as_ref().map(|s| s.to_string()),
-                                input_schema: Some(t.schema_as_json_value()),
-                            }).collect();
+                            state.cached_tools = tools
+                                .iter()
+                                .map(|t| McpToolInfo {
+                                    name: t.name.to_string(),
+                                    description: t.description.as_ref().map(|s| s.to_string()),
+                                    input_schema: Some(t.schema_as_json_value()),
+                                })
+                                .collect();
                             state.cached_resources = resources;
                             state.cached_resource_templates = resource_templates;
                             state.cached_prompts = prompts;
@@ -274,8 +304,13 @@ impl McpManager {
                             state.status = ServerStatus::Error(e.to_string());
                             if state.retry_count >= max_retries {
                                 state.clear_caches();
-                                state.status = ServerStatus::Error("max retries exceeded".to_string());
-                                tracing::error!(server = &name, retries = state.retry_count, "MCP server max retries exceeded");
+                                state.status =
+                                    ServerStatus::Error("max retries exceeded".to_string());
+                                tracing::error!(
+                                    server = &name,
+                                    retries = state.retry_count,
+                                    "MCP server max retries exceeded"
+                                );
                                 break;
                             }
                         }
@@ -288,7 +323,8 @@ impl McpManager {
                             state.status = ServerStatus::Error("connection timeout".to_string());
                             if state.retry_count >= max_retries {
                                 state.clear_caches();
-                                state.status = ServerStatus::Error("max retries exceeded".to_string());
+                                state.status =
+                                    ServerStatus::Error("max retries exceeded".to_string());
                                 break;
                             }
                         }
@@ -313,9 +349,10 @@ impl McpManager {
             .iter()
             .filter(|(_, state)| state.status == ServerStatus::Connected)
             .flat_map(|(server, state)| {
-                state.cached_tools.iter().map(|tool| {
-                    (server.clone(), tool.clone())
-                })
+                state
+                    .cached_tools
+                    .iter()
+                    .map(|tool| (server.clone(), tool.clone()))
             })
             .collect()
     }
@@ -355,13 +392,14 @@ impl McpManager {
 
         let params = CallToolRequestParams::new(tool_name.to_string()).with_arguments(arguments);
 
-        let result = peer.call_tool(params).await.map_err(|e: rmcp::service::ServiceError| {
-            McpError::ToolCallFailed {
+        let result = peer
+            .call_tool(params)
+            .await
+            .map_err(|e: rmcp::service::ServiceError| McpError::ToolCallFailed {
                 server: server_name.clone(),
                 tool: tool_name.to_string(),
                 detail: e.to_string(),
-            }
-        })?;
+            })?;
 
         Ok(Self::format_call_tool_result(&result))
     }
@@ -381,7 +419,11 @@ impl McpManager {
                 .join("\n");
             return format!(
                 "MCP tool error: {}",
-                if text.is_empty() { "unknown error" } else { &text }
+                if text.is_empty() {
+                    "unknown error"
+                } else {
+                    &text
+                }
             );
         }
 
@@ -412,7 +454,10 @@ impl McpManager {
             .iter()
             .filter(|(_, state)| state.status == ServerStatus::Connected)
             .flat_map(|(server, state)| {
-                state.cached_resources.iter().map(|r| (server.clone(), r.clone()))
+                state
+                    .cached_resources
+                    .iter()
+                    .map(|r| (server.clone(), r.clone()))
             })
             .collect()
     }
@@ -425,7 +470,10 @@ impl McpManager {
             .iter()
             .filter(|(_, state)| state.status == ServerStatus::Connected)
             .flat_map(|(server, state)| {
-                state.cached_resource_templates.iter().map(|t| (server.clone(), t.clone()))
+                state
+                    .cached_resource_templates
+                    .iter()
+                    .map(|t| (server.clone(), t.clone()))
             })
             .collect()
     }
@@ -437,16 +485,14 @@ impl McpManager {
                 continue;
             }
             if state.cached_resources.iter().any(|r| r.uri == uri)
-                || state.cached_resource_templates.iter().any(|t| {
-                    uri.starts_with(&t.uri_template)
-                })
+                || state
+                    .cached_resource_templates
+                    .iter()
+                    .any(|t| uri.starts_with(&t.uri_template))
             {
                 if let Some(service) = &state.running_service {
-                    return Self::read_resource_from_peer(
-                        service.peer(),
-                        &state.config.name,
-                        uri,
-                    ).await;
+                    return Self::read_resource_from_peer(service.peer(), &state.config.name, uri)
+                        .await;
                 }
             }
         }
@@ -461,22 +507,29 @@ impl McpManager {
         use rmcp::model::{ReadResourceRequestParams, ResourceContents};
 
         let params = ReadResourceRequestParams::new(uri);
-        let result = peer.read_resource(params).await.map_err(|e: rmcp::service::ServiceError| {
-            McpError::ResourceReadFailed {
-                server: server_name.to_string(),
-                uri: uri.to_string(),
-                detail: e.to_string(),
-            }
-        })?;
+        let result =
+            peer.read_resource(params)
+                .await
+                .map_err(
+                    |e: rmcp::service::ServiceError| McpError::ResourceReadFailed {
+                        server: server_name.to_string(),
+                        uri: uri.to_string(),
+                        detail: e.to_string(),
+                    },
+                )?;
 
         let texts: Vec<String> = result
             .contents
             .into_iter()
             .filter_map(|c| match c {
                 ResourceContents::TextResourceContents { text, .. } => Some(text),
-                ResourceContents::BlobResourceContents { blob, mime_type, .. } => {
-                    Some(format!("[blob content, {} bytes, mime: {}]", blob.len(), mime_type.as_deref().unwrap_or("unknown")))
-                }
+                ResourceContents::BlobResourceContents {
+                    blob, mime_type, ..
+                } => Some(format!(
+                    "[blob content, {} bytes, mime: {}]",
+                    blob.len(),
+                    mime_type.as_deref().unwrap_or("unknown")
+                )),
             })
             .collect();
 
@@ -491,7 +544,10 @@ impl McpManager {
             .iter()
             .filter(|(_, state)| state.status == ServerStatus::Connected)
             .flat_map(|(server, state)| {
-                state.cached_prompts.iter().map(|p| (server.clone(), p.clone()))
+                state
+                    .cached_prompts
+                    .iter()
+                    .map(|p| (server.clone(), p.clone()))
             })
             .collect()
     }
@@ -513,7 +569,8 @@ impl McpManager {
                         &state.config.name,
                         name,
                         args,
-                    ).await;
+                    )
+                    .await;
                 }
             }
         }
@@ -530,9 +587,7 @@ impl McpManager {
 
         let arguments = match args {
             Some(args) if !args.is_empty() => {
-                Some(JsonObject::from_iter(
-                    args.into_iter().map(|(k, v)| (k, v))
-                ))
+                Some(JsonObject::from_iter(args.into_iter().map(|(k, v)| (k, v))))
             }
             _ => None,
         };
@@ -542,13 +597,14 @@ impl McpManager {
             None => GetPromptRequestParams::new(name),
         };
 
-        let result = peer.get_prompt(params).await.map_err(|e: rmcp::service::ServiceError| {
-            McpError::PromptGetFailed {
+        let result = peer
+            .get_prompt(params)
+            .await
+            .map_err(|e: rmcp::service::ServiceError| McpError::PromptGetFailed {
                 server: server_name.to_string(),
                 name: name.to_string(),
                 detail: e.to_string(),
-            }
-        })?;
+            })?;
 
         Ok((result.description, result.messages))
     }
@@ -566,18 +622,15 @@ impl McpManager {
             }
             if state.cached_prompts.iter().any(|p| p.name == name) {
                 if let Some(service) = &state.running_service {
-                    return service.peer().complete_prompt_argument(
-                        name,
-                        argument_name,
-                        value,
-                        None,
-                    ).await.map_err(|e: rmcp::service::ServiceError| {
-                        McpError::PromptGetFailed {
+                    return service
+                        .peer()
+                        .complete_prompt_argument(name, argument_name, value, None)
+                        .await
+                        .map_err(|e: rmcp::service::ServiceError| McpError::PromptGetFailed {
                             server: server.to_string(),
                             name: name.to_string(),
                             detail: e.to_string(),
-                        }
-                    });
+                        });
                 }
             }
         }
@@ -664,7 +717,9 @@ impl McpManager {
         self.connect_server(name).await;
 
         let servers = self.servers.read().await;
-        let state = servers.get(name).ok_or_else(|| McpError::ServerNotFound(name.to_string()))?;
+        let state = servers
+            .get(name)
+            .ok_or_else(|| McpError::ServerNotFound(name.to_string()))?;
         match &state.status {
             ServerStatus::Connected => Ok(()),
             ServerStatus::Error(e) => Err(McpError::ConnectionFailed {
@@ -695,12 +750,11 @@ async fn connect_stdio(
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::inherit());
 
-    let child = TokioChildProcess::new(cmd).map_err(|e: std::io::Error| {
-        McpError::ConnectionFailed {
+    let child =
+        TokioChildProcess::new(cmd).map_err(|e: std::io::Error| McpError::ConnectionFailed {
             server: config.name.clone(),
             detail: e.to_string(),
-        }
-    })?;
+        })?;
 
     let client_info = ClientInfo::default();
     tokio::time::timeout(
@@ -770,10 +824,12 @@ async fn connect_http(
     let transport = if let Some(ref proxy) = proxy_url {
         let client = reqwest::Client::builder()
             .pool_max_idle_per_host(0)
-            .proxy(reqwest::Proxy::https(proxy).map_err(|e| McpError::ConnectionFailed {
-                server: config.name.clone(),
-                detail: format!("invalid proxy URL '{proxy}': {e}"),
-            })?)
+            .proxy(
+                reqwest::Proxy::https(proxy).map_err(|e| McpError::ConnectionFailed {
+                    server: config.name.clone(),
+                    detail: format!("invalid proxy URL '{proxy}': {e}"),
+                })?,
+            )
             .build()
             .map_err(|e| McpError::ConnectionFailed {
                 server: config.name.clone(),

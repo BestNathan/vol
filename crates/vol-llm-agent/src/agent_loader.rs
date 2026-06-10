@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use tokio::sync::{OnceCell, RwLock};
 
-use crate::agent_def::{AgentDef, AgentFrontmatter, AgentMetadata, AgentScope, AgentDefError};
+use crate::agent_def::{AgentDef, AgentDefError, AgentFrontmatter, AgentMetadata, AgentScope};
 
 /// Discovers, loads, and caches agent definitions from user and repo scopes.
 pub struct AgentLoader {
@@ -73,7 +73,8 @@ impl AgentLoader {
                     continue;
                 }
 
-                let doc = match md_frontmatter::io::from_path::<AgentFrontmatter>(&file_path).await {
+                let doc = match md_frontmatter::io::from_path::<AgentFrontmatter>(&file_path).await
+                {
                     Ok(d) => d,
                     Err(e) => {
                         tracing::warn!(path = %file_path.display(), error = %e, "Failed to parse agent file, skipping");
@@ -180,7 +181,13 @@ mod tests {
     use super::*;
     use std::io::Write;
 
-    fn create_agent_file(dir: &std::path::Path, name: &str, r#type: &str, description: &str, content: &str) {
+    fn create_agent_file(
+        dir: &std::path::Path,
+        name: &str,
+        r#type: &str,
+        description: &str,
+        content: &str,
+    ) {
         let mut f = std::fs::File::create(dir.join(format!("{}.md", name))).unwrap();
         writeln!(f, "---").unwrap();
         writeln!(f, "name: {}", name).unwrap();
@@ -265,7 +272,8 @@ mod tests {
         std::fs::write(
             agents_dir.join("no-frontmatter.md"),
             "# No Frontmatter\n\nJust markdown.",
-        ).unwrap();
+        )
+        .unwrap();
 
         let mut f = std::fs::File::create(agents_dir.join("bad-yaml.md")).unwrap();
         writeln!(f, "---").unwrap();
@@ -314,8 +322,20 @@ mod tests {
         std::fs::create_dir_all(&user_dir).unwrap();
         std::fs::create_dir_all(&repo_dir).unwrap();
 
-        create_agent_file(&user_dir, "helper", "helper", "User helper", "User content.");
-        create_agent_file(&repo_dir, "helper", "helper", "Repo helper", "Repo content.");
+        create_agent_file(
+            &user_dir,
+            "helper",
+            "helper",
+            "User helper",
+            "User content.",
+        );
+        create_agent_file(
+            &repo_dir,
+            "helper",
+            "helper",
+            "Repo helper",
+            "Repo content.",
+        );
 
         let mut loader = AgentLoader::new(None);
         loader.roots.clear();

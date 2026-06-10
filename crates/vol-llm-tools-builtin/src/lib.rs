@@ -58,16 +58,16 @@ pub mod web_fetch_provider {
 }
 
 // Re-export all tools for convenience
-pub use read_tool::ReadTool;
-pub use write_tool::WriteTool;
+pub use bash_tool::BashTool;
+pub use config::{WebFetchConfig, WebSearchConfig};
 pub use edit_tool::EditTool;
 pub use glob_tool::GlobTool;
 pub use grep_tool::GrepTool;
-pub use bash_tool::BashTool;
-pub use web_search_tool::{WebFetchTool, WebSearchTool};
-pub use web_search_tool::tavily::TavilySearchProvider;
+pub use read_tool::ReadTool;
 pub use web_fetch_provider::DefaultFetchProvider;
-pub use config::{WebFetchConfig, WebSearchConfig};
+pub use web_search_tool::tavily::TavilySearchProvider;
+pub use web_search_tool::{WebFetchTool, WebSearchTool};
+pub use write_tool::WriteTool;
 
 // Re-export error type
 pub use read_tool::BuiltinToolError;
@@ -90,18 +90,17 @@ pub fn register_all(registry: &mut vol_llm_tool::ToolRegistry) {
 /// Always registers web tools with default configuration.
 /// Tools can be reconfigured at runtime via `ToolConfig::set()`.
 /// If a tool fails to initialize (e.g., missing API key), a warning is logged.
-pub fn register_web_all(
-    registry: &mut vol_llm_tool::ToolRegistry,
-    tool_config: &ToolConfig,
-) {
+pub fn register_web_all(registry: &mut vol_llm_tool::ToolRegistry, tool_config: &ToolConfig) {
     // Register web search — use configured values or defaults (reads TAVILY_API_KEY env)
     let search_cfg = tool_config
         .get::<WebSearchConfig>("web_search")
         .unwrap_or_default();
-    match TavilySearchProvider::from_config(&vol_llm_tools_builtin_web_search::tavily::TavilyConfig {
-        api_key: search_cfg.api_key,
-        proxy: search_cfg.proxy,
-    }) {
+    match TavilySearchProvider::from_config(
+        &vol_llm_tools_builtin_web_search::tavily::TavilyConfig {
+            api_key: search_cfg.api_key,
+            proxy: search_cfg.proxy,
+        },
+    ) {
         Ok(provider) => {
             registry.register(WebSearchTool::new(provider));
         }

@@ -19,7 +19,9 @@ impl McpHandler {
     }
 
     fn mgr(&self) -> Result<&Arc<McpManager>, ProtocolError> {
-        self.mcp_manager.as_ref().ok_or(ProtocolError::PayloadDecodeFailed("mcp not configured"))
+        self.mcp_manager
+            .as_ref()
+            .ok_or(ProtocolError::PayloadDecodeFailed("mcp not configured"))
     }
 
     fn server_status_to_str(status: &vol_llm_mcp::manager::ServerStatus) -> String {
@@ -90,13 +92,23 @@ impl DomainHandler for McpHandler {
                     Payload::Mcp(McpPayload::ListToolsResult { tools: tools_json }),
                 )])
             }
-            (McpOperation::CallTool, Payload::Mcp(McpPayload::CallTool { server, tool_name, arguments })) => {
+            (
+                McpOperation::CallTool,
+                Payload::Mcp(McpPayload::CallTool {
+                    server,
+                    tool_name,
+                    arguments,
+                }),
+            ) => {
                 let mgr = self.mgr()?;
                 match mgr.call_tool(&server, &tool_name, arguments).await {
                     Ok(result) => Ok(vec![AgentServerMessage::new_result(
                         message.message_id,
                         Operation::Mcp(McpOperation::CallTool),
-                        Payload::Mcp(McpPayload::CallToolResult { tool_name, result: serde_json::json!(result) }),
+                        Payload::Mcp(McpPayload::CallToolResult {
+                            tool_name,
+                            result: serde_json::json!(result),
+                        }),
                     )]),
                     Err(e) => Ok(vec![AgentServerMessage::new_error(
                         message.message_id,
@@ -124,7 +136,10 @@ impl DomainHandler for McpHandler {
                     Payload::Mcp(McpPayload::ListResourcesResult { resources: r_json }),
                 )])
             }
-            (McpOperation::ListResourceTemplates, Payload::Mcp(McpPayload::ListResourceTemplates { server })) => {
+            (
+                McpOperation::ListResourceTemplates,
+                Payload::Mcp(McpPayload::ListResourceTemplates { server }),
+            ) => {
                 let mgr = self.mgr()?;
                 let templates = mgr.list_all_resource_templates().await;
                 let t_json: Vec<serde_json::Value> = templates.iter()
@@ -179,17 +194,26 @@ impl DomainHandler for McpHandler {
             }
             (McpOperation::GetPrompt, Payload::Mcp(McpPayload::GetPrompt { name, arguments })) => {
                 let mgr = self.mgr()?;
-                match mgr.get_prompt(&name, arguments.map(|m| m.into_iter().collect())).await {
+                match mgr
+                    .get_prompt(&name, arguments.map(|m| m.into_iter().collect()))
+                    .await
+                {
                     Ok((desc, messages)) => {
-                        let msgs = messages.iter().map(|m| {
-                            let content = serde_json::to_string(&m.content).unwrap_or_default();
-                            let role = format!("{:?}", m.role);
-                            serde_json::json!({ "role": role, "content": content })
-                        }).collect::<Vec<_>>();
+                        let msgs = messages
+                            .iter()
+                            .map(|m| {
+                                let content = serde_json::to_string(&m.content).unwrap_or_default();
+                                let role = format!("{:?}", m.role);
+                                serde_json::json!({ "role": role, "content": content })
+                            })
+                            .collect::<Vec<_>>();
                         Ok(vec![AgentServerMessage::new_result(
                             message.message_id,
                             Operation::Mcp(McpOperation::GetPrompt),
-                            Payload::Mcp(McpPayload::GetPromptResult { name, prompt: serde_json::json!({ "description": desc, "messages": msgs }) }),
+                            Payload::Mcp(McpPayload::GetPromptResult {
+                                name,
+                                prompt: serde_json::json!({ "description": desc, "messages": msgs }),
+                            }),
                         )])
                     }
                     Err(e) => Ok(vec![AgentServerMessage::new_error(
@@ -209,7 +233,8 @@ impl DomainHandler for McpHandler {
                 match mgr.reconnect(&server).await {
                     Ok(()) => {
                         let status = mgr.server_status_async().await;
-                        let status_str = status.get(&server)
+                        let status_str = status
+                            .get(&server)
                             .map(Self::server_status_to_str)
                             .unwrap_or_else(|| "unknown".into());
                         Ok(vec![AgentServerMessage::new_result(
@@ -245,16 +270,34 @@ impl DomainHandler for McpHandler {
                     }),
                 )])
             }
-            (McpOperation::ListServers, _) => Err(ProtocolError::PayloadDecodeFailed("mcp.list_servers")),
-            (McpOperation::ListTools, _) => Err(ProtocolError::PayloadDecodeFailed("mcp.list_tools")),
+            (McpOperation::ListServers, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("mcp.list_servers"))
+            }
+            (McpOperation::ListTools, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("mcp.list_tools"))
+            }
             (McpOperation::CallTool, _) => Err(ProtocolError::PayloadDecodeFailed("mcp.call_tool")),
-            (McpOperation::ListResources, _) => Err(ProtocolError::PayloadDecodeFailed("mcp.list_resources")),
-            (McpOperation::ListResourceTemplates, _) => Err(ProtocolError::PayloadDecodeFailed("mcp.list_resource_templates")),
-            (McpOperation::ReadResource, _) => Err(ProtocolError::PayloadDecodeFailed("mcp.read_resource")),
-            (McpOperation::ListPrompts, _) => Err(ProtocolError::PayloadDecodeFailed("mcp.list_prompts")),
-            (McpOperation::GetPrompt, _) => Err(ProtocolError::PayloadDecodeFailed("mcp.get_prompt")),
-            (McpOperation::Reconnect, _) => Err(ProtocolError::PayloadDecodeFailed("mcp.reconnect")),
-            (McpOperation::ServerStatus, _) => Err(ProtocolError::PayloadDecodeFailed("mcp.server_status")),
+            (McpOperation::ListResources, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("mcp.list_resources"))
+            }
+            (McpOperation::ListResourceTemplates, _) => Err(ProtocolError::PayloadDecodeFailed(
+                "mcp.list_resource_templates",
+            )),
+            (McpOperation::ReadResource, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("mcp.read_resource"))
+            }
+            (McpOperation::ListPrompts, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("mcp.list_prompts"))
+            }
+            (McpOperation::GetPrompt, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("mcp.get_prompt"))
+            }
+            (McpOperation::Reconnect, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("mcp.reconnect"))
+            }
+            (McpOperation::ServerStatus, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("mcp.server_status"))
+            }
         }
     }
 }

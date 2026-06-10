@@ -1,19 +1,19 @@
 //! Wasm sandbox — execute WebAssembly modules in a WASI environment.
 
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use async_trait::async_trait;
 use wasmtime::*;
-use wasmtime_wasi::preview1::{self, WasiP1Ctx};
 use wasmtime_wasi::pipe::{MemoryInputPipe, MemoryOutputPipe};
+use wasmtime_wasi::preview1::{self, WasiP1Ctx};
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::{DirPerms, FilePerms};
 
+use crate::registry::{WasmConfig, WasmModuleConfig};
 use crate::{
     CommandOutput, DirEntry, FileMetadata, FileType, Sandbox, SandboxError, SandboxResult,
 };
-use crate::registry::{WasmConfig, WasmModuleConfig};
 
 /// Wasm sandbox — executes `.wasm` modules in an isolated WASI environment.
 pub struct WasmSandbox {
@@ -29,11 +29,7 @@ pub struct WasmSandbox {
 
 impl WasmSandbox {
     /// Create a new WasmSandbox, precompiling all configured modules.
-    pub fn new(
-        name: String,
-        work_dir: PathBuf,
-        config: WasmConfig,
-    ) -> SandboxResult<Self> {
+    pub fn new(name: String, work_dir: PathBuf, config: WasmConfig) -> SandboxResult<Self> {
         let mut engine_config = Config::new();
         engine_config.wasm_multi_memory(true);
         let engine = Engine::new(&engine_config)
@@ -41,12 +37,13 @@ impl WasmSandbox {
 
         let mut modules = HashMap::new();
         for mc in &config.modules {
-            let wasm_bytes = std::fs::read(&mc.path)
-                .map_err(|e| SandboxError::Io(e))?;
-            let module = Module::from_binary(&engine, &wasm_bytes)
-                .map_err(|e| SandboxError::Io(std::io::Error::other(
-                    format!("failed to compile {}: {}", mc.path, e)
-                )))?;
+            let wasm_bytes = std::fs::read(&mc.path).map_err(|e| SandboxError::Io(e))?;
+            let module = Module::from_binary(&engine, &wasm_bytes).map_err(|e| {
+                SandboxError::Io(std::io::Error::other(format!(
+                    "failed to compile {}: {}",
+                    mc.path, e
+                )))
+            })?;
             modules.insert(mc.name.clone(), module);
         }
 
@@ -72,9 +69,13 @@ impl WasmSandbox {
 
 #[async_trait]
 impl Sandbox for WasmSandbox {
-    fn kind(&self) -> &str { "wasm" }
+    fn kind(&self) -> &str {
+        "wasm"
+    }
 
-    fn name(&self) -> &str { &self.name }
+    fn name(&self) -> &str {
+        &self.name
+    }
 
     async fn start(&self) -> SandboxResult<()> {
         std::fs::create_dir_all(&self.work_dir).map_err(SandboxError::Io)
@@ -84,7 +85,9 @@ impl Sandbox for WasmSandbox {
         Ok(())
     }
 
-    fn root_path(&self) -> &Path { &self.root_path }
+    fn root_path(&self) -> &Path {
+        &self.root_path
+    }
 
     fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf> {
         if rel.starts_with('/') {
@@ -100,7 +103,10 @@ impl Sandbox for WasmSandbox {
     }
 
     async fn read_file(
-        &self, path: &Path, offset: Option<u64>, limit: Option<u64>,
+        &self,
+        path: &Path,
+        offset: Option<u64>,
+        limit: Option<u64>,
     ) -> SandboxResult<Vec<u8>> {
         let content = std::fs::read(path).map_err(SandboxError::Io)?;
         let start = offset.unwrap_or(0) as usize;
@@ -125,12 +131,20 @@ impl Sandbox for WasmSandbox {
             .filter_map(|e| e.ok())
             .map(|e| {
                 let name = e.file_name().to_string_lossy().to_string();
-                let file_type = e.file_type().map(|ft| {
-                    if ft.is_dir() { FileType::Directory }
-                    else if ft.is_file() { FileType::File }
-                    else if ft.is_symlink() { FileType::Symlink }
-                    else { FileType::Other }
-                }).unwrap_or(FileType::Other);
+                let file_type = e
+                    .file_type()
+                    .map(|ft| {
+                        if ft.is_dir() {
+                            FileType::Directory
+                        } else if ft.is_file() {
+                            FileType::File
+                        } else if ft.is_symlink() {
+                            FileType::Symlink
+                        } else {
+                            FileType::Other
+                        }
+                    })
+                    .unwrap_or(FileType::Other);
                 DirEntry { name, file_type }
             })
             .collect();
@@ -139,15 +153,21 @@ impl Sandbox for WasmSandbox {
 
     async fn metadata(&self, path: &Path) -> SandboxResult<FileMetadata> {
         let meta = std::fs::metadata(path).map_err(SandboxError::Io)?;
-        let mtime = meta.modified()
+        let mtime = meta
+            .modified()
             .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
-        let file_type = if meta.is_dir() { FileType::Directory }
-            else if meta.is_file() { FileType::File }
-            else if meta.is_symlink() { FileType::Symlink }
-            else { FileType::Other };
+        let file_type = if meta.is_dir() {
+            FileType::Directory
+        } else if meta.is_file() {
+            FileType::File
+        } else if meta.is_symlink() {
+            FileType::Symlink
+        } else {
+            FileType::Other
+        };
         Ok(FileMetadata {
             size: meta.len(),
             mtime,
@@ -170,9 +190,7 @@ impl Sandbox for WasmSandbox {
         let max_execution = self.max_execution;
 
         tokio::task::spawn_blocking(move || {
-            execute_wasm_module(
-                &engine, &wasm_module, &work_dir, &req, max_execution,
-            )
+            execute_wasm_module(&engine, &wasm_module, &work_dir, &req, max_execution)
         })
         .await
         .map_err(|e| SandboxError::Io(std::io::Error::other(e.to_string())))?
@@ -238,9 +256,9 @@ fn execute_wasm_module(
 
     // Create the store and instantiate the module
     let mut store = Store::new(engine, wasi_ctx);
-    let instance = linker.instantiate(&mut store, module).map_err(|e| {
-        SandboxError::Wasm(format!("instantiation failed: {}", e))
-    })?;
+    let instance = linker
+        .instantiate(&mut store, module)
+        .map_err(|e| SandboxError::Wasm(format!("instantiation failed: {}", e)))?;
 
     // Call the WASI _start entry point
     let exit_code = match instance.get_typed_func::<(), ()>(&mut store, "_start") {
@@ -251,10 +269,7 @@ fn execute_wasm_module(
                 if let Some(exit) = trap.downcast_ref::<wasmtime_wasi::I32Exit>() {
                     exit.0
                 } else {
-                    return Err(SandboxError::Wasm(format!(
-                        "wasm trap: {}",
-                        trap
-                    )));
+                    return Err(SandboxError::Wasm(format!("wasm trap: {}", trap)));
                 }
             }
         },

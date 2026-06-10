@@ -1,7 +1,7 @@
 mod file;
-mod user_input;
 mod simple;
+mod user_input;
 
 pub use file::{FileContributor, FileSpec};
-pub use user_input::UserInputContributor;
 pub use simple::SimpleContributor;
+pub use user_input::UserInputContributor;

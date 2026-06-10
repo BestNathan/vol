@@ -7,7 +7,9 @@ use async_trait::async_trait;
 use tokio::sync::RwLock;
 use vol_llm_agent::react::{AgentPlugin, AgentStreamEvent, PluginId, RunContext};
 
-use crate::agent_server_protocol::{AgentOperation, AgentPayload, AgentServerMessage, MessageKind, Operation, Payload};
+use crate::agent_server_protocol::{
+    AgentOperation, AgentPayload, AgentServerMessage, MessageKind, Operation, Payload,
+};
 use crate::error::ConnectionError;
 
 /// Abstract connection for agent communication.
@@ -40,7 +42,9 @@ impl ConnectionHolder {
     pub fn new(
         sender: String,
         receiver: String,
-        agent_status: Option<Arc<std::sync::RwLock<HashMap<String, crate::server_core::AgentStatus>>>>,
+        agent_status: Option<
+            Arc<std::sync::RwLock<HashMap<String, crate::server_core::AgentStatus>>>,
+        >,
     ) -> Self {
         Self {
             connection: Arc::new(RwLock::new(None)),
@@ -93,10 +97,10 @@ impl AgentPlugin for ConnectionHolder {
                     );
                 }
                 AgentStreamEvent::AgentComplete { .. } | AgentStreamEvent::AgentAborted { .. } => {
-                    status_map.write().unwrap().insert(
-                        self.sender.clone(),
-                        crate::server_core::AgentStatus::idle(),
-                    );
+                    status_map
+                        .write()
+                        .unwrap()
+                        .insert(self.sender.clone(), crate::server_core::AgentStatus::idle());
                 }
                 _ => {}
             }
@@ -133,9 +137,15 @@ mod tests {
 
     #[async_trait]
     impl Connection for MockConnection {
-        fn protocol(&self) -> &str { &self.protocol }
-        async fn recv(&self) -> Option<Result<AgentServerMessage, ConnectionError>> { None }
-        async fn send(&self, _msg: AgentServerMessage) -> Result<(), ConnectionError> { Ok(()) }
+        fn protocol(&self) -> &str {
+            &self.protocol
+        }
+        async fn recv(&self) -> Option<Result<AgentServerMessage, ConnectionError>> {
+            None
+        }
+        async fn send(&self, _msg: AgentServerMessage) -> Result<(), ConnectionError> {
+            Ok(())
+        }
     }
 
     #[tokio::test]
@@ -147,7 +157,9 @@ mod tests {
     #[tokio::test]
     async fn test_holder_attach() {
         let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string(), None);
-        let conn = Arc::new(MockConnection { protocol: "test".to_string() });
+        let conn = Arc::new(MockConnection {
+            protocol: "test".to_string(),
+        });
 
         holder.attach(conn.clone()).await;
         assert!(holder.is_connected().await);
@@ -157,8 +169,12 @@ mod tests {
     #[tokio::test]
     async fn test_holder_detach_replaces_connection() {
         let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string(), None);
-        let conn1 = Arc::new(MockConnection { protocol: "test1".to_string() });
-        let conn2 = Arc::new(MockConnection { protocol: "test2".to_string() });
+        let conn1 = Arc::new(MockConnection {
+            protocol: "test1".to_string(),
+        });
+        let conn2 = Arc::new(MockConnection {
+            protocol: "test2".to_string(),
+        });
 
         holder.attach(conn1).await;
         assert_eq!(holder.connection().await.unwrap().protocol(), "test1");
@@ -170,7 +186,9 @@ mod tests {
     #[tokio::test]
     async fn test_holder_detach_clears() {
         let holder = ConnectionHolder::new("sender".to_string(), "receiver".to_string(), None);
-        let conn = Arc::new(MockConnection { protocol: "test".to_string() });
+        let conn = Arc::new(MockConnection {
+            protocol: "test".to_string(),
+        });
 
         holder.attach(conn).await;
         holder.detach().await;

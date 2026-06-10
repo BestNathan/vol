@@ -100,7 +100,8 @@ impl AgentPlugin for LokiPlugin {
             agent_type = agent_type,
             agent_model = ctx.model,
             run_id = ctx.run_id,
-            "{}", event_json
+            "{}",
+            event_json
         );
     }
 }

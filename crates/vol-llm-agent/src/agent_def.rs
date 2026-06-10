@@ -230,8 +230,7 @@ mod tests {
 
     #[test]
     fn test_agent_def_with_working_dir() {
-        let def = AgentDef::new("test", "prompt")
-            .with_working_dir(PathBuf::from("/tmp/project"));
+        let def = AgentDef::new("test", "prompt").with_working_dir(PathBuf::from("/tmp/project"));
         assert_eq!(def.working_dir, Some(PathBuf::from("/tmp/project")));
     }
 }

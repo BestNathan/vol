@@ -1,8 +1,19 @@
+use axum::extract::ws::WebSocketUpgrade;
+use axum::routing::get;
+use axum::Router;
+use futures::{SinkExt, StreamExt};
+use tokio::net::TcpListener;
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::Message as TungsteniteMessage;
 use vol_llm_agent_channel::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, ErrorPayload, FileOperation, FilePayload,
     MessageKind, Operation, Payload,
 };
-use vol_llm_agent_channel::transport::jsonrpc::codec::{decode_jsonrpc_frame, encode_jsonrpc_message};
+use vol_llm_agent_channel::connection::Connection;
+use vol_llm_agent_channel::transport::jsonrpc::codec::{
+    decode_jsonrpc_frame, encode_jsonrpc_message,
+};
+use vol_llm_agent_channel::transport::jsonrpc::connection::JsonRpcConnection;
 
 #[test]
 fn decode_agent_submit_maps_jsonrpc_id_to_message_id() {
@@ -132,9 +143,60 @@ fn decode_invalid_json_returns_parse_error() {
 
 #[test]
 fn decode_unknown_method_returns_parse_error() {
-    let err = decode_jsonrpc_frame(
-        r#"{"jsonrpc":"2.0","id":1,"method":"foo.bar","params":{}}"#,
-    )
-    .unwrap_err();
+    let err = decode_jsonrpc_frame(r#"{"jsonrpc":"2.0","id":1,"method":"foo.bar","params":{}}"#)
+        .unwrap_err();
     assert!(err.to_string().contains("unknown method"));
+}
+
+async fn spawn_jsonrpc_connection_sender(msg: AgentServerMessage) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let app = Router::new().route(
+        "/ws",
+        get(move |ws: WebSocketUpgrade| {
+            let msg = msg.clone();
+            async move {
+                ws.on_upgrade(move |socket| async move {
+                    let conn = JsonRpcConnection::new(socket);
+                    conn.send(msg).await.unwrap();
+                })
+            }
+        }),
+    );
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    format!("ws://{addr}/ws")
+}
+
+#[tokio::test]
+async fn jsonrpc_connection_send_preserves_error_id_and_payload() {
+    let error = AgentServerMessage::new_error(
+        "5",
+        Operation::Agent(AgentOperation::Submit),
+        ErrorPayload {
+            code: "session_not_found".to_string(),
+            message: "session not found".to_string(),
+            detail: Some(serde_json::json!({"session_id": "missing-session"})),
+            terminal: true,
+        },
+    );
+    let url = spawn_jsonrpc_connection_sender(error).await;
+
+    let (mut socket, _) = connect_async(url).await.unwrap();
+    let frame = socket.next().await.unwrap().unwrap();
+    let text = match frame {
+        TungsteniteMessage::Text(text) => text,
+        other => panic!("expected text WebSocket frame, got {other:?}"),
+    };
+    let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+
+    assert_eq!(parsed["jsonrpc"], "2.0");
+    assert_eq!(parsed["id"], 5);
+    assert_eq!(parsed["error"]["code"], "session_not_found");
+    assert_eq!(parsed["error"]["message"], "session not found");
+    assert_eq!(parsed["error"]["detail"]["session_id"], "missing-session");
+    assert_eq!(parsed["error"]["terminal"], true);
 }

@@ -1,6 +1,8 @@
 use vol_llm_core::{Message, MessageRole};
 
-use crate::{AttentionAnchor, ContextBlock, ContextContributor, ContextError, TokenBudget, estimate_tokens};
+use crate::{
+    estimate_tokens, AttentionAnchor, ContextBlock, ContextContributor, ContextError, TokenBudget,
+};
 
 /// Output from ContextBuilder — ready-to-send LLM messages.
 pub struct ContextOutput {
@@ -169,7 +171,9 @@ impl ContextBuilder {
         middle_blocks.sort_by(|a, b| a.anchor.position().cmp(&b.anchor.position()));
 
         // Step 6: Drop lowest-priority middle blocks if over budget
-        let middle_budget = self.token_budget.total
+        let middle_budget = self
+            .token_budget
+            .total
             .saturating_sub(self.token_budget.head_size)
             .saturating_sub(self.token_budget.tail_size);
 
@@ -289,7 +293,10 @@ mod tests {
         }
 
         async fn contribute(&self) -> Result<Vec<ContextBlock>, ContextError> {
-            Ok(vec![ContextBlock::new(self.messages.clone(), self.anchor.clone())])
+            Ok(vec![ContextBlock::new(
+                self.messages.clone(),
+                self.anchor.clone(),
+            )])
         }
 
         async fn compress(&mut self) {
@@ -328,8 +335,14 @@ mod tests {
 
         let output = builder.build().await.unwrap();
         assert_eq!(output.messages.len(), 2);
-        assert_eq!(output.messages[0].role, vol_llm_core::message::MessageRole::System);
-        assert_eq!(output.messages[1].role, vol_llm_core::message::MessageRole::User);
+        assert_eq!(
+            output.messages[0].role,
+            vol_llm_core::message::MessageRole::System
+        );
+        assert_eq!(
+            output.messages[1].role,
+            vol_llm_core::message::MessageRole::User
+        );
     }
 
     #[tokio::test]
@@ -358,9 +371,21 @@ mod tests {
             .build();
 
         let output = builder.build().await.unwrap();
-        assert_eq!(output.messages[0].content.as_ref().unwrap().as_str(), "Head first");
-        assert_eq!(output.messages[1].content.as_ref().unwrap().as_str(), "Head second");
-        assert_eq!(output.messages[2].content.as_ref().unwrap().as_str(), "Middle data");
-        assert_eq!(output.messages[3].content.as_ref().unwrap().as_str(), "Tail message");
+        assert_eq!(
+            output.messages[0].content.as_ref().unwrap().as_str(),
+            "Head first"
+        );
+        assert_eq!(
+            output.messages[1].content.as_ref().unwrap().as_str(),
+            "Head second"
+        );
+        assert_eq!(
+            output.messages[2].content.as_ref().unwrap().as_str(),
+            "Middle data"
+        );
+        assert_eq!(
+            output.messages[3].content.as_ref().unwrap().as_str(),
+            "Tail message"
+        );
     }
 }

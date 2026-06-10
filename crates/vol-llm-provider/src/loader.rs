@@ -117,11 +117,19 @@ fn load_dir(dir: Option<&Path>) -> HashMap<String, ProviderFileConfig> {
                             map.insert(id, config);
                         }
                         Err(e) => {
-                            tracing::warn!("Failed to parse provider config '{}': {}", path.display(), e);
+                            tracing::warn!(
+                                "Failed to parse provider config '{}': {}",
+                                path.display(),
+                                e
+                            );
                         }
                     },
                     Err(e) => {
-                        tracing::warn!("Failed to read provider config '{}': {}", path.display(), e);
+                        tracing::warn!(
+                            "Failed to read provider config '{}': {}",
+                            path.display(),
+                            e
+                        );
                     }
                 }
             }

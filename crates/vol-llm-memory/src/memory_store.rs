@@ -1,6 +1,6 @@
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
-use async_trait::async_trait;
 use tokio::sync::RwLock;
 
 use crate::item::{MemoryFilter, MemoryItem};
@@ -59,7 +59,11 @@ impl MemoryStore for InMemoryStore {
 
     async fn list(&self, filter: MemoryFilter) -> Result<Vec<MemoryItem>> {
         let items = self.items.read().await;
-        Ok(items.values().filter(|item| filter.matches(item)).cloned().collect())
+        Ok(items
+            .values()
+            .filter(|item| filter.matches(item))
+            .cloned()
+            .collect())
     }
 
     async fn remove_many(&self, filter: MemoryFilter) -> Result<usize> {

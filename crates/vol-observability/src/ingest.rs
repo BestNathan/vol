@@ -12,7 +12,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
-use crate::event::{IngestBatch, ExtractedMetric};
+use crate::event::{ExtractedMetric, IngestBatch};
 use crate::loki_writer::{LokiCommand, LokiWriterHealth};
 use crate::tdengine_writer::{TdengineCommand, TdengineWriterHealth};
 
@@ -42,9 +42,7 @@ pub struct HealthResponse {
 }
 
 /// Health check handler.
-async fn handle_health(
-    State(state): State<AppState>,
-) -> Json<HealthResponse> {
+async fn handle_health(State(state): State<AppState>) -> Json<HealthResponse> {
     let loki_ok = state.loki_health.last_flush_ok.load(Ordering::SeqCst);
     let tdengine_ok = state.tdengine_health.last_flush_ok.load(Ordering::SeqCst);
 
@@ -78,7 +76,10 @@ async fn handle_events(
 
         // Extract metric and route to TDengine
         if let Some(metric) = ExtractedMetric::from_event(&event) {
-            let _ = state.tdengine_tx.send(TdengineCommand::Metric(metric)).await;
+            let _ = state
+                .tdengine_tx
+                .send(TdengineCommand::Metric(metric))
+                .await;
         }
     }
 

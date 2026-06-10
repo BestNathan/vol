@@ -95,29 +95,17 @@ impl ExecutableTool for TaskUpdate {
         args: &serde_json::Value,
         _context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
-        let params: TaskUpdateParams = serde_json::from_value(args.clone())
-            .map_err(|e| {
-                vol_llm_tool::ToolError::InvalidArguments(format!(
-                    "Failed to parse arguments: {}",
-                    e
-                ))
-            })?;
+        let params: TaskUpdateParams = serde_json::from_value(args.clone()).map_err(|e| {
+            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
+        })?;
 
-        let task_id: TaskId = params
-            .task_id
-            .parse::<u64>()
-            .map(TaskId)
-            .map_err(|e| {
-                vol_llm_tool::ToolError::InvalidArguments(format!("Invalid task ID: {}", e))
-            })?;
+        let task_id: TaskId = params.task_id.parse::<u64>().map(TaskId).map_err(|e| {
+            vol_llm_tool::ToolError::InvalidArguments(format!("Invalid task ID: {}", e))
+        })?;
 
-        let task = self
-            .store
-            .get(&task_id)
-            .await
-            .map_err(|e| {
-                vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to get task: {}", e))
-            })?;
+        let task = self.store.get(&task_id).await.map_err(|e| {
+            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to get task: {}", e))
+        })?;
 
         let mut task = match task {
             Some(t) => t,
@@ -203,11 +191,7 @@ impl ExecutableTool for TaskUpdate {
 
         Ok(ToolResult {
             success: true,
-            content: format!(
-                "Updated task #{} {}",
-                task_id.0,
-                updated_fields.join(", ")
-            ),
+            content: format!("Updated task #{} {}", task_id.0, updated_fields.join(", ")),
             error: None,
             data: Some(serde_json::json!({
                 "success": true,

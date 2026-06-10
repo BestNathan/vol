@@ -4,8 +4,8 @@
 //! `[DONE]` sentinel. Each event contains `choices[0].delta` for content
 //! and tool call streaming.
 
-use vol_llm_core::{FinishReason, LLMError, ParsedEvent, StreamProtocol, TokenUsage};
 use serde_json::Value;
+use vol_llm_core::{FinishReason, LLMError, ParsedEvent, StreamProtocol, TokenUsage};
 
 /// OpenAI-specific SSE protocol parser
 pub struct OpenaiStreamParser;
@@ -49,7 +49,9 @@ impl StreamProtocol for OpenaiStreamParser {
 
         // Extract model if present
         if let Some(model) = data["model"].as_str() {
-            return Some(Ok(ParsedEvent::ResponseStart { model: model.to_string() }));
+            return Some(Ok(ParsedEvent::ResponseStart {
+                model: model.to_string(),
+            }));
         }
 
         // Extract deltas from choices
@@ -154,7 +156,13 @@ mod tests {
         let parser = OpenaiStreamParser;
         let line = r#"data: {"id":"chatcmpl-123","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#;
         let event = parser.parse_line(line).unwrap();
-        assert!(matches!(event, Ok(ParsedEvent::ResponseComplete { finish_reason: _, .. })));
+        assert!(matches!(
+            event,
+            Ok(ParsedEvent::ResponseComplete {
+                finish_reason: _,
+                ..
+            })
+        ));
         if let Ok(ParsedEvent::ResponseComplete { finish_reason, .. }) = event {
             assert_eq!(finish_reason, FinishReason::Stop);
         }
@@ -186,7 +194,10 @@ mod tests {
         let line = r#"data: {"id":"chatcmpl-123","choices":[{"index":0,"delta":{"content":""},"finish_reason":null}]}"#;
         // Empty content should be skipped, returning None since there's nothing else
         let result = parser.parse_line(line);
-        assert!(result.is_none(), "Expected None for empty content with no other data");
+        assert!(
+            result.is_none(),
+            "Expected None for empty content with no other data"
+        );
     }
 
     #[test]

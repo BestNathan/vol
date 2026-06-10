@@ -77,7 +77,10 @@ impl FirecrackerVM {
         let temp_dir = tempfile::TempDir::new().map_err(SandboxError::Io)?;
         let api_socket = temp_dir.path().join("api.sock");
 
-        let binary = config.firecracker_binary.as_deref().unwrap_or("firecracker");
+        let binary = config
+            .firecracker_binary
+            .as_deref()
+            .unwrap_or("firecracker");
 
         let child = Command::new(binary)
             .arg("--api-sock")
@@ -378,7 +381,12 @@ impl FirecrackerPool {
                 Ok::<_, SandboxError>(vm)
             })
             .await
-            .map_err(|e| SandboxError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))??;
+            .map_err(|e| {
+                SandboxError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })??;
 
             let mut inner = self.inner.lock().unwrap();
             inner.idle.push_back((vm, Instant::now()));

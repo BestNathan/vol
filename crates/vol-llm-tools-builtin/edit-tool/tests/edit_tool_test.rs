@@ -26,7 +26,9 @@ async fn test_edit_unique_string() {
 
     let result = tool.execute(&args, &ToolContext::default()).await.unwrap();
     assert!(result.success);
-    assert!(result.content.contains("Successfully replaced 1 occurrence(s)"));
+    assert!(result
+        .content
+        .contains("Successfully replaced 1 occurrence(s)"));
 
     // Verify file content
     let content = std::fs::read_to_string(file.path()).unwrap();
@@ -47,7 +49,9 @@ async fn test_edit_multiple_replace_all() {
 
     let result = tool.execute(&args, &ToolContext::default()).await.unwrap();
     assert!(result.success);
-    assert!(result.content.contains("Successfully replaced 4 occurrence(s)"));
+    assert!(result
+        .content
+        .contains("Successfully replaced 4 occurrence(s)"));
 
     // Verify file content
     let content = std::fs::read_to_string(file.path()).unwrap();

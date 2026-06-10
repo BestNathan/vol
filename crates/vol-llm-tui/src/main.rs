@@ -13,14 +13,14 @@ use std::io::{self, stdout};
 use std::sync::Arc;
 use std::time::Duration;
 
-use vol_session::Session;
 use vol_llm_skill::SkillLoader;
+use vol_session::Session;
 
 use app::AppState;
 use crossterm::{
+    event::{Event, EventStream, KeyCode, KeyEvent, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    event::{Event, EventStream, KeyCode, KeyEvent, KeyModifiers},
 };
 use futures::StreamExt;
 use ratatui::backend::CrosstermBackend;
@@ -64,8 +64,7 @@ impl RatatuiObserver {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Verify API key
-    let _api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
-        .expect("ANTHROPIC_AUTH_TOKEN must be set");
+    let _api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").expect("ANTHROPIC_AUTH_TOKEN must be set");
 
     // Create persistent session
     let initial_session = create_session()?;
@@ -87,9 +86,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let skills = discover_skills(&working_dir).await;
 
     // Create shared state
-    let state = Arc::new(tokio::sync::Mutex::new(
-        AppState::new(session_id, working_dir.to_string_lossy().as_ref(), skills),
-    ));
+    let state = Arc::new(tokio::sync::Mutex::new(AppState::new(
+        session_id,
+        working_dir.to_string_lossy().as_ref(),
+        skills,
+    )));
 
     // Build pre-built agent configuration cache
     let (store_dir, _) = derive_store_paths();
@@ -292,7 +293,11 @@ fn send_input(state: &mut AppState) -> KeyAction {
     KeyAction::Send(input)
 }
 
-fn respond_approval(approval_state: &crate::approval::ApprovalState, approved: bool, reason: Option<String>) {
+fn respond_approval(
+    approval_state: &crate::approval::ApprovalState,
+    approved: bool,
+    reason: Option<String>,
+) {
     tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current().block_on(async {
             *approval_state.response.lock().await = Some((approved, reason));
@@ -312,11 +317,19 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
                 return KeyAction::None;
             }
             KeyCode::Char('r') | KeyCode::Char('R') => {
-                respond_approval(&state.approval_state, false, Some("User rejected".to_string()));
+                respond_approval(
+                    &state.approval_state,
+                    false,
+                    Some("User rejected".to_string()),
+                );
                 return KeyAction::None;
             }
             KeyCode::Char('s') | KeyCode::Char('S') => {
-                respond_approval(&state.approval_state, false, Some("User stopped execution".to_string()));
+                respond_approval(
+                    &state.approval_state,
+                    false,
+                    Some("User stopped execution".to_string()),
+                );
                 return KeyAction::None;
             }
             _ => {}
@@ -324,10 +337,14 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
     }
 
     // Log viewer navigation (Logs tab active, no dialog, not running)
-    if matches!(state.active_tab, app::ActiveTab::Logs) && !state.session_dialog.open && !state.is_running {
+    if matches!(state.active_tab, app::ActiveTab::Logs)
+        && !state.session_dialog.open
+        && !state.is_running
+    {
         match key.code {
             KeyCode::Enter => {
-                if state.log_viewer.selected_run.is_none() && !state.log_viewer.run_logs.is_empty() {
+                if state.log_viewer.selected_run.is_none() && !state.log_viewer.run_logs.is_empty()
+                {
                     let run_id = state.log_viewer.run_logs[0].run_id.clone();
                     state.log_viewer.load_run(&run_id);
                     state.log_viewer.selected_run = Some(run_id);
@@ -369,7 +386,11 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
                 return KeyAction::None;
             }
             KeyCode::Enter => {
-                if let Some(entry) = state.session_dialog.sessions.get(state.session_dialog.selected) {
+                if let Some(entry) = state
+                    .session_dialog
+                    .sessions
+                    .get(state.session_dialog.selected)
+                {
                     return KeyAction::ResumeSession(entry.session_id.clone());
                 }
                 return KeyAction::None;
@@ -392,7 +413,11 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
                 return KeyAction::None;
             }
             KeyCode::Char('d') => {
-                if let Some(entry) = state.session_dialog.sessions.get(state.session_dialog.selected) {
+                if let Some(entry) = state
+                    .session_dialog
+                    .sessions
+                    .get(state.session_dialog.selected)
+                {
                     if entry.session_id != state.session_id {
                         let id = entry.session_id.clone();
                         let (_, sessions_dir) = derive_store_paths();
@@ -400,9 +425,15 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
                         // Block on deletion — near-instant for local file
                         if tokio::task::block_in_place(|| {
                             tokio::runtime::Handle::current().block_on(store.delete_session(&id))
-                        }).is_ok() {
-                            state.session_dialog.sessions.remove(state.session_dialog.selected);
-                            state.session_dialog.selected = 0.min(state.session_dialog.sessions.len().saturating_sub(1));
+                        })
+                        .is_ok()
+                        {
+                            state
+                                .session_dialog
+                                .sessions
+                                .remove(state.session_dialog.selected);
+                            state.session_dialog.selected =
+                                0.min(state.session_dialog.sessions.len().saturating_sub(1));
                         } else {
                             state.last_error = Some(format!("Failed to delete session: {}", id));
                         }
@@ -517,14 +548,20 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
         // Unsafe mode toggle
         (_, KeyCode::Char('u')) if key.modifiers == KeyModifiers::CONTROL => {
             state.unsafe_mode = !state.unsafe_mode;
-            state.approval_state.unsafe_mode.store(state.unsafe_mode, std::sync::atomic::Ordering::Relaxed);
-            state.conversation.push(app::ConversationEntry::AgentAnswer {
-                text: if state.unsafe_mode {
-                    "Unsafe mode enabled — all tool approvals auto-approved".to_string()
-                } else {
-                    "Unsafe mode disabled — HITL approval required for dangerous tools".to_string()
-                },
-            });
+            state
+                .approval_state
+                .unsafe_mode
+                .store(state.unsafe_mode, std::sync::atomic::Ordering::Relaxed);
+            state
+                .conversation
+                .push(app::ConversationEntry::AgentAnswer {
+                    text: if state.unsafe_mode {
+                        "Unsafe mode enabled — all tool approvals auto-approved".to_string()
+                    } else {
+                        "Unsafe mode disabled — HITL approval required for dangerous tools"
+                            .to_string()
+                    },
+                });
             KeyAction::None
         }
 

@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use vol_llm_task::InMemoryTaskStore;
 use vol_llm_task::tools;
+use vol_llm_task::InMemoryTaskStore;
 use vol_llm_task::TaskStore;
 use vol_llm_tool::ToolRegistry;
 
@@ -84,10 +84,6 @@ async fn test_full_workflow() {
     assert!(result.success);
 
     // Verify status changed
-    let task: vol_llm_task::Task = store
-        .get(&vol_llm_task::TaskId(1))
-        .await
-        .unwrap()
-        .unwrap();
+    let task: vol_llm_task::Task = store.get(&vol_llm_task::TaskId(1)).await.unwrap().unwrap();
     assert_eq!(task.status, vol_llm_task::TaskStatus::Completed);
 }

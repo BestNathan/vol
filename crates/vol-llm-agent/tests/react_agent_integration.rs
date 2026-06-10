@@ -3,18 +3,16 @@
 //! Tests the full chain: ContextBuilder -> SessionContributor -> compression -> continue.
 //! Uses MockLLM (no real API calls).
 
+use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use async_trait::async_trait;
 use vol_llm_agent::{AgentConfig, ReActAgent};
-use vol_llm_core::{
-    ConversationRequest, ConversationResponse, LLMClient, LLMProvider,
-    Message, StreamEvent, StreamEventData,
-};
 use vol_llm_core::stream::StreamReceiver;
-use vol_session::{
-    InMemoryEntryStore, Session, SessionMessage,
+use vol_llm_core::{
+    ConversationRequest, ConversationResponse, LLMClient, LLMProvider, Message, StreamEvent,
+    StreamEventData,
 };
+use vol_session::{InMemoryEntryStore, Session, SessionMessage};
 
 // ─── Mock LLM: returns final answer on first call ───────────────────────────
 
@@ -24,29 +22,45 @@ struct QuickAnswerMock {
 
 impl QuickAnswerMock {
     fn new(answer: &str) -> Self {
-        Self { answer: answer.to_string() }
+        Self {
+            answer: answer.to_string(),
+        }
     }
 }
 
 #[async_trait]
 impl LLMClient for QuickAnswerMock {
-    fn provider(&self) -> LLMProvider { LLMProvider::Anthropic }
-    fn model(&self) -> &str { "mock" }
-    fn supported_params(&self) -> &[vol_llm_core::SupportedParam] { &[] }
+    fn provider(&self) -> LLMProvider {
+        LLMProvider::Anthropic
+    }
+    fn model(&self) -> &str {
+        "mock"
+    }
+    fn supported_params(&self) -> &[vol_llm_core::SupportedParam] {
+        &[]
+    }
 
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
         unimplemented!("Use converse_stream")
     }
 
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+    async fn converse_stream(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<StreamReceiver> {
         use tokio::sync::mpsc;
         let (tx, rx) = mpsc::channel(10);
         let answer = self.answer.clone();
         tokio::spawn(async move {
-            let _ = tx.send(Ok(StreamEvent {
-                id: "1".to_string(),
-                data: StreamEventData::ContentComplete { content: answer },
-            })).await;
+            let _ = tx
+                .send(Ok(StreamEvent {
+                    id: "1".to_string(),
+                    data: StreamEventData::ContentComplete { content: answer },
+                }))
+                .await;
         });
         Ok(StreamReceiver::new(rx))
     }
@@ -60,9 +74,15 @@ async fn make_session_with_messages(n: usize) -> Arc<Session> {
 
     for i in 0..n {
         let msg = if i % 2 == 0 {
-            SessionMessage::new("test-session".to_string(), Message::user(format!("session-msg-{}", i)))
+            SessionMessage::new(
+                "test-session".to_string(),
+                Message::user(format!("session-msg-{}", i)),
+            )
         } else {
-            SessionMessage::new("test-session".to_string(), Message::assistant(format!("session-reply-{}", i)))
+            SessionMessage::new(
+                "test-session".to_string(),
+                Message::assistant(format!("session-reply-{}", i)),
+            )
         };
         session.add_message(msg).await.unwrap();
     }
@@ -120,22 +140,36 @@ async fn test_run_with_large_history_limit() {
 
     #[async_trait]
     impl LLMClient for CountingMock {
-        fn provider(&self) -> LLMProvider { LLMProvider::Anthropic }
-        fn model(&self) -> &str { "mock" }
-        fn supported_params(&self) -> &[vol_llm_core::SupportedParam] { &[] }
-        async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+        fn provider(&self) -> LLMProvider {
+            LLMProvider::Anthropic
+        }
+        fn model(&self) -> &str {
+            "mock"
+        }
+        fn supported_params(&self) -> &[vol_llm_core::SupportedParam] {
+            &[]
+        }
+        async fn converse(
+            &self,
+            _request: ConversationRequest,
+        ) -> vol_llm_core::Result<ConversationResponse> {
             unimplemented!("Use converse_stream")
         }
-        async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> {
+        async fn converse_stream(
+            &self,
+            _request: ConversationRequest,
+        ) -> vol_llm_core::Result<StreamReceiver> {
             use tokio::sync::mpsc;
             self.calls.fetch_add(1, Ordering::SeqCst);
             let (tx, rx) = mpsc::channel(10);
             let answer = self.answer.clone();
             tokio::spawn(async move {
-                let _ = tx.send(Ok(StreamEvent {
-                    id: "1".to_string(),
-                    data: StreamEventData::ContentComplete { content: answer },
-                })).await;
+                let _ = tx
+                    .send(Ok(StreamEvent {
+                        id: "1".to_string(),
+                        data: StreamEventData::ContentComplete { content: answer },
+                    }))
+                    .await;
             });
             Ok(StreamReceiver::new(rx))
         }

@@ -124,11 +124,7 @@ async fn test_agent_executes_full_react_cycle() {
             100
         }
 
-        async fn intercept(
-            &self,
-            _event: &AgentStreamEvent,
-            _ctx: &RunContext,
-        ) -> PluginDecision {
+        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
             PluginDecision::Continue
         }
 
@@ -244,15 +240,10 @@ async fn test_agent_max_iterations() {
             100
         }
 
-        async fn intercept(
-            &self,
-            event: &AgentStreamEvent,
-            _ctx: &RunContext,
-        ) -> PluginDecision {
+        async fn intercept(&self, event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
             match event {
                 AgentStreamEvent::IterationComplete {
-                    final_answer: None,
-                    ..
+                    final_answer: None, ..
                 } => PluginDecision::Abort("max iterations reached".to_string()),
                 _ => PluginDecision::Continue,
             }

@@ -15,19 +15,33 @@ pub struct StreamEvent {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum StreamEventData {
     // Lifecycle events
-    ResponseStart { model: String },
-    ResponseComplete { finish_reason: FinishReason },
+    ResponseStart {
+        model: String,
+    },
+    ResponseComplete {
+        finish_reason: FinishReason,
+    },
 
     // Content (text output)
-    ContentDelta { delta: String },
-    ContentComplete { content: String },
+    ContentDelta {
+        delta: String,
+    },
+    ContentComplete {
+        content: String,
+    },
 
     // Thinking (model reasoning)
-    ThinkingDelta { thinking: String },
-    ThinkingComplete { thinking: String },
+    ThinkingDelta {
+        thinking: String,
+    },
+    ThinkingComplete {
+        thinking: String,
+    },
 
     // Tool calls
-    ToolCallComplete { tool_call: ToolCall },
+    ToolCallComplete {
+        tool_call: ToolCall,
+    },
     ToolCallArgumentDelta {
         tool_call_id: String,
         tool_name: String,
@@ -35,10 +49,15 @@ pub enum StreamEventData {
     },
 
     // Usage
-    UsageUpdate { usage: TokenUsage },
+    UsageUpdate {
+        usage: TokenUsage,
+    },
 
     // Error handling
-    Error { code: String, message: String },
+    Error {
+        code: String,
+        message: String,
+    },
 }
 
 /// Stream receiver - receives streaming events from provider
@@ -193,63 +212,151 @@ pub enum AgentStreamEvent {
 
 impl AgentStreamEvent {
     pub fn agent_start(input: String) -> Self {
-        Self::AgentStart { timestamp: chrono::Utc::now(), input }
+        Self::AgentStart {
+            timestamp: chrono::Utc::now(),
+            input,
+        }
     }
     pub fn agent_complete() -> Self {
-        Self::AgentComplete { timestamp: chrono::Utc::now(), response: None }
+        Self::AgentComplete {
+            timestamp: chrono::Utc::now(),
+            response: None,
+        }
     }
     pub fn agent_complete_with_response(response: serde_json::Value) -> Self {
-        Self::AgentComplete { timestamp: chrono::Utc::now(), response: Some(response) }
+        Self::AgentComplete {
+            timestamp: chrono::Utc::now(),
+            response: Some(response),
+        }
     }
     pub fn agent_aborted(reason: String) -> Self {
-        Self::AgentAborted { timestamp: chrono::Utc::now(), reason }
+        Self::AgentAborted {
+            timestamp: chrono::Utc::now(),
+            reason,
+        }
     }
     pub fn max_iterations_reached(current_iteration: u32, max_iterations: u32) -> Self {
-        Self::MaxIterationsReached { timestamp: chrono::Utc::now(), current_iteration, max_iterations }
+        Self::MaxIterationsReached {
+            timestamp: chrono::Utc::now(),
+            current_iteration,
+            max_iterations,
+        }
     }
     pub fn iteration_continued(from_iteration: u32) -> Self {
-        Self::IterationContinued { timestamp: chrono::Utc::now(), from_iteration }
+        Self::IterationContinued {
+            timestamp: chrono::Utc::now(),
+            from_iteration,
+        }
     }
     pub fn llm_call_start(iteration: u32, messages: Vec<Message>) -> Self {
-        Self::LLMCallStart { timestamp: chrono::Utc::now(), iteration, messages }
+        Self::LLMCallStart {
+            timestamp: chrono::Utc::now(),
+            iteration,
+            messages,
+        }
     }
     pub fn llm_call_complete(model: String, usage: Option<TokenUsage>) -> Self {
-        Self::LLMCallComplete { timestamp: chrono::Utc::now(), model, usage }
+        Self::LLMCallComplete {
+            timestamp: chrono::Utc::now(),
+            model,
+            usage,
+        }
     }
     pub fn llm_call_error(error: String) -> Self {
-        Self::LLMCallError { timestamp: chrono::Utc::now(), error }
+        Self::LLMCallError {
+            timestamp: chrono::Utc::now(),
+            error,
+        }
     }
     pub fn thinking_start() -> Self {
-        Self::ThinkingStart { timestamp: chrono::Utc::now() }
+        Self::ThinkingStart {
+            timestamp: chrono::Utc::now(),
+        }
     }
     pub fn thinking_delta(delta: String) -> Self {
-        Self::ThinkingDelta { timestamp: chrono::Utc::now(), delta }
+        Self::ThinkingDelta {
+            timestamp: chrono::Utc::now(),
+            delta,
+        }
     }
     pub fn thinking_complete(thinking: String) -> Self {
-        Self::ThinkingComplete { timestamp: chrono::Utc::now(), thinking }
+        Self::ThinkingComplete {
+            timestamp: chrono::Utc::now(),
+            thinking,
+        }
     }
     pub fn content_start() -> Self {
-        Self::ContentStart { timestamp: chrono::Utc::now() }
+        Self::ContentStart {
+            timestamp: chrono::Utc::now(),
+        }
     }
     pub fn content_delta(delta: String) -> Self {
-        Self::ContentDelta { timestamp: chrono::Utc::now(), delta }
+        Self::ContentDelta {
+            timestamp: chrono::Utc::now(),
+            delta,
+        }
     }
     pub fn content_complete(content: String) -> Self {
-        Self::ContentComplete { timestamp: chrono::Utc::now(), content }
+        Self::ContentComplete {
+            timestamp: chrono::Utc::now(),
+            content,
+        }
     }
     pub fn tool_call_begin(tool_call_id: String, tool_name: String, arguments: String) -> Self {
-        Self::ToolCallBegin { timestamp: chrono::Utc::now(), tool_call_id, tool_name, arguments }
+        Self::ToolCallBegin {
+            timestamp: chrono::Utc::now(),
+            tool_call_id,
+            tool_name,
+            arguments,
+        }
     }
-    pub fn tool_call_complete(tool_call_id: String, tool_name: String, result: String, duration_ms: Option<u64>) -> Self {
-        Self::ToolCallComplete { timestamp: chrono::Utc::now(), tool_call_id, tool_name, result, duration_ms }
+    pub fn tool_call_complete(
+        tool_call_id: String,
+        tool_name: String,
+        result: String,
+        duration_ms: Option<u64>,
+    ) -> Self {
+        Self::ToolCallComplete {
+            timestamp: chrono::Utc::now(),
+            tool_call_id,
+            tool_name,
+            result,
+            duration_ms,
+        }
     }
-    pub fn tool_call_error(tool_call_id: String, tool_name: String, error: String, duration_ms: Option<u64>) -> Self {
-        Self::ToolCallError { timestamp: chrono::Utc::now(), tool_call_id, tool_name, error, duration_ms }
+    pub fn tool_call_error(
+        tool_call_id: String,
+        tool_name: String,
+        error: String,
+        duration_ms: Option<u64>,
+    ) -> Self {
+        Self::ToolCallError {
+            timestamp: chrono::Utc::now(),
+            tool_call_id,
+            tool_name,
+            error,
+            duration_ms,
+        }
     }
-    pub fn tool_call_skipped(tool_call_id: String, tool_name: String, reason: String, duration_ms: Option<u64>) -> Self {
-        Self::ToolCallSkipped { timestamp: chrono::Utc::now(), tool_call_id, tool_name, reason, duration_ms }
+    pub fn tool_call_skipped(
+        tool_call_id: String,
+        tool_name: String,
+        reason: String,
+        duration_ms: Option<u64>,
+    ) -> Self {
+        Self::ToolCallSkipped {
+            timestamp: chrono::Utc::now(),
+            tool_call_id,
+            tool_name,
+            reason,
+            duration_ms,
+        }
     }
-    pub fn tool_call_argument_delta(tool_call_id: String, tool_name: String, delta: String) -> Self {
+    pub fn tool_call_argument_delta(
+        tool_call_id: String,
+        tool_name: String,
+        delta: String,
+    ) -> Self {
         Self::ToolCallArgumentDelta {
             timestamp: chrono::Utc::now(),
             tool_call_id,
@@ -257,11 +364,24 @@ impl AgentStreamEvent {
             delta,
         }
     }
-    pub fn iteration_complete(iteration: u32, tool_calls: Vec<ToolCall>, final_answer: Option<String>) -> Self {
-        Self::IterationComplete { timestamp: chrono::Utc::now(), iteration, tool_calls, final_answer }
+    pub fn iteration_complete(
+        iteration: u32,
+        tool_calls: Vec<ToolCall>,
+        final_answer: Option<String>,
+    ) -> Self {
+        Self::IterationComplete {
+            timestamp: chrono::Utc::now(),
+            iteration,
+            tool_calls,
+            final_answer,
+        }
     }
     pub fn plugin_event(name: String, data: serde_json::Map<String, serde_json::Value>) -> Self {
-        Self::PluginEvent { timestamp: chrono::Utc::now(), name, data }
+        Self::PluginEvent {
+            timestamp: chrono::Utc::now(),
+            name,
+            data,
+        }
     }
 
     /// Extract the timestamp from any event variant.
@@ -358,11 +478,8 @@ mod tests {
 
     #[test]
     fn test_agent_stream_event_iteration_complete() {
-        let event = AgentStreamEvent::iteration_complete(
-            1,
-            Vec::new(),
-            Some("The answer".to_string()),
-        );
+        let event =
+            AgentStreamEvent::iteration_complete(1, Vec::new(), Some("The answer".to_string()));
         match event {
             AgentStreamEvent::IterationComplete {
                 iteration,

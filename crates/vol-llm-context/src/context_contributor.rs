@@ -55,7 +55,10 @@ mod tests {
         }
 
         async fn compress(&mut self) {
-            self.content = format!("[compressed] {}", self.content.chars().take(20).collect::<String>());
+            self.content = format!(
+                "[compressed] {}",
+                self.content.chars().take(20).collect::<String>()
+            );
         }
 
         fn estimate_size(&self) -> usize {
@@ -71,7 +74,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_contributor_contribute() {
-        let c = TestContributor { content: "Hello world".to_string() };
+        let c = TestContributor {
+            content: "Hello world".to_string(),
+        };
         let blocks = c.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].messages.len(), 1);
@@ -79,7 +84,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_contributor_compress_then_contribute() {
-        let mut c = TestContributor { content: "This is a long piece of text that should be compressed".to_string() };
+        let mut c = TestContributor {
+            content: "This is a long piece of text that should be compressed".to_string(),
+        };
         c.compress().await;
         let blocks = c.contribute().await.unwrap();
         assert!(blocks[0].messages.len() == 1);

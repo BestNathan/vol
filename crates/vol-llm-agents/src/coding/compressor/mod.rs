@@ -23,8 +23,8 @@ pub use conversation::ConversationCompressor;
 pub use tool_call::ToolCallCompressor;
 
 use std::sync::Arc;
+use vol_llm_core::{message::MessageRole, LLMClient};
 use vol_session::SessionMessage;
-use vol_llm_core::{LLMClient, message::MessageRole};
 
 /// Number of recent messages to preserve untouched
 const KEEP_LAST: usize = 5;
@@ -75,12 +75,14 @@ impl SessionCompressor {
         let recent: Vec<SessionMessage> = recent_slice.to_vec();
 
         // Partition history into tool vs conversation messages (collect references into Vec)
-        let tool_msgs: Vec<&SessionMessage> = history_slice.iter().filter(|sm| {
-            matches!(sm.message.role, MessageRole::Tool)
-        }).collect();
-        let conv_msgs: Vec<&SessionMessage> = history_slice.iter().filter(|sm| {
-            !matches!(sm.message.role, MessageRole::Tool)
-        }).collect();
+        let tool_msgs: Vec<&SessionMessage> = history_slice
+            .iter()
+            .filter(|sm| matches!(sm.message.role, MessageRole::Tool))
+            .collect();
+        let conv_msgs: Vec<&SessionMessage> = history_slice
+            .iter()
+            .filter(|sm| !matches!(sm.message.role, MessageRole::Tool))
+            .collect();
 
         let mut result = Vec::new();
 
@@ -124,12 +126,24 @@ mod tests {
 
     #[async_trait::async_trait]
     impl LLMClient for MockLlm {
-        fn provider(&self) -> vol_llm_core::LLMProvider { vol_llm_core::LLMProvider::Anthropic }
-        fn model(&self) -> &str { "mock" }
-        fn supported_params(&self) -> &[vol_llm_core::SupportedParam] { &[] }
-        async fn converse(&self, _request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+        fn provider(&self) -> vol_llm_core::LLMProvider {
+            vol_llm_core::LLMProvider::Anthropic
+        }
+        fn model(&self) -> &str {
+            "mock"
+        }
+        fn supported_params(&self) -> &[vol_llm_core::SupportedParam] {
+            &[]
+        }
+        async fn converse(
+            &self,
+            _request: vol_llm_core::ConversationRequest,
+        ) -> vol_llm_core::Result<ConversationResponse> {
             if self.fail {
-                Err(vol_llm_core::LLMError::Api { status: 500, message: "LLM failed".to_string() })
+                Err(vol_llm_core::LLMError::Api {
+                    status: 500,
+                    message: "LLM failed".to_string(),
+                })
             } else {
                 Ok(ConversationResponse {
                     message: Message::user(self.response.clone()),
@@ -140,18 +154,27 @@ mod tests {
                 })
             }
         }
-        async fn converse_stream(&self, _request: vol_llm_core::ConversationRequest) -> vol_llm_core::Result<vol_llm_core::StreamReceiver> {
+        async fn converse_stream(
+            &self,
+            _request: vol_llm_core::ConversationRequest,
+        ) -> vol_llm_core::Result<vol_llm_core::StreamReceiver> {
             unimplemented!()
         }
     }
 
-    fn make_msg(session_id: &str, role: MessageRole, content: &str, call_id: Option<&str>) -> SessionMessage {
+    fn make_msg(
+        session_id: &str,
+        role: MessageRole,
+        content: &str,
+        call_id: Option<&str>,
+    ) -> SessionMessage {
         let msg = match role {
             MessageRole::System => Message::system(content.to_string()),
             MessageRole::User => Message::user(content.to_string()),
             MessageRole::Assistant => Message::assistant(content.to_string()),
             MessageRole::Tool => {
-                let mut m = Message::tool(content.to_string(), call_id.unwrap_or("call_1").to_string());
+                let mut m =
+                    Message::tool(content.to_string(), call_id.unwrap_or("call_1").to_string());
                 m.name = Some("test_tool".to_string());
                 m
             }
@@ -161,14 +184,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_compress_empty() {
-        let llm = Arc::new(MockLlm { response: "ok".to_string(), fail: false });
+        let llm = Arc::new(MockLlm {
+            response: "ok".to_string(),
+            fail: false,
+        });
         let compressor = SessionCompressor::new(llm);
         assert!(compressor.compress(vec![]).await.is_empty());
     }
 
     #[tokio::test]
     async fn test_compress_under_threshold() {
-        let llm = Arc::new(MockLlm { response: "ok".to_string(), fail: false });
+        let llm = Arc::new(MockLlm {
+            response: "ok".to_string(),
+            fail: false,
+        });
         let compressor = SessionCompressor::new(llm);
         let msgs = vec![
             make_msg("s1", MessageRole::User, "hello", None),
@@ -180,20 +209,33 @@ mod tests {
 
     #[tokio::test]
     async fn test_compress_mixed_history() {
-        let llm = Arc::new(MockLlm { response: "They discussed Rust".to_string(), fail: false });
+        let llm = Arc::new(MockLlm {
+            response: "They discussed Rust".to_string(),
+            fail: false,
+        });
         let compressor = SessionCompressor::new(llm);
 
         // Build 9 messages total
         let mut msgs = Vec::new();
-        msgs.push(make_msg("s1", MessageRole::User, "Let's build a tool", None));          // 0: history, conv
-        msgs.push(make_msg("s1", MessageRole::Assistant, "Good idea", None));               // 1: history, conv
-        msgs.push(make_msg("s1", MessageRole::Tool, "result1", Some("call_1")));            // 2: history, tool
-        msgs.push(make_msg("s1", MessageRole::Tool, "result2", Some("call_2")));            // 3: history, tool
-        msgs.push(make_msg("s1", MessageRole::User, "What about compression?", None));      // 4: recent
-        msgs.push(make_msg("s1", MessageRole::Assistant, "Yes let's", None));               // 5: recent
-        msgs.push(make_msg("s1", MessageRole::Tool, "result3", Some("call_3")));            // 6: recent
-        msgs.push(make_msg("s1", MessageRole::User, "Recent msg 1", None));                 // 7: recent
-        msgs.push(make_msg("s1", MessageRole::Assistant, "Recent msg 2", None));            // 8: recent
+        msgs.push(make_msg(
+            "s1",
+            MessageRole::User,
+            "Let's build a tool",
+            None,
+        )); // 0: history, conv
+        msgs.push(make_msg("s1", MessageRole::Assistant, "Good idea", None)); // 1: history, conv
+        msgs.push(make_msg("s1", MessageRole::Tool, "result1", Some("call_1"))); // 2: history, tool
+        msgs.push(make_msg("s1", MessageRole::Tool, "result2", Some("call_2"))); // 3: history, tool
+        msgs.push(make_msg(
+            "s1",
+            MessageRole::User,
+            "What about compression?",
+            None,
+        )); // 4: recent
+        msgs.push(make_msg("s1", MessageRole::Assistant, "Yes let's", None)); // 5: recent
+        msgs.push(make_msg("s1", MessageRole::Tool, "result3", Some("call_3"))); // 6: recent
+        msgs.push(make_msg("s1", MessageRole::User, "Recent msg 1", None)); // 7: recent
+        msgs.push(make_msg("s1", MessageRole::Assistant, "Recent msg 2", None)); // 8: recent
 
         // 9 total, keep_last=5, split_at=4
         // History (0..4): User, Assistant, Tool, Tool → conv_msgs=2, tool_msgs=2
@@ -210,22 +252,28 @@ mod tests {
         assert!(content.contains("[Session Summary]"));
         assert!(content.contains("They discussed Rust"));
         // Message at index 2 should be first recent message
-        assert_eq!(result[2].message.content.as_ref().unwrap().as_str(), "What about compression?");
+        assert_eq!(
+            result[2].message.content.as_ref().unwrap().as_str(),
+            "What about compression?"
+        );
     }
 
     #[tokio::test]
     async fn test_compress_llm_fallback() {
-        let llm = Arc::new(MockLlm { response: "".to_string(), fail: true });
+        let llm = Arc::new(MockLlm {
+            response: "".to_string(),
+            fail: true,
+        });
         let compressor = SessionCompressor::new(llm);
 
         // 6 messages: keep_last=5, split_at=1
         let mut msgs = Vec::new();
-        msgs.push(make_msg("s1", MessageRole::User, "Hello", None));         // 0: history, conv
-        msgs.push(make_msg("s1", MessageRole::Assistant, "Hi", None));       // 1: recent
-        msgs.push(make_msg("s1", MessageRole::User, "How are you?", None));  // 2: recent
-        msgs.push(make_msg("s1", MessageRole::Assistant, "Fine", None));     // 3: recent
-        msgs.push(make_msg("s1", MessageRole::User, "Recent", None));        // 4: recent
-        msgs.push(make_msg("s1", MessageRole::Assistant, "Recent2", None));  // 5: recent
+        msgs.push(make_msg("s1", MessageRole::User, "Hello", None)); // 0: history, conv
+        msgs.push(make_msg("s1", MessageRole::Assistant, "Hi", None)); // 1: recent
+        msgs.push(make_msg("s1", MessageRole::User, "How are you?", None)); // 2: recent
+        msgs.push(make_msg("s1", MessageRole::Assistant, "Fine", None)); // 3: recent
+        msgs.push(make_msg("s1", MessageRole::User, "Recent", None)); // 4: recent
+        msgs.push(make_msg("s1", MessageRole::Assistant, "Recent2", None)); // 5: recent
 
         // History = msgs[0..1] = [User "Hello"] → conv_msgs = [User "Hello"]
         // LLM fails → conv_msgs included uncompressed (1 message)
@@ -234,6 +282,9 @@ mod tests {
         assert_eq!(result.len(), 6);
         // First message should be the uncompressed conv message from history
         assert_eq!(result[0].message.role, MessageRole::User);
-        assert_eq!(result[0].message.content.as_ref().unwrap().as_str(), "Hello");
+        assert_eq!(
+            result[0].message.content.as_ref().unwrap().as_str(),
+            "Hello"
+        );
     }
 }

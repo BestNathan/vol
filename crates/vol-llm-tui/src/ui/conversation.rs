@@ -1,11 +1,11 @@
 //! Conversation tab widget — scrollable message view.
 
 use crate::app::{AppState, ConversationEntry};
-use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::text::{Line, Span, Text};
+use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::Frame;
 
 /// Render the conversation panel.
 pub fn render_conversation(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -37,7 +37,8 @@ pub fn render_conversation(frame: &mut Frame, area: Rect, state: &AppState) {
     };
 
     // Slice only the visible lines to prevent overflow beyond widget bounds
-    let visible_lines: Vec<Line> = lines.into_iter()
+    let visible_lines: Vec<Line> = lines
+        .into_iter()
         .skip(scroll)
         .take(visible_height)
         .collect();
@@ -88,74 +89,94 @@ fn build_conversation_lines<'a>(state: &'a AppState, max_width: usize) -> Vec<Li
         match entry {
             ConversationEntry::UserInput { text } => {
                 let wrap = max_width.saturating_sub(4); // ">>> "
-                lines.push(Line::from(vec![
-                    Span::styled(">>> ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    ">>> ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )]));
                 for line in text.lines() {
                     for wrapped in wrap_line(line, wrap) {
-                        lines.push(Line::from(vec![
-                            Span::styled(wrapped, Style::default().fg(Color::White)),
-                        ]));
+                        lines.push(Line::from(vec![Span::styled(
+                            wrapped,
+                            Style::default().fg(Color::White),
+                        )]));
                     }
                 }
                 lines.push(Line::raw(""));
             }
             ConversationEntry::Thinking { content } => {
-                lines.push(Line::from(vec![
-                    Span::styled("Thinking", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    "Thinking",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )]));
                 let wrap = max_width.saturating_sub(2);
                 for line in content.lines() {
                     for wrapped in wrap_line(line, wrap) {
-                        lines.push(Line::from(vec![
-                            Span::styled(format!("  {}", wrapped), Style::default().fg(Color::DarkGray)),
-                        ]));
+                        lines.push(Line::from(vec![Span::styled(
+                            format!("  {}", wrapped),
+                            Style::default().fg(Color::DarkGray),
+                        )]));
                     }
                 }
                 lines.push(Line::raw(""));
             }
             ConversationEntry::ContentStreaming { content } => {
                 if content.is_empty() {
-                    lines.push(Line::from(vec![
-                        Span::styled("Generating...", Style::default().fg(Color::DarkGray)),
-                    ]));
+                    lines.push(Line::from(vec![Span::styled(
+                        "Generating...",
+                        Style::default().fg(Color::DarkGray),
+                    )]));
                 } else {
                     for line in content.lines() {
                         for wrapped in wrap_line(line, max_width) {
-                            lines.push(Line::from(vec![
-                                Span::styled(wrapped, Style::default().fg(Color::White)),
-                            ]));
+                            lines.push(Line::from(vec![Span::styled(
+                                wrapped,
+                                Style::default().fg(Color::White),
+                            )]));
                         }
                     }
                 }
             }
-            ConversationEntry::ToolCall { tool_name, arg_preview } => {
-                lines.push(Line::from(vec![
-                    Span::styled(format!("[{}]", tool_name), Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
-                ]));
+            ConversationEntry::ToolCall {
+                tool_name,
+                arg_preview,
+            } => {
+                lines.push(Line::from(vec![Span::styled(
+                    format!("[{}]", tool_name),
+                    Style::default()
+                        .fg(Color::Blue)
+                        .add_modifier(Modifier::BOLD),
+                )]));
                 if !arg_preview.is_empty() {
                     for wrapped in wrap_line(arg_preview, max_width.saturating_sub(2)) {
-                        lines.push(Line::from(vec![
-                            Span::styled(format!("  {}", wrapped), Style::default().fg(Color::DarkGray)),
-                        ]));
+                        lines.push(Line::from(vec![Span::styled(
+                            format!("  {}", wrapped),
+                            Style::default().fg(Color::DarkGray),
+                        )]));
                     }
                 }
             }
-            ConversationEntry::ToolResult { tool_name, preview, success } => {
+            ConversationEntry::ToolResult {
+                tool_name,
+                preview,
+                success,
+            } => {
                 let status = if *success { "OK" } else { "ERR" };
                 let color = if *success { Color::Green } else { Color::Red };
-                lines.push(Line::from(vec![
-                    Span::styled(
-                        format!("  {} {} ", status, tool_name),
-                        Style::default().fg(color),
-                    ),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    format!("  {} {} ", status, tool_name),
+                    Style::default().fg(color),
+                )]));
                 let wrap = max_width.saturating_sub(4);
                 for line in preview.lines().take(6) {
                     for wrapped in wrap_line(line, wrap) {
-                        lines.push(Line::from(vec![
-                            Span::styled(format!("    {}", wrapped), Style::default().fg(Color::DarkGray)),
-                        ]));
+                        lines.push(Line::from(vec![Span::styled(
+                            format!("    {}", wrapped),
+                            Style::default().fg(Color::DarkGray),
+                        )]));
                     }
                 }
                 lines.push(Line::raw(""));
@@ -164,34 +185,38 @@ fn build_conversation_lines<'a>(state: &'a AppState, max_width: usize) -> Vec<Li
                 lines.push(Line::raw(""));
                 for line in text.lines() {
                     for wrapped in wrap_line(line, max_width) {
-                        lines.push(Line::from(vec![
-                            Span::styled(wrapped, Style::default().fg(Color::White)),
-                        ]));
+                        lines.push(Line::from(vec![Span::styled(
+                            wrapped,
+                            Style::default().fg(Color::White),
+                        )]));
                     }
                 }
                 lines.push(Line::raw(""));
             }
-            ConversationEntry::RunSummary { iterations, tool_calls, elapsed_ms } => {
-                lines.push(Line::from(vec![
-                    Span::styled(
-                        format!("Done · {} iteration{} · {} tool call{} · {}ms",
-                            iterations,
-                            if *iterations == 1 { "" } else { "s" },
-                            tool_calls,
-                            if *tool_calls == 1 { "" } else { "s" },
-                            elapsed_ms,
-                        ),
-                        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            ConversationEntry::RunSummary {
+                iterations,
+                tool_calls,
+                elapsed_ms,
+            } => {
+                lines.push(Line::from(vec![Span::styled(
+                    format!(
+                        "Done · {} iteration{} · {} tool call{} · {}ms",
+                        iterations,
+                        if *iterations == 1 { "" } else { "s" },
+                        tool_calls,
+                        if *tool_calls == 1 { "" } else { "s" },
+                        elapsed_ms,
                     ),
-                ]));
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                )]));
             }
             ConversationEntry::Error { message } => {
-                lines.push(Line::from(vec![
-                    Span::styled(
-                        format!("Error: {}", message),
-                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                    ),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    format!("Error: {}", message),
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                )]));
             }
         }
     }

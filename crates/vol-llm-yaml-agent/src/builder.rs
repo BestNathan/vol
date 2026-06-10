@@ -2,8 +2,8 @@
 
 use std::path::Path;
 use std::sync::Arc;
-use vol_llm_agent::ReActAgent;
 use vol_llm_agent::react::AgentConfig;
+use vol_llm_agent::ReActAgent;
 use vol_llm_context::ContextBuilderBuilder;
 use vol_llm_provider::LLMProviderRegistry;
 use vol_llm_tool::ToolRegistry;
@@ -11,8 +11,8 @@ use vol_session::{InMemoryEntryStore, Session};
 
 use crate::config::YamlAgentConfig;
 use crate::error::YamlAgentError;
-use crate::tools::register_tools_by_name;
 use crate::plugins::register_plugins_by_name;
+use crate::tools::register_tools_by_name;
 
 /// Builder that creates a ReActAgent from YAML config.
 pub struct YamlAgentBuilder {
@@ -23,8 +23,7 @@ pub struct YamlAgentBuilder {
 impl YamlAgentBuilder {
     /// Load YAML from a file path.
     pub fn from_file(path: &Path) -> Result<Self, YamlAgentError> {
-        let yaml = std::fs::read_to_string(path)
-            .map_err(YamlAgentError::Io)?;
+        let yaml = std::fs::read_to_string(path).map_err(YamlAgentError::Io)?;
         Self::from_yaml(&yaml)
     }
 
@@ -32,7 +31,10 @@ impl YamlAgentBuilder {
     pub fn from_yaml(yaml: &str) -> Result<Self, YamlAgentError> {
         let config: YamlAgentConfig = serde_yaml::from_str(yaml)?;
         let llm_registry = LLMProviderRegistry::new();
-        Ok(Self { config, llm_registry })
+        Ok(Self {
+            config,
+            llm_registry,
+        })
     }
 
     /// Get a reference to the parsed config.
@@ -51,7 +53,9 @@ impl YamlAgentBuilder {
     /// Build the ReActAgent.
     pub fn build(self) -> Result<ReActAgent, YamlAgentError> {
         // 1. Resolve LLM
-        let llm = self.llm_registry.get(&self.config.llm)
+        let llm = self
+            .llm_registry
+            .get(&self.config.llm)
             .ok_or_else(|| YamlAgentError::LlmNotFound(self.config.llm.clone()))?;
 
         // 2. Register tools
@@ -173,13 +177,16 @@ system_files:
         let file_path = temp.path().join("instructions.md");
         std::fs::write(&file_path, "File content here.").unwrap();
 
-        let yaml = format!(r#"
+        let yaml = format!(
+            r#"
 name: test
 llm: p
 system: "Inline prefix"
 system_files:
   - {}
-"#, file_path.display());
+"#,
+            file_path.display()
+        );
         let builder = YamlAgentBuilder::from_yaml(&yaml).unwrap();
         let prompt = builder.build_system_prompt();
         assert!(prompt.contains("Inline prefix"));

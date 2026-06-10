@@ -12,5 +12,9 @@ use crate::{GrepParams, SearchResult};
 pub trait GrepBackend: Send + Sync {
     /// Execute a grep search with the given parameters and sandbox.
     /// Returns a Vec of SearchResult (one per matching file).
-    async fn search(params: &GrepParams, root: &Path, sandbox: &dyn Sandbox) -> Result<Vec<SearchResult>, String>;
+    async fn search(
+        params: &GrepParams,
+        root: &Path,
+        sandbox: &dyn Sandbox,
+    ) -> Result<Vec<SearchResult>, String>;
 }

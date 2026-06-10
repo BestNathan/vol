@@ -6,8 +6,8 @@ use async_trait::async_trait;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use vol_llm_agent_channel::{
-    AgentServerMessage, Connection, ConnectionError, ConnectionHolder, MessageKind, Operation,
     agent_server_protocol::{AgentOperation, AgentPayload, Payload},
+    AgentServerMessage, Connection, ConnectionError, ConnectionHolder, MessageKind, Operation,
 };
 
 /// Minimal connection that uses AgentServerMessage for testing.
@@ -21,8 +21,14 @@ impl TestConnection {
         let (in_tx, in_rx) = mpsc::unbounded_channel::<AgentServerMessage>();
         let (out_tx, out_rx) = mpsc::unbounded_channel::<AgentServerMessage>();
         (
-            Self { rx: Mutex::new(in_rx), tx: out_tx },
-            TestHandle { tx: in_tx, rx: out_rx },
+            Self {
+                rx: Mutex::new(in_rx),
+                tx: out_tx,
+            },
+            TestHandle {
+                tx: in_tx,
+                rx: out_rx,
+            },
         )
     }
 }

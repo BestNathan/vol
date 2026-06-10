@@ -1,7 +1,7 @@
 //! YAML agent configuration.
 
-use std::path::PathBuf;
 use serde::Deserialize;
+use std::path::PathBuf;
 
 /// Parsed YAML agent configuration.
 #[derive(Debug, Clone, Deserialize)]
@@ -45,9 +45,15 @@ pub struct YamlAgentConfig {
     pub working_dir: PathBuf,
 }
 
-fn default_max_iterations() -> u32 { 10 }
-fn default_max_history() -> usize { 20 }
-fn default_working_dir() -> PathBuf { PathBuf::from(".") }
+fn default_max_iterations() -> u32 {
+    10
+}
+fn default_max_history() -> usize {
+    20
+}
+fn default_working_dir() -> PathBuf {
+    PathBuf::from(".")
+}
 
 #[cfg(test)]
 mod tests {
@@ -95,10 +101,16 @@ working_dir: "/tmp/project"
         assert_eq!(config.name, "coding");
         assert_eq!(config.max_iterations, 20);
         assert_eq!(config.max_history_messages, 30);
-        assert_eq!(config.system.as_deref(), Some("You are a coding assistant."));
+        assert_eq!(
+            config.system.as_deref(),
+            Some("You are a coding assistant.")
+        );
         assert_eq!(config.system_files.as_ref().unwrap().len(), 2);
         assert_eq!(config.tools, vec!["read", "write", "edit", "bash"]);
-        assert_eq!(config.plugins.as_ref().unwrap(), &vec!["logger".to_string()]);
+        assert_eq!(
+            config.plugins.as_ref().unwrap(),
+            &vec!["logger".to_string()]
+        );
         assert_eq!(config.working_dir, PathBuf::from("/tmp/project"));
     }
 }

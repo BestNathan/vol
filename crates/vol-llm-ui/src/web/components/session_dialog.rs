@@ -1,35 +1,51 @@
 //! Session management dialog (list, resume, new, delete).
 
-use dioxus::prelude::*;
 use crate::state::SessionDialogState;
+use dioxus::prelude::*;
 
 fn uuid_v4_stub() -> String {
     let ts = js_sys::Date::now() as u128 * 1_000_000;
-    format!("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
-        (ts >> 96) as u32, (ts >> 80) as u16 & 0xffff, (ts >> 64) as u16 & 0xffff,
-        ((ts >> 48) as u16 & 0x0fff) | 0x4000, ts & 0xffffffffffff)
+    format!(
+        "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+        (ts >> 96) as u32,
+        (ts >> 80) as u16 & 0xffff,
+        (ts >> 64) as u16 & 0xffff,
+        ((ts >> 48) as u16 & 0x0fff) | 0x4000,
+        ts & 0xffffffffffff
+    )
 }
 
 #[component]
 pub fn SessionDialog() -> Element {
     let signal = use_signal(|| SessionDialogState::new());
     let open = signal.read().open;
-    if !open { return rsx! {}; }
+    if !open {
+        return rsx! {};
+    }
 
     let sessions = signal.read().sessions.clone();
     let selected = signal.read().selected;
 
     let mut sig_new = signal;
-    let on_new = move |_: Event<MouseData>| { sig_new.with_mut(|s| { s.open = false; let _ = uuid_v4_stub(); }); };
+    let on_new = move |_: Event<MouseData>| {
+        sig_new.with_mut(|s| {
+            s.open = false;
+            let _ = uuid_v4_stub();
+        });
+    };
     let mut sig_resume = signal;
-    let on_resume = move |_: Event<MouseData>| { sig_resume.with_mut(|s| s.open = false); };
+    let on_resume = move |_: Event<MouseData>| {
+        sig_resume.with_mut(|s| s.open = false);
+    };
     let mut sig_delete = signal;
     let on_delete = move |_: Event<MouseData>| {
         sig_delete.with_mut(|s| {
             let sel = s.selected;
             if s.sessions.get(sel).is_some() {
                 s.sessions.remove(sel);
-                if !s.sessions.is_empty() { s.selected = sel.min(s.sessions.len().saturating_sub(1)); }
+                if !s.sessions.is_empty() {
+                    s.selected = sel.min(s.sessions.len().saturating_sub(1));
+                }
             }
         });
     };

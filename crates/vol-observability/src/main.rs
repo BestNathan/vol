@@ -54,10 +54,7 @@ async fn main() {
 
     let app = build_router(app_state);
 
-    let addr: SocketAddr = config
-        .listen_addr
-        .parse()
-        .expect("Invalid listen address");
+    let addr: SocketAddr = config.listen_addr.parse().expect("Invalid listen address");
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
@@ -65,9 +62,7 @@ async fn main() {
 
     tracing::info!(%addr, "Listening");
 
-    axum::serve(listener, app)
-        .await
-        .unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
 
 fn load_config() -> ObservabilityConfig {
@@ -89,11 +84,13 @@ fn parse_tdengine_dsn_to_http(dsn: &str) -> String {
 
     if let Some(colon_pos) = without_scheme.find(':') {
         let host = without_scheme[..colon_pos].to_string();
-        let native_port: u16 = without_scheme[colon_pos + 1..]
-            .parse()
-            .unwrap_or(6030);
+        let native_port: u16 = without_scheme[colon_pos + 1..].parse().unwrap_or(6030);
         // Convert native port (6030) to REST port (6041)
-        let rest_port = if native_port == 6030 { 6041 } else { native_port + 11 };
+        let rest_port = if native_port == 6030 {
+            6041
+        } else {
+            native_port + 11
+        };
         format!("http://{}:{}", host, rest_port)
     } else {
         // Default: localhost REST port

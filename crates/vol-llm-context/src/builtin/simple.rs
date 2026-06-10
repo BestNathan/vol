@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use vol_llm_core::Message;
 
-use crate::{AttentionAnchor, ContextBlock, ContextContributor, ContextError, estimate_tokens};
+use crate::{estimate_tokens, AttentionAnchor, ContextBlock, ContextContributor, ContextError};
 
 /// A simple contributor for ad-hoc context blocks.
 pub struct SimpleContributor {
@@ -36,7 +36,10 @@ impl ContextContributor for SimpleContributor {
     }
 
     async fn contribute(&self) -> Result<Vec<ContextBlock>, ContextError> {
-        Ok(vec![ContextBlock::new(self.messages.clone(), self.anchor.clone())])
+        Ok(vec![ContextBlock::new(
+            self.messages.clone(),
+            self.anchor.clone(),
+        )])
     }
 
     async fn compress(&mut self) {

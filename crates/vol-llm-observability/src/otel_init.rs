@@ -8,10 +8,7 @@ use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::Resource;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
-use tracing_subscriber::{
-    fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter,
-    Registry,
-};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
 /// Initialize the tracing-subscriber with OTel log export.
 ///
@@ -36,14 +33,12 @@ pub fn init_otel_logs(
     endpoint: &str,
     service_name: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let resolved_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
-        .unwrap_or_else(|_| endpoint.to_string());
+    let resolved_endpoint =
+        std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_else(|_| endpoint.to_string());
 
     let resource = Resource::builder()
         .with_service_name(service_name.to_string())
-        .with_attributes([
-            KeyValue::new("deployment.environment", "development"),
-        ])
+        .with_attributes([KeyValue::new("deployment.environment", "development")])
         .build();
 
     let exporter = opentelemetry_otlp::LogExporter::builder()
@@ -56,7 +51,8 @@ pub fn init_otel_logs(
         .with_batch_exporter(exporter)
         .build();
 
-    let otel_log_layer = opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(&logger_provider);
+    let otel_log_layer =
+        opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(&logger_provider);
 
     // Console layer
     let console_layer = fmt::layer()
@@ -91,8 +87,7 @@ pub fn init_otel_logs(
         .with_line_number(true)
         .with_writer(file_appender);
 
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     Registry::default()
         .with(env_filter)

@@ -193,7 +193,11 @@ fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
 }
 
 #[component]
-fn ServerRow(signal: Signal<McpState>, app_state: AppState, server: crate::state::McpServerInfo) -> Element {
+fn ServerRow(
+    signal: Signal<McpState>,
+    app_state: AppState,
+    server: crate::state::McpServerInfo,
+) -> Element {
     let status_color = match server.status.as_str() {
         "connected" => "#40c040",
         "connecting" => "#f0c040",
@@ -362,17 +366,26 @@ fn ResourceList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>)
         };
     }
 
-    let mut resource_groups: std::collections::BTreeMap<String, Vec<_>> = std::collections::BTreeMap::new();
+    let mut resource_groups: std::collections::BTreeMap<String, Vec<_>> =
+        std::collections::BTreeMap::new();
     for r in &resources {
-        resource_groups.entry(r.server.clone()).or_default().push(r.clone());
+        resource_groups
+            .entry(r.server.clone())
+            .or_default()
+            .push(r.clone());
     }
 
-    let mut template_groups: std::collections::BTreeMap<String, Vec<_>> = std::collections::BTreeMap::new();
+    let mut template_groups: std::collections::BTreeMap<String, Vec<_>> =
+        std::collections::BTreeMap::new();
     for t in &templates {
-        template_groups.entry(t.server.clone()).or_default().push(t.clone());
+        template_groups
+            .entry(t.server.clone())
+            .or_default()
+            .push(t.clone());
     }
 
-    let all_servers: std::collections::BTreeSet<String> = resource_groups.keys()
+    let all_servers: std::collections::BTreeSet<String> = resource_groups
+        .keys()
         .chain(template_groups.keys())
         .cloned()
         .collect();
@@ -448,7 +461,10 @@ fn ResourceList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>)
 }
 
 #[component]
-fn ResourceRow(mut signal: Signal<McpDialogState>, resource: crate::state::McpResourceInfo) -> Element {
+fn ResourceRow(
+    mut signal: Signal<McpDialogState>,
+    resource: crate::state::McpResourceInfo,
+) -> Element {
     rsx! {
         div { class: "flex items-center justify-between py-1 border-b border-[#2a2a44]",
             div { class: "flex-1 min-w-0",

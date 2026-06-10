@@ -63,9 +63,9 @@ fn kind_from_db(value: &str) -> Result<TaskKind> {
 }
 
 fn system_time_to_secs(value: SystemTime) -> Result<i64> {
-    let duration = value.duration_since(UNIX_EPOCH).map_err(|e| {
-        StoreError::Serialization(format!("task time is before unix epoch: {e}"))
-    })?;
+    let duration = value
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| StoreError::Serialization(format!("task time is before unix epoch: {e}")))?;
     i64::try_from(duration.as_secs()).map_err(|_| {
         StoreError::Serialization(format!(
             "task timestamp exceeds database i64 range: {}",

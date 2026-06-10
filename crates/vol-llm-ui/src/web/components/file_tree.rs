@@ -74,9 +74,8 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
             let mut sig = dir_ws.clone();
             let click_node = dir_node.clone();
 
-            let should_load = sig.with_mut(|s| {
-                toggle_directory_for_click(&click_node, &mut s.collapsed_dirs)
-            });
+            let should_load =
+                sig.with_mut(|s| toggle_directory_for_click(&click_node, &mut s.collapsed_dirs));
 
             if should_load {
                 let p_str = p.clone();
@@ -365,7 +364,8 @@ mod tests {
         ]
         .join(" ");
 
-        assert!(source.contains("w-3 h-3 flex-shrink-0 origin-center transition-transform duration-150"));
+        assert!(source
+            .contains("w-3 h-3 flex-shrink-0 origin-center transition-transform duration-150"));
         assert!(!source.contains(&old_button_shape));
     }
 
@@ -373,7 +373,9 @@ mod tests {
     fn directory_chevron_is_drawn_with_css_borders() {
         let source = include_str!("file_tree.rs");
 
-        assert!(source.contains("block h-1.5 w-1.5 origin-center border-r-2 border-t-2 border-[#8b8baa] rotate-45"));
+        assert!(source.contains(
+            "block h-1.5 w-1.5 origin-center border-r-2 border-t-2 border-[#8b8baa] rotate-45"
+        ));
         assert!(!source.contains("class: \"{chevron_class}\", \">\""));
         assert!(!source.contains("class: \"{chevron_class}\", \"\\u{203a}\""));
         assert!(!source.contains("class: \"{chevron_class}\", \"\\u{25be}\""));

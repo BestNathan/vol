@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
-use crate::state::TaskState;
 use super::task_dep_graph::TaskDepGraph;
+use crate::state::TaskState;
 
 pub(crate) fn status_color(status: &str) -> &'static str {
     match status {
@@ -27,15 +27,23 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
     // Initial load
     use_hook(move || {
         let mut s = sig;
-        s.with_mut(|t| { t.loading = true; t.error = None; });
+        s.with_mut(|t| {
+            t.loading = true;
+            t.error = None;
+        });
         let s2 = sig;
         rpc.task_list(None, initial_assignee.as_deref(), move |result| {
             let mut s2 = s2;
             s2.with_mut(|t| {
                 t.loading = false;
                 match result {
-                    Ok(tasks) => { t.tasks = tasks; t.error = None; }
-                    Err(e) => { t.error = Some(e); }
+                    Ok(tasks) => {
+                        t.tasks = tasks;
+                        t.error = None;
+                    }
+                    Err(e) => {
+                        t.error = Some(e);
+                    }
                 }
             });
         });
@@ -46,22 +54,32 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
     let sig_retry = task_state;
     let assignee = assignee_filter.clone();
     use_hook(move || {
-        let _sub = app.event_bus.subscribe(crate::state::UiEventKind::WsConnected, move |_| {
-            let mut s = sig_retry;
-            s.with_mut(|t| { t.loading = true; t.error = None; });
-            let s2 = sig_retry;
-            let a = assignee.clone();
-            rpc_retry.task_list(None, a.as_deref(), move |result| {
-                let mut s2 = s2;
-                s2.with_mut(|t| {
-                    t.loading = false;
-                    match result {
-                        Ok(tasks) => { t.tasks = tasks; t.error = None; }
-                        Err(e) => { t.error = Some(e); }
-                    }
+        let _sub = app
+            .event_bus
+            .subscribe(crate::state::UiEventKind::WsConnected, move |_| {
+                let mut s = sig_retry;
+                s.with_mut(|t| {
+                    t.loading = true;
+                    t.error = None;
+                });
+                let s2 = sig_retry;
+                let a = assignee.clone();
+                rpc_retry.task_list(None, a.as_deref(), move |result| {
+                    let mut s2 = s2;
+                    s2.with_mut(|t| {
+                        t.loading = false;
+                        match result {
+                            Ok(tasks) => {
+                                t.tasks = tasks;
+                                t.error = None;
+                            }
+                            Err(e) => {
+                                t.error = Some(e);
+                            }
+                        }
+                    });
                 });
             });
-        });
     });
 
     let tasks = task_state.read().tasks.clone();
@@ -72,9 +90,14 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
 
     // Filter tasks by selected status
     let filtered: Vec<_> = if let Some(ref sf) = status_filter {
-        if sf == "all" { tasks.clone() }
-        else { tasks.iter().filter(|t| t.status == *sf).cloned().collect() }
-    } else { tasks.clone() };
+        if sf == "all" {
+            tasks.clone()
+        } else {
+            tasks.iter().filter(|t| t.status == *sf).cloned().collect()
+        }
+    } else {
+        tasks.clone()
+    };
 
     // Empty + error
     if tasks.is_empty() && error.is_some() {

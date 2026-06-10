@@ -1,16 +1,116 @@
 //! End-to-end test: exercise every operation through core.handle() directly,
 //! verifying full handler registry dispatch for all 22 methods.
 
-use vol_llm_core::AgentDef;
 use vol_llm_agent::AgentInput;
 use vol_llm_agent_channel::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, FileOperation, LogOperation, McpOperation,
     MessageKind, Operation, Payload, SessionOperation, SkillOperation,
 };
 use vol_llm_agent_channel::AgentServerCore;
+use vol_llm_core::AgentDef;
 
 fn command(id: &str, op: Operation, payload: Payload) -> AgentServerMessage {
     AgentServerMessage::new_command(id, op, payload)
+}
+
+#[tokio::test]
+async fn session_domain_works_with_sqlite_session_store() {
+    let temp = tempfile::tempdir().unwrap();
+    let db_url = format!("sqlite://{}", temp.path().join("sessions.db").display());
+
+    let core = match AgentServerCore::builder(temp.path(), temp.path())
+        .with_session_store_config(Some(vol_llm_runtime::SessionStoreConfig {
+            store_type: vol_llm_runtime::SessionStoreType::Database,
+            url: Some(db_url),
+        }))
+        .build()
+        .await
+    {
+        Ok(core) => core,
+        Err(e) if e.contains("No LLM provider configured") => return,
+        Err(e) => panic!("failed to build AgentServerCore: {e}"),
+    };
+
+    let manager = core.runtime.session_manager.clone();
+    manager
+        .entry_store_for_agent("alpha")
+        .save(vol_session::SessionEntry::new_summary(
+            "session-a".to_string(),
+            "database summary".to_string(),
+        ))
+        .await
+        .unwrap();
+
+    let resp = core
+        .handle(AgentServerMessage::new_command(
+            "sqlite-session-list",
+            Operation::Session(SessionOperation::List),
+            Payload::Session(
+                vol_llm_agent_channel::agent_server_protocol::SessionPayload::List {
+                    agent_id: Some("alpha".to_string()),
+                },
+            ),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(resp.len(), 1);
+    assert_eq!(resp[0].kind, MessageKind::Result);
+    let Payload::Session(
+        vol_llm_agent_channel::agent_server_protocol::SessionPayload::ListResult { sessions },
+    ) = &resp[0].payload
+    else {
+        panic!("expected session list result, got {:?}", resp[0].payload);
+    };
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0]["agent_id"], "alpha");
+    assert_eq!(sessions[0]["session_id"], "session-a");
+    assert_eq!(sessions[0]["entry_count"], 1);
+}
+
+#[tokio::test]
+async fn register_agent_uses_configured_sqlite_session_manager() {
+    let temp = tempfile::tempdir().unwrap();
+    let db_url = format!("sqlite://{}", temp.path().join("sessions.db").display());
+
+    let core = match AgentServerCore::builder(temp.path(), temp.path())
+        .with_session_store_config(Some(vol_llm_runtime::SessionStoreConfig {
+            store_type: vol_llm_runtime::SessionStoreType::Database,
+            url: Some(db_url),
+        }))
+        .build()
+        .await
+    {
+        Ok(core) => core,
+        Err(e) if e.contains("No LLM provider configured") => return,
+        Err(e) => panic!("failed to build AgentServerCore: {e}"),
+    };
+
+    let def = AgentDef::new("registered-agent", "You are a test agent.").with_type("test-agent");
+    core.register_agent("registered-agent", def).await.unwrap();
+
+    let agent = core
+        .router()
+        .get_agent("registered-agent")
+        .await
+        .expect("registered agent should be routed");
+    let session_id = agent.session().id.clone();
+    agent
+        .session()
+        .add_summary("summary written through registered agent session".to_string())
+        .await
+        .unwrap();
+
+    let sessions = core
+        .runtime
+        .session_manager
+        .list_sessions(Some("registered-agent"))
+        .await
+        .unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].agent_id, "registered-agent");
+    assert_eq!(sessions[0].session_id, session_id);
+    assert_eq!(sessions[0].entry_count, 1);
 }
 
 #[tokio::test]
@@ -138,13 +238,15 @@ async fn test_e2e_all_methods() {
     let resp = handle(command(
         "10",
         Operation::Session(SessionOperation::List),
-        Payload::Session(vol_llm_agent_channel::agent_server_protocol::SessionPayload::List { agent_id: None }),
+        Payload::Session(
+            vol_llm_agent_channel::agent_server_protocol::SessionPayload::List { agent_id: None },
+        ),
     ))
     .await
     .unwrap();
     assert_eq!(resp[0].kind, MessageKind::Result);
 
-    // ── 11. session.resume (nonexistent → error) ──
+    // ── 11. session.resume (nonexistent → error message) ──
     let resp = handle(command(
         "11",
         Operation::Session(SessionOperation::Resume),
@@ -155,14 +257,19 @@ async fn test_e2e_all_methods() {
             },
         ),
     ))
-    .await;
-    assert!(
-        resp.is_err(),
-        "session.resume should return Err for nonexistent session, got {:?}",
-        resp
-    );
+    .await
+    .unwrap();
+    assert_eq!(resp[0].kind, MessageKind::Error);
+    let Payload::Error(err) = &resp[0].payload else {
+        panic!(
+            "session.resume should return Error payload, got {:?}",
+            resp[0].payload
+        );
+    };
+    assert_eq!(err.code, "session_not_found");
+    assert!(err.terminal);
 
-    // ── 12. session.entries (nonexistent → error) ──
+    // ── 12. session.entries (nonexistent → error message) ──
     let resp = handle(command(
         "12",
         Operation::Session(SessionOperation::Entries),
@@ -173,12 +280,17 @@ async fn test_e2e_all_methods() {
             },
         ),
     ))
-    .await;
-    assert!(
-        resp.is_err(),
-        "session.entries should return Err for nonexistent session, got {:?}",
-        resp
-    );
+    .await
+    .unwrap();
+    assert_eq!(resp[0].kind, MessageKind::Error);
+    let Payload::Error(err) = &resp[0].payload else {
+        panic!(
+            "session.entries should return Error payload, got {:?}",
+            resp[0].payload
+        );
+    };
+    assert_eq!(err.code, "session_not_found");
+    assert!(err.terminal);
 
     // ── 13. log.list ──
     let resp = handle(command(

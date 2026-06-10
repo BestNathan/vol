@@ -30,20 +30,20 @@ impl DomainHandler for LogHandler {
             _ => return Err(ProtocolError::PayloadDecodeFailed("log")),
         };
         match (op, message.payload) {
-            (LogOperation::List, Payload::Log(LogPayload::List)) => Ok(vec![
-                AgentServerMessage::new_result(
+            (LogOperation::List, Payload::Log(LogPayload::List)) => {
+                Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Log(LogOperation::List),
                     Payload::Log(LogPayload::ListResult { runs: vec![] }),
-                ),
-            ]),
-            (LogOperation::Read, Payload::Log(LogPayload::Read { .. })) => Ok(vec![
-                AgentServerMessage::new_result(
+                )])
+            }
+            (LogOperation::Read, Payload::Log(LogPayload::Read { .. })) => {
+                Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Log(LogOperation::Read),
                     Payload::Log(LogPayload::ReadResult { entries: vec![] }),
-                ),
-            ]),
+                )])
+            }
             (LogOperation::List, _) => Err(ProtocolError::PayloadDecodeFailed("log.list")),
             (LogOperation::Read, _) => Err(ProtocolError::PayloadDecodeFailed("log.read")),
         }

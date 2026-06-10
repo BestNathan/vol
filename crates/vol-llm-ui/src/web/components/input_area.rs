@@ -1,8 +1,8 @@
 //! Text input for sending messages to the agent.
 
-use dioxus::prelude::*;
 use crate::state::{AgentsState, ApprovalUiState, ConversationState, GlobalState};
 use crate::web::components::app::AppState;
+use dioxus::prelude::*;
 use web_time::Instant;
 
 #[component]
@@ -26,7 +26,9 @@ pub fn InputArea() -> Element {
         move || {
             let text = input_text.peek().clone();
             let text = text.trim().to_string();
-            if text.is_empty() { return; }
+            if text.is_empty() {
+                return;
+            }
             let target = agents.read().selected.clone();
             match client.submit(&text, target.as_deref()) {
                 Ok(run_id) => log::info!("Submitted via JSON-RPC: {}", run_id),
@@ -36,7 +38,9 @@ pub fn InputArea() -> Element {
         }
     };
 
-    let on_input = move |evt: Event<FormData>| { input_text.set(evt.value()); };
+    let on_input = move |evt: Event<FormData>| {
+        input_text.set(evt.value());
+    };
 
     let on_keydown = move |evt: Event<KeyboardData>| {
         let key = evt.key();
@@ -51,7 +55,9 @@ pub fn InputArea() -> Element {
             }
             Key::Escape => {
                 let now = Instant::now();
-                let double = last_esc.read().map_or(false, |t| now.duration_since(t).as_millis() < 500);
+                let double = last_esc
+                    .read()
+                    .map_or(false, |t| now.duration_since(t).as_millis() < 500);
                 if double {
                     input_text.set(String::new());
                     last_esc.set(None);

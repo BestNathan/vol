@@ -1,13 +1,16 @@
 //! Root App component with state management, event loop, and routing.
 
 use dioxus::prelude::*;
+use gloo_timers::future::TimeoutFuture;
 use std::sync::Arc;
 use std::time::Duration;
-use gloo_timers::future::TimeoutFuture;
 
-use crate::state::{ActiveTab, ApprovalUiState, AgentsState, ConversationState, DebugState, EventBus, GlobalState, SessionsState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState};
 use crate::state::McpDialogState;
 use crate::state::SkillDialogState;
+use crate::state::{
+    ActiveTab, AgentsState, ApprovalUiState, ConversationState, DebugState, EventBus, GlobalState,
+    SessionsState, SubscriptionSet, ToolState, UiEvent, UiEventKind, WorkspaceState,
+};
 
 /// Thread-local slot so `reduce_conversation` can read the owning agent for the
 /// currently-publishing event without threading through every UiEvent variant.
@@ -29,20 +32,20 @@ use crate::web::client::{AgentEvent, JsonRpcClient};
 use super::agents_panel::AgentsPanel;
 use super::approval_dialog::ApprovalDialog;
 use super::conversation::ConversationView;
+use super::debug_panel::DebugPanel;
 use super::file_content::FileContentView;
 use super::file_tree::FileTree;
 use super::log_viewer::LogViewer;
 use super::mcp_panel::McpPanel;
-use super::sessions_panel::SessionsPanel;
-use super::skills::SkillsPanel;
-use super::skill_detail_dialog::SkillDetailDialog;
-use super::debug_panel::DebugPanel;
-use super::tasks_panel::TasksPanel;
-use super::status_bar::StatusBar;
-use super::tools_tab::ToolsTabContent;
-use super::mcp_tool_dialog::ToolCallDialog;
-use super::mcp_resource_viewer::ResourceViewer;
 use super::mcp_prompt_viewer::PromptViewer;
+use super::mcp_resource_viewer::ResourceViewer;
+use super::mcp_tool_dialog::ToolCallDialog;
+use super::sessions_panel::SessionsPanel;
+use super::skill_detail_dialog::SkillDetailDialog;
+use super::skills::SkillsPanel;
+use super::status_bar::StatusBar;
+use super::tasks_panel::TasksPanel;
+use super::tools_tab::ToolsTabContent;
 
 /// Derive WebSocket URL from the page's host at runtime.
 fn derive_ws_url() -> String {
@@ -72,7 +75,8 @@ impl PartialEq for AppState {
 fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
     let ev = &event.event;
     // AgentStreamEvent is externally-tagged: {"VariantName": {...fields}}
-    let (variant, data) = ev.as_object()
+    let (variant, data) = ev
+        .as_object()
         .and_then(|obj| obj.iter().next())
         .map(|(k, v)| (k.as_str(), v))?;
 
@@ -81,63 +85,132 @@ fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
     match variant {
         "AgentStart" => Some(UiEvent::AgentStart {
             run_id: run_id.clone(),
-            input: data.get("input").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            input: data
+                .get("input")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
         }),
         "AgentComplete" => Some(UiEvent::AgentComplete {
             run_id: run_id.clone(),
-            response: data.get("response")
+            response: data
+                .get("response")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string(),
         }),
         "AgentAborted" => Some(UiEvent::AgentAborted {
             run_id: run_id.clone(),
-            reason: data.get("reason").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            reason: data
+                .get("reason")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
         }),
         "ThinkingStart" => Some(UiEvent::ThinkingStart),
         "ThinkingDelta" => Some(UiEvent::ThinkingDelta {
-            delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            delta: data
+                .get("delta")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
         }),
         "ThinkingComplete" => Some(UiEvent::ThinkingComplete),
-"ContentStart" => Some(UiEvent::ContentStart),
+        "ContentStart" => Some(UiEvent::ContentStart),
         "ContentDelta" => Some(UiEvent::ContentDelta {
-            delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            delta: data
+                .get("delta")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
         }),
         "ContentComplete" => Some(UiEvent::ContentComplete {
-            content: data.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            content: data
+                .get("content")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
         }),
         "ToolCallBegin" => Some(UiEvent::ToolCallBegin {
-            tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            arguments: data.get("arguments").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            tool_name: data
+                .get("tool_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            arguments: data
+                .get("arguments")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
         }),
         "ToolCallArgumentDelta" => Some(UiEvent::ToolCallArgumentDelta {
-            delta: data.get("delta").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            delta: data
+                .get("delta")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
         }),
         "ToolCallComplete" => Some(UiEvent::ToolCallComplete {
-            tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            result: data.get("result").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            tool_name: data
+                .get("tool_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            result: data
+                .get("result")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
         }),
         "ToolCallError" => Some(UiEvent::ToolCallError {
-            tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            error: data.get("error").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            tool_name: data
+                .get("tool_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            error: data
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
         }),
         "ToolCallSkipped" => Some(UiEvent::ToolCallSkipped {
-            tool_name: data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            reason: data.get("reason").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            tool_name: data
+                .get("tool_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            reason: data
+                .get("reason")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
         }),
         "MaxIterationsReached" => Some(UiEvent::MaxIterationsReached {
-            current: data.get("current_iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            max: data.get("max_iterations").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            current: data
+                .get("current_iteration")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            max: data
+                .get("max_iterations")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
         }),
         "IterationContinued" => Some(UiEvent::IterationContinued {
-            from_iteration: data.get("from_iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            from_iteration: data
+                .get("from_iteration")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
         }),
         "IterationComplete" => Some(UiEvent::IterationComplete {
             iteration: data.get("iteration").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            final_answer: data.get("final_answer").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            final_answer: data
+                .get("final_answer")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         }),
         _ => None,
     }
@@ -183,8 +256,9 @@ pub fn App() -> Element {
             let event = match cs {
                 crate::web::client::ConnectionState::Connected => UiEvent::WsConnected,
                 crate::web::client::ConnectionState::Connecting => UiEvent::WsConnecting,
-                crate::web::client::ConnectionState::Disconnected =>
-                    UiEvent::WsDisconnected { reason: Some("Disconnected".to_string()) },
+                crate::web::client::ConnectionState::Disconnected => UiEvent::WsDisconnected {
+                    reason: Some("Disconnected".to_string()),
+                },
             };
             bus_conn.publish(&event);
             match cs {
@@ -233,7 +307,9 @@ pub fn App() -> Element {
             move |e| {
                 if let UiEvent::AgentStart { run_id, .. } = e {
                     let mut s = global.write_unchecked();
-                    s.run_count += 1; s.iteration = 0; s.tool_call_count = 0;
+                    s.run_count += 1;
+                    s.iteration = 0;
+                    s.tool_call_count = 0;
                     s.run_start = Some(web_time::Instant::now());
                     s.run_elapsed = Duration::ZERO;
                     // Attribute the run to the agent that submitted it
@@ -244,7 +320,11 @@ pub fn App() -> Element {
                 }
             }
         });
-        for kind in [UiEventKind::AgentComplete, UiEventKind::AgentAborted, UiEventKind::AgentError] {
+        for kind in [
+            UiEventKind::AgentComplete,
+            UiEventKind::AgentAborted,
+            UiEventKind::AgentError,
+        ] {
             let global = global.clone();
             set.subscribe(&bus, kind, move |e| {
                 let run_id = match e {
@@ -254,7 +334,9 @@ pub fn App() -> Element {
                     _ => None,
                 };
                 let mut s = global.write_unchecked();
-                if let Some(start) = s.run_start { s.run_elapsed = start.elapsed(); }
+                if let Some(start) = s.run_start {
+                    s.run_elapsed = start.elapsed();
+                }
                 if let Some(run_id) = run_id {
                     s.set_agent_idle_by_run(&run_id);
                 }
@@ -273,7 +355,12 @@ pub fn App() -> Element {
         set.subscribe(&bus, UiEventKind::ApprovalRequest, {
             let approval = approval.clone();
             move |e| {
-                if let UiEvent::ApprovalRequest { tool_name, reason, arguments } = e {
+                if let UiEvent::ApprovalRequest {
+                    tool_name,
+                    reason,
+                    arguments,
+                } = e
+                {
                     let mut s = approval.write_unchecked();
                     s.tool_name = Some(tool_name.clone());
                     s.reason = Some(reason.clone());
@@ -299,14 +386,23 @@ pub fn App() -> Element {
         let conv = conversation_signal.clone();
 
         for kind in [
-            UiEventKind::AgentStart, UiEventKind::AgentComplete, UiEventKind::AgentAborted,
-            UiEventKind::AgentError, UiEventKind::ThinkingStart, UiEventKind::ThinkingDelta,
+            UiEventKind::AgentStart,
+            UiEventKind::AgentComplete,
+            UiEventKind::AgentAborted,
+            UiEventKind::AgentError,
+            UiEventKind::ThinkingStart,
+            UiEventKind::ThinkingDelta,
             UiEventKind::ThinkingComplete,
-            UiEventKind::ContentStart, UiEventKind::ContentDelta,
-            UiEventKind::ContentComplete, UiEventKind::MaxIterationsReached,
-            UiEventKind::IterationContinued, UiEventKind::IterationComplete,
-            UiEventKind::ToolCallBegin, UiEventKind::ToolCallComplete,
-            UiEventKind::ToolCallError, UiEventKind::ToolCallSkipped,
+            UiEventKind::ContentStart,
+            UiEventKind::ContentDelta,
+            UiEventKind::ContentComplete,
+            UiEventKind::MaxIterationsReached,
+            UiEventKind::IterationContinued,
+            UiEventKind::IterationComplete,
+            UiEventKind::ToolCallBegin,
+            UiEventKind::ToolCallComplete,
+            UiEventKind::ToolCallError,
+            UiEventKind::ToolCallSkipped,
         ] {
             set.subscribe(&bus, kind, {
                 let conv = conv.clone();
@@ -325,7 +421,12 @@ pub fn App() -> Element {
         let mut set = SubscriptionSet::new(bus.clone());
         let tool = tool_signal.clone();
 
-        for kind in [UiEventKind::ToolCallBegin, UiEventKind::ToolCallComplete, UiEventKind::ToolCallError, UiEventKind::ToolCallSkipped] {
+        for kind in [
+            UiEventKind::ToolCallBegin,
+            UiEventKind::ToolCallComplete,
+            UiEventKind::ToolCallError,
+            UiEventKind::ToolCallSkipped,
+        ] {
             set.subscribe(&bus, kind, {
                 let tool = tool.clone();
                 move |event| {
@@ -347,7 +448,11 @@ pub fn App() -> Element {
                 Some(event) => {
                     // Look up which agent this event belongs to via run_map
                     let agent_id = {
-                        global_ev.read_unchecked().run_map.get(&event.run_id).cloned()
+                        global_ev
+                            .read_unchecked()
+                            .run_map
+                            .get(&event.run_id)
+                            .cloned()
                     };
                     set_current_event_agent(agent_id);
                     if let Some(ui_event) = agent_event_to_ui(&event) {
@@ -357,8 +462,13 @@ pub fn App() -> Element {
                 None => {
                     log::warn!("Event stream closed");
                     set_current_event_agent(None);
-                    bus_ev.publish(&UiEvent::AgentError { run_id: String::new(), message: "Event stream closed".to_string() });
-                    bus_ev.publish(&UiEvent::WsDisconnected { reason: Some("Event stream closed".to_string()) });
+                    bus_ev.publish(&UiEvent::AgentError {
+                        run_id: String::new(),
+                        message: "Event stream closed".to_string(),
+                    });
+                    bus_ev.publish(&UiEvent::WsDisconnected {
+                        reason: Some("Event stream closed".to_string()),
+                    });
                     break;
                 }
             }
@@ -529,7 +639,10 @@ pub fn App() -> Element {
             });
             match rx3.await {
                 Ok(Ok(entries)) => {
-                    let conv_entries = crate::web::components::sessions_panel::session_entries_to_conversation(entries);
+                    let conv_entries =
+                        crate::web::components::sessions_panel::session_entries_to_conversation(
+                            entries,
+                        );
                     let agent_id = restore_agents.read().selected.clone().unwrap_or_default();
                     {
                         let mut conv = restore_conv.write_unchecked();

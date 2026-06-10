@@ -5,22 +5,41 @@
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use vol_llm_context::{AttentionAnchor, ContextBuilderBuilder, ContextContributor};
 use vol_llm_context::builtin::{SimpleContributor, UserInputContributor};
+use vol_llm_context::{AttentionAnchor, ContextBuilderBuilder, ContextContributor};
 use vol_llm_core::Message;
 use vol_llm_skill::SkillInjector;
 use vol_session::{InMemoryEntryStore, Session, SessionContributor, SessionMessage};
 
 // Dummy LLM for CodingAgent construction test
-use vol_llm_core::{LLMClient, ConversationRequest, ConversationResponse, StreamReceiver, SupportedParam, LLMProvider};
+use vol_llm_core::{
+    ConversationRequest, ConversationResponse, LLMClient, LLMProvider, StreamReceiver,
+    SupportedParam,
+};
 struct DummyLlm;
 #[async_trait::async_trait]
 impl LLMClient for DummyLlm {
-    fn provider(&self) -> LLMProvider { LLMProvider::Anthropic }
-    fn model(&self) -> &str { "dummy" }
-    fn supported_params(&self) -> &[SupportedParam] { &[] }
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> { unimplemented!() }
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> { unimplemented!() }
+    fn provider(&self) -> LLMProvider {
+        LLMProvider::Anthropic
+    }
+    fn model(&self) -> &str {
+        "dummy"
+    }
+    fn supported_params(&self) -> &[SupportedParam] {
+        &[]
+    }
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
+        unimplemented!()
+    }
+    async fn converse_stream(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<StreamReceiver> {
+        unimplemented!()
+    }
 }
 
 /// Helper: create a session with n messages
@@ -28,10 +47,7 @@ async fn make_session(n: usize) -> Arc<Mutex<Session>> {
     let store = Arc::new(InMemoryEntryStore::new());
     let session = Session::new(store);
     for i in 0..n {
-        let msg = SessionMessage::new(
-            session.id.clone(),
-            Message::user(format!("msg-{}", i)),
-        );
+        let msg = SessionMessage::new(session.id.clone(), Message::user(format!("msg-{}", i)));
         session.add_message(msg).await.unwrap();
     }
     Arc::new(Mutex::new(session))
@@ -73,7 +89,11 @@ async fn test_context_with_skills_and_session() {
             "You are an expert coding assistant.".to_string(),
         )))
         .add_contributor(Box::new(skill_injector))
-        .add_contributor(Box::new(SessionContributor::new(session, 10, AttentionAnchor::Middle(0))))
+        .add_contributor(Box::new(SessionContributor::new(
+            session,
+            10,
+            AttentionAnchor::Middle(0),
+        )))
         .add_contributor(Box::new(UserInputContributor::new(
             "Write a function".to_string(),
         )))
@@ -90,9 +110,18 @@ async fn test_context_with_skills_and_session() {
         .filter_map(|m| m.content.as_ref())
         .map(|c| c.as_str().to_string())
         .collect();
-    assert!(all_content.contains("msg-0"), "Should contain session message msg-0");
-    assert!(all_content.contains("msg-2"), "Should contain session message msg-2");
-    assert!(all_content.contains("Write a function"), "Should contain user input");
+    assert!(
+        all_content.contains("msg-0"),
+        "Should contain session message msg-0"
+    );
+    assert!(
+        all_content.contains("msg-2"),
+        "Should contain session message msg-2"
+    );
+    assert!(
+        all_content.contains("Write a function"),
+        "Should contain user input"
+    );
 }
 
 #[tokio::test]
@@ -108,7 +137,11 @@ async fn test_context_zone_ordering() {
             "System prompt.".to_string(),
         )))
         .add_contributor(Box::new(skill_injector))
-        .add_contributor(Box::new(SessionContributor::new(session, 10, AttentionAnchor::Middle(0))))
+        .add_contributor(Box::new(SessionContributor::new(
+            session,
+            10,
+            AttentionAnchor::Middle(0),
+        )))
         .add_contributor(Box::new(UserInputContributor::new(
             "User input".to_string(),
         )))
@@ -140,14 +173,14 @@ async fn test_context_empty_session_with_skills() {
     let empty_session = make_session(0).await;
 
     let context_builder = ContextBuilderBuilder::new(128_000)
-        .add_contributor(Box::new(SimpleContributor::system(
-            "System.".to_string(),
-        )))
+        .add_contributor(Box::new(SimpleContributor::system("System.".to_string())))
         .add_contributor(Box::new(skill_injector))
-        .add_contributor(Box::new(SessionContributor::new(empty_session, 10, AttentionAnchor::Middle(0))))
-        .add_contributor(Box::new(UserInputContributor::new(
-            "Hello".to_string(),
+        .add_contributor(Box::new(SessionContributor::new(
+            empty_session,
+            10,
+            AttentionAnchor::Middle(0),
         )))
+        .add_contributor(Box::new(UserInputContributor::new("Hello".to_string())))
         .build();
 
     let output = context_builder.build().await.unwrap();
@@ -163,7 +196,10 @@ async fn test_context_empty_session_with_skills() {
         .filter_map(|m| m.content.as_ref())
         .map(|c| c.as_str().to_string())
         .collect();
-    assert!(all_content.contains("System."), "Should contain system prompt");
+    assert!(
+        all_content.contains("System."),
+        "Should contain system prompt"
+    );
     assert!(all_content.contains("Hello"), "Should contain user input");
     // Skills are present from .agents/skills
     assert!(
@@ -188,7 +224,11 @@ async fn test_skill_injector_from_workdir_path_resolution() {
         .filter_map(|m| m.content.as_ref())
         .map(|c| c.as_str())
         .collect();
-    assert!(content.contains("test-skill"), "Should have skill content, got: {:?}", content);
+    assert!(
+        content.contains("test-skill"),
+        "Should have skill content, got: {:?}",
+        content
+    );
 }
 
 #[tokio::test]

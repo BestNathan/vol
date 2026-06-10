@@ -1,4 +1,4 @@
-use crate::state::{UiState, UiEvent};
+use crate::state::{UiEvent, UiState};
 use vol_llm_core::AgentStreamEvent;
 
 /// Bridges AgentStreamEvent (local agent) and UiEvent (remote/normalized) to UiState.
@@ -16,24 +16,32 @@ impl EventBuffer {
     pub fn apply_stream(&mut self, event: &AgentStreamEvent, state: &mut UiState) {
         match event {
             AgentStreamEvent::AgentStart { input, .. } => {
-                state.apply(UiEvent::AgentStart { input: input.clone() });
+                state.apply(UiEvent::AgentStart {
+                    run_id: String::new(),
+                    input: input.clone(),
+                });
             }
             AgentStreamEvent::AgentComplete { response, .. } => {
-                let response = response
-                    .as_ref()
-                    .map(|v| v.to_string())
-                    .unwrap_or_default();
-                state.apply(UiEvent::AgentComplete { response });
+                let response = response.as_ref().map(|v| v.to_string()).unwrap_or_default();
+                state.apply(UiEvent::AgentComplete {
+                    run_id: String::new(),
+                    response,
+                });
             }
             AgentStreamEvent::AgentAborted { reason, .. } => {
-                state.apply(UiEvent::AgentAborted { reason: reason.clone() });
+                state.apply(UiEvent::AgentAborted {
+                    run_id: String::new(),
+                    reason: reason.clone(),
+                });
             }
 
             AgentStreamEvent::ThinkingStart { .. } => {
                 state.apply(UiEvent::ThinkingStart);
             }
             AgentStreamEvent::ThinkingDelta { delta, .. } => {
-                state.apply(UiEvent::ThinkingDelta { delta: delta.clone() });
+                state.apply(UiEvent::ThinkingDelta {
+                    delta: delta.clone(),
+                });
             }
             AgentStreamEvent::ThinkingComplete { .. } => {
                 state.apply(UiEvent::ThinkingComplete);
@@ -43,10 +51,14 @@ impl EventBuffer {
                 state.apply(UiEvent::ContentStart);
             }
             AgentStreamEvent::ContentDelta { delta, .. } => {
-                state.apply(UiEvent::ContentDelta { delta: delta.clone() });
+                state.apply(UiEvent::ContentDelta {
+                    delta: delta.clone(),
+                });
             }
             AgentStreamEvent::ContentComplete { content, .. } => {
-                state.apply(UiEvent::ContentComplete { content: content.clone() });
+                state.apply(UiEvent::ContentComplete {
+                    content: content.clone(),
+                });
             }
 
             AgentStreamEvent::ToolCallBegin {
@@ -116,9 +128,7 @@ impl EventBuffer {
                     max: *max_iterations,
                 });
             }
-            AgentStreamEvent::IterationContinued {
-                from_iteration, ..
-            } => {
+            AgentStreamEvent::IterationContinued { from_iteration, .. } => {
                 state.apply(UiEvent::IterationContinued {
                     from_iteration: *from_iteration,
                 });
@@ -134,7 +144,10 @@ impl EventBuffer {
                 });
             }
 
-            AgentStreamEvent::PluginEvent { .. } => {}
+            AgentStreamEvent::LLMCallStart { .. }
+            | AgentStreamEvent::LLMCallComplete { .. }
+            | AgentStreamEvent::LLMCallError { .. }
+            | AgentStreamEvent::PluginEvent { .. } => {}
         }
     }
 
@@ -168,7 +181,13 @@ mod tests {
     fn test_apply_event_direct() {
         let mut buffer = EventBuffer::new();
         let mut state = UiState::new("sess-1".into(), ".", "local");
-        buffer.apply_event(UiEvent::AgentStart { input: "hello".into() }, &mut state);
+        buffer.apply_event(
+            UiEvent::AgentStart {
+                run_id: "test-run".into(),
+                input: "hello".into(),
+            },
+            &mut state,
+        );
         assert!(state.is_running);
         assert_eq!(state.conversation.len(), 1);
     }

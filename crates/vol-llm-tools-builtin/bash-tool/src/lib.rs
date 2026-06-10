@@ -5,7 +5,9 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity};
+use vol_llm_tool::{
+    ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity,
+};
 
 /// Error type for builtin tools
 /// Re-exported from vol_llm_tool for convenience
@@ -19,15 +21,15 @@ const DEFAULT_TIMEOUT_MS: u64 = 120_000;
 
 /// Dangerous command patterns that are blocked
 const DANGEROUS_PATTERNS: &[&str] = &[
-    r"rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|[a-zA-Z]*f[a-zA-Z]*r).*\s+/",  // rm -rf /
-    r":\s*\(\s*\)\s*\{",                                          // Fork bomb start :(){
-    r"mkfs",                                                      // Format disk
-    r"dd\s+of=/dev/(zero|sda|nvme)",                              // Write to device
-    r">\s*/dev/sd[a-z]",                                          // Redirect to device
-    r"curl\s+[^|]*\|\s*(?:bash|sh)",                              // Curl pipe bash
-    r"wget\s+[^|]*-O[^|]*\|\s*(?:bash|sh)",                       // Wget pipe bash
-    r"nc\s+-e\s+",                                                // Netcat reverse shell
-    r"bash\s+-i\s+>&\s+/dev/tcp",                                 // Bash reverse shell
+    r"rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|[a-zA-Z]*f[a-zA-Z]*r).*\s+/", // rm -rf /
+    r":\s*\(\s*\)\s*\{",                                        // Fork bomb start :(){
+    r"mkfs",                                                    // Format disk
+    r"dd\s+of=/dev/(zero|sda|nvme)",                            // Write to device
+    r">\s*/dev/sd[a-z]",                                        // Redirect to device
+    r"curl\s+[^|]*\|\s*(?:bash|sh)",                            // Curl pipe bash
+    r"wget\s+[^|]*-O[^|]*\|\s*(?:bash|sh)",                     // Wget pipe bash
+    r"nc\s+-e\s+",                                              // Netcat reverse shell
+    r"bash\s+-i\s+>&\s+/dev/tcp",                               // Bash reverse shell
 ];
 
 /// Error type for bash tool operations
@@ -180,9 +182,10 @@ impl ExecutableTool for BashTool {
             timeout: timeout_duration,
         };
 
-        let output = context.sandbox.execute(req).await.map_err(|e| {
-            ToolError::ExecutionFailed(format!("Command execution failed: {}", e))
-        })?;
+        let output =
+            context.sandbox.execute(req).await.map_err(|e| {
+                ToolError::ExecutionFailed(format!("Command execution failed: {}", e))
+            })?;
 
         // Convert output to strings
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();

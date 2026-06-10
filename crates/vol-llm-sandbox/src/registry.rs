@@ -1,9 +1,9 @@
+use crate::local::LocalSandbox;
+use crate::{Sandbox, SandboxError, SandboxResult};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
-use crate::{Sandbox, SandboxError, SandboxResult};
-use crate::local::LocalSandbox;
 
 /// Deserialized from `.agent/sandboxes/*.toml` files.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -40,9 +40,15 @@ pub struct SshConfig {
     pub connect_timeout_secs: u64,
 }
 
-fn default_port() -> u16 { 22 }
-fn default_idle_timeout() -> u64 { 300 }
-fn default_connect_timeout() -> u64 { 10 }
+fn default_port() -> u16 {
+    22
+}
+fn default_idle_timeout() -> u64 {
+    300
+}
+fn default_connect_timeout() -> u64 {
+    10
+}
 
 /// Configuration for a Firecracker microVM sandbox.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -108,14 +114,28 @@ pub struct WasmModuleConfig {
     pub expose_as_tool: bool,
 }
 
-fn default_wasm_memory() -> u64 { 134_217_728 }    // 128 MB
-fn default_wasm_timeout() -> u64 { 30_000 }         // 30 seconds
+fn default_wasm_memory() -> u64 {
+    134_217_728
+} // 128 MB
+fn default_wasm_timeout() -> u64 {
+    30_000
+} // 30 seconds
 
-fn default_pool_size() -> usize { 1 }
-fn default_idle_timeout_fc() -> u64 { 300 }
-fn default_connect_timeout_fc() -> u64 { 10 }
-fn default_guest_ip() -> String { "172.16.0.2".to_string() }
-fn default_guest_ssh_port() -> u16 { 22 }
+fn default_pool_size() -> usize {
+    1
+}
+fn default_idle_timeout_fc() -> u64 {
+    300
+}
+fn default_connect_timeout_fc() -> u64 {
+    10
+}
+fn default_guest_ip() -> String {
+    "172.16.0.2".to_string()
+}
+fn default_guest_ssh_port() -> u16 {
+    22
+}
 
 /// Registry of named sandbox instances.
 /// Always contains a built-in "local" sandbox. Additional sandboxes
@@ -142,7 +162,10 @@ impl SandboxRegistry {
 
         #[cfg(feature = "firecracker")]
         #[allow(unused_mut)]
-        let mut firecracker_pools: HashMap<String, Arc<crate::firecracker::FirecrackerPool>> = HashMap::new();
+        let mut firecracker_pools: HashMap<
+            String,
+            Arc<crate::firecracker::FirecrackerPool>,
+        > = HashMap::new();
 
         // Load *.toml files
         if sandboxes_dir.exists() {
@@ -151,10 +174,13 @@ impl SandboxRegistry {
                 let path = entry.path();
                 if path.extension().is_some_and(|ext| ext == "toml") {
                     let content = std::fs::read_to_string(&path).map_err(SandboxError::Io)?;
-                    let config: SandboxConfig = toml::from_str(&content)
-                        .map_err(|e| SandboxError::UnknownType(format!(
-                            "failed to parse {}: {}", path.display(), e
-                        )))?;
+                    let config: SandboxConfig = toml::from_str(&content).map_err(|e| {
+                        SandboxError::UnknownType(format!(
+                            "failed to parse {}: {}",
+                            path.display(),
+                            e
+                        ))
+                    })?;
 
                     if config.name == "local" {
                         return Err(SandboxError::LocalOverride);
@@ -168,7 +194,7 @@ impl SandboxRegistry {
                         "ssh" => {
                             let ssh_config = config.ssh.ok_or_else(|| {
                                 SandboxError::UnknownType(
-                                    "SSH sandbox requires [sandbox.ssh] section".to_string()
+                                    "SSH sandbox requires [sandbox.ssh] section".to_string(),
                                 )
                             })?;
                             let sb = crate::ssh::SSHSandbox::new(
@@ -184,7 +210,8 @@ impl SandboxRegistry {
                         "firecracker" => {
                             let fc_config = config.firecracker.ok_or_else(|| {
                                 SandboxError::UnknownType(
-                                    "Firecracker sandbox requires [sandbox.firecracker] section".to_string()
+                                    "Firecracker sandbox requires [sandbox.firecracker] section"
+                                        .to_string(),
                                 )
                             })?;
 
@@ -194,15 +221,14 @@ impl SandboxRegistry {
                                     fc_config.clone(),
                                     tokio::runtime::Handle::current(),
                                 );
-                                let sandbox: Arc<dyn Sandbox> = Arc::new(
-                                    crate::firecracker::FirecrackerSandbox::new(
+                                let sandbox: Arc<dyn Sandbox> =
+                                    Arc::new(crate::firecracker::FirecrackerSandbox::new(
                                         config.name.clone(),
                                         std::path::PathBuf::from(
-                                            config.work_dir.as_deref().unwrap_or("/tmp/fc-sandbox")
+                                            config.work_dir.as_deref().unwrap_or("/tmp/fc-sandbox"),
                                         ),
                                         pool.clone(),
-                                    )
-                                );
+                                    ));
                                 sandboxes.insert(config.name.clone(), sandbox);
                                 firecracker_pools.insert(config.name.clone(), pool);
                             }
@@ -220,14 +246,14 @@ impl SandboxRegistry {
                         "wasm" => {
                             let wasm_config = config.wasm.ok_or_else(|| {
                                 SandboxError::UnknownType(
-                                    "Wasm sandbox requires [wasm] section".to_string()
+                                    "Wasm sandbox requires [wasm] section".to_string(),
                                 )
                             })?;
 
                             let sb = crate::wasm::WasmSandbox::new(
                                 config.name.clone(),
                                 std::path::PathBuf::from(
-                                    config.work_dir.as_deref().unwrap_or("/tmp/wasm-sandbox")
+                                    config.work_dir.as_deref().unwrap_or("/tmp/wasm-sandbox"),
                                 ),
                                 wasm_config,
                             )?;
@@ -262,16 +288,16 @@ impl SandboxRegistry {
         #[cfg(feature = "firecracker")]
         {
             if let Some(pool) = self.firecracker_pools.get(name) {
-                let work_dir = self.sandboxes.get(name)
+                let work_dir = self
+                    .sandboxes
+                    .get(name)
                     .map(|sb| sb.root_path().to_path_buf())
                     .unwrap_or_else(|| std::path::PathBuf::from("/tmp/fc-sandbox"));
-                return Some(Arc::new(
-                    crate::firecracker::FirecrackerSandbox::new(
-                        name.to_string(),
-                        work_dir,
-                        pool.clone(),
-                    )
-                ));
+                return Some(Arc::new(crate::firecracker::FirecrackerSandbox::new(
+                    name.to_string(),
+                    work_dir,
+                    pool.clone(),
+                )));
             }
         }
 
@@ -280,7 +306,8 @@ impl SandboxRegistry {
 
     /// Get the default sandbox (always "local").
     pub fn default(&self) -> Arc<dyn Sandbox> {
-        self.sandboxes.get(&self.default_name)
+        self.sandboxes
+            .get(&self.default_name)
             .cloned()
             .expect("LocalSandbox always present")
     }

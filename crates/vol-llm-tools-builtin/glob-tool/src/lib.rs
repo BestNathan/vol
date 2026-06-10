@@ -74,14 +74,13 @@ impl ExecutableTool for GlobTool {
         })?;
 
         let search_path = params.path.unwrap_or_else(|| ".".to_string());
-        let resolved_path = context.resolve_path(&search_path).map_err(|e| {
-            ToolError::ExecutionFailed(format!("Path resolution failed: {}", e))
-        })?;
+        let resolved_path = context
+            .resolve_path(&search_path)
+            .map_err(|e| ToolError::ExecutionFailed(format!("Path resolution failed: {}", e)))?;
 
         // Build glob pattern matcher (matches against relative paths from search root)
-        let glob_pattern = Pattern::new(&params.pattern).map_err(|e| {
-            ToolError::ExecutionFailed(format!("Invalid glob pattern: {}", e))
-        })?;
+        let glob_pattern = Pattern::new(&params.pattern)
+            .map_err(|e| ToolError::ExecutionFailed(format!("Invalid glob pattern: {}", e)))?;
 
         // Walk directory tree using sandbox.read_dir()
         let mut results: Vec<(String, u64)> = Vec::new();
@@ -103,7 +102,8 @@ impl ExecutableTool for GlobTool {
                 if let Ok(relative) = entry_path.strip_prefix(&resolved_path) {
                     if glob_pattern.matches(&relative.to_string_lossy()) {
                         if let Ok(metadata) = context.sandbox.metadata(&entry_path).await {
-                            results.push((entry_path.to_string_lossy().to_string(), metadata.mtime));
+                            results
+                                .push((entry_path.to_string_lossy().to_string(), metadata.mtime));
                         }
                     }
                 }
@@ -115,7 +115,9 @@ impl ExecutableTool for GlobTool {
 
         // Return newline-separated file paths
         if results.is_empty() {
-            Ok(ToolResult::success("No files matched the pattern.".to_string()))
+            Ok(ToolResult::success(
+                "No files matched the pattern.".to_string(),
+            ))
         } else {
             let paths: Vec<String> = results.into_iter().map(|(p, _)| p).collect();
             Ok(ToolResult::success(paths.join("\n")))

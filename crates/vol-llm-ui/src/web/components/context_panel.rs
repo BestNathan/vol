@@ -94,40 +94,40 @@ pub fn ContextPanel() -> Element {
     use_effect(move || {
         let selected = agents_signal.read().selected.clone();
         if let Some(ref agent_id) = selected {
-                let client = rpc_client_effect.clone();
-                let aid = agent_id.clone();
-                let mut sig = ctx_state;
-                sig.with_mut(|s| {
-                    s.loading = true;
-                    s.error = None;
+            let client = rpc_client_effect.clone();
+            let aid = agent_id.clone();
+            let mut sig = ctx_state;
+            sig.with_mut(|s| {
+                s.loading = true;
+                s.error = None;
+            });
+            wasm_bindgen_futures::spawn_local(async move {
+                let (tx, rx) = futures_channel::oneshot::channel();
+                client.agent_context_config(&aid, move |result| {
+                    let _ = tx.send(result);
                 });
-                wasm_bindgen_futures::spawn_local(async move {
-                    let (tx, rx) = futures_channel::oneshot::channel();
-                    client.agent_context_config(&aid, move |result| {
-                        let _ = tx.send(result);
-                    });
-                    match rx.await {
-                        Ok(Ok(contributors)) => {
-                            sig.with_mut(|s| {
-                                s.contributors = contributors;
-                                s.loading = false;
-                            });
-                        }
-                        Ok(Err(e)) => {
-                            sig.with_mut(|s| {
-                                s.error = Some(e);
-                                s.loading = false;
-                            });
-                        }
-                        Err(_) => {
-                            sig.with_mut(|s| {
-                                s.error = Some("request dropped".to_string());
-                                s.loading = false;
-                            });
-                        }
+                match rx.await {
+                    Ok(Ok(contributors)) => {
+                        sig.with_mut(|s| {
+                            s.contributors = contributors;
+                            s.loading = false;
+                        });
                     }
-                });
-            }
+                    Ok(Err(e)) => {
+                        sig.with_mut(|s| {
+                            s.error = Some(e);
+                            s.loading = false;
+                        });
+                    }
+                    Err(_) => {
+                        sig.with_mut(|s| {
+                            s.error = Some("request dropped".to_string());
+                            s.loading = false;
+                        });
+                    }
+                }
+            });
+        }
     });
 
     if agents_signal.read().selected.is_none() {

@@ -34,7 +34,9 @@ async fn ws_transport_forwards_protocol_messages_to_core() {
     );
 
     socket
-        .send(TungsteniteMessage::Text(serde_json::to_string(&command).unwrap()))
+        .send(TungsteniteMessage::Text(
+            serde_json::to_string(&command).unwrap(),
+        ))
         .await
         .unwrap();
 

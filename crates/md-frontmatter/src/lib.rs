@@ -23,8 +23,8 @@ pub mod io;
 pub mod parser;
 
 pub use error::MdFmError;
-pub use parser::{ParsedDoc, parse, to_string, update_frontmatter};
-pub use io::{from_path, write, scan_dir};
+pub use io::{from_path, scan_dir, write};
+pub use parser::{parse, to_string, update_frontmatter, ParsedDoc};
 
 /// Result alias for crate operations.
 pub type Result<T> = std::result::Result<T, MdFmError>;

@@ -25,7 +25,10 @@ pub struct SessionRecorderPlugin {
 
 impl SessionRecorderPlugin {
     pub fn new(session: Arc<Session>, entry_store: Arc<dyn SessionEntryStore>) -> Self {
-        Self { session, entry_store }
+        Self {
+            session,
+            entry_store,
+        }
     }
 
     fn should_record(event: &AgentStreamEvent) -> bool {
@@ -44,15 +47,18 @@ impl SessionRecorderPlugin {
 
     fn event_to_session_message(&self, event: &AgentStreamEvent) -> Option<SessionMessage> {
         match event {
-            AgentStreamEvent::AgentStart { input, .. } => {
-                Some(SessionMessage::new(self.session.id.clone(), Message::user(input.clone())))
-            }
-            AgentStreamEvent::ThinkingComplete { thinking, .. } => {
-                Some(SessionMessage::new(self.session.id.clone(), Message::assistant(thinking.clone())))
-            }
-            AgentStreamEvent::ContentComplete { content, .. } => {
-                Some(SessionMessage::new(self.session.id.clone(), Message::assistant(content.clone())))
-            }
+            AgentStreamEvent::AgentStart { input, .. } => Some(SessionMessage::new(
+                self.session.id.clone(),
+                Message::user(input.clone()),
+            )),
+            AgentStreamEvent::ThinkingComplete { thinking, .. } => Some(SessionMessage::new(
+                self.session.id.clone(),
+                Message::assistant(thinking.clone()),
+            )),
+            AgentStreamEvent::ContentComplete { content, .. } => Some(SessionMessage::new(
+                self.session.id.clone(),
+                Message::assistant(content.clone()),
+            )),
             AgentStreamEvent::ToolCallBegin {
                 tool_call_id,
                 tool_name,
@@ -108,10 +114,7 @@ impl SessionRecorderPlugin {
             }
             AgentStreamEvent::IterationComplete { final_answer, .. } => {
                 final_answer.as_ref().map(|answer| {
-                    SessionMessage::new(
-                        self.session.id.clone(),
-                        Message::assistant(answer.clone()),
-                    )
+                    SessionMessage::new(self.session.id.clone(), Message::assistant(answer.clone()))
                 })
             }
             _ => None,
@@ -142,10 +145,10 @@ impl SessionRecorderPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::InMemoryEntryStore;
     use crate::entry::{SessionEntryData, SessionEntryType};
-    use vol_llm_core::AgentStreamEvent;
+    use crate::InMemoryEntryStore;
     use std::sync::Arc;
+    use vol_llm_core::AgentStreamEvent;
 
     fn make_plugin() -> SessionRecorderPlugin {
         let entry_store: Arc<dyn crate::SessionEntryStore> = Arc::new(InMemoryEntryStore::new());
@@ -169,7 +172,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].r#type, SessionEntryType::Message);
         if let SessionEntryData::Message { message } = &entries[0].data {
@@ -190,7 +197,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert_eq!(entries.len(), 1);
         if let SessionEntryData::Message { message } = &entries[0].data {
             let tool_calls = message.message.tool_calls.as_ref().unwrap();
@@ -213,7 +224,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert_eq!(entries.len(), 1);
         if let SessionEntryData::Message { message } = &entries[0].data {
             assert_eq!(message.message.role, vol_llm_core::MessageRole::Tool);
@@ -235,7 +250,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert_eq!(entries.len(), 1);
         if let SessionEntryData::Message { message } = &entries[0].data {
             assert_eq!(message.message.role, vol_llm_core::MessageRole::Tool);
@@ -256,7 +275,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert_eq!(entries.len(), 1);
         if let SessionEntryData::Message { message } = &entries[0].data {
             assert_eq!(message.message.role, vol_llm_core::MessageRole::Tool);
@@ -274,7 +297,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert_eq!(entries.len(), 1);
         if let SessionEntryData::Message { message } = &entries[0].data {
             assert_eq!(message.message.role, vol_llm_core::MessageRole::User);
@@ -294,7 +321,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert_eq!(entries.len(), 1);
         if let SessionEntryData::Message { message } = &entries[0].data {
             assert_eq!(message.message.role, vol_llm_core::MessageRole::Assistant);
@@ -312,7 +343,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         if let SessionEntryData::Message { message } = &entries[0].data {
             assert_eq!(
                 message.metadata.get(RUN_ID_KEY),
@@ -331,7 +366,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert!(entries.is_empty(), "ThinkingStart should not be recorded");
     }
 
@@ -344,7 +383,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert!(entries.is_empty(), "ThinkingDelta should not be recorded");
     }
 
@@ -358,7 +401,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert!(entries.is_empty(), "LLMCallStart should not be recorded");
     }
 
@@ -370,7 +417,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert!(entries.is_empty(), "ContentStart should not be recorded");
     }
 
@@ -383,7 +434,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert!(entries.is_empty(), "ContentDelta should not be recorded");
     }
 
@@ -397,7 +452,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert!(entries.is_empty(), "LLMCallComplete should not be recorded");
     }
 
@@ -410,7 +469,11 @@ mod tests {
         };
         plugin.record(&event, "test-run").await;
 
-        let entries = plugin.entry_store.get_entries(&plugin.session.id).await.unwrap();
+        let entries = plugin
+            .entry_store
+            .get_entries(&plugin.session.id)
+            .await
+            .unwrap();
         assert!(entries.is_empty(), "LLMCallError should not be recorded");
     }
 }

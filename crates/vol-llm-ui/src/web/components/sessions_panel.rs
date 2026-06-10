@@ -16,114 +16,167 @@ fn truncate_for_log(s: &str, max_len: usize) -> String {
 }
 
 /// Convert raw session entries to ConversationEntry for display.
-pub(crate) fn session_entries_to_conversation(entries: Vec<SessionEntry>) -> Vec<ConversationEntry> {
-    entries.into_iter().flat_map(|e| {
-        let entry_type = e.entry_type.clone();
-        let data_debug = serde_json::to_string(&e.data).unwrap_or_default();
-        let result: Vec<ConversationEntry> = match e.entry_type.as_str() {
-            "message" => {
-                let data = &e.data;
-                // data.message is SessionMessage wrapper
-                if let Some(session_msg) = data.get("message").and_then(|m| m.get("message")) {
-                    // session_msg.message is the actual vol_llm_core::Message with role/content
-                    if let Some(msg) = session_msg.get("message") {
-                        if let Some(role) = msg.get("role").and_then(|v| v.as_str()) {
-                            let text = match msg.get("content") {
-                                Some(serde_json::Value::String(s)) => s.clone(),
-                                Some(serde_json::Value::Array(parts)) => {
-                                    parts.iter().filter_map(|p| {
-                                        p.get("text").and_then(|v| v.as_str())
-                                            .or_else(|| p.get("type").and_then(|v| v.as_str()))
-                                    }).collect::<Vec<_>>().join("\n")
-                                }
-                                other => {
-                                    log::warn!("session entry message content unexpected type: {:?}", other);
-                                    String::new()
-                                }
-                            };
-                            match role {
-                                "user" => vec![ConversationEntry::UserInput { text }],
-                                "assistant" => {
-                                    let mut entries = Vec::new();
-                                    // Extract thinking if present, so resumed sessions show thinking blocks
-                                    if let Some(thinking) = msg.get("thinking").and_then(|v| v.as_str()) {
-                                        if !thinking.is_empty() {
-                                            entries.push(ConversationEntry::Thinking { content: thinking.to_string() });
-                                        }
+pub(crate) fn session_entries_to_conversation(
+    entries: Vec<SessionEntry>,
+) -> Vec<ConversationEntry> {
+    entries
+        .into_iter()
+        .flat_map(|e| {
+            let entry_type = e.entry_type.clone();
+            let data_debug = serde_json::to_string(&e.data).unwrap_or_default();
+            let result: Vec<ConversationEntry> = match e.entry_type.as_str() {
+                "message" => {
+                    let data = &e.data;
+                    // data.message is SessionMessage wrapper
+                    if let Some(session_msg) = data.get("message").and_then(|m| m.get("message")) {
+                        // session_msg.message is the actual vol_llm_core::Message with role/content
+                        if let Some(msg) = session_msg.get("message") {
+                            if let Some(role) = msg.get("role").and_then(|v| v.as_str()) {
+                                let text = match msg.get("content") {
+                                    Some(serde_json::Value::String(s)) => s.clone(),
+                                    Some(serde_json::Value::Array(parts)) => parts
+                                        .iter()
+                                        .filter_map(|p| {
+                                            p.get("text")
+                                                .and_then(|v| v.as_str())
+                                                .or_else(|| p.get("type").and_then(|v| v.as_str()))
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join("\n"),
+                                    other => {
+                                        log::warn!(
+                                            "session entry message content unexpected type: {:?}",
+                                            other
+                                        );
+                                        String::new()
                                     }
-                                    // Extract tool_calls if present
-                                    if let Some(tool_calls) = msg.get("tool_calls").and_then(|v| v.as_array()) {
-                                        for tc in tool_calls {
-                                            let tc_name = tc.get("name").and_then(|v| v.as_str()).unwrap_or("tool").to_string();
-                                            let arguments = tc.get("arguments").and_then(|v| v.as_str()).unwrap_or("{}").to_string();
-                                            let arg_preview = crate::state::format_tool_args(&arguments);
-                                            entries.push(ConversationEntry::ToolCall {
-                                                tool_name: tc_name,
-                                                arg_preview,
-                                                full_arguments: arguments,
-                                            });
+                                };
+                                match role {
+                                    "user" => vec![ConversationEntry::UserInput { text }],
+                                    "assistant" => {
+                                        let mut entries = Vec::new();
+                                        // Extract thinking if present, so resumed sessions show thinking blocks
+                                        if let Some(thinking) =
+                                            msg.get("thinking").and_then(|v| v.as_str())
+                                        {
+                                            if !thinking.is_empty() {
+                                                entries.push(ConversationEntry::Thinking {
+                                                    content: thinking.to_string(),
+                                                });
+                                            }
                                         }
+                                        // Extract tool_calls if present
+                                        if let Some(tool_calls) =
+                                            msg.get("tool_calls").and_then(|v| v.as_array())
+                                        {
+                                            for tc in tool_calls {
+                                                let tc_name = tc
+                                                    .get("name")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("tool")
+                                                    .to_string();
+                                                let arguments = tc
+                                                    .get("arguments")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("{}")
+                                                    .to_string();
+                                                let arg_preview =
+                                                    crate::state::format_tool_args(&arguments);
+                                                entries.push(ConversationEntry::ToolCall {
+                                                    tool_name: tc_name,
+                                                    arg_preview,
+                                                    full_arguments: arguments,
+                                                });
+                                            }
+                                        }
+                                        entries.push(ConversationEntry::AgentAnswer { text });
+                                        entries
                                     }
-                                    entries.push(ConversationEntry::AgentAnswer { text });
-                                    entries
+                                    "tool" => {
+                                        let tool_name = msg
+                                            .get("name")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("tool")
+                                            .to_string();
+                                        let preview = crate::state::truncate_preview(&text, 200);
+                                        vec![ConversationEntry::ToolResult {
+                                            tool_name,
+                                            preview,
+                                            full_result: text,
+                                            success: true,
+                                        }]
+                                    }
+                                    _ => {
+                                        log::warn!("session entry unknown role: {role}");
+                                        vec![]
+                                    }
                                 }
-                                "tool" => {
-                                    let tool_name = msg.get("name").and_then(|v| v.as_str()).unwrap_or("tool").to_string();
-                                    let preview = crate::state::truncate_preview(&text, 200);
-                                    vec![ConversationEntry::ToolResult {
-                                        tool_name,
-                                        preview,
-                                        full_result: text,
-                                        success: true,
-                                    }]
-                                }
-                                _ => {
-                                    log::warn!("session entry unknown role: {role}");
-                                    vec![]
-                                }
+                            } else {
+                                log::warn!(
+                                    "session entry message missing role, data: {}",
+                                    truncate_for_log(&data_debug, 200)
+                                );
+                                vec![]
                             }
                         } else {
-                            log::warn!("session entry message missing role, data: {}", truncate_for_log(&data_debug, 200));
+                            log::warn!(
+                                "session entry data missing inner message, data: {}",
+                                truncate_for_log(&data_debug, 200)
+                            );
                             vec![]
                         }
                     } else {
-                        log::warn!("session entry data missing inner message, data: {}", truncate_for_log(&data_debug, 200));
+                        log::warn!(
+                            "session entry data missing message wrapper, data: {}",
+                            truncate_for_log(&data_debug, 200)
+                        );
                         vec![]
                     }
-                } else {
-                    log::warn!("session entry data missing message wrapper, data: {}", truncate_for_log(&data_debug, 200));
+                }
+                "checkpoint" => {
+                    let reason = e
+                        .data
+                        .get("checkpoint")
+                        .and_then(|c| c.get("reason"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Checkpoint")
+                        .to_string();
+                    let note = e
+                        .data
+                        .get("checkpoint")
+                        .and_then(|c| c.get("note"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    vec![ConversationEntry::EntryCheckpoint {
+                        reason,
+                        note,
+                        created_at: e.created_at,
+                    }]
+                }
+                "summary" => {
+                    vec![ConversationEntry::RunSummary {
+                        iterations: 0,
+                        tool_calls: 0,
+                        elapsed_ms: 0,
+                    }]
+                }
+                _ => {
+                    log::warn!(
+                        "session entry unknown entry_type: {entry_type}, data: {}",
+                        truncate_for_log(&data_debug, 100)
+                    );
                     vec![]
                 }
+            };
+            if result.is_empty() {
+                log::warn!(
+                    "session entry dropped: type={entry_type}, data_preview={}",
+                    truncate_for_log(&data_debug, 100)
+                );
             }
-            "checkpoint" => {
-                let reason = e.data.get("checkpoint")
-                    .and_then(|c| c.get("reason"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Checkpoint")
-                    .to_string();
-                let note = e.data.get("checkpoint")
-                    .and_then(|c| c.get("note"))
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                vec![ConversationEntry::EntryCheckpoint { reason, note, created_at: e.created_at }]
-            }
-            "summary" => {
-                vec![ConversationEntry::RunSummary {
-                    iterations: 0,
-                    tool_calls: 0,
-                    elapsed_ms: 0,
-                }]
-            }
-            _ => {
-                log::warn!("session entry unknown entry_type: {entry_type}, data: {}", truncate_for_log(&data_debug, 100));
-                vec![]
-            }
-        };
-        if result.is_empty() {
-            log::warn!("session entry dropped: type={entry_type}, data_preview={}", truncate_for_log(&data_debug, 100));
-        }
-        result
-    }).collect()
+            result
+        })
+        .collect()
 }
 
 /// Format a Unix timestamp as a human-readable age label.
@@ -256,8 +309,16 @@ fn truncate_lines(s: &str, max_lines: usize, max_chars: usize) -> String {
     let lines: Vec<&str> = s.lines().take(max_lines).collect();
     let result = lines.join("\n");
     if result.chars().count() > max_chars {
-        format!("{}...", result.chars().take(max_chars.saturating_sub(3)).collect::<String>())
-    } else { result }
+        format!(
+            "{}...",
+            result
+                .chars()
+                .take(max_chars.saturating_sub(3))
+                .collect::<String>()
+        )
+    } else {
+        result
+    }
 }
 
 /// Mobile card for a single session (sm:hidden).
@@ -543,31 +604,37 @@ pub fn SessionsPanel() -> Element {
         };
     }
 
-    let mobile_items: Vec<Element> = sessions.iter().map(|session| {
-        rsx! {
-            SessionCard {
-                session_id: session.id.clone(),
-                entry_count: session.entry_count,
-                created_at: session.created_at,
-                rpc: rpc_for_items.clone(),
-                conversation_signal,
-                agents_signal,
+    let mobile_items: Vec<Element> = sessions
+        .iter()
+        .map(|session| {
+            rsx! {
+                SessionCard {
+                    session_id: session.id.clone(),
+                    entry_count: session.entry_count,
+                    created_at: session.created_at,
+                    rpc: rpc_for_items.clone(),
+                    conversation_signal,
+                    agents_signal,
+                }
             }
-        }
-    }).collect();
+        })
+        .collect();
 
-    let desktop_items: Vec<Element> = sessions.iter().map(|session| {
-        rsx! {
-            SessionItem {
-                session_id: session.id.clone(),
-                entry_count: session.entry_count,
-                created_at: session.created_at,
-                rpc: rpc_for_items.clone(),
-                conversation_signal,
-                agents_signal,
+    let desktop_items: Vec<Element> = sessions
+        .iter()
+        .map(|session| {
+            rsx! {
+                SessionItem {
+                    session_id: session.id.clone(),
+                    entry_count: session.entry_count,
+                    created_at: session.created_at,
+                    rpc: rpc_for_items.clone(),
+                    conversation_signal,
+                    agents_signal,
+                }
             }
-        }
-    }).collect();
+        })
+        .collect();
 
     rsx! {
         div { class: "flex-1 overflow-y-auto p-2",

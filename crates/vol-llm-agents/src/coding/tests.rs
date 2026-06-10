@@ -2,8 +2,8 @@
 
 use crate::coding::*;
 use std::sync::Arc;
-use vol_llm_sandbox::Sandbox;
 use vol_llm_agent::react::AgentPlugin;
+use vol_llm_sandbox::Sandbox;
 
 // Dummy LLM client for builder/agent construction tests
 use vol_llm_core::LLMClient;
@@ -12,11 +12,27 @@ use vol_llm_core::{ConversationRequest, ConversationResponse, StreamReceiver, Su
 struct DummyLlm;
 #[async_trait::async_trait]
 impl LLMClient for DummyLlm {
-    fn provider(&self) -> vol_llm_core::LLMProvider { vol_llm_core::LLMProvider::Anthropic }
-    fn model(&self) -> &str { "dummy" }
-    fn supported_params(&self) -> &[SupportedParam] { &[] }
-    async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> { unimplemented!() }
-    async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<StreamReceiver> { unimplemented!() }
+    fn provider(&self) -> vol_llm_core::LLMProvider {
+        vol_llm_core::LLMProvider::Anthropic
+    }
+    fn model(&self) -> &str {
+        "dummy"
+    }
+    fn supported_params(&self) -> &[SupportedParam] {
+        &[]
+    }
+    async fn converse(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<ConversationResponse> {
+        unimplemented!()
+    }
+    async fn converse_stream(
+        &self,
+        _request: ConversationRequest,
+    ) -> vol_llm_core::Result<StreamReceiver> {
+        unimplemented!()
+    }
 }
 
 // ========================
@@ -43,9 +59,7 @@ fn test_config_default_session_is_none() {
 #[test]
 fn test_config_with_session() {
     use vol_session::{InMemoryEntryStore, Session};
-    let session = Arc::new(Session::new(
-        Arc::new(InMemoryEntryStore::new()),
-    ));
+    let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
     let config = CodingAgentConfig {
         session: Some(session.clone()),
         ..Default::default()
@@ -146,7 +160,10 @@ async fn test_hitl_handler_safe_operation() {
 #[tokio::test]
 async fn test_hitl_handler_dangerous_operation() {
     let handler = HITLHandler::new(true);
-    let decision = handler.check_operation("bash", "rm -rf /tmp/foo").await.unwrap();
+    let decision = handler
+        .check_operation("bash", "rm -rf /tmp/foo")
+        .await
+        .unwrap();
     assert!(matches!(decision, HITLDecision::Reject { .. }));
 }
 
@@ -175,7 +192,10 @@ async fn test_hitl_handler_dangerous_patterns() {
 #[tokio::test]
 async fn test_hitl_handler_delete_file() {
     let handler = HITLHandler::new(true);
-    let decision = handler.check_operation("delete_file", "/tmp/foo").await.unwrap();
+    let decision = handler
+        .check_operation("delete_file", "/tmp/foo")
+        .await
+        .unwrap();
     assert!(matches!(decision, HITLDecision::Reject { .. }));
 }
 
@@ -185,7 +205,9 @@ fn test_hitl_decision_serialize() {
     let json = serde_json::to_string(&approve).unwrap();
     assert!(json.contains("approve"));
 
-    let reject = HITLDecision::Reject { reason: "no".to_string() };
+    let reject = HITLDecision::Reject {
+        reason: "no".to_string(),
+    };
     let json = serde_json::to_string(&reject).unwrap();
     assert!(json.contains("reject"));
 }
@@ -199,10 +221,7 @@ async fn test_html_reporter_generate() {
     let tmp_dir = tempfile::tempdir().unwrap();
     let output_path = tmp_dir.path().join("report.html");
 
-    let reporter = HTMLReporter::new(
-        output_path.clone(),
-        "Test task".to_string(),
-    );
+    let reporter = HTMLReporter::new(output_path.clone(), "Test task".to_string());
 
     // on_complete triggers report generation
     reporter.on_complete().await.unwrap();
@@ -345,10 +364,7 @@ async fn test_builder_default() {
 #[tokio::test]
 async fn test_builder_with_llm() {
     let llm = Arc::new(DummyLlm);
-    let agent = CodingAgentBuilder::new()
-        .llm(llm)
-        .build()
-        .unwrap();
+    let agent = CodingAgentBuilder::new().llm(llm).build().unwrap();
     // Agent created successfully
     assert!(agent.config().llm.is_some());
 }
@@ -439,8 +455,7 @@ async fn test_agent_with_observer() {
         ..Default::default()
     };
     let observer = Arc::new(ChannelledEventObserver::new());
-    let agent = CodingAgent::new(config).unwrap()
-        .with_observer(observer);
+    let agent = CodingAgent::new(config).unwrap().with_observer(observer);
     assert!(agent.observer().is_some());
 }
 

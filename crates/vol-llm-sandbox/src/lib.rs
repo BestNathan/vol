@@ -3,18 +3,18 @@
 //! All tool I/O goes through the Sandbox trait — tools never call OS APIs directly.
 //! Implementations: LocalSandbox (local directory), SSHSandbox (remote host via SSH).
 
-use std::path::{Path, PathBuf};
-use std::collections::HashMap;
-use std::time::Duration;
-use std::sync::Arc;
 use async_trait::async_trait;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
 
+#[cfg(feature = "firecracker")]
+pub mod firecracker;
 pub mod local;
 pub mod registry;
 #[cfg(feature = "ssh")]
 pub mod ssh;
-#[cfg(feature = "firecracker")]
-pub mod firecracker;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
@@ -55,7 +55,10 @@ pub trait Sandbox: Send + Sync {
 
     /// Read file content as raw bytes. Tools decode to String as needed.
     async fn read_file(
-        &self, path: &Path, offset: Option<u64>, limit: Option<u64>
+        &self,
+        path: &Path,
+        offset: Option<u64>,
+        limit: Option<u64>,
     ) -> SandboxResult<Vec<u8>>;
 
     /// Write bytes to a file. Parent directories must exist.
@@ -117,7 +120,7 @@ pub struct DirEntry {
 #[derive(Debug, Clone)]
 pub struct FileMetadata {
     pub size: u64,
-    pub mtime: u64,      // unix timestamp, milliseconds
+    pub mtime: u64, // unix timestamp, milliseconds
     pub file_type: FileType,
 }
 
@@ -168,7 +171,9 @@ pub fn normalize_path(path: &Path) -> PathBuf {
     let mut result = PathBuf::new();
     for component in path.components() {
         match component {
-            std::path::Component::ParentDir => { result.pop(); }
+            std::path::Component::ParentDir => {
+                result.pop();
+            }
             std::path::Component::CurDir => {}
             _ => result.push(component),
         }

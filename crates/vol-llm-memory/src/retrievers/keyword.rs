@@ -19,7 +19,8 @@ impl KeywordRetriever {
 #[async_trait]
 impl MemoryRetriever for KeywordRetriever {
     async fn retrieve(&self, query: &str, k: usize) -> Result<Vec<MemoryItem>> {
-        self.retrieve_with_filter(query, k, MemoryFilter::default()).await
+        self.retrieve_with_filter(query, k, MemoryFilter::default())
+            .await
     }
 
     async fn retrieve_with_filter(

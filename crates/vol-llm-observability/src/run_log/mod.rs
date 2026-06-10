@@ -2,4 +2,4 @@
 
 pub mod logger;
 
-pub use logger::{LogEntry, append_log};
+pub use logger::{append_log, LogEntry};

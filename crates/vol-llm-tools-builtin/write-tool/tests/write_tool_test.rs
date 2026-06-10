@@ -32,7 +32,9 @@ async fn test_write_overwrite_file() {
     let new_content = "Overwritten content";
 
     // Create the file with original content
-    tokio::fs::write(&file_path, original_content).await.unwrap();
+    tokio::fs::write(&file_path, original_content)
+        .await
+        .unwrap();
 
     let tool = WriteTool::new();
     let args = serde_json::json!({
@@ -53,7 +55,12 @@ async fn test_write_overwrite_file() {
 async fn test_write_creates_parent_dirs() {
     // WriteTool creates parent directories if they don't exist
     let temp_dir = tempfile::TempDir::new().unwrap();
-    let nested_path = temp_dir.path().join("a").join("b").join("c").join("file.txt");
+    let nested_path = temp_dir
+        .path()
+        .join("a")
+        .join("b")
+        .join("c")
+        .join("file.txt");
     let content = "Nested content";
 
     let tool = WriteTool::new();

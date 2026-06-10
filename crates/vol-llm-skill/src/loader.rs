@@ -180,9 +180,10 @@ impl SkillLoader {
         guard
             .values()
             .filter(|def| {
-                def.triggers
-                    .iter()
-                    .any(|t| query_lower.contains(&t.to_lowercase()) || t.to_lowercase().contains(&query_lower))
+                def.triggers.iter().any(|t| {
+                    query_lower.contains(&t.to_lowercase())
+                        || t.to_lowercase().contains(&query_lower)
+                })
             })
             .cloned()
             .collect()
@@ -317,7 +318,11 @@ mod tests {
         // Skill with no frontmatter — should be skipped
         let no_fm_dir = skills_dir.join("no-frontmatter");
         std::fs::create_dir_all(&no_fm_dir).unwrap();
-        std::fs::write(no_fm_dir.join("SKILL.md"), "# No Frontmatter\n\nJust markdown.").unwrap();
+        std::fs::write(
+            no_fm_dir.join("SKILL.md"),
+            "# No Frontmatter\n\nJust markdown.",
+        )
+        .unwrap();
 
         // Skill with invalid YAML — should be skipped
         let bad_yaml_dir = skills_dir.join("bad-yaml");

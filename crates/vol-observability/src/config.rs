@@ -45,10 +45,18 @@ pub struct LokiConfig {
     pub flush_interval_ms: u64,
 }
 
-fn default_true() -> bool { true }
-fn default_loki_url() -> String { "http://localhost:3100".to_string() }
-fn default_loki_batch_size() -> usize { 50 }
-fn default_loki_flush_ms() -> u64 { 200 }
+fn default_true() -> bool {
+    true
+}
+fn default_loki_url() -> String {
+    "http://localhost:3100".to_string()
+}
+fn default_loki_batch_size() -> usize {
+    50
+}
+fn default_loki_flush_ms() -> u64 {
+    200
+}
 
 impl Default for LokiConfig {
     fn default() -> Self {
@@ -80,10 +88,18 @@ pub struct TdengineWriterConfig {
     pub flush_interval_ms: u64,
 }
 
-fn default_tdengine_dsn() -> String { "taos://localhost:6030".to_string() }
-fn default_tdengine_database() -> String { "vol_observability".to_string() }
-fn default_tdengine_batch_size() -> usize { 100 }
-fn default_tdengine_flush_ms() -> u64 { 500 }
+fn default_tdengine_dsn() -> String {
+    "taos://localhost:6030".to_string()
+}
+fn default_tdengine_database() -> String {
+    "vol_observability".to_string()
+}
+fn default_tdengine_batch_size() -> usize {
+    100
+}
+fn default_tdengine_flush_ms() -> u64 {
+    500
+}
 
 impl Default for TdengineWriterConfig {
     fn default() -> Self {

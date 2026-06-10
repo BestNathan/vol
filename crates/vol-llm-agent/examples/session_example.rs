@@ -3,8 +3,8 @@
 //! Demonstrates how to use Session with ReActAgent.
 
 use std::sync::Arc;
-use vol_session::{InMemoryEntryStore, Session, SessionMessage};
 use vol_llm_core::Message;
+use vol_session::{InMemoryEntryStore, Session, SessionMessage};
 
 #[tokio::main]
 async fn main() {

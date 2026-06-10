@@ -28,8 +28,11 @@ pub(crate) async fn execute(
             blocks,
             json,
         } => {
-            let mut task =
-                Task::new(TaskKind::Agent, name.clone(), deps.into_iter().map(TaskId).collect());
+            let mut task = Task::new(
+                TaskKind::Agent,
+                name.clone(),
+                deps.into_iter().map(TaskId).collect(),
+            );
             task.description = desc;
             task.active_form = active_form;
             task.assignee = assignee;
@@ -472,7 +475,11 @@ fn scheme_for(subcommand: Option<&str>) -> String {
                 ("assignee", false, "Reassign to agent type"),
                 ("activeForm", false, "Spinner display text"),
                 ("addDeps", false, "Add dependencies (comma-separated IDs)"),
-                ("addBlocks", false, "Add blocking tasks (comma-separated IDs)"),
+                (
+                    "addBlocks",
+                    false,
+                    "Add blocking tasks (comma-separated IDs)",
+                ),
             ],
         ),
         Some("get") => super::format::fmt_scheme("get", &[("id", true, "Task ID to retrieve")]),
@@ -484,17 +491,12 @@ fn scheme_for(subcommand: Option<&str>) -> String {
             ],
         ),
         Some("stop") => super::format::fmt_scheme("stop", &[("id", true, "Task ID to stop")]),
-        Some("output") => super::format::fmt_scheme(
-            "output",
-            &[("id", true, "Task ID to read output from")],
-        ),
+        Some("output") => {
+            super::format::fmt_scheme("output", &[("id", true, "Task ID to read output from")])
+        }
         Some("claim") => super::format::fmt_scheme(
             "claim",
-            &[(
-                "id",
-                false,
-                "Task ID to claim (omit to claim first ready)",
-            )],
+            &[("id", false, "Task ID to claim (omit to claim first ready)")],
         ),
         Some("+task") => super::format::fmt_scheme(
             "+task",
@@ -761,9 +763,7 @@ mod tests {
     #[tokio::test]
     async fn test_execute_scheme_all() {
         let s = store();
-        let cmd = ParsedCommand::Scheme {
-            subcommand: None,
-        };
+        let cmd = ParsedCommand::Scheme { subcommand: None };
         let result = execute(cmd, &s, &ctx()).await.unwrap();
         assert!(result.content.contains("create"));
         assert!(result.content.contains("+task"));

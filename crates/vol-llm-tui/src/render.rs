@@ -37,9 +37,7 @@ impl EventBuffer {
                 self.flush_thinking(state);
                 self.flush_content();
 
-                let elapsed = state.run_start
-                    .map(|s| s.elapsed())
-                    .unwrap_or_default();
+                let elapsed = state.run_start.map(|s| s.elapsed()).unwrap_or_default();
                 state.run_elapsed = elapsed;
                 state.conversation.push(ConversationEntry::RunSummary {
                     iterations: state.iteration,
@@ -52,9 +50,7 @@ impl EventBuffer {
             AgentStreamEvent::AgentAborted { reason, .. } => {
                 self.flush_thinking(state);
                 self.flush_content();
-                let elapsed = state.run_start
-                    .map(|s| s.elapsed())
-                    .unwrap_or_default();
+                let elapsed = state.run_start.map(|s| s.elapsed()).unwrap_or_default();
                 state.run_elapsed = elapsed;
                 state.conversation.push(ConversationEntry::Error {
                     message: reason.clone(),
@@ -62,7 +58,11 @@ impl EventBuffer {
                 state.is_running = false;
             }
 
-            AgentStreamEvent::MaxIterationsReached { current_iteration, max_iterations, .. } => {
+            AgentStreamEvent::MaxIterationsReached {
+                current_iteration,
+                max_iterations,
+                ..
+            } => {
                 self.flush_thinking(state);
                 self.flush_content();
                 state.conversation.push(ConversationEntry::Error {
@@ -98,7 +98,8 @@ impl EventBuffer {
 
             AgentStreamEvent::ThinkingDelta { delta, .. } => {
                 // Append to last Thinking entry in-place
-                if let Some(ConversationEntry::Thinking { content }) = state.conversation.last_mut() {
+                if let Some(ConversationEntry::Thinking { content }) = state.conversation.last_mut()
+                {
                     content.push_str(delta);
                 }
             }
@@ -111,21 +112,26 @@ impl EventBuffer {
             // Content — push empty streaming entry on start, mutate on delta
             AgentStreamEvent::ContentStart { .. } => {
                 self.content_buffer.clear();
-                state.conversation.push(ConversationEntry::ContentStreaming {
-                    content: String::new(),
-                });
+                state
+                    .conversation
+                    .push(ConversationEntry::ContentStreaming {
+                        content: String::new(),
+                    });
             }
 
             AgentStreamEvent::ContentDelta { delta, .. } => {
                 // Append to last ContentStreaming entry in-place
-                if let Some(ConversationEntry::ContentStreaming { content }) = state.conversation.last_mut() {
+                if let Some(ConversationEntry::ContentStreaming { content }) =
+                    state.conversation.last_mut()
+                {
                     content.push_str(delta);
                 }
             }
 
             AgentStreamEvent::ContentComplete { content, .. } => {
                 // Mutate last ContentStreaming to AgentAnswer (single source)
-                if let Some(ConversationEntry::ContentStreaming { .. }) = state.conversation.last() {
+                if let Some(ConversationEntry::ContentStreaming { .. }) = state.conversation.last()
+                {
                     let entry = state.conversation.last_mut().unwrap();
                     *entry = ConversationEntry::AgentAnswer {
                         text: content.clone(),
@@ -139,7 +145,11 @@ impl EventBuffer {
             }
 
             // Tools
-            AgentStreamEvent::ToolCallBegin { tool_name, arguments, .. } => {
+            AgentStreamEvent::ToolCallBegin {
+                tool_name,
+                arguments,
+                ..
+            } => {
                 let seq = state.tool_call_count + 1;
                 state.tool_call_count = seq;
 
@@ -157,8 +167,18 @@ impl EventBuffer {
                 });
             }
 
-            AgentStreamEvent::ToolCallComplete { tool_name, result, duration_ms, .. } => {
-                self.update_tool_call_status(state, tool_name, ToolCallStatus::Success, *duration_ms);
+            AgentStreamEvent::ToolCallComplete {
+                tool_name,
+                result,
+                duration_ms,
+                ..
+            } => {
+                self.update_tool_call_status(
+                    state,
+                    tool_name,
+                    ToolCallStatus::Success,
+                    *duration_ms,
+                );
                 let preview = truncate_preview(result, 200);
                 state.conversation.push(ConversationEntry::ToolResult {
                     tool_name: tool_name.clone(),
@@ -174,7 +194,12 @@ impl EventBuffer {
                 }
             }
 
-            AgentStreamEvent::ToolCallError { tool_name, error, duration_ms, .. } => {
+            AgentStreamEvent::ToolCallError {
+                tool_name,
+                error,
+                duration_ms,
+                ..
+            } => {
                 self.update_tool_call_status(state, tool_name, ToolCallStatus::Error, *duration_ms);
                 state.conversation.push(ConversationEntry::ToolResult {
                     tool_name: tool_name.clone(),
@@ -183,8 +208,18 @@ impl EventBuffer {
                 });
             }
 
-            AgentStreamEvent::ToolCallSkipped { tool_name, reason, duration_ms, .. } => {
-                self.update_tool_call_status(state, tool_name, ToolCallStatus::Skipped, *duration_ms);
+            AgentStreamEvent::ToolCallSkipped {
+                tool_name,
+                reason,
+                duration_ms,
+                ..
+            } => {
+                self.update_tool_call_status(
+                    state,
+                    tool_name,
+                    ToolCallStatus::Skipped,
+                    *duration_ms,
+                );
                 state.conversation.push(ConversationEntry::ToolResult {
                     tool_name: tool_name.clone(),
                     preview: reason.clone(),
@@ -196,7 +231,11 @@ impl EventBuffer {
             AgentStreamEvent::ToolCallArgumentDelta { .. } => {}
 
             // Iteration
-            AgentStreamEvent::IterationComplete { final_answer: Some(answer), iteration, .. } => {
+            AgentStreamEvent::IterationComplete {
+                final_answer: Some(answer),
+                iteration,
+                ..
+            } => {
                 state.iteration = *iteration;
                 state.conversation.push(ConversationEntry::AgentAnswer {
                     text: answer.clone(),

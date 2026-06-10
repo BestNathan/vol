@@ -53,21 +53,13 @@ impl ExecutableTool for TaskGet {
         args: &serde_json::Value,
         _context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
-        let params: TaskGetParams = serde_json::from_value(args.clone())
-            .map_err(|e| {
-                vol_llm_tool::ToolError::InvalidArguments(format!(
-                    "Failed to parse arguments: {}",
-                    e
-                ))
-            })?;
+        let params: TaskGetParams = serde_json::from_value(args.clone()).map_err(|e| {
+            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
+        })?;
 
-        let task_id: TaskId = params
-            .task_id
-            .parse::<u64>()
-            .map(TaskId)
-            .map_err(|e| {
-                vol_llm_tool::ToolError::InvalidArguments(format!("Invalid task ID: {}", e))
-            })?;
+        let task_id: TaskId = params.task_id.parse::<u64>().map(TaskId).map_err(|e| {
+            vol_llm_tool::ToolError::InvalidArguments(format!("Invalid task ID: {}", e))
+        })?;
 
         let task = self.store.get(&task_id).await.map_err(|e| {
             vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to get task: {}", e))

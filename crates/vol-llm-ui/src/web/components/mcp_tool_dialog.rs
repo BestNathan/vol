@@ -1,22 +1,25 @@
-use dioxus::prelude::*;
+use super::schema_form::SchemaForm;
 use crate::state::McpDialogState;
 use crate::web::components::app::AppState;
-use super::schema_form::SchemaForm;
+use dioxus::prelude::*;
 
 #[component]
 pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
     let app_state: AppState = use_context();
     let rpc_client = app_state.rpc_client.clone();
 
-    let mut form_value: Signal<serde_json::Value> = use_signal(|| serde_json::Value::Object(serde_json::Map::new()));
+    let mut form_value: Signal<serde_json::Value> =
+        use_signal(|| serde_json::Value::Object(serde_json::Map::new()));
 
     let maybe_dialog = {
         let s = signal.read();
-        s.tool_call_dialog.as_ref().map(|d| (
-            d.server.clone(),
-            d.tool_name.clone(),
-            d.input_schema.clone(),
-        ))
+        s.tool_call_dialog.as_ref().map(|d| {
+            (
+                d.server.clone(),
+                d.tool_name.clone(),
+                d.input_schema.clone(),
+            )
+        })
     };
 
     let Some((server, tool_name, input_schema)) = maybe_dialog else {
@@ -39,7 +42,10 @@ pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
         (
             s.tool_call_dialog.as_ref().and_then(|d| d.result.clone()),
             s.tool_call_dialog.as_ref().and_then(|d| d.error.clone()),
-            s.tool_call_dialog.as_ref().map(|d| d.loading).unwrap_or(false),
+            s.tool_call_dialog
+                .as_ref()
+                .map(|d| d.loading)
+                .unwrap_or(false),
         )
     };
 

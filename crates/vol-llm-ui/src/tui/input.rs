@@ -1,7 +1,7 @@
 // crates/vol-llm-ui/src/tui/input.rs
 
+use crate::state::{ActiveTab, UiState};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use crate::state::{UiState, ActiveTab};
 
 /// Result of processing a key event.
 pub enum InputAction {
@@ -50,9 +50,13 @@ pub fn handle_key(key: KeyEvent, state: &mut UiState, input_text: &str) -> Input
         (KeyModifiers::ALT, KeyCode::Enter) => InputAction::None, // Insert newline
 
         (_, KeyCode::Enter) => {
-            if state.is_running { return InputAction::None; }
+            if state.is_running {
+                return InputAction::None;
+            }
             let input = input_text.trim().to_string();
-            if input.is_empty() { return InputAction::None; }
+            if input.is_empty() {
+                return InputAction::None;
+            }
             InputAction::Send(input)
         }
 
@@ -119,13 +123,15 @@ pub fn handle_key(key: KeyEvent, state: &mut UiState, input_text: &str) -> Input
 
         (_, KeyCode::Char('u')) if key.modifiers == KeyModifiers::CONTROL => {
             state.unsafe_mode = !state.unsafe_mode;
-            state.conversation.push(crate::state::ConversationEntry::AgentAnswer {
-                text: if state.unsafe_mode {
-                    "Unsafe mode enabled -- all tool approvals auto-approved".to_string()
-                } else {
-                    "Unsafe mode disabled".to_string()
-                },
-            });
+            state
+                .conversation
+                .push(crate::state::ConversationEntry::AgentAnswer {
+                    text: if state.unsafe_mode {
+                        "Unsafe mode enabled -- all tool approvals auto-approved".to_string()
+                    } else {
+                        "Unsafe mode disabled".to_string()
+                    },
+                });
             InputAction::None
         }
 
@@ -140,7 +146,10 @@ fn handle_session_dialog_key(key: KeyEvent, state: &mut UiState) -> InputAction 
             InputAction::None
         }
         KeyCode::Enter => {
-            if let Some(entry) = state.session_dialog_sessions.get(state.session_dialog_selected) {
+            if let Some(entry) = state
+                .session_dialog_sessions
+                .get(state.session_dialog_selected)
+            {
                 let id = entry.session_id.clone();
                 state.session_dialog_open = false;
                 return InputAction::ResumeSession(id);
@@ -166,10 +175,16 @@ fn handle_session_dialog_key(key: KeyEvent, state: &mut UiState) -> InputAction 
         }
         KeyCode::Char('d') => {
             // Delete session -- placeholder, needs session store access
-            if let Some(entry) = state.session_dialog_sessions.get(state.session_dialog_selected) {
+            if let Some(entry) = state
+                .session_dialog_sessions
+                .get(state.session_dialog_selected)
+            {
                 if entry.session_id != state.session_id {
-                    state.session_dialog_sessions.remove(state.session_dialog_selected);
-                    state.session_dialog_selected = 0.min(state.session_dialog_sessions.len().saturating_sub(1));
+                    state
+                        .session_dialog_sessions
+                        .remove(state.session_dialog_selected);
+                    state.session_dialog_selected =
+                        0.min(state.session_dialog_sessions.len().saturating_sub(1));
                 }
             }
             InputAction::None

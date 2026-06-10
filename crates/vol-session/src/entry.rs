@@ -28,18 +28,14 @@ pub enum CheckpointReason {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SessionEntryData {
     #[serde(rename = "message")]
-    Message {
-        message: SessionMessage,
-    },
+    Message { message: SessionMessage },
     #[serde(rename = "checkpoint")]
     Checkpoint {
         reason: CheckpointReason,
         note: Option<String>,
     },
     #[serde(rename = "summary")]
-    Summary {
-        summary: String,
-    },
+    Summary { summary: String },
 }
 
 impl SessionEntryData {
