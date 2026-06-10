@@ -7,6 +7,10 @@ impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         vec![Box::new(M20260609_000001CreateSessions)]
     }
+
+    fn migration_table_name() -> sea_orm::DynIden {
+        "seaql_migrations_sessions".into_iden()
+    }
 }
 
 #[derive(DeriveMigrationName)]

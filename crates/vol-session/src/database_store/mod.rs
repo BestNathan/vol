@@ -51,18 +51,48 @@ fn normalize_sqlite_url(url: &str) -> Result<String> {
         ));
     }
 
+    let url = expand_sqlite_tilde_url(url);
+
     if let Some((_, query)) = url.split_once('?') {
         if query
             .split('&')
             .filter_map(|param| param.split_once('=').map(|(key, _)| key))
             .any(|key| key == "mode")
         {
-            Ok(url.to_string())
+            Ok(url)
         } else {
             Ok(format!("{url}&mode=rwc"))
         }
     } else {
         Ok(format!("{url}?mode=rwc"))
+    }
+}
+
+fn expand_sqlite_tilde_url(url: &str) -> String {
+    let (without_query, query) = url
+        .split_once('?')
+        .map_or((url, None), |(path, query)| (path, Some(query)));
+    let Some(raw) = without_query
+        .strip_prefix("sqlite://")
+        .or_else(|| without_query.strip_prefix("sqlite:"))
+    else {
+        return url.to_string();
+    };
+
+    let expanded = if raw == "~" {
+        std::env::var("HOME").unwrap_or_else(|_| raw.to_string())
+    } else if let Some(rest) = raw.strip_prefix("~/") {
+        std::env::var("HOME")
+            .map(|home| format!("{home}/{rest}"))
+            .unwrap_or_else(|_| raw.to_string())
+    } else {
+        raw.to_string()
+    };
+
+    let rebuilt = format!("sqlite://{expanded}");
+    match query {
+        Some(query) => format!("{rebuilt}?{query}"),
+        None => rebuilt,
     }
 }
 
@@ -707,6 +737,19 @@ mod tests {
             .exec(&manager.db)
             .await
             .unwrap();
+    }
+
+    #[test]
+    fn normalize_sqlite_url_expands_home_dir() {
+        let home = std::env::var("HOME").unwrap();
+        assert_eq!(
+            normalize_sqlite_url("sqlite://~/.vol/data.db").unwrap(),
+            format!("sqlite://{home}/.vol/data.db?mode=rwc")
+        );
+        assert_eq!(
+            normalize_sqlite_url("sqlite://~/.vol/data.db?cache=shared").unwrap(),
+            format!("sqlite://{home}/.vol/data.db?cache=shared&mode=rwc")
+        );
     }
 
     #[tokio::test]

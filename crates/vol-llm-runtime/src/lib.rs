@@ -626,6 +626,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn builds_task_and_session_stores_in_same_sqlite_database() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_url = format!("sqlite://{}", temp.path().join("data.db").display());
+
+        let task_store = build_database_task_store(&db_url).await.unwrap();
+        let session_manager = build_database_session_manager(&db_url).await.unwrap();
+
+        let task_id = task_store
+            .create(vol_llm_task::Task::new(
+                vol_llm_task::TaskKind::Manual,
+                "shared sqlite task".to_string(),
+                Vec::new(),
+            ))
+            .await
+            .unwrap();
+        assert!(task_store.get(&task_id).await.unwrap().is_some());
+
+        let session_store = session_manager.entry_store_for_agent("alpha");
+        session_store
+            .save(vol_session::SessionEntry::new_summary(
+                "shared-session".to_string(),
+                "summary".to_string(),
+            ))
+            .await
+            .unwrap();
+
+        let sessions = session_manager.list_sessions(Some("alpha")).await.unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].session_id, "shared-session");
+    }
+
+    #[tokio::test]
     async fn builder_accepts_database_task_store_config_until_provider_requirement() {
         let temp = tempfile::tempdir().unwrap();
         let providers_dir = temp.path().join(".agents/providers");

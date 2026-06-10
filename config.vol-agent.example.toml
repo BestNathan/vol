@@ -34,16 +34,15 @@ store_dir = "~/.vol"
 # Optional task store backend. If omitted, the server uses the file task store
 # rooted under runtime.store_dir.
 #
+# Local SQLite database store. Task, session, and future runtime stores can share
+# the same database file; each store owns its own tables.
+[runtime.task_store]
+type = "database"
+url = "sqlite://~/.vol/data.db"
+#
 # Explicit file store:
 # [runtime.task_store]
 # type = "file"
-#
-# Database store. The concrete database is inferred from the URL scheme.
-# SQLite and Postgres are implemented; mysql is recognized for a clear
-# not-enabled error until that backend is added.
-# [runtime.task_store]
-# type = "database"
-# url = "sqlite://./data/tasks.db"
 #
 # Postgres example:
 # [runtime.task_store]
@@ -52,13 +51,14 @@ store_dir = "~/.vol"
 
 # Session store configuration.
 # Defaults to file-backed JSONL sessions under the agent store directory.
+# Uses the same local SQLite database as task_store by default.
 [runtime.session_store]
-type = "file"
+type = "database"
+url = "sqlite://~/.vol/data.db"
 
-# SQLite session database example:
+# Explicit file store:
 # [runtime.session_store]
-# type = "database"
-# url = "sqlite://data/sessions.db"
+# type = "file"
 
 # Postgres session database example:
 # [runtime.session_store]

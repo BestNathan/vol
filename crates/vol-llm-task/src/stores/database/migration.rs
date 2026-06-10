@@ -9,6 +9,10 @@ impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         vec![Box::new(CreateTasks)]
     }
+
+    fn migration_table_name() -> sea_orm::DynIden {
+        "seaql_migrations_tasks".into_iden()
+    }
 }
 
 struct CreateTasks;
