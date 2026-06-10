@@ -97,11 +97,7 @@ impl McpSession {
                     );
                 }
                 Err(e) => {
-                    tracing::error!(
-                        "MCP server '{}' failed to connect: {}",
-                        config.name,
-                        e
-                    );
+                    tracing::error!("MCP server '{}' failed to connect: {}", config.name, e);
                 }
             }
         }
@@ -115,7 +111,10 @@ impl McpSession {
         let McpTransport::Stdio { command, args, env } = &config.transport else {
             return Err(McpError::ConnectionFailed {
                 server: config.name.clone(),
-                detail: format!("unsupported transport type for session: {:?}", config.transport),
+                detail: format!(
+                    "unsupported transport type for session: {:?}",
+                    config.transport
+                ),
             });
         };
         let mut cmd = Command::new(command);
@@ -138,13 +137,14 @@ impl McpSession {
         let client_info = ClientInfo::default();
 
         let ct = CancellationToken::new();
-        let service = client_info
-            .serve_with_ct(child, ct)
-            .await
-            .map_err(|e| McpError::ConnectionFailed {
-                server: config.name.clone(),
-                detail: e.to_string(),
-            })?;
+        let service =
+            client_info
+                .serve_with_ct(child, ct)
+                .await
+                .map_err(|e| McpError::ConnectionFailed {
+                    server: config.name.clone(),
+                    detail: e.to_string(),
+                })?;
 
         // List tools from the connected server
         let tools = service.peer().list_all_tools().await.unwrap_or_else(|e| {
@@ -210,19 +210,19 @@ impl McpSession {
         };
 
         let params = match arguments {
-            Some(args) => {
-                CallToolRequestParams::new(tool_name.to_string()).with_arguments(args)
-            }
+            Some(args) => CallToolRequestParams::new(tool_name.to_string()).with_arguments(args),
             None => CallToolRequestParams::new(tool_name.to_string()),
         };
 
-        let result = conn.peer().call_tool(params).await.map_err(|e: ServiceError| {
-            McpError::ToolCallFailed {
+        let result = conn
+            .peer()
+            .call_tool(params)
+            .await
+            .map_err(|e: ServiceError| McpError::ToolCallFailed {
                 server: server.to_string(),
                 tool: tool_name.to_string(),
                 detail: e.to_string(),
-            }
-        })?;
+            })?;
 
         Ok(Self::format_tool_result(&result))
     }

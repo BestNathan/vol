@@ -23,20 +23,36 @@ impl ToolCallCompressor {
         }
 
         let summary = summary_lines.join("\n");
-        let session_id = messages.first().map(|m| m.session_id.clone()).unwrap_or_default();
+        let session_id = messages
+            .first()
+            .map(|m| m.session_id.clone())
+            .unwrap_or_default();
         let system_msg = vol_llm_core::Message::system(summary);
         Some(SessionMessage::new(session_id, system_msg))
     }
 
     fn compress_one(&self, msg: &SessionMessage) -> Option<String> {
         let tool_name = msg.message.name.as_deref().unwrap_or("unknown");
-        let args = msg.message.content.as_ref().map(|c| c.as_str()).unwrap_or("");
-        let result = msg.message.content.as_ref().map(|c| c.as_str()).unwrap_or("");
+        let args = msg
+            .message
+            .content
+            .as_ref()
+            .map(|c| c.as_str())
+            .unwrap_or("");
+        let result = msg
+            .message
+            .content
+            .as_ref()
+            .map(|c| c.as_str())
+            .unwrap_or("");
 
         let args_truncated = truncate(args, TOOL_ARGS_MAX);
         let result_truncated = truncate(result, TOOL_RESULT_MAX);
 
-        Some(format!("[{}] {} → {}", tool_name, args_truncated, result_truncated))
+        Some(format!(
+            "[{}] {} → {}",
+            tool_name, args_truncated, result_truncated
+        ))
     }
 }
 
@@ -70,7 +86,10 @@ mod tests {
         let compressor = ToolCallCompressor;
         let msgs = vec![make_tool_msg("s1", "bash", "ls -la", "total 42")];
         let result = compressor.compress(&msgs).unwrap();
-        assert_eq!(result.message.role, vol_llm_core::message::MessageRole::System);
+        assert_eq!(
+            result.message.role,
+            vol_llm_core::message::MessageRole::System
+        );
         let content = result.message.content.as_ref().unwrap().as_str();
         assert!(content.contains("[bash]"));
         assert!(content.contains("total 42"));

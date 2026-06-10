@@ -46,7 +46,11 @@ impl MigrationTrait for CreateTasks {
                     .col(ColumnDef::new(Tasks::ResultJson).text())
                     .col(ColumnDef::new(Tasks::Summary).text())
                     .col(ColumnDef::new(Tasks::OutputFile).text())
-                    .col(ColumnDef::new(Tasks::CreatedAtSecs).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(Tasks::CreatedAtSecs)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Tasks::StartedAtSecs).big_integer())
                     .col(ColumnDef::new(Tasks::CompletedAtSecs).big_integer())
                     .to_owned(),

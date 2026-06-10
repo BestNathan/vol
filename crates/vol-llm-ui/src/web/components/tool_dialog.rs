@@ -1,6 +1,6 @@
-use dioxus::prelude::*;
-use crate::web::components::app::AppState;
 use super::schema_form::SchemaForm;
+use crate::web::components::app::AppState;
+use dioxus::prelude::*;
 
 pub struct SystemToolDialogState {
     pub open: bool,

@@ -304,7 +304,9 @@ mod tests {
     }
 
     async fn postgres_store() -> DatabaseTaskStore {
-        let store = DatabaseTaskStore::connect(&postgres_test_url()).await.unwrap();
+        let store = DatabaseTaskStore::connect(&postgres_test_url())
+            .await
+            .unwrap();
         clear_store(&store).await;
         store
     }
@@ -476,7 +478,9 @@ mod tests {
         use crate::model::{Task, TaskKind};
         use crate::store::TaskStore;
 
-        let store = DatabaseTaskStore::connect(&postgres_test_url()).await.unwrap();
+        let store = DatabaseTaskStore::connect(&postgres_test_url())
+            .await
+            .unwrap();
         clear_store(&store).await;
         let id = store
             .create(Task::new(
@@ -520,7 +524,9 @@ mod tests {
         let _guard = PostgresTestLock::acquire();
         use sea_orm::{ConnectionTrait, Statement};
 
-        let store = DatabaseTaskStore::connect(&postgres_test_url()).await.unwrap();
+        let store = DatabaseTaskStore::connect(&postgres_test_url())
+            .await
+            .unwrap();
         clear_store(&store).await;
         let rows = store
             .db

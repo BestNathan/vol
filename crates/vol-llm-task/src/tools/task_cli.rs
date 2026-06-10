@@ -63,9 +63,7 @@ impl ExecutableTool for TaskCliTool {
     }
 
     fn sensitivity(&self, args: &serde_json::Value) -> ToolSensitivity {
-        let cmd_str = args.get("command")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let cmd_str = args.get("command").and_then(|v| v.as_str()).unwrap_or("");
         let first_token = cmd_str.trim().split_whitespace().next().unwrap_or("");
 
         match first_token {
@@ -84,13 +82,15 @@ impl ExecutableTool for TaskCliTool {
         let command = args
             .get("command")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| vol_llm_tool::ToolError::InvalidArguments(
-                "Missing required parameter: 'command'. Usage: task <subcommand> [--flags]".to_string()
-            ))?;
+            .ok_or_else(|| {
+                vol_llm_tool::ToolError::InvalidArguments(
+                    "Missing required parameter: 'command'. Usage: task <subcommand> [--flags]"
+                        .to_string(),
+                )
+            })?;
 
-        let cmd: ParsedCommand = parser::parse(command).map_err(|e| {
-            vol_llm_tool::ToolError::InvalidArguments(e)
-        })?;
+        let cmd: ParsedCommand =
+            parser::parse(command).map_err(|e| vol_llm_tool::ToolError::InvalidArguments(e))?;
 
         crate::cli::executor::execute(cmd, &self.store, context)
             .await
@@ -156,15 +156,30 @@ mod tests {
         let ctx = ToolContext::default();
 
         // Create
-        let r = t.execute(&serde_json::json!({"command": "+task --name 'e2e test'"}), &ctx).await.unwrap();
+        let r = t
+            .execute(
+                &serde_json::json!({"command": "+task --name 'e2e test'"}),
+                &ctx,
+            )
+            .await
+            .unwrap();
         assert!(r.success);
 
         // Get
-        let r = t.execute(&serde_json::json!({"command": "get --id 1"}), &ctx).await.unwrap();
+        let r = t
+            .execute(&serde_json::json!({"command": "get --id 1"}), &ctx)
+            .await
+            .unwrap();
         assert!(r.content.contains("e2e test"));
 
         // Update
-        let r = t.execute(&serde_json::json!({"command": "update --id 1 --status completed"}), &ctx).await.unwrap();
+        let r = t
+            .execute(
+                &serde_json::json!({"command": "update --id 1 --status completed"}),
+                &ctx,
+            )
+            .await
+            .unwrap();
         assert!(r.success);
 
         // Verify

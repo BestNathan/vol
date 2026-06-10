@@ -1,8 +1,8 @@
 //! LLM-driven conversation compressor.
 
 use std::sync::Arc;
+use vol_llm_core::{ConversationRequest, LLMClient, Message};
 use vol_session::SessionMessage;
-use vol_llm_core::{LLMClient, ConversationRequest, Message};
 
 pub struct ConversationCompressor {
     llm: Arc<dyn LLMClient>,
@@ -35,7 +35,12 @@ Be concise. Output only the summary."#;
                     vol_llm_core::message::MessageRole::Assistant => "Assistant",
                     _ => return None,
                 };
-                let content = sm.message.content.as_ref().map(|c| c.as_str()).unwrap_or("");
+                let content = sm
+                    .message
+                    .content
+                    .as_ref()
+                    .map(|c| c.as_str())
+                    .unwrap_or("");
                 Some(format!("{}: {}", role, content))
             })
             .collect::<Vec<_>>()
@@ -45,7 +50,9 @@ Be concise. Output only the summary."#;
 
         match self.llm.converse(request).await {
             Ok(response) => {
-                let summary_text = response.message.content
+                let summary_text = response
+                    .message
+                    .content
                     .as_ref()
                     .map(|c| c.as_str())
                     .unwrap_or("")
@@ -56,7 +63,10 @@ Be concise. Output only the summary."#;
                 }
 
                 let prefixed = format!("[Session Summary]: {}", summary_text);
-                let session_id = messages.first().map(|m| m.session_id.clone()).unwrap_or_default();
+                let session_id = messages
+                    .first()
+                    .map(|m| m.session_id.clone())
+                    .unwrap_or_default();
                 let user_msg = Message::user(prefixed);
                 Some(SessionMessage::new(session_id, user_msg))
             }
@@ -71,7 +81,7 @@ Be concise. Output only the summary."#;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_llm_core::{ConversationResponse, FinishReason, TokenUsage, message::MessageRole};
+    use vol_llm_core::{message::MessageRole, ConversationResponse, FinishReason, TokenUsage};
 
     struct MockLlm {
         response: String,
@@ -79,10 +89,19 @@ mod tests {
 
     #[async_trait::async_trait]
     impl LLMClient for MockLlm {
-        fn provider(&self) -> vol_llm_core::LLMProvider { vol_llm_core::LLMProvider::Anthropic }
-        fn model(&self) -> &str { "mock" }
-        fn supported_params(&self) -> &[vol_llm_core::SupportedParam] { &[] }
-        async fn converse(&self, _request: ConversationRequest) -> vol_llm_core::Result<ConversationResponse> {
+        fn provider(&self) -> vol_llm_core::LLMProvider {
+            vol_llm_core::LLMProvider::Anthropic
+        }
+        fn model(&self) -> &str {
+            "mock"
+        }
+        fn supported_params(&self) -> &[vol_llm_core::SupportedParam] {
+            &[]
+        }
+        async fn converse(
+            &self,
+            _request: ConversationRequest,
+        ) -> vol_llm_core::Result<ConversationResponse> {
             Ok(ConversationResponse {
                 message: Message::user(self.response.clone()),
                 model: "mock".to_string(),
@@ -91,7 +110,10 @@ mod tests {
                 raw: None,
             })
         }
-        async fn converse_stream(&self, _request: ConversationRequest) -> vol_llm_core::Result<vol_llm_core::StreamReceiver> {
+        async fn converse_stream(
+            &self,
+            _request: ConversationRequest,
+        ) -> vol_llm_core::Result<vol_llm_core::StreamReceiver> {
             unimplemented!()
         }
     }
@@ -107,14 +129,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_compress_empty() {
-        let llm = Arc::new(MockLlm { response: "ignored".to_string() });
+        let llm = Arc::new(MockLlm {
+            response: "ignored".to_string(),
+        });
         let compressor = ConversationCompressor::new(llm);
         assert!(compressor.compress(&[]).await.is_none());
     }
 
     #[tokio::test]
     async fn test_compress_returns_summary() {
-        let llm = Arc::new(MockLlm { response: "Decided to use Rust".to_string() });
+        let llm = Arc::new(MockLlm {
+            response: "Decided to use Rust".to_string(),
+        });
         let compressor = ConversationCompressor::new(llm);
         let msgs = vec![
             make_conv_msg("s1", MessageRole::User, "What language?"),
@@ -129,7 +155,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_compress_empty_llm_response() {
-        let llm = Arc::new(MockLlm { response: "".to_string() });
+        let llm = Arc::new(MockLlm {
+            response: "".to_string(),
+        });
         let compressor = ConversationCompressor::new(llm);
         let msgs = vec![make_conv_msg("s1", MessageRole::User, "Hello")];
         assert!(compressor.compress(&msgs).await.is_none());

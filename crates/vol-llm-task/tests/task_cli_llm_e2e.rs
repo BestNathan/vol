@@ -53,7 +53,7 @@ async fn test_task_cli_tool_with_real_llm_create_and_list() {
              - JSON output: {\"command\": \"get --id 1 --json\"}\n\n\
              IMPORTANT: The argument to the 'task' tool is a JSON object with a 'command' key.\n\
              Example: {\"command\": \"create --name 'Task' --desc 'Description'\"}"
-            .to_string(),
+                .to_string(),
         )
         .build()
         .expect("AgentConfig build should succeed");
@@ -75,17 +75,18 @@ async fn test_task_cli_tool_with_real_llm_create_and_list() {
     assert!(result.iterations > 0, "Should have at least 1 iteration");
 
     // Step 2: List tasks
-    let result = agent
-        .run("List all tasks.")
-        .await
-        .unwrap();
+    let result = agent.run("List all tasks.").await.unwrap();
 
     println!("=== List result ===\n{}\n", result.content);
     assert!(!result.content.is_empty());
 
     // Verify tasks exist in store
     let tasks: Vec<vol_llm_task::Task> = store.list(None).await.unwrap();
-    assert!(tasks.len() >= 2, "Expected at least 2 tasks, got {}", tasks.len());
+    assert!(
+        tasks.len() >= 2,
+        "Expected at least 2 tasks, got {}",
+        tasks.len()
+    );
     println!("Store has {} tasks:", tasks.len());
     for t in &tasks {
         println!("  {}: \"{}\" [{:?}]", t.id, t.subject, t.status);
@@ -106,7 +107,7 @@ async fn test_task_cli_tool_json_output_mode() {
              The argument is a JSON object: {\"command\": \"<cli command>\"}\n\n\
              Use '--json' flag for JSON output.\n\
              Example: {\"command\": \"list --json\"}"
-            .to_string(),
+                .to_string(),
         )
         .build()
         .expect("AgentConfig build should succeed");

@@ -1,6 +1,6 @@
-use dioxus::prelude::*;
 use crate::state::McpDialogState;
 use crate::web::components::app::AppState;
+use dioxus::prelude::*;
 
 #[component]
 pub fn ResourceViewer(mut signal: Signal<McpDialogState>) -> Element {

@@ -33,14 +33,18 @@ pub fn WorkspacePanel() -> Element {
         };
     }
 
-    let items = entries.iter().enumerate().map(|(index, (name, is_dir, indent))| {
-        let n = name.clone();
-        let d = *is_dir;
-        let i = *indent;
-        rsx! {
-            WorkspaceItem { name: n, is_dir: d, indent: i, key: "{index}" }
-        }
-    }).collect::<Vec<_>>();
+    let items = entries
+        .iter()
+        .enumerate()
+        .map(|(index, (name, is_dir, indent))| {
+            let n = name.clone();
+            let d = *is_dir;
+            let i = *indent;
+            rsx! {
+                WorkspaceItem { name: n, is_dir: d, indent: i, key: "{index}" }
+            }
+        })
+        .collect::<Vec<_>>();
 
     rsx! {
         div { class: "flex-1 overflow-y-auto p-2.5",

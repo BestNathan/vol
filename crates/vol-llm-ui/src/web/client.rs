@@ -14,11 +14,13 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use crate::state::{
+    McpPromptInfo, McpResourceInfo, McpResourceTemplateInfo, McpServerInfo, McpToolInfo,
+};
 use dioxus::prelude::{Signal, Writable};
 use futures_channel::mpsc;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
-use crate::state::{McpPromptInfo, McpResourceInfo, McpResourceTemplateInfo, McpServerInfo, McpToolInfo};
 use wasm_bindgen::prelude::*;
 
 /// Agent event received from the server subscription.
@@ -170,7 +172,10 @@ impl JsonRpcClient {
                 Self::handle_message(&inner_clone, &data);
             }
         }) as Box<dyn FnMut(_)>);
-        inner.ws.borrow().set_onmessage(Some(on_msg.as_ref().unchecked_ref()));
+        inner
+            .ws
+            .borrow()
+            .set_onmessage(Some(on_msg.as_ref().unchecked_ref()));
         on_msg.forget();
 
         // Set up close handler
@@ -188,7 +193,10 @@ impl JsonRpcClient {
                 inner_clone.on_state_change.set(Some(cb));
             }
         }) as Box<dyn FnMut(_)>);
-        inner.ws.borrow().set_onclose(Some(on_close.as_ref().unchecked_ref()));
+        inner
+            .ws
+            .borrow()
+            .set_onclose(Some(on_close.as_ref().unchecked_ref()));
         on_close.forget();
 
         // Set up open handler — auto-subscribe to agent events
@@ -208,7 +216,10 @@ impl JsonRpcClient {
             // Auto-subscribe to agent events on connect
             let _ = client_for_open.subscribe();
         }) as Box<dyn FnMut(_)>);
-        inner.ws.borrow().set_onopen(Some(on_open.as_ref().unchecked_ref()));
+        inner
+            .ws
+            .borrow()
+            .set_onopen(Some(on_open.as_ref().unchecked_ref()));
         on_open.forget();
 
         client
@@ -225,18 +236,30 @@ impl JsonRpcClient {
     fn send_raw(&self, msg: &str) -> Result<(), String> {
         let state = self.inner.ws.borrow().ready_state();
         let method = serde_json::from_str::<serde_json::Value>(msg)
-            .ok().and_then(|v| v.get("method").and_then(|m| m.as_str()).map(|s| s.to_string()))
+            .ok()
+            .and_then(|v| {
+                v.get("method")
+                    .and_then(|m| m.as_str())
+                    .map(|s| s.to_string())
+            })
             .unwrap_or_default();
         log::info!("send_raw: method={method} state={state}");
         let result = match state {
-            1 => { // OPEN
-                self.inner.ws.borrow().send_with_str(msg).map_err(|e| format!("send failed: {e:?}"))
+            1 => {
+                // OPEN
+                self.inner
+                    .ws
+                    .borrow()
+                    .send_with_str(msg)
+                    .map_err(|e| format!("send failed: {e:?}"))
             }
-            0 => { // CONNECTING — queue for on_open
+            0 => {
+                // CONNECTING — queue for on_open
                 self.inner.send_queue.borrow_mut().push(msg.to_string());
                 Ok(())
             }
-            _ => { // CLOSING (2) or CLOSED (3)
+            _ => {
+                // CLOSING (2) or CLOSED (3)
                 Err("WebSocket not connected".to_string())
             }
         };
@@ -269,8 +292,16 @@ impl JsonRpcClient {
     fn push_debug_out(&self, msg: &str) {
         if let Some(ref ds) = *self.inner.debug_state.borrow() {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(msg) {
-                let method = val.get("method").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
-                ds.write_unchecked().push_ws(crate::state::WsDirection::Out, method, msg.to_string());
+                let method = val
+                    .get("method")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                ds.write_unchecked().push_ws(
+                    crate::state::WsDirection::Out,
+                    method,
+                    msg.to_string(),
+                );
             }
         }
     }
@@ -401,7 +432,10 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
@@ -409,17 +443,19 @@ impl JsonRpcClient {
         }
 
         // Register callback for when the response arrives.
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("entries").and_then(|v| v.as_array()) {
-                Some(entries) => {
-                    let parsed: Vec<FileEntry> = entries.iter()
-                        .filter_map(|e| serde_json::from_value(e.clone()).ok())
-                        .collect();
-                    cb(Ok(parsed));
-                }
-                None => cb(Err("no entries in response".to_string())),
-            }
-        });
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("entries").and_then(|v| v.as_array()) {
+                    Some(entries) => {
+                        let parsed: Vec<FileEntry> = entries
+                            .iter()
+                            .filter_map(|e| serde_json::from_value(e.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no entries in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
@@ -435,7 +471,10 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
@@ -466,29 +505,38 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
 
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("agents").and_then(|v| v.as_array()) {
-                Some(agents) => {
-                    let parsed: Vec<AgentListEntry> = agents.iter()
-                        .filter_map(|e| serde_json::from_value(e.clone()).ok())
-                        .collect();
-                    cb(Ok(parsed));
-                }
-                None => cb(Err("no agents in response".to_string())),
-            }
-        });
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("agents").and_then(|v| v.as_array()) {
+                    Some(agents) => {
+                        let parsed: Vec<AgentListEntry> = agents
+                            .iter()
+                            .filter_map(|e| serde_json::from_value(e.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no agents in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
     /// Query agent running status.
-    pub fn agent_status(&self, agent_id: &str, cb: impl FnOnce(Result<(String, Option<String>), String>) + 'static) {
+    pub fn agent_status(
+        &self,
+        agent_id: &str,
+        cb: impl FnOnce(Result<(String, Option<String>), String>) + 'static,
+    ) {
         let id = self.alloc_id();
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
@@ -498,22 +546,36 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            let status = result.get("status").and_then(|v| v.as_str()).unwrap_or("idle").to_string();
-            let run_id = result.get("run_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let status = result
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("idle")
+                .to_string();
+            let run_id = result
+                .get("run_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
             cb(Ok((status, run_id)));
         });
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
     /// Fetch contributor metadata for an agent.
-    pub fn agent_context_config(&self, agent_id: &str, cb: impl FnOnce(Result<Vec<crate::state::ContributorInfoEntry>, String>) + 'static) {
+    pub fn agent_context_config(
+        &self,
+        agent_id: &str,
+        cb: impl FnOnce(Result<Vec<crate::state::ContributorInfoEntry>, String>) + 'static,
+    ) {
         let id = self.alloc_id();
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
@@ -523,28 +585,38 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("contributors").and_then(|v| v.as_array()) {
-                Some(arr) => {
-                    let parsed: Vec<crate::state::ContributorInfoEntry> = arr.iter()
-                        .filter_map(|e| serde_json::from_value(e.clone()).ok())
-                        .collect();
-                    cb(Ok(parsed));
-                }
-                None => cb(Err("no contributors in response".to_string())),
-            }
-        });
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("contributors").and_then(|v| v.as_array()) {
+                    Some(arr) => {
+                        let parsed: Vec<crate::state::ContributorInfoEntry> = arr
+                            .iter()
+                            .filter_map(|e| serde_json::from_value(e.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no contributors in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
     /// Fetch full message snapshot for a named contributor.
-    pub fn agent_context_snapshot(&self, agent_id: &str, contributor_name: &str, cb: impl FnOnce(Result<Vec<crate::state::ContextMessageEntry>, String>) + 'static) {
+    pub fn agent_context_snapshot(
+        &self,
+        agent_id: &str,
+        contributor_name: &str,
+        cb: impl FnOnce(Result<Vec<crate::state::ContextMessageEntry>, String>) + 'static,
+    ) {
         let id = self.alloc_id();
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
@@ -554,28 +626,37 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("messages").and_then(|v| v.as_array()) {
-                Some(arr) => {
-                    let parsed: Vec<crate::state::ContextMessageEntry> = arr.iter()
-                        .filter_map(|e| serde_json::from_value(e.clone()).ok())
-                        .collect();
-                    cb(Ok(parsed));
-                }
-                None => cb(Err("no messages in response".to_string())),
-            }
-        });
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("messages").and_then(|v| v.as_array()) {
+                    Some(arr) => {
+                        let parsed: Vec<crate::state::ContextMessageEntry> = arr
+                            .iter()
+                            .filter_map(|e| serde_json::from_value(e.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no messages in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
     /// List all persisted sessions on the server. Returns entries via callback.
-    pub fn session_list(&self, agent_id: Option<&str>, cb: impl FnOnce(Result<Vec<crate::state::SessionListEntry>, String>) + 'static) {
+    pub fn session_list(
+        &self,
+        agent_id: Option<&str>,
+        cb: impl FnOnce(Result<Vec<crate::state::SessionListEntry>, String>) + 'static,
+    ) {
         let id = self.alloc_id();
 
         let mut params = serde_json::Map::new();
@@ -591,34 +672,49 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
 
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("sessions").and_then(|v| v.as_array()) {
-                Some(sessions) => {
-                    let parsed: Vec<crate::state::SessionListEntry> = sessions.iter()
-                        .filter_map(|s| {
-                            let id = s.get("id").and_then(|v| v.as_str())?.to_string();
-                            let entry_count = s.get("entry_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-                            let created_at = s.get("created_at").and_then(|v| v.as_i64())?;
-                            Some(crate::state::SessionListEntry { id, entry_count, created_at })
-                        })
-                        .collect();
-                    cb(Ok(parsed));
-                }
-                None => cb(Err("no sessions in response".to_string())),
-            }
-        });
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("sessions").and_then(|v| v.as_array()) {
+                    Some(sessions) => {
+                        let parsed: Vec<crate::state::SessionListEntry> = sessions
+                            .iter()
+                            .filter_map(|s| {
+                                let id = s.get("id").and_then(|v| v.as_str())?.to_string();
+                                let entry_count =
+                                    s.get("entry_count").and_then(|v| v.as_u64()).unwrap_or(0)
+                                        as usize;
+                                let created_at = s.get("created_at").and_then(|v| v.as_i64())?;
+                                Some(crate::state::SessionListEntry {
+                                    id,
+                                    entry_count,
+                                    created_at,
+                                })
+                            })
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no sessions in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
     /// Fetch all entries for a specific session. Returns entries via callback.
-    pub fn session_entries(&self, session_id: &str, cb: impl FnOnce(Result<Vec<SessionEntry>, String>) + 'static) {
+    pub fn session_entries(
+        &self,
+        session_id: &str,
+        cb: impl FnOnce(Result<Vec<SessionEntry>, String>) + 'static,
+    ) {
         let id = self.alloc_id();
 
         let msg = serde_json::json!({
@@ -629,7 +725,10 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
@@ -638,14 +737,17 @@ impl JsonRpcClient {
 
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
             if let Some(error) = result.get("error") {
-                let msg = error.get("message").and_then(|m| m.as_str())
+                let msg = error
+                    .get("message")
+                    .and_then(|m| m.as_str())
                     .unwrap_or("unknown RPC error");
                 cb(Err(msg.to_string()));
                 return;
             }
             match result.get("entries").and_then(|v| v.as_array()) {
                 Some(entries) => {
-                    let parsed: Vec<SessionEntry> = entries.iter()
+                    let parsed: Vec<SessionEntry> = entries
+                        .iter()
                         .filter_map(|e| serde_json::from_value(e.clone()).ok())
                         .collect();
                     cb(Ok(parsed));
@@ -657,7 +759,12 @@ impl JsonRpcClient {
     }
 
     /// Resume a session on the server (swaps agent session). Returns response via callback.
-    pub fn session_resume(&self, session_id: &str, agent_id: Option<&str>, cb: impl FnOnce(Result<SessionResumeResponse, String>) + 'static) {
+    pub fn session_resume(
+        &self,
+        session_id: &str,
+        agent_id: Option<&str>,
+        cb: impl FnOnce(Result<SessionResumeResponse, String>) + 'static,
+    ) {
         let id = self.alloc_id();
         log::info!("session_resume: id={id} session_id={session_id} agent_id={agent_id:?}");
 
@@ -673,7 +780,10 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
@@ -683,7 +793,9 @@ impl JsonRpcClient {
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
             log::info!("session_resume response received");
             if let Some(error) = result.get("error") {
-                let msg = error.get("message").and_then(|m| m.as_str())
+                let msg = error
+                    .get("message")
+                    .and_then(|m| m.as_str())
                     .unwrap_or("unknown RPC error");
                 log::error!("session_resume RPC error: {msg}");
                 cb(Err(msg.to_string()));
@@ -691,14 +803,31 @@ impl JsonRpcClient {
             }
             let session_id = match result.get("session_id").and_then(|v| v.as_str()) {
                 Some(s) => s.to_string(),
-                None => { log::error!("session_resume: no session_id in response"); cb(Err("no session_id in response".to_string())); return; }
+                None => {
+                    log::error!("session_resume: no session_id in response");
+                    cb(Err("no session_id in response".to_string()));
+                    return;
+                }
             };
-            let entry_count = result.get("entry_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-            let entries = result.get("entries").and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|e| serde_json::from_value(e.clone()).ok()).collect())
+            let entry_count = result
+                .get("entry_count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as usize;
+            let entries = result
+                .get("entries")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|e| serde_json::from_value(e.clone()).ok())
+                        .collect()
+                })
                 .unwrap_or_default();
             log::info!("session_resume success: session_id={session_id} entries={entry_count}");
-            cb(Ok(SessionResumeResponse { session_id, entry_count, entries }));
+            cb(Ok(SessionResumeResponse {
+                session_id,
+                entry_count,
+                entries,
+            }));
         });
         self.inner.pending.borrow_mut().insert(id, cb);
     }
@@ -714,31 +843,42 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("servers").and_then(|v| v.as_array()) {
-                Some(servers) => {
-                    let parsed: Vec<McpServerInfo> = servers.iter()
-                        .filter_map(|s| serde_json::from_value(s.clone()).ok())
-                        .collect();
-                    cb(Ok(parsed));
-                }
-                None => cb(Err("no servers in response".to_string())),
-            }
-        });
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("servers").and_then(|v| v.as_array()) {
+                    Some(servers) => {
+                        let parsed: Vec<McpServerInfo> = servers
+                            .iter()
+                            .filter_map(|s| serde_json::from_value(s.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no servers in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
     /// List MCP tools across all servers.
-    pub fn mcp_list_tools(&self, server: Option<&str>, cb: impl FnOnce(Result<Vec<McpToolInfo>, String>) + 'static) {
+    pub fn mcp_list_tools(
+        &self,
+        server: Option<&str>,
+        cb: impl FnOnce(Result<Vec<McpToolInfo>, String>) + 'static,
+    ) {
         let id = self.alloc_id();
         let mut params = serde_json::Map::new();
-        if let Some(s) = server { params.insert("server".to_string(), serde_json::json!(s)); }
+        if let Some(s) = server {
+            params.insert("server".to_string(), serde_json::json!(s));
+        }
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "mcp.list_tools",
@@ -747,28 +887,39 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("tools").and_then(|v| v.as_array()) {
-                Some(tools) => {
-                    let parsed: Vec<McpToolInfo> = tools.iter()
-                        .filter_map(|t| serde_json::from_value(t.clone()).ok())
-                        .collect();
-                    cb(Ok(parsed));
-                }
-                None => cb(Err("no tools in response".to_string())),
-            }
-        });
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("tools").and_then(|v| v.as_array()) {
+                    Some(tools) => {
+                        let parsed: Vec<McpToolInfo> = tools
+                            .iter()
+                            .filter_map(|t| serde_json::from_value(t.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no tools in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
     /// Call an MCP tool on a specific server.
-    pub fn mcp_call_tool(&self, server: &str, tool_name: &str, arguments: serde_json::Value, cb: impl FnOnce(Result<String, String>) + 'static) {
+    pub fn mcp_call_tool(
+        &self,
+        server: &str,
+        tool_name: &str,
+        arguments: serde_json::Value,
+        cb: impl FnOnce(Result<String, String>) + 'static,
+    ) {
         let id = self.alloc_id();
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
@@ -778,7 +929,10 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
@@ -786,7 +940,10 @@ impl JsonRpcClient {
         }
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
             if let Some(error) = result.get("error") {
-                let msg = error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
+                let msg = error
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("unknown error");
                 cb(Err(msg.to_string()));
             } else if let Some(content) = result.get("result").and_then(|v| v.as_str()) {
                 cb(Ok(content.to_string()));
@@ -798,10 +955,16 @@ impl JsonRpcClient {
     }
 
     /// List MCP resources across all servers.
-    pub fn mcp_list_resources(&self, server: Option<&str>, cb: impl FnOnce(Result<Vec<McpResourceInfo>, String>) + 'static) {
+    pub fn mcp_list_resources(
+        &self,
+        server: Option<&str>,
+        cb: impl FnOnce(Result<Vec<McpResourceInfo>, String>) + 'static,
+    ) {
         let id = self.alloc_id();
         let mut params = serde_json::Map::new();
-        if let Some(s) = server { params.insert("server".to_string(), serde_json::json!(s)); }
+        if let Some(s) = server {
+            params.insert("server".to_string(), serde_json::json!(s));
+        }
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "mcp.list_resources",
@@ -810,31 +973,42 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("resources").and_then(|v| v.as_array()) {
-                Some(resources) => {
-                    let parsed: Vec<McpResourceInfo> = resources.iter()
-                        .filter_map(|r| serde_json::from_value(r.clone()).ok())
-                        .collect();
-                    cb(Ok(parsed));
-                }
-                None => cb(Err("no resources in response".to_string())),
-            }
-        });
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("resources").and_then(|v| v.as_array()) {
+                    Some(resources) => {
+                        let parsed: Vec<McpResourceInfo> = resources
+                            .iter()
+                            .filter_map(|r| serde_json::from_value(r.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no resources in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
     /// List MCP resource templates across all servers.
-    pub fn mcp_list_resource_templates(&self, server: Option<&str>, cb: impl FnOnce(Result<Vec<McpResourceTemplateInfo>, String>) + 'static) {
+    pub fn mcp_list_resource_templates(
+        &self,
+        server: Option<&str>,
+        cb: impl FnOnce(Result<Vec<McpResourceTemplateInfo>, String>) + 'static,
+    ) {
         let id = self.alloc_id();
         let mut params = serde_json::Map::new();
-        if let Some(s) = server { params.insert("server".to_string(), serde_json::json!(s)); }
+        if let Some(s) = server {
+            params.insert("server".to_string(), serde_json::json!(s));
+        }
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "mcp.list_resource_templates",
@@ -843,23 +1017,28 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("templates").and_then(|v| v.as_array()) {
-                Some(templates) => {
-                    let parsed: Vec<McpResourceTemplateInfo> = templates.iter()
-                        .filter_map(|t| serde_json::from_value(t.clone()).ok())
-                        .collect();
-                    cb(Ok(parsed));
-                }
-                None => cb(Err("no templates in response".to_string())),
-            }
-        });
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("templates").and_then(|v| v.as_array()) {
+                    Some(templates) => {
+                        let parsed: Vec<McpResourceTemplateInfo> = templates
+                            .iter()
+                            .filter_map(|t| serde_json::from_value(t.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no templates in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
@@ -874,7 +1053,10 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
@@ -882,7 +1064,10 @@ impl JsonRpcClient {
         }
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
             if let Some(error) = result.get("error") {
-                let msg = error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
+                let msg = error
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("unknown error");
                 cb(Err(msg.to_string()));
             } else if let Some(content) = result.get("content").and_then(|v| v.as_str()) {
                 cb(Ok(content.to_string()));
@@ -894,10 +1079,16 @@ impl JsonRpcClient {
     }
 
     /// List MCP prompts across all servers.
-    pub fn mcp_list_prompts(&self, server: Option<&str>, cb: impl FnOnce(Result<Vec<McpPromptInfo>, String>) + 'static) {
+    pub fn mcp_list_prompts(
+        &self,
+        server: Option<&str>,
+        cb: impl FnOnce(Result<Vec<McpPromptInfo>, String>) + 'static,
+    ) {
         let id = self.alloc_id();
         let mut params = serde_json::Map::new();
-        if let Some(s) = server { params.insert("server".to_string(), serde_json::json!(s)); }
+        if let Some(s) = server {
+            params.insert("server".to_string(), serde_json::json!(s));
+        }
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "mcp.list_prompts",
@@ -906,23 +1097,28 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("prompts").and_then(|v| v.as_array()) {
-                Some(prompts) => {
-                    let parsed: Vec<McpPromptInfo> = prompts.iter()
-                        .filter_map(|p| serde_json::from_value(p.clone()).ok())
-                        .collect();
-                    cb(Ok(parsed));
-                }
-                None => cb(Err("no prompts in response".to_string())),
-            }
-        });
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("prompts").and_then(|v| v.as_array()) {
+                    Some(prompts) => {
+                        let parsed: Vec<McpPromptInfo> = prompts
+                            .iter()
+                            .filter_map(|p| serde_json::from_value(p.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no prompts in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
@@ -937,14 +1133,20 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            let success = result.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+            let success = result
+                .get("success")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             cb(Ok(success));
         });
         self.inner.pending.borrow_mut().insert(id, cb);
@@ -961,28 +1163,37 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("skills").and_then(|v| v.as_array()) {
-                Some(skills) => {
-                    let parsed: Vec<SkillListEntry> = skills.iter()
-                        .filter_map(|s| serde_json::from_value(s.clone()).ok())
-                        .collect();
-                    cb(Ok(parsed));
-                }
-                None => cb(Err("no skills in response".to_string())),
-            }
-        });
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("skills").and_then(|v| v.as_array()) {
+                    Some(skills) => {
+                        let parsed: Vec<SkillListEntry> = skills
+                            .iter()
+                            .filter_map(|s| serde_json::from_value(s.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no skills in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
     /// Get full skill details by name.
-    pub fn skill_get(&self, name: &str, cb: impl FnOnce(Result<crate::state::SkillDetail, String>) + 'static) {
+    pub fn skill_get(
+        &self,
+        name: &str,
+        cb: impl FnOnce(Result<crate::state::SkillDetail, String>) + 'static,
+    ) {
         let id = self.alloc_id();
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
@@ -992,7 +1203,10 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
@@ -1000,7 +1214,10 @@ impl JsonRpcClient {
         }
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
             if let Some(error) = result.get("error") {
-                let msg = error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
+                let msg = error
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("unknown error");
                 cb(Err(msg.to_string()));
             } else {
                 // SkillGetResult has { skill, name }; extract the skill payload.
@@ -1025,25 +1242,32 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("discovered").and_then(|v| v.as_u64()) {
-                Some(count) => cb(Ok(count as usize)),
-                None => {
-                    if let Some(error) = result.get("error") {
-                        let msg = error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
-                        cb(Err(msg.to_string()));
-                    } else {
-                        cb(Err("no discovered count in response".to_string()));
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("discovered").and_then(|v| v.as_u64()) {
+                    Some(count) => cb(Ok(count as usize)),
+                    None => {
+                        if let Some(error) = result.get("error") {
+                            let msg = error
+                                .get("message")
+                                .and_then(|m| m.as_str())
+                                .unwrap_or("unknown error");
+                            cb(Err(msg.to_string()));
+                        } else {
+                            cb(Err("no discovered count in response".to_string()));
+                        }
                     }
-                }
-            }
-        });
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
@@ -1058,18 +1282,22 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("tools").and_then(|v| v.as_array()) {
-                Some(tools) => cb(Ok(tools.clone())),
-                None => cb(Err("no tools in response".to_string())),
-            }
-        });
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("tools").and_then(|v| v.as_array()) {
+                    Some(tools) => cb(Ok(tools.clone())),
+                    None => cb(Err("no tools in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
@@ -1089,7 +1317,10 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
@@ -1097,7 +1328,10 @@ impl JsonRpcClient {
         }
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
             if let Some(error) = result.get("error") {
-                let msg = error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
+                let msg = error
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("unknown error");
                 cb(Err(msg.to_string()));
             } else {
                 cb(Ok(result.clone()));
@@ -1106,7 +1340,12 @@ impl JsonRpcClient {
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
-    pub fn task_list(&self, status: Option<&str>, assignee: Option<&str>, cb: impl FnOnce(Result<Vec<TaskEntry>, String>) + 'static) {
+    pub fn task_list(
+        &self,
+        status: Option<&str>,
+        assignee: Option<&str>,
+        cb: impl FnOnce(Result<Vec<TaskEntry>, String>) + 'static,
+    ) {
         let id = self.alloc_id();
 
         let mut params = serde_json::Map::new();
@@ -1125,23 +1364,28 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("tasks").and_then(|v| v.as_array()) {
-                Some(tasks) => {
-                    let parsed: Vec<TaskEntry> = tasks.iter()
-                        .filter_map(|t| serde_json::from_value(t.clone()).ok())
-                        .collect();
-                    cb(Ok(parsed));
-                }
-                None => cb(Err("no tasks in response".to_string())),
-            }
-        });
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("tasks").and_then(|v| v.as_array()) {
+                    Some(tasks) => {
+                        let parsed: Vec<TaskEntry> = tasks
+                            .iter()
+                            .filter_map(|t| serde_json::from_value(t.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no tasks in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
@@ -1155,31 +1399,39 @@ impl JsonRpcClient {
         });
         let json = match serde_json::to_string(&msg) {
             Ok(j) => j,
-            Err(e) => { cb(Err(e.to_string())); return; }
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
         };
         if let Err(e) = self.send_raw(&json) {
             cb(Err(format!("send failed: {e:?}")));
             return;
         }
-        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match result.get("task") {
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(move |result| match result.get("task") {
                 Some(task) => match serde_json::from_value(task.clone()) {
                     Ok(t) => cb(Ok(t)),
                     Err(e) => cb(Err(format!("parse error: {e}"))),
                 },
                 None => cb(Err("no task in response".to_string())),
-            }
-        });
+            });
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
     fn push_debug_in(inner: &Rc<ClientInner>, data: &str) {
         if let Some(ref ds) = *inner.debug_state.borrow() {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
-                let method = val.get("method").and_then(|v| v.as_str())
+                let method = val
+                    .get("method")
+                    .and_then(|v| v.as_str())
                     .unwrap_or("<response>")
                     .to_string();
-                ds.write_unchecked().push_ws(crate::state::WsDirection::In, method, data.to_string());
+                ds.write_unchecked().push_ws(
+                    crate::state::WsDirection::In,
+                    method,
+                    data.to_string(),
+                );
             }
         }
     }

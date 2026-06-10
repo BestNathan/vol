@@ -133,7 +133,12 @@ pub fn build_graph_layout(tasks: &[TaskEntry], center: u64) -> GraphLayout {
         let layer = layer_of[id];
         let order = *layer_count.get(&layer).unwrap_or(&0);
         layer_count.insert(layer, order + 1);
-        nodes.push(GraphNode { id: *id, layer, order, known: known_of[id] });
+        nodes.push(GraphNode {
+            id: *id,
+            layer,
+            order,
+            known: known_of[id],
+        });
     }
 
     // Edges (deduped). `dependencies` and `blocks` are inverse relations, and
@@ -346,7 +351,11 @@ mod tests {
     }
 
     fn node<'a>(layout: &'a GraphLayout, id: u64) -> &'a GraphNode {
-        layout.nodes.iter().find(|n| n.id == id).expect("node present")
+        layout
+            .nodes
+            .iter()
+            .find(|n| n.id == id)
+            .expect("node present")
     }
 
     fn has_edge(layout: &GraphLayout, from: u64, to: u64) -> bool {
@@ -411,10 +420,7 @@ mod tests {
 
     #[test]
     fn cycle_terminates_and_places_each_node_once() {
-        let tasks = vec![
-            t(1, vec![2], vec![2]),
-            t(2, vec![1], vec![1]),
-        ];
+        let tasks = vec![t(1, vec![2], vec![2]), t(2, vec![1], vec![1])];
         let layout = build_graph_layout(&tasks, 1);
         assert_eq!(layout.nodes.len(), 2);
         assert_eq!(node(&layout, 1).layer, 0);

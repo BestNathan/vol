@@ -3,12 +3,12 @@
 //! Provides task data models, Store abstraction (memory + file backends),
 //! TaskScheduler facade, and LLM tools for task management.
 
+pub(crate) mod cli;
 mod model;
 mod scheduler;
 mod store;
 mod stores;
 pub mod tools;
-pub(crate) mod cli;
 
 pub use model::{Task, TaskId, TaskKind, TaskResult, TaskStatus};
 pub use scheduler::TaskScheduler;

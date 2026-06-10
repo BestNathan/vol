@@ -43,7 +43,10 @@ async fn test_session_contributor_compress_flow() {
     let compressed_count = blocks.iter().map(|b| b.messages.len()).sum::<usize>();
     // Default PositionSampleCompressor(keep_first=3, sample_every=5) on 10 messages:
     // [0,1,2] + [3, 8] + [9] = 6
-    assert!(compressed_count < 10, "Should have fewer messages after compression");
+    assert!(
+        compressed_count < 10,
+        "Should have fewer messages after compression"
+    );
     assert!(compressed_count >= 3, "Should keep at least first messages");
 }
 

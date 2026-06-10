@@ -84,14 +84,16 @@ impl ExecutableTool for ReadTool {
         })?;
 
         // Resolve path through sandbox
-        let file_path = context.resolve_path(&params.file_path).map_err(|e| {
-            ToolError::ExecutionFailed(format!("Path resolution failed: {}", e))
-        })?;
+        let file_path = context
+            .resolve_path(&params.file_path)
+            .map_err(|e| ToolError::ExecutionFailed(format!("Path resolution failed: {}", e)))?;
 
         // Read file contents via sandbox (read full file; offset/limit applied by line below)
-        let raw = context.sandbox.read_file(&file_path, None, None).await.map_err(|e| {
-            ToolError::ExecutionFailed(format!("Failed to read file: {}", e))
-        })?;
+        let raw = context
+            .sandbox
+            .read_file(&file_path, None, None)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file: {}", e)))?;
 
         let content = String::from_utf8_lossy(&raw).to_string();
 

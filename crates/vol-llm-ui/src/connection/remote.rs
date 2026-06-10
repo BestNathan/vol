@@ -89,18 +89,23 @@ impl AgentConnection for RemoteConnection {
                     // For now, we do a simple request-response pattern
                     let mut params = ObjectParams::new();
                     params.insert("input", &input_clone)?;
-                    let response: serde_json::Value = client
-                        .request("agent.submit", params)
-                        .await?;
+                    let response: serde_json::Value =
+                        client.request("agent.submit", params).await?;
 
-                    if let Some(_req_id) = response.get("req_id").and_then(|v| v.as_str()) {
+                    if let Some(req_id) = response.get("req_id").and_then(|v| v.as_str()) {
                         // Poll for events or listen on subscription
                         // Simple polling approach -- server should push via notifications
-                        let _ = tx.send(UiEvent::AgentStart { input: input_clone.clone() }).await;
+                        let _ = tx
+                            .send(UiEvent::AgentStart {
+                                run_id: req_id.to_string(),
+                                input: input_clone.clone(),
+                            })
+                            .await;
                     }
 
                     anyhow::Result::<()>::Ok(())
-                }.await;
+                }
+                .await;
 
                 match result {
                     Ok(()) => break,
@@ -111,9 +116,15 @@ impl AgentConnection for RemoteConnection {
                             let delay = std::cmp::min(1000 * 2_u64.pow(retry as u32 - 1), 30000);
                             tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                         } else {
-                            let _ = tx.send(UiEvent::AgentError {
-                                message: format!("Connection failed after {} retries: {}", retry, e),
-                            }).await;
+                            let _ = tx
+                                .send(UiEvent::AgentError {
+                                    run_id: String::new(),
+                                    message: format!(
+                                        "Connection failed after {} retries: {}",
+                                        retry, e
+                                    ),
+                                })
+                                .await;
                         }
                     }
                 }
@@ -123,7 +134,12 @@ impl AgentConnection for RemoteConnection {
         Ok(rx)
     }
 
-    async fn approve_tool(&self, req_id: String, approved: bool, reason: Option<String>) -> anyhow::Result<()> {
+    async fn approve_tool(
+        &self,
+        req_id: String,
+        approved: bool,
+        reason: Option<String>,
+    ) -> anyhow::Result<()> {
         let mut params = ObjectParams::new();
         params.insert("req_id", &req_id)?;
         params.insert("approved", &approved)?;

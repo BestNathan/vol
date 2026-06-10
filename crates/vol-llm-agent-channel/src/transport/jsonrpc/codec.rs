@@ -1,7 +1,8 @@
 //! JSON-RPC WebSocket gateway codec.
 
 use crate::agent_server_protocol::{
-    AgentOperation, AgentPayload, AgentServerMessage, ErrorPayload, FileOperation, MessageKind, Operation, Payload,
+    AgentOperation, AgentPayload, AgentServerMessage, ErrorPayload, FileOperation, MessageKind,
+    Operation, Payload,
 };
 use crate::error::ConnectionError;
 use crate::operation_codec::{decode_payload, method_to_operation};
@@ -35,10 +36,13 @@ pub fn decode_jsonrpc_frame(text: &str) -> Result<AgentServerMessage, Connection
     let method = envelope
         .method
         .ok_or_else(|| ConnectionError::ParseError("missing method".into()))?;
-    let operation = method_to_operation(&method)
-        .map_err(|e| ConnectionError::ParseError(e.to_string()))?;
-    let payload = decode_payload(operation.clone(), envelope.params.unwrap_or(serde_json::json!({})))
-        .map_err(|e| ConnectionError::ParseError(e.to_string()))?;
+    let operation =
+        method_to_operation(&method).map_err(|e| ConnectionError::ParseError(e.to_string()))?;
+    let payload = decode_payload(
+        operation.clone(),
+        envelope.params.unwrap_or(serde_json::json!({})),
+    )
+    .map_err(|e| ConnectionError::ParseError(e.to_string()))?;
 
     Ok(AgentServerMessage {
         protocol: "agent-server/1".to_string(),
@@ -76,8 +80,9 @@ pub fn encode_jsonrpc_message(msg: AgentServerMessage) -> Result<String, Connect
         MessageKind::Error => {
             let id = parse_message_id_for_jsonrpc(&msg.message_id);
             let error = match msg.payload {
-                Payload::Error(err) => serde_json::to_value(err)
-                    .map_err(|e| ConnectionError::ParseError(format!("serialization error: {e}")))?,
+                Payload::Error(err) => serde_json::to_value(err).map_err(|e| {
+                    ConnectionError::ParseError(format!("serialization error: {e}"))
+                })?,
                 _ => serde_json::to_value(ErrorPayload {
                     code: "internal_error".to_string(),
                     message: "error message missing error payload".to_string(),

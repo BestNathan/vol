@@ -58,29 +58,17 @@ impl ExecutableTool for TaskStop {
         args: &serde_json::Value,
         _context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
-        let params: TaskStopParams = serde_json::from_value(args.clone())
-            .map_err(|e| {
-                vol_llm_tool::ToolError::InvalidArguments(format!(
-                    "Failed to parse arguments: {}",
-                    e
-                ))
-            })?;
+        let params: TaskStopParams = serde_json::from_value(args.clone()).map_err(|e| {
+            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
+        })?;
 
-        let task_id: TaskId = params
-            .task_id
-            .parse::<u64>()
-            .map(TaskId)
-            .map_err(|e| {
-                vol_llm_tool::ToolError::InvalidArguments(format!("Invalid task ID: {}", e))
-            })?;
+        let task_id: TaskId = params.task_id.parse::<u64>().map(TaskId).map_err(|e| {
+            vol_llm_tool::ToolError::InvalidArguments(format!("Invalid task ID: {}", e))
+        })?;
 
-        let task = self
-            .store
-            .get(&task_id)
-            .await
-            .map_err(|e| {
-                vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to get task: {}", e))
-            })?;
+        let task = self.store.get(&task_id).await.map_err(|e| {
+            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to get task: {}", e))
+        })?;
 
         let mut task = match task {
             Some(t) => t,
@@ -92,10 +80,7 @@ impl ExecutableTool for TaskStop {
             }
         };
 
-        if matches!(
-            task.status,
-            TaskStatus::Completed | TaskStatus::Failed
-        ) {
+        if matches!(task.status, TaskStatus::Completed | TaskStatus::Failed) {
             return Ok(ToolResult::failure(format!(
                 "Task #{} is not running (status: {:?})",
                 task_id.0, task.status
@@ -112,10 +97,7 @@ impl ExecutableTool for TaskStop {
 
         Ok(ToolResult {
             success: true,
-            content: format!(
-                "Successfully stopped task #{}: {}",
-                task_id.0, subject
-            ),
+            content: format!("Successfully stopped task #{}: {}", task_id.0, subject),
             error: None,
             data: Some(serde_json::json!({
                 "success": true,

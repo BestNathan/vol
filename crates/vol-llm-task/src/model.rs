@@ -4,7 +4,9 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 
 /// Unique task identifier (newtype over u64, auto-increment).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub struct TaskId(pub u64);
 
 impl std::fmt::Display for TaskId {
@@ -14,9 +16,7 @@ impl std::fmt::Display for TaskId {
 }
 
 /// Task lifecycle status
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TaskStatus {
     Pending,
     Running,

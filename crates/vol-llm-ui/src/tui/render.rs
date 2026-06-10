@@ -5,13 +5,13 @@
 // skills_panel.rs, session_dialog.rs, status_bar, mod.rs), adapting from
 // AppState to UiState.
 
-use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::Frame;
 
-use crate::state::{UiState, ConversationEntry, ToolCallStatus, ActiveTab};
+use crate::state::{ActiveTab, ConversationEntry, ToolCallStatus, UiState};
 
 /// Render the full UI to the frame.
 pub fn render_ui(frame: &mut Frame, state: &UiState) {
@@ -20,10 +20,7 @@ pub fn render_ui(frame: &mut Frame, state: &UiState) {
     // Status bar: 1 row at top
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1),
-            Constraint::Min(1),
-        ])
+        .constraints([Constraint::Length(1), Constraint::Min(1)])
         .split(area);
 
     render_status_bar(frame, chunks[0], state);
@@ -31,10 +28,7 @@ pub fn render_ui(frame: &mut Frame, state: &UiState) {
     // Split remaining area: tools panel (30%) | content panel (70%)
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(30),
-            Constraint::Percentage(70),
-        ])
+        .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
         .split(chunks[1]);
 
     render_tools_panel(frame, main_chunks[0], state);
@@ -46,9 +40,9 @@ fn render_right_panel(frame: &mut Frame, area: Rect, state: &UiState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),   // tab bar
-            Constraint::Min(3),      // tab content
-            Constraint::Length(5),   // input area
+            Constraint::Length(1), // tab bar
+            Constraint::Min(3),    // tab content
+            Constraint::Length(5), // input area
         ])
         .split(area);
 
@@ -86,12 +80,18 @@ fn render_status_bar(frame: &mut Frame, area: Rect, state: &UiState) {
 
     let text = format!(
         " {}Session: {}{} │ Run: {} │ Iter: {} │ Tools: {} │ Time: {} │ {}",
-        unsafe_prefix, prefix, state.session_id, state.run_count,
-        state.iteration, state.tool_call_count, time_str, status,
+        unsafe_prefix,
+        prefix,
+        state.session_id,
+        state.run_count,
+        state.iteration,
+        state.tool_call_count,
+        time_str,
+        status,
     );
 
-    let paragraph = Paragraph::new(text)
-        .style(Style::default().fg(Color::White).bg(Color::DarkGray));
+    let paragraph =
+        Paragraph::new(text).style(Style::default().fg(Color::White).bg(Color::DarkGray));
     frame.render_widget(paragraph, area);
 }
 
@@ -100,7 +100,10 @@ fn render_status_bar(frame: &mut Frame, area: Rect, state: &UiState) {
 fn render_tab_bar(frame: &mut Frame, area: Rect, state: &UiState) {
     let style = |tab: ActiveTab| {
         if tab == state.active_tab {
-            Style::default().fg(Color::Black).bg(Color::White).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::White)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::DarkGray)
         }
@@ -126,15 +129,16 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &UiState) {
         Span::raw(" "),
     ]);
 
-    let paragraph = Paragraph::new(tabs)
-        .block(Block::default().borders(Borders::BOTTOM));
+    let paragraph = Paragraph::new(tabs).block(Block::default().borders(Borders::BOTTOM));
     frame.render_widget(paragraph, area);
 }
 
 // === Conversation ============================================================
 
 fn render_conversation(frame: &mut Frame, area: Rect, state: &UiState) {
-    let block = Block::default().borders(Borders::ALL).title(" Conversation ");
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Conversation ");
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -174,7 +178,10 @@ fn wrap_line(text: &str, max_chars: usize) -> Vec<String> {
         }
         let mut split = end;
         for i in (start..end).rev() {
-            if chars[i] == ' ' { split = i; break; }
+            if chars[i] == ' ' {
+                split = i;
+                break;
+            }
         }
         if split == start || chars[start..end].iter().all(|&c| c != ' ') {
             lines.push(chars[start..end].iter().collect());
@@ -193,67 +200,96 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
         match entry {
             ConversationEntry::UserInput { text } => {
                 let wrap = max_width.saturating_sub(4);
-                lines.push(Line::from(vec![
-                    Span::styled(">>> ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    ">>> ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )]));
                 for line in text.lines() {
                     for w in wrap_line(line, wrap) {
-                        lines.push(Line::from(vec![Span::styled(w, Style::default().fg(Color::White))]));
+                        lines.push(Line::from(vec![Span::styled(
+                            w,
+                            Style::default().fg(Color::White),
+                        )]));
                     }
                 }
                 lines.push(Line::raw(""));
             }
             ConversationEntry::Thinking { content } => {
-                lines.push(Line::from(vec![
-                    Span::styled("Thinking", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    "Thinking",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )]));
                 let wrap = max_width.saturating_sub(2);
                 for line in content.lines() {
                     for w in wrap_line(line, wrap) {
-                        lines.push(Line::from(vec![
-                            Span::styled(format!("  {}", w), Style::default().fg(Color::DarkGray)),
-                        ]));
+                        lines.push(Line::from(vec![Span::styled(
+                            format!("  {}", w),
+                            Style::default().fg(Color::DarkGray),
+                        )]));
                     }
                 }
                 lines.push(Line::raw(""));
             }
             ConversationEntry::ContentStreaming { content } => {
                 if content.is_empty() {
-                    lines.push(Line::from(vec![
-                        Span::styled("Generating...", Style::default().fg(Color::DarkGray)),
-                    ]));
+                    lines.push(Line::from(vec![Span::styled(
+                        "Generating...",
+                        Style::default().fg(Color::DarkGray),
+                    )]));
                 } else {
                     for line in content.lines() {
                         for w in wrap_line(line, max_width) {
-                            lines.push(Line::from(vec![Span::styled(w, Style::default().fg(Color::White))]));
+                            lines.push(Line::from(vec![Span::styled(
+                                w,
+                                Style::default().fg(Color::White),
+                            )]));
                         }
                     }
                 }
             }
-            ConversationEntry::ToolCall { tool_name, arg_preview, .. } => {
-                lines.push(Line::from(vec![
-                    Span::styled(format!("[{}]", tool_name), Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
-                ]));
+            ConversationEntry::ToolCall {
+                tool_name,
+                arg_preview,
+                ..
+            } => {
+                lines.push(Line::from(vec![Span::styled(
+                    format!("[{}]", tool_name),
+                    Style::default()
+                        .fg(Color::Blue)
+                        .add_modifier(Modifier::BOLD),
+                )]));
                 if !arg_preview.is_empty() {
                     for w in wrap_line(arg_preview, max_width.saturating_sub(2)) {
-                        lines.push(Line::from(vec![
-                            Span::styled(format!("  {}", w), Style::default().fg(Color::DarkGray)),
-                        ]));
+                        lines.push(Line::from(vec![Span::styled(
+                            format!("  {}", w),
+                            Style::default().fg(Color::DarkGray),
+                        )]));
                     }
                 }
             }
-            ConversationEntry::ToolResult { tool_name, preview, success, .. } => {
+            ConversationEntry::ToolResult {
+                tool_name,
+                preview,
+                success,
+                ..
+            } => {
                 let status = if *success { "OK" } else { "ERR" };
                 let color = if *success { Color::Green } else { Color::Red };
-                lines.push(Line::from(vec![
-                    Span::styled(format!("  {} {} ", status, tool_name), Style::default().fg(color)),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    format!("  {} {} ", status, tool_name),
+                    Style::default().fg(color),
+                )]));
                 let wrap = max_width.saturating_sub(4);
                 for line in preview.lines().take(6) {
                     for w in wrap_line(line, wrap) {
-                        lines.push(Line::from(vec![
-                            Span::styled(format!("    {}", w), Style::default().fg(Color::DarkGray)),
-                        ]));
+                        lines.push(Line::from(vec![Span::styled(
+                            format!("    {}", w),
+                            Style::default().fg(Color::DarkGray),
+                        )]));
                     }
                 }
                 lines.push(Line::raw(""));
@@ -262,43 +298,63 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                 lines.push(Line::raw(""));
                 for line in text.lines() {
                     for w in wrap_line(line, max_width) {
-                        lines.push(Line::from(vec![Span::styled(w, Style::default().fg(Color::White))]));
+                        lines.push(Line::from(vec![Span::styled(
+                            w,
+                            Style::default().fg(Color::White),
+                        )]));
                     }
                 }
                 lines.push(Line::raw(""));
             }
-            ConversationEntry::RunSummary { iterations, tool_calls, elapsed_ms } => {
-                lines.push(Line::from(vec![
-                    Span::styled(
-                        format!("Done · {} iteration{} · {} tool call{} · {}ms",
-                            iterations, if *iterations == 1 { "" } else { "s" },
-                            tool_calls, if *tool_calls == 1 { "" } else { "s" },
-                            elapsed_ms),
-                        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            ConversationEntry::RunSummary {
+                iterations,
+                tool_calls,
+                elapsed_ms,
+            } => {
+                lines.push(Line::from(vec![Span::styled(
+                    format!(
+                        "Done · {} iteration{} · {} tool call{} · {}ms",
+                        iterations,
+                        if *iterations == 1 { "" } else { "s" },
+                        tool_calls,
+                        if *tool_calls == 1 { "" } else { "s" },
+                        elapsed_ms
                     ),
-                ]));
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                )]));
             }
             ConversationEntry::Error { message } => {
-                lines.push(Line::from(vec![
-                    Span::styled(format!("Error: {}", message),
-                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    format!("Error: {}", message),
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                )]));
             }
-            ConversationEntry::EntryCheckpoint { reason, note, created_at } => {
+            ConversationEntry::EntryCheckpoint {
+                reason,
+                note,
+                created_at,
+            } => {
                 let label = format!("[Checkpoint: {}] {}", created_at, reason);
-                let label = note.as_ref().map(|n| format!("{} ({})", label, n)).unwrap_or(label);
-                lines.push(Line::from(vec![
-                    Span::styled(label,
-                        Style::default().fg(Color::Yellow).add_modifier(Modifier::DIM)),
-                ]));
+                let label = note
+                    .as_ref()
+                    .map(|n| format!("{} ({})", label, n))
+                    .unwrap_or(label);
+                lines.push(Line::from(vec![Span::styled(
+                    label,
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::DIM),
+                )]));
             }
             ConversationEntry::RunningBanner { run_id } => {
-                lines.push(Line::from(vec![
-                    Span::styled(
-                        format!("\u{2b24} Agent running  [{}]", run_id),
-                        Style::default().fg(Color::LightBlue).add_modifier(Modifier::BOLD),
-                    ),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    format!("\u{2b24} Agent running  [{}]", run_id),
+                    Style::default()
+                        .fg(Color::LightBlue)
+                        .add_modifier(Modifier::BOLD),
+                )]));
             }
         }
     }
@@ -309,35 +365,43 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
 
 fn render_tools_panel(frame: &mut Frame, area: Rect, state: &UiState) {
     let title = format!(" Tools Called ({}) ", state.tool_calls.len());
-    let block = Block::default().borders(Borders::ALL).title(title)
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(title)
         .style(Style::default().fg(Color::Blue));
 
     if state.tool_calls.is_empty() {
         let empty = Paragraph::new("No tool calls yet")
-            .style(Style::default().fg(Color::DarkGray)).block(block.clone());
+            .style(Style::default().fg(Color::DarkGray))
+            .block(block.clone());
         frame.render_widget(empty, area);
         return;
     }
 
-    let items: Vec<ListItem> = state.tool_calls.iter().map(|entry| {
-        let (status_str, status_color) = match entry.status {
-            ToolCallStatus::Running => ("...", Color::Yellow),
-            ToolCallStatus::Success => ("OK", Color::Green),
-            ToolCallStatus::Error => ("ERR", Color::Red),
-            ToolCallStatus::Skipped => ("SKIP", Color::DarkGray),
-        };
-        ListItem::new(vec![
-            Line::from(vec![
-                Span::styled(
+    let items: Vec<ListItem> = state
+        .tool_calls
+        .iter()
+        .map(|entry| {
+            let (status_str, status_color) = match entry.status {
+                ToolCallStatus::Running => ("...", Color::Yellow),
+                ToolCallStatus::Success => ("OK", Color::Green),
+                ToolCallStatus::Error => ("ERR", Color::Red),
+                ToolCallStatus::Skipped => ("SKIP", Color::DarkGray),
+            };
+            ListItem::new(vec![
+                Line::from(vec![Span::styled(
                     format!("{}. [{}]  {}", entry.sequence, entry.tool_name, status_str),
-                    Style::default().fg(status_color).add_modifier(Modifier::BOLD),
-                ),
-            ]),
-            Line::from(vec![
-                Span::styled(&entry.arg_preview, Style::default().fg(Color::DarkGray)),
-            ]),
-        ])
-    }).collect();
+                    Style::default()
+                        .fg(status_color)
+                        .add_modifier(Modifier::BOLD),
+                )]),
+                Line::from(vec![Span::styled(
+                    &entry.arg_preview,
+                    Style::default().fg(Color::DarkGray),
+                )]),
+            ])
+        })
+        .collect();
 
     let list = List::new(items).block(block);
     frame.render_widget(list, area);
@@ -346,7 +410,9 @@ fn render_tools_panel(frame: &mut Frame, area: Rect, state: &UiState) {
 // === Input Area + Approval ==================================================
 
 fn render_input_area(frame: &mut Frame, area: Rect, state: &UiState) {
-    if area.height < 3 { return; }
+    if area.height < 3 {
+        return;
+    }
 
     if state.approval_state.has_pending() {
         render_approval_panel(frame, area, state);
@@ -356,8 +422,18 @@ fn render_input_area(frame: &mut Frame, area: Rect, state: &UiState) {
 }
 
 fn render_textarea_hints(frame: &mut Frame, area: Rect, state: &UiState) {
-    let hint_area = Rect { x: area.x, y: area.y + area.height - 1, width: area.width, height: 1 };
-    let text_area = Rect { x: area.x, y: area.y, width: area.width, height: area.height - 1 };
+    let hint_area = Rect {
+        x: area.x,
+        y: area.y + area.height - 1,
+        width: area.width,
+        height: 1,
+    };
+    let text_area = Rect {
+        x: area.x,
+        y: area.y,
+        width: area.width,
+        height: area.height - 1,
+    };
 
     let block = Block::default().borders(Borders::ALL).title(" Input ");
     let inner = block.inner(text_area);
@@ -370,7 +446,10 @@ fn render_textarea_hints(frame: &mut Frame, area: Rect, state: &UiState) {
     frame.render_widget(placeholder, inner);
 
     let hint = if state.is_running {
-        Line::from(vec![Span::styled(" Running... (input disabled) ", Style::default().fg(Color::Yellow))])
+        Line::from(vec![Span::styled(
+            " Running... (input disabled) ",
+            Style::default().fg(Color::Yellow),
+        )])
     } else {
         Line::from(vec![
             Span::styled(" Enter ", Style::default().fg(Color::Blue)),
@@ -383,7 +462,11 @@ fn render_textarea_hints(frame: &mut Frame, area: Rect, state: &UiState) {
 }
 
 fn render_approval_panel(frame: &mut Frame, area: Rect, state: &UiState) {
-    let tool_name = state.approval_state.tool_name.as_deref().unwrap_or("unknown");
+    let tool_name = state
+        .approval_state
+        .tool_name
+        .as_deref()
+        .unwrap_or("unknown");
     let arguments = state.approval_state.arguments.as_deref().unwrap_or("");
 
     let block = Block::default().borders(Borders::ALL).title(" Approval ");
@@ -391,21 +474,34 @@ fn render_approval_panel(frame: &mut Frame, area: Rect, state: &UiState) {
     frame.render_widget(block, area);
 
     let text = Text::from(vec![
-        Line::from(vec![
-            Span::styled(format!(" [!] {}", tool_name),
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-        ]),
-        Line::from(vec![
-            Span::styled(format!("  {}", arguments.chars().take(100).collect::<String>()),
-                Style::default().fg(Color::DarkGray)),
-        ]),
+        Line::from(vec![Span::styled(
+            format!(" [!] {}", tool_name),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(vec![Span::styled(
+            format!("  {}", arguments.chars().take(100).collect::<String>()),
+            Style::default().fg(Color::DarkGray),
+        )]),
         Line::raw(""),
         Line::from(vec![
-            Span::styled(" [A] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " [A] ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled("Approve  ", Style::default().fg(Color::DarkGray)),
-            Span::styled(" [R] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " [R] ",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
             Span::styled("Reject  ", Style::default().fg(Color::DarkGray)),
-            Span::styled(" [S] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " [S] ",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
             Span::styled("Stop", Style::default().fg(Color::DarkGray)),
         ]),
     ]);
@@ -415,7 +511,10 @@ fn render_approval_panel(frame: &mut Frame, area: Rect, state: &UiState) {
 
 // === Workspace Panel ========================================================
 
-fn flatten_tree_for_tui(node: &crate::state::WorkspaceTreeNode, indent: usize) -> Vec<(String, bool, usize)> {
+fn flatten_tree_for_tui(
+    node: &crate::state::WorkspaceTreeNode,
+    indent: usize,
+) -> Vec<(String, bool, usize)> {
     let mut result = Vec::new();
     for child in &node.children {
         result.push((child.name.clone(), child.is_dir, indent));
@@ -439,19 +538,24 @@ fn render_workspace(frame: &mut Frame, area: Rect, state: &UiState) {
     }
 
     let entries = flatten_tree_for_tui(&state.workspace, 0);
-    let lines: Vec<Line> = entries.iter().map(|(name, is_dir, indent)| {
-        let prefix = if *is_dir {
-            format!("{}[DIR] {}", "  ".repeat(*indent), name)
-        } else {
-            format!("{}[FILE] {}", "  ".repeat(*indent), name)
-        };
-        let style = if *is_dir {
-            Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-        Line::from(vec![Span::styled(prefix, style)])
-    }).collect();
+    let lines: Vec<Line> = entries
+        .iter()
+        .map(|(name, is_dir, indent)| {
+            let prefix = if *is_dir {
+                format!("{}[DIR] {}", "  ".repeat(*indent), name)
+            } else {
+                format!("{}[FILE] {}", "  ".repeat(*indent), name)
+            };
+            let style = if *is_dir {
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            Line::from(vec![Span::styled(prefix, style)])
+        })
+        .collect();
 
     let paragraph = Paragraph::new(Text::from(lines)).scroll((state.workspace_scroll, 0));
     frame.render_widget(paragraph, inner);
@@ -470,44 +574,77 @@ fn render_log_viewer(frame: &mut Frame, area: Rect, state: &UiState) {
 fn render_run_list(frame: &mut Frame, area: Rect, state: &UiState) {
     let mut lines = Vec::new();
     if state.log_viewer_run_logs.is_empty() {
-        lines.push(Line::from(Span::styled(" No log files found.", Style::default().fg(Color::DarkGray))));
+        lines.push(Line::from(Span::styled(
+            " No log files found.",
+            Style::default().fg(Color::DarkGray),
+        )));
     } else {
         for run in &state.log_viewer_run_logs {
-            let short_id = if run.run_id.len() > 12 { &run.run_id[..12] } else { &run.run_id };
+            let short_id = if run.run_id.len() > 12 {
+                &run.run_id[..12]
+            } else {
+                &run.run_id
+            };
             lines.push(Line::from(vec![
-                Span::styled(format!(" {:<14}", short_id), Style::default().fg(Color::Gray)),
-                Span::styled(format!(" {:>5} events", run.event_count), Style::default().fg(Color::DarkGray)),
-                Span::styled(format!("  {}", run.last_event), Style::default().fg(Color::DarkGray)),
-                Span::styled(format!(" ({})", run.last_event_time), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!(" {:<14}", short_id),
+                    Style::default().fg(Color::Gray),
+                ),
+                Span::styled(
+                    format!(" {:>5} events", run.event_count),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(
+                    format!("  {}", run.last_event),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(
+                    format!(" ({})", run.last_event_time),
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]));
         }
     }
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(" Enter to view  Esc to go back", Style::default().fg(Color::DarkGray))));
+    lines.push(Line::from(Span::styled(
+        " Enter to view  Esc to go back",
+        Style::default().fg(Color::DarkGray),
+    )));
 
-    let paragraph = Paragraph::new(lines)
-        .block(Block::default().title(" Log Runs ").borders(Borders::ALL));
+    let paragraph =
+        Paragraph::new(lines).block(Block::default().title(" Log Runs ").borders(Borders::ALL));
     frame.render_widget(paragraph, area);
 }
 
 fn render_log_entries(frame: &mut Frame, area: Rect, state: &UiState) {
-    let lines: Vec<Line> = state.log_viewer_entries.iter().map(|entry| {
-        let color = match entry.event_type.as_str() {
-            "AgentStart" | "AgentComplete" => Color::Green,
-            "ToolCallBegin" | "ToolCallComplete" => Color::Yellow,
-            "ToolCallError" | "AgentAborted" => Color::Red,
-            _ => Color::White,
-        };
-        Line::from(vec![
-            Span::styled(format!("[{}] ", entry.timestamp), Style::default().fg(Color::DarkGray)),
-            Span::styled(entry.event_type.clone(), Style::default().fg(color)),
-            Span::styled(format!(" -- {}", entry.summary), Style::default().fg(color)),
-        ])
-    }).collect();
+    let lines: Vec<Line> = state
+        .log_viewer_entries
+        .iter()
+        .map(|entry| {
+            let color = match entry.event_type.as_str() {
+                "AgentStart" | "AgentComplete" => Color::Green,
+                "ToolCallBegin" | "ToolCallComplete" => Color::Yellow,
+                "ToolCallError" | "AgentAborted" => Color::Red,
+                _ => Color::White,
+            };
+            Line::from(vec![
+                Span::styled(
+                    format!("[{}] ", entry.timestamp),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(entry.event_type.clone(), Style::default().fg(color)),
+                Span::styled(format!(" -- {}", entry.summary), Style::default().fg(color)),
+            ])
+        })
+        .collect();
 
     let run_id = state.log_viewer_selected_run.as_deref().unwrap_or("");
     let paragraph = Paragraph::new(lines)
-        .block(Block::default().title(format!(" Log: {} ", run_id)).borders(Borders::ALL))
+        .block(
+            Block::default()
+                .title(format!(" Log: {} ", run_id))
+                .borders(Borders::ALL),
+        )
         .scroll((state.log_viewer_scroll, 0));
     frame.render_widget(paragraph, area);
 }
@@ -515,13 +652,15 @@ fn render_log_entries(frame: &mut Frame, area: Rect, state: &UiState) {
 // === Skills Panel ===========================================================
 
 fn render_skills(frame: &mut Frame, area: Rect, state: &UiState) {
-    let block = Block::default().borders(Borders::ALL).title(format!(" Skills ({}) ", state.skills.len()));
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(format!(" Skills ({}) ", state.skills.len()));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
     if state.skills.is_empty() {
-        let empty = Paragraph::new("No skills discovered")
-            .style(Style::default().fg(Color::DarkGray));
+        let empty =
+            Paragraph::new("No skills discovered").style(Style::default().fg(Color::DarkGray));
         frame.render_widget(empty, inner);
         return;
     }
@@ -532,22 +671,40 @@ fn render_skills(frame: &mut Frame, area: Rect, state: &UiState) {
     let scope_w = 10.min(max_width.saturating_sub(name_w + version_w + 4));
     let desc_w = max_width.saturating_sub(name_w + version_w + scope_w + 4);
 
-    let lines: Vec<Line> = state.skills.iter().map(|s| {
-        let scope_color = match s.scope.as_str() {
-            "User" => Color::Green,
-            "Repo" => Color::Blue,
-            _ => Color::Yellow,
-        };
-        Line::from(vec![
-            Span::styled(pad_or_truncate(&s.name, name_w), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-            Span::raw(" | "),
-            Span::styled(pad_or_truncate(&s.version, version_w), Style::default().fg(Color::DarkGray)),
-            Span::raw(" | "),
-            Span::styled(pad_or_truncate(&s.scope, scope_w), Style::default().fg(scope_color)),
-            Span::raw(" | "),
-            Span::styled(pad_or_truncate(&s.description, desc_w), Style::default().fg(Color::DarkGray)),
-        ])
-    }).collect();
+    let lines: Vec<Line> = state
+        .skills
+        .iter()
+        .map(|s| {
+            let scope_color = match s.scope.as_str() {
+                "User" => Color::Green,
+                "Repo" => Color::Blue,
+                _ => Color::Yellow,
+            };
+            Line::from(vec![
+                Span::styled(
+                    pad_or_truncate(&s.name, name_w),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" | "),
+                Span::styled(
+                    pad_or_truncate(&s.version, version_w),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::raw(" | "),
+                Span::styled(
+                    pad_or_truncate(&s.scope, scope_w),
+                    Style::default().fg(scope_color),
+                ),
+                Span::raw(" | "),
+                Span::styled(
+                    pad_or_truncate(&s.description, desc_w),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ])
+        })
+        .collect();
 
     frame.render_widget(Paragraph::new(Text::from(lines)), inner);
 }
@@ -610,14 +767,19 @@ fn pad_or_truncate(s: &str, width: usize) -> String {
     if char_count <= width {
         format!("{}{}", s, " ".repeat(width.saturating_sub(char_count)))
     } else {
-        format!("{}...", s.chars().take(width.saturating_sub(1)).collect::<String>())
+        format!(
+            "{}...",
+            s.chars().take(width.saturating_sub(1)).collect::<String>()
+        )
     }
 }
 
 // === Session Dialog =========================================================
 
 fn render_session_dialog(frame: &mut Frame, area: Rect, state: &UiState) {
-    if !state.session_dialog_open { return; }
+    if !state.session_dialog_open {
+        return;
+    }
 
     let width = 60.min(area.width);
     let height = (state.session_dialog_sessions.len() as u16 + 6).min(area.height - 2);
@@ -629,22 +791,38 @@ fn render_session_dialog(frame: &mut Frame, area: Rect, state: &UiState) {
 
     let mut lines = Vec::new();
     if state.session_dialog_sessions.is_empty() {
-        lines.push(Line::from(Span::styled("  No saved sessions found.", Style::default().fg(Color::DarkGray))));
+        lines.push(Line::from(Span::styled(
+            "  No saved sessions found.",
+            Style::default().fg(Color::DarkGray),
+        )));
     } else {
         for (i, entry) in state.session_dialog_sessions.iter().enumerate() {
             let is_selected = i == state.session_dialog_selected;
             let prefix = if is_selected { "> " } else { "  " };
-            let short_id = if entry.session_id.len() > 8 { &entry.session_id[..8] } else { &entry.session_id };
+            let short_id = if entry.session_id.len() > 8 {
+                &entry.session_id[..8]
+            } else {
+                &entry.session_id
+            };
             let style = if is_selected {
-                Style::default().fg(Color::White).bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::White)
+                    .bg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::Gray)
             };
             lines.push(Line::from(vec![
                 Span::styled(prefix, style),
                 Span::styled(format!("{:<10}", short_id), style),
-                Span::styled(format!(" {:>4} entries", entry.entry_count), Style::default().fg(Color::DarkGray)),
-                Span::styled(format!("    {}", entry.age_label), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!(" {:>4} entries", entry.entry_count),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(
+                    format!("    {}", entry.age_label),
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]));
         }
     }
@@ -654,10 +832,11 @@ fn render_session_dialog(frame: &mut Frame, area: Rect, state: &UiState) {
         Style::default().fg(Color::DarkGray),
     )));
 
-    let paragraph = Paragraph::new(lines)
-        .block(Block::default()
+    let paragraph = Paragraph::new(lines).block(
+        Block::default()
             .title(" Sessions (Ctrl+S to dismiss) ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Yellow)));
+            .border_style(Style::default().fg(Color::Yellow)),
+    );
     frame.render_widget(paragraph, rect);
 }

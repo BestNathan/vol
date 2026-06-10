@@ -31,8 +31,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("ANTHROPIC_AUTH_TOKEN must be set for this example");
     println!("✓ ANTHROPIC_AUTH_TOKEN is set");
 
-    let docs_rs_bin = std::env::var("DOCS_RS_MCP_BIN")
-        .unwrap_or_else(|_| "docs-rs-mcp".to_string());
+    let docs_rs_bin =
+        std::env::var("DOCS_RS_MCP_BIN").unwrap_or_else(|_| "docs-rs-mcp".to_string());
     println!("✓ docs-rs-mcp binary: {docs_rs_bin}");
 
     // --- Create temp directory with .mcp.json ---
@@ -88,13 +88,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|d| d.name.starts_with("mcp__"))
         .collect();
     if mcp_tools.is_empty() {
-        return Err("No MCP tools discovered. Check that docs-rs-mcp binary is available.
+        return Err(
+            "No MCP tools discovered. Check that docs-rs-mcp binary is available.
 Build it: cargo build --bin docs-rs-mcp -p vol-mcp-servers"
-            .into());
+                .into(),
+        );
     }
     println!("✓ Discovered {} MCP tools:", mcp_tools.len());
     for tool in &mcp_tools {
-        println!("    - {} ({})", tool.name, tool.description.as_deref().unwrap_or("no description"));
+        println!(
+            "    - {} ({})",
+            tool.name,
+            tool.description.as_deref().unwrap_or("no description")
+        );
     }
     println!();
 
@@ -126,7 +132,11 @@ Build it: cargo build --bin docs-rs-mcp -p vol-mcp-servers"
         Ok(response) => {
             println!("Agent completed successfully.");
             println!("Run ID: {}", response.run_id);
-            println!("Iterations: {}, Tool calls: {}", response.iterations, response.tool_calls.len());
+            println!(
+                "Iterations: {}, Tool calls: {}",
+                response.iterations,
+                response.tool_calls.len()
+            );
             println!();
             println!("Answer:");
             println!("{}", response.content);

@@ -35,6 +35,5 @@ pub enum FetchError {
 #[async_trait]
 pub trait FetchFn: Send + Sync {
     /// Fetch and extract content from a URL
-    async fn fetch(&self, url: &str, opts: FetchOptions)
-        -> Result<FetchResult, FetchError>;
+    async fn fetch(&self, url: &str, opts: FetchOptions) -> Result<FetchResult, FetchError>;
 }

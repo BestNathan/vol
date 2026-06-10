@@ -1,8 +1,8 @@
 //! Dialog showing full details of a skill with file viewer.
 
-use dioxus::prelude::*;
 use crate::state::SkillDialogState;
 use crate::web::components::app::AppState;
+use dioxus::prelude::*;
 
 #[component]
 pub fn SkillDetailDialog(mut signal: Signal<SkillDialogState>) -> Element {

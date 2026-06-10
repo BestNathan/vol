@@ -16,10 +16,9 @@ use vol_llm_agent::react::AgentStreamEvent;
 /// in sync with the existing `AgentStreamEvent` variants.
 pub fn serialize_agent_event(event: &AgentStreamEvent) -> (String, serde_json::Value) {
     match event {
-        AgentStreamEvent::AgentStart { input, .. } => (
-            "agent_start".into(),
-            serde_json::json!({ "input": input }),
-        ),
+        AgentStreamEvent::AgentStart { input, .. } => {
+            ("agent_start".into(), serde_json::json!({ "input": input }))
+        }
         AgentStreamEvent::AgentComplete { response, .. } => (
             "agent_complete".into(),
             serde_json::json!({ "response": response }),
@@ -28,10 +27,7 @@ pub fn serialize_agent_event(event: &AgentStreamEvent) -> (String, serde_json::V
             "agent_aborted".into(),
             serde_json::json!({ "reason": reason }),
         ),
-        AgentStreamEvent::ThinkingStart { .. } => (
-            "thinking_start".into(),
-            serde_json::json!({}),
-        ),
+        AgentStreamEvent::ThinkingStart { .. } => ("thinking_start".into(), serde_json::json!({})),
         AgentStreamEvent::ThinkingDelta { delta, .. } => (
             "thinking_delta".into(),
             serde_json::json!({ "delta": delta }),
@@ -40,10 +36,7 @@ pub fn serialize_agent_event(event: &AgentStreamEvent) -> (String, serde_json::V
             "thinking_complete".into(),
             serde_json::json!({ "thinking": thinking }),
         ),
-        AgentStreamEvent::ContentStart { .. } => (
-            "content_start".into(),
-            serde_json::json!({}),
-        ),
+        AgentStreamEvent::ContentStart { .. } => ("content_start".into(), serde_json::json!({})),
         AgentStreamEvent::ContentDelta { delta, .. } => (
             "content_delta".into(),
             serde_json::json!({ "delta": delta }),
@@ -134,9 +127,7 @@ pub fn serialize_agent_event(event: &AgentStreamEvent) -> (String, serde_json::V
                 "max": max_iterations,
             }),
         ),
-        AgentStreamEvent::IterationContinued {
-            from_iteration, ..
-        } => (
+        AgentStreamEvent::IterationContinued { from_iteration, .. } => (
             "iteration_continued".into(),
             serde_json::json!({ "from_iteration": from_iteration }),
         ),
@@ -181,11 +172,7 @@ pub fn serialize_agent_event(event: &AgentStreamEvent) -> (String, serde_json::V
 /// ```json
 /// {"jsonrpc":"2.0","method":"agent.event","params":{"subscription":1,"result":{"req_id":"...","event_type":"...","data":{...}}}}
 /// ```
-pub fn to_jsonrpc_event(
-    event: &AgentStreamEvent,
-    sub_id: u64,
-    req_id: &str,
-) -> String {
+pub fn to_jsonrpc_event(event: &AgentStreamEvent, sub_id: u64, req_id: &str) -> String {
     let (event_type, data) = serialize_agent_event(event);
     let envelope = serde_json::json!({
         "jsonrpc": "2.0",

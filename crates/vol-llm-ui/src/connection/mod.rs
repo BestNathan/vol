@@ -28,7 +28,12 @@ pub trait AgentConnection: Send + Sync {
     async fn submit(&self, input: String) -> anyhow::Result<mpsc::Receiver<UiEvent>>;
 
     /// Request tool approval/denial.
-    async fn approve_tool(&self, req_id: String, approved: bool, reason: Option<String>) -> anyhow::Result<()>;
+    async fn approve_tool(
+        &self,
+        req_id: String,
+        approved: bool,
+        reason: Option<String>,
+    ) -> anyhow::Result<()>;
 
     /// Cancel the current agent run.
     async fn cancel(&self, req_id: String) -> anyhow::Result<()>;

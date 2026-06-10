@@ -77,8 +77,14 @@ async fn test_compress_real_session() {
                 .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("md"))
                 .collect();
 
-            assert!(!entries.is_empty(), "Wiki directory should have markdown files after compression");
-            println!("Wiki files created: {:?}", entries.iter().map(|e| e.file_name()).collect::<Vec<_>>());
+            assert!(
+                !entries.is_empty(),
+                "Wiki directory should have markdown files after compression"
+            );
+            println!(
+                "Wiki files created: {:?}",
+                entries.iter().map(|e| e.file_name()).collect::<Vec<_>>()
+            );
         }
         Err(e) => {
             println!("Compression failed (expected if no API key): {}", e);

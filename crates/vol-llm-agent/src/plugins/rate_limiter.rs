@@ -52,8 +52,8 @@ impl AgentPlugin for RateLimiterPlugin {
 mod tests {
     use super::*;
     use crate::react::{AgentConfig, RunContext};
-    use vol_session::{InMemoryEntryStore, Session};
     use std::sync::Arc;
+    use vol_session::{InMemoryEntryStore, Session};
 
     fn create_test_run_context() -> RunContext {
         let (ctx, _rx) = RunContext::new(

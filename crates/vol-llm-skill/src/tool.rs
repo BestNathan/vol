@@ -4,7 +4,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::loader::SkillLoader;
-use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity};
+use vol_llm_tool::{
+    ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity,
+};
 
 /// Parameters for the Skill tool.
 #[derive(Debug, Deserialize, Serialize)]
@@ -67,7 +69,9 @@ impl SkillTool {
                 output.push_str(&format!("- {}: {}\n", m.name, m.description));
             }
         }
-        output.push_str("\nUse the `read` tool with absolute paths to access files relative to the skill root.");
+        output.push_str(
+            "\nUse the `read` tool with absolute paths to access files relative to the skill root.",
+        );
         output
     }
 }

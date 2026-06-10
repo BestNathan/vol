@@ -40,10 +40,8 @@ impl ToolRegistry {
             .get(&call.name)
             .ok_or_else(|| format!("Unknown tool: {}", call.name))?;
 
-        let args: serde_json::Value =
-            serde_json::from_str(&call.arguments).map_err(|e| {
-                format!("Invalid JSON arguments for {}: {}", call.name, e)
-            })?;
+        let args: serde_json::Value = serde_json::from_str(&call.arguments)
+            .map_err(|e| format!("Invalid JSON arguments for {}: {}", call.name, e))?;
 
         let result = tool
             .execute(&args, context)
@@ -71,11 +69,7 @@ impl ToolRegistry {
 
     /// Create a filtered registry containing only the allowed tools,
     /// minus any disallowed tools.
-    pub fn filter(
-        &self,
-        allowed: Option<&[&str]>,
-        disallowed: Option<&[&str]>,
-    ) -> Arc<Self> {
+    pub fn filter(&self, allowed: Option<&[&str]>, disallowed: Option<&[&str]>) -> Arc<Self> {
         let disallowed_set: std::collections::HashSet<&str> = disallowed
             .map(|d| d.iter().copied().collect())
             .unwrap_or_default();
@@ -88,7 +82,8 @@ impl ToolRegistry {
                 .map(|(name, tool)| (name.clone(), Arc::clone(tool)))
                 .collect(),
             Some(allow_list) => {
-                let allowed_set: std::collections::HashSet<&str> = allow_list.iter().copied().collect();
+                let allowed_set: std::collections::HashSet<&str> =
+                    allow_list.iter().copied().collect();
                 self.tools
                     .iter()
                     .filter(|(name, _)| {
@@ -123,9 +118,9 @@ impl ToolRegistry {
                 &server,
                 &tool_info.name,
                 description,
-                tool_info.input_schema.unwrap_or_else(|| {
-                    serde_json::json!({ "type": "object", "properties": {} })
-                }),
+                tool_info
+                    .input_schema
+                    .unwrap_or_else(|| serde_json::json!({ "type": "object", "properties": {} })),
             );
             self.register_boxed(Box::new(mcp_tool));
             count += 1;
@@ -151,8 +146,8 @@ impl Default for ToolRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_trait::async_trait;
     use crate::tool::{ExecutableTool, ToolResultType, ToolSensitivity};
+    use async_trait::async_trait;
 
     struct DummyTool {
         name: &'static str,
@@ -164,11 +159,23 @@ mod tests {
     }
     #[async_trait]
     impl ExecutableTool for DummyTool {
-        fn name(&self) -> &'static str { self.name }
-        fn description(&self) -> &'static str { "dummy" }
-        fn parameters(&self) -> serde_json::Value { serde_json::json!({}) }
-        fn sensitivity(&self, _args: &serde_json::Value) -> ToolSensitivity { ToolSensitivity::Safe }
-        async fn execute(&self, _args: &serde_json::Value, _context: &ToolContext) -> ToolResultType<ToolResult> {
+        fn name(&self) -> &'static str {
+            self.name
+        }
+        fn description(&self) -> &'static str {
+            "dummy"
+        }
+        fn parameters(&self) -> serde_json::Value {
+            serde_json::json!({})
+        }
+        fn sensitivity(&self, _args: &serde_json::Value) -> ToolSensitivity {
+            ToolSensitivity::Safe
+        }
+        async fn execute(
+            &self,
+            _args: &serde_json::Value,
+            _context: &ToolContext,
+        ) -> ToolResultType<ToolResult> {
             Ok(ToolResult::success("ok"))
         }
     }

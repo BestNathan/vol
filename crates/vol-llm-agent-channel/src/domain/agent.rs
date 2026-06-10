@@ -27,7 +27,12 @@ impl AgentHandler {
         agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>>,
         agent_status: Arc<std::sync::RwLock<HashMap<String, crate::server_core::AgentStatus>>>,
     ) -> Self {
-        Self { router, holders, agent_defs, agent_status }
+        Self {
+            router,
+            holders,
+            agent_defs,
+            agent_status,
+        }
     }
 }
 
@@ -61,13 +66,7 @@ impl DomainHandler for AgentHandler {
             _ => return Err(ProtocolError::PayloadDecodeFailed("agent")),
         };
         match (op, message.payload) {
-            (
-                AgentOperation::Submit,
-                Payload::Agent(AgentPayload::Submit {
-                    input,
-                    target,
-                }),
-            ) => {
+            (AgentOperation::Submit, Payload::Agent(AgentPayload::Submit { input, target })) => {
                 let target_id = {
                     let holders = self.holders.lock().unwrap();
                     target
@@ -195,8 +194,7 @@ impl DomainHandler for AgentHandler {
                     let sb = b.get("scope").and_then(|v| v.as_str()).unwrap_or("");
                     let na = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
                     let nb = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                    scope_rank(sa).cmp(&scope_rank(sb))
-                        .then_with(|| na.cmp(nb))
+                    scope_rank(sa).cmp(&scope_rank(sb)).then_with(|| na.cmp(nb))
                 });
 
                 Ok(vec![AgentServerMessage::new_result(
@@ -229,7 +227,11 @@ impl DomainHandler for AgentHandler {
                     Some(s) if s.status == "running" => (s.status, s.run_id),
                     _ => {
                         let is_busy = self.router.is_agent_running(&agent_id).await;
-                        let status = if is_busy { "running".to_string() } else { "idle".to_string() };
+                        let status = if is_busy {
+                            "running".to_string()
+                        } else {
+                            "idle".to_string()
+                        };
                         (status, None)
                     }
                 };
@@ -241,31 +243,43 @@ impl DomainHandler for AgentHandler {
             }
             (AgentOperation::Status, _) => Err(ProtocolError::PayloadDecodeFailed("agent.status")),
             (AgentOperation::Event, _) => Err(ProtocolError::PayloadDecodeFailed("agent.event")),
-            (AgentOperation::ContextConfig, Payload::Agent(AgentPayload::ContextConfig { agent_id })) => {
+            (
+                AgentOperation::ContextConfig,
+                Payload::Agent(AgentPayload::ContextConfig { agent_id }),
+            ) => {
                 let agent = match self.router.get_agent(&agent_id).await {
                     Some(a) => a,
-                    None => return Ok(vec![AgentServerMessage::new_error(
-                        message.message_id,
-                        Operation::Agent(AgentOperation::ContextConfig),
-                        crate::agent_server_protocol::ErrorPayload {
-                            code: "agent_not_found".to_string(),
-                            message: format!("agent '{}' not found", agent_id),
-                            detail: None,
-                            terminal: true,
-                        },
-                    )]),
+                    None => {
+                        return Ok(vec![AgentServerMessage::new_error(
+                            message.message_id,
+                            Operation::Agent(AgentOperation::ContextConfig),
+                            crate::agent_server_protocol::ErrorPayload {
+                                code: "agent_not_found".to_string(),
+                                message: format!("agent '{}' not found", agent_id),
+                                detail: None,
+                                terminal: true,
+                            },
+                        )])
+                    }
                 };
 
-                let contributors = agent.contributors().await.map(|infos| {
-                    infos.into_iter().map(|info| {
-                        serde_json::json!({
-                            "name": info.name,
-                            "anchor_zone": info.anchor_zone,
-                            "estimated_tokens": info.estimated_tokens,
-                            "message_count": info.message_count,
-                        })
-                    }).collect::<Vec<_>>()
-                }).unwrap_or_default();
+                let contributors = agent
+                    .contributors()
+                    .await
+                    .map(|infos| {
+                        infos
+                            .into_iter()
+                            .map(|info| {
+                                serde_json::json!({
+                                    "name": info.name,
+                                    "anchor_zone": info.anchor_zone,
+                                    "estimated_tokens": info.estimated_tokens,
+                                    "message_count": info.message_count,
+                                })
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
 
                 Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
@@ -273,22 +287,32 @@ impl DomainHandler for AgentHandler {
                     Payload::Agent(AgentPayload::ContextConfigResult { contributors }),
                 )])
             }
-            (AgentOperation::ContextSnapshot, Payload::Agent(AgentPayload::ContextSnapshot { agent_id, contributor_name })) => {
+            (
+                AgentOperation::ContextSnapshot,
+                Payload::Agent(AgentPayload::ContextSnapshot {
+                    agent_id,
+                    contributor_name,
+                }),
+            ) => {
                 let agent = match self.router.get_agent(&agent_id).await {
                     Some(a) => a,
-                    None => return Ok(vec![AgentServerMessage::new_error(
-                        message.message_id,
-                        Operation::Agent(AgentOperation::ContextSnapshot),
-                        crate::agent_server_protocol::ErrorPayload {
-                            code: "agent_not_found".to_string(),
-                            message: format!("agent '{}' not found", agent_id),
-                            detail: None,
-                            terminal: true,
-                        },
-                    )]),
+                    None => {
+                        return Ok(vec![AgentServerMessage::new_error(
+                            message.message_id,
+                            Operation::Agent(AgentOperation::ContextSnapshot),
+                            crate::agent_server_protocol::ErrorPayload {
+                                code: "agent_not_found".to_string(),
+                                message: format!("agent '{}' not found", agent_id),
+                                detail: None,
+                                terminal: true,
+                            },
+                        )])
+                    }
                 };
 
-                let messages = agent.snapshot_by_name(&contributor_name).await
+                let messages = agent
+                    .snapshot_by_name(&contributor_name)
+                    .await
                     .map(|msgs| {
                         msgs.into_iter()
                             .map(|m| serde_json::json!({"role": m.role, "content": m.content}))
@@ -302,8 +326,12 @@ impl DomainHandler for AgentHandler {
                     Payload::Agent(AgentPayload::ContextSnapshotResult { messages }),
                 )])
             }
-            (AgentOperation::ContextConfig, _) => Err(ProtocolError::PayloadDecodeFailed("agent.context_config")),
-            (AgentOperation::ContextSnapshot, _) => Err(ProtocolError::PayloadDecodeFailed("agent.context_snapshot")),
+            (AgentOperation::ContextConfig, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("agent.context_config"))
+            }
+            (AgentOperation::ContextSnapshot, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("agent.context_snapshot"))
+            }
         }
     }
 }

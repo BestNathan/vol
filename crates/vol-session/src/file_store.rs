@@ -57,7 +57,10 @@ impl FileSessionEntryStore {
     /// Includes agent_type subdirectory when configured.
     fn file_path(&self, session_id: &str) -> PathBuf {
         match &self.agent_type {
-            Some(agent) => self.entry_dir.join(agent).join(format!("{}.jsonl", session_id)),
+            Some(agent) => self
+                .entry_dir
+                .join(agent)
+                .join(format!("{}.jsonl", session_id)),
             None => self.entry_dir.join(format!("{}.jsonl", session_id)),
         }
     }
@@ -96,9 +99,8 @@ impl FileSessionEntryStore {
                 StoreError::Serialization(format!("Failed to serialize entry data: {}", e))
             })?,
         };
-        serde_json::to_string(&line).map_err(|e| {
-            StoreError::Serialization(format!("Failed to serialize entry: {}", e))
-        })
+        serde_json::to_string(&line)
+            .map_err(|e| StoreError::Serialization(format!("Failed to serialize entry: {}", e)))
     }
 
     /// Parse a single JSONL line. Returns `None` for unparseable or non-matching lines.
@@ -123,7 +125,11 @@ impl FileSessionEntryStore {
 
     /// Read entries from the head of the file, parsing up to `max_parsed` lines.
     /// Skips unparseable lines silently.
-    fn read_from_head(&self, session_id: &str, max_parsed: usize) -> std::io::Result<Vec<SessionEntry>> {
+    fn read_from_head(
+        &self,
+        session_id: &str,
+        max_parsed: usize,
+    ) -> std::io::Result<Vec<SessionEntry>> {
         let file_path = self.file_path(session_id);
         let mut entries = Vec::new();
         if !file_path.exists() {
@@ -149,7 +155,11 @@ impl FileSessionEntryStore {
     /// Read entries from the tail of the file backwards.
     /// Reads up to `buf_size` bytes from the end, parses complete lines found,
     /// and returns them in file order (oldest first).
-    fn read_from_tail(&self, session_id: &str, buf_size: u64) -> std::io::Result<Vec<SessionEntry>> {
+    fn read_from_tail(
+        &self,
+        session_id: &str,
+        buf_size: u64,
+    ) -> std::io::Result<Vec<SessionEntry>> {
         let file_path = self.file_path(session_id);
         if !file_path.exists() {
             return Ok(Vec::new());
@@ -258,11 +268,13 @@ impl FileSessionEntryStore {
 impl SessionEntryStore for FileSessionEntryStore {
     async fn save(&self, entry: SessionEntry) -> Result<()> {
         let json = Self::to_json(&entry)?;
-        self.append_line(&entry.session_id, &json).map_err(StoreError::Io)
+        self.append_line(&entry.session_id, &json)
+            .map_err(StoreError::Io)
     }
 
     async fn get_entries(&self, session_id: &str) -> Result<Vec<SessionEntry>> {
-        self.read_from_head(session_id, usize::MAX).map_err(StoreError::Io)
+        self.read_from_head(session_id, usize::MAX)
+            .map_err(StoreError::Io)
     }
 
     async fn get_after(&self, session_id: &str, after: i64) -> Result<Vec<SessionEntry>> {
@@ -289,7 +301,9 @@ impl SessionEntryStore for FileSessionEntryStore {
 
     async fn find_latest_checkpoint(&self, session_id: &str) -> Result<Option<SessionEntry>> {
         // Try reading from the tail first (last 64KB) — most likely to contain the latest checkpoint.
-        let tail_entries = self.read_from_tail(session_id, 64 * 1024).map_err(StoreError::Io)?;
+        let tail_entries = self
+            .read_from_tail(session_id, 64 * 1024)
+            .map_err(StoreError::Io)?;
         let mut latest: Option<SessionEntry> = None;
         for entry in &tail_entries {
             if entry.r#type == SessionEntryType::Checkpoint {
@@ -307,7 +321,9 @@ impl SessionEntryStore for FileSessionEntryStore {
 
         // If no checkpoint found in tail, fall back to full scan.
         if latest.is_none() {
-            let all = self.read_from_head(session_id, usize::MAX).map_err(StoreError::Io)?;
+            let all = self
+                .read_from_head(session_id, usize::MAX)
+                .map_err(StoreError::Io)?;
             for entry in all {
                 if entry.r#type == SessionEntryType::Checkpoint {
                     match &latest {
@@ -369,9 +385,10 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::new(temp_dir.path());
 
-        let entry = SessionEntry::from_message(
-            SessionMessage::new("test-session".to_string(), Message::user("Hello, World!")),
-        );
+        let entry = SessionEntry::from_message(SessionMessage::new(
+            "test-session".to_string(),
+            Message::user("Hello, World!"),
+        ));
 
         store.save(entry.clone()).await.unwrap();
 
@@ -385,9 +402,10 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::new(temp_dir.path());
 
-        let mut before = SessionEntry::from_message(
-            SessionMessage::new("test-session".to_string(), Message::user("before")),
-        );
+        let mut before = SessionEntry::from_message(SessionMessage::new(
+            "test-session".to_string(),
+            Message::user("before"),
+        ));
         before.created_at = 1000;
 
         let mut checkpoint = SessionEntry::new_checkpoint(
@@ -397,19 +415,27 @@ mod entry_tests {
         );
         checkpoint.created_at = 1001;
 
-        let mut after = SessionEntry::from_message(
-            SessionMessage::new("test-session".to_string(), Message::user("after")),
-        );
+        let mut after = SessionEntry::from_message(SessionMessage::new(
+            "test-session".to_string(),
+            Message::user("after"),
+        ));
         after.created_at = 1002;
 
         store.save(before).await.unwrap();
         store.save(checkpoint).await.unwrap();
         store.save(after).await.unwrap();
 
-        let cp = store.find_latest_checkpoint("test-session").await.unwrap().unwrap();
+        let cp = store
+            .find_latest_checkpoint("test-session")
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(cp.r#type, SessionEntryType::Checkpoint);
 
-        let entries = store.get_after("test-session", cp.created_at).await.unwrap();
+        let entries = store
+            .get_after("test-session", cp.created_at)
+            .await
+            .unwrap();
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].r#type, SessionEntryType::Checkpoint);
         assert_eq!(entries[1].r#type, SessionEntryType::Message);
@@ -420,9 +446,13 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::new(temp_dir.path());
 
-        store.save(SessionEntry::from_message(
-            SessionMessage::new("test-session".to_string(), Message::user("test")),
-        )).await.unwrap();
+        store
+            .save(SessionEntry::from_message(SessionMessage::new(
+                "test-session".to_string(),
+                Message::user("test"),
+            )))
+            .await
+            .unwrap();
 
         store.delete_session("test-session").await.unwrap();
         let count = store.get_count("test-session").await.unwrap();
@@ -434,9 +464,10 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::new(temp_dir.path());
 
-        let entry1 = SessionEntry::from_message(
-            SessionMessage::new("test-session".to_string(), Message::user("hello")),
-        );
+        let entry1 = SessionEntry::from_message(SessionMessage::new(
+            "test-session".to_string(),
+            Message::user("hello"),
+        ));
         store.save(entry1).await.unwrap();
 
         std::fs::OpenOptions::new()
@@ -446,9 +477,10 @@ mod entry_tests {
             .write_all(b"this is not valid json\n")
             .unwrap();
 
-        let entry2 = SessionEntry::from_message(
-            SessionMessage::new("test-session".to_string(), Message::user("world")),
-        );
+        let entry2 = SessionEntry::from_message(SessionMessage::new(
+            "test-session".to_string(),
+            Message::user("world"),
+        ));
         store.save(entry2).await.unwrap();
 
         let entries = store.get_entries("test-session").await.unwrap();
@@ -461,15 +493,19 @@ mod entry_tests {
         let store = FileSessionEntryStore::new(temp_dir.path());
 
         for i in 0..5 {
-            let entry = SessionEntry::from_message(
-                SessionMessage::new("test-session".to_string(), Message::user(format!("msg-{i}"))),
-            );
+            let entry = SessionEntry::from_message(SessionMessage::new(
+                "test-session".to_string(),
+                Message::user(format!("msg-{i}")),
+            ));
             store.save(entry).await.unwrap();
         }
 
         let tail = store.read_from_tail("test-session", 1024).unwrap();
         assert!(!tail.is_empty());
-        assert_eq!(tail.last().unwrap().data.entry_type(), SessionEntryType::Message);
+        assert_eq!(
+            tail.last().unwrap().data.entry_type(),
+            SessionEntryType::Message
+        );
     }
 
     #[tokio::test]
@@ -477,13 +513,21 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::new(temp_dir.path());
 
-        store.save(SessionEntry::from_message(
-            SessionMessage::new("session-a".to_string(), Message::user("from A")),
-        )).await.unwrap();
+        store
+            .save(SessionEntry::from_message(SessionMessage::new(
+                "session-a".to_string(),
+                Message::user("from A"),
+            )))
+            .await
+            .unwrap();
 
-        store.save(SessionEntry::from_message(
-            SessionMessage::new("session-b".to_string(), Message::user("from B")),
-        )).await.unwrap();
+        store
+            .save(SessionEntry::from_message(SessionMessage::new(
+                "session-b".to_string(),
+                Message::user("from B"),
+            )))
+            .await
+            .unwrap();
 
         let entries_a = store.get_entries("session-a").await.unwrap();
         assert_eq!(entries_a.len(), 1);
@@ -503,14 +547,16 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::new(temp_dir.path());
 
-        let entry_a = SessionEntry::from_message(
-            SessionMessage::new("session-a".to_string(), Message::user("hello")),
-        );
+        let entry_a = SessionEntry::from_message(SessionMessage::new(
+            "session-a".to_string(),
+            Message::user("hello"),
+        ));
         store.save(entry_a).await.unwrap();
 
-        let entry_b = SessionEntry::from_message(
-            SessionMessage::new("session-b".to_string(), Message::user("world")),
-        );
+        let entry_b = SessionEntry::from_message(SessionMessage::new(
+            "session-b".to_string(),
+            Message::user("world"),
+        ));
         store.save(entry_b).await.unwrap();
 
         let summaries = store.list_sessions().unwrap();
@@ -532,13 +578,18 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::with_agent_type(temp_dir.path(), Some("qa".to_string()));
 
-        let entry = SessionEntry::from_message(
-            SessionMessage::new("test-session".to_string(), Message::user("Hello from QA")),
-        );
+        let entry = SessionEntry::from_message(SessionMessage::new(
+            "test-session".to_string(),
+            Message::user("Hello from QA"),
+        ));
         store.save(entry).await.unwrap();
 
         let expected_path = temp_dir.path().join("qa").join("test-session.jsonl");
-        assert!(expected_path.exists(), "File should exist at {}/qa/test-session.jsonl", temp_dir.path().display());
+        assert!(
+            expected_path.exists(),
+            "File should exist at {}/qa/test-session.jsonl",
+            temp_dir.path().display()
+        );
 
         let entries = store.get_entries("test-session").await.unwrap();
         assert_eq!(entries.len(), 1);
@@ -547,16 +598,26 @@ mod entry_tests {
     #[tokio::test]
     async fn test_file_entry_store_agent_type_isolation() {
         let temp_dir = tempdir().unwrap();
-        let qa_store = FileSessionEntryStore::with_agent_type(temp_dir.path(), Some("qa".to_string()));
-        let coding_store = FileSessionEntryStore::with_agent_type(temp_dir.path(), Some("coding".to_string()));
+        let qa_store =
+            FileSessionEntryStore::with_agent_type(temp_dir.path(), Some("qa".to_string()));
+        let coding_store =
+            FileSessionEntryStore::with_agent_type(temp_dir.path(), Some("coding".to_string()));
 
-        qa_store.save(SessionEntry::from_message(
-            SessionMessage::new("shared-session".to_string(), Message::user("from QA")),
-        )).await.unwrap();
+        qa_store
+            .save(SessionEntry::from_message(SessionMessage::new(
+                "shared-session".to_string(),
+                Message::user("from QA"),
+            )))
+            .await
+            .unwrap();
 
-        coding_store.save(SessionEntry::from_message(
-            SessionMessage::new("shared-session".to_string(), Message::user("from Coding")),
-        )).await.unwrap();
+        coding_store
+            .save(SessionEntry::from_message(SessionMessage::new(
+                "shared-session".to_string(),
+                Message::user("from Coding"),
+            )))
+            .await
+            .unwrap();
 
         // QA store should only see QA entries
         let qa_entries = qa_store.get_entries("shared-session").await.unwrap();
@@ -566,11 +627,22 @@ mod entry_tests {
         // Coding store should only see Coding entries
         let coding_entries = coding_store.get_entries("shared-session").await.unwrap();
         assert_eq!(coding_entries.len(), 1);
-        assert_eq!(coding_entries[0].data.entry_type(), SessionEntryType::Message);
+        assert_eq!(
+            coding_entries[0].data.entry_type(),
+            SessionEntryType::Message
+        );
 
         // Files should be in different directories
-        assert!(temp_dir.path().join("qa").join("shared-session.jsonl").exists());
-        assert!(temp_dir.path().join("coding").join("shared-session.jsonl").exists());
+        assert!(temp_dir
+            .path()
+            .join("qa")
+            .join("shared-session.jsonl")
+            .exists());
+        assert!(temp_dir
+            .path()
+            .join("coding")
+            .join("shared-session.jsonl")
+            .exists());
     }
 
     #[tokio::test]
@@ -578,14 +650,19 @@ mod entry_tests {
         let temp_dir = tempdir().unwrap();
         let store = FileSessionEntryStore::new(temp_dir.path());
 
-        let entry = SessionEntry::from_message(
-            SessionMessage::new("test-session".to_string(), Message::user("backward compat")),
-        );
+        let entry = SessionEntry::from_message(SessionMessage::new(
+            "test-session".to_string(),
+            Message::user("backward compat"),
+        ));
         store.save(entry).await.unwrap();
 
         // File should be directly in entry_dir, not in a subdirectory
         let expected_path = temp_dir.path().join("test-session.jsonl");
-        assert!(expected_path.exists(), "File should exist at original path {}", expected_path.display());
+        assert!(
+            expected_path.exists(),
+            "File should exist at original path {}",
+            expected_path.display()
+        );
 
         let entries = store.get_entries("test-session").await.unwrap();
         assert_eq!(entries.len(), 1);

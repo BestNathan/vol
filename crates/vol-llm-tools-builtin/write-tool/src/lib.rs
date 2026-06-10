@@ -70,24 +70,31 @@ impl ExecutableTool for WriteTool {
         })?;
 
         // Resolve path through sandbox
-        let file_path = context.resolve_path(&params.file_path).map_err(|e| {
-            ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e))
-        })?;
+        let file_path = context
+            .resolve_path(&params.file_path)
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e)))?;
 
         // Create parent directories if they don't exist
         if let Some(parent) = file_path.parent() {
             if !parent.as_os_str().is_empty() {
-                context.sandbox.create_dir_all(parent).await
-                    .map_err(|e| ToolError::ExecutionFailed(format!("Failed to create directory: {}", e)))?;
+                context.sandbox.create_dir_all(parent).await.map_err(|e| {
+                    ToolError::ExecutionFailed(format!("Failed to create directory: {}", e))
+                })?;
             }
         }
 
         // Write file content
-        context.sandbox.write_file(&file_path, params.content.as_bytes())
+        context
+            .sandbox
+            .write_file(&file_path, params.content.as_bytes())
             .await
             .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write file: {}", e)))?;
 
-        let output = format!("Successfully wrote {} bytes to {}", params.content.len(), params.file_path);
+        let output = format!(
+            "Successfully wrote {} bytes to {}",
+            params.content.len(),
+            params.file_path
+        );
         Ok(ToolResult::success(output))
     }
 }

@@ -1,11 +1,13 @@
+use crate::{
+    CommandOutput, DirEntry, FileMetadata, FileType, Sandbox, SandboxError, SandboxResult,
+};
+use async_trait::async_trait;
 use std::io::Write;
+#[cfg(unix)]
+use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use async_trait::async_trait;
-#[cfg(unix)]
-use std::os::unix::process::{CommandExt, ExitStatusExt};
-use crate::{CommandOutput, DirEntry, FileMetadata, FileType, Sandbox, SandboxError, SandboxResult};
 
 /// Counter to guarantee unique temp directory names across parallel tests.
 static SANDBOX_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -36,9 +38,13 @@ impl LocalSandbox {
 
 #[async_trait]
 impl Sandbox for LocalSandbox {
-    fn kind(&self) -> &str { "local" }
+    fn kind(&self) -> &str {
+        "local"
+    }
 
-    fn name(&self) -> &str { "local" }
+    fn name(&self) -> &str {
+        "local"
+    }
 
     async fn start(&self) -> SandboxResult<()> {
         std::fs::create_dir_all(&self.root_path).map_err(SandboxError::Io)
@@ -51,7 +57,9 @@ impl Sandbox for LocalSandbox {
         Ok(())
     }
 
-    fn root_path(&self) -> &Path { &self.root_path }
+    fn root_path(&self) -> &Path {
+        &self.root_path
+    }
 
     fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf> {
         if rel.starts_with('/') {
@@ -74,7 +82,9 @@ impl Sandbox for LocalSandbox {
             for (k, v) in &req.env {
                 cmd.env(k, v);
             }
-            let cwd = req.cwd.map(|p| root.join(p))
+            let cwd = req
+                .cwd
+                .map(|p| root.join(p))
                 .unwrap_or_else(|| root.clone());
             cmd.current_dir(&cwd);
             cmd.stdin(std::process::Stdio::piped());
@@ -82,7 +92,9 @@ impl Sandbox for LocalSandbox {
             cmd.stderr(std::process::Stdio::piped());
 
             #[cfg(unix)]
-            { cmd.process_group(0); }
+            {
+                cmd.process_group(0);
+            }
 
             let mut child = cmd.spawn().map_err(SandboxError::Io)?;
 
@@ -143,9 +155,12 @@ impl Sandbox for LocalSandbox {
         .map_err(|e| SandboxError::Io(std::io::Error::other(e.to_string())))?
     }
 
-    async fn read_file(&self, path: &Path, offset: Option<u64>, limit: Option<u64>)
-        -> SandboxResult<Vec<u8>>
-    {
+    async fn read_file(
+        &self,
+        path: &Path,
+        offset: Option<u64>,
+        limit: Option<u64>,
+    ) -> SandboxResult<Vec<u8>> {
         let content = std::fs::read(path).map_err(SandboxError::Io)?;
         let start = offset.unwrap_or(0) as usize;
         let end = limit.map(|l| start + l as usize).unwrap_or(content.len());
@@ -170,12 +185,20 @@ impl Sandbox for LocalSandbox {
             .filter_map(|e| e.ok())
             .map(|e| {
                 let name = e.file_name().to_string_lossy().to_string();
-                let file_type = e.file_type().map(|ft| {
-                    if ft.is_dir() { FileType::Directory }
-                    else if ft.is_file() { FileType::File }
-                    else if ft.is_symlink() { FileType::Symlink }
-                    else { FileType::Other }
-                }).unwrap_or(FileType::Other);
+                let file_type = e
+                    .file_type()
+                    .map(|ft| {
+                        if ft.is_dir() {
+                            FileType::Directory
+                        } else if ft.is_file() {
+                            FileType::File
+                        } else if ft.is_symlink() {
+                            FileType::Symlink
+                        } else {
+                            FileType::Other
+                        }
+                    })
+                    .unwrap_or(FileType::Other);
                 DirEntry { name, file_type }
             })
             .collect();
@@ -184,15 +207,21 @@ impl Sandbox for LocalSandbox {
 
     async fn metadata(&self, path: &Path) -> SandboxResult<FileMetadata> {
         let meta = std::fs::metadata(path).map_err(SandboxError::Io)?;
-        let mtime = meta.modified()
+        let mtime = meta
+            .modified()
             .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
-        let file_type = if meta.is_dir() { FileType::Directory }
-            else if meta.is_file() { FileType::File }
-            else if meta.is_symlink() { FileType::Symlink }
-            else { FileType::Other };
+        let file_type = if meta.is_dir() {
+            FileType::Directory
+        } else if meta.is_file() {
+            FileType::File
+        } else if meta.is_symlink() {
+            FileType::Symlink
+        } else {
+            FileType::Other
+        };
         Ok(FileMetadata {
             size: meta.len(),
             mtime,

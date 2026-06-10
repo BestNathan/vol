@@ -3,17 +3,17 @@
 //! Uses SSH channel multiplexing for concurrent command execution
 //! and SFTP for file I/O. Maintains an idle-timeout connection.
 
+use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
-use async_trait::async_trait;
 use tracing::{debug, info};
 
 use crate::registry::SshConfig;
-use std::io::{Read, Seek, Write};
 use crate::{
     CommandOutput, DirEntry, FileMetadata, FileType, Sandbox, SandboxError, SandboxResult,
 };
+use std::io::{Read, Seek, Write};
 
 pub mod session;
 
@@ -256,11 +256,7 @@ impl Sandbox for SSHSandbox {
                 Err(_) => {
                     // Directory may already exist — verify by stat-ing
                     sftp.stat(&current).map_err(|e| {
-                        SandboxError::Ssh(format!(
-                            "mkdir {}: {}",
-                            current.display(),
-                            e
-                        ))
+                        SandboxError::Ssh(format!("mkdir {}: {}", current.display(), e))
                     })?;
                 }
             }
@@ -322,4 +318,3 @@ impl Sandbox for SSHSandbox {
         })
     }
 }
-

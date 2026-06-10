@@ -5,7 +5,8 @@ use std::path::Path;
 /// Scan a directory and build a WorkspaceTreeNode tree.
 pub fn scan_workspace(root: &str) -> WorkspaceTreeNode {
     let path = Path::new(root);
-    let name = path.file_name()
+    let name = path
+        .file_name()
         .unwrap_or(std::ffi::OsStr::new(root))
         .to_string_lossy()
         .to_string();
@@ -18,7 +19,14 @@ pub fn scan_workspace(root: &str) -> WorkspaceTreeNode {
 }
 
 fn scan_dir(base: &Path, dir: &Path, dir_name: &str) -> WorkspaceTreeNode {
-    let ignored = [".git", "node_modules", "target", ".cargo", "__pycache__", ".venv"];
+    let ignored = [
+        ".git",
+        "node_modules",
+        "target",
+        ".cargo",
+        "__pycache__",
+        ".venv",
+    ];
     let rel = dir.strip_prefix(base).unwrap_or(dir);
     let path_str = rel.to_string_lossy().to_string();
 
@@ -51,7 +59,9 @@ fn scan_dir(base: &Path, dir: &Path, dir_name: &str) -> WorkspaceTreeNode {
     });
 
     for entry in entries {
-        let Ok(file_type) = entry.file_type() else { continue };
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
         let name = entry.file_name().to_string_lossy().to_string();
 
         if file_type.is_dir() {

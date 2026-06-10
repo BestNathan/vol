@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use axum::Router;
 use axum::extract::ws::{WebSocket, WebSocketUpgrade};
 use axum::routing::get;
+use axum::Router;
 
 use crate::server_core::AgentServerCore;
 
@@ -25,14 +25,13 @@ impl JsonRpcServer {
     pub fn into_axum_router(self) -> Router {
         let server = Arc::new(self);
 
-        Router::new()
-            .route(
-                "/ws",
-                get(move |ws: WebSocketUpgrade| {
-                    let server = server.clone();
-                    async move { ws.on_upgrade(move |socket| handle_ws(socket, server)) }
-                }),
-            )
+        Router::new().route(
+            "/ws",
+            get(move |ws: WebSocketUpgrade| {
+                let server = server.clone();
+                async move { ws.on_upgrade(move |socket| handle_ws(socket, server)) }
+            }),
+        )
     }
 }
 

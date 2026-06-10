@@ -30,10 +30,7 @@ pub(crate) enum ParsedCommand {
         json: bool,
     },
     /// `task get --id <ID>`
-    Get {
-        id: u64,
-        json: bool,
-    },
+    Get { id: u64, json: bool },
     /// `task list [--status S] [--assignee A]`
     List {
         status: Option<String>,
@@ -41,10 +38,7 @@ pub(crate) enum ParsedCommand {
         json: bool,
     },
     /// `task stop --id <ID>`
-    Stop {
-        id: u64,
-        json: bool,
-    },
+    Stop { id: u64, json: bool },
     /// `task output --id <ID> [--block] [--timeout <MS>]`
     Output {
         id: u64,
@@ -53,14 +47,9 @@ pub(crate) enum ParsedCommand {
         json: bool,
     },
     /// `task claim [--id <ID>]`
-    Claim {
-        id: Option<u64>,
-        json: bool,
-    },
+    Claim { id: Option<u64>, json: bool },
     /// `task scheme [<subcommand>]`
-    Scheme {
-        subcommand: Option<String>,
-    },
+    Scheme { subcommand: Option<String> },
     /// `task +task --name <NAME> [--desc D] [--assignee A]`
     QuickCreate {
         name: String,
@@ -69,12 +58,7 @@ pub(crate) enum ParsedCommand {
         json: bool,
     },
     /// `task +done --id <ID>`
-    QuickDone {
-        id: u64,
-        json: bool,
-    },
+    QuickDone { id: u64, json: bool },
     /// `task +claim`
-    QuickClaim {
-        json: bool,
-    },
+    QuickClaim { json: bool },
 }

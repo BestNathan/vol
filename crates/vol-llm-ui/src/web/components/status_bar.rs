@@ -18,7 +18,9 @@ pub fn StatusBar() -> Element {
     let gs = g.read();
 
     let elapsed = if gs.is_running() {
-        gs.run_start.map(|s: web_time::Instant| s.elapsed()).unwrap_or_default()
+        gs.run_start
+            .map(|s: web_time::Instant| s.elapsed())
+            .unwrap_or_default()
     } else {
         gs.run_elapsed
     };
@@ -99,7 +101,13 @@ pub fn StatusBar() -> Element {
 }
 
 #[component]
-fn ConnectionIndicator(connected: bool, error: Option<String>, reconnecting: bool, reconnect_delay: u32, reconnect_maxed: bool) -> Element {
+fn ConnectionIndicator(
+    connected: bool,
+    error: Option<String>,
+    reconnecting: bool,
+    reconnect_delay: u32,
+    reconnect_maxed: bool,
+) -> Element {
     if reconnect_maxed {
         rsx! {
             span { class: "flex items-center gap-1 mr-1", title: "Connection lost. Please refresh.",

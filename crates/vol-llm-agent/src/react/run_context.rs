@@ -2,7 +2,6 @@
 //!
 //! Encapsulates all state and resources for a single `run()` invocation.
 
-use vol_session::{Session, SessionMessage};
 use super::plugin::PluginDecision;
 use super::state::{ReasoningStep, ToolCallRecord};
 use super::stream::AgentStreamEvent;
@@ -14,8 +13,8 @@ use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use vol_llm_core::Message;
 use vol_llm_core::ToolCall;
 use vol_llm_tool::ToolRegistry;
+use vol_session::{Session, SessionMessage};
 use vol_tracing::TracedEvent;
-
 
 /// Request type for plugin event bus communication
 pub enum PluginRequest {
@@ -27,7 +26,6 @@ pub enum PluginRequest {
         event: TracedEvent<AgentStreamEvent>,
     },
 }
-
 
 /// RunContext encapsulates all state and resources for a single run() invocation.
 ///
@@ -95,7 +93,6 @@ pub struct RunContext {
     /// avoid keeping shutdown channels alive.
     pub plugin_event_tx: Option<Arc<mpsc::Sender<PluginRequest>>>,
 
-
     // Internal state collection
     pub(crate) reasoning_chain: Arc<RwLock<Vec<ReasoningStep>>>,
     pub(crate) tool_call_records: Arc<RwLock<Vec<ToolCallRecord>>>,
@@ -127,7 +124,11 @@ impl RunContext {
             run_id,
             user_input,
             session_id: session.id.clone(),
-            model: if config.llm.model().is_empty() { "unknown".to_string() } else { config.llm.model().to_string() },
+            model: if config.llm.model().is_empty() {
+                "unknown".to_string()
+            } else {
+                config.llm.model().to_string()
+            },
             iteration: AtomicU32::new(0),
             all_tool_calls: Arc::new(RwLock::new(Vec::new())),
             current_tool_calls: Arc::new(RwLock::new(Vec::new())),
@@ -165,14 +166,18 @@ impl RunContext {
 
     /// Get max iterations from AgentDef, defaulting to 5.
     pub fn max_iterations(&self) -> u32 {
-        self.config.def.as_ref()
+        self.config
+            .def
+            .as_ref()
             .and_then(|d| d.max_iterations)
             .unwrap_or(5)
     }
 
     /// Get max history messages from AgentDef, defaulting to 20.
     pub fn max_history_messages(&self) -> usize {
-        self.config.def.as_ref()
+        self.config
+            .def
+            .as_ref()
             .and_then(|d| d.max_history_messages)
             .unwrap_or(20)
     }
@@ -205,9 +210,10 @@ impl RunContext {
     /// so we clone the builder and build directly.
     pub async fn get_context(&self) -> Result<Vec<Message>, crate::AgentError> {
         let cb = self.config.context_builder.read().unwrap().clone();
-        let output = cb.build().await.map_err(|e| {
-            crate::AgentError::Context(format!("Failed to build context: {}", e))
-        })?;
+        let output = cb
+            .build()
+            .await
+            .map_err(|e| crate::AgentError::Context(format!("Failed to build context: {}", e)))?;
         Ok(output.messages)
     }
 
@@ -295,9 +301,13 @@ impl RunContext {
     /// disallowed tools. If no def is present, returns the full registry.
     fn effective_registry(&self) -> Arc<ToolRegistry> {
         if let Some(def) = &self.config.def {
-            let allowed: Option<Vec<&str>> = def.tools.as_ref()
+            let allowed: Option<Vec<&str>> = def
+                .tools
+                .as_ref()
                 .map(|t| t.iter().map(|s| s.as_str()).collect());
-            let disallowed: Option<Vec<&str>> = def.disallowed_tools.as_ref()
+            let disallowed: Option<Vec<&str>> = def
+                .disallowed_tools
+                .as_ref()
                 .map(|t| t.iter().map(|s| s.as_str()).collect());
             ToolRegistry::filter(&self.tools, allowed.as_deref(), disallowed.as_deref())
         } else {
@@ -453,8 +463,8 @@ impl Clone for RunContext {
 mod tests {
     use super::*;
     use vol_llm_context::{AttentionAnchor, ContextBuilderBuilder};
-    use vol_session::{InMemoryEntryStore, SessionMessage};
     use vol_llm_core::{MessageContent, MessageRole};
+    use vol_session::{InMemoryEntryStore, SessionMessage};
 
     fn create_test_context() -> RunContext {
         let (ctx, _rx) = RunContext::new(
@@ -557,11 +567,7 @@ mod tests {
             ..Default::default()
         });
 
-        let (ctx, _rx) = RunContext::new(
-            "test-run".to_string(),
-            "test input".to_string(),
-            config,
-        );
+        let (ctx, _rx) = RunContext::new("test-run".to_string(), "test input".to_string(), config);
 
         let messages = ctx.get_context().await.unwrap();
 
@@ -581,15 +587,11 @@ mod tests {
         use vol_llm_context::builtin::SimpleContributor;
         use vol_session::SessionContributor;
 
-        let session = Arc::new(Session::new(
-            Arc::new(InMemoryEntryStore::new()),
-        ));
+        let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
 
         // Add a historical message to session
-        let history_msg = SessionMessage::new(
-            session.id.clone(),
-            Message::user("Previous conversation"),
-        );
+        let history_msg =
+            SessionMessage::new(session.id.clone(), Message::user("Previous conversation"));
         session.add_message(history_msg).await.unwrap();
 
         // Build context_builder with SessionContributor after session has messages
@@ -608,11 +610,7 @@ mod tests {
             ..Default::default()
         });
 
-        let (ctx, _rx) = RunContext::new(
-            "test-run".to_string(),
-            "new input".to_string(),
-            config,
-        );
+        let (ctx, _rx) = RunContext::new("test-run".to_string(), "new input".to_string(), config);
 
         let messages = ctx.get_context().await.unwrap();
 
@@ -632,9 +630,7 @@ mod tests {
         use vol_llm_context::builtin::SimpleContributor;
         use vol_session::SessionContributor;
 
-        let session = Arc::new(Session::new(
-            Arc::new(InMemoryEntryStore::new()),
-        ));
+        let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
 
         // Build context_builder with SessionContributor (session is empty for now)
         let context_builder = ContextBuilderBuilder::new(128_000)
@@ -659,7 +655,9 @@ mod tests {
         );
 
         // Persist user message to session (simulating what agent.rs does at run start)
-        ctx.add_message(Message::user("analyze market volatility")).await.unwrap();
+        ctx.add_message(Message::user("analyze market volatility"))
+            .await
+            .unwrap();
 
         // get_context should now pick up the user message from the session
         let messages = ctx.get_context().await.unwrap();
@@ -681,9 +679,7 @@ mod tests {
         use vol_llm_context::builtin::SimpleContributor;
         use vol_session::SessionContributor;
 
-        let session = Arc::new(Session::new(
-            Arc::new(InMemoryEntryStore::new()),
-        ));
+        let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
 
         // Add a historical message
         let history_msg = SessionMessage::new(session.id.clone(), Message::user("History"));
@@ -705,11 +701,7 @@ mod tests {
             ..Default::default()
         });
 
-        let (ctx, _rx) = RunContext::new(
-            "test-run".to_string(),
-            "input".to_string(),
-            config,
-        );
+        let (ctx, _rx) = RunContext::new("test-run".to_string(), "input".to_string(), config);
 
         // Call get_context multiple times - each builds fresh
         let messages_first = ctx.get_context().await.unwrap();
@@ -814,7 +806,10 @@ mod tests {
         assert_eq!(session_msgs.len(), 2);
         assert!(session_msgs[0].parent_id.is_none()); // first message, no parent
         assert!(session_msgs[1].parent_id.is_some()); // second message has parent
-        assert_eq!(session_msgs[1].parent_id.as_ref().unwrap(), &session_msgs[0].id);
+        assert_eq!(
+            session_msgs[1].parent_id.as_ref().unwrap(),
+            &session_msgs[0].id
+        );
     }
 
     #[tokio::test]

@@ -9,10 +9,10 @@ pub mod backend;
 pub mod cli;
 pub mod lib_impl;
 
-use async_trait::async_trait;
 use crate::backend::GrepBackend;
 use crate::cli::RgCliBackend;
 use crate::lib_impl::RustLibBackend;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
@@ -126,18 +126,38 @@ impl ExecutableTool for GrepTool {
         let search_root = PathBuf::from(params.path.clone().unwrap_or_else(|| ".".to_string()));
 
         // Try rg via sandbox first, fall back to Rust library
-        let results = match tokio::time::timeout(Duration::from_secs(SEARCH_TIMEOUT_SECS), RgCliBackend::search(&params, &search_root, &*context.sandbox)).await {
+        let results = match tokio::time::timeout(
+            Duration::from_secs(SEARCH_TIMEOUT_SECS),
+            RgCliBackend::search(&params, &search_root, &*context.sandbox),
+        )
+        .await
+        {
             Ok(Ok(results)) => results,
-            Ok(Err(_rg_err)) => {
-                tokio::time::timeout(Duration::from_secs(SEARCH_TIMEOUT_SECS), RustLibBackend::search(&params, &search_root, &*context.sandbox)).await
-                    .map_err(|_| ToolError::ExecutionFailed("Search timed out after 30 seconds. Try a narrower path or glob.".to_string()))?
-                    .map_err(ToolError::ExecutionFailed)?
-            }
+            Ok(Err(_rg_err)) => tokio::time::timeout(
+                Duration::from_secs(SEARCH_TIMEOUT_SECS),
+                RustLibBackend::search(&params, &search_root, &*context.sandbox),
+            )
+            .await
+            .map_err(|_| {
+                ToolError::ExecutionFailed(
+                    "Search timed out after 30 seconds. Try a narrower path or glob.".to_string(),
+                )
+            })?
+            .map_err(ToolError::ExecutionFailed)?,
             Err(_) => {
                 // rg timed out or was unavailable, use library fallback
-                tokio::time::timeout(Duration::from_secs(SEARCH_TIMEOUT_SECS), RustLibBackend::search(&params, &search_root, &*context.sandbox)).await
-                    .map_err(|_| ToolError::ExecutionFailed("Search timed out after 30 seconds. Try a narrower path or glob.".to_string()))?
-                    .map_err(ToolError::ExecutionFailed)?
+                tokio::time::timeout(
+                    Duration::from_secs(SEARCH_TIMEOUT_SECS),
+                    RustLibBackend::search(&params, &search_root, &*context.sandbox),
+                )
+                .await
+                .map_err(|_| {
+                    ToolError::ExecutionFailed(
+                        "Search timed out after 30 seconds. Try a narrower path or glob."
+                            .to_string(),
+                    )
+                })?
+                .map_err(ToolError::ExecutionFailed)?
             }
         };
 

@@ -3,9 +3,9 @@
 use super::plugin::{AgentPlugin, PluginDecision};
 use super::run_context::{PluginRequest, RunContext};
 use super::{AgentError, AgentResponse, AgentStreamEvent, AgentStreamReceiver};
+use futures::FutureExt;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use futures::FutureExt;
 
 /// Spawn one listener task per plugin, each subscribing to the event broadcast
 /// channel and processing events sequentially.

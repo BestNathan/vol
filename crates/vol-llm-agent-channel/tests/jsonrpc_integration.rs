@@ -38,10 +38,7 @@ fn test_jsonrpc_event_format_structure() {
     );
 
     let result = &params["result"];
-    assert_eq!(
-        result["req_id"], "req-abc-123",
-        "result must have req_id"
-    );
+    assert_eq!(result["req_id"], "req-abc-123", "result must have req_id");
     assert_eq!(
         result["event_type"], "agent_start",
         "result must have event_type"
@@ -67,14 +64,16 @@ fn test_serialize_agent_complete() {
     let event = AgentStreamEvent::agent_complete();
     let (event_type, data) = serialize_agent_event(&event);
     assert_eq!(event_type, "agent_complete");
-    assert!(data["response"].is_null(), "response should be null when None");
+    assert!(
+        data["response"].is_null(),
+        "response should be null when None"
+    );
 }
 
 #[test]
 fn test_serialize_agent_complete_with_response() {
-    let event = AgentStreamEvent::agent_complete_with_response(
-        serde_json::json!({ "answer": "42" }),
-    );
+    let event =
+        AgentStreamEvent::agent_complete_with_response(serde_json::json!({ "answer": "42" }));
     let (event_type, data) = serialize_agent_event(&event);
     assert_eq!(event_type, "agent_complete");
     assert_eq!(data["response"]["answer"], "42");
@@ -231,11 +230,7 @@ fn test_serialize_iteration_continued() {
 
 #[test]
 fn test_serialize_iteration_complete() {
-    let event = AgentStreamEvent::iteration_complete(
-        2,
-        vec![],
-        Some("done".to_string()),
-    );
+    let event = AgentStreamEvent::iteration_complete(2, vec![], Some("done".to_string()));
     let (event_type, data) = serialize_agent_event(&event);
     assert_eq!(event_type, "iteration_complete");
     assert_eq!(data["iteration"], 2);
@@ -258,10 +253,7 @@ fn test_serialize_llm_call_complete() {
         total_tokens: 150,
         cached_tokens: None,
     };
-    let event = AgentStreamEvent::llm_call_complete(
-        "gpt-4".to_string(),
-        Some(usage),
-    );
+    let event = AgentStreamEvent::llm_call_complete("gpt-4".to_string(), Some(usage));
     let (event_type, data) = serialize_agent_event(&event);
     assert_eq!(event_type, "llm_call_complete");
     assert_eq!(data["model"], "gpt-4");

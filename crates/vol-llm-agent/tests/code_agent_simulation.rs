@@ -263,11 +263,7 @@ async fn test_code_agent_market_data_query() {
             100
         }
 
-        async fn intercept(
-            &self,
-            _event: &AgentStreamEvent,
-            _ctx: &RunContext,
-        ) -> PluginDecision {
+        async fn intercept(&self, _event: &AgentStreamEvent, _ctx: &RunContext) -> PluginDecision {
             PluginDecision::Continue
         }
 

@@ -45,7 +45,7 @@ impl ToolResult {
 #[derive(Clone)]
 pub struct ToolContext {
     pub messages: Vec<Message>,
-    pub sandbox: SandboxRef,                               // Always set
+    pub sandbox: SandboxRef, // Always set
     pub agent_def: Option<vol_llm_core::AgentDef>,
 }
 
@@ -63,7 +63,10 @@ impl std::fmt::Debug for ToolContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ToolContext")
             .field("messages", &self.messages)
-            .field("sandbox", &format_args!("{}:{}", self.sandbox.kind(), self.sandbox.name()))
+            .field(
+                "sandbox",
+                &format_args!("{}:{}", self.sandbox.kind(), self.sandbox.name()),
+            )
             .field("agent_def", &self.agent_def)
             .finish()
     }
@@ -83,8 +86,13 @@ impl ToolContext {
     }
 
     /// Resolve a path through the sandbox.
-    pub fn resolve_path(&self, rel: &str) -> std::result::Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
-        self.sandbox.resolve_path(rel).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    pub fn resolve_path(
+        &self,
+        rel: &str,
+    ) -> std::result::Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+        self.sandbox
+            .resolve_path(rel)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
 }
 

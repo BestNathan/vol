@@ -91,9 +91,7 @@ impl SshSession {
         let cmd_line = if req.args.is_empty() {
             req.program.clone()
         } else {
-            let quoted_args: Vec<String> = req.args.iter()
-                .map(|a| shell_quote(a))
-                .collect();
+            let quoted_args: Vec<String> = req.args.iter().map(|a| shell_quote(a)).collect();
             format!("{} {}", req.program, quoted_args.join(" "))
         };
 
@@ -103,10 +101,12 @@ impl SshSession {
 
         // Write stdin if provided
         if let Some(ref stdin_data) = req.stdin {
-            channel.write_all(stdin_data)
+            channel
+                .write_all(stdin_data)
                 .map_err(|e| SandboxError::Ssh(format!("stdin write failed: {}", e)))?;
         }
-        channel.send_eof()
+        channel
+            .send_eof()
             .map_err(|e| SandboxError::Ssh(format!("send_eof failed: {}", e)))?;
 
         let mut stdout = Vec::new();
@@ -153,8 +153,7 @@ impl SshSession {
 
         tcp.set_read_timeout(Some(Duration::from_secs(30))).ok();
 
-        let mut sess = ssh2::Session::new()
-            .map_err(|e| SandboxError::Ssh(e.to_string()))?;
+        let mut sess = ssh2::Session::new().map_err(|e| SandboxError::Ssh(e.to_string()))?;
         sess.set_tcp_stream(
             tcp.try_clone()
                 .map_err(|e| SandboxError::Ssh(e.to_string()))?,
@@ -199,10 +198,7 @@ fn verify_host_key(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxRe
             .known_hosts()
             .map_err(|e| SandboxError::Ssh(e.to_string()))?;
         known
-            .read_file(
-                Path::new(&known_hosts),
-                ssh2::KnownHostFileKind::OpenSSH,
-            )
+            .read_file(Path::new(&known_hosts), ssh2::KnownHostFileKind::OpenSSH)
             .map_err(|e| SandboxError::Ssh(format!("failed to read known_hosts: {}", e)))?;
         let key = known.check(&config.host, remote_key.0);
         match key {
@@ -285,7 +281,34 @@ fn shell_quote(s: &str) -> String {
         return "''".to_string();
     }
     // If no special chars, return as-is
-    if !s.chars().any(|c| matches!(c, ' ' | '\t' | '\n' | '"' | '\'' | '\\' | '$' | '`' | '!' | '*' | '?' | '[' | ']' | '{' | '}' | '|' | '&' | ';' | '<' | '>' | '(' | ')' | '#' | '~')) {
+    if !s.chars().any(|c| {
+        matches!(
+            c,
+            ' ' | '\t'
+                | '\n'
+                | '"'
+                | '\''
+                | '\\'
+                | '$'
+                | '`'
+                | '!'
+                | '*'
+                | '?'
+                | '['
+                | ']'
+                | '{'
+                | '}'
+                | '|'
+                | '&'
+                | ';'
+                | '<'
+                | '>'
+                | '('
+                | ')'
+                | '#'
+                | '~'
+        )
+    }) {
         return s.to_string();
     }
     // Wrap in single quotes, escape embedded single quotes: ' -> '\''

@@ -134,8 +134,7 @@ async fn flush_to_loki(
     let loki_streams: Vec<LokiStream> = streams
         .into_iter()
         .map(|(sorted_labels, values)| {
-            let stream: HashMap<String, String> =
-                sorted_labels.into_iter().collect();
+            let stream: HashMap<String, String> = sorted_labels.into_iter().collect();
             LokiStream { stream, values }
         })
         .collect();
@@ -168,13 +167,21 @@ async fn flush_to_loki(
             }
         }
         if attempt < max_attempts {
-            tracing::warn!("loki flush failed (attempt {}), retrying: {}", attempt, last_err.as_ref().unwrap());
+            tracing::warn!(
+                "loki flush failed (attempt {}), retrying: {}",
+                attempt,
+                last_err.as_ref().unwrap()
+            );
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
 
     // All attempts exhausted.
-    tracing::error!("loki flush failed after {} attempts: {}", max_attempts, last_err.as_ref().unwrap());
+    tracing::error!(
+        "loki flush failed after {} attempts: {}",
+        max_attempts,
+        last_err.as_ref().unwrap()
+    );
     health.last_flush_ok.store(false, Ordering::SeqCst);
 }
 
@@ -204,9 +211,7 @@ mod tests {
             },
             LokiStream {
                 stream: labels_b,
-                values: vec![
-                    ["1714370002000000000".to_string(), "line three".to_string()],
-                ],
+                values: vec![["1714370002000000000".to_string(), "line three".to_string()]],
             },
         ];
 

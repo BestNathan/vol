@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use vol_llm_core::Message;
 
-use crate::{AttentionAnchor, ContextBlock, ContextContributor, ContextError, estimate_tokens};
+use crate::{estimate_tokens, AttentionAnchor, ContextBlock, ContextContributor, ContextError};
 
 /// User input contributor — wraps the user's query as a Tail-anchored message.
 pub struct UserInputContributor {
@@ -53,7 +53,12 @@ mod tests {
         let blocks = contributor.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
         assert!(matches!(blocks[0].anchor, AttentionAnchor::Tail(0)));
-        assert!(blocks[0].messages[0].content.as_ref().unwrap().as_str().contains("fix the bug"));
+        assert!(blocks[0].messages[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("fix the bug"));
     }
 
     #[tokio::test]
@@ -62,6 +67,11 @@ mod tests {
         let cloned = contributor.clone_box();
         let blocks = cloned.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
-        assert!(blocks[0].messages[0].content.as_ref().unwrap().as_str().contains("hello"));
+        assert!(blocks[0].messages[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("hello"));
     }
 }

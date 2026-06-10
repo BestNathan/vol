@@ -3,13 +3,13 @@
 //! Loads a task from coding_task.txt, configures web fetch proxy for Deribit docs access,
 //! runs the coding agent, and verifies session/run logs after completion.
 
-use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, HTMLReporter};
-use vol_llm_tool::{ToolConfig, ProxyConfig};
-use vol_llm_tools_builtin::WebFetchConfig;
-use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
-use vol_llm_core::LLMProvider;
 use std::path::PathBuf;
 use std::sync::Arc;
+use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, HTMLReporter};
+use vol_llm_core::LLMProvider;
+use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
+use vol_llm_tool::{ProxyConfig, ToolConfig};
+use vol_llm_tools_builtin::WebFetchConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -58,7 +58,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let registry = LLMProviderRegistry::from_configs(&[llm_config])
         .expect("Failed to create LLM provider registry");
-    let llm = registry.get("anthropic-main")
+    let llm = registry
+        .get("anthropic-main")
         .expect("LLM provider 'anthropic-main' not found")
         .clone();
 
@@ -89,7 +90,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\n=== Task Completed ===");
     println!("Success: {}", result.success);
-    println!("Iterations: {}, Tool calls: {}", result.iterations, result.tool_calls);
+    println!(
+        "Iterations: {}, Tool calls: {}",
+        result.iterations, result.tool_calls
+    );
     println!("HTML Report: {:?}", report_path);
 
     // Verify session and run logs
@@ -113,7 +117,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Show last 3 events
                         for line in lines.iter().rev().take(3).rev() {
                             if let Ok(event) = serde_json::from_str::<serde_json::Value>(line) {
-                                let event_type = event.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
+                                let event_type = event
+                                    .get("type")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("unknown");
                                 println!("    Last event: type={}", event_type);
                             }
                         }
@@ -140,7 +147,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("    Lines: {}", total);
                         for line in lines.iter().rev().take(3).rev() {
                             if let Ok(event) = serde_json::from_str::<serde_json::Value>(line) {
-                                let event_type = event.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
+                                let event_type = event
+                                    .get("type")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("unknown");
                                 println!("    Last event: type={}", event_type);
                             }
                         }

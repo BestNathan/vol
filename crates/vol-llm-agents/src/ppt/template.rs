@@ -1,9 +1,9 @@
 //! PPT Agent 模板系统。
 
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 
 /// PPT 模板定义
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -85,12 +85,22 @@ impl TemplateRegistry {
                 let keyword_lower = keyword.to_lowercase();
 
                 // Check occasion tags
-                if template.tags.occasion.iter().any(|t| t.to_lowercase().contains(&keyword_lower)) {
+                if template
+                    .tags
+                    .occasion
+                    .iter()
+                    .any(|t| t.to_lowercase().contains(&keyword_lower))
+                {
                     return Some(template);
                 }
 
                 // Check style tags
-                if template.tags.style.iter().any(|t| t.to_lowercase().contains(&keyword_lower)) {
+                if template
+                    .tags
+                    .style
+                    .iter()
+                    .any(|t| t.to_lowercase().contains(&keyword_lower))
+                {
                     return Some(template);
                 }
             }

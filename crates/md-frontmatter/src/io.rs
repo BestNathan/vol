@@ -3,13 +3,11 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 use crate::error::MdFmError;
-use crate::parser::{ParsedDoc, parse, to_string};
+use crate::parser::{parse, to_string, ParsedDoc};
 use crate::Result;
 
 /// Read a file and parse its frontmatter.
-pub async fn from_path<T: DeserializeOwned>(
-    path: impl AsRef<Path>,
-) -> Result<ParsedDoc<T>> {
+pub async fn from_path<T: DeserializeOwned>(path: impl AsRef<Path>) -> Result<ParsedDoc<T>> {
     let path = path.as_ref().to_path_buf();
     let content = tokio::fs::read_to_string(&path).await?;
 
@@ -24,9 +22,12 @@ pub async fn from_path<T: DeserializeOwned>(
 
 /// Write a ParsedDoc back to its file.
 pub async fn write<T: Serialize>(doc: &ParsedDoc<T>) -> Result<()> {
-    let path = doc.path.as_ref().ok_or_else(|| MdFmError::Io(
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, "no path set on ParsedDoc")
-    ))?;
+    let path = doc.path.as_ref().ok_or_else(|| {
+        MdFmError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "no path set on ParsedDoc",
+        ))
+    })?;
     let content = to_string(doc)?;
     tokio::fs::write(path, content).await.map_err(MdFmError::Io)
 }
@@ -45,9 +46,9 @@ pub async fn scan_dir<T: DeserializeOwned + Clone>(
     let pattern = root.join("**/*.md");
     let pattern_str = pattern.to_string_lossy().to_string();
 
-    for entry in glob::glob(&pattern_str).map_err(|e| {
-        vec![(root.clone(), std::io::Error::other(e.to_string()).into())]
-    })? {
+    for entry in glob::glob(&pattern_str)
+        .map_err(|e| vec![(root.clone(), std::io::Error::other(e.to_string()).into())])?
+    {
         let path = match entry {
             Ok(p) => p,
             Err(e) => {
@@ -110,7 +111,9 @@ mod tests {
     async fn test_from_path_non_utf8() {
         let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("binary.md");
-        tokio::fs::write(&file_path, &[0x80, 0x81, 0x82]).await.unwrap();
+        tokio::fs::write(&file_path, &[0x80, 0x81, 0x82])
+            .await
+            .unwrap();
 
         let result = from_path::<TestFm>(&file_path).await;
         // tokio::fs::read_to_string returns Io error for non-UTF8
@@ -157,10 +160,13 @@ mod tests {
         tokio::fs::write(&file_path, &original).await.unwrap();
 
         let mut doc = from_path::<TestFm>(&file_path).await.unwrap();
-        update_frontmatter(&mut doc, &TestFm {
-            title: "Updated".to_string(),
-            tags: vec![],
-        });
+        update_frontmatter(
+            &mut doc,
+            &TestFm {
+                title: "Updated".to_string(),
+                tags: vec![],
+            },
+        );
         write(&doc).await.unwrap();
 
         let final_content = tokio::fs::read_to_string(&file_path).await.unwrap();
@@ -178,9 +184,15 @@ mod tests {
     #[tokio::test]
     async fn test_scan_dir_with_files() {
         let dir = tempfile::tempdir().unwrap();
-        tokio::fs::write(dir.path().join("a.md"), "---\ntitle: A\n---\nbody a").await.unwrap();
-        tokio::fs::write(dir.path().join("b.md"), "---\ntitle: B\n---\nbody b").await.unwrap();
-        tokio::fs::write(dir.path().join("c.txt"), "not markdown").await.unwrap();
+        tokio::fs::write(dir.path().join("a.md"), "---\ntitle: A\n---\nbody a")
+            .await
+            .unwrap();
+        tokio::fs::write(dir.path().join("b.md"), "---\ntitle: B\n---\nbody b")
+            .await
+            .unwrap();
+        tokio::fs::write(dir.path().join("c.txt"), "not markdown")
+            .await
+            .unwrap();
 
         let docs = scan_dir::<TestFm>(dir.path()).await.unwrap();
         assert_eq!(docs.len(), 2);
@@ -189,14 +201,20 @@ mod tests {
         assert!(titles.contains(&"A".to_string()));
         assert!(titles.contains(&"B".to_string()));
 
-        assert!(!docs.iter().any(|d| d.path.as_ref().unwrap().to_string_lossy().ends_with(".txt")));
+        assert!(!docs
+            .iter()
+            .any(|d| d.path.as_ref().unwrap().to_string_lossy().ends_with(".txt")));
     }
 
     #[tokio::test]
     async fn test_scan_dir_with_errors() {
         let dir = tempfile::tempdir().unwrap();
-        tokio::fs::write(dir.path().join("good.md"), "---\ntitle: Good\n---\nbody").await.unwrap();
-        tokio::fs::write(dir.path().join("bad.md"), "# No frontmatter").await.unwrap();
+        tokio::fs::write(dir.path().join("good.md"), "---\ntitle: Good\n---\nbody")
+            .await
+            .unwrap();
+        tokio::fs::write(dir.path().join("bad.md"), "# No frontmatter")
+            .await
+            .unwrap();
 
         let result = scan_dir::<TestFm>(dir.path()).await;
         assert!(result.is_err());
@@ -208,9 +226,18 @@ mod tests {
     #[tokio::test]
     async fn test_scan_dir_nested() {
         let dir = tempfile::tempdir().unwrap();
-        tokio::fs::create_dir_all(dir.path().join("sub")).await.unwrap();
-        tokio::fs::write(dir.path().join("root.md"), "---\ntitle: Root\n---\nbody").await.unwrap();
-        tokio::fs::write(dir.path().join("sub/nested.md"), "---\ntitle: Nested\n---\nbody").await.unwrap();
+        tokio::fs::create_dir_all(dir.path().join("sub"))
+            .await
+            .unwrap();
+        tokio::fs::write(dir.path().join("root.md"), "---\ntitle: Root\n---\nbody")
+            .await
+            .unwrap();
+        tokio::fs::write(
+            dir.path().join("sub/nested.md"),
+            "---\ntitle: Nested\n---\nbody",
+        )
+        .await
+        .unwrap();
 
         let docs = scan_dir::<TestFm>(dir.path()).await.unwrap();
         assert_eq!(docs.len(), 2);

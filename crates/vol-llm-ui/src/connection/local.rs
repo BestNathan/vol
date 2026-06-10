@@ -26,7 +26,11 @@ pub struct LocalConnection {
 }
 
 impl LocalConnection {
-    pub fn new(config: CodingAgentConfig, state: Arc<tokio::sync::RwLock<UiState>>, render_tx: tokio::sync::mpsc::Sender<()>) -> Self {
+    pub fn new(
+        config: CodingAgentConfig,
+        state: Arc<tokio::sync::RwLock<UiState>>,
+        render_tx: tokio::sync::mpsc::Sender<()>,
+    ) -> Self {
         Self {
             agent_config: config,
             state,
@@ -36,7 +40,12 @@ impl LocalConnection {
         }
     }
 
-    async fn run_agent(&self, input: String, tx: mpsc::Sender<UiEvent>, cancelled: Arc<AtomicBool>) {
+    async fn run_agent(
+        &self,
+        input: String,
+        tx: mpsc::Sender<UiEvent>,
+        cancelled: Arc<AtomicBool>,
+    ) {
         let state = self.state.clone();
 
         let observer = Arc::new(LocalEventObserver {
@@ -51,6 +60,7 @@ impl LocalConnection {
             Err(e) => {
                 let _ = tx
                     .send(UiEvent::AgentError {
+                        run_id: String::new(),
                         message: format!("Failed to create agent: {}", e),
                     })
                     .await;
@@ -64,6 +74,7 @@ impl LocalConnection {
                 if !response.summary.is_empty() {
                     let _ = tx
                         .send(UiEvent::AgentComplete {
+                            run_id: String::new(),
                             response: response.summary,
                         })
                         .await;
@@ -74,6 +85,7 @@ impl LocalConnection {
                 if !cancelled.load(Ordering::Relaxed) {
                     let _ = tx
                         .send(UiEvent::AgentError {
+                            run_id: String::new(),
                             message: format!("{}", e),
                         })
                         .await;

@@ -80,8 +80,8 @@ impl WikiLoader {
             let pattern = root.join("**/*.md");
             let pattern_str = pattern.to_string_lossy();
 
-            let entries = glob::glob(&pattern_str)
-                .map_err(|e| format!("Invalid glob pattern: {e}"))?;
+            let entries =
+                glob::glob(&pattern_str).map_err(|e| format!("Invalid glob pattern: {e}"))?;
 
             for entry in entries.flatten() {
                 match md_frontmatter::from_path::<WikiFrontmatter>(&entry).await {
@@ -113,7 +113,12 @@ impl WikiLoader {
 
     /// List page paths (relative paths only).
     pub async fn list_paths(&self) -> Vec<String> {
-        self.pages.read().await.iter().map(|p| p.path.clone()).collect()
+        self.pages
+            .read()
+            .await
+            .iter()
+            .map(|p| p.path.clone())
+            .collect()
     }
 }
 

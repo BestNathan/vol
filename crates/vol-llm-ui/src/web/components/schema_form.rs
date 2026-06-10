@@ -10,7 +10,11 @@ pub fn SchemaForm(schema: serde_json::Value, value: Signal<serde_json::Value>) -
     let required: std::collections::HashSet<String> = schema
         .get("required")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let Some(props) = properties else {
@@ -37,14 +41,35 @@ pub fn SchemaForm(schema: serde_json::Value, value: Signal<serde_json::Value>) -
 
 /// Renders a single form field based on its JSON Schema property definition.
 #[component]
-fn SchemaField(field_key: String, prop_schema: serde_json::Value, value: Signal<serde_json::Value>, required: bool) -> Element {
-    let type_str = prop_schema.get("type").and_then(|t| t.as_str()).unwrap_or("string");
-    let label = prop_schema.get("title").and_then(|t| t.as_str()).map(String::from).unwrap_or_else(|| field_key.clone());
+fn SchemaField(
+    field_key: String,
+    prop_schema: serde_json::Value,
+    value: Signal<serde_json::Value>,
+    required: bool,
+) -> Element {
+    let type_str = prop_schema
+        .get("type")
+        .and_then(|t| t.as_str())
+        .unwrap_or("string");
+    let label = prop_schema
+        .get("title")
+        .and_then(|t| t.as_str())
+        .map(String::from)
+        .unwrap_or_else(|| field_key.clone());
     let desc = prop_schema.get("description").and_then(|t| t.as_str());
 
     match type_str {
-        "string" => render_string_field(field_key.clone(), &label, desc, &prop_schema, value, required),
-        "number" | "integer" => render_number_field(field_key.clone(), &label, desc, type_str, value, required),
+        "string" => render_string_field(
+            field_key.clone(),
+            &label,
+            desc,
+            &prop_schema,
+            value,
+            required,
+        ),
+        "number" | "integer" => {
+            render_number_field(field_key.clone(), &label, desc, type_str, value, required)
+        }
         "boolean" => render_boolean_field(field_key.clone(), &label, desc, value, required),
         "object" => render_object_field(field_key, &label, desc, &prop_schema, value, required),
         _ => rsx! {
@@ -53,9 +78,17 @@ fn SchemaField(field_key: String, prop_schema: serde_json::Value, value: Signal<
     }
 }
 
-fn render_string_field(field_key: String, label: &str, desc: Option<&str>, prop_schema: &serde_json::Value, value: Signal<serde_json::Value>, required: bool) -> Element {
+fn render_string_field(
+    field_key: String,
+    label: &str,
+    desc: Option<&str>,
+    prop_schema: &serde_json::Value,
+    value: Signal<serde_json::Value>,
+    required: bool,
+) -> Element {
     if let Some(enum_vals) = prop_schema.get("enum").and_then(|v| v.as_array()) {
-        let options: Vec<String> = enum_vals.iter()
+        let options: Vec<String> = enum_vals
+            .iter()
             .filter_map(|v| v.as_str().map(String::from))
             .collect();
         let sel_val = value.read()[&field_key].as_str().unwrap_or("").to_string();
@@ -104,8 +137,16 @@ fn render_string_field(field_key: String, label: &str, desc: Option<&str>, prop_
     }
 }
 
-fn render_number_field(field_key: String, label: &str, desc: Option<&str>, type_str: &str, value: Signal<serde_json::Value>, required: bool) -> Element {
-    let num_str = value.read()[&field_key].as_number()
+fn render_number_field(
+    field_key: String,
+    label: &str,
+    desc: Option<&str>,
+    type_str: &str,
+    value: Signal<serde_json::Value>,
+    required: bool,
+) -> Element {
+    let num_str = value.read()[&field_key]
+        .as_number()
         .map(|n| n.to_string())
         .unwrap_or_else(|| "0".to_string());
     let type_str_owned = type_str.to_string();
@@ -136,7 +177,13 @@ fn render_number_field(field_key: String, label: &str, desc: Option<&str>, type_
     }
 }
 
-fn render_boolean_field(field_key: String, label: &str, desc: Option<&str>, value: Signal<serde_json::Value>, required: bool) -> Element {
+fn render_boolean_field(
+    field_key: String,
+    label: &str,
+    desc: Option<&str>,
+    value: Signal<serde_json::Value>,
+    required: bool,
+) -> Element {
     rsx! {
         div { class: "flex items-center gap-2",
             input {
@@ -157,7 +204,14 @@ fn render_boolean_field(field_key: String, label: &str, desc: Option<&str>, valu
     }
 }
 
-fn render_object_field(_field_key: String, label: &str, desc: Option<&str>, prop_schema: &serde_json::Value, value: Signal<serde_json::Value>, required: bool) -> Element {
+fn render_object_field(
+    _field_key: String,
+    label: &str,
+    desc: Option<&str>,
+    prop_schema: &serde_json::Value,
+    value: Signal<serde_json::Value>,
+    required: bool,
+) -> Element {
     rsx! {
         div { class: "border border-[#3a3a55] rounded p-2",
             div { class: "text-[12px] text-[#888] font-semibold mb-2",

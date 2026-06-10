@@ -67,7 +67,13 @@ impl DomainHandler for ToolHandler {
                     Payload::Tool(ToolPayload::ListResult { tools }),
                 )])
             }
-            (ToolOperation::Call, Payload::Tool(ToolPayload::Call { tool_name, arguments })) => {
+            (
+                ToolOperation::Call,
+                Payload::Tool(ToolPayload::Call {
+                    tool_name,
+                    arguments,
+                }),
+            ) => {
                 let call = ToolCall {
                     id: uuid::Uuid::new_v4().simple().to_string(),
                     name: tool_name.clone(),

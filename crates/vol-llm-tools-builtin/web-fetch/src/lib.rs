@@ -40,11 +40,15 @@ impl DefaultFetchProvider {
     }
 
     /// Create a new fetch provider from configuration.
-    pub fn from_config(config: &FetchProviderConfig) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn from_config(
+        config: &FetchProviderConfig,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = build_client(&config.proxy.proxy_url)?;
         Ok(Self {
             client,
-            max_content_length: config.max_content_length.unwrap_or(DEFAULT_MAX_CONTENT_LENGTH),
+            max_content_length: config
+                .max_content_length
+                .unwrap_or(DEFAULT_MAX_CONTENT_LENGTH),
         })
     }
 }
@@ -68,8 +72,7 @@ fn build_client(
 impl FetchFn for DefaultFetchProvider {
     async fn fetch(&self, url: &str, opts: FetchOptions) -> Result<FetchResult, FetchError> {
         // Validate URL
-        let parsed =
-            url::Url::parse(url).map_err(|e| FetchError::InvalidUrl(e.to_string()))?;
+        let parsed = url::Url::parse(url).map_err(|e| FetchError::InvalidUrl(e.to_string()))?;
 
         // Fetch URL
         let response = self
@@ -110,9 +113,7 @@ impl FetchFn for DefaultFetchProvider {
 
         // Extract readable content using readability extractor
         let product = extractor::extract(&mut Cursor::new(&bytes), &parsed)
-            .map_err(|e| FetchError::NotAccessible(format!(
-                "Failed to extract content: {}", e
-            )))?;
+            .map_err(|e| FetchError::NotAccessible(format!("Failed to extract content: {}", e)))?;
 
         // Use extracted text (plain text version)
         let content = if product.text.is_empty() {
@@ -127,7 +128,8 @@ impl FetchFn for DefaultFetchProvider {
         let content = if content.len() > max_length {
             format!(
                 "{}\n\n[Content truncated at {} characters]",
-                &content[..max_length], max_length
+                &content[..max_length],
+                max_length
             )
         } else {
             content

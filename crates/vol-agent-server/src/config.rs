@@ -275,8 +275,14 @@ url = "sqlite:///tmp/vol-agent/tasks.db"
 
         let config: ServerConfig = toml::from_str(toml_str).unwrap();
         let task_store = config.runtime.task_store.as_ref().unwrap();
-        assert_eq!(task_store.store_type, vol_llm_runtime::TaskStoreType::Database);
-        assert_eq!(task_store.url.as_deref(), Some("sqlite:///tmp/vol-agent/tasks.db"));
+        assert_eq!(
+            task_store.store_type,
+            vol_llm_runtime::TaskStoreType::Database
+        );
+        assert_eq!(
+            task_store.url.as_deref(),
+            Some("sqlite:///tmp/vol-agent/tasks.db")
+        );
     }
 
     #[test]
@@ -292,8 +298,14 @@ url = "sqlite://data/sessions.db"
 "#;
         let config: ServerConfig = toml::from_str(toml).unwrap();
         let session_store = config.runtime.session_store.unwrap();
-        assert_eq!(session_store.store_type, vol_llm_runtime::SessionStoreType::Database);
-        assert_eq!(session_store.url.as_deref(), Some("sqlite://data/sessions.db"));
+        assert_eq!(
+            session_store.store_type,
+            vol_llm_runtime::SessionStoreType::Database
+        );
+        assert_eq!(
+            session_store.url.as_deref(),
+            Some("sqlite://data/sessions.db")
+        );
     }
 
     #[test]
@@ -316,7 +328,10 @@ type = "database"
 
         let config: ServerConfig = toml::from_str(toml_str).unwrap();
         let err = config.validate().unwrap_err();
-        assert_eq!(err, "runtime.task_store.url is required when type = \"database\"");
+        assert_eq!(
+            err,
+            "runtime.task_store.url is required when type = \"database\""
+        );
     }
 
     #[test]
@@ -329,7 +344,10 @@ url = "sqlite:///tmp/tasks.db"
 
         let config: ServerConfig = toml::from_str(toml_str).unwrap();
         let err = config.validate().unwrap_err();
-        assert_eq!(err, "runtime.task_store.url is not valid when type = \"file\"");
+        assert_eq!(
+            err,
+            "runtime.task_store.url is not valid when type = \"file\""
+        );
     }
 
     #[test]

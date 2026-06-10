@@ -58,9 +58,7 @@ impl TaskStore for InMemoryTaskStore {
         Ok(self
             .tasks
             .iter()
-            .filter(|r| {
-                status.is_none_or(|s| r.value().status == s)
-            })
+            .filter(|r| status.is_none_or(|s| r.value().status == s))
             .map(|r| r.value().clone())
             .collect())
     }
@@ -84,9 +82,7 @@ impl TaskStore for InMemoryTaskStore {
 
         let ready: Vec<TaskId> = pending_tasks
             .into_iter()
-            .filter(|(_, deps)| {
-                deps.iter().all(|d| completed_ids.contains(d))
-            })
+            .filter(|(_, deps)| deps.iter().all(|d| completed_ids.contains(d)))
             .map(|(id, _)| id)
             .collect();
 

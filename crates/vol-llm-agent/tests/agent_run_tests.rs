@@ -568,8 +568,7 @@ impl AgentPlugin for RejectMaxIterationsPlugin {
     async fn intercept(&self, event: &AgentStreamEvent, _: &RunContext) -> PluginDecision {
         match event {
             AgentStreamEvent::IterationComplete {
-                final_answer: None,
-                ..
+                final_answer: None, ..
             } => PluginDecision::Abort("max iterations reached".to_string()),
             _ => PluginDecision::Continue,
         }

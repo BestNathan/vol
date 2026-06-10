@@ -88,16 +88,21 @@ impl ExecutableTool for EditTool {
 
         // Validate old_string is not empty
         if params.old_string.is_empty() {
-            return Err(ToolError::InvalidArguments("old_string cannot be empty".into()));
+            return Err(ToolError::InvalidArguments(
+                "old_string cannot be empty".into(),
+            ));
         }
 
         // Resolve path through sandbox
-        let file_path = context.resolve_path(&params.file_path).map_err(|e| {
-            ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e))
-        })?;
+        let file_path = context
+            .resolve_path(&params.file_path)
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e)))?;
 
         // Read file contents via sandbox
-        let raw = context.sandbox.read_file(&file_path, None, None).await
+        let raw = context
+            .sandbox
+            .read_file(&file_path, None, None)
+            .await
             .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file: {}", e)))?;
 
         let content = String::from_utf8_lossy(&raw).to_string();
@@ -129,7 +134,9 @@ impl ExecutableTool for EditTool {
         };
 
         // Write back to file via sandbox
-        context.sandbox.write_file(&file_path, new_content.as_bytes())
+        context
+            .sandbox
+            .write_file(&file_path, new_content.as_bytes())
             .await
             .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write file: {}", e)))?;
 

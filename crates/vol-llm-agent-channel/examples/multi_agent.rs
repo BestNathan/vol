@@ -22,12 +22,12 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use tokio::net::TcpListener;
 use tracing::info;
-use vol_llm_core::AgentDef;
 use vol_llm_agent::AgentInput;
 use vol_llm_agent_channel::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, Operation, Payload,
 };
 use vol_llm_agent_channel::{AgentServerCore, HttpTransport, WsServer};
+use vol_llm_core::AgentDef;
 
 #[tokio::main]
 async fn main() {
@@ -39,9 +39,18 @@ async fn main() {
         .init();
 
     let agents = [
-        ("translator", "You are a translation assistant. Translate the input to English."),
-        ("summarizer", "You are a summarization assistant. Provide a brief summary."),
-        ("coder", "You are a coding assistant. Help with programming questions."),
+        (
+            "translator",
+            "You are a translation assistant. Translate the input to English.",
+        ),
+        (
+            "summarizer",
+            "You are a summarization assistant. Provide a brief summary.",
+        ),
+        (
+            "coder",
+            "You are a coding assistant. Help with programming questions.",
+        ),
     ];
 
     let core = Arc::new(
@@ -61,15 +70,24 @@ async fn main() {
     let ws_router = WsServer::new(core.clone()).into_axum_router();
     let http_router = HttpTransport::new(core.clone()).into_axum_router();
     let app = Router::new()
-        .route("/health", get(|| async { Json(serde_json::json!({"status": "ok"})) }))
-        .route("/api/agents", get({
-            let core = core.clone();
-            move || list_agents_handler(core.clone())
-        }))
-        .route("/api/chat/:agent_id", post({
-            let core = core.clone();
-            move |agent_id, body| chat_handler(core.clone(), agent_id, body)
-        }))
+        .route(
+            "/health",
+            get(|| async { Json(serde_json::json!({"status": "ok"})) }),
+        )
+        .route(
+            "/api/agents",
+            get({
+                let core = core.clone();
+                move || list_agents_handler(core.clone())
+            }),
+        )
+        .route(
+            "/api/chat/:agent_id",
+            post({
+                let core = core.clone();
+                move |agent_id, body| chat_handler(core.clone(), agent_id, body)
+            }),
+        )
         .merge(ws_router)
         .merge(http_router);
 
@@ -82,9 +100,7 @@ async fn main() {
         .await
         .expect("failed to bind to 0.0.0.0:3001");
 
-    axum::serve(listener, app)
-        .await
-        .expect("server failed");
+    axum::serve(listener, app).await.expect("server failed");
 }
 
 async fn list_agents_handler(core: Arc<AgentServerCore>) -> impl IntoResponse {
@@ -103,7 +119,10 @@ async fn chat_handler(
     Json(body): Json<ChatInput>,
 ) -> impl IntoResponse {
     if !core.router().has_agent(&agent_id).await {
-        return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "agent not found" })))
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "agent not found" })),
+        )
             .into_response();
     }
 

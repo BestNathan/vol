@@ -13,10 +13,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-#[cfg(all(feature = "web", not(feature = "tui")))]
-use web_time::Instant;
 #[cfg(feature = "tui")]
 use std::time::Instant;
+#[cfg(all(feature = "web", not(feature = "tui")))]
+use web_time::Instant;
 
 // === Unified Event Type ======================================================
 
@@ -27,42 +27,96 @@ use std::time::Instant;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum UiEvent {
     // Agent lifecycle
-    AgentStart { run_id: String, input: String },
-    AgentComplete { run_id: String, response: String },
-    AgentAborted { run_id: String, reason: String },
-    AgentError { run_id: String, message: String },
+    AgentStart {
+        run_id: String,
+        input: String,
+    },
+    AgentComplete {
+        run_id: String,
+        response: String,
+    },
+    AgentAborted {
+        run_id: String,
+        reason: String,
+    },
+    AgentError {
+        run_id: String,
+        message: String,
+    },
 
     // Thinking
     ThinkingStart,
-    ThinkingDelta { delta: String },
+    ThinkingDelta {
+        delta: String,
+    },
     ThinkingComplete,
 
     // Content
     ContentStart,
-    ContentDelta { delta: String },
-    ContentComplete { content: String },
+    ContentDelta {
+        delta: String,
+    },
+    ContentComplete {
+        content: String,
+    },
 
     // Tools
-    ToolCallBegin { tool_name: String, arguments: String },
-    ToolCallArgumentDelta { delta: String },
-    ToolCallComplete { tool_name: String, result: String, duration_ms: Option<u64> },
-    ToolCallError { tool_name: String, error: String, duration_ms: Option<u64> },
-    ToolCallSkipped { tool_name: String, reason: String, duration_ms: Option<u64> },
+    ToolCallBegin {
+        tool_name: String,
+        arguments: String,
+    },
+    ToolCallArgumentDelta {
+        delta: String,
+    },
+    ToolCallComplete {
+        tool_name: String,
+        result: String,
+        duration_ms: Option<u64>,
+    },
+    ToolCallError {
+        tool_name: String,
+        error: String,
+        duration_ms: Option<u64>,
+    },
+    ToolCallSkipped {
+        tool_name: String,
+        reason: String,
+        duration_ms: Option<u64>,
+    },
 
     // Iteration
-    MaxIterationsReached { current: u32, max: u32 },
-    IterationContinued { from_iteration: u32 },
-    IterationComplete { iteration: u32, final_answer: Option<String> },
+    MaxIterationsReached {
+        current: u32,
+        max: u32,
+    },
+    IterationContinued {
+        from_iteration: u32,
+    },
+    IterationComplete {
+        iteration: u32,
+        final_answer: Option<String>,
+    },
 
     // HITL
-    ApprovalRequest { tool_name: String, reason: String, arguments: String },
-    ApprovalResolved { approved: bool },
+    ApprovalRequest {
+        tool_name: String,
+        reason: String,
+        arguments: String,
+    },
+    ApprovalResolved {
+        approved: bool,
+    },
 
     // Reconnection state
     WsConnected,
     WsConnecting,
-    WsDisconnected { reason: Option<String> },
-    WsReconnecting { attempt: u32, delay_secs: u32 },
+    WsDisconnected {
+        reason: Option<String>,
+    },
+    WsReconnecting {
+        attempt: u32,
+        delay_secs: u32,
+    },
     WsReconnectFailed,
     WsReconnected,
 }
@@ -70,14 +124,32 @@ pub enum UiEvent {
 /// Coarse-grained event type for routing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UiEventKind {
-    AgentStart, AgentComplete, AgentAborted, AgentError,
-    ThinkingStart, ThinkingDelta, ThinkingComplete,
-    ContentStart, ContentDelta, ContentComplete,
-    ToolCallBegin, ToolCallArgumentDelta, ToolCallComplete, ToolCallError, ToolCallSkipped,
-    ApprovalRequest, ApprovalResolved,
-    IterationComplete, IterationContinued, MaxIterationsReached,
-    WsConnected, WsConnecting, WsDisconnected,
-    WsReconnecting, WsReconnectFailed, WsReconnected,
+    AgentStart,
+    AgentComplete,
+    AgentAborted,
+    AgentError,
+    ThinkingStart,
+    ThinkingDelta,
+    ThinkingComplete,
+    ContentStart,
+    ContentDelta,
+    ContentComplete,
+    ToolCallBegin,
+    ToolCallArgumentDelta,
+    ToolCallComplete,
+    ToolCallError,
+    ToolCallSkipped,
+    ApprovalRequest,
+    ApprovalResolved,
+    IterationComplete,
+    IterationContinued,
+    MaxIterationsReached,
+    WsConnected,
+    WsConnecting,
+    WsDisconnected,
+    WsReconnecting,
+    WsReconnectFailed,
+    WsReconnected,
 }
 
 impl UiEvent {
@@ -116,7 +188,12 @@ impl UiEvent {
 // === Display Types ===========================================================
 
 #[derive(Debug, Clone)]
-pub enum ToolCallStatus { Running, Success, Error, Skipped }
+pub enum ToolCallStatus {
+    Running,
+    Success,
+    Error,
+    Skipped,
+}
 
 #[derive(Debug, Clone)]
 pub struct ToolCallEntry {
@@ -129,16 +206,45 @@ pub struct ToolCallEntry {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConversationEntry {
-    UserInput { text: String },
-    Thinking { content: String },
-    ContentStreaming { content: String },
-    ToolCall { tool_name: String, arg_preview: String, full_arguments: String },
-    ToolResult { tool_name: String, preview: String, full_result: String, success: bool },
-    AgentAnswer { text: String },
-    RunSummary { iterations: u32, tool_calls: u32, elapsed_ms: u128 },
-    EntryCheckpoint { reason: String, note: Option<String>, created_at: i64 },
-    Error { message: String },
-    RunningBanner { run_id: String },
+    UserInput {
+        text: String,
+    },
+    Thinking {
+        content: String,
+    },
+    ContentStreaming {
+        content: String,
+    },
+    ToolCall {
+        tool_name: String,
+        arg_preview: String,
+        full_arguments: String,
+    },
+    ToolResult {
+        tool_name: String,
+        preview: String,
+        full_result: String,
+        success: bool,
+    },
+    AgentAnswer {
+        text: String,
+    },
+    RunSummary {
+        iterations: u32,
+        tool_calls: u32,
+        elapsed_ms: u128,
+    },
+    EntryCheckpoint {
+        reason: String,
+        note: Option<String>,
+        created_at: i64,
+    },
+    Error {
+        message: String,
+    },
+    RunningBanner {
+        run_id: String,
+    },
 }
 
 /// A node in the workspace directory tree.
@@ -165,9 +271,13 @@ impl WorkspaceTreeNode {
     }
 
     pub fn find_child_mut(&mut self, path: &str) -> Option<&mut Self> {
-        if self.path == path { return Some(self); }
+        if self.path == path {
+            return Some(self);
+        }
         for child in &mut self.children {
-            if let Some(found) = child.find_child_mut(path) { return Some(found); }
+            if let Some(found) = child.find_child_mut(path) {
+                return Some(found);
+            }
         }
         None
     }
@@ -227,7 +337,17 @@ pub struct OpenFileTab {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ActiveTab { Conversation, Sessions, Tasks, Agents, Tools, Workspace, Skills, Mcp, Logs }
+pub enum ActiveTab {
+    Conversation,
+    Sessions,
+    Tasks,
+    Agents,
+    Tools,
+    Workspace,
+    Skills,
+    Mcp,
+    Logs,
+}
 
 impl ActiveTab {
     pub fn next(self) -> Self {
@@ -251,11 +371,21 @@ impl ActiveTab {
 
 /// Sub-tabs within the Agents panel.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AgentSubTab { Conversation, Sessions, Context, Tasks }
+pub enum AgentSubTab {
+    Conversation,
+    Sessions,
+    Context,
+    Tasks,
+}
 
 /// Sub-tabs within the MCP panel.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum McpSubtab { Servers, Tools, Resources, Prompts }
+pub enum McpSubtab {
+    Servers,
+    Tools,
+    Resources,
+    Prompts,
+}
 
 #[derive(Debug, Clone)]
 pub struct SessionDialogEntry {
@@ -327,7 +457,10 @@ pub struct SubscriptionId(u64);
 type EventHandler = Box<dyn Fn(&UiEvent) + 'static>;
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
-struct Subscriber { id: SubscriptionId, handler: EventHandler }
+struct Subscriber {
+    id: SubscriptionId,
+    handler: EventHandler,
+}
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
 struct EventBusInner {
@@ -338,32 +471,48 @@ struct EventBusInner {
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl EventBusInner {
     fn subscribe<F>(&self, kind: UiEventKind, handler: F) -> SubscriptionId
-    where F: Fn(&UiEvent) + 'static {
+    where
+        F: Fn(&UiEvent) + 'static,
+    {
         let id = SubscriptionId(self.next_id.fetch_add(1, Ordering::Relaxed));
         let mut subs = self.subscribers.lock().unwrap();
-        subs.entry(kind).or_default().push(Subscriber { id, handler: Box::new(handler) });
+        subs.entry(kind).or_default().push(Subscriber {
+            id,
+            handler: Box::new(handler),
+        });
         id
     }
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
 #[derive(Clone)]
-pub struct EventBus { inner: Arc<EventBusInner> }
+pub struct EventBus {
+    inner: Arc<EventBusInner>,
+}
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl EventBus {
     pub fn new() -> Self {
-        Self { inner: Arc::new(EventBusInner { next_id: AtomicU64::new(0), subscribers: Mutex::new(HashMap::new()) }) }
+        Self {
+            inner: Arc::new(EventBusInner {
+                next_id: AtomicU64::new(0),
+                subscribers: Mutex::new(HashMap::new()),
+            }),
+        }
     }
     pub fn subscribe<F>(&self, kind: UiEventKind, handler: F) -> SubscriptionId
-    where F: Fn(&UiEvent) + 'static {
+    where
+        F: Fn(&UiEvent) + 'static,
+    {
         self.inner.subscribe(kind, handler)
     }
     pub fn publish(&self, event: &UiEvent) {
         let kind = event.kind();
         let subs = self.inner.subscribers.lock().unwrap();
         if let Some(handlers) = subs.get(&kind) {
-            for sub in handlers { (sub.handler)(event); }
+            for sub in handlers {
+                (sub.handler)(event);
+            }
         }
     }
 }
@@ -377,10 +526,15 @@ pub struct SubscriptionSet {
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl SubscriptionSet {
     pub fn new(bus: EventBus) -> Self {
-        Self { ids: Vec::new(), bus: bus.inner.clone() }
+        Self {
+            ids: Vec::new(),
+            bus: bus.inner.clone(),
+        }
     }
     pub fn subscribe<F>(&mut self, _bus: &EventBus, kind: UiEventKind, handler: F)
-    where F: Fn(&UiEvent) + 'static {
+    where
+        F: Fn(&UiEvent) + 'static,
+    {
         let id = self.bus.subscribe(kind, handler);
         self.ids.push((kind, id));
     }
@@ -391,7 +545,9 @@ impl Drop for SubscriptionSet {
     fn drop(&mut self) {
         let mut subs = self.bus.subscribers.lock().unwrap();
         for (kind, id) in &self.ids {
-            if let Some(list) = subs.get_mut(kind) { list.retain(|s| s.id != *id); }
+            if let Some(list) = subs.get_mut(kind) {
+                list.retain(|s| s.id != *id);
+            }
         }
     }
 }
@@ -434,14 +590,25 @@ pub struct GlobalState {
 impl GlobalState {
     pub fn new(ws_url: String) -> Self {
         Self {
-            session_id: "web-session".into(), run_count: 0, iteration: 0,
-            tool_call_count: 0, run_start: None, run_elapsed: std::time::Duration::ZERO,
-            running_agents: HashSet::new(), run_map: HashMap::new(),
-            pending_submit_agent: None, exiting: false, ws_url, ws_connected: false,
+            session_id: "web-session".into(),
+            run_count: 0,
+            iteration: 0,
+            tool_call_count: 0,
+            run_start: None,
+            run_elapsed: std::time::Duration::ZERO,
+            running_agents: HashSet::new(),
+            run_map: HashMap::new(),
+            pending_submit_agent: None,
+            exiting: false,
+            ws_url,
+            ws_connected: false,
             ws_last_error: None,
-            reconnecting: false, reconnect_attempts: 0, reconnect_delay_secs: 0,
+            reconnecting: false,
+            reconnect_attempts: 0,
+            reconnect_delay_secs: 0,
             reconnect_maxed: false,
-            unsafe_mode: false, active_tab: ActiveTab::Agents,
+            unsafe_mode: false,
+            active_tab: ActiveTab::Agents,
         }
     }
 
@@ -481,7 +648,10 @@ pub struct AgentConversation {
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl AgentConversation {
     pub fn new() -> Self {
-        Self { entries: Vec::new(), auto_scroll: true }
+        Self {
+            entries: Vec::new(),
+            auto_scroll: true,
+        }
     }
 }
 
@@ -496,11 +666,16 @@ pub struct ConversationState {
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl ConversationState {
     pub fn new() -> Self {
-        Self { agents: HashMap::new(), active_agent: None }
+        Self {
+            agents: HashMap::new(),
+            active_agent: None,
+        }
     }
 
     pub fn get_or_create(&mut self, agent_id: &str) -> &mut AgentConversation {
-        self.agents.entry(agent_id.to_string()).or_insert_with(AgentConversation::new)
+        self.agents
+            .entry(agent_id.to_string())
+            .or_insert_with(AgentConversation::new)
     }
 
     pub fn active_mut(&mut self) -> &mut AgentConversation {
@@ -509,7 +684,8 @@ impl ConversationState {
     }
 
     pub fn active_entries(&self) -> &[ConversationEntry] {
-        self.active_agent.as_ref()
+        self.active_agent
+            .as_ref()
             .and_then(|id| self.agents.get(id))
             .map(|a| a.entries.as_slice())
             .unwrap_or(&[])
@@ -537,7 +713,11 @@ pub struct ToolState {
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl ToolState {
     pub fn new() -> Self {
-        Self { calls: Vec::new(), expanded: HashSet::new(), scroll: 0 }
+        Self {
+            calls: Vec::new(),
+            expanded: HashSet::new(),
+            scroll: 0,
+        }
     }
 }
 
@@ -558,8 +738,10 @@ impl WorkspaceState {
     pub fn new(working_dir: &str) -> Self {
         Self {
             workspace: WorkspaceTreeNode::root(working_dir.to_string(), ".".into()),
-            modified_files: HashSet::new(), open_files: Vec::new(),
-            selected_file_tab: None, collapsed_dirs: HashSet::new(),
+            modified_files: HashSet::new(),
+            open_files: Vec::new(),
+            selected_file_tab: None,
+            collapsed_dirs: HashSet::new(),
             file_tree_drawer_open: false,
         }
     }
@@ -577,7 +759,11 @@ pub struct SkillsState {
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl SkillsState {
     pub fn new() -> Self {
-        Self { skills: Vec::new(), error: None, loading: false }
+        Self {
+            skills: Vec::new(),
+            error: None,
+            loading: false,
+        }
     }
 }
 
@@ -593,7 +779,11 @@ pub struct SkillDialogState {
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl SkillDialogState {
     pub fn new() -> Self {
-        Self { open: false, skill: None, loading: false }
+        Self {
+            open: false,
+            skill: None,
+            loading: false,
+        }
     }
 }
 
@@ -601,14 +791,23 @@ impl SkillDialogState {
 #[cfg(all(feature = "web", not(feature = "tui")))]
 #[derive(Debug)]
 pub struct LogViewerState {
-    pub selected_run: Option<String>, pub entries: Vec<LogLine>,
-    pub scroll: u16, pub auto_scroll: bool, pub run_logs: Vec<LogRunSummary>,
+    pub selected_run: Option<String>,
+    pub entries: Vec<LogLine>,
+    pub scroll: u16,
+    pub auto_scroll: bool,
+    pub run_logs: Vec<LogRunSummary>,
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl LogViewerState {
     pub fn new() -> Self {
-        Self { selected_run: None, entries: Vec::new(), scroll: 0, auto_scroll: true, run_logs: Vec::new() }
+        Self {
+            selected_run: None,
+            entries: Vec::new(),
+            scroll: 0,
+            auto_scroll: true,
+            run_logs: Vec::new(),
+        }
     }
 }
 
@@ -736,7 +935,14 @@ pub struct AgentsState {
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl AgentsState {
     pub fn new() -> Self {
-        Self { agents: Vec::new(), expanded: HashSet::new(), loading: false, error: None, selected: None, sub_tab: AgentSubTab::Conversation }
+        Self {
+            agents: Vec::new(),
+            expanded: HashSet::new(),
+            loading: false,
+            error: None,
+            selected: None,
+            sub_tab: AgentSubTab::Conversation,
+        }
     }
 }
 
@@ -760,7 +966,11 @@ pub struct SessionsState {
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl SessionsState {
     pub fn new() -> Self {
-        Self { sessions: Vec::new(), loading: false, error: None }
+        Self {
+            sessions: Vec::new(),
+            loading: false,
+            error: None,
+        }
     }
 }
 
@@ -815,9 +1025,14 @@ pub struct McpState {
 impl McpState {
     pub fn new() -> Self {
         Self {
-            servers: Vec::new(), tools: Vec::new(), resources: Vec::new(),
-            resource_templates: Vec::new(), prompts: Vec::new(),
-            loading: true, error: None, active_subtab: McpSubtab::Servers,
+            servers: Vec::new(),
+            tools: Vec::new(),
+            resources: Vec::new(),
+            resource_templates: Vec::new(),
+            prompts: Vec::new(),
+            loading: true,
+            error: None,
+            active_subtab: McpSubtab::Servers,
         }
     }
 }
@@ -870,13 +1085,19 @@ pub struct McpPromptViewerState {
 #[cfg(all(feature = "web", not(feature = "tui")))]
 #[derive(Debug)]
 pub struct SessionDialogState {
-    pub open: bool, pub sessions: Vec<SessionDialogEntry>, pub selected: usize,
+    pub open: bool,
+    pub sessions: Vec<SessionDialogEntry>,
+    pub selected: usize,
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl SessionDialogState {
     pub fn new() -> Self {
-        Self { open: false, sessions: Vec::new(), selected: 0 }
+        Self {
+            open: false,
+            sessions: Vec::new(),
+            selected: 0,
+        }
     }
 }
 
@@ -884,17 +1105,27 @@ impl SessionDialogState {
 #[cfg(all(feature = "web", not(feature = "tui")))]
 #[derive(Debug)]
 pub struct ApprovalUiState {
-    pub tool_name: Option<String>, pub reason: Option<String>, pub arguments: Option<String>,
+    pub tool_name: Option<String>,
+    pub reason: Option<String>,
+    pub arguments: Option<String>,
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
 impl ApprovalUiState {
     pub fn new() -> Self {
-        Self { tool_name: None, reason: None, arguments: None }
+        Self {
+            tool_name: None,
+            reason: None,
+            arguments: None,
+        }
     }
-    pub fn has_pending(&self) -> bool { self.tool_name.is_some() }
+    pub fn has_pending(&self) -> bool {
+        self.tool_name.is_some()
+    }
     pub fn clear(&mut self) {
-        self.tool_name = None; self.reason = None; self.arguments = None;
+        self.tool_name = None;
+        self.reason = None;
+        self.arguments = None;
     }
 }
 
@@ -998,7 +1229,8 @@ impl UiState {
             UiEvent::AgentStart { input, .. } => {
                 self.reset_for_run();
                 self.is_running = true;
-                self.conversation.push(ConversationEntry::UserInput { text: input });
+                self.conversation
+                    .push(ConversationEntry::UserInput { text: input });
             }
             UiEvent::AgentComplete { .. } => {
                 self.flush_pending_content();
@@ -1010,7 +1242,8 @@ impl UiState {
                 self.flush_pending_content();
                 let elapsed = self.run_start.map(|s| s.elapsed()).unwrap_or_default();
                 self.run_elapsed = elapsed;
-                self.conversation.push(ConversationEntry::Error { message: reason });
+                self.conversation
+                    .push(ConversationEntry::Error { message: reason });
                 self.is_running = false;
             }
             UiEvent::AgentError { message, .. } => {
@@ -1021,10 +1254,13 @@ impl UiState {
                 self.is_running = false;
             }
             UiEvent::ThinkingStart => {
-                self.conversation.push(ConversationEntry::Thinking { content: String::new() });
+                self.conversation.push(ConversationEntry::Thinking {
+                    content: String::new(),
+                });
             }
             UiEvent::ThinkingDelta { delta } => {
-                if let Some(ConversationEntry::Thinking { content }) = self.conversation.last_mut() {
+                if let Some(ConversationEntry::Thinking { content }) = self.conversation.last_mut()
+                {
                     content.push_str(&delta);
                 }
             }
@@ -1032,10 +1268,14 @@ impl UiState {
                 // No-op — thinking content already streamed via deltas
             }
             UiEvent::ContentStart => {
-                self.conversation.push(ConversationEntry::ContentStreaming { content: String::new() });
+                self.conversation.push(ConversationEntry::ContentStreaming {
+                    content: String::new(),
+                });
             }
             UiEvent::ContentDelta { delta } => {
-                if let Some(ConversationEntry::ContentStreaming { content }) = self.conversation.last_mut() {
+                if let Some(ConversationEntry::ContentStreaming { content }) =
+                    self.conversation.last_mut()
+                {
                     content.push_str(&delta);
                 }
             }
@@ -1044,10 +1284,14 @@ impl UiState {
                     let entry = self.conversation.last_mut().unwrap();
                     *entry = ConversationEntry::AgentAnswer { text: content };
                 } else if !content.is_empty() {
-                    self.conversation.push(ConversationEntry::AgentAnswer { text: content });
+                    self.conversation
+                        .push(ConversationEntry::AgentAnswer { text: content });
                 }
             }
-            UiEvent::ToolCallBegin { tool_name, arguments } => {
+            UiEvent::ToolCallBegin {
+                tool_name,
+                arguments,
+            } => {
                 let seq = self.tool_call_count + 1;
                 self.tool_call_count = seq;
                 let preview = format_tool_args(&arguments);
@@ -1067,7 +1311,11 @@ impl UiState {
             UiEvent::ToolCallArgumentDelta { delta: _ } => {
                 // Invisible in UI
             }
-            UiEvent::ToolCallComplete { tool_name, result, duration_ms } => {
+            UiEvent::ToolCallComplete {
+                tool_name,
+                result,
+                duration_ms,
+            } => {
                 self.update_tool_call_status(&tool_name, ToolCallStatus::Success, duration_ms);
                 let preview = truncate_preview(&result, 200);
                 self.conversation.push(ConversationEntry::ToolResult {
@@ -1077,7 +1325,11 @@ impl UiState {
                     success: true,
                 });
             }
-            UiEvent::ToolCallError { tool_name, error, duration_ms } => {
+            UiEvent::ToolCallError {
+                tool_name,
+                error,
+                duration_ms,
+            } => {
                 self.update_tool_call_status(&tool_name, ToolCallStatus::Error, duration_ms);
                 let err = error;
                 self.conversation.push(ConversationEntry::ToolResult {
@@ -1087,7 +1339,11 @@ impl UiState {
                     success: false,
                 });
             }
-            UiEvent::ToolCallSkipped { tool_name, reason, duration_ms } => {
+            UiEvent::ToolCallSkipped {
+                tool_name,
+                reason,
+                duration_ms,
+            } => {
                 self.update_tool_call_status(&tool_name, ToolCallStatus::Skipped, duration_ms);
                 let rsn = reason;
                 self.conversation.push(ConversationEntry::ToolResult {
@@ -1099,21 +1355,34 @@ impl UiState {
             }
             UiEvent::MaxIterationsReached { current, max } => {
                 self.conversation.push(ConversationEntry::Error {
-                    message: format!("Max iterations reached ({}/{}) — waiting for user decision...", current, max),
+                    message: format!(
+                        "Max iterations reached ({}/{}) — waiting for user decision...",
+                        current, max
+                    ),
                 });
             }
             UiEvent::IterationContinued { from_iteration } => {
                 self.iteration = from_iteration;
                 self.conversation.push(ConversationEntry::AgentAnswer {
-                    text: format!("Continuing from iteration {} (counter reset to 0)", from_iteration),
+                    text: format!(
+                        "Continuing from iteration {} (counter reset to 0)",
+                        from_iteration
+                    ),
                 });
             }
-            UiEvent::IterationComplete { iteration, final_answer: _ } => {
+            UiEvent::IterationComplete {
+                iteration,
+                final_answer: _,
+            } => {
                 // Content already rendered via ContentComplete stream;
                 // only update iteration counter, do not push duplicate AgentAnswer.
                 self.iteration = iteration;
             }
-            UiEvent::ApprovalRequest { tool_name, reason, arguments } => {
+            UiEvent::ApprovalRequest {
+                tool_name,
+                reason,
+                arguments,
+            } => {
                 self.approval_state.tool_name = Some(tool_name);
                 self.approval_state.reason = Some(reason);
                 self.approval_state.arguments = Some(arguments);
@@ -1121,8 +1390,12 @@ impl UiState {
             UiEvent::ApprovalResolved { approved: _ } => {
                 self.approval_state.clear();
             }
-            UiEvent::WsConnected | UiEvent::WsConnecting | UiEvent::WsDisconnected { .. }
-            | UiEvent::WsReconnecting { .. } | UiEvent::WsReconnectFailed | UiEvent::WsReconnected => {
+            UiEvent::WsConnected
+            | UiEvent::WsConnecting
+            | UiEvent::WsDisconnected { .. }
+            | UiEvent::WsReconnecting { .. }
+            | UiEvent::WsReconnectFailed
+            | UiEvent::WsReconnected => {
                 // Connection state handled separately via shared GlobalState signal
             }
         }
@@ -1144,7 +1417,12 @@ impl UiState {
         }
     }
 
-    fn update_tool_call_status(&mut self, tool_name: &str, status: ToolCallStatus, duration_ms: Option<u64>) {
+    fn update_tool_call_status(
+        &mut self,
+        tool_name: &str,
+        status: ToolCallStatus,
+        duration_ms: Option<u64>,
+    ) {
         // Match the most recent running entry for this tool by sequence (last-written wins).
         for entry in self.tool_calls.iter_mut().rev() {
             if entry.tool_name == tool_name && matches!(entry.status, ToolCallStatus::Running) {
@@ -1158,7 +1436,9 @@ impl UiState {
     /// Compute current elapsed time (works mid-run and after completion).
     pub fn elapsed(&self) -> std::time::Duration {
         if self.is_running {
-            self.run_start.map(|s| s.elapsed()).unwrap_or(self.run_elapsed)
+            self.run_start
+                .map(|s| s.elapsed())
+                .unwrap_or(self.run_elapsed)
         } else {
             self.run_elapsed
         }
@@ -1170,12 +1450,15 @@ impl UiState {
 pub fn format_tool_args(arguments: &str) -> String {
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(arguments) {
         if let Some(obj) = parsed.as_object() {
-            if obj.is_empty() { return String::new(); }
+            if obj.is_empty() {
+                return String::new();
+            }
             if obj.len() == 1 {
                 let (_, v) = obj.iter().next().unwrap();
                 return json_value_to_display(v);
             }
-            let parts: Vec<String> = obj.iter()
+            let parts: Vec<String> = obj
+                .iter()
                 .map(|(k, v)| format!("{}={}", k, json_value_to_display(v)))
                 .collect();
             return parts.join(", ");
@@ -1193,7 +1476,11 @@ fn json_value_to_display(v: &serde_json::Value) -> String {
         serde_json::Value::Null => "null".to_string(),
         _ => {
             let s = v.to_string();
-            if s.len() > 60 { format!("{}…", s.chars().take(57).collect::<String>()) } else { s }
+            if s.len() > 60 {
+                format!("{}…", s.chars().take(57).collect::<String>())
+            } else {
+                s
+            }
         }
     }
 }
@@ -1211,7 +1498,10 @@ pub fn truncate_preview(s: &str, max_chars: usize) -> String {
 
 /// Whether a WS message is inbound or outbound.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum WsDirection { In, Out }
+pub enum WsDirection {
+    In,
+    Out,
+}
 
 /// A captured WebSocket message.
 #[derive(Debug, Clone, PartialEq)]
@@ -1228,15 +1518,22 @@ pub struct DebugState {
     pub open: bool,
     pub active_tab: DebugTab,
     pub ws_messages: Vec<WsMessage>,
-    start_time: Option<web_time::Instant>,
+    start_time: Option<Instant>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum DebugTab { Ws }
+pub enum DebugTab {
+    Ws,
+}
 
 impl DebugState {
     pub fn new() -> Self {
-        Self { open: false, active_tab: DebugTab::Ws, ws_messages: Vec::new(), start_time: None }
+        Self {
+            open: false,
+            active_tab: DebugTab::Ws,
+            ws_messages: Vec::new(),
+            start_time: None,
+        }
     }
 
     pub fn toggle(&mut self) {
@@ -1248,10 +1545,15 @@ impl DebugState {
 
     pub fn push_ws(&mut self, direction: WsDirection, method: String, payload: String) {
         if self.start_time.is_none() {
-            self.start_time = Some(web_time::Instant::now());
+            self.start_time = Some(Instant::now());
         }
         let elapsed_ms = self.start_time.unwrap().elapsed().as_millis() as u64;
-        self.ws_messages.push(WsMessage { direction, method, payload, elapsed_ms });
+        self.ws_messages.push(WsMessage {
+            direction,
+            method,
+            payload,
+            elapsed_ms,
+        });
     }
 }
 
@@ -1263,7 +1565,10 @@ mod tests {
 
     #[test]
     fn test_ui_event_agent_start_serializes() {
-        let event = UiEvent::AgentStart { run_id: "test-run".into(), input: "hello".into() };
+        let event = UiEvent::AgentStart {
+            run_id: "test-run".into(),
+            input: "hello".into(),
+        };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""type":"agent_start""#));
         assert!(json.contains(r#""input":"hello""#));
@@ -1303,7 +1608,10 @@ mod tests {
     #[test]
     fn test_ui_state_apply_agent_start() {
         let mut state = UiState::new("sess-1".into(), ".", "local");
-        state.apply(UiEvent::AgentStart { run_id: "test-run".into(), input: "fix the bug".into() });
+        state.apply(UiEvent::AgentStart {
+            run_id: "test-run".into(),
+            input: "fix the bug".into(),
+        });
         assert!(state.is_running);
         assert_eq!(state.run_count, 1);
         assert_eq!(state.conversation.len(), 1);
@@ -1317,8 +1625,12 @@ mod tests {
     fn test_ui_state_apply_thinking_deltas() {
         let mut state = UiState::new("sess-1".into(), ".", "local");
         state.apply(UiEvent::ThinkingStart);
-        state.apply(UiEvent::ThinkingDelta { delta: "Let me ".into() });
-        state.apply(UiEvent::ThinkingDelta { delta: "think...".into() });
+        state.apply(UiEvent::ThinkingDelta {
+            delta: "Let me ".into(),
+        });
+        state.apply(UiEvent::ThinkingDelta {
+            delta: "think...".into(),
+        });
         state.apply(UiEvent::ThinkingComplete);
         assert_eq!(state.conversation.len(), 1);
         match &state.conversation[0] {
@@ -1367,10 +1679,27 @@ mod tests {
 
     #[test]
     fn test_ui_event_kind_mapping() {
-        assert_eq!(UiEvent::AgentStart { run_id: "test-run".into(), input: "hi".into() }.kind(), UiEventKind::AgentStart);
+        assert_eq!(
+            UiEvent::AgentStart {
+                run_id: "test-run".into(),
+                input: "hi".into()
+            }
+            .kind(),
+            UiEventKind::AgentStart
+        );
         assert_eq!(UiEvent::WsConnected.kind(), UiEventKind::WsConnected);
-        assert_eq!(UiEvent::WsDisconnected { reason: None }.kind(), UiEventKind::WsDisconnected);
-        assert_eq!(UiEvent::ToolCallBegin { tool_name: "x".into(), arguments: "{}".into() }.kind(), UiEventKind::ToolCallBegin);
+        assert_eq!(
+            UiEvent::WsDisconnected { reason: None }.kind(),
+            UiEventKind::WsDisconnected
+        );
+        assert_eq!(
+            UiEvent::ToolCallBegin {
+                tool_name: "x".into(),
+                arguments: "{}".into()
+            }
+            .kind(),
+            UiEventKind::ToolCallBegin
+        );
     }
 
     #[test]
@@ -1419,16 +1748,14 @@ mod tests {
             is_dir: true,
             loaded: true,
             load_error: false,
-            children: vec![
-                WorkspaceTreeNode {
-                    name: "main.rs".into(),
-                    path: "src/main.rs".into(),
-                    is_dir: false,
-                    loaded: false,
-                    load_error: false,
-                    children: vec![],
-                },
-            ],
+            children: vec![WorkspaceTreeNode {
+                name: "main.rs".into(),
+                path: "src/main.rs".into(),
+                is_dir: false,
+                loaded: false,
+                load_error: false,
+                children: vec![],
+            }],
         });
         assert_eq!(root.children.len(), 1);
         assert!(root.children[0].is_dir);
@@ -1464,11 +1791,14 @@ mod tests {
             load_error: false,
             children: vec![],
         });
-        root.replace_dir_children("src", vec![
-            ("main.rs".into(), false),
-            ("lib.rs".into(), false),
-            ("utils".into(), true),
-        ]);
+        root.replace_dir_children(
+            "src",
+            vec![
+                ("main.rs".into(), false),
+                ("lib.rs".into(), false),
+                ("utils".into(), true),
+            ],
+        );
         let src = root.find_child_mut("src").unwrap();
         assert_eq!(src.children.len(), 3);
         assert!(src.loaded);

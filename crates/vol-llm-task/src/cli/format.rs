@@ -61,7 +61,11 @@ pub(crate) fn fmt_create_confirm(task: &Task) -> String {
 pub(crate) fn fmt_scheme(subcommand: &str, params: &[(&str, bool, &str)]) -> String {
     let mut out = format!("{} parameters:\n", subcommand);
     for (name, required, desc) in params {
-        let req = if *required { "(required)" } else { "(optional)" };
+        let req = if *required {
+            "(required)"
+        } else {
+            "(optional)"
+        };
         out.push_str(&format!("  --{:<14} {:<10} {}\n", name, req, desc));
     }
     out.trim_end().to_string()

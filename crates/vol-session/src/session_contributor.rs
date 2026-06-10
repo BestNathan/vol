@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use async_trait::async_trait;
+use std::sync::Arc;
 use vol_llm_context::{AttentionAnchor, ContextBlock, ContextContributor};
 use vol_llm_core::Message;
 
@@ -95,11 +95,8 @@ impl ContextContributor for SessionContributor {
 
         // 3. Write checkpoint (seal old messages)
         let session = self.session.lock().await;
-        let mut cp_entry = SessionEntry::new_checkpoint(
-            session_id.clone(),
-            CheckpointReason::Compression,
-            None,
-        );
+        let mut cp_entry =
+            SessionEntry::new_checkpoint(session_id.clone(), CheckpointReason::Compression, None);
         let base_ts = cp_entry.created_at;
         if let Err(e) = session.entry_store.save(cp_entry).await {
             tracing::error!("Failed to write checkpoint before compression: {}", e);
@@ -115,10 +112,7 @@ impl ContextContributor for SessionContributor {
             .join("\n");
 
         // 5. Write summary entry (timestamp after checkpoint)
-        let mut summary_entry = SessionEntry::new_summary(
-            session_id.clone(),
-            summary,
-        );
+        let mut summary_entry = SessionEntry::new_summary(session_id.clone(), summary);
         summary_entry.created_at = base_ts + 1;
         if let Err(e) = session.entry_store.save(summary_entry).await {
             tracing::error!("Failed to write summary during compression: {}", e);
@@ -163,7 +157,11 @@ mod tests {
         let session_msg = SessionMessage::new(session.id.clone(), Message::user("hello"));
         session.add_message(session_msg).await.unwrap();
 
-        let contributor = SessionContributor::new(Arc::new(tokio::sync::Mutex::new(session)), 10, AttentionAnchor::Middle(0));
+        let contributor = SessionContributor::new(
+            Arc::new(tokio::sync::Mutex::new(session)),
+            10,
+            AttentionAnchor::Middle(0),
+        );
         let blocks = contributor.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].messages.len(), 1);
@@ -179,7 +177,11 @@ mod tests {
             session.add_message(msg).await.unwrap();
         }
 
-        let contributor = SessionContributor::new(Arc::new(tokio::sync::Mutex::new(session)), 3, AttentionAnchor::Middle(0));
+        let contributor = SessionContributor::new(
+            Arc::new(tokio::sync::Mutex::new(session)),
+            3,
+            AttentionAnchor::Middle(0),
+        );
         let blocks = contributor.contribute().await.unwrap();
         assert_eq!(blocks[0].messages.len(), 3);
     }
@@ -189,7 +191,11 @@ mod tests {
         let entry_store = Arc::new(InMemoryEntryStore::new());
         let session = Session::new(entry_store);
 
-        let contributor = SessionContributor::new(Arc::new(tokio::sync::Mutex::new(session)), 10, AttentionAnchor::Middle(0));
+        let contributor = SessionContributor::new(
+            Arc::new(tokio::sync::Mutex::new(session)),
+            10,
+            AttentionAnchor::Middle(0),
+        );
         let blocks = contributor.contribute().await.unwrap();
         assert!(blocks.is_empty());
     }
@@ -205,7 +211,8 @@ mod tests {
         }
 
         let session = Arc::new(tokio::sync::Mutex::new(session));
-        let mut contributor = SessionContributor::new(session.clone(), 10, AttentionAnchor::Middle(0));
+        let mut contributor =
+            SessionContributor::new(session.clone(), 10, AttentionAnchor::Middle(0));
 
         // Before compression
         let blocks = contributor.contribute().await.unwrap();
@@ -218,7 +225,10 @@ mod tests {
         let blocks = contributor.contribute().await.unwrap();
         assert!(blocks[0].messages.len() < 10);
         // First message should be the summary (system role)
-        assert_eq!(blocks[0].messages[0].role, vol_llm_core::MessageRole::System);
+        assert_eq!(
+            blocks[0].messages[0].role,
+            vol_llm_core::MessageRole::System
+        );
     }
 
     #[tokio::test]
@@ -227,7 +237,8 @@ mod tests {
         let session = Session::new(entry_store);
         let session = Arc::new(tokio::sync::Mutex::new(session));
 
-        let mut contributor = SessionContributor::new(session.clone(), 10, AttentionAnchor::Middle(0));
+        let mut contributor =
+            SessionContributor::new(session.clone(), 10, AttentionAnchor::Middle(0));
 
         // Compress on empty session — no-op
         contributor.compress().await;

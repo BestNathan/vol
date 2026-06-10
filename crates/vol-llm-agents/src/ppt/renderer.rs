@@ -1,14 +1,13 @@
 //! PPT Agent 渲染器。
 
+use crate::ppt::{Outline, PptTemplate, SlideType};
 use pptx::{
-    Presentation,
     dml::ColorFormat,
-    slide::{SlideRef, SlideLayoutRef},
-    PptxError,
+    slide::{SlideLayoutRef, SlideRef},
+    PptxError, Presentation,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
-use crate::ppt::{PptTemplate, Outline, SlideType};
 
 /// PPTX 渲染器
 pub struct PptxRenderer {
@@ -37,11 +36,11 @@ impl PptxRenderer {
         self.add_textbox_to_slide(
             &slide,
             title,
-            457_200,    // 0.5 inch (left)
-            914_400,    // 1.0 inch (top)
-            8_229_600,  // 9 inches (width)
-            1_371_600,  // 1.5 inches (height)
-            44.0,       // font size
+            457_200,   // 0.5 inch (left)
+            914_400,   // 1.0 inch (top)
+            8_229_600, // 9 inches (width)
+            1_371_600, // 1.5 inches (height)
+            44.0,      // font size
             &title_color,
         )?;
 
@@ -51,9 +50,9 @@ impl PptxRenderer {
             &slide,
             subtitle,
             457_200,
-            2_743_200,  // 3.0 inches (top)
+            2_743_200, // 3.0 inches (top)
             8_229_600,
-            914_400,    // 1.0 inch (height)
+            914_400, // 1.0 inch (height)
             24.0,
             &subtitle_color,
         )?;
@@ -72,7 +71,7 @@ impl PptxRenderer {
             &slide,
             title,
             457_200,
-            457_200,    // 0.5 inch (top)
+            457_200, // 0.5 inch (top)
             8_229_600,
             914_400,
             32.0,
@@ -87,10 +86,10 @@ impl PptxRenderer {
             self.add_textbox_to_slide(
                 &slide,
                 &bullet_text,
-                685_800,    // 0.75 inch (left)
+                685_800, // 0.75 inch (left)
                 y_offset,
-                7_772_400,  // 8.5 inches (width)
-                457_200,    // 0.5 inch (height)
+                7_772_400, // 8.5 inches (width)
+                457_200,   // 0.5 inch (height)
                 18.0,
                 &text_color,
             )?;
@@ -101,7 +100,11 @@ impl PptxRenderer {
     }
 
     /// 添加内容页
-    pub fn add_content_slide(&mut self, title: &str, bullets: &[String]) -> Result<(), RendererError> {
+    pub fn add_content_slide(
+        &mut self,
+        title: &str,
+        bullets: &[String],
+    ) -> Result<(), RendererError> {
         let layout = self.get_first_layout()?;
         let slide = self.presentation.add_slide(&layout)?;
 
@@ -126,7 +129,7 @@ impl PptxRenderer {
             self.add_textbox_to_slide(
                 &slide,
                 &bullet_text,
-                685_800,    // 0.75 inch (left)
+                685_800, // 0.75 inch (left)
                 y_offset,
                 7_772_400,
                 457_200,
@@ -146,7 +149,9 @@ impl PptxRenderer {
         self.add_title_slide(&outline.title, subtitle)?;
 
         // Collect sections for TOC
-        let sections: Vec<String> = outline.slides.iter()
+        let sections: Vec<String> = outline
+            .slides
+            .iter()
             .filter(|s| matches!(s.slide_type, SlideType::Content))
             .map(|s| s.title.clone())
             .collect();
@@ -170,11 +175,11 @@ impl PptxRenderer {
     pub fn save(&self, path: &PathBuf) -> Result<(), RendererError> {
         // Create parent directories if needed
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| RendererError::IoError(e.to_string()))?;
+            std::fs::create_dir_all(parent).map_err(|e| RendererError::IoError(e.to_string()))?;
         }
 
-        self.presentation.save(path)
+        self.presentation
+            .save(path)
             .map_err(|e| RendererError::PptxError(e.to_string()))?;
         Ok(())
     }
@@ -281,7 +286,9 @@ impl PptxRenderer {
         color: &ColorFormat,
     ) -> Result<(), RendererError> {
         // Get current slide XML
-        let slide_xml = self.presentation.slide_xml(slide)
+        let slide_xml = self
+            .presentation
+            .slide_xml(slide)
             .map_err(|e| RendererError::PptxError(e.to_string()))?;
 
         // Create textbox XML with text content
@@ -303,7 +310,10 @@ impl PptxRenderer {
 
         // Find position of closing spTree tag
         let closing_tag = b"</p:spTree>";
-        if let Some(pos) = slide_xml.windows(closing_tag.len()).position(|w| w == closing_tag) {
+        if let Some(pos) = slide_xml
+            .windows(closing_tag.len())
+            .position(|w| w == closing_tag)
+        {
             new_xml.extend_from_slice(&slide_xml[..pos]);
             new_xml.extend_from_slice(&textbox_bytes);
             new_xml.extend_from_slice(&slide_xml[pos..]);
@@ -314,7 +324,9 @@ impl PptxRenderer {
         }
 
         // Write back to slide
-        let slide_xml_mut = self.presentation.slide_xml_mut(slide)
+        let slide_xml_mut = self
+            .presentation
+            .slide_xml_mut(slide)
             .map_err(|e| RendererError::PptxError(e.to_string()))?;
         *slide_xml_mut = new_xml;
 
@@ -323,10 +335,13 @@ impl PptxRenderer {
 
     /// 获取第一个可用的布局
     fn get_first_layout(&self) -> Result<SlideLayoutRef, RendererError> {
-        let layouts = self.presentation.slide_layouts()
+        let layouts = self
+            .presentation
+            .slide_layouts()
             .map_err(|e| RendererError::PptxError(e.to_string()))?;
 
-        layouts.into_iter()
+        layouts
+            .into_iter()
             .next()
             .ok_or_else(|| RendererError::PptxError("No slide layouts available".to_string()))
     }

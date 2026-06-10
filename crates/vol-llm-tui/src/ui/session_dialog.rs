@@ -1,11 +1,11 @@
 //! Session list dialog overlay rendering.
 
 use crate::app::AppState;
-use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::Frame;
 
 pub fn render_session_dialog(frame: &mut Frame, area: Rect, state: &AppState) {
     if !state.session_dialog.open {
@@ -22,11 +22,12 @@ pub fn render_session_dialog(frame: &mut Frame, area: Rect, state: &AppState) {
     frame.render_widget(ratatui::widgets::Clear, rect);
 
     let lines = build_dialog_lines(state);
-    let paragraph = Paragraph::new(lines)
-        .block(Block::default()
+    let paragraph = Paragraph::new(lines).block(
+        Block::default()
             .title(" Sessions (Ctrl+S to dismiss) ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Yellow)));
+            .border_style(Style::default().fg(Color::Yellow)),
+    );
 
     frame.render_widget(paragraph, rect);
 }

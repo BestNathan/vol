@@ -1,22 +1,28 @@
 //! HITL approval dialog for tool calls.
 
-use dioxus::prelude::*;
 use crate::state::ApprovalUiState;
+use dioxus::prelude::*;
 
 #[component]
 pub fn ApprovalDialog() -> Element {
     let sig: Signal<ApprovalUiState> = use_context();
     let has_pending = sig.read().has_pending();
-    if !has_pending { return rsx! {}; }
+    if !has_pending {
+        return rsx! {};
+    }
 
     let tool_name = sig.read().tool_name.clone().unwrap_or_default();
     let reason = sig.read().reason.clone().unwrap_or_default();
     let arguments = sig.read().arguments.clone().unwrap_or_default();
 
     let mut sig_clear = sig;
-    let on_approve = move |_: Event<MouseData>| { sig_clear.with_mut(|s| s.clear()); };
+    let on_approve = move |_: Event<MouseData>| {
+        sig_clear.with_mut(|s| s.clear());
+    };
     let mut sig_reject = sig;
-    let on_reject = move |_: Event<MouseData>| { sig_reject.with_mut(|s| s.clear()); };
+    let on_reject = move |_: Event<MouseData>| {
+        sig_reject.with_mut(|s| s.clear());
+    };
 
     rsx! {
         div { class: "fixed inset-0 bg-black/60 flex items-center justify-center z-[100]",

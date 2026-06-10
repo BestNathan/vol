@@ -1,7 +1,6 @@
 use crate::agent_server_protocol::{
-    AgentOperation, FileOperation, LogOperation, McpOperation,
-    Operation, Payload, ProtocolError, SessionOperation, SkillOperation, SystemOperation,
-    TaskOperation, ToolOperation,
+    AgentOperation, FileOperation, LogOperation, McpOperation, Operation, Payload, ProtocolError,
+    SessionOperation, SkillOperation, SystemOperation, TaskOperation, ToolOperation,
 };
 
 pub fn method_to_operation(method: &str) -> Result<Operation, ProtocolError> {
@@ -45,6 +44,9 @@ pub fn method_to_operation(method: &str) -> Result<Operation, ProtocolError> {
     }
 }
 
-pub fn decode_payload(operation: Operation, value: serde_json::Value) -> Result<Payload, ProtocolError> {
+pub fn decode_payload(
+    operation: Operation,
+    value: serde_json::Value,
+) -> Result<Payload, ProtocolError> {
     Payload::from_operation(&operation, value)
 }

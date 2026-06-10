@@ -1,6 +1,6 @@
 mod http;
-mod memory;
 pub mod jsonrpc;
+mod memory;
 mod ws;
 
 pub use http::HttpTransport;

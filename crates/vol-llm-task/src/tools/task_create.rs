@@ -70,13 +70,9 @@ impl ExecutableTool for TaskCreate {
         args: &serde_json::Value,
         context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
-        let params: TaskCreateParams = serde_json::from_value(args.clone())
-            .map_err(|e| {
-                vol_llm_tool::ToolError::InvalidArguments(format!(
-                    "Failed to parse arguments: {}",
-                    e
-                ))
-            })?;
+        let params: TaskCreateParams = serde_json::from_value(args.clone()).map_err(|e| {
+            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
+        })?;
 
         let mut task = Task::new(TaskKind::Agent, params.subject.clone(), vec![]);
         task.description = params.description;
@@ -85,10 +81,7 @@ impl ExecutableTool for TaskCreate {
         task.assignee = params.assignee;
 
         let id = self.store.create(task).await.map_err(|e| {
-            vol_llm_tool::ToolError::ExecutionFailed(format!(
-                "Failed to create task: {}",
-                e
-            ))
+            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to create task: {}", e))
         })?;
 
         Ok(ToolResult::success(format!(

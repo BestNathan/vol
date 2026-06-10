@@ -4,8 +4,7 @@ use vol_llm_provider::LLMProviderRegistry;
 
 #[tokio::test]
 async fn test_parse_yaml_file() {
-    let yaml_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/test_agent.yaml");
+    let yaml_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_agent.yaml");
     assert!(yaml_path.exists(), "Test YAML file should exist");
 
     let builder = vol_llm_yaml_agent::YamlAgentBuilder::from_file(&yaml_path).unwrap();

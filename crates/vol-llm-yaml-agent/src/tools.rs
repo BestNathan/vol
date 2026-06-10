@@ -11,8 +11,8 @@ pub fn register_tool_by_name(
 ) -> Result<(), crate::error::YamlAgentError> {
     use crate::error::YamlAgentError;
     use vol_llm_tools_builtin::{
-        ReadTool, WriteTool, EditTool, GlobTool, GrepTool, BashTool,
-        WebSearchTool, WebFetchTool, TavilySearchProvider, DefaultFetchProvider,
+        BashTool, DefaultFetchProvider, EditTool, GlobTool, GrepTool, ReadTool,
+        TavilySearchProvider, WebFetchTool, WebSearchTool, WriteTool,
     };
 
     match name {
@@ -36,15 +36,13 @@ pub fn register_tool_by_name(
                 return Ok(());
             }
         }
-        "web_fetch" => {
-            match DefaultFetchProvider::new(None) {
-                Ok(provider) => registry.register(WebFetchTool::new(provider)),
-                Err(e) => {
-                    tracing::warn!("web_fetch provider init failed: {}", e);
-                    return Ok(());
-                }
+        "web_fetch" => match DefaultFetchProvider::new(None) {
+            Ok(provider) => registry.register(WebFetchTool::new(provider)),
+            Err(e) => {
+                tracing::warn!("web_fetch provider init failed: {}", e);
+                return Ok(());
             }
-        }
+        },
         _ => return Err(YamlAgentError::UnknownTool(name.to_string())),
     }
 

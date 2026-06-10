@@ -42,6 +42,5 @@ pub enum SearchError {
 #[async_trait]
 pub trait SearchFn: Send + Sync {
     /// Search the web for the given query
-    async fn search(&self, query: &str, opts: SearchOptions)
-        -> Result<SearchResult, SearchError>;
+    async fn search(&self, query: &str, opts: SearchOptions) -> Result<SearchResult, SearchError>;
 }

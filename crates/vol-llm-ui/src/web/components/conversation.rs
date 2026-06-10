@@ -5,9 +5,7 @@ use dioxus::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
 
-use crate::state::{
-    ConversationEntry, ConversationState, GlobalState, UiEvent,
-};
+use crate::state::{ConversationEntry, ConversationState, GlobalState, UiEvent};
 
 /// Escapes the five HTML-significant characters so a raw string is safe to
 /// embed inside `<pre data-md-raw>...</pre>` without breaking parsing.
@@ -57,11 +55,27 @@ struct ToolDetail {
 
 fn find_tool_detail(entries: &[ConversationEntry], index: usize) -> Option<ToolDetail> {
     match &entries[index] {
-        ConversationEntry::ToolCall { tool_name, full_arguments, .. } => {
+        ConversationEntry::ToolCall {
+            tool_name,
+            full_arguments,
+            ..
+        } => {
             let result = entries[index + 1..].iter().find_map(|e| {
-                if let ConversationEntry::ToolResult { tool_name: tn, full_result, success, .. } = e {
-                    if tn == tool_name { Some((full_result.clone(), *success)) } else { None }
-                } else { None }
+                if let ConversationEntry::ToolResult {
+                    tool_name: tn,
+                    full_result,
+                    success,
+                    ..
+                } = e
+                {
+                    if tn == tool_name {
+                        Some((full_result.clone(), *success))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
             });
             Some(ToolDetail {
                 tool_name: tool_name.clone(),
@@ -70,12 +84,32 @@ fn find_tool_detail(entries: &[ConversationEntry], index: usize) -> Option<ToolD
                 success: result.map(|(_, s)| s),
             })
         }
-        ConversationEntry::ToolResult { tool_name, full_result, success, .. } => {
-            let arguments = entries[..index].iter().rev().find_map(|e| {
-                if let ConversationEntry::ToolCall { tool_name: tn, full_arguments, .. } = e {
-                    if tn == tool_name { Some(full_arguments.clone()) } else { None }
-                } else { None }
-            }).unwrap_or_default();
+        ConversationEntry::ToolResult {
+            tool_name,
+            full_result,
+            success,
+            ..
+        } => {
+            let arguments = entries[..index]
+                .iter()
+                .rev()
+                .find_map(|e| {
+                    if let ConversationEntry::ToolCall {
+                        tool_name: tn,
+                        full_arguments,
+                        ..
+                    } = e
+                    {
+                        if tn == tool_name {
+                            Some(full_arguments.clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_default();
             Some(ToolDetail {
                 tool_name: tool_name.clone(),
                 arguments,
@@ -104,19 +138,28 @@ pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
     let conv = s.active_mut();
     match event {
         UiEvent::AgentStart { input, .. } => {
-            conv.entries.push(ConversationEntry::UserInput { text: input.clone() });
+            conv.entries.push(ConversationEntry::UserInput {
+                text: input.clone(),
+            });
         }
         UiEvent::AgentComplete { .. } => {
             flush_pending_content(&mut conv.entries);
             clear_running_banner(&mut conv.entries);
         }
-        UiEvent::AgentAborted { reason, .. } | UiEvent::AgentError { message: reason, .. } => {
+        UiEvent::AgentAborted { reason, .. }
+        | UiEvent::AgentError {
+            message: reason, ..
+        } => {
             flush_pending_content(&mut conv.entries);
             clear_running_banner(&mut conv.entries);
-            conv.entries.push(ConversationEntry::Error { message: reason.clone() });
+            conv.entries.push(ConversationEntry::Error {
+                message: reason.clone(),
+            });
         }
         UiEvent::ThinkingStart => {
-            conv.entries.push(ConversationEntry::Thinking { content: String::new() });
+            conv.entries.push(ConversationEntry::Thinking {
+                content: String::new(),
+            });
         }
         UiEvent::ThinkingDelta { delta } => {
             if let Some(ConversationEntry::Thinking { content }) = conv.entries.last_mut() {
@@ -125,7 +168,9 @@ pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
         }
         UiEvent::ThinkingComplete => {}
         UiEvent::ContentStart => {
-            conv.entries.push(ConversationEntry::ContentStreaming { content: String::new() });
+            conv.entries.push(ConversationEntry::ContentStreaming {
+                content: String::new(),
+            });
         }
         UiEvent::ContentDelta { delta } => {
             if let Some(ConversationEntry::ContentStreaming { content }) = conv.entries.last_mut() {
@@ -134,12 +179,19 @@ pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
         }
         UiEvent::ContentComplete { content } => {
             if let Some(ConversationEntry::ContentStreaming { .. }) = conv.entries.last() {
-                *conv.entries.last_mut().unwrap() = ConversationEntry::AgentAnswer { text: content.clone() };
+                *conv.entries.last_mut().unwrap() = ConversationEntry::AgentAnswer {
+                    text: content.clone(),
+                };
             } else if !content.is_empty() {
-                conv.entries.push(ConversationEntry::AgentAnswer { text: content.clone() });
+                conv.entries.push(ConversationEntry::AgentAnswer {
+                    text: content.clone(),
+                });
             }
         }
-        UiEvent::ToolCallBegin { tool_name, arguments } => {
+        UiEvent::ToolCallBegin {
+            tool_name,
+            arguments,
+        } => {
             let preview = crate::state::format_tool_args(arguments);
             conv.entries.push(ConversationEntry::ToolCall {
                 tool_name: tool_name.clone(),
@@ -148,7 +200,9 @@ pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
             });
         }
         UiEvent::ToolCallArgumentDelta { .. } => {}
-        UiEvent::ToolCallComplete { tool_name, result, .. } => {
+        UiEvent::ToolCallComplete {
+            tool_name, result, ..
+        } => {
             let preview = crate::state::truncate_preview(result, 200);
             conv.entries.push(ConversationEntry::ToolResult {
                 tool_name: tool_name.clone(),
@@ -157,7 +211,9 @@ pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
                 success: true,
             });
         }
-        UiEvent::ToolCallError { tool_name, error, .. } => {
+        UiEvent::ToolCallError {
+            tool_name, error, ..
+        } => {
             conv.entries.push(ConversationEntry::ToolResult {
                 tool_name: tool_name.clone(),
                 preview: error.clone(),
@@ -165,7 +221,9 @@ pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
                 success: false,
             });
         }
-        UiEvent::ToolCallSkipped { tool_name, reason, .. } => {
+        UiEvent::ToolCallSkipped {
+            tool_name, reason, ..
+        } => {
             conv.entries.push(ConversationEntry::ToolResult {
                 tool_name: tool_name.clone(),
                 preview: reason.clone(),
@@ -177,7 +235,10 @@ pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
         UiEvent::ApprovalResolved { .. } => {}
         UiEvent::MaxIterationsReached { current, max } => {
             conv.entries.push(ConversationEntry::Error {
-                message: format!("Max iterations reached ({}/{}) — waiting for user decision...", current, max),
+                message: format!(
+                    "Max iterations reached ({}/{}) — waiting for user decision...",
+                    current, max
+                ),
             });
         }
         UiEvent::IterationContinued { from_iteration } => {
@@ -188,8 +249,12 @@ pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
         UiEvent::IterationComplete { .. } => {
             clear_running_banner(&mut conv.entries);
         }
-        UiEvent::WsConnected | UiEvent::WsConnecting | UiEvent::WsDisconnected { .. }
-        | UiEvent::WsReconnecting { .. } | UiEvent::WsReconnectFailed | UiEvent::WsReconnected => {}
+        UiEvent::WsConnected
+        | UiEvent::WsConnecting
+        | UiEvent::WsDisconnected { .. }
+        | UiEvent::WsReconnecting { .. }
+        | UiEvent::WsReconnectFailed
+        | UiEvent::WsReconnected => {}
     }
 }
 
@@ -218,7 +283,9 @@ pub fn ConversationView() -> Element {
     }).collect();
 
     // Auto-scroll: read current state so VNode always reflects it
-    let auto_scroll = guard.active_agent.as_ref()
+    let auto_scroll = guard
+        .active_agent
+        .as_ref()
         .and_then(|id| guard.agents.get(id))
         .map(|a| a.auto_scroll)
         .unwrap_or(true);
@@ -227,7 +294,8 @@ pub fn ConversationView() -> Element {
     let signal_clone = signal.clone();
     use_effect(move || {
         let auto_scroll = signal_clone.with(|s| {
-            s.active_agent.as_ref()
+            s.active_agent
+                .as_ref()
                 .and_then(|id| s.agents.get(id))
                 .map(|a| a.auto_scroll)
                 .unwrap_or(true)
@@ -246,7 +314,8 @@ pub fn ConversationView() -> Element {
                 if let Some(el) = doc.query_selector("[data-scroll]").ok().flatten() {
                     if let Ok(el) = el.dyn_into::<HtmlElement>() {
                         // Skip scroll events triggered by our own JS (auto-scroll)
-                        let programmatic = el.get_attribute("data-scroll-programmatic")
+                        let programmatic = el
+                            .get_attribute("data-scroll-programmatic")
                             .map(|v| v == "1")
                             .unwrap_or(false);
                         if programmatic {
@@ -254,12 +323,14 @@ pub fn ConversationView() -> Element {
                             return;
                         }
                         // User-initiated scroll: tight 2px threshold — any scroll up cancels stick
-                        let at_bottom = el.scroll_top() + el.client_height() >= el.scroll_height() - 2;
+                        let at_bottom =
+                            el.scroll_top() + el.client_height() >= el.scroll_height() - 2;
                         let mut s = signal_scroll.write_unchecked();
                         let agent_id = s.active_agent.clone().unwrap_or_default();
                         let ac = s.get_or_create(&agent_id);
                         ac.auto_scroll = at_bottom;
-                        let _ = el.set_attribute("data-auto-scroll", if at_bottom { "1" } else { "0" });
+                        let _ =
+                            el.set_attribute("data-auto-scroll", if at_bottom { "1" } else { "0" });
                     }
                 }
             }
@@ -313,7 +384,11 @@ fn TimelineEntry(
                 markdown_container(&content, "")
             }
         }
-        ConversationEntry::ToolCall { tool_name, ref arg_preview, .. } => {
+        ConversationEntry::ToolCall {
+            tool_name,
+            ref arg_preview,
+            ..
+        } => {
             let empty = arg_preview.is_empty();
             rsx! {
                 div {
@@ -333,10 +408,19 @@ fn TimelineEntry(
                 }
             }
         }
-        ConversationEntry::ToolResult { tool_name, ref preview, success, .. } => {
+        ConversationEntry::ToolResult {
+            tool_name,
+            ref preview,
+            success,
+            ..
+        } => {
             let status = if success { "OK" } else { "ERR" };
             let color = if success { "#40c040" } else { "#c04040" };
-            let bg = if success { "bg-[#1a2a1a]" } else { "bg-[#2a1a1a]" };
+            let bg = if success {
+                "bg-[#1a2a1a]"
+            } else {
+                "bg-[#2a1a1a]"
+            };
             rsx! {
                 div {
                     class: "ml-4 cursor-pointer hover:brightness-125 rounded px-1.5 py-1 select-none group {bg}",
@@ -356,16 +440,33 @@ fn TimelineEntry(
                 }
             }
         }
-        ConversationEntry::AgentAnswer { text } => {
-            markdown_container(&text, "")
-        }
-        ConversationEntry::RunSummary { iterations, tool_calls, elapsed_ms } => {
-            let iw = if iterations == 1 { "iteration" } else { "iterations" };
-            let tw = if tool_calls == 1 { "tool call" } else { "tool calls" };
+        ConversationEntry::AgentAnswer { text } => markdown_container(&text, ""),
+        ConversationEntry::RunSummary {
+            iterations,
+            tool_calls,
+            elapsed_ms,
+        } => {
+            let iw = if iterations == 1 {
+                "iteration"
+            } else {
+                "iterations"
+            };
+            let tw = if tool_calls == 1 {
+                "tool call"
+            } else {
+                "tool calls"
+            };
             rsx! { div { class: "text-[#80c080] font-bold text-center text-sm", "Done | {iterations} {iw} | {tool_calls} {tw} | {elapsed_ms}ms" } }
         }
-        ConversationEntry::EntryCheckpoint { reason, note, created_at } => {
-            let note_text = note.as_deref().map(|n| format!(" ({n})")).unwrap_or_default();
+        ConversationEntry::EntryCheckpoint {
+            reason,
+            note,
+            created_at,
+        } => {
+            let note_text = note
+                .as_deref()
+                .map(|n| format!(" ({n})"))
+                .unwrap_or_default();
             rsx! { div { class: "text-[#888] text-xs italic", "[Checkpoint {created_at}] {reason}{note_text}" } }
         }
         ConversationEntry::Error { ref message } => {
@@ -410,7 +511,11 @@ fn ToolDetailModal(detail: ToolDetail, detail_signal: Signal<Option<ToolDetail>>
     let args_display = format_json_pretty(&detail.arguments);
     let result_display = detail.result.as_deref().map(format_json_pretty);
     let status_badge: Option<(String, String)> = detail.success.map(|ok| {
-        if ok { ("OK".to_string(), "#40c040".to_string()) } else { ("ERR".to_string(), "#c04040".to_string()) }
+        if ok {
+            ("OK".to_string(), "#40c040".to_string())
+        } else {
+            ("ERR".to_string(), "#c04040".to_string())
+        }
     });
 
     rsx! {
@@ -464,7 +569,9 @@ fn ToolDetailModal(detail: ToolDetail, detail_signal: Signal<Option<ToolDetail>>
 }
 
 fn format_json_pretty(raw: &str) -> String {
-    if raw.is_empty() { return String::new(); }
+    if raw.is_empty() {
+        return String::new();
+    }
     if let Ok(val) = serde_json::from_str::<serde_json::Value>(raw) {
         serde_json::to_string_pretty(&val).unwrap_or_else(|_| raw.to_string())
     } else {
@@ -480,7 +587,10 @@ mod tests {
     fn test_html_escape_special_chars() {
         assert_eq!(html_escape("a & b"), "a &amp; b");
         assert_eq!(html_escape("<script>"), "&lt;script&gt;");
-        assert_eq!(html_escape("a \"quoted\" word"), "a &quot;quoted&quot; word");
+        assert_eq!(
+            html_escape("a \"quoted\" word"),
+            "a &quot;quoted&quot; word"
+        );
         assert_eq!(html_escape("'apostrophe'"), "&#39;apostrophe&#39;");
     }
 

@@ -104,7 +104,11 @@ impl ExtractedMetric {
                 let data = &event.data;
                 let response = data.get("response")?;
                 let iterations = response.get("iterations")?.as_u64()? as i32;
-                let tool_calls = response.get("tool_calls")?.as_array().map(|a| a.len()).unwrap_or(0) as i32;
+                let tool_calls = response
+                    .get("tool_calls")?
+                    .as_array()
+                    .map(|a| a.len())
+                    .unwrap_or(0) as i32;
                 let content = response.get("content")?.as_str().unwrap_or("");
 
                 Some(ExtractedMetric::AgentRun {
@@ -120,20 +124,18 @@ impl ExtractedMetric {
                     status: 0,
                 })
             }
-            "AgentAborted" => {
-                Some(ExtractedMetric::AgentRun {
-                    run_id: event.run_id.clone(),
-                    session_id: event.session_id.clone(),
-                    agent_id: event.agent_id.clone(),
-                    agent_type: event.agent_type.clone(),
-                    timestamp: event.timestamp,
-                    duration_ms: 0,
-                    iterations: 0,
-                    tool_calls: 0,
-                    final_answer_len: 0,
-                    status: 1,
-                })
-            }
+            "AgentAborted" => Some(ExtractedMetric::AgentRun {
+                run_id: event.run_id.clone(),
+                session_id: event.session_id.clone(),
+                agent_id: event.agent_id.clone(),
+                agent_type: event.agent_type.clone(),
+                timestamp: event.timestamp,
+                duration_ms: 0,
+                iterations: 0,
+                tool_calls: 0,
+                final_answer_len: 0,
+                status: 1,
+            }),
             "LLMCallComplete" => {
                 let usage = event.data.get("usage");
                 let (input_tokens, output_tokens, total_tokens) = if let Some(u) = usage {
@@ -145,7 +147,12 @@ impl ExtractedMetric {
                 } else {
                     (0, 0, 0)
                 };
-                let model = event.data.get("model").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
+                let model = event
+                    .data
+                    .get("model")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
 
                 Some(ExtractedMetric::LlmCall {
                     run_id: event.run_id.clone(),
@@ -154,7 +161,11 @@ impl ExtractedMetric {
                     agent_type: event.agent_type.clone(),
                     timestamp: event.timestamp,
                     duration_ms: 0,
-                    iteration: event.data.get("iteration").and_then(|v| v.as_u64()).unwrap_or(0) as i32,
+                    iteration: event
+                        .data
+                        .get("iteration")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as i32,
                     input_tokens,
                     output_tokens,
                     total_tokens,
@@ -162,25 +173,32 @@ impl ExtractedMetric {
                     is_error: false,
                 })
             }
-            "LLMCallError" => {
-                Some(ExtractedMetric::LlmCall {
-                    run_id: event.run_id.clone(),
-                    session_id: event.session_id.clone(),
-                    agent_id: event.agent_id.clone(),
-                    agent_type: event.agent_type.clone(),
-                    timestamp: event.timestamp,
-                    duration_ms: 0,
-                    iteration: 0,
-                    input_tokens: 0,
-                    output_tokens: 0,
-                    total_tokens: 0,
-                    model: "unknown".to_string(),
-                    is_error: true,
-                })
-            }
+            "LLMCallError" => Some(ExtractedMetric::LlmCall {
+                run_id: event.run_id.clone(),
+                session_id: event.session_id.clone(),
+                agent_id: event.agent_id.clone(),
+                agent_type: event.agent_type.clone(),
+                timestamp: event.timestamp,
+                duration_ms: 0,
+                iteration: 0,
+                input_tokens: 0,
+                output_tokens: 0,
+                total_tokens: 0,
+                model: "unknown".to_string(),
+                is_error: true,
+            }),
             "ToolCallComplete" => {
-                let duration_ms = event.data.get("duration_ms").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
-                let tool_name = event.data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
+                let duration_ms = event
+                    .data
+                    .get("duration_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as i64;
+                let tool_name = event
+                    .data
+                    .get("tool_name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
 
                 Some(ExtractedMetric::ToolCall {
                     run_id: event.run_id.clone(),
@@ -194,8 +212,17 @@ impl ExtractedMetric {
                 })
             }
             "ToolCallError" => {
-                let duration_ms = event.data.get("duration_ms").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
-                let tool_name = event.data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
+                let duration_ms = event
+                    .data
+                    .get("duration_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as i64;
+                let tool_name = event
+                    .data
+                    .get("tool_name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
 
                 Some(ExtractedMetric::ToolCall {
                     run_id: event.run_id.clone(),
@@ -269,7 +296,12 @@ mod tests {
 
         let metric = ExtractedMetric::from_event(&event).unwrap();
         match metric {
-            ExtractedMetric::ToolCall { duration_ms, status, tool_name, .. } => {
+            ExtractedMetric::ToolCall {
+                duration_ms,
+                status,
+                tool_name,
+                ..
+            } => {
                 assert_eq!(duration_ms, 150);
                 assert_eq!(status, 0);
                 assert_eq!(tool_name, "bash");
@@ -298,7 +330,13 @@ mod tests {
 
         let metric = ExtractedMetric::from_event(&event).unwrap();
         match metric {
-            ExtractedMetric::AgentRun { iterations, tool_calls, final_answer_len, status, .. } => {
+            ExtractedMetric::AgentRun {
+                iterations,
+                tool_calls,
+                final_answer_len,
+                status,
+                ..
+            } => {
                 assert_eq!(iterations, 3);
                 assert_eq!(tool_calls, 2);
                 assert_eq!(final_answer_len, 4);
@@ -330,7 +368,14 @@ mod tests {
 
         let metric = ExtractedMetric::from_event(&event).unwrap();
         match metric {
-            ExtractedMetric::LlmCall { input_tokens, output_tokens, total_tokens, model, is_error, .. } => {
+            ExtractedMetric::LlmCall {
+                input_tokens,
+                output_tokens,
+                total_tokens,
+                model,
+                is_error,
+                ..
+            } => {
                 assert_eq!(input_tokens, 100);
                 assert_eq!(output_tokens, 50);
                 assert_eq!(total_tokens, 150);

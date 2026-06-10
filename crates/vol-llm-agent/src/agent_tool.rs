@@ -17,8 +17,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde::Deserialize;
 use vol_llm_core::LLMClient;
-use vol_llm_tool::{ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity};
 use vol_llm_tool::ToolRegistry;
+use vol_llm_tool::{
+    ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity,
+};
 use vol_session::{InMemoryEntryStore, Session};
 
 use crate::agent_def::{AgentDef, AgentPath};
@@ -87,10 +89,7 @@ impl AgentTool {
         } else {
             output.push_str("Available agent types:\n");
             for m in &metadata {
-                output.push_str(&format!(
-                    "- {} ({}): {}\n",
-                    m.r#type, m.name, m.description
-                ));
+                output.push_str(&format!("- {} ({}): {}\n", m.r#type, m.name, m.description));
             }
         }
         output
@@ -146,8 +145,7 @@ impl ExecutableTool for AgentTool {
         if self.agent_path.depth() >= self.max_depth as usize {
             return Err(ToolError::ExecutionFailed(format!(
                 "Cannot dispatch: maximum dispatch depth ({}) reached at path '{}'",
-                self.max_depth,
-                self.agent_path
+                self.max_depth, self.agent_path
             )));
         }
 
@@ -179,13 +177,16 @@ impl ExecutableTool for AgentTool {
             .with_system_prompt(system_prompt)
             .with_plugin_registry(PluginRegistry::new())
             .build()
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to build agent config: {}", e)))?;
+            .map_err(|e| {
+                ToolError::ExecutionFailed(format!("Failed to build agent config: {}", e))
+            })?;
 
         let sub_agent = crate::react::ReActAgent::new(agent_config);
 
-        let response = sub_agent.run(&params.prompt).await.map_err(|e| {
-            ToolError::ExecutionFailed(format!("Sub-agent failed: {}", e))
-        })?;
+        let response = sub_agent
+            .run(&params.prompt)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed(format!("Sub-agent failed: {}", e)))?;
 
         Ok(ToolResult::success(response.content))
     }

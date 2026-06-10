@@ -2,7 +2,9 @@
 
 use dioxus::prelude::*;
 
-use crate::state::{AgentsState, AgentSubTab, ConversationEntry, ConversationState, GlobalState, UiEventKind};
+use crate::state::{
+    AgentSubTab, AgentsState, ConversationEntry, ConversationState, GlobalState, UiEventKind,
+};
 
 use super::context_panel::ContextPanel;
 use super::conversation::ConversationView;
@@ -74,9 +76,14 @@ fn load_running_session(
         });
         let sessions = match rx.await {
             Ok(Ok(s)) => s,
-            _ => { log::warn!("Failed to list sessions for {}", agent); return; }
+            _ => {
+                log::warn!("Failed to list sessions for {}", agent);
+                return;
+            }
         };
-        if sessions.is_empty() { return; }
+        if sessions.is_empty() {
+            return;
+        }
         let latest_id = sessions[0].id.clone();
 
         let (tx2, rx2) = futures_channel::oneshot::channel();
@@ -85,10 +92,14 @@ fn load_running_session(
         });
         let entries = match rx2.await {
             Ok(Ok(e)) => e,
-            _ => { log::warn!("Failed to fetch session entries for {}", agent); return; }
+            _ => {
+                log::warn!("Failed to fetch session entries for {}", agent);
+                return;
+            }
         };
 
-        let conv_entries = crate::web::components::sessions_panel::session_entries_to_conversation(entries);
+        let conv_entries =
+            crate::web::components::sessions_panel::session_entries_to_conversation(entries);
         let mut banner_entries = vec![ConversationEntry::RunningBanner { run_id: rid }];
         banner_entries.extend(conv_entries);
 
@@ -112,15 +123,23 @@ pub fn AgentsPanel() -> Element {
     // Initial load on mount
     use_hook(move || {
         let mut sig = sig_load;
-        sig.with_mut(|s| { s.loading = true; s.error = None; });
+        sig.with_mut(|s| {
+            s.loading = true;
+            s.error = None;
+        });
         let sig2 = sig_load;
         rpc_load.agent_list(move |result| {
             let mut sig2 = sig2;
             sig2.with_mut(|s| {
                 s.loading = false;
                 match result {
-                    Ok(agents) => { s.agents = agents; s.error = None; }
-                    Err(e) => { s.error = Some(e); }
+                    Ok(agents) => {
+                        s.agents = agents;
+                        s.error = None;
+                    }
+                    Err(e) => {
+                        s.error = Some(e);
+                    }
                 }
             });
         });
@@ -132,15 +151,23 @@ pub fn AgentsPanel() -> Element {
     use_hook(move || {
         let _sub = app.event_bus.subscribe(UiEventKind::WsConnected, move |_| {
             let mut sig = sig_retry;
-            sig.with_mut(|s| { s.loading = true; s.error = None; });
+            sig.with_mut(|s| {
+                s.loading = true;
+                s.error = None;
+            });
             let sig2 = sig_retry;
             rpc_retry.agent_list(move |result| {
                 let mut sig2 = sig2;
                 sig2.with_mut(|s| {
                     s.loading = false;
                     match result {
-                        Ok(agents) => { s.agents = agents; s.error = None; }
-                        Err(e) => { s.error = Some(e); }
+                        Ok(agents) => {
+                            s.agents = agents;
+                            s.error = None;
+                        }
+                        Err(e) => {
+                            s.error = Some(e);
+                        }
                     }
                 });
             });

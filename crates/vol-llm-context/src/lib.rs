@@ -32,10 +32,12 @@
 pub mod context_block;
 pub mod context_contributor;
 
-pub use context_block::{AttentionAnchor, ContextBlock, TokenBudget, estimate_tokens};
+pub use context_block::{estimate_tokens, AttentionAnchor, ContextBlock, TokenBudget};
 pub use context_contributor::{ContextContributor, ContextError};
 
 pub mod builder;
 pub mod builtin;
 
-pub use builder::{ContextBuilder, ContextBuilderBuilder, ContextMessage, ContextOutput, ContributorInfo};
+pub use builder::{
+    ContextBuilder, ContextBuilderBuilder, ContextMessage, ContextOutput, ContributorInfo,
+};

@@ -13,9 +13,9 @@ mod sandbox;
 
 pub use agent::{CodingAgent, CodingAgentBuilder, CodingAgentResponse};
 pub use channelled_observer::ChannelledEventObserver;
-pub use compressor::{ToolCallCompressor, ConversationCompressor, SessionCompressor};
+pub use compressor::{ConversationCompressor, SessionCompressor, ToolCallCompressor};
 pub use config::CodingAgentConfig;
-pub use error::{CodingAgentError, ObserverError, HITLError};
+pub use error::{CodingAgentError, HITLError, ObserverError};
 pub use hitl::{HITLDecision, HITLHandler};
 pub use html_reporter::HTMLReporter;
 pub use observer::EventObserver;

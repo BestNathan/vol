@@ -51,9 +51,7 @@ impl OpenaiProvider {
             builder = builder.proxy(proxy);
         }
 
-        builder
-            .build()
-            .map_err(|e| LLMError::Network(e.into()))
+        builder.build().map_err(|e| LLMError::Network(e.into()))
     }
 
     /// Convert messages to OpenAI format.
@@ -177,8 +175,15 @@ impl LLMClient for OpenaiProvider {
         });
 
         // Max tokens
-        let max_tokens = request.model_config.max_tokens
-            .or_else(|| self.body_defaults.get("max_tokens").and_then(|v| v.as_u64()).map(|v| v as u32))
+        let max_tokens = request
+            .model_config
+            .max_tokens
+            .or_else(|| {
+                self.body_defaults
+                    .get("max_tokens")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+            })
             .unwrap_or(4096);
         body["max_tokens"] = json!(max_tokens);
 
@@ -223,8 +228,8 @@ impl LLMClient for OpenaiProvider {
                 "seed" => request.model_config.seed.is_some(),
                 "logprobs" => request.model_config.logprobs.is_some(),
                 // Always set from request — skip body defaults
-                "model" | "messages" | "tools" | "tool_choice" | "stream"
-                | "stream_options" | "max_tokens" => true,
+                "model" | "messages" | "tools" | "tool_choice" | "stream" | "stream_options"
+                | "max_tokens" => true,
                 _ => false,
             };
             if !overridden {
@@ -247,10 +252,7 @@ impl LLMClient for OpenaiProvider {
             req = req.header(key, value);
         }
 
-        let response = req
-            .send()
-            .await
-            .map_err(LLMError::Network)?;
+        let response = req.send().await.map_err(LLMError::Network)?;
 
         // Handle response
         if !response.status().is_success() {
@@ -350,8 +352,15 @@ impl LLMClient for OpenaiProvider {
         });
 
         // Max tokens
-        let max_tokens = request.model_config.max_tokens
-            .or_else(|| self.body_defaults.get("max_tokens").and_then(|v| v.as_u64()).map(|v| v as u32))
+        let max_tokens = request
+            .model_config
+            .max_tokens
+            .or_else(|| {
+                self.body_defaults
+                    .get("max_tokens")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+            })
             .unwrap_or(4096);
         body["max_tokens"] = json!(max_tokens);
 
@@ -396,8 +405,8 @@ impl LLMClient for OpenaiProvider {
                 "seed" => request.model_config.seed.is_some(),
                 "logprobs" => request.model_config.logprobs.is_some(),
                 // Always set from request — skip body defaults
-                "model" | "messages" | "tools" | "tool_choice" | "stream"
-                | "stream_options" | "max_tokens" => true,
+                "model" | "messages" | "tools" | "tool_choice" | "stream" | "stream_options"
+                | "max_tokens" => true,
                 _ => false,
             };
             if !overridden {
@@ -420,10 +429,7 @@ impl LLMClient for OpenaiProvider {
             req = req.header(key, value);
         }
 
-        let response = req
-            .send()
-            .await
-            .map_err(LLMError::Network)?;
+        let response = req.send().await.map_err(LLMError::Network)?;
 
         // Handle non-success status
         if !response.status().is_success() {
@@ -617,7 +623,10 @@ mod tests {
         std::env::set_var("TEST_OPENAI_MERGE", "test-key");
         let mut body = HashMap::new();
         body.insert("temperature".to_string(), serde_json::json!(0.9));
-        body.insert("custom_param".to_string(), serde_json::json!("custom_value"));
+        body.insert(
+            "custom_param".to_string(),
+            serde_json::json!("custom_value"),
+        );
 
         let config = LLMConfig::with_env_key(
             LLMProvider::OpenAI,

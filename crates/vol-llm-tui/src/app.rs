@@ -25,14 +25,35 @@ pub enum ToolCallStatus {
 /// A single rendered entry in the conversation view.
 #[derive(Debug, Clone)]
 pub enum ConversationEntry {
-    UserInput { text: String },
-    Thinking { content: String },
-    ContentStreaming { content: String },
-    ToolCall { tool_name: String, arg_preview: String },
-    ToolResult { tool_name: String, preview: String, success: bool },
-    AgentAnswer { text: String },
-    RunSummary { iterations: u32, tool_calls: u32, elapsed_ms: u128 },
-    Error { message: String },
+    UserInput {
+        text: String,
+    },
+    Thinking {
+        content: String,
+    },
+    ContentStreaming {
+        content: String,
+    },
+    ToolCall {
+        tool_name: String,
+        arg_preview: String,
+    },
+    ToolResult {
+        tool_name: String,
+        preview: String,
+        success: bool,
+    },
+    AgentAnswer {
+        text: String,
+    },
+    RunSummary {
+        iterations: u32,
+        tool_calls: u32,
+        elapsed_ms: u128,
+    },
+    Error {
+        message: String,
+    },
 }
 
 /// Snapshot of the workspace file tree.
@@ -153,7 +174,9 @@ impl LogViewer {
             return;
         }
 
-        let Ok(entries) = std::fs::read_dir(&logs_dir) else { return };
+        let Ok(entries) = std::fs::read_dir(&logs_dir) else {
+            return;
+        };
 
         for entry in entries {
             let Ok(entry) = entry else { continue };
@@ -192,7 +215,8 @@ impl LogViewer {
             });
         }
 
-        self.run_logs.sort_by(|a, b| b.event_count.cmp(&a.event_count));
+        self.run_logs
+            .sort_by(|a, b| b.event_count.cmp(&a.event_count));
     }
 
     pub fn load_run(&mut self, run_id: &str) {
@@ -332,22 +356,20 @@ fn scan_workspace(root: &str) -> WorkspaceTree {
         skip_dirs: &[&str],
         indent: usize,
     ) {
-        let Ok(read_dir) = std::fs::read_dir(dir) else { return };
-        let mut paths: Vec<_> = read_dir
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .collect();
+        let Ok(read_dir) = std::fs::read_dir(dir) else {
+            return;
+        };
+        let mut paths: Vec<_> = read_dir.filter_map(|e| e.ok()).map(|e| e.path()).collect();
         paths.sort();
 
         for path in paths {
-            let file_name = path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             if path.is_dir() {
                 if skip_dirs.contains(&file_name) {
                     continue;
                 }
-                let rel = path.strip_prefix(root)
+                let rel = path
+                    .strip_prefix(root)
                     .unwrap_or(&path)
                     .to_string_lossy()
                     .to_string();
@@ -359,7 +381,8 @@ fn scan_workspace(root: &str) -> WorkspaceTree {
                 });
                 walk(&path, root, entries, skip_dirs, indent + 1);
             } else {
-                let rel = path.strip_prefix(root)
+                let rel = path
+                    .strip_prefix(root)
                     .unwrap_or(&path)
                     .to_string_lossy()
                     .to_string();

@@ -65,9 +65,9 @@ impl ExecutableTool for TaskClaim {
             .map_err(|e| ToolError::InvalidArguments(format!("Failed to parse task ID: {}", e)))?;
 
         let raw = params.task_id.trim_start_matches('t');
-        let id_num: u64 = raw
-            .parse()
-            .map_err(|_| ToolError::InvalidArguments(format!("Invalid task ID: {}", params.task_id)))?;
+        let id_num: u64 = raw.parse().map_err(|_| {
+            ToolError::InvalidArguments(format!("Invalid task ID: {}", params.task_id))
+        })?;
         let task_id = TaskId(id_num);
 
         let caller_type = context
@@ -83,7 +83,9 @@ impl ExecutableTool for TaskClaim {
             .get(&task_id)
             .await
             .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?
-            .ok_or_else(|| ToolError::ExecutionFailed(format!("Task {} not found", params.task_id)))?;
+            .ok_or_else(|| {
+                ToolError::ExecutionFailed(format!("Task {} not found", params.task_id))
+            })?;
 
         if task.status != TaskStatus::Pending {
             return Err(ToolError::ExecutionFailed(format!(
@@ -201,7 +203,10 @@ mod tests {
         let args = serde_json::json!({"taskId": task_id.to_string()});
         let result = tool.execute(&args, &ctx).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("agent identity required"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("agent identity required"));
     }
 
     #[tokio::test]

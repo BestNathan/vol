@@ -1,7 +1,7 @@
 //! Discover YAML agent files from a directory.
 
-use std::path::{Path, PathBuf};
 use crate::error::YamlAgentError;
+use std::path::{Path, PathBuf};
 
 /// Find all .yaml files in the given directory.
 pub fn discover_agents(dir: &Path) -> Result<Vec<PathBuf>, YamlAgentError> {
@@ -9,8 +9,7 @@ pub fn discover_agents(dir: &Path) -> Result<Vec<PathBuf>, YamlAgentError> {
         return Ok(vec![]);
     }
 
-    let entries = std::fs::read_dir(dir)
-        .map_err(YamlAgentError::Io)?;
+    let entries = std::fs::read_dir(dir).map_err(YamlAgentError::Io)?;
 
     let mut files = Vec::new();
     for entry in entries.flatten() {

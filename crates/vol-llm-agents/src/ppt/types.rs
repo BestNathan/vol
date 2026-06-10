@@ -1,7 +1,7 @@
 //! PPT Agent 类型定义。
 
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 /// PPT 生成请求的输入类型
 #[derive(Clone, Debug)]

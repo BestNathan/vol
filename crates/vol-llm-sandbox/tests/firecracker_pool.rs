@@ -22,13 +22,13 @@ ssh_identity_file = "/opt/key"
     assert_eq!(config.name, "fc");
     assert_eq!(config.sandbox_type, "firecracker");
     let fc = config.firecracker.unwrap();
-    assert_eq!(fc.pool_size, 1);           // default
+    assert_eq!(fc.pool_size, 1); // default
     assert_eq!(fc.idle_timeout_secs, 300); // default
     assert_eq!(fc.guest_ip, "172.16.0.2"); // default
     assert_eq!(fc.rootfs_readonly, false); // default
-    assert_eq!(fc.guest_ssh_port, 22);     // default
+    assert_eq!(fc.guest_ssh_port, 22); // default
     assert_eq!(fc.firecracker_binary, None); // default
-    assert_eq!(fc.ssh_passphrase, None);     // default
+    assert_eq!(fc.ssh_passphrase, None); // default
 }
 
 #[test]

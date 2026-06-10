@@ -1,11 +1,11 @@
 //! TUI approval channel — bridges ApprovalState to the ApprovalChannel trait.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, Notify};
-use vol_llm_agent::react::{ApprovalChannel, ApprovalRequest, ApprovalResponse};
 use vol_llm_agent::react::hitl::ApprovalError;
+use vol_llm_agent::react::{ApprovalChannel, ApprovalRequest, ApprovalResponse};
 
 /// Shared state for pending approval requests in the TUI.
 #[derive(Clone)]
@@ -56,7 +56,9 @@ impl ApprovalState {
     pub fn into_hitl_plugin(self) -> vol_llm_agent::react::hitl::HitlPlugin<TuiApprovalChannel> {
         use vol_llm_agent::react::{ApprovalTrigger, HitlConfig};
 
-        let channel = TuiApprovalChannel { state: self.clone() };
+        let channel = TuiApprovalChannel {
+            state: self.clone(),
+        };
         let config = HitlConfig {
             triggers: vec![ApprovalTrigger::ToolExecution { tools: None }],
             timeout_secs: 0,
@@ -89,10 +91,8 @@ impl ApprovalChannel for TuiApprovalChannel {
         // Store the pending request for UI display
         *self.state.tool_name.lock().await = Some(request.tool_name.clone());
         *self.state.reason.lock().await = Some(request.reason.clone());
-        *self.state.arguments.lock().await = Some(
-            serde_json::to_string_pretty(&request.metadata)
-                .unwrap_or_default(),
-        );
+        *self.state.arguments.lock().await =
+            Some(serde_json::to_string_pretty(&request.metadata).unwrap_or_default());
 
         // Wait for keyboard handler to set the response
         self.state.notify.notified().await;

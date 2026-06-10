@@ -19,11 +19,11 @@ pub use tools_panel::render_tools_panel;
 pub use workspace_panel::render_workspace;
 
 use crate::app::{ActiveTab, AppState};
-use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::Frame;
 
 /// Render the full UI to the frame.
 pub fn render_ui(frame: &mut Frame, state: &AppState) {
@@ -33,8 +33,8 @@ pub fn render_ui(frame: &mut Frame, state: &AppState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),  // status bar
-            Constraint::Min(1),     // remaining area
+            Constraint::Length(1), // status bar
+            Constraint::Min(1),    // remaining area
         ])
         .split(area);
 
@@ -44,10 +44,7 @@ pub fn render_ui(frame: &mut Frame, state: &AppState) {
     // Split remaining area: tools panel (30%) | content panel (70%)
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(30),
-            Constraint::Percentage(70),
-        ])
+        .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
         .split(chunks[1]);
 
     // Render tools panel
@@ -65,9 +62,9 @@ fn render_right_panel(frame: &mut Frame, area: Rect, state: &AppState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),   // tab bar
-            Constraint::Min(3),      // tab content (conversation/workspace)
-            Constraint::Length(5),   // input area (4 rows textarea + 1 row hints)
+            Constraint::Length(1), // tab bar
+            Constraint::Min(3),    // tab content (conversation/workspace)
+            Constraint::Length(5), // input area (4 rows textarea + 1 row hints)
         ])
         .split(area);
 
@@ -98,25 +95,37 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &AppState) {
     let active = &state.active_tab;
 
     let conv_style = if matches!(active, ActiveTab::Conversation) {
-        Style::default().fg(Color::Black).bg(Color::White).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::White)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::DarkGray)
     };
 
     let ws_style = if matches!(active, ActiveTab::Workspace) {
-        Style::default().fg(Color::Black).bg(Color::White).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::White)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::DarkGray)
     };
 
     let logs_style = if matches!(active, ActiveTab::Logs) {
-        Style::default().fg(Color::Black).bg(Color::White).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::White)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::DarkGray)
     };
 
     let skills_style = if matches!(active, ActiveTab::Skills) {
-        Style::default().fg(Color::Black).bg(Color::White).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::White)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::DarkGray)
     };
@@ -133,8 +142,7 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &AppState) {
         Span::raw(" "),
     ]);
 
-    let paragraph = Paragraph::new(tabs)
-        .block(Block::default().borders(Borders::BOTTOM));
+    let paragraph = Paragraph::new(tabs).block(Block::default().borders(Borders::BOTTOM));
 
     frame.render_widget(paragraph, area);
 }

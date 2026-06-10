@@ -1,13 +1,18 @@
 //! ReAct Agent implementation.
 
-use super::{AgentInput, AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext};
+use super::{
+    AgentInput, AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext,
+};
 use crate::react::state::ToolCallRecord;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use vol_llm_context::{AttentionAnchor, ContextBuilder, ContextBuilderBuilder, ContextContributor, ContextError, ContextMessage, ContributorInfo};
+use vol_llm_context::{
+    AttentionAnchor, ContextBuilder, ContextBuilderBuilder, ContextContributor, ContextError,
+    ContextMessage, ContributorInfo,
+};
 use vol_llm_core::{
-    ConversationRequest, ConversationResponse, LLMClient, Message, StreamEventData,
-    StreamReceiver, ToolChoice,
+    ConversationRequest, ConversationResponse, LLMClient, Message, StreamEventData, StreamReceiver,
+    ToolChoice,
 };
 use vol_llm_mcp::McpManager;
 use vol_llm_sandbox::registry::SandboxRegistry;
@@ -56,7 +61,10 @@ impl AgentConfig {
 
     /// Add a context contributor.
     pub fn add_contributor(&mut self, contributor: Box<dyn ContextContributor>) {
-        self.context_builder.write().unwrap().add_contributor(contributor);
+        self.context_builder
+            .write()
+            .unwrap()
+            .add_contributor(contributor);
     }
 
     /// List contributor info (for RPC / UI queries).
@@ -78,7 +86,9 @@ impl Default for AgentConfig {
             def: None,
             llm: Arc::new(DefaultLlm),
             tools: Arc::new(vol_llm_tool::ToolRegistry::new()),
-            session: std::sync::RwLock::new(Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())))),
+            session: std::sync::RwLock::new(Arc::new(Session::new(Arc::new(
+                InMemoryEntryStore::new(),
+            )))),
             sandbox: None,
             sandbox_registry: None,
             default_sandbox: None,
@@ -234,7 +244,10 @@ impl ReActAgent {
                 agent_id: self.config.agent_id.clone(),
             });
         }
-        let max_history = self.config.def.as_ref()
+        let max_history = self
+            .config
+            .def
+            .as_ref()
             .and_then(|d| d.max_history_messages)
             .unwrap_or(50);
         let session_contributor = Box::new(SessionContributor::new(
@@ -243,7 +256,10 @@ impl ReActAgent {
             AttentionAnchor::Tail(0),
         ));
         *self.config.session.write().unwrap() = session;
-        self.config.context_builder.write().unwrap()
+        self.config
+            .context_builder
+            .write()
+            .unwrap()
             .replace_contributor("session", session_contributor);
         Ok(())
     }
@@ -289,7 +305,9 @@ impl ReActAgent {
         *self.run_state.current_run_id.write().unwrap() = Some(run_id.clone());
 
         // RAII guard: clears running state on drop (even on panic)
-        let _guard = RunningGuard { run_state: &self.run_state };
+        let _guard = RunningGuard {
+            run_state: &self.run_state,
+        };
 
         let (run_ctx, plugin_rx) =
             RunContext::new(run_id.clone(), user_input.clone(), self.config.clone());
@@ -492,14 +510,18 @@ impl ReActAgent {
                         //   1. ToolConfig.get_sandbox(tool_name) — per-tool override
                         //   2. AgentDef.sandbox — agent default
                         //   3. Registry default ("local")
-                        let sandbox_ref = if let Some(ref registry) = run_ctx.config.sandbox_registry {
+                        let sandbox_ref = if let Some(ref registry) =
+                            run_ctx.config.sandbox_registry
+                        {
                             let sandbox_name = run_ctx
                                 .config
                                 .tool_config
                                 .get_sandbox(&call.name)
                                 .or_else(|| run_ctx.config.default_sandbox.clone())
                                 .unwrap_or_else(|| "local".to_string());
-                            registry.acquire(&sandbox_name).unwrap_or_else(|| registry.default())
+                            registry
+                                .acquire(&sandbox_name)
+                                .unwrap_or_else(|| registry.default())
                         } else {
                             match &sandbox {
                                 Some(sb) => sb.clone(),

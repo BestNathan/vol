@@ -10,14 +10,14 @@
 //! let response = agent.run("Hello!").await?;
 //! ```
 
-mod config;
-mod error;
 mod builder;
-mod tools;
-mod plugins;
+mod config;
 mod discovery;
+mod error;
+mod plugins;
+mod tools;
 
-pub use config::YamlAgentConfig;
-pub use error::YamlAgentError;
 pub use builder::YamlAgentBuilder;
+pub use config::YamlAgentConfig;
 pub use discovery::{discover_agents, discover_from_workdir};
+pub use error::YamlAgentError;

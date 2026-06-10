@@ -59,13 +59,9 @@ impl ExecutableTool for TaskList {
         args: &serde_json::Value,
         context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
-        let params: TaskListParams = serde_json::from_value(args.clone())
-            .map_err(|e| {
-                vol_llm_tool::ToolError::InvalidArguments(format!(
-                    "Failed to parse arguments: {}",
-                    e
-                ))
-            })?;
+        let params: TaskListParams = serde_json::from_value(args.clone()).map_err(|e| {
+            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
+        })?;
 
         let status = match params.status.as_deref() {
             Some("pending") => Some(TaskStatus::Pending),
@@ -83,10 +79,7 @@ impl ExecutableTool for TaskList {
         };
 
         let mut tasks = self.store.list(status).await.map_err(|e| {
-            vol_llm_tool::ToolError::ExecutionFailed(format!(
-                "Failed to list tasks: {}",
-                e
-            ))
+            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to list tasks: {}", e))
         })?;
 
         // Apply assignee filter

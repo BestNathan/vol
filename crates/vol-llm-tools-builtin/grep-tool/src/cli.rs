@@ -10,15 +10,19 @@ use vol_llm_sandbox::{CommandRequest, Sandbox};
 use crate::backend::GrepBackend;
 use crate::GrepParams;
 use crate::SearchResult;
-use crate::MODE_COUNT;
 use crate::MODE_CONTENT;
+use crate::MODE_COUNT;
 use crate::MODE_FILES;
 
 pub struct RgCliBackend;
 
 #[async_trait::async_trait]
 impl GrepBackend for RgCliBackend {
-    async fn search(params: &GrepParams, root: &Path, sandbox: &dyn Sandbox) -> Result<Vec<SearchResult>, String> {
+    async fn search(
+        params: &GrepParams,
+        root: &Path,
+        sandbox: &dyn Sandbox,
+    ) -> Result<Vec<SearchResult>, String> {
         let mut args: Vec<String> = vec![
             "--no-heading".to_string(),
             "--with-filename".to_string(),
@@ -65,7 +69,10 @@ impl GrepBackend for RgCliBackend {
             timeout: Duration::from_secs(30),
         };
 
-        let output = sandbox.execute(req).await.map_err(|e| format!("rg execution failed: {}", e))?;
+        let output = sandbox
+            .execute(req)
+            .await
+            .map_err(|e| format!("rg execution failed: {}", e))?;
 
         if output.exit_code != 0 {
             let stderr = String::from_utf8_lossy(&output.stderr);

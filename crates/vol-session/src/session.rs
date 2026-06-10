@@ -66,7 +66,9 @@ impl Session {
             Some(cp) => {
                 // Get entries strictly after the checkpoint
                 let all = self.entry_store.get_entries(&self.id).await?;
-                all.into_iter().filter(|e| e.created_at > cp.created_at).collect()
+                all.into_iter()
+                    .filter(|e| e.created_at > cp.created_at)
+                    .collect()
             }
             None => self.entry_store.get_entries(&self.id).await?,
         };
@@ -103,7 +105,9 @@ impl Session {
         let entries = match self.entry_store.find_latest_checkpoint(&self.id).await? {
             Some(cp) => {
                 let all = self.entry_store.get_entries(&self.id).await?;
-                all.into_iter().filter(|e| e.created_at > cp.created_at).collect()
+                all.into_iter()
+                    .filter(|e| e.created_at > cp.created_at)
+                    .collect()
             }
             None => self.entry_store.get_entries(&self.id).await?,
         };
@@ -192,7 +196,9 @@ mod tests {
         session.add_message(msg).await.unwrap();
 
         // Resume from the same entry_store
-        let resumed = Session::resume(session_id.clone(), entry_store.clone()).await.unwrap();
+        let resumed = Session::resume(session_id.clone(), entry_store.clone())
+            .await
+            .unwrap();
         assert_eq!(resumed.id, session_id);
 
         // get_messages should return the messages after checkpoint (all, since no checkpoint)

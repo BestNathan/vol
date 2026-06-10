@@ -1,9 +1,9 @@
 #[cfg(feature = "ssh")]
 mod ssh_tests {
-    use vol_llm_sandbox::{CommandRequest, Sandbox};
-    use vol_llm_sandbox::registry::SshConfig;
     use std::path::Path;
     use std::time::Duration;
+    use vol_llm_sandbox::registry::SshConfig;
+    use vol_llm_sandbox::{CommandRequest, Sandbox};
 
     fn test_config() -> SshConfig {
         SshConfig {
@@ -73,8 +73,7 @@ mod ssh_tests {
     async fn test_ssh_missing_host_key_rejected() {
         let mut config = test_config();
         // Set a deliberately wrong host key to verify verification is enforced
-        config.host_key =
-            Some("SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string());
+        config.host_key = Some("SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string());
 
         let sb = vol_llm_sandbox::ssh::SSHSandbox::new(
             "test".to_string(),

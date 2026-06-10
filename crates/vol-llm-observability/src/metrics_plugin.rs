@@ -96,10 +96,22 @@ impl MetricsPlugin {
 
     fn labels(&self, ctx: &RunContext, extra: &[KeyValue]) -> Vec<KeyValue> {
         let mut labels = vec![
-            KeyValue::new("agent_id", ctx.config.def.as_ref()
-                .map(|d| d.name.clone()).unwrap_or_else(|| "unknown".to_string())),
-            KeyValue::new("agent_type", ctx.config.def.as_ref()
-                .map(|d| d.r#type.clone()).unwrap_or_else(|| "unknown".to_string())),
+            KeyValue::new(
+                "agent_id",
+                ctx.config
+                    .def
+                    .as_ref()
+                    .map(|d| d.name.clone())
+                    .unwrap_or_else(|| "unknown".to_string()),
+            ),
+            KeyValue::new(
+                "agent_type",
+                ctx.config
+                    .def
+                    .as_ref()
+                    .map(|d| d.r#type.clone())
+                    .unwrap_or_else(|| "unknown".to_string()),
+            ),
         ];
         labels.extend_from_slice(extra);
         labels
@@ -108,7 +120,9 @@ impl MetricsPlugin {
     fn handle_llm_call_start(&self, event: &AgentStreamEvent, ctx: &RunContext) {
         if let AgentStreamEvent::LLMCallStart { iteration, .. } = event {
             let mut state = self.state.lock().unwrap();
-            state.llm_call_starts.push((ctx.run_id.clone(), *iteration, Instant::now()));
+            state
+                .llm_call_starts
+                .push((ctx.run_id.clone(), *iteration, Instant::now()));
         }
     }
 
@@ -121,9 +135,11 @@ impl MetricsPlugin {
             return;
         }
 
-        if let Some(pos) = state.llm_call_starts.iter().rposition(
-            |(run_id, iter, _)| run_id == &ctx.run_id && *iter == iteration
-        ) {
+        if let Some(pos) = state
+            .llm_call_starts
+            .iter()
+            .rposition(|(run_id, iter, _)| run_id == &ctx.run_id && *iter == iteration)
+        {
             let (_, _, start_time) = &state.llm_call_starts[pos];
             let ttft = start_time.elapsed().as_secs_f64();
             state.ttft_measured.insert(key);
@@ -133,8 +149,14 @@ impl MetricsPlugin {
                 ttft,
                 &[
                     KeyValue::new("model", model.clone()),
-                    KeyValue::new("agent_id", ctx.config.def.as_ref()
-                        .map(|d| d.name.clone()).unwrap_or_else(|| "unknown".to_string())),
+                    KeyValue::new(
+                        "agent_id",
+                        ctx.config
+                            .def
+                            .as_ref()
+                            .map(|d| d.name.clone())
+                            .unwrap_or_else(|| "unknown".to_string()),
+                    ),
                 ],
             );
         }
@@ -157,50 +179,67 @@ impl MetricsPlugin {
     fn handle_tool_call_begin(&self, event: &AgentStreamEvent) {
         if let AgentStreamEvent::ToolCallBegin { tool_call_id, .. } = event {
             let mut state = self.state.lock().unwrap();
-            state.tool_call_starts.push((tool_call_id.clone(), Instant::now()));
+            state
+                .tool_call_starts
+                .push((tool_call_id.clone(), Instant::now()));
         }
     }
 
     /// Extract tool call fields from any tool-related event.
     fn extract_tool_call_info(event: &AgentStreamEvent) -> Option<(&str, &str, &Option<u64>)> {
         match event {
-            AgentStreamEvent::ToolCallComplete { tool_call_id, tool_name, duration_ms, .. }
-            | AgentStreamEvent::ToolCallError { tool_call_id, tool_name, duration_ms, .. }
-            | AgentStreamEvent::ToolCallSkipped { tool_call_id, tool_name, duration_ms, .. } => {
-                Some((tool_call_id, tool_name, duration_ms))
+            AgentStreamEvent::ToolCallComplete {
+                tool_call_id,
+                tool_name,
+                duration_ms,
+                ..
             }
+            | AgentStreamEvent::ToolCallError {
+                tool_call_id,
+                tool_name,
+                duration_ms,
+                ..
+            }
+            | AgentStreamEvent::ToolCallSkipped {
+                tool_call_id,
+                tool_name,
+                duration_ms,
+                ..
+            } => Some((tool_call_id, tool_name, duration_ms)),
             _ => None,
         }
     }
 
     fn handle_tool_call_complete(&self, event: &AgentStreamEvent, ctx: &RunContext, status: &str) {
-        let Some((tool_call_id, tool_name, duration_ms)) = Self::extract_tool_call_info(event) else {
+        let Some((tool_call_id, tool_name, duration_ms)) = Self::extract_tool_call_info(event)
+        else {
             return;
         };
 
-        let duration = duration_ms
-            .map(|ms| ms as f64 / 1000.0)
-            .unwrap_or(0.0);
+        let duration = duration_ms.map(|ms| ms as f64 / 1000.0).unwrap_or(0.0);
 
         self.instruments.tool_calls_total.add(
             1,
-            &self.labels(ctx, &[
-                KeyValue::new("tool_name", tool_name.to_string()),
-                KeyValue::new("status", status.to_string()),
-            ]),
+            &self.labels(
+                ctx,
+                &[
+                    KeyValue::new("tool_name", tool_name.to_string()),
+                    KeyValue::new("status", status.to_string()),
+                ],
+            ),
         );
 
         self.instruments.tool_call_duration.record(
             duration,
-            &self.labels(ctx, &[
-                KeyValue::new("tool_name", tool_name.to_string()),
-            ]),
+            &self.labels(ctx, &[KeyValue::new("tool_name", tool_name.to_string())]),
         );
 
         let mut state = self.state.lock().unwrap();
-        if let Some(pos) = state.tool_call_starts.iter().rposition(
-            |(id, _)| id == tool_call_id
-        ) {
+        if let Some(pos) = state
+            .tool_call_starts
+            .iter()
+            .rposition(|(id, _)| id == tool_call_id)
+        {
             state.tool_call_starts.remove(pos);
         }
     }
@@ -225,15 +264,18 @@ impl AgentPlugin for MetricsPlugin {
             AgentStreamEvent::LLMCallStart { .. } => {
                 self.handle_llm_call_start(event, ctx);
             }
-            AgentStreamEvent::ThinkingStart { .. }
-            | AgentStreamEvent::ContentStart { .. } => {
+            AgentStreamEvent::ThinkingStart { .. } | AgentStreamEvent::ContentStart { .. } => {
                 self.handle_first_token(event, ctx);
             }
             AgentStreamEvent::LLMCallComplete { model, usage, .. } => {
                 self.handle_llm_call_complete_cleanup();
                 if let Some(usage) = usage {
-                    let agent_id = ctx.config.def.as_ref()
-                        .map(|d| d.name.clone()).unwrap_or_else(|| "unknown".to_string());
+                    let agent_id = ctx
+                        .config
+                        .def
+                        .as_ref()
+                        .map(|d| d.name.clone())
+                        .unwrap_or_else(|| "unknown".to_string());
                     self.instruments.tokens_used_total.add(
                         usage.prompt_tokens as u64,
                         &[
@@ -263,8 +305,12 @@ impl AgentPlugin for MetricsPlugin {
             AgentStreamEvent::LLMCallError { .. } => {
                 self.handle_llm_call_error();
                 let model = &ctx.model;
-                let agent_id = ctx.config.def.as_ref()
-                    .map(|d| d.name.clone()).unwrap_or_else(|| "unknown".to_string());
+                let agent_id = ctx
+                    .config
+                    .def
+                    .as_ref()
+                    .map(|d| d.name.clone())
+                    .unwrap_or_else(|| "unknown".to_string());
                 self.instruments.llm_call_errors_total.add(
                     1,
                     &[
@@ -285,8 +331,7 @@ impl AgentPlugin for MetricsPlugin {
             AgentStreamEvent::ToolCallSkipped { .. } => {
                 self.handle_tool_call_complete(event, ctx, "skipped");
             }
-            AgentStreamEvent::AgentComplete { .. }
-            | AgentStreamEvent::AgentAborted { .. } => {
+            AgentStreamEvent::AgentComplete { .. } | AgentStreamEvent::AgentAborted { .. } => {
                 self.state.lock().unwrap().cleanup();
             }
             _ => {}
@@ -328,10 +373,8 @@ mod tests {
         );
 
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let decision = rt.block_on(plugin.intercept(
-            &AgentStreamEvent::agent_start("test".to_string()),
-            &ctx,
-        ));
+        let decision =
+            rt.block_on(plugin.intercept(&AgentStreamEvent::agent_start("test".to_string()), &ctx));
         assert!(matches!(decision, PluginDecision::Continue));
     }
 
@@ -341,8 +384,12 @@ mod tests {
 
         {
             let mut state = plugin.state.lock().unwrap();
-            state.llm_call_starts.push(("run-1".to_string(), 1, Instant::now()));
-            state.tool_call_starts.push(("tc-1".to_string(), Instant::now()));
+            state
+                .llm_call_starts
+                .push(("run-1".to_string(), 1, Instant::now()));
+            state
+                .tool_call_starts
+                .push(("tc-1".to_string(), Instant::now()));
             state.ttft_measured.insert(("run-1".to_string(), 1));
             assert!(!state.llm_call_starts.is_empty());
         }

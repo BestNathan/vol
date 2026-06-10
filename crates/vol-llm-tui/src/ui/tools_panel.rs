@@ -1,11 +1,11 @@
 //! Tools panel widget — left side, 30% width.
 
 use crate::app::{AppState, ToolCallStatus};
-use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::Frame;
 
 /// Render the tools panel.
 pub fn render_tools_panel(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -23,30 +23,28 @@ pub fn render_tools_panel(frame: &mut Frame, area: Rect, state: &AppState) {
         return;
     }
 
-    let items: Vec<ListItem> = state.tool_calls
+    let items: Vec<ListItem> = state
+        .tool_calls
         .iter()
         .map(|entry| {
             let (status_str, status_color) = status_display(entry);
 
-            let _duration_str = entry.duration_ms
+            let _duration_str = entry
+                .duration_ms
                 .map(|ms| format!("{ms}ms"))
                 .unwrap_or_default();
 
             let lines = vec![
-                Line::from(vec![
-                    Span::styled(
-                        format!("{}. [{}]  {}", entry.sequence, entry.tool_name, status_str),
-                        Style::default()
-                            .fg(status_color)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ]),
-                Line::from(vec![
-                    Span::styled(
-                        &entry.arg_preview,
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ]),
+                Line::from(vec![Span::styled(
+                    format!("{}. [{}]  {}", entry.sequence, entry.tool_name, status_str),
+                    Style::default()
+                        .fg(status_color)
+                        .add_modifier(Modifier::BOLD),
+                )]),
+                Line::from(vec![Span::styled(
+                    &entry.arg_preview,
+                    Style::default().fg(Color::DarkGray),
+                )]),
             ];
 
             ListItem::new(lines)

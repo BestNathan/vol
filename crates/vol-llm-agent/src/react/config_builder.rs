@@ -7,9 +7,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use vol_llm_context::{AttentionAnchor, ContextBuilderBuilder, ContextContributor};
+use vol_llm_mcp::{McpConfig, McpManager};
 use vol_llm_sandbox::registry::SandboxRegistry;
 use vol_llm_sandbox::SandboxRef;
-use vol_llm_mcp::{McpConfig, McpManager};
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::{ExecutableTool, ToolConfig, ToolRegistry};
 use vol_session::{InMemoryEntryStore, Session, SessionContributor};
@@ -102,7 +102,8 @@ impl AgentConfigBuilder {
 
     pub fn with_system_prompt(mut self, prompt: String) -> Self {
         use vol_llm_context::builtin::SimpleContributor;
-        self.contributors.push(Box::new(SimpleContributor::system(prompt)));
+        self.contributors
+            .push(Box::new(SimpleContributor::system(prompt)));
         self
     }
 
@@ -176,12 +177,11 @@ impl AgentConfigBuilder {
     }
 
     pub fn build(self) -> Result<AgentConfig, AgentConfigBuildError> {
-        let llm = self
-            .llm
-            .ok_or(AgentConfigBuildError::MissingLlm)?;
+        let llm = self.llm.ok_or(AgentConfigBuildError::MissingLlm)?;
 
         // Determine effective working_dir: explicit override > def > None
-        let working_dir = self.working_dir
+        let working_dir = self
+            .working_dir
             .or_else(|| self.def.as_ref().and_then(|d| d.working_dir.clone()));
 
         // Build tool registry: if tool_registry not set, build from individual tools
@@ -207,9 +207,9 @@ impl AgentConfigBuilder {
         tools.register(SkillTool::new(skill_loader.clone()));
 
         // Create session if not provided
-        let session = self.session.unwrap_or_else(|| {
-            Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())))
-        });
+        let session = self
+            .session
+            .unwrap_or_else(|| Arc::new(Session::new(Arc::new(InMemoryEntryStore::new()))));
 
         // Build context builder with standardized ordering:
         //
@@ -277,9 +277,9 @@ impl AgentConfigBuilder {
 
             // 3. Custom Files — Middle(0..n) from AgentDef.context_files
             if !context_files.is_empty() {
-                b = b.add_contributor(Box::new(
-                    vol_llm_context::builtin::FileContributor::new(context_files),
-                ));
+                b = b.add_contributor(Box::new(vol_llm_context::builtin::FileContributor::new(
+                    context_files,
+                )));
             }
 
             // 4. Clone existing context_builder contributors (if any)
@@ -311,9 +311,9 @@ impl AgentConfigBuilder {
         }
 
         // Resolve default_sandbox: explicit builder override > AgentDef.sandbox
-        let effective_default_sandbox = self.default_sandbox.or_else(|| {
-            self.def.as_ref().and_then(|d| d.sandbox.clone())
-        });
+        let effective_default_sandbox = self
+            .default_sandbox
+            .or_else(|| self.def.as_ref().and_then(|d| d.sandbox.clone()));
 
         Ok(AgentConfig {
             def: self.def,
@@ -448,7 +448,11 @@ mod tests {
             .unwrap();
         // SkillTool should be registered in the tool registry
         let tool_names = config.tools.tool_names();
-        assert!(tool_names.contains(&"skill"), "SkillTool should be auto-registered, got: {:?}", tool_names);
+        assert!(
+            tool_names.contains(&"skill"),
+            "SkillTool should be auto-registered, got: {:?}",
+            tool_names
+        );
     }
 
     #[tokio::test]
@@ -460,13 +464,16 @@ mod tests {
         // SkillInjector should always be added to context builder
         let cb = config.context_builder.read().unwrap();
         let names: Vec<&str> = cb.contributor_names();
-        assert!(names.iter().any(|n| n.contains("skill")), "SkillInjector should be present, got: {:?}", names);
+        assert!(
+            names.iter().any(|n| n.contains("skill")),
+            "SkillInjector should be present, got: {:?}",
+            names
+        );
     }
 
     #[tokio::test]
     async fn test_builder_working_dir_override_takes_precedence() {
-        let def = AgentDef::new("test", "prompt")
-            .with_working_dir(PathBuf::from("/tmp/from-def"));
+        let def = AgentDef::new("test", "prompt").with_working_dir(PathBuf::from("/tmp/from-def"));
         let config = AgentConfigBuilder::new()
             .with_llm(Arc::new(MockLlm))
             .with_def(def)
@@ -475,6 +482,9 @@ mod tests {
             .unwrap();
         // Both def and explicit working_dir should result in skills being loaded
         let tool_names = config.tools.tool_names();
-        assert!(tool_names.contains(&"skill"), "SkillTool should be auto-registered with explicit override");
+        assert!(
+            tool_names.contains(&"skill"),
+            "SkillTool should be auto-registered with explicit override"
+        );
     }
 }

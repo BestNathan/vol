@@ -138,60 +138,87 @@ async fn flush_to_tdengine(
     for metric in metrics {
         match metric {
             ExtractedMetric::AgentRun {
-                run_id, session_id, agent_id, agent_type,
-                timestamp, duration_ms, iterations, tool_calls,
-                final_answer_len, status,
+                run_id,
+                session_id,
+                agent_id,
+                agent_type,
+                timestamp,
+                duration_ms,
+                iterations,
+                tool_calls,
+                final_answer_len,
+                status,
             } => {
                 let ts = timestamp.timestamp_millis();
                 let tags = format!(
                     "('{}','{}','{}','{}')",
-                    sql_escape(&run_id), sql_escape(&session_id),
-                    sql_escape(&agent_id), sql_escape(&agent_type),
+                    sql_escape(&run_id),
+                    sql_escape(&session_id),
+                    sql_escape(&agent_id),
+                    sql_escape(&agent_type),
                 );
                 let values = format!(
                     "({},{},{},{},{},{})",
-                    ts, duration_ms, iterations, tool_calls,
-                    final_answer_len, status,
+                    ts, duration_ms, iterations, tool_calls, final_answer_len, status,
                 );
                 agent_tags_values.push((tags, values));
             }
             ExtractedMetric::LlmCall {
-                run_id, session_id, agent_id, agent_type,
-                timestamp, duration_ms, iteration,
-                input_tokens, output_tokens, total_tokens,
-                model, is_error,
+                run_id,
+                session_id,
+                agent_id,
+                agent_type,
+                timestamp,
+                duration_ms,
+                iteration,
+                input_tokens,
+                output_tokens,
+                total_tokens,
+                model,
+                is_error,
             } => {
                 let ts = timestamp.timestamp_millis();
                 let error_flag = if is_error { -1 } else { 0 };
                 let tags = format!(
                     "('{}','{}','{}','{}','{}')",
-                    sql_escape(&run_id), sql_escape(&session_id),
-                    sql_escape(&agent_id), sql_escape(&agent_type),
+                    sql_escape(&run_id),
+                    sql_escape(&session_id),
+                    sql_escape(&agent_id),
+                    sql_escape(&agent_type),
                     sql_escape(&model),
                 );
                 let values = format!(
                     "({},{},{},{},{},{},{})",
-                    ts, duration_ms, iteration,
-                    input_tokens, output_tokens, total_tokens,
+                    ts,
+                    duration_ms,
+                    iteration,
+                    input_tokens,
+                    output_tokens,
+                    total_tokens,
                     error_flag,
                 );
                 llm_tags_values.push((tags, values));
             }
             ExtractedMetric::ToolCall {
-                run_id, session_id, agent_id, agent_type,
-                timestamp, duration_ms, status, tool_name,
+                run_id,
+                session_id,
+                agent_id,
+                agent_type,
+                timestamp,
+                duration_ms,
+                status,
+                tool_name,
             } => {
                 let ts = timestamp.timestamp_millis();
                 let tags = format!(
                     "('{}','{}','{}','{}','{}')",
-                    sql_escape(&run_id), sql_escape(&session_id),
-                    sql_escape(&agent_id), sql_escape(&agent_type),
+                    sql_escape(&run_id),
+                    sql_escape(&session_id),
+                    sql_escape(&agent_id),
+                    sql_escape(&agent_type),
                     sql_escape(&tool_name),
                 );
-                let values = format!(
-                    "({},{},{})",
-                    ts, duration_ms, status,
-                );
+                let values = format!("({},{},{})", ts, duration_ms, status,);
                 tool_tags_values.push((tags, values));
             }
         }
@@ -214,7 +241,8 @@ async fn flush_to_tdengine(
 
         // Group rows by identical tags to produce true multi-row VALUES.
         // Key = tags string, Value = list of value tuples.
-        let mut by_tags: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        let mut by_tags: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
         for (tags, values) in tags_values {
             by_tags.entry(tags).or_default().push(values);
         }
@@ -222,7 +250,13 @@ async fn flush_to_tdengine(
         let sql_parts: Vec<String> = by_tags
             .into_iter()
             .map(|(tags, values)| {
-                format!("{} USING {} TAGS {} VALUES {}", table, table, tags, values.join(" "))
+                format!(
+                    "{} USING {} TAGS {} VALUES {}",
+                    table,
+                    table,
+                    tags,
+                    values.join(" ")
+                )
             })
             .collect();
 
@@ -238,10 +272,7 @@ async fn flush_to_tdengine(
             Ok(resp) => {
                 let status = resp.status();
                 if !status.is_success() {
-                    tracing::error!(
-                        "tdengine flush failed: table={}, status={}",
-                        table, status,
-                    );
+                    tracing::error!("tdengine flush failed: table={}, status={}", table, status,);
                     ok = false;
                 }
             }
@@ -330,22 +361,87 @@ mod tests {
 
         for metric in metrics {
             match metric {
-                ExtractedMetric::AgentRun { run_id, session_id, agent_id, agent_type, timestamp, duration_ms, iterations, tool_calls, final_answer_len, status } => {
+                ExtractedMetric::AgentRun {
+                    run_id,
+                    session_id,
+                    agent_id,
+                    agent_type,
+                    timestamp,
+                    duration_ms,
+                    iterations,
+                    tool_calls,
+                    final_answer_len,
+                    status,
+                } => {
                     let ts = timestamp.timestamp_millis();
-                    let tags = format!("('{}','{}','{}','{}')", sql_escape(&run_id), sql_escape(&session_id), sql_escape(&agent_id), sql_escape(&agent_type));
-                    let values = format!("({},{},{},{},{},{})", ts, duration_ms, iterations, tool_calls, final_answer_len, status);
+                    let tags = format!(
+                        "('{}','{}','{}','{}')",
+                        sql_escape(&run_id),
+                        sql_escape(&session_id),
+                        sql_escape(&agent_id),
+                        sql_escape(&agent_type)
+                    );
+                    let values = format!(
+                        "({},{},{},{},{},{})",
+                        ts, duration_ms, iterations, tool_calls, final_answer_len, status
+                    );
                     agent_tags_values.push((tags, values));
                 }
-                ExtractedMetric::LlmCall { run_id, session_id, agent_id, agent_type, timestamp, duration_ms, iteration, input_tokens, output_tokens, total_tokens, model, is_error } => {
+                ExtractedMetric::LlmCall {
+                    run_id,
+                    session_id,
+                    agent_id,
+                    agent_type,
+                    timestamp,
+                    duration_ms,
+                    iteration,
+                    input_tokens,
+                    output_tokens,
+                    total_tokens,
+                    model,
+                    is_error,
+                } => {
                     let ts = timestamp.timestamp_millis();
-                    let tags = format!("('{}','{}','{}','{}','{}')", sql_escape(&run_id), sql_escape(&session_id), sql_escape(&agent_id), sql_escape(&agent_type), sql_escape(&model));
+                    let tags = format!(
+                        "('{}','{}','{}','{}','{}')",
+                        sql_escape(&run_id),
+                        sql_escape(&session_id),
+                        sql_escape(&agent_id),
+                        sql_escape(&agent_type),
+                        sql_escape(&model)
+                    );
                     let error_flag = if is_error { -1 } else { 0 };
-                    let values = format!("({},{},{},{},{},{},{})", ts, duration_ms, iteration, input_tokens, output_tokens, total_tokens, error_flag);
+                    let values = format!(
+                        "({},{},{},{},{},{},{})",
+                        ts,
+                        duration_ms,
+                        iteration,
+                        input_tokens,
+                        output_tokens,
+                        total_tokens,
+                        error_flag
+                    );
                     llm_tags_values.push((tags, values));
                 }
-                ExtractedMetric::ToolCall { run_id, session_id, agent_id, agent_type, timestamp, duration_ms, status, tool_name } => {
+                ExtractedMetric::ToolCall {
+                    run_id,
+                    session_id,
+                    agent_id,
+                    agent_type,
+                    timestamp,
+                    duration_ms,
+                    status,
+                    tool_name,
+                } => {
                     let ts = timestamp.timestamp_millis();
-                    let tags = format!("('{}','{}','{}','{}','{}')", sql_escape(&run_id), sql_escape(&session_id), sql_escape(&agent_id), sql_escape(&agent_type), sql_escape(&tool_name));
+                    let tags = format!(
+                        "('{}','{}','{}','{}','{}')",
+                        sql_escape(&run_id),
+                        sql_escape(&session_id),
+                        sql_escape(&agent_id),
+                        sql_escape(&agent_type),
+                        sql_escape(&tool_name)
+                    );
                     let values = format!("({},{},{})", ts, duration_ms, status);
                     tool_tags_values.push((tags, values));
                 }
@@ -354,11 +450,16 @@ mod tests {
 
         // Two AgentRun metrics share tags → should group into one multi-row VALUES
         assert_eq!(agent_tags_values.len(), 2);
-        let mut agent_by_tags: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        let mut agent_by_tags: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
         for (tags, values) in agent_tags_values {
             agent_by_tags.entry(tags).or_default().push(values);
         }
-        assert_eq!(agent_by_tags.len(), 1, "identical tags should group into one entry");
+        assert_eq!(
+            agent_by_tags.len(),
+            1,
+            "identical tags should group into one entry"
+        );
         let values = agent_by_tags.values().next().unwrap();
         assert_eq!(values.len(), 2, "should have two value sets grouped");
 

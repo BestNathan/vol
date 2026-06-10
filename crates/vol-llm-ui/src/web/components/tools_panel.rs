@@ -1,9 +1,11 @@
 //! Left panel showing system tools and tool call history.
 
-use dioxus::prelude::*;
-use crate::state::{ToolState, ToolCallEntry, ToolCallStatus, UiEvent, UiEventKind, SubscriptionSet};
+use crate::state::{
+    SubscriptionSet, ToolCallEntry, ToolCallStatus, ToolState, UiEvent, UiEventKind,
+};
 use crate::web::client::JsonRpcClient;
 use crate::web::components::app::AppState;
+use dioxus::prelude::*;
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct ToolDef {
@@ -20,10 +22,17 @@ struct ToolPanelState {
     call_result: Option<String>,
 }
 
-fn update_status(calls: &mut Vec<ToolCallEntry>, name: &str, status: ToolCallStatus, dur: Option<u64>) {
+fn update_status(
+    calls: &mut Vec<ToolCallEntry>,
+    name: &str,
+    status: ToolCallStatus,
+    dur: Option<u64>,
+) {
     for e in calls.iter_mut().rev() {
         if e.tool_name == name && matches!(e.status, ToolCallStatus::Running) {
-            e.status = status; e.duration_ms = dur; break;
+            e.status = status;
+            e.duration_ms = dur;
+            break;
         }
     }
 }
@@ -31,31 +40,80 @@ fn update_status(calls: &mut Vec<ToolCallEntry>, name: &str, status: ToolCallSta
 fn arg_preview(arguments: &str) -> String {
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(arguments) {
         if let Some(c) = v.get("command").and_then(|v| v.as_str()) {
-            return if c.chars().count() > 80 { format!("Command: {}...", c.chars().take(77).collect::<String>()) } else { format!("Command: {}", c) };
+            return if c.chars().count() > 80 {
+                format!("Command: {}...", c.chars().take(77).collect::<String>())
+            } else {
+                format!("Command: {}", c)
+            };
         }
-        if let Some(p) = v.get("path").and_then(|v| v.as_str()) { return format!("Path: {}", p); }
-        if let Some(f) = v.get("file_path").and_then(|v| v.as_str()) { return format!("File: {}", f); }
-        if arguments.chars().count() > 80 { return format!("Args: {}...", arguments.chars().take(77).collect::<String>()); }
+        if let Some(p) = v.get("path").and_then(|v| v.as_str()) {
+            return format!("Path: {}", p);
+        }
+        if let Some(f) = v.get("file_path").and_then(|v| v.as_str()) {
+            return format!("File: {}", f);
+        }
+        if arguments.chars().count() > 80 {
+            return format!(
+                "Args: {}...",
+                arguments.chars().take(77).collect::<String>()
+            );
+        }
         return format!("Args: {}", arguments);
     }
     String::new()
 }
 
 pub fn status_label(s: ToolCallStatus) -> &'static str {
-    match s { ToolCallStatus::Running => "...", ToolCallStatus::Success => "OK", ToolCallStatus::Error => "ERR", ToolCallStatus::Skipped => "SKIP" }
+    match s {
+        ToolCallStatus::Running => "...",
+        ToolCallStatus::Success => "OK",
+        ToolCallStatus::Error => "ERR",
+        ToolCallStatus::Skipped => "SKIP",
+    }
 }
 
 /// Update ToolState from an EventBus event.
 fn reduce_tool_state(s: &mut ToolState, event: &UiEvent) {
     match event {
-        UiEvent::ToolCallBegin { tool_name, arguments } => {
+        UiEvent::ToolCallBegin {
+            tool_name,
+            arguments,
+        } => {
             let seq = s.calls.len() as u32 + 1;
-            s.calls.push(ToolCallEntry { sequence: seq, tool_name: tool_name.clone(), arg_preview: arg_preview(arguments), status: ToolCallStatus::Running, duration_ms: None });
+            s.calls.push(ToolCallEntry {
+                sequence: seq,
+                tool_name: tool_name.clone(),
+                arg_preview: arg_preview(arguments),
+                status: ToolCallStatus::Running,
+                duration_ms: None,
+            });
             s.scroll = s.calls.len() as u16;
         }
-        UiEvent::ToolCallComplete { tool_name, duration_ms, .. } => update_status(&mut s.calls, tool_name, ToolCallStatus::Success, *duration_ms),
-        UiEvent::ToolCallError { tool_name, duration_ms, .. } => update_status(&mut s.calls, tool_name, ToolCallStatus::Error, *duration_ms),
-        UiEvent::ToolCallSkipped { tool_name, duration_ms, .. } => update_status(&mut s.calls, tool_name, ToolCallStatus::Skipped, *duration_ms),
+        UiEvent::ToolCallComplete {
+            tool_name,
+            duration_ms,
+            ..
+        } => update_status(
+            &mut s.calls,
+            tool_name,
+            ToolCallStatus::Success,
+            *duration_ms,
+        ),
+        UiEvent::ToolCallError {
+            tool_name,
+            duration_ms,
+            ..
+        } => update_status(&mut s.calls, tool_name, ToolCallStatus::Error, *duration_ms),
+        UiEvent::ToolCallSkipped {
+            tool_name,
+            duration_ms,
+            ..
+        } => update_status(
+            &mut s.calls,
+            tool_name,
+            ToolCallStatus::Skipped,
+            *duration_ms,
+        ),
         _ => {}
     }
 }
@@ -64,7 +122,12 @@ fn reduce_tool_state(s: &mut ToolState, event: &UiEvent) {
 pub fn ToolsPanel() -> Element {
     let app_state: AppState = use_context();
     let call_signal = use_signal(|| ToolState::new());
-    let tool_signal = use_signal(|| ToolPanelState { tools: vec![], loading: false, error: None, call_result: None });
+    let tool_signal = use_signal(|| ToolPanelState {
+        tools: vec![],
+        loading: false,
+        error: None,
+        call_result: None,
+    });
     let client: JsonRpcClient = app_state.rpc_client.clone();
 
     // Load tools on mount (follow sessions panel pattern: use_hook, not use_effect)
@@ -83,7 +146,8 @@ pub fn ToolsPanel() -> Element {
                 s.loading = false;
                 match result {
                     Ok(tools) => {
-                        s.tools = tools.iter()
+                        s.tools = tools
+                            .iter()
                             .filter_map(|t| serde_json::from_value::<ToolDef>(t.clone()).ok())
                             .collect();
                     }
@@ -109,11 +173,14 @@ pub fn ToolsPanel() -> Element {
                     s.loading = false;
                     match result {
                         Ok(tools) => {
-                            s.tools = tools.iter()
+                            s.tools = tools
+                                .iter()
                                 .filter_map(|t| serde_json::from_value::<ToolDef>(t.clone()).ok())
                                 .collect();
                         }
-                        Err(e) => { s.error = Some(e); }
+                        Err(e) => {
+                            s.error = Some(e);
+                        }
                     }
                 });
             });
@@ -124,7 +191,12 @@ pub fn ToolsPanel() -> Element {
     let event_bus2 = app_state.event_bus.clone();
     use_hook(move || {
         let mut set = SubscriptionSet::new(event_bus2.clone());
-        for kind in [UiEventKind::ToolCallBegin, UiEventKind::ToolCallComplete, UiEventKind::ToolCallError, UiEventKind::ToolCallSkipped] {
+        for kind in [
+            UiEventKind::ToolCallBegin,
+            UiEventKind::ToolCallComplete,
+            UiEventKind::ToolCallError,
+            UiEventKind::ToolCallSkipped,
+        ] {
             set.subscribe(&event_bus2, kind, {
                 let signal = call_signal.clone();
                 move |event| {
@@ -138,7 +210,12 @@ pub fn ToolsPanel() -> Element {
     // Read state for rendering
     let (tools, loading, error, call_result) = {
         let s = tool_signal.read();
-        (s.tools.clone(), s.loading, s.error.clone(), s.call_result.clone())
+        (
+            s.tools.clone(),
+            s.loading,
+            s.error.clone(),
+            s.call_result.clone(),
+        )
     };
     let call_count = call_signal.read().calls.len();
 
@@ -253,7 +330,13 @@ fn ToolItem(signal: Signal<ToolState>, index: usize) -> Element {
     let (seq, name, arg, status, dur) = {
         let ui = signal.read();
         match ui.calls.get(index) {
-            Some(e) => (e.sequence, e.tool_name.clone(), e.arg_preview.clone(), e.status.clone(), e.duration_ms),
+            Some(e) => (
+                e.sequence,
+                e.tool_name.clone(),
+                e.arg_preview.clone(),
+                e.status.clone(),
+                e.duration_ms,
+            ),
             None => return rsx! {},
         }
     };

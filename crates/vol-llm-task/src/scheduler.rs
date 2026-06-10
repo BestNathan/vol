@@ -38,9 +38,7 @@ impl TaskScheduler {
             .store
             .get(task_id)
             .await?
-            .ok_or_else(|| {
-                crate::store::StoreError::NotFound(format!("Task {}", task_id))
-            })?;
+            .ok_or_else(|| crate::store::StoreError::NotFound(format!("Task {}", task_id)))?;
 
         task.status = TaskStatus::Completed;
         task.result = Some(result);
@@ -56,9 +54,7 @@ impl TaskScheduler {
             .store
             .get(task_id)
             .await?
-            .ok_or_else(|| {
-                crate::store::StoreError::NotFound(format!("Task {}", task_id))
-            })?;
+            .ok_or_else(|| crate::store::StoreError::NotFound(format!("Task {}", task_id)))?;
 
         task.status = TaskStatus::Failed;
         task.summary = Some(format!("Failed: {}", error));
@@ -73,9 +69,7 @@ impl TaskScheduler {
             .store
             .get(task_id)
             .await?
-            .ok_or_else(|| {
-                crate::store::StoreError::NotFound(format!("Task {}", task_id))
-            })?;
+            .ok_or_else(|| crate::store::StoreError::NotFound(format!("Task {}", task_id)))?;
 
         task.status = TaskStatus::Killed;
         task.completed_at = Some(std::time::SystemTime::now());
@@ -87,12 +81,12 @@ impl TaskScheduler {
     pub async fn all_complete(&self) -> Result<bool> {
         let tasks = self.store.list(None).await?;
         Ok(!tasks.is_empty()
-            && tasks
-                .iter()
-                .all(|t| matches!(
+            && tasks.iter().all(|t| {
+                matches!(
                     t.status,
                     TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Killed
-                )))
+                )
+            }))
     }
 
     /// Get the underlying store reference for direct queries.

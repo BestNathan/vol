@@ -18,8 +18,8 @@ use axum::routing::get;
 use axum::{Json, Router};
 use tokio::net::TcpListener;
 use tracing::info;
-use vol_llm_core::AgentDef;
 use vol_llm_agent_channel::{AgentServerCore, HttpTransport, WsServer};
+use vol_llm_core::AgentDef;
 
 #[tokio::main]
 async fn main() {
@@ -31,7 +31,10 @@ async fn main() {
         )
         .init();
 
-    info!(model = "claude-sonnet-4-6", "LLM provider configured through AgentServerCore");
+    info!(
+        model = "claude-sonnet-4-6",
+        "LLM provider configured through AgentServerCore"
+    );
 
     // Build agent
     let def = AgentDef::new(
@@ -58,7 +61,10 @@ async fn main() {
 
     // Combine
     let app = Router::new()
-        .route("/health", get(|| async { Json(serde_json::json!({"status": "ok"})) }))
+        .route(
+            "/health",
+            get(|| async { Json(serde_json::json!({"status": "ok"})) }),
+        )
         .merge(ws_router)
         .merge(http_router);
 
@@ -71,7 +77,5 @@ async fn main() {
         .await
         .expect("failed to bind to 0.0.0.0:3000");
 
-    axum::serve(listener, app)
-        .await
-        .expect("server failed");
+    axum::serve(listener, app).await.expect("server failed");
 }

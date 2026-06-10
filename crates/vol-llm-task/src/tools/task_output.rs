@@ -74,13 +74,9 @@ impl ExecutableTool for TaskOutput {
         args: &serde_json::Value,
         _context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
-        let _params: TaskOutputParams = serde_json::from_value(args.clone())
-            .map_err(|e| {
-                vol_llm_tool::ToolError::InvalidArguments(format!(
-                    "Failed to parse arguments: {}",
-                    e
-                ))
-            })?;
+        let _params: TaskOutputParams = serde_json::from_value(args.clone()).map_err(|e| {
+            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
+        })?;
 
         let task_id_str = args
             .get("task_id")
@@ -95,13 +91,9 @@ impl ExecutableTool for TaskOutput {
             vol_llm_tool::ToolError::InvalidArguments(format!("Invalid task ID: {}", e))
         })?;
 
-        let task = self
-            .store
-            .get(&task_id)
-            .await
-            .map_err(|e| {
-                vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to get task: {}", e))
-            })?;
+        let task = self.store.get(&task_id).await.map_err(|e| {
+            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to get task: {}", e))
+        })?;
 
         let task = match task {
             Some(t) => t,

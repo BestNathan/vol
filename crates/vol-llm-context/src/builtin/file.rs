@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use vol_llm_core::Message;
 
-use crate::{AttentionAnchor, ContextBlock, ContextContributor, ContextError, estimate_tokens};
+use crate::{estimate_tokens, AttentionAnchor, ContextBlock, ContextContributor, ContextError};
 
 /// A file specification for FileContributor.
 #[derive(Clone)]
@@ -26,9 +26,7 @@ pub struct FileContributor {
 
 impl FileContributor {
     pub fn new(specs: Vec<FileSpec>) -> Self {
-        Self {
-            specs,
-        }
+        Self { specs }
     }
 }
 
@@ -90,7 +88,12 @@ mod tests {
         let blocks = contributor.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
         assert!(matches!(blocks[0].anchor, AttentionAnchor::Head(0)));
-        assert!(blocks[0].messages[0].content.as_ref().unwrap().as_str().contains("# Role"));
+        assert!(blocks[0].messages[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("# Role"));
     }
 
     #[tokio::test]
@@ -138,10 +141,8 @@ mod tests {
         let mut f = tempfile::NamedTempFile::new().unwrap();
         writeln!(f, "# Content").unwrap();
         let path = f.path().to_str().unwrap().to_string();
-        let mut contributor = FileContributor::new(vec![FileSpec::new(
-            &path,
-            AttentionAnchor::Head(0),
-        )]);
+        let mut contributor =
+            FileContributor::new(vec![FileSpec::new(&path, AttentionAnchor::Head(0))]);
         contributor.compress().await;
         // compress is no-op, content unchanged
         let blocks = contributor.contribute().await.unwrap();

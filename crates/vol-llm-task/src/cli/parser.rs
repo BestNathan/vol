@@ -5,7 +5,7 @@
 //!   2. `build_cli` — return a fully-defined `clap::Command` tree.
 //!   3. `parse` — combine the two and produce a [`ParsedCommand`].
 
-use clap::{Arg, ArgAction, Command, value_parser};
+use clap::{value_parser, Arg, ArgAction, Command};
 
 use super::commands::ParsedCommand;
 
@@ -57,10 +57,24 @@ pub(crate) fn build_cli() -> Command {
         .subcommand(
             Command::new("create")
                 .about("Create a new task")
-                .arg(Arg::new("name").long("name").required(true).help("Task name"))
-                .arg(Arg::new("desc").long("desc").required(true).help("Task description"))
+                .arg(
+                    Arg::new("name")
+                        .long("name")
+                        .required(true)
+                        .help("Task name"),
+                )
+                .arg(
+                    Arg::new("desc")
+                        .long("desc")
+                        .required(true)
+                        .help("Task description"),
+                )
                 .arg(Arg::new("assignee").long("assignee").help("Task assignee"))
-                .arg(Arg::new("activeForm").long("activeForm").help("Active form text"))
+                .arg(
+                    Arg::new("activeForm")
+                        .long("activeForm")
+                        .help("Active form text"),
+                )
                 .arg(
                     Arg::new("deps")
                         .long("deps")
@@ -89,15 +103,17 @@ pub(crate) fn build_cli() -> Command {
                 .arg(
                     Arg::new("status")
                         .long("status")
-                        .value_parser([
-                            "pending", "running", "completed", "failed", "killed",
-                        ])
+                        .value_parser(["pending", "running", "completed", "failed", "killed"])
                         .help("New status"),
                 )
                 .arg(Arg::new("subject").long("subject").help("New subject"))
                 .arg(Arg::new("desc").long("desc").help("New description"))
                 .arg(Arg::new("assignee").long("assignee").help("New assignee"))
-                .arg(Arg::new("activeForm").long("activeForm").help("New active form text"))
+                .arg(
+                    Arg::new("activeForm")
+                        .long("activeForm")
+                        .help("New active form text"),
+                )
                 .arg(
                     Arg::new("addDeps")
                         .long("addDeps")
@@ -114,15 +130,13 @@ pub(crate) fn build_cli() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("get")
-                .about("Get task details")
-                .arg(
-                    Arg::new("id")
-                        .long("id")
-                        .required(true)
-                        .value_parser(value_parser!(u64))
-                        .help("Task ID"),
-                ),
+            Command::new("get").about("Get task details").arg(
+                Arg::new("id")
+                    .long("id")
+                    .required(true)
+                    .value_parser(value_parser!(u64))
+                    .help("Task ID"),
+            ),
         )
         .subcommand(
             Command::new("list")
@@ -130,23 +144,23 @@ pub(crate) fn build_cli() -> Command {
                 .arg(
                     Arg::new("status")
                         .long("status")
-                        .value_parser([
-                            "pending", "running", "completed", "failed", "killed",
-                        ])
+                        .value_parser(["pending", "running", "completed", "failed", "killed"])
                         .help("Filter by status"),
                 )
-                .arg(Arg::new("assignee").long("assignee").help("Filter by assignee")),
+                .arg(
+                    Arg::new("assignee")
+                        .long("assignee")
+                        .help("Filter by assignee"),
+                ),
         )
         .subcommand(
-            Command::new("stop")
-                .about("Stop a running task")
-                .arg(
-                    Arg::new("id")
-                        .long("id")
-                        .required(true)
-                        .value_parser(value_parser!(u64))
-                        .help("Task ID"),
-                ),
+            Command::new("stop").about("Stop a running task").arg(
+                Arg::new("id")
+                    .long("id")
+                    .required(true)
+                    .value_parser(value_parser!(u64))
+                    .help("Task ID"),
+            ),
         )
         .subcommand(
             Command::new("output")
@@ -173,25 +187,32 @@ pub(crate) fn build_cli() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("claim")
-                .about("Claim a pending task")
-                .arg(
-                    Arg::new("id")
-                        .long("id")
-                        .value_parser(value_parser!(u64))
-                        .help("Task ID (default: first available)"),
-                ),
+            Command::new("claim").about("Claim a pending task").arg(
+                Arg::new("id")
+                    .long("id")
+                    .value_parser(value_parser!(u64))
+                    .help("Task ID (default: first available)"),
+            ),
         )
         .subcommand(
             Command::new("scheme")
                 .about("Show parameter definitions for a subcommand")
-                .arg(Arg::new("subcommand").required(false).help("Subcommand name")),
+                .arg(
+                    Arg::new("subcommand")
+                        .required(false)
+                        .help("Subcommand name"),
+                ),
         )
         // --- Shortcut commands ---
         .subcommand(
             Command::new("+task")
                 .about("Quick create — minimal params, smart defaults")
-                .arg(Arg::new("name").long("name").required(true).help("Task name"))
+                .arg(
+                    Arg::new("name")
+                        .long("name")
+                        .required(true)
+                        .help("Task name"),
+                )
                 .arg(Arg::new("desc").long("desc").help("Task description"))
                 .arg(Arg::new("assignee").long("assignee").help("Task assignee")),
         )
@@ -206,10 +227,7 @@ pub(crate) fn build_cli() -> Command {
                         .help("Task ID"),
                 ),
         )
-        .subcommand(
-            Command::new("+claim")
-                .about("Quick claim — claim first ready pending task"),
-        )
+        .subcommand(Command::new("+claim").about("Quick claim — claim first ready pending task"))
 }
 
 // ---------------------------------------------------------------------------
@@ -230,15 +248,13 @@ pub(crate) fn parse(input: &str) -> Result<ParsedCommand, String> {
         with_prefix
     };
 
-    let matches = cli
-        .try_get_matches_from(&full_tokens)
-        .map_err(|e| {
-            format!(
-                "Parse error: {}\nUsage: task <subcommand> [--flags]. \
+    let matches = cli.try_get_matches_from(&full_tokens).map_err(|e| {
+        format!(
+            "Parse error: {}\nUsage: task <subcommand> [--flags]. \
                  Use 'task scheme <sub>' to see parameters.",
-                e
-            )
-        })?;
+            e
+        )
+    })?;
 
     let json = matches.get_flag("json");
 
@@ -312,10 +328,7 @@ pub(crate) fn parse(input: &str) -> Result<ParsedCommand, String> {
             json,
         }),
         Some(("+claim", _)) => Ok(ParsedCommand::QuickClaim { json }),
-        _ => Err(
-            "Unknown subcommand. Use 'task scheme' to see available subcommands."
-                .to_string(),
-        ),
+        _ => Err("Unknown subcommand. Use 'task scheme' to see available subcommands.".to_string()),
     }
 }
 
@@ -336,11 +349,16 @@ mod tests {
 
     #[test]
     fn test_tokenize_quotes() {
-        let tokens =
-            tokenize("create --name 'fix login' --desc \"handle OAuth error\"");
+        let tokens = tokenize("create --name 'fix login' --desc \"handle OAuth error\"");
         assert_eq!(
             tokens,
-            vec!["create", "--name", "fix login", "--desc", "handle OAuth error"]
+            vec![
+                "create",
+                "--name",
+                "fix login",
+                "--desc",
+                "handle OAuth error"
+            ]
         );
     }
 
@@ -447,7 +465,12 @@ mod tests {
     fn test_parse_output_with_block_and_timeout() {
         let cmd = parse("output --id 7 --block --timeout 60000").unwrap();
         match cmd {
-            ParsedCommand::Output { id, block, timeout_ms, .. } => {
+            ParsedCommand::Output {
+                id,
+                block,
+                timeout_ms,
+                ..
+            } => {
                 assert_eq!(id, 7);
                 assert!(block);
                 assert_eq!(timeout_ms, 60000);

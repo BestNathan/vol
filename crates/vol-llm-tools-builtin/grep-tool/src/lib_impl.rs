@@ -33,7 +33,11 @@ impl RustLibBackend {
 
 #[async_trait::async_trait]
 impl GrepBackend for RustLibBackend {
-    async fn search(params: &GrepParams, root: &Path, _sandbox: &dyn Sandbox) -> Result<Vec<SearchResult>, String> {
+    async fn search(
+        params: &GrepParams,
+        root: &Path,
+        _sandbox: &dyn Sandbox,
+    ) -> Result<Vec<SearchResult>, String> {
         let pattern = params.pattern.clone();
         let case_sensitive = params.case_sensitive;
         let glob = params.glob.clone();
@@ -62,8 +66,8 @@ fn search_blocking(
     } else {
         format!("(?i){}", pattern)
     };
-    let matcher = RegexMatcher::new(&regex_pattern)
-        .map_err(|e| format!("Invalid regex pattern: {}", e))?;
+    let matcher =
+        RegexMatcher::new(&regex_pattern).map_err(|e| format!("Invalid regex pattern: {}", e))?;
 
     // Build walker that auto-respects .gitignore and skips hidden dirs
     let mut walker = WalkBuilder::new(root);
@@ -77,7 +81,11 @@ fn search_blocking(
             .map_err(|e| format!("Invalid glob: {}", e))?;
         type_builder.select("custom");
         walker
-            .types(type_builder.build().map_err(|e| format!("Glob error: {}", e))?)
+            .types(
+                type_builder
+                    .build()
+                    .map_err(|e| format!("Glob error: {}", e))?,
+            )
             .git_ignore(true);
     }
 
@@ -188,7 +196,9 @@ mod tests {
 
         let sb = LocalSandbox::new(Some(dir.path().to_path_buf()));
         let params = make_params("hello", None, "files_with_matches");
-        let results = RustLibBackend::search(&params, dir.path(), &sb).await.unwrap();
+        let results = RustLibBackend::search(&params, dir.path(), &sb)
+            .await
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].path.ends_with("test.txt"));
     }
@@ -201,7 +211,9 @@ mod tests {
 
         let sb = LocalSandbox::new(Some(dir.path().to_path_buf()));
         let params = make_params("nonexistent", None, "files_with_matches");
-        let results = RustLibBackend::search(&params, dir.path(), &sb).await.unwrap();
+        let results = RustLibBackend::search(&params, dir.path(), &sb)
+            .await
+            .unwrap();
         assert!(results.is_empty());
     }
 
@@ -215,7 +227,9 @@ mod tests {
 
         let sb = LocalSandbox::new(Some(dir.path().to_path_buf()));
         let params = make_params("hello", Some("*.rs"), "files_with_matches");
-        let results = RustLibBackend::search(&params, dir.path(), &sb).await.unwrap();
+        let results = RustLibBackend::search(&params, dir.path(), &sb)
+            .await
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert!(
             results[0].path.to_string_lossy().ends_with(".rs"),
@@ -234,7 +248,9 @@ mod tests {
 
         let sb = LocalSandbox::new(Some(dir.path().to_path_buf()));
         let params = make_params("hello", None, "count");
-        let results = RustLibBackend::search(&params, dir.path(), &sb).await.unwrap();
+        let results = RustLibBackend::search(&params, dir.path(), &sb)
+            .await
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].match_count, 2);
     }
@@ -249,7 +265,9 @@ mod tests {
 
         let sb = LocalSandbox::new(Some(dir.path().to_path_buf()));
         let params = make_params("hello", None, "content");
-        let results = RustLibBackend::search(&params, dir.path(), &sb).await.unwrap();
+        let results = RustLibBackend::search(&params, dir.path(), &sb)
+            .await
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].line_numbers, vec![2]);
     }

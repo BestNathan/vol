@@ -84,7 +84,9 @@ impl TokenBudget {
 
     /// Available tokens for middle-zone blocks.
     pub fn middle_budget(&self) -> usize {
-        self.total.saturating_sub(self.head_size).saturating_sub(self.tail_size)
+        self.total
+            .saturating_sub(self.head_size)
+            .saturating_sub(self.tail_size)
     }
 
     /// Remaining tokens in the middle budget.
