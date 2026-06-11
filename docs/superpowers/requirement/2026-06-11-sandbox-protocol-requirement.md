@@ -43,8 +43,7 @@
 - **协议 crate 依赖**：`vol-llm-agent-protocol` 新增对 `vol-llm-sandbox` 的依赖（用于引用 `CommandRequest`、`CommandOutput` 等基础类型）
 - **无循环依赖**：`vol-llm-sandbox` ← `vol-llm-agent-protocol` ← `vol-agent-server`，单向无环
 - **复用现有模式**：遵循 `DomainHandler` trait 和 `HandlerRegistry` 模式注册 handler，不引入新的路由机制
-- **JSON-RPC 兼容**：s
-andbox 操作遵循已有 JSON-RPC 2.0 编解码规范
+- **JSON-RPC 兼容**：sandbox 操作遵循已有 JSON-RPC 2.0 编解码规范
 
 ## Protocol Operations
 
