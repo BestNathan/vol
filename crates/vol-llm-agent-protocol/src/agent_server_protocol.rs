@@ -46,6 +46,7 @@ pub enum Operation {
     System(SystemOperation),
     Task(TaskOperation),
     Control(ControlOperation),
+    Sandbox(SandboxOperation),
 }
 
 impl Operation {
@@ -100,6 +101,7 @@ impl Operation {
             Operation::Control(ControlOperation::NodeGet) => "control.node_get",
             Operation::Control(ControlOperation::CapabilityList) => "control.capability_list",
             Operation::Control(ControlOperation::RunStatus) => "control.run_status",
+            Self::Sandbox(op) => op.method_name(),
         }
     }
 }
@@ -175,6 +177,39 @@ pub enum TaskOperation {
     Get,
 }
 
+/// Sandbox protocol operations.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SandboxOperation {
+    /// List available sandboxes.
+    List,
+    /// Execute a command inside the sandbox.
+    Exec,
+    /// Read file content from the sandbox.
+    ReadFile,
+    /// Write file content to the sandbox.
+    WriteFile,
+    /// Create a directory (and parents) inside the sandbox.
+    CreateDir,
+    /// List directory entries in the sandbox.
+    ReadDir,
+    /// Get file/directory metadata.
+    Metadata,
+}
+
+impl SandboxOperation {
+    pub fn method_name(&self) -> &'static str {
+        match self {
+            Self::List => "sandbox.list",
+            Self::Exec => "sandbox.exec",
+            Self::ReadFile => "sandbox.read_file",
+            Self::WriteFile => "sandbox.write_file",
+            Self::CreateDir => "sandbox.create_dir",
+            Self::ReadDir => "sandbox.read_dir",
+            Self::Metadata => "sandbox.metadata",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlOperation {
     Register,
@@ -189,6 +224,152 @@ pub enum ControlOperation {
     NodeGet,
     CapabilityList,
     RunStatus,
+}
+
+/// Wire-compatible command request. All fields directly serializable.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommandRequestDef {
+    pub program: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: Vec<(String, String)>,
+    #[serde(default)]
+    pub cwd: Option<String>,
+    #[serde(default)]
+    pub stdin: Option<String>, // base64 encoded
+    #[serde(default)]
+    pub timeout_ms: u64,
+}
+
+impl From<CommandRequestDef> for vol_llm_sandbox::CommandRequest {
+    fn from(d: CommandRequestDef) -> Self {
+        use std::time::Duration;
+        let timeout = if d.timeout_ms == 0 {
+            Duration::from_secs(30)
+        } else {
+            Duration::from_millis(d.timeout_ms)
+        };
+        Self {
+            program: d.program,
+            args: d.args,
+            env: d.env.into_iter().collect(),
+            cwd: d.cwd.map(std::path::PathBuf::from),
+            stdin: d.stdin.map(|s| {
+                use base64::Engine;
+                base64::engine::general_purpose::STANDARD
+                    .decode(&s)
+                    .unwrap_or_default()
+            }),
+            timeout,
+        }
+    }
+}
+
+impl From<vol_llm_sandbox::CommandRequest> for CommandRequestDef {
+    fn from(r: vol_llm_sandbox::CommandRequest) -> Self {
+        use base64::Engine;
+        Self {
+            program: r.program,
+            args: r.args,
+            env: r.env.into_iter().collect(),
+            cwd: r.cwd.map(|p| p.to_string_lossy().to_string()),
+            stdin: r.stdin.map(|s| {
+                base64::engine::general_purpose::STANDARD.encode(&s)
+            }),
+            timeout_ms: r.timeout.as_millis() as u64,
+        }
+    }
+}
+
+/// Wire-compatible command output.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommandOutputDef {
+    pub stdout: String,  // base64 encoded
+    pub stderr: String,  // base64 encoded
+    pub exit_code: i32,
+    #[serde(default)]
+    pub killed_by_signal: Option<i32>,
+}
+
+impl From<vol_llm_sandbox::CommandOutput> for CommandOutputDef {
+    fn from(o: vol_llm_sandbox::CommandOutput) -> Self {
+        use base64::Engine;
+        Self {
+            stdout: base64::engine::general_purpose::STANDARD.encode(&o.stdout),
+            stderr: base64::engine::general_purpose::STANDARD.encode(&o.stderr),
+            exit_code: o.exit_code,
+            killed_by_signal: o.killed_by_signal,
+        }
+    }
+}
+
+impl From<CommandOutputDef> for vol_llm_sandbox::CommandOutput {
+    fn from(d: CommandOutputDef) -> Self {
+        use base64::Engine;
+        Self {
+            stdout: base64::engine::general_purpose::STANDARD
+                .decode(&d.stdout)
+                .unwrap_or_default(),
+            stderr: base64::engine::general_purpose::STANDARD
+                .decode(&d.stderr)
+                .unwrap_or_default(),
+            exit_code: d.exit_code,
+            killed_by_signal: d.killed_by_signal,
+        }
+    }
+}
+
+/// Wire-compatible directory entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DirEntryDef {
+    pub name: String,
+    pub file_type: String, // "file", "directory", "symlink", "other"
+}
+
+impl From<vol_llm_sandbox::DirEntry> for DirEntryDef {
+    fn from(e: vol_llm_sandbox::DirEntry) -> Self {
+        Self {
+            name: e.name,
+            file_type: match e.file_type {
+                vol_llm_sandbox::FileType::File => "file".into(),
+                vol_llm_sandbox::FileType::Directory => "directory".into(),
+                vol_llm_sandbox::FileType::Symlink => "symlink".into(),
+                vol_llm_sandbox::FileType::Other => "other".into(),
+            },
+        }
+    }
+}
+
+/// Wire-compatible file metadata.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileMetadataDef {
+    pub size: u64,
+    pub mtime: u64,
+    pub file_type: String,
+}
+
+impl From<vol_llm_sandbox::FileMetadata> for FileMetadataDef {
+    fn from(m: vol_llm_sandbox::FileMetadata) -> Self {
+        Self {
+            size: m.size,
+            mtime: m.mtime,
+            file_type: match m.file_type {
+                vol_llm_sandbox::FileType::File => "file".into(),
+                vol_llm_sandbox::FileType::Directory => "directory".into(),
+                vol_llm_sandbox::FileType::Symlink => "symlink".into(),
+                vol_llm_sandbox::FileType::Other => "other".into(),
+            },
+        }
+    }
+}
+
+/// Sandbox metadata returned by sandbox.list.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SandboxInfo {
+    pub name: String,
+    pub kind: String,
+    pub root_path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -608,6 +789,9 @@ impl Payload {
                 .map(ControlPayload::RunStatus)
                 .map(Payload::Control)
                 .map_err(|_| ProtocolError::PayloadDecodeFailed("control.run_status")),
+            Operation::Sandbox(_) => Err(ProtocolError::UnknownMethod(
+                operation.method_name().to_string(),
+            )),
         }
     }
 

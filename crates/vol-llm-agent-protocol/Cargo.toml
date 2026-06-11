@@ -14,6 +14,7 @@ async-trait = { workspace = true }
 axum = { workspace = true }
 futures = "0.3"
 vol-llm-sandbox = { path = "../vol-llm-sandbox" }
+base64 = "0.22"
 
 [dev-dependencies]
 tokio-tungstenite = { workspace = true }
