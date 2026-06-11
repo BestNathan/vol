@@ -3,19 +3,19 @@ type: source
 category: implementation
 tags: [examples, agent, channel, websocket, http, axum]
 created: 2026-05-07
-updated: 2026-05-21
+updated: 2026-06-10
 ---
 
-# Agent Channel Examples: WS + HTTP Service
+# Agent Channel Examples: Historical WS + HTTP Service
 
 **Source Type:** Implementation
 **Related:** [[vol-llm-agent-channel-crate]], [[agent-server-protocol]], [[http-transport]], [[agent-channel-server-protocol-transport-migration]]
 
 ## Summary
 
-Two example applications in `crates/vol-llm-agent-channel/examples/` demonstrate how to build runnable agent services using `AgentServerCore` and Agent Server Protocol transports.
+Historical example applications once lived in `crates/vol-llm-agent-channel/examples/` to demonstrate WS + HTTP services. They were deleted during the Task 4 channel/data-plane cleanup; current runnable server behavior lives in `vol-agent-server`.
 
-## Examples Created
+## Historical Examples Deleted
 
 ### single_agent.rs
 
@@ -41,6 +41,6 @@ Multiple `ReActAgent` instances registered with `AgentRouter`, each accessible v
 - [[agent-router]] — Multi-agent routing pattern with per-agent dispatchers
 - [[connection-holder-clone-limitation]] — ConnectionHolder cannot be both a plugin and transport reference
 
-## Current Transport Architecture
+## Current Status
 
-The examples no longer keep transport-owned `AgentDispatcher` or `ConnectionHolder` maps. Agent registration, routing, event holders, sessions, tools, and provider setup are created through `AgentServerCore`; transports only carry `AgentServerMessage` values across WebSocket or HTTP boundaries [[agent-channel-server-protocol-transport-migration]].
+These examples are no longer active source files. After Task 4, the channel crate keeps protocol and generic transport abstractions only; concrete data-plane registration, routing, event holders, sessions, tools, and provider setup live in `vol-agent-server::data_plane` [[agent-server-data-plane-core-move]].

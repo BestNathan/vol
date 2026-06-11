@@ -85,7 +85,7 @@ crates/
 ├── vol-llm-runtime/             Agent runtime combining all layers
 ├── vol-llm-tools-builtin/       Built-in tools (read/write/edit/grep/bash/...)
 ├── vol-llm-yaml-agent/          YAML-defined agent config
-├── vol-llm-agent-channel/       JSON-RPC agent communication
+├── vol-llm-agent-protocol/       JSON-RPC agent communication
 ├── vol-llm-mcp/                 MCP client (rmcp)
 ├── vol-llm-wiki/                Wiki/knowledge-base tool
 ├── vol-llm-observability/       OpenTelemetry logging for agent sessions

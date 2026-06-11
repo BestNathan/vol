@@ -67,7 +67,7 @@ When adding a new tool or resource that should be available to all agents, regis
 | `crates/vol-datasource`, `crates/vol-deribit`, `crates/vol-tdengine` | Market-data ingestion and storage integrations. |
 | `crates/vol-eventbus`, `crates/vol-engine`, `crates/vol-alert`, `crates/vol-notification`, `crates/vol-monitor` | Runtime pipeline: event distribution, monitoring engine, alert rules, notification delivery, and main monitor binary. |
 | `crates/vol-llm-core`, `crates/vol-llm-provider`, `crates/vol-llm-tool`, `crates/vol-llm-agent`, `crates/vol-llm-agents` | LLM abstraction layer, provider implementations, tool registry, ReAct orchestration, and higher-level agent implementations. |
-| `crates/vol-llm-agent-channel`, `crates/vol-llm-mcp`, `crates/vol-mcp-servers` | Agent communication, JSON-RPC/MCP integration, and MCP server implementations. |
+| `crates/vol-llm-agent-protocol`, `crates/vol-llm-mcp`, `crates/vol-mcp-servers` | Agent communication, JSON-RPC/MCP integration, and MCP server implementations. |
 | `crates/vol-llm-ui` | Dioxus 0.6 WASM web frontend. Use the web Makefile commands rather than generic Cargo commands for this crate. |
 | `crates/vol-llm-tui` | Terminal UI frontend for the LLM agent experience. |
 | `docs/` | Architecture, deployment, development notes, migrations, test results, superpowers docs, and the persistent project wiki at `docs/wiki`. |
@@ -114,7 +114,7 @@ All web development commands use the Makefile. Run `make help` to see available 
 | `make web-css` | Tailwind watch | Build Tailwind CSS in watch mode |
 | `make web-dev` | WASM hot-reload | Start Dioxus dev server on port 8080 (WASM optimized: `opt-level="s"`, `lto=true`, no debug symbols) |
 | `make web-serve` | — | Release WASM build + serve with `Cache-Control` immutable headers (phone testing, port 8080) |
-| `make web-backend` | cargo-watch | Start backend JSON-RPC agent service from `vol-llm-agent-channel` (port 3001) |
+| `make web-backend` | cargo-watch | Start backend JSON-RPC agent service from `vol-llm-agent-protocol` (port 3001) |
 | `make web-check` | — | cargo check (web only) |
 | `make web-build` | — | Build WASM binary |
 | `make web-clippy` | — | cargo clippy (web only) |
@@ -158,6 +158,35 @@ The model service is available at:
 - When finished a development task, you **MUST** use skill `wiki-ingest` to add or update project wiki at `docs/wiki`
 
 - When `docs/superpowers/*` add or update docs you **MUST** upload the doc to lark wiki space **7630485291026910436**
+
+### Test Coverage
+
+**Threshold: `vol-agent-server` and `vol-llm-agent-protocol` must maintain ≥80% line coverage.**
+
+Coverage tool: `cargo-llvm-cov` (requires `llvm-tools-preview`)
+
+```bash
+# Install prerequisites (one-time)
+rustup component add llvm-tools-preview
+cargo install cargo-llvm-cov
+
+# Coverage for any crate (override PKG / PCT)
+make coverage PKG=vol-agent-server
+make coverage PKG="vol-agent-server vol-llm-agent-protocol"
+make coverage-html PKG=vol-llm-runtime
+
+make coverage-threshold PKG=vol-agent-server PCT=80
+```
+
+**Rules:**
+
+- Every new `pub fn` / handler / trait implementation must have at least one test.
+- Before claiming a development task complete, run `make coverage-threshold` for the affected crate and confirm it passes.
+- For the two principal crates, the default threshold is 80% line coverage.
+- Coverage exceptions (allowed to stay untested):
+  - `main.rs` (binary entry point)
+  - `app.rs` (process orchestration, covered by integration/WS tests)
+  - `health.rs` (trivial JSON response)
 
 - **Frontend verification**: When developing vol-llm-ui (Dioxus/WASM frontend) or any change that affects the web UI, you **MUST** verify with Playwright headless mode before completing. Start the web services (`make web-backend` + `make web-dev`), navigate to the relevant page, and confirm the UI renders and behaves correctly.
 ```bash

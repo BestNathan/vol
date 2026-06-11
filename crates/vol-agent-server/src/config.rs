@@ -6,10 +6,14 @@ use serde::Deserialize;
 use std::path::PathBuf;
 
 /// Top-level server configuration.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct ServerConfig {
     #[serde(default)]
     pub server: ServerSection,
+    #[serde(default)]
+    pub control_plane: ControlPlaneSection,
+    #[serde(default)]
+    pub data_plane: DataPlaneSection,
     #[serde(default)]
     pub runtime: RuntimeSection,
     #[serde(default)]
@@ -22,6 +26,46 @@ pub struct ServerSection {
     pub host: String,
     #[serde(default = "default_port")]
     pub port: u16,
+    #[serde(default)]
+    pub roles: ServerRoles,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ServerRoles {
+    #[serde(default)]
+    pub control_plane: bool,
+    #[serde(default = "default_data_plane_role")]
+    pub data_plane: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ControlPlaneSection {
+    #[serde(default)]
+    pub auth_token: Option<String>,
+    #[serde(default = "default_client_ws_path")]
+    pub client_ws_path: String,
+    #[serde(default = "default_node_ws_path")]
+    pub node_ws_path: String,
+    #[serde(default = "default_lease_timeout_secs")]
+    pub lease_timeout_secs: u64,
+    #[serde(default = "default_lease_scan_secs")]
+    pub lease_scan_secs: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DataPlaneSection {
+    #[serde(default)]
+    pub node_id: Option<String>,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub control_url: Option<String>,
+    #[serde(default)]
+    pub auth_token: Option<String>,
+    #[serde(default = "default_heartbeat_secs")]
+    pub heartbeat_secs: u64,
+    #[serde(default = "default_snapshot_on_connect")]
+    pub snapshot_on_connect: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -54,6 +98,34 @@ fn default_port() -> u16 {
     3001
 }
 
+fn default_data_plane_role() -> bool {
+    true
+}
+
+fn default_client_ws_path() -> String {
+    "/ws".to_string()
+}
+
+fn default_node_ws_path() -> String {
+    "/control/v1/ws".to_string()
+}
+
+fn default_lease_timeout_secs() -> u64 {
+    90
+}
+
+fn default_lease_scan_secs() -> u64 {
+    15
+}
+
+fn default_heartbeat_secs() -> u64 {
+    15
+}
+
+fn default_snapshot_on_connect() -> bool {
+    true
+}
+
 fn default_working_dir() -> String {
     ".".to_string()
 }
@@ -77,6 +149,41 @@ impl Default for ServerSection {
         Self {
             host: default_host(),
             port: default_port(),
+            roles: ServerRoles::default(),
+        }
+    }
+}
+
+impl Default for ServerRoles {
+    fn default() -> Self {
+        Self {
+            control_plane: false,
+            data_plane: default_data_plane_role(),
+        }
+    }
+}
+
+impl Default for ControlPlaneSection {
+    fn default() -> Self {
+        Self {
+            auth_token: None,
+            client_ws_path: default_client_ws_path(),
+            node_ws_path: default_node_ws_path(),
+            lease_timeout_secs: default_lease_timeout_secs(),
+            lease_scan_secs: default_lease_scan_secs(),
+        }
+    }
+}
+
+impl Default for DataPlaneSection {
+    fn default() -> Self {
+        Self {
+            node_id: None,
+            name: None,
+            control_url: None,
+            auth_token: None,
+            heartbeat_secs: default_heartbeat_secs(),
+            snapshot_on_connect: default_snapshot_on_connect(),
         }
     }
 }
@@ -101,16 +208,6 @@ impl Default for TracingSection {
     }
 }
 
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            server: ServerSection::default(),
-            runtime: RuntimeSection::default(),
-            tracing: TracingSection::default(),
-        }
-    }
-}
-
 // --- Load ---
 
 impl ServerConfig {
@@ -125,6 +222,31 @@ impl ServerConfig {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        if !self.server.roles.control_plane && !self.server.roles.data_plane {
+            return Err("at least one server role must be enabled".to_string());
+        }
+
+        if self.server.roles.control_plane && self.control_plane.client_ws_path == "/health" {
+            return Err("control_plane.client_ws_path must not equal /health".to_string());
+        }
+        if self.server.roles.control_plane && self.control_plane.node_ws_path == "/health" {
+            return Err("control_plane.node_ws_path must not equal /health".to_string());
+        }
+        if !self.server.roles.control_plane
+            && self.server.roles.data_plane
+            && self.control_plane.client_ws_path == "/health"
+        {
+            return Err("control_plane.client_ws_path must not equal /health".to_string());
+        }
+
+        if self.server.roles.control_plane
+            && self.control_plane.client_ws_path == self.control_plane.node_ws_path
+        {
+            return Err(
+                "control_plane.client_ws_path and node_ws_path must be different".to_string(),
+            );
+        }
+
         if let Some(task_store) = &self.runtime.task_store {
             task_store.validate()?;
         }
@@ -221,6 +343,85 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_roles_config() {
+        let toml_str = r#"
+        [server.roles]
+        control_plane = true
+        data_plane = false
+
+        [control_plane]
+        client_ws_path = "/ws"
+        node_ws_path = "/control/v1/ws"
+        lease_timeout_secs = 90
+        lease_scan_secs = 15
+    "#;
+
+        let config: ServerConfig = toml::from_str(toml_str).unwrap();
+        assert!(config.server.roles.control_plane);
+        assert!(!config.server.roles.data_plane);
+        assert_eq!(config.control_plane.client_ws_path, "/ws");
+        assert_eq!(config.control_plane.node_ws_path, "/control/v1/ws");
+    }
+
+    #[test]
+    fn test_reject_both_roles_disabled() {
+        let toml_str = r#"
+        [server.roles]
+        control_plane = false
+        data_plane = false
+    "#;
+
+        let config: ServerConfig = toml::from_str(toml_str).unwrap();
+        let err = config.validate().unwrap_err();
+        assert!(err.contains("at least one server role must be enabled"));
+    }
+
+    #[test]
+    fn test_reject_health_route_ws_path_collision() {
+        let cases = [
+            (
+                r#"
+                [server.roles]
+                control_plane = true
+                data_plane = false
+
+                [control_plane]
+                client_ws_path = "/health"
+            "#,
+                "control_plane.client_ws_path must not equal /health",
+            ),
+            (
+                r#"
+                [server.roles]
+                control_plane = true
+                data_plane = false
+
+                [control_plane]
+                node_ws_path = "/health"
+            "#,
+                "control_plane.node_ws_path must not equal /health",
+            ),
+            (
+                r#"
+                [server.roles]
+                control_plane = false
+                data_plane = true
+
+                [control_plane]
+                client_ws_path = "/health"
+            "#,
+                "control_plane.client_ws_path must not equal /health",
+            ),
+        ];
+
+        for (toml_str, expected_err) in cases {
+            let config: ServerConfig = toml::from_str(toml_str).unwrap();
+            let err = config.validate().unwrap_err();
+            assert_eq!(err, expected_err);
+        }
+    }
+
+    #[test]
     fn test_parse_partial_toml() {
         let toml_str = r#"
 [server]
@@ -235,6 +436,43 @@ level = "debug"
         assert_eq!(config.tracing.level, "debug");
         assert_eq!(config.tracing.format, "text"); // default preserved
         assert_eq!(config.runtime.working_dir, "."); // default preserved
+    }
+
+    #[test]
+    fn test_reject_equal_client_and_node_ws_paths() {
+        let toml_str = r#"
+        [server.roles]
+        control_plane = true
+        data_plane = false
+
+        [control_plane]
+        client_ws_path = "/ws"
+        node_ws_path = "/ws"
+    "#;
+
+        let config: ServerConfig = toml::from_str(toml_str).unwrap();
+        let err = config.validate().unwrap_err();
+        assert!(
+            err.contains("client_ws_path and node_ws_path must be different"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_equal_ws_paths_allowed_when_control_plane_disabled() {
+        // When control plane is not running, same paths don't matter.
+        let toml_str = r#"
+        [server.roles]
+        control_plane = false
+        data_plane = true
+
+        [control_plane]
+        client_ws_path = "/ws"
+        node_ws_path = "/ws"
+    "#;
+
+        let config: ServerConfig = toml::from_str(toml_str).unwrap();
+        assert!(config.validate().is_ok());
     }
 
     #[test]

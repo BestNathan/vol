@@ -1,4 +1,5 @@
-.PHONY: help web-css web-dev web-backend web-check web-build web-clippy web-serve
+.PHONY: help web-css web-dev web-backend web-check web-build web-clippy web-serve \
+        coverage coverage-html coverage-threshold
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -24,3 +25,36 @@ web-build: ## Build WASM binary
 
 web-clippy: ## cargo clippy (web only)
 	cargo clippy -p vol-llm-ui --no-default-features --features web -- -D warnings
+
+# ── Coverage ──
+#
+# Prerequisites:
+#   rustup component add llvm-tools-preview
+#   cargo install cargo-llvm-cov
+#
+# Usage:
+#   make coverage PKG=vol-agent-server              # single crate
+#   make coverage PKG="vol-agent-server vol-llm-agent-protocol"  # multi-crate
+#   make coverage-html PKG=vol-llm-runtime           # open HTML report
+#   make coverage-threshold PKG=vol-agent-server PCT=80  # gate at 80%
+#
+# Threshold pin values are in CLAUDE.md; update there if changed.
+
+PKG ?= vol-agent-server
+PCT ?= 80
+
+coverage: ## Run llvm-cov summary (override PKG / PCT)
+	cargo llvm-cov $(addprefix --package ,$(PKG)) --summary-only
+
+coverage-html: ## Open llvm-cov HTML report (override PKG)
+	cargo llvm-cov $(addprefix --package ,$(PKG)) --open
+
+coverage-threshold: ## Fail if PKG line coverage < PCT (default 80)
+	@LINE_COV=$$(cargo llvm-cov $(addprefix --package ,$(PKG)) --summary-only 2>&1 | grep '^TOTAL' | awk '{print $$10}' | tr -d '%'); \
+	if [ "$$(echo "$$LINE_COV < $(PCT)" | bc 2>/dev/null)" = "1" ]; then \
+		echo "FAIL: $(PKG) line coverage is $${LINE_COV}% (required ≥ $(PCT)%)"; \
+		exit 1; \
+	else \
+		echo "PASS: $(PKG) line coverage is $${LINE_COV}% (≥ $(PCT)%)"; \
+	fi
+

@@ -27,7 +27,7 @@ anyhow = "1.0"
 tokio = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 vol-llm-agent = { path = "../vol-llm-agent", optional = true }
-vol-llm-agent-channel = { path = "../vol-llm-agent-channel", optional = true }
+vol-llm-agent-protocol = { path = "../vol-llm-agent-protocol", optional = true }
 vol-llm-core = { path = "../vol-llm-core", optional = true }
 vol-llm-provider = { path = "../vol-llm-provider", optional = true }
 vol-llm-tool = { path = "../vol-llm-tool", optional = true }
@@ -72,7 +72,7 @@ default = ["tui"]
 tui = [
     "dep:ratatui", "dep:crossterm", "dep:futures", "dep:uuid",
     "dep:tokio", "dep:async-trait",
-    "dep:vol-llm-agent", "dep:vol-llm-agent-channel",
+    "dep:vol-llm-agent", "dep:vol-llm-agent-protocol",
     "dep:vol-llm-core", "dep:vol-llm-provider", "dep:vol-llm-tool",
     "dep:vol-llm-agents", "dep:vol-llm-skill", "dep:vol-llm-observability",
     "dep:vol-session", "dep:jsonrpsee", "dep:dioxus-primitives",

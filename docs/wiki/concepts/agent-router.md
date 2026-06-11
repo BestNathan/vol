@@ -3,8 +3,8 @@ type: concept
 category: framework
 tags: [router, multi-agent, dispatch, channel]
 created: 2026-05-07
-updated: 2026-05-21
-source_count: 2
+updated: 2026-06-10
+source_count: 3
 ---
 
 # Agent Router
@@ -42,12 +42,19 @@ let result = rx.await?;
 
 `AgentRouter` is a higher-level abstraction than `AgentDispatcher`. A dispatcher handles a single agent's request queue; the router distributes requests across multiple dispatchers based on agent ID. They compose: each agent gets its own dispatcher, and the router selects which dispatcher to use. Cancellation is broadcast across dispatchers by `run_id`, matching the unified run identity model [[run-id-unification]].
 
+## Relationship to Control Plane
+
+Source: [[agent-server-control-data-plane-architecture]]
+
+In the proposed [[agent-server-control-data-plane]] architecture, `AgentRouter` remains node-local. A new control-plane `ControlRouter` chooses which data-plane node should receive a request; the selected node then delegates to its existing `AgentRouter` and `AgentDispatcher` instances. This keeps distributed placement separate from local FIFO execution.
+
 ## Multi-Agent Service Architecture
 
 In a multi-agent service, each agent needs its own `ConnectionHolder` (for transport integration) and `AgentDispatcher` (for request queueing). The router holds references to dispatchers, while a separate `HashMap` holds holders for WebSocket/HTTP handler lookup. This is necessary because `ConnectionHolder` does not implement `Clone` ([[connection-holder-clone-limitation]]).
 
 ## Related Concepts
 
+- [[agent-server-control-data-plane]]: Distributed `ControlRouter` sits above the node-local `AgentRouter`.
 - [[run-id-unification]]: Router cancellation now searches dispatchers by run id.
 - [[agent-dispatcher]]: Per-agent FIFO queue and run id cancellation target.
 - [[vol-llm-agent-channel-crate]]: Crate containing the router implementation.

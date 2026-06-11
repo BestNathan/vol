@@ -12,12 +12,7 @@
 //! vol-agent-server --config ./my-config.toml
 //! ```
 
-use std::sync::Arc;
-
-use vol_llm_agent_channel::{AgentServerCore, JsonRpcServer};
-
-mod config;
-use config::ServerConfig;
+use vol_agent_server::{app, config::ServerConfig};
 
 #[tokio::main]
 async fn main() {
@@ -33,12 +28,11 @@ async fn main() {
     });
 
     // --- Load config ---
-    let (mut config, config_path) = ServerConfig::load_or_default(explicit_config.as_deref())
+    let (config, config_path) = ServerConfig::load_or_default(explicit_config.as_deref())
         .unwrap_or_else(|e| {
             eprintln!("Config error: {}", e);
             std::process::exit(1);
         });
-    config.expand_tilde();
 
     // --- Init tracing ---
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
@@ -62,6 +56,12 @@ async fn main() {
         tracing::info!("Using built-in defaults (no config file found)");
     }
 
+    tracing::info!(
+        control_plane = config.server.roles.control_plane,
+        data_plane = config.server.roles.data_plane,
+        "Configured server roles"
+    );
+
     if let Some(task_store) = &config.runtime.task_store {
         tracing::info!(task_store_type = ?task_store.store_type, "Using configured task store");
     } else {
@@ -74,53 +74,8 @@ async fn main() {
         tracing::info!("Using default file session store");
     }
 
-    // --- Build core ---
-    tracing::info!(
-        working_dir = %config.runtime.working_dir,
-        store_dir = %config.runtime.store_dir,
-        "Building AgentServerCore"
-    );
-
-    let core = AgentServerCore::builder(&config.runtime.working_dir, &config.runtime.store_dir)
-        .with_task_store_config(config.runtime.task_store.clone())
-        .with_session_store_config(config.runtime.session_store.clone())
-        .build()
-        .await
-        .unwrap_or_else(|e| {
-            tracing::error!("Failed to build AgentServerCore: {}", e);
-            std::process::exit(1);
-        });
-
-    // --- Discover agents ---
-    core.discover_agents().await.unwrap_or_else(|e| {
-        tracing::error!("Failed to discover agents: {}", e);
+    if let Err(err) = app::run(config).await {
+        tracing::error!("Server error: {}", err);
         std::process::exit(1);
-    });
-
-    // --- Start server ---
-    let server = JsonRpcServer::new(Arc::new(core));
-    let app = server.into_axum_router();
-
-    let addr = format!("{}:{}", config.server.host, config.server.port);
-    let listener = tokio::net::TcpListener::bind(&addr)
-        .await
-        .unwrap_or_else(|e| {
-            tracing::error!("Failed to bind {}: {}", addr, e);
-            std::process::exit(1);
-        });
-
-    tracing::info!("JSON-RPC server started on ws://{}", addr);
-    tracing::info!("  Methods: agent.submit, agent.cancel, agent.approve");
-    tracing::info!("           agent.list, agent.subscribe, agent.unsubscribe");
-    tracing::info!("           file.list, file.read");
-    tracing::info!("           log.list, log.read");
-    tracing::info!("           session.list, session.resume");
-    tracing::info!("           mcp.* (list_servers, list_tools, call_tool, etc.)");
-    tracing::info!("           skill.list, skill.get");
-    tracing::info!("           task.list, task.output");
-
-    axum::serve(listener, app).await.unwrap_or_else(|e| {
-        tracing::error!("Server error: {}", e);
-        std::process::exit(1);
-    });
+    }
 }

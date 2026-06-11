@@ -3,7 +3,7 @@ type: concept
 category: framework
 tags: [http, transport, sse, axum]
 created: 2026-05-05
-updated: 2026-05-21
+updated: 2026-06-10
 source_count: 2
 ---
 
@@ -14,15 +14,13 @@ source_count: 2
 
 ## Definition
 
-HTTP transport implementation for `vol-llm-agent-channel` using axum 0.7. It accepts `AgentServerMessage` JSON bodies, delegates to `AgentServerCore`, and returns protocol responses as either blocking JSON or SSE events.
+Historical HTTP transport implementation for `vol-llm-agent-channel` using axum 0.7. It was deleted during the Task 4 data-plane boundary cleanup; the active channel crate API now keeps WebSocket/JSON-RPC and memory transports only.
 
 ## Key Points
-- `HttpTransport` struct holds `Arc<AgentServerCore>` and does not depend on `AgentDispatcher` or `ConnectionHolder` [[agent-channel-server-protocol-transport-migration]]
-- `into_axum_router()` returns an axum `Router` with a POST `/` endpoint [[http-transport-impl]]
-- `?stream=true` query parameter switches between blocking JSON and SSE event output [[agent-channel-server-protocol-transport-migration]]
-- Blocking mode deserializes one `AgentServerMessage`, calls `AgentServerCore::handle`, and returns `Vec<AgentServerMessage>` [[agent-channel-server-protocol-transport-migration]]
-- SSE mode emits serialized protocol response messages as SSE data events [[agent-channel-server-protocol-transport-migration]]
-- Business routing, agent dispatch, and domain response shaping live in `AgentServerCore` and its handlers, not the HTTP transport [[agent-server-protocol]]
+- Deleted from the active `vol-llm-agent-channel` source during Task 4 cleanup after concrete data-plane behavior moved into `vol-agent-server` [[agent-server-data-plane-core-move]]
+- Former `HttpTransport` accepted `AgentServerMessage` JSON bodies and could return blocking JSON or SSE events [[http-transport-impl]]
+- Current active remote transport for the channel crate is JSON-RPC 2.0 over WebSocket via `JsonRpcServer<S>` and `JsonRpcConnection` [[jsonrpc-transport]]
+- Historical details below describe the removed implementation for archaeology only; do not treat them as current API
 
 ## Blocking Mode
 

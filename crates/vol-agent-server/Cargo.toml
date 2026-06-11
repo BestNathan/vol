@@ -15,5 +15,23 @@ toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 axum = { workspace = true }
-vol-llm-agent-channel = { path = "../vol-llm-agent-channel" }
+async-trait = { workspace = true }
+uuid = { version = "1.6", features = ["v4"] }
+vol-llm-agent = { path = "../vol-llm-agent" }
+vol-llm-agent-protocol = { path = "../vol-llm-agent-protocol" }
+vol-llm-core = { path = "../vol-llm-core" }
+vol-llm-mcp = { workspace = true }
+vol-llm-provider = { path = "../vol-llm-provider" }
 vol-llm-runtime = { path = "../vol-llm-runtime" }
+vol-llm-sandbox = { workspace = true }
+vol-llm-skill = { path = "../vol-llm-skill" }
+vol-llm-task = { path = "../vol-llm-task" }
+vol-llm-tool = { path = "../vol-llm-tool" }
+vol-session = { path = "../vol-session" }
+
+[dev-dependencies]
+futures = "0.3"
+tempfile = "3"
+tokio-tungstenite = { workspace = true }
+vol-llm-runtime = { path = "../vol-llm-runtime" }
+vol-session = { path = "../vol-session" }
