@@ -1,0 +1,107 @@
+# vol-agent-server.example.toml — Agent server configuration
+#
+# Copy to ~/.vol/agent-server.toml or pass via --config <path>.
+#
+# The agent framework auto-discovers these from disk:
+#   .agents/providers/*.toml     — LLM provider definitions
+#   .mcp.json                     — MCP server definitions
+#   .agents/agents/*.md          — Agent definitions (Markdown + YAML frontmatter)
+#   .agents/agents/*.yaml        — YAML agent definitions
+#   .agents/skills/*/SKILL.md    — Skill definitions
+#
+# Only sections below are read by the vol-agent-server binary.
+# Provider, MCP, agent, and skill config lives on disk at the paths above.
+
+# =============================================================================
+# Server — bind address and role selection
+# =============================================================================
+[server]
+host = "0.0.0.0"
+port = 3001
+
+# Roles control which server cores are active:
+#   standalone data-plane:  { control_plane = false, data_plane = true }  (default)
+#   standalone control-plane: { control_plane = true,  data_plane = false }
+#   combined:                { control_plane = true,  data_plane = true }
+[server.roles]
+control_plane = false
+data_plane = true
+
+# =============================================================================
+# Control Plane — only read when server.roles.control_plane = true
+# =============================================================================
+[control_plane]
+# Bearer token for client /ws and node /control/v1/ws WebSocket upgrade
+# auth_token = "dev-token"
+
+# JSON-RPC WebSocket mount paths
+client_ws_path = "/ws"
+node_ws_path = "/control/v1/ws"
+
+# Node lease management
+lease_timeout_secs = 90
+lease_scan_secs = 15
+
+# =============================================================================
+# Data Plane — node identity when registering with a control plane
+# =============================================================================
+[data_plane]
+# Stable node id; derived from hostname + working_dir hash if omitted
+# node_id = "local-dev-node"
+
+# Human-readable name shown in the control plane
+# name = "Local Development Node"
+
+# Control-plane WebSocket URL for registration
+# control_url = "ws://127.0.0.1:3001/control/v1/ws"
+
+# Bearer token for control-plane connection
+# auth_token = "dev-token"
+
+# Reporting intervals
+heartbeat_secs = 15
+snapshot_on_connect = true
+
+# =============================================================================
+# Runtime — working and data directories
+# =============================================================================
+[runtime]
+# Project root for agent discovery (.agents/ dirs, .mcp.json, etc.)
+working_dir = "."
+
+# Data store directory (sessions, file-backed tasks, logs)
+# Supports ~ tilde expansion
+store_dir = "~/.vol"
+
+# ── Task store ───────────────────────────────────────────────────────────────
+# Omit for default file-backed store under runtime.store_dir.
+#
+# SQLite (shared database with session_store):
+# [runtime.task_store]
+# type = "database"
+# url = "sqlite://~/.vol/data.db"
+#
+# Postgres:
+# [runtime.task_store]
+# type = "database"
+# url = "postgres://USER:PASSWORD@HOST:5432/DATABASE"
+
+# ── Session store ────────────────────────────────────────────────────────────
+# Omit for default file-backed JSONL sessions under the agent store directory.
+#
+# SQLite (shared database with task_store):
+# [runtime.session_store]
+# type = "database"
+# url = "sqlite://~/.vol/data.db"
+#
+# Postgres:
+# [runtime.session_store]
+# type = "database"
+# url = "postgres://vol_agent:vol_agent@localhost:5432/vol_agent_sessions"
+
+# =============================================================================
+# Tracing — logging configuration
+# =============================================================================
+[tracing]
+level = "info"         # trace, debug, info, warn, error (override: RUST_LOG)
+format = "text"        # "text" or "json"

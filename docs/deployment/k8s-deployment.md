@@ -43,17 +43,17 @@ kubectl get secret vol-monitor-secrets -n deribit
 ### 3. Create ConfigMap (Non-Sensitive Configuration)
 
 ```bash
-kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/vol-monitor/configmap.yaml
 ```
 
 **Update ConfigMap:**
 ```bash
 # Delete and recreate
 kubectl -n deribit delete configmap vol-monitor-config
-kubectl -n deribit create configmap vol-monitor-config --from-file=config.toml=/root/vol/config.prod.toml
+kubectl -n deribit create configmap vol-monitor-config --from-file=config.toml=configs/vol-monitor.example.toml
 
 # Or apply updated manifest
-kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/vol-monitor/configmap.yaml
 ```
 
 ## Deploy Application
@@ -61,13 +61,13 @@ kubectl apply -f k8s/configmap.yaml
 ### Option 1: Manual Deployment
 
 ```bash
-kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/vol-monitor/deployment.yaml
 ```
 
 ### Option 2: Using Deploy Script
 
 ```bash
-./k8s/deploy.sh latest
+./k8s/vol-monitor/deploy.sh latest
 ```
 
 ## Pod Spec Highlights

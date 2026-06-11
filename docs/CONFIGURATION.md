@@ -2,25 +2,30 @@
 
 ## Overview
 
-The project uses TOML config files for application settings and a `.env` file for secrets. Config presets target different environments and two subsystems:
+Config files live under `configs/` — one example per server type. Secrets go in `.env` (gitignored).
 
-| File | Purpose | Sensitive Data |
-|------|---------|---------------|
-| `.env.example` | Template for local secrets | Placeholders |
-| `.env` | Local secrets (gitignored) | **Yes** |
-| `config.toml` | Default / K8s ConfigMap | No |
-| `config.dev.toml` | Local development | No |
-| `config.prod.toml` | Production | No |
-| `config.agent-test.toml` | Agent advice testing | No |
-| `config.feishu-test.toml` | Feishu notification testing | No |
-| `config.toml.example` | Legacy example (v0.3.x format) | Placeholders |
+| File | Purpose |
+|------|---------|
+| `configs/vol-monitor.example.toml` | Vol monitor pipeline config example |
+| `configs/vol-agent-server.example.toml` | Agent server config example (data/control plane) |
+| `configs/vol-monitor.env.example` | Env template for vol-monitor |
+| `configs/vol-agent-server.env.example` | Env template for agent server |
+| `.env` | Local secrets (gitignored, **never commit**) |
 
-**Quick Start**
+**Quick Start — Agent Server**
 
 ```bash
-cp .env.example .env       # edit with your credentials
+cp configs/vol-agent-server.env.example .env   # edit API keys
 source .env
-cargo run --release -p vol-monitor -- --config config.dev.toml
+cargo run -p vol-agent-server -- --config configs/vol-agent-server.example.toml
+```
+
+**Quick Start — Vol Monitor**
+
+```bash
+cp configs/vol-monitor.env.example .env        # edit credentials
+source .env
+cargo run -p vol-monitor -- --config configs/vol-monitor.example.toml
 ```
 
 ---
@@ -31,7 +36,7 @@ Configuration for the Deribit market data pipeline: WebSocket connection, tenor 
 
 ### A.1 Environment Variables
 
-All secrets are injected via environment variables. Copy `.env.example` to `.env` and fill in:
+All secrets are injected via environment variables. Copy `configs/vol-monitor.env.example` to `.env` and fill in:
 
 #### Deribit API
 
@@ -74,29 +79,16 @@ For testnet use `wss://test.deribit.com/ws/api/v2`.
 
 | Variable | Description |
 |----------|-------------|
-| `VOL_MONITOR_CONFIG` | Path to TOML config file (e.g. `./config.dev.toml`) |
+| `VOL_MONITOR_CONFIG` | Path to TOML config file (e.g. `./configs/vol-monitor.example.toml`) |
 
 ### A.2 TOML Config Sections
 
 The config file is selected at runtime (via `VOL_MONITOR_CONFIG` or `--config`). Available config presets:
 
-#### `config.dev.toml` — Local Development
+#### `configs/vol-monitor.example.toml` — Reference for all deployments
 
-- **Shorter cooldowns** (60s global, 120s/300s/600s per tenor) for rapid feedback
-- **Relaxed thresholds** (BTC short IV: 0.80) so you can see alerts without extreme market moves
-- **Feishu disabled** — only stdout notifications
-- **Human-readable logs**, console level `debug`
-- **OTEL disabled**
-- Logs written to `./logs/`, 3 day retention
-
-#### `config.prod.toml` — Production
-
-- **Standard cooldowns** (300s global, 600s/3600s/14400s per tenor)
-- **Strict thresholds** (BTC short IV: 0.55)
-- **All notifications enabled** (Feishu + stdout)
-- **JSON logs**, console level `info`
-- **OTEL enabled** → exports to Jaeger at `jaeger-collector.observability.svc.cluster.local:4317`
-- Logs written to `/var/log/vol-monitor/`, 7 day retention, 100MB rotation
+This is the canonical example for the vol-monitor pipeline. Copy and tune for your environment
+(tighten thresholds for production, adjust cooldowns, enable/disable Feishu, switch log format).
 
 ### A.3 Config Reference
 
@@ -327,22 +319,11 @@ llm_provider_id = "anthropic-main"
 
 Rate limiting uses both cooldown and hourly cap — both must be satisfied before an analysis proceeds.
 
-### B.4 Test Config Presets
+### B.4 Agent Server Configuration
 
-#### `config.agent-test.toml`
-
-For testing the Agent Advice integration:
-- **Very low thresholds** (BTC short IV: 0.10) — alerts fire constantly
-- **Short cooldowns** (30s global) — rapid analysis cycling
-- **stdout only** — no Feishu noise
-- **OTEL disabled**, debug-level console logs
-
-#### `config.feishu-test.toml`
-
-For testing end-to-end Feishu notification delivery:
-- Same low thresholds and short cooldowns as agent-test
-- **Feishu enabled** — validates notification pipeline
-- Requires valid `FEISHU_APP_ID` / `FEISHU_APP_SECRET` / `FEISHU_RECEIVE_ID`
+See `configs/vol-agent-server.example.toml` for the full annotated example covering server roles
+(standalone data-plane, standalone control-plane, combined), control-plane node registration and
+routing, data-plane identity, runtime store configuration, and tracing.
 
 ### B.5 Model Service
 
@@ -380,7 +361,7 @@ kubectl create secret generic vol-monitor-secrets \
 The TOML config (without secrets) is deployed as a ConfigMap and mounted at `/etc/vol-monitor/config.toml`:
 
 ```bash
-kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/vol-monitor/configmap.yaml
 ```
 
 ### Deploy
@@ -392,7 +373,7 @@ cd k8s && bash deploy.sh
 ### Security Checklist
 
 - [ ] `.env` is in `.gitignore`
-- [ ] No credentials in `config.toml` — only env var references
+- [ ] No credentials in ConfigMap — only env var references
 - [ ] K8s Secrets used, not ConfigMap literals
 - [ ] Consider `sealed-secrets` or `external-secrets` for production
 - [ ] Rotate credentials after team changes

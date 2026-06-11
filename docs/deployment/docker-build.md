@@ -65,7 +65,7 @@ ENTRYPOINT ["/usr/local/bin/vol-monitor"]
 
 ```bash
 # Build image
-docker build -t crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:latest .
+docker build -t crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:latest -f dockers/vol-monitor.Dockerfile .
 
 # Push to ACR
 docker push crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:latest
@@ -85,6 +85,7 @@ docker buildx inspect multiarch --bootstrap
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
+    -f dockers/vol-monitor.Dockerfile \
     --push -t crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:latest .
 ```
 
@@ -109,11 +110,11 @@ docker buildx imagetools inspect crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.al
 ```bash
 # Deploy to k8s
 kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/vol-monitor/configmap.yaml
+kubectl apply -f k8s/vol-monitor/deployment.yaml
 ```
 
 Or use the one-click deploy script:
 ```bash
-./k8s/deploy.sh latest
+./k8s/vol-monitor/deploy.sh latest
 ```

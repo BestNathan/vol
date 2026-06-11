@@ -1,5 +1,5 @@
 #!/bin/bash
-# k8s/deploy.sh - One-click deploy script for vol-monitor
+# k8s/vol-monitor/deploy.sh - One-click deploy script for vol-monitor
 
 set -e
 
@@ -35,13 +35,13 @@ docker run --rm --privileged multiarch/qemu-user-static --reset -p yes >/dev/nul
 
 # Step 3: Build and push amd64 image
 echo "[3/7] Building amd64 image..."
-docker build --platform linux/amd64 -t "$IMAGE_NAME:amd64" -f Dockerfile .
+docker build --platform linux/amd64 -t "$IMAGE_NAME:amd64" -f dockers/vol-monitor.Dockerfile .
 echo "Pushing amd64 image..."
 docker push "$IMAGE_NAME:amd64"
 
 # Step 4: Build and push arm64 image (using QEMU)
 echo "[4/7] Building arm64 image (this may take 10-15 minutes)..."
-docker build --platform linux/arm64 -t "$IMAGE_NAME:arm64" -f Dockerfile .
+docker build --platform linux/arm64 -t "$IMAGE_NAME:arm64" -f dockers/vol-monitor.Dockerfile .
 echo "Pushing arm64 image..."
 docker push "$IMAGE_NAME:arm64"
 

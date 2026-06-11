@@ -3,7 +3,7 @@
 # Multi-stage build for the JSON-RPC agent service — minimal Alpine runtime.
 #
 # Build:
-#   docker build -t vol-agent-server:alpine -f Dockerfile.agent-server.alpine .
+#   docker build -t vol-agent-server:alpine -f dockers/vol-agent-server.alpine.Dockerfile .
 #
 # Run:
 #   docker run -d \

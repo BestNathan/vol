@@ -3,7 +3,7 @@
 # Multi-stage build for the JSON-RPC agent service.
 #
 # Build:
-#   docker build -t vol-agent-server:latest -f Dockerfile.agent-server .
+#   docker build -t vol-agent-server:latest -f dockers/vol-agent-server.Dockerfile .
 #
 # Run:
 #   docker run -d \

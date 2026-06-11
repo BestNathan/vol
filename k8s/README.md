@@ -1,90 +1,76 @@
-# vol-monitor Kubernetes Deployment
+# Kubernetes Deployment
 
-## Prerequisites
+```
+k8s/
+├── namespace.yaml                        # Shared namespace
+├── vol-monitor/
+│   ├── deploy.sh                         # Build + push + deploy
+│   ├── deployment.yaml                   # Standard deployment
+│   ├── deployment-arm64-test.yaml        # ARM64 test deployment
+│   ├── configmap.yaml                    # TOML config (no secrets)
+│   └── secrets.yaml                      # Secret template (do not commit real secrets)
+├── agent-server/
+│   ├── deployment.yaml                   # vol-agent-server deployment
+│   ├── configmap.yaml                    # Agent server TOML config
+│   └── secret.yaml                       # API key secret template
+└── mcp/
+    ├── deploy.sh                         # Build + push + deploy MCP server
+    └── deployment-template.yaml          # MCP server deployment template
+```
 
-- Docker installed and logged in (`docker login`)
+## Vol Monitor
+
+### Prerequisites
+
+- Docker installed and logged in
 - kubectl configured with cluster access
-- Docker Hub account
 
-## Quick Start
-
-### First Time Setup
+### Quick Start
 
 1. **Update configuration:**
-   - Edit `k8s/deploy.sh` and set `DOCKERHUB_USERNAME` to your Docker Hub username
-   - Edit `k8s/deployment.yaml` and update the image field with your Docker Hub username
+   - Edit `k8s/vol-monitor/deploy.sh` and set `DOCKERHUB_USERNAME`
+   - Edit `k8s/vol-monitor/deployment.yaml` and update the image field
 
-2. **Update ConfigMap (optional):**
-   - Edit `k8s/configmap.yaml` with your actual config.toml content
-   - Update Deribit API credentials and Feishu notification settings
+2. **Update ConfigMap:**
+   - Edit `k8s/vol-monitor/configmap.yaml` with actual `config.toml` content
 
 3. **Deploy:**
    ```bash
-   ./k8s/deploy.sh v0.1.0
+   ./k8s/vol-monitor/deploy.sh v0.1.0
    ```
 
-### Deploy New Version
+### Manual Operations
 
 ```bash
-./k8s/deploy.sh v0.1.1
-```
-
-### View Status
-
-```bash
-# Check pods
+# View status
 kubectl -n deribit get pods -l app=vol-monitor
 
 # View logs
 kubectl -n deribit logs -f deployment/vol-monitor
 
-# Check events
-kubectl -n deribit get events --sort-by='.lastTimestamp'
-```
-
-### Rollback
-
-```bash
+# Rollback
 kubectl -n deribit rollout undo deployment/vol-monitor
 ```
 
-## Manual Operations
-
-### Update ConfigMap
+## Agent Server
 
 ```bash
-# Edit the ConfigMap
-kubectl -n deribit edit configmap vol-monitor-config
+# Deploy
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/agent-server/configmap.yaml
+kubectl apply -f k8s/agent-server/secret.yaml
+kubectl apply -f k8s/agent-server/deployment.yaml
 
-# Restart deployment to pick up changes
-kubectl -n deribit rollout restart deployment/vol-monitor
+# View status
+kubectl -n deribit get pods -l app=vol-agent-server
+kubectl -n deribit logs -f deployment/vol-agent-server
 ```
 
-### Scale (if needed)
+## MCP Server
 
 ```bash
-kubectl -n deribit scale deployment/vol-monitor --replicas=2
+./k8s/mcp/deploy.sh docs-rs-mcp v0.1.0
 ```
-
-### Delete Deployment
-
-```bash
-kubectl delete -f k8s/namespace.yaml
-# This removes namespace and all resources
-```
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RUST_LOG` | `info` | Logging level |
-
-### ConfigMap Mount
-
-- **Path:** `/etc/vol-monitor/config.toml`
-- **Source:** `vol-monitor-config` ConfigMap
 
 ## Troubleshooting
 
@@ -97,19 +83,10 @@ kubectl -n deribit logs deployment/vol-monitor
 
 ### Image pull errors
 
-Ensure Docker Hub credentials are correct and image is public, or create a pull secret:
-
 ```bash
 kubectl -n deribit create secret docker-registry regcred \
   --docker-server=docker.io \
   --docker-username=<user> \
   --docker-password=<pass> \
   --docker-email=<email>
-```
-
-Then add to deployment.yaml:
-```yaml
-spec:
-  imagePullSecrets:
-  - name: regcred
 ```
