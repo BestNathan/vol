@@ -7753,12 +7753,15 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "base64 0.22.1",
  "futures",
+ "futures-util",
  "serde",
  "serde_json",
  "tempfile",
  "tokio",
  "tokio-tungstenite 0.21.0",
+ "tokio-util",
  "toml",
  "tracing",
  "tracing-subscriber",
@@ -7924,6 +7927,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "base64 0.22.1",
  "futures",
  "serde",
  "serde_json",
@@ -7934,6 +7938,7 @@ dependencies = [
  "tracing-subscriber",
  "vol-llm-agent",
  "vol-llm-core",
+ "vol-llm-sandbox",
 ]
 
 [[package]]
