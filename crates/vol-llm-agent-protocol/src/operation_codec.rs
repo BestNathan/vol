@@ -1,7 +1,7 @@
 use crate::agent_server_protocol::{
     AgentOperation, ControlOperation, FileOperation, LogOperation, McpOperation, Operation,
-    Payload, ProtocolError, SessionOperation, SkillOperation, SystemOperation, TaskOperation,
-    ToolOperation,
+    Payload, ProtocolError, SandboxOperation, SessionOperation, SkillOperation, SystemOperation,
+    TaskOperation, ToolOperation,
 };
 
 pub fn method_to_operation(method: &str) -> Result<Operation, ProtocolError> {
@@ -55,6 +55,13 @@ pub fn method_to_operation(method: &str) -> Result<Operation, ProtocolError> {
         "control.node_get" => Ok(Operation::Control(ControlOperation::NodeGet)),
         "control.capability_list" => Ok(Operation::Control(ControlOperation::CapabilityList)),
         "control.run_status" => Ok(Operation::Control(ControlOperation::RunStatus)),
+        "sandbox.list" => Ok(Operation::Sandbox(SandboxOperation::List)),
+        "sandbox.exec" => Ok(Operation::Sandbox(SandboxOperation::Exec)),
+        "sandbox.read_file" => Ok(Operation::Sandbox(SandboxOperation::ReadFile)),
+        "sandbox.write_file" => Ok(Operation::Sandbox(SandboxOperation::WriteFile)),
+        "sandbox.create_dir" => Ok(Operation::Sandbox(SandboxOperation::CreateDir)),
+        "sandbox.read_dir" => Ok(Operation::Sandbox(SandboxOperation::ReadDir)),
+        "sandbox.metadata" => Ok(Operation::Sandbox(SandboxOperation::Metadata)),
         _ => Err(ProtocolError::UnknownMethod(method.to_string())),
     }
 }
