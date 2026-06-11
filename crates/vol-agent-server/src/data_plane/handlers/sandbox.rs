@@ -223,3 +223,125 @@ impl DomainHandler for SandboxHandler {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::Engine;
+    use vol_llm_agent_protocol::agent_server_protocol::{
+        CommandRequestDef, SandboxOperation, SandboxPayload,
+    };
+    use vol_llm_sandbox::local::LocalSandbox;
+    use vol_llm_sandbox::Sandbox;
+
+    async fn setup() -> SandboxHandler {
+        let sandbox = Arc::new(LocalSandbox::new(None));
+        sandbox.start().await.unwrap();
+        SandboxHandler::new(sandbox)
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let sb = LocalSandbox::new(None);
+        let handler = SandboxHandler::new(Arc::new(sb));
+        assert_eq!(handler.name(), "sandbox");
+    }
+
+    #[test]
+    fn test_operations_count() {
+        let sb = LocalSandbox::new(None);
+        let handler = SandboxHandler::new(Arc::new(sb));
+        let ops = handler.operations();
+        assert_eq!(ops.len(), 7);
+    }
+
+    #[tokio::test]
+    async fn test_list() {
+        let handler = setup().await;
+        let msg = AgentServerMessage::new_command(
+            "1",
+            Operation::Sandbox(SandboxOperation::List),
+            Payload::Sandbox(SandboxPayload::List),
+        );
+        let replies = handler.handle(msg).await.unwrap();
+        assert_eq!(replies.len(), 1);
+        match &replies[0].payload {
+            Payload::Sandbox(SandboxPayload::ListResult { sandboxes }) => {
+                assert_eq!(sandboxes.len(), 1);
+                assert_eq!(sandboxes[0].name, "local");
+            }
+            _ => panic!("expected ListResult"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_exec_echo() {
+        let handler = setup().await;
+        let msg = AgentServerMessage::new_command(
+            "2",
+            Operation::Sandbox(SandboxOperation::Exec),
+            Payload::Sandbox(SandboxPayload::Exec {
+                command: CommandRequestDef {
+                    program: "echo".into(),
+                    args: vec!["-n".into(), "hello".into()],
+                    env: vec![],
+                    cwd: None,
+                    stdin: None,
+                    timeout_ms: 5000,
+                },
+            }),
+        );
+        let replies = handler.handle(msg).await.unwrap();
+        assert_eq!(replies.len(), 1);
+        match &replies[0].payload {
+            Payload::Sandbox(SandboxPayload::ExecResult { output }) => {
+                assert_eq!(output.exit_code, 0);
+                // stdout is base64 encoded
+                let stdout = base64::engine::general_purpose::STANDARD
+                    .decode(&output.stdout).unwrap_or_default();
+                assert_eq!(stdout, b"hello");
+            }
+            _ => panic!("expected ExecResult"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write_and_read_file() {
+        let handler = setup().await;
+
+        // Write
+        let write = AgentServerMessage::new_command(
+            "3",
+            Operation::Sandbox(SandboxOperation::WriteFile),
+            Payload::Sandbox(SandboxPayload::WriteFile {
+                path: "test.txt".into(),
+                content: base64::engine::general_purpose::STANDARD.encode(b"hello world"),
+            }),
+        );
+        let replies = handler.handle(write).await.unwrap();
+        assert!(matches!(
+            &replies[0].payload,
+            Payload::Sandbox(SandboxPayload::WriteFileResult)
+        ));
+
+        // Read
+        let read = AgentServerMessage::new_command(
+            "4",
+            Operation::Sandbox(SandboxOperation::ReadFile),
+            Payload::Sandbox(SandboxPayload::ReadFile {
+                path: "test.txt".into(),
+                offset: None,
+                limit: None,
+            }),
+        );
+        let replies = handler.handle(read).await.unwrap();
+        match &replies[0].payload {
+            Payload::Sandbox(SandboxPayload::ReadFileResult { content }) => {
+                let decoded = base64::engine::general_purpose::STANDARD
+                    .decode(content).unwrap();
+                assert_eq!(decoded, b"hello world");
+            }
+            _ => panic!("expected ReadFileResult"),
+        }
+    }
+}
