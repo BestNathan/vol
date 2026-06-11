@@ -4,6 +4,7 @@ pub mod file;
 pub mod log;
 pub mod mcp;
 pub mod session;
+pub mod sandbox;
 pub mod skill;
 pub mod system;
 pub mod task;
