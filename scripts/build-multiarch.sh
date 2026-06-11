@@ -18,7 +18,7 @@ set -e
 DOCKER_REGISTRY="${DOCKER_REGISTRY:-crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com}"
 IMAGE_NAME="${DOCKER_REGISTRY}/n_common/vol-monitor"
 VERSION="beta"
-DOCKERFILE="Dockerfile.cross-compile"
+DOCKERFILE="dockers/vol-monitor.cross.Dockerfile"
 
 echo "============================================"
 echo "  vol-monitor Single-Image Multi-Arch Build"

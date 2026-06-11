@@ -57,7 +57,7 @@ ENTRYPOINT ["/entrypoint.sh"]
 
 ```bash
 # 标准 docker build (无需 buildx)
-docker build -f Dockerfile.cross-compile \
+docker build -f dockers/vol-monitor.cross.Dockerfile \
     -t vol-monitor:beta .
 ```
 
@@ -140,6 +140,6 @@ kubectl rollout undo deployment/vol-monitor -n deribit
 
 ## 参考文件
 
-- `Dockerfile.cross-compile` - 交叉编译 Dockerfile
+- `dockers/vol-monitor.cross.Dockerfile` - 交叉编译 Dockerfile
 - `scripts/build-multiarch.sh` - 构建脚本
 - 镜像仓库：`crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:beta`

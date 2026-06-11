@@ -4,7 +4,7 @@
 # At runtime, an entrypoint script selects the correct binary based on architecture
 #
 # Build command (single arch build, single image):
-#   docker build -f Dockerfile.cross-compile -t vol-monitor:beta .
+#   docker build -f dockers/vol-monitor.cross.Dockerfile -t vol-monitor:beta .
 #
 # =============================================================================
 

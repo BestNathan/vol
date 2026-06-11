@@ -109,5 +109,4 @@ spec:
           name: vol-monitor-config
           items:
           - key: config.toml
-          - key: config.feishu-test.toml
           defaultMode: 0644
