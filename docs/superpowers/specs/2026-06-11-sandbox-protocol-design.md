@@ -39,18 +39,20 @@ RemoteSandbox                                   SandboxHandler (DomainHandler)
 
 ```
   vol-llm-sandbox               # Sandbox trait + CommandRequest/CommandOutput/...
-        ↑
-  vol-llm-agent-protocol        # +vol-llm-sandbox dep; SandboxOperation/Payload wire types
-        ↑
-  vol-agent-server              # SandboxHandler + RemoteSandbox（两者均已有 protocol + sandbox dep）
+        ↑                  (direct dep: Cargo.toml)
+  vol-llm-agent-protocol        # +vol-llm-sandbox dep; SandboxOperation/Payload/Def wire types
+        ↑                  (已有 protocol dep)
+  vol-agent-server              # SandboxHandler + RemoteSandbox
 ```
+
+> **Note**: `vol-llm-agent-protocol` currently depends on `vol-llm-agent` (which transitively depends on `vol-llm-sandbox`)。但 Def 类型需要直接引用 `CommandRequest`、`CommandOutput`、`DirEntry` 等 sandbox 类型来实现 `From` trait。因此**新增直接依赖 `vol-llm-sandbox`**，避免依赖隐式 transitive 类型。
 
 ### Component Breakdown
 
 #### 1. Protocol Wire Types（`vol-llm-agent-protocol`）
 
 - 新增 `SandboxOperation` 枚举（List/Exec/ReadFile/WriteFile/CreateDir/ReadDir/Metadata），每个有 `method_name()` 映射
-- 新增 `SandboxPayload` 枚举（request/result pair），`#[serde(untagged)]`，与现有 `FilePayload` 风格一致
+- 新增 `SandboxPayload` 枚举（request/result pair），标准 tagged enum，与 `FilePayload`/`McpPayload` 风格一致。**不**使用 `#[serde(untagged)]`——避免与 `Payload` 顶层 untagged 产生双重歧义
 - 扩展 `Operation::Sandbox(SandboxOperation)` 和 `Payload::Sandbox(SandboxPayload)`
 - `operation_codec.rs` 中新增 `"sandbox.*" → Operation::Sandbox(...)` 映射
 - 定义 serde 友好的 "Def" 类型（`CommandRequestDef`、`CommandOutputDef`、`DirEntryDef`、`FileMetadataDef`）避免 `Duration`/`HashMap`/`PathBuf` 序列化问题；通过 `From`/`Into` 转换
@@ -58,8 +60,13 @@ RemoteSandbox                                   SandboxHandler (DomainHandler)
 #### 2. SandboxHandler（`vol-agent-server`）
 
 - 实现 `DomainHandler` trait
-- 持有 `SandboxRef`（直接引用 `LocalSandbox` 实例，不走 `SandboxRegistry`）
-- 注册到 data-plane 和 control-plane 的 `HandlerRegistry`
+- 持有 `SandboxRef`——通过 `sandbox_registry.default()` 获取已存在的 LocalSandbox 实例，不另建
+- 在 `DataPlaneServerCoreBuilder::build()` 中注册：
+  ```rust
+  let sandbox_ref = sandbox_registry.default(); // Arc<dyn Sandbox>, always "local"
+  handler_registry.register(Arc::new(SandboxHandler::new(sandbox_ref)))?;
+  ```
+- control-plane 同理在 `ControlPlaneServerCoreBuilder::build()` 中注册
 - 每个 handler method 匹配 `(SandboxOperation, SandboxPayload)` → 转换 "Def" 类型 → 调用 `Sandbox` trait → 转换结果 → `AgentServerMessage`
 
 #### 3. RemoteSandbox（`vol-agent-server`）
@@ -69,7 +76,7 @@ RemoteSandbox                                   SandboxHandler (DomainHandler)
 - 内部结构：
   - `write_tx: mpsc::UnboundedSender<String>` 发送端
   - `pending: Mutex<HashMap<msg_id, oneshot::Sender<AgentServerMessage>>>` 请求-响应匹配
-  - Background reader task：收帧 → `decode_jsonrpc_frame()` → 查 `pending` → `oneshot::send()`
+  - Background reader task：收帧 → `decode_jsonrpc_frame()` → `pending.lock().remove(&mid)` → `if let Some(tx)` → `tx.send(msg)`（不 panic 不匹配或孤儿响应）
   - Background writer task：从 mpsc channel 读 → `ws.send()`
 - 每个 `Sandbox` trait 方法：构造 `AgentServerMessage` → `encode_jsonrpc_message()` → 发送 → 等待 oneshot 响应 → 解析回 trait 返回类型
 - 30s 默认超时，无自动重连
@@ -134,9 +141,10 @@ impl SandboxOperation {
 
 ### `SandboxPayload`（protocol）
 
+与 `FilePayload`/`McpPayload` 一致的标准 tagged enum。**不**使用 `#[serde(untagged)]`，由 `Payload::from_operation()` 根据 operation 路由到正确的反序列化类型。
+
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
 pub enum SandboxPayload {
     // ── List ──
     List,
@@ -192,6 +200,14 @@ pub enum SandboxPayload {
     MetadataResult {
         metadata: FileMetadataDef,
     },
+}
+
+/// Sandbox metadata returned by `sandbox.list`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SandboxInfo {
+    pub name: String,
+    pub kind: String,
+    pub root_path: String,
 }
 ```
 
@@ -291,6 +307,8 @@ pub struct RemoteSandbox {
     server_url: String,
     write_tx: mpsc::UnboundedSender<String>,
     inner: Arc<RemoteSandboxInner>,
+    /// Abort on drop to clean up background reader/writer tasks.
+    cancel: tokio_util::sync::CancellationToken,
     _bg: tokio::task::JoinHandle<()>,
 }
 
@@ -299,13 +317,21 @@ struct RemoteSandboxInner {
     msg_id_counter: AtomicU64,
 }
 
+impl Drop for RemoteSandbox {
+    fn drop(&mut self) {
+        self.cancel.cancel();
+    }
+}
+
 impl RemoteSandbox {
     /// Connect to the agent server. Returns immediately if the server is reachable;
     /// errors if the WebSocket handshake fails.
     pub async fn connect(server_url: &str) -> SandboxResult<Self> {
+        let cancel = tokio_util::sync::CancellationToken::new();
         // 1. Connect via tokio_tungstenite
-        // 2. Spawn background writer task (mpsc → ws.send)
-        // 3. Spawn background reader task (ws.recv → decode → pending::remove → oneshot::send)
+        // 2. Spawn background writer task (mpsc → ws.send), guarded by cancel.child_token()
+        // 3. Spawn background reader task (ws.recv → decode → pending::remove → oneshot::send),
+        //    guarded by cancel.child_token()
         // 4. Combined _bg task: tokio::select! on writer + reader
     }
 
@@ -319,12 +345,13 @@ impl RemoteSandbox {
             .fetch_add(1, Ordering::Relaxed)
             .to_string();
 
-        let msg = AgentServerMessage::new_command(
-            &msg_id,
-            "remote-sandbox", "server",
+        let mut msg = AgentServerMessage::new_command(
+            msg_id.clone(),
             Operation::Sandbox(op),
             Payload::Sandbox(payload),
         );
+        msg.sender = "remote-sandbox".to_string();
+        msg.receiver = "server".to_string();
 
         let (tx, rx) = oneshot::channel();
         self.inner.pending.lock().unwrap().insert(msg_id, tx);
@@ -479,7 +506,12 @@ impl Sandbox for RemoteSandbox {
 | Path traversal rejection | Attempt `read_file("../etc/passwd")`, verify error | `vol-agent-server/tests/` |
 | Concurrency | Two concurrent RemoteSandbox connections both execute commands successfully | `vol-agent-server/tests/` |
 
-Integration tests use the in-memory server pattern: start `DataPlaneServerCore` with `MemoryConnection`, connect `RemoteSandbox` (with a test-mode path that accepts `MemoryConnection` as transport instead of WebSocket).
+Integration tests use the in-memory server pattern to avoid needing a real WebSocket server:
+
+1. **Server side**: Create `DataPlaneServerCore` with `MemoryConnection` pair (see `vol-llm-agent-protocol/src/transport/memory.rs`)
+2. **Client side**: Add a `RemoteSandbox::connect_memory(rx, tx)` constructor that accepts raw `MemoryConnection` halves instead of opening a WebSocket, or use `RemoteSandbox::connect()` against a locally-running server on `localhost`
+
+Prefer the real-WebSocket approach for integration tests when possible (start a server on a random port), falling back to `MemoryConnection`-based tests for CI environments that can't bind ports.
 
 ### E2E Test
 
