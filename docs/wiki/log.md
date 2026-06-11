@@ -1,5 +1,137 @@
 # Change Log
 
+## [2026-06-11] refactor | Rename crate: vol-llm-agent-channel → vol-llm-agent-protocol
+- Renamed crate directory, Cargo.toml, all workspace dependency references, all Rust source imports, scripts, Makefile, CLAUDE.md, wiki entity page
+
+## [2026-06-10] ingest | Control Plane Behavior Completion Plan
+- Created sources: [[control-plane-behavior-completion-plan]]
+- Updated concepts: [[agent-server-control-data-plane]] (follow-up plan for notification decode, endpoint roles, client handlers, data-plane command handling, capability revision sync, run status, and combined-mode registration)
+- Updated index: new follow-up plan source entry
+- Cross-references added: 8
+- Changes: Captured the follow-up implementation plan after final review found behavior gaps in the initial control/data-plane implementation. Feishu/Lark upload: https://my.feishu.cn/docx/JRjcd9jnkoKxVyxoQ7zc1aHenue
+
+## [2026-06-10] ingest | Agent Server Boundary and Role-Mode Verification
+- Created sources: [[agent-server-boundary-mode-verification]]
+- Updated entities: [[vol-agent-server-crate]] (Task 10 integration tests and dependency boundary script, source_count 15->16)
+- Updated concepts: [[agent-server-control-data-plane]] (Task 10 verification status and boundary invariants, source_count 11->12)
+- Updated index: new Task 10 source entry and refreshed server/control-data summaries
+- Cross-references added: 10
+- Changes: Documented boundary and mode verification for the control/data-plane split: executable cargo-tree guard script, `/ws` ownership integration tests for standalone and control-plane modes, disabled-role TOML validation, and verification commands.
+
+## [2026-06-10] ingest | Agent Server Control Router MVP
+- Created sources: [[agent-server-control-router-mvp]]
+- Updated entities: [[vol-agent-server-crate]] (`ControlRouter<'a>`, `route_agent`, source_count 14->15)
+- Updated concepts: [[agent-server-control-data-plane]] (Task 9 implementation status and routing semantics, source_count 10->11)
+- Updated index: new Task 9 source entry and refreshed server/control-data summaries
+- Cross-references added: 9
+- Changes: Documented Task 9 control-plane routing MVP: online-node filtering through `NodeRegistry`, capability snapshot iteration through `CapabilityIndex`, target matching by `agent_id` or `name`, untargeted first-agent routing, and `capability_not_found` on miss.
+
+## [2026-06-10] ingest | Agent Server Data-Plane Snapshot/Command Skeletons
+- Created sources: [[agent-server-data-plane-snapshot-command]]
+- Updated entities: [[vol-agent-server-crate]] (`RuntimeCapabilitySource`, `StaticCapabilitySource`, `accept_control_command`, source_count 13->14)
+- Updated concepts: [[agent-server-control-data-plane]] (Task 8 implementation status and data-plane reporting primitives, source_count 9->10)
+- Updated index: new Task 8 source entry and refreshed server/control-data summaries
+- Cross-references added: 9
+- Changes: Documented Task 8 data-plane primitives: snapshot/load facade, static empty capability source, fake-source test, accepted `CommandAck` skeleton with synthetic `run_{command_id}` for `SubmitAgent`, and verification commands.
+
+## [2026-06-10] ingest | Agent Server Health Route Collision Validation
+- Created sources: [[agent-server-health-route-collision-validation]]
+- Updated entities: [[vol-agent-server-crate]] (`ServerConfig::validate` rejects active WebSocket paths equal to `/health`, source_count 12->13)
+- Updated concepts: [[agent-server-control-data-plane]] (route edge case for `/health` collision validation, source_count 8->9)
+- Updated index: new source entry plus refreshed server/control-data summaries
+- Cross-references added: 8
+- Changes: Documented the Task 7 quality fix preventing Axum duplicate-route startup panics by rejecting `/health` collisions for enabled control-plane client/node paths and data-plane-only client paths; noted regression test and verification commands.
+
+## [2026-06-10] ingest | Agent Server Role Route Composition
+- Created sources: [[agent-server-role-route-composition]]
+- Updated entities: [[vol-agent-server-crate]] (`ws_owner`, role-specific `app::run`, configured control/data WebSocket mounting, main startup delegation, source_count 11->12)
+- Updated concepts: [[agent-server-control-data-plane]] (Task 7 implementation status and route composition semantics, source_count 7->8)
+- Updated index: new Task 7 source entry and refreshed server/control-data summaries
+- Cross-references added: 10
+- Changes: Documented Task 7 role composition for `vol-agent-server`: pure `/ws` ownership tests, control-plane priority for `/ws`, data-plane standalone fallback, configured `/control/v1/ws` node path, path expansion, data-plane agent discovery, and startup delegation to `app::run`.
+
+## [2026-06-10] ingest | Agent Server Control-Plane Core and Handlers
+- Created sources: [[agent-server-control-plane-core-handlers]]
+- Updated entities: [[vol-agent-server-crate]] (`ControlPlaneServerCore`, control handlers, source_count 10->11)
+- Updated concepts: [[agent-server-control-data-plane]] (Task 6 implementation status, source_count 6->7)
+- Updated index: new Task 6 source entry and updated last-modified marker
+- Cross-references added: 9
+- Changes: Documented the Task 6 control-plane core and handler implementation: TDD `control_register_creates_node`, `control.register` RegisterAck behavior, heartbeat/snapshot/event handling, node list/get, capability list node filtering, and `JsonRpcMessageService` serve loop verification.
+
+## [2026-06-10] ingest | Task 4 Quality Issues Cleanup
+- Created sources: [[task-4-quality-issues-cleanup]]
+- Updated concepts: [[jsonrpc-transport]] (generic `JsonRpcServer<S>`/`JsonRpcMessageService` path ownership and current `vol_llm_agent_channel::transport::jsonrpc::*` module path)
+- Updated entities: [[vol-llm-agent-channel-crate]] (dependency scope cleanup and moved-router/dispatcher comment cleanup), [[vol-agent-server-crate]] (active backend ownership and `config.control_plane.client_ws_path` default `/ws` startup path)
+- Updated sources: [[remove-vol-agent-manager]] (active backend claim points to `vol-agent-server` instead of deleted channel example)
+- Updated index: new source entry and refreshed server/JSON-RPC summaries
+- Cross-references added: 7
+- Changes: Documented the follow-up Task 4 quality cleanup: removed unused `uuid`/`tempfile`, moved `tokio-tungstenite` and `vol-llm-core` to test-only dev-dependencies, removed stale active registration-list/deleted-example documentation claims, and verified checks/tests/clippy/fmt.
+
+## [2026-06-10] update | Task 4 Code Quality Cleanup
+- Updated concepts: [[http-transport]] marked historical/deleted from active channel API
+- Updated sources: [[agent-channel-examples]] marked historical/deleted
+- Updated entities: [[vol-llm-agent-channel-crate]] current transport/API notes, dependency cleanup, and configured JSON-RPC path ownership
+- Updated index: HTTP transport and examples statuses set to stale
+- Changes: Cleaned stale Task 4 wiki references after HTTP transport/examples deletion and channel/data-plane boundary cleanup.
+
+## [2026-06-10] ingest | Agent Server Data-Plane Core Move
+- Created sources: [[agent-server-data-plane-core-move]]
+- Updated entities: [[vol-agent-server-crate]] (`DataPlaneServerCore`, data-plane module tree, configured standalone WebSocket mounting with `/ws` default, source_count 8->9), [[vol-llm-agent-channel-crate]] (protocol/connection/service/generic transport boundary, concrete module removal, source_count 18->19)
+- Updated concepts: [[agent-server-control-data-plane]] (source_count 5->6, Task 4 implementation status)
+- Updated index: new source entry and refreshed server summary
+- Cross-references added: 18
+- Changes: Documented Task 4 migration of concrete data-plane execution behavior into `vol-agent-server::data_plane`, with channel reduced to protocol/transport abstractions and verification passing for channel/server checks, tests, and formatting.
+
+## [2026-06-10] ingest | Agent Server Role Config and Route Skeleton
+- Created sources: [[agent-server-role-config-route-skeleton]]
+- Updated sources: [[agent-server-control-data-plane-implementation-plan]] (Task 3 completion status and verification commands)
+- Updated entities: [[vol-agent-server-crate]] (`ServerRoles`, `[control_plane]`, `[data_plane]`, `/health` route skeleton, source_count 7->8)
+- Updated concepts: [[agent-server-control-data-plane]] (source_count 4->5, Task 3 role-config skeleton status)
+- Updated index: new source entry for agent-server-role-config-route-skeleton
+- Cross-references added: 10
+- Changes: Documented Task 3 implementation of role-aware config parsing/validation and minimal Axum app/routes/health skeleton in `vol-agent-server`; focused tests, crate check, and formatting passed.
+
+## [2026-06-10] ingest | ControlPayload Flat JSON-RPC Encoding Fix
+- Created sources: [[control-payload-flat-jsonrpc-encoding-fix]]
+- Updated entities: [[vol-llm-agent-channel-crate]] (key fact for `ControlPayload` flat encoding, timeline entry, source_count 17->18)
+- Updated concepts: [[agent-server-control-data-plane]] (source_count 3->4, new source link, flat JSON-RPC payload rule)
+- Updated index: new source entry for control-payload-flat-jsonrpc-encoding-fix
+- Cross-references added: 5
+- Changes: Documented the Task 2 code-quality fix removing internal serde tagging from `ControlPayload` so `Payload::data_json()` produces flat `control.*` JSON-RPC params/results. Two regression tests (`encode_control_register_command_uses_flat_params`, `encode_control_register_ack_result_uses_flat_result`) verify absence of `type`/`data` wrappers. `cargo test -p vol-llm-agent-channel encode_control` (2/2), `decode_control_register` (1/1), `decode_control_heartbeat_notification` (1/1) all pass. `cargo fmt --check` passes.
+
+## [2026-06-10] ingest | Agent Server Control/Data Plane Task 1 Implementation
+- Updated sources: [[agent-server-control-data-plane-implementation-plan]] (Task 1 completion status and verification commands)
+- Updated entities: [[vol-llm-agent-channel-crate]] (`JsonRpcMessageService`, generic `JsonRpcServer<S>`, explicit route path, `AgentServerCore::serve_dyn` bridge), [[vol-agent-server-crate]] (startup now passes `/ws` explicitly)
+- Updated index: no new entries; existing summaries already cover generic service abstraction
+- Cross-references added: 6
+- Changes: Documented the completed Task 1 implementation that decouples JSON-RPC transport from concrete `AgentServerCore` while preserving current data-plane behavior and tests.
+
+## [2026-06-10] ingest | Agent Server Control/Data Plane Implementation Plan
+- Created sources: [[agent-server-control-data-plane-implementation-plan]]
+- Updated concepts: [[agent-server-control-data-plane]] (staged implementation sequence for channel service abstraction, control protocol, data-plane core migration, control-plane core, route composition, and boundary tests)
+- Updated entities: [[vol-llm-agent-channel-crate]] (implementation starts with `JsonRpcMessageService` and `control.*` protocol), [[vol-agent-server-crate]] (implementation owns moved data-plane core and new control-plane core), [[vol-llm-runtime-crate]] (source count for runtime capability source role)
+- Updated index: new implementation-plan source entry
+- Cross-references added: 17
+- Changes: Captured the implementation plan for the final agent-server control/data-plane architecture. Feishu/Lark upload updated to revision 18: https://my.feishu.cn/docx/TnKWd2VUeoKHnjxX8FgcIKzEnQ5
+
+## [2026-06-10] ingest | Agent Server Control/Data Plane Addendum
+- Created sources: [[agent-server-control-data-plane-addendum]]
+- Updated concepts: [[agent-server-control-data-plane]] (endpoint role allowlists, command/run semantics, capability revision consistency, node record/session separation, combined-mode lifecycle, runtime capability facade, subscriptions, error code ownership, migration constraints, and boundary tests)
+- Updated entities: [[vol-agent-server-crate]] (addendum-owned implementation details for roles/lifecycle/stores), [[vol-llm-agent-channel-crate]] (error vocabulary and allowlist protocol semantics), [[vol-llm-runtime-crate]] (source count for capability-source reference)
+- Updated index: new source entry and refreshed concept summary
+- Cross-references added: 22
+- Changes: Captured the brainstormed addendum for implementation-critical details that should guide the future plan. Feishu/Lark upload: https://my.feishu.cn/docx/Rk11ddyFJoC6q2x8HOjcrwuQn4c
+
+## [2026-06-10] ingest | Agent Server Control Plane / Data Plane Architecture
+- Created sources: [[agent-server-control-data-plane-architecture]]
+- Created concepts: [[agent-server-control-data-plane]]
+- Updated entities: [[vol-agent-server-crate]] (final owner of concrete `DataPlaneServerCore`, `ControlPlaneServerCore`, and config-driven role composition), [[vol-llm-agent-channel-crate]] (final owner of protocol definitions, JSON-RPC transport, connection/handler/registry/service abstractions), [[vol-llm-runtime-crate]] (runtime remains data-plane capability source)
+- Updated concepts: [[agent-router]] (clarified node-local router vs distributed `ControlRouter`)
+- Removed obsolete entities: `vol-agent-control-plane` (final design does not add a separate crate)
+- Updated index: source/concept entries and refreshed server/channel summaries
+- Cross-references added: 34
+- Changes: Documented the final architecture design: no new control-plane crate; `vol-llm-agent-channel` owns all JSON-RPC protocol/transport abstractions; `vol-agent-server` owns concrete data/control-plane cores and role composition; `vol-llm-runtime` remains execution resource owner. Feishu/Lark upload updated to revision 20: https://my.feishu.cn/docx/K0mGdhW5UoKL9IxVBwHcQmsxn9c
+
 ## [2026-06-10] ingest | Session Database Store Implementation
 - Created sources: [[session-database-store-implementation]]
 - Created concepts: [[runtime-session-store-configuration]]
@@ -102,7 +234,7 @@
 - Updated entities: [[vol-llm-ui-crate]], [[vol-llm-agent-channel-crate]]
 - Updated index: new source entry, updated date
 - Cross-references added: 4
-- Changes: Removed obsolete `vol-agent-manager` crate, manager-only Docker/Kubernetes artifacts, and legacy React `frontend/`; active web backend remains `vol-llm-agent-channel` JSON-RPC service via `make web-backend`.
+- Changes: Removed obsolete `vol-agent-manager` crate, manager-only Docker/Kubernetes artifacts, and legacy React `frontend/`; the active web backend is now documented as `vol-agent-server` via `make web-backend`, using channel-owned JSON-RPC protocol/transport abstractions.
 
 ## [2026-05-28] ingest | CLAUDE.md Web Development Environment
 - Created sources: [[web-dev-environment-claudemd]]
@@ -264,7 +396,7 @@
 - Updated entities: [[vol-llm-agent-channel-crate]]
 - Updated index: new entries, updated summaries
 - Cross-references added: 6
-- Changes: EventBridgePlugin deleted, JsonRpcHandler/JsonRpcContext replaced by JsonRpcConnection implementing Connection trait; JsonRpcServer with Vec<AgentRegistration> multi-agent support; agent.submit gains optional target param; 49 integration tests; wire format preserved
+- Changes: EventBridgePlugin deleted, JsonRpcHandler/JsonRpcContext replaced by JsonRpcConnection implementing Connection trait; the historical JsonRpcServer gained registration-list multi-agent support; agent.submit gained optional target param; 49 integration tests; wire format preserved
 
 ## [2026-05-09] ingest | Task 5: JSON-RPC Integration Tests
 - Created sources: [[task-5-jsonrpc-integration-tests]]

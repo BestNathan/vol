@@ -1,0 +1,255 @@
+use std::sync::Arc;
+
+use vol_llm_agent_protocol::agent_server_protocol::{
+    AgentServerMessage, ControlOperation, ControlPayload, ErrorPayload, Operation, Payload,
+    ProtocolError,
+};
+use vol_llm_agent_protocol::{Connection, HandlerRegistry, JsonRpcMessageService};
+
+use crate::control_plane::handlers::capability::CapabilityHandler;
+use crate::control_plane::handlers::client::ClientHandler;
+use crate::control_plane::handlers::control::ControlHandler;
+use crate::control_plane::handlers::node::NodeHandler;
+use crate::control_plane::handlers::run::RunHandler;
+use crate::control_plane::state::ControlPlaneState;
+
+pub(crate) fn make_result(
+    message: AgentServerMessage,
+    operation: ControlOperation,
+    payload: ControlPayload,
+) -> AgentServerMessage {
+    let mut result = AgentServerMessage::new_result(
+        message.message_id,
+        Operation::Control(operation),
+        Payload::Control(payload),
+    );
+    result.sender = "control".to_string();
+    result.receiver = message.sender;
+    result
+}
+
+pub struct ControlPlaneServerCore {
+    pub state: Arc<ControlPlaneState>,
+    handler_registry: HandlerRegistry,
+}
+
+impl ControlPlaneServerCore {
+    pub fn new(state: Arc<ControlPlaneState>) -> Result<Self, String> {
+        let mut handler_registry = HandlerRegistry::new();
+        handler_registry.register(Arc::new(ControlHandler::new(state.clone())))?;
+        handler_registry.register(Arc::new(NodeHandler::new(state.clone())))?;
+        handler_registry.register(Arc::new(CapabilityHandler::new(state.clone())))?;
+        handler_registry.register(Arc::new(ClientHandler::new(state.clone())))?;
+        handler_registry.register(Arc::new(RunHandler::new(state.clone())))?;
+
+        Ok(Self {
+            state,
+            handler_registry,
+        })
+    }
+
+    pub async fn handle(
+        &self,
+        message: AgentServerMessage,
+    ) -> Result<Vec<AgentServerMessage>, ProtocolError> {
+        self.handler_registry.dispatch(message).await
+    }
+}
+
+impl ControlPlaneServerCore {
+    pub async fn serve_connection_with_role(
+        &self,
+        role: crate::control_plane::endpoint::ControlConnectionRole,
+        conn: Arc<dyn Connection>,
+    ) {
+        while let Some(next) = conn.recv().await {
+            match next {
+                Ok(message) => {
+                    let message_id = message.message_id.clone();
+                    let operation = message.operation.clone();
+
+                    if !role.allows(&message.operation) {
+                        let err = AgentServerMessage::new_error(
+                            message_id,
+                            operation,
+                            ErrorPayload {
+                                code: "method_not_allowed_for_role".to_string(),
+                                message: "method is not allowed on this endpoint".to_string(),
+                                detail: None,
+                                terminal: false,
+                            },
+                        );
+                        let _ = conn.send(err).await;
+                        continue;
+                    }
+
+                    let replies = match self.handle(message).await {
+                        Ok(replies) => replies,
+                        Err(err) => {
+                            tracing::warn!("control-plane handler error: {err}");
+                            vec![AgentServerMessage::new_error(
+                                message_id,
+                                operation,
+                                ErrorPayload {
+                                    code: "dispatch_error".to_string(),
+                                    message: err.to_string(),
+                                    detail: None,
+                                    terminal: false,
+                                },
+                            )]
+                        }
+                    };
+
+                    for reply in replies {
+                        if let Err(err) = conn.send(reply).await {
+                            tracing::warn!("control-plane send error: {err}");
+                            break;
+                        }
+                    }
+                }
+                Err(err) => {
+                    tracing::warn!("control-plane connection error: {err}");
+                    break;
+                }
+            }
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl JsonRpcMessageService for ControlPlaneServerCore {
+    async fn serve_connection(&self, conn: Arc<dyn Connection>) {
+        self.serve_connection_with_role(
+            crate::control_plane::endpoint::ControlConnectionRole::Client,
+            conn,
+        )
+        .await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::control_plane::state::ControlPlaneState;
+    use crate::control_plane::core::make_result;
+    use vol_llm_agent_protocol::agent_server_protocol::{
+        AgentServerMessage, ControlOperation, ControlPayload, MessageKind, Operation, Payload,
+    };
+
+    #[test]
+    fn make_result_sets_sender_receiver_and_operation() {
+        let msg = AgentServerMessage {
+            protocol: "agent-server/1".to_string(),
+            message_id: "req-1".to_string(),
+            sender: "client".to_string(),
+            receiver: "control".to_string(),
+            kind: MessageKind::Command,
+            operation: Operation::Control(ControlOperation::NodeList),
+            payload: Payload::Control(ControlPayload::NodeList(
+                vol_llm_agent_protocol::agent_server_protocol::NodeListRequest {},
+            )),
+            meta: Default::default(),
+        };
+
+        let result = make_result(
+            msg,
+            ControlOperation::NodeList,
+            ControlPayload::NodeListResult(
+                vol_llm_agent_protocol::agent_server_protocol::NodeListResult { nodes: vec![] },
+            ),
+        );
+        assert_eq!(result.sender, "control");
+        assert_eq!(result.receiver, "client");
+        assert_eq!(result.message_id, "req-1");
+        match result.operation {
+            Operation::Control(ControlOperation::NodeList) => {}
+            _ => panic!("expected NodeList operation"),
+        }
+    }
+
+    #[test]
+    fn control_plane_server_core_registers_all_handlers() {
+        let state = Arc::new(ControlPlaneState::new());
+        let core = super::ControlPlaneServerCore::new(state).unwrap();
+        // Core doesn't expose handler_registry publicly, but construction succeeds
+        // and we can verify state is wired
+        assert!(core.state.nodes.list().is_empty());
+    }
+
+    #[tokio::test]
+    async fn control_plane_server_core_handle_unknown_operation() {
+        let state = Arc::new(ControlPlaneState::new());
+        let core = super::ControlPlaneServerCore::new(state).unwrap();
+        let msg = AgentServerMessage {
+            protocol: "agent-server/1".to_string(),
+            message_id: "1".to_string(),
+            sender: "client".to_string(),
+            receiver: "control".to_string(),
+            kind: MessageKind::Command,
+            operation: Operation::Control(ControlOperation::Heartbeat),
+            payload: Payload::Control(ControlPayload::Heartbeat(
+                vol_llm_agent_protocol::agent_server_protocol::NodeHeartbeat {
+                    node_id: "unknown".to_string(),
+                    status: "online".to_string(),
+                    load: vol_llm_agent_protocol::agent_server_protocol::NodeLoad::default(),
+                },
+            )),
+            meta: Default::default(),
+        };
+
+        let result = core.handle(msg).await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn make_result_preserves_message_id() {
+        let msg = AgentServerMessage {
+            protocol: "agent-server/1".to_string(),
+            message_id: "req-42".to_string(),
+            sender: "client".to_string(),
+            receiver: "control".to_string(),
+            kind: MessageKind::Command,
+            operation: Operation::Control(ControlOperation::NodeGet),
+            payload: Payload::Control(ControlPayload::NodeGet(
+                vol_llm_agent_protocol::agent_server_protocol::NodeGetRequest {
+                    node_id: "x".to_string(),
+                },
+            )),
+            meta: Default::default(),
+        };
+        let result = make_result(
+            msg,
+            ControlOperation::NodeGet,
+            ControlPayload::NodeGetResult(
+                vol_llm_agent_protocol::agent_server_protocol::NodeGetResult { node: None },
+            ),
+        );
+        assert_eq!(result.message_id, "req-42");
+        match result.operation {
+            Operation::Control(ControlOperation::NodeGet) => {}
+            _ => panic!("wrong operation"),
+        }
+    }
+
+    #[tokio::test]
+    async fn control_plane_server_core_handle_node_list() {
+        let state = Arc::new(ControlPlaneState::new());
+        let core = super::ControlPlaneServerCore::new(state).unwrap();
+        let msg = AgentServerMessage {
+            protocol: "agent-server/1".to_string(),
+            message_id: "1".to_string(),
+            sender: "client".to_string(),
+            receiver: "control".to_string(),
+            kind: MessageKind::Command,
+            operation: Operation::Control(ControlOperation::NodeList),
+            payload: Payload::Control(ControlPayload::NodeList(
+                vol_llm_agent_protocol::agent_server_protocol::NodeListRequest {},
+            )),
+            meta: Default::default(),
+        };
+
+        let replies = core.handle(msg).await.unwrap();
+        assert_eq!(replies.len(), 1);
+    }
+}

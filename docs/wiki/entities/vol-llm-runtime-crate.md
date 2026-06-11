@@ -1,10 +1,10 @@
 ---
 type: entity
 category: service
-tags: [runtime, agents, tools, task-store, session-store]
+tags: [runtime, agents, tools, task-store, session-store, data-plane]
 created: 2026-06-09
 updated: 2026-06-10
-source_count: 6
+source_count: 9
 ---
 
 # vol-llm-runtime Crate
@@ -46,7 +46,13 @@ Source: [[session-database-store-implementation]]
 
 Agent registration uses `session_manager.entry_store_for_agent(agent_id)`, so the runtime's active agent sessions write to the same backend that JSON-RPC session-domain operations read from.
 
+## Data-plane Capability Source
+Source: [[agent-server-control-data-plane-architecture]]
+
+In the proposed control/data-plane architecture, `AgentRuntime` is the authoritative source for data-plane `CapabilitySnapshot` data. `DataPlaneReporter` reads `runtime.tool_registry.definitions()`, `runtime.mcp_manager.server_tools()`, `runtime.skill_loader.list_all()`, and `runtime.agent_defs` to build capability snapshots. This avoids duplicating registry metadata in hand-written config files or control-plane config.
+
 ## Related
+- [[agent-server-control-data-plane]]
 - [[vol-agent-server-crate]]
 - [[vol-llm-task-crate]]
 - [[runtime-task-store-configuration]]

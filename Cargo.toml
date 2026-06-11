@@ -31,7 +31,7 @@ members = [
     "crates/vol-llm-runtime",
     "crates/vol-llm-wiki",
     "crates/vol-llm-yaml-agent",
-    "crates/vol-llm-agent-channel",
+    "crates/vol-llm-agent-protocol",
     "crates/vol-agent-server",
     "crates/vol-llm-ui",
     "crates/md-frontmatter",
@@ -134,7 +134,7 @@ vol-llm-runtime = { path = "crates/vol-llm-runtime" }
 vol-llm-tools-builtin = { path = "crates/vol-llm-tools-builtin" }
 vol-llm-wiki = { path = "crates/vol-llm-wiki" }
 md-frontmatter = { path = "crates/md-frontmatter" }
-vol-llm-agent-channel = { path = "crates/vol-llm-agent-channel" }
+vol-llm-agent-protocol = { path = "crates/vol-llm-agent-protocol" }
 vol-mcp-servers = { path = "crates/vol-mcp-servers" }
 vol-llm-mcp = { path = "crates/vol-llm-mcp" }
 dirs = "5.0"

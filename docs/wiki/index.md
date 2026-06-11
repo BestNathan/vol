@@ -1,14 +1,14 @@
 # Wiki Index
 
-Last updated: 2026-06-10 (session-database-store-implementation)
+Last updated: 2026-06-10 (agent-server-boundary-mode-verification)
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[vol-llm-runtime-crate]] | AgentRuntime owner of shared agent resources and runtime task/session store config types | active | 2026-06-10 |
+| [[vol-llm-runtime-crate]] | AgentRuntime owner of shared agent resources, runtime task/session store config types, and data-plane capability source | active | 2026-06-10 |
 | [[vol-llm-task-crate]] | Task models and persistence stores, including SeaORM database store for SQLite and Postgres with compiled migrations | active | 2026-06-09 |
-| [[vol-agent-server-crate]] | Standalone agent server crate with TOML parsing and `[runtime.task_store]` / `[runtime.session_store]` validation | active | 2026-06-10 |
+| [[vol-agent-server-crate]] | Standalone server crate that composes DataPlaneServerCore and ControlPlaneServerCore routes by role, verifies role-mode behavior, enforces dependency boundaries, and includes data/control-plane primitives | active | 2026-06-10 |
 | [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with Dioxus as the sole active web frontend | active | 2026-05-29 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API | active | 2026-05-21 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
@@ -16,7 +16,7 @@ Last updated: 2026-06-10 (session-database-store-implementation)
 | [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager | stable | 2026-05-21 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with Anthropic multipart text/image conversion | stable | 2026-05-21 |
 | [[vol-session]] | Session message store and entry persistence, including file and SeaORM database-backed session managers | active | 2026-06-10 |
-| [[vol-llm-agent-channel-crate]] | Agent communication channel layer and active JSON-RPC web backend service with task/session store config pass-through | active | 2026-06-10 |
+| [[vol-llm-agent-protocol-crate]] | Protocol, JSON-RPC transport, connection, handler, registry, and generic service abstraction layer | active | 2026-06-10 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 | [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support | active | 2026-05-10 |
@@ -26,6 +26,7 @@ Last updated: 2026-06-10 (session-database-store-implementation)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[agent-server-control-data-plane]] | Single server crate with DataPlaneServerCore/ControlPlaneServerCore, channel-owned JSON-RPC protocol, route composition, data-plane snapshot facade, command/run semantics, control-plane router MVP, role-mode verification tests, and dependency boundary checks | draft | 2026-06-10 |
 | [[runtime-session-store-configuration]] | Shared `[runtime.session_store]` TOML contract and runtime `SessionManager` behavior for file/database session persistence | active | 2026-06-10 |
 | [[runtime-task-store-configuration]] | Shared `[runtime.task_store]` TOML contract and single global runtime store behavior for file/database task persistence | active | 2026-06-09 |
 | [[rich-text-conversation]] | Markdown rendering for chat (Dioxus handoff to marked.js + DOMPurify + highlight.js) | active | 2026-06-04 |
@@ -53,12 +54,12 @@ Last updated: 2026-06-10 (session-database-store-implementation)
 | [[human-in-the-loop]] | Human approval workflow for tool execution | stable | 2026-05-04 |
 | [[retry-with-backoff]] | Automatic retry with exponential backoff on errors | stable | 2026-05-04 |
 | [[rate-limiting]] | Concurrency control using semaphore-based rate limiting | stable | 2026-05-04 |
-| [[http-transport]] | HTTP transport with blocking and SSE streaming modes | active | 2026-05-05 |
+| [[http-transport]] | Historical HTTP transport with blocking and SSE streaming modes; deleted from active channel API after Task 4 | stale | 2026-06-10 |
 | [[connection-trait]] | Connection trait abstracting transport protocols | active | 2026-05-05 |
 | [[connection-holder]] | ConnectionHolder plugin for forwarding agent events | active | 2026-05-05 |
 | [[agent-dispatcher]] | FIFO request queueing for single-agent execution | active | 2026-05-05 |
 | [[subagent-review-pattern]] | Independent subagent review of documents before user gate | active | 2026-05-06 |
-| [[agent-router]] | Multi-agent routing with per-agent dispatchers | active | 2026-05-07 |
+| [[agent-router]] | Node-local multi-agent routing with per-agent dispatchers; distributed routing sits above it | active | 2026-06-10 |
 | [[connection-holder-clone-limitation]] | ConnectionHolder cannot be both plugin and transport reference | active | 2026-05-07 |
 | [[clarifying-requirements-workflow]] | Structured dialogue for turning vague requests into requirements | active | 2026-05-06 |
 | [[mcp-transport-pattern]] | Multi-transport startup pattern for MCP servers (stdio, HTTP/SSE) | active | 2026-05-10 |
@@ -71,7 +72,7 @@ Last updated: 2026-06-10 (session-database-store-implementation)
 | [[dioxus-web-pattern]] | Dioxus 0.6 WASM component architecture and rendering patterns | active | 2026-05-08 |
 | [[remote-agent-connection]] | AgentConnection and FileOperations traits with local/remote implementations | active | 2026-05-08 |
 | [[json-rpc-websocket]] | JSON-RPC 2.0 over WebSocket protocol for remote agent communication | active | 2026-05-08 |
-| [[jsonrpc-transport]] | JSON-RPC 2.0 over WebSocket implementing the Connection trait | active | 2026-05-09 |
+| [[jsonrpc-transport]] | JSON-RPC 2.0 over WebSocket with `Connection`, generic `JsonRpcMessageService`, and configured server mount path | active | 2026-06-10 |
 | [[jsonrpc-server-handler]] | Historical JSON-RPC handler architecture — deleted, replaced by jsonrpc-transport | stale | 2026-05-09 |
 | [[file-tab-pattern]] | Tabbed file viewer with non-component render function pattern for Dioxus | active | 2026-05-10 |
 | [[workspace-tree-pattern]] | Recursive WorkspaceTreeNode tree with lazy-loaded directory children via JSON-RPC file.list | active | 2026-05-10 |
@@ -86,6 +87,20 @@ Last updated: 2026-06-10 (session-database-store-implementation)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[control-plane-behavior-completion-plan]] | Follow-up plan to complete JSON-RPC notifications, endpoint roles, client handlers, control.command, run status, and combined-mode registration | draft | 2026-06-10 |
+| [[agent-server-boundary-mode-verification]] | Task 10 boundary and role-mode verification: cargo-tree dependency guard plus `/ws` ownership and disabled-role config tests | active | 2026-06-10 |
+| [[agent-server-control-router-mvp]] | Task 9 control router MVP: routes targeted or untargeted agents to online nodes using capability snapshots | active | 2026-06-10 |
+| [[agent-server-data-plane-snapshot-command]] | Task 8 data-plane primitives: runtime capability snapshot facade, static source, fake-source test, and control command acceptance skeleton | active | 2026-06-10 |
+| [[agent-server-health-route-collision-validation]] | Task 7 quality fix rejecting active WebSocket paths that collide with `/health` before Axum can panic on duplicate routes | active | 2026-06-10 |
+| [[agent-server-role-route-composition]] | Task 7 role route composition: pure `/ws` ownership tests, role-specific core construction, configured control/data WebSocket mounting, and main startup delegation | active | 2026-06-10 |
+| [[agent-server-control-plane-core-handlers]] | Task 6 control-plane core and handlers: register/heartbeat/snapshot/event, node list/get, capability list, and JsonRpcMessageService loop | active | 2026-06-10 |
+| [[task-4-quality-issues-cleanup]] | Task 4 follow-up cleanup for channel dependency scopes, generic JSON-RPC docs, active backend ownership, and moved-routing comments | active | 2026-06-10 |
+| [[agent-server-data-plane-core-move]] | Task 4 migration moving concrete data-plane core/router/dispatcher/handlers from channel into vol-agent-server::data_plane | active | 2026-06-10 |
+| [[agent-server-role-config-route-skeleton]] | Task 3 server role config and base Axum route skeleton for future control/data-plane composition | active | 2026-06-10 |
+| [[control-payload-flat-jsonrpc-encoding-fix]] | Task 2 code-quality fix aligning `ControlPayload` serialization with flat JSON-RPC `control.*` params/results and codec tests | active | 2026-06-10 |
+| [[agent-server-control-data-plane-implementation-plan]] | Staged implementation plan for generic channel JSON-RPC service, control protocol, data-plane core move, control-plane core, routing, and tests | draft | 2026-06-10 |
+| [[agent-server-control-data-plane-addendum]] | Addendum detailing endpoint allowlists, command/run semantics, capability revisions, node sessions, lifecycle, and migration tests | draft | 2026-06-10 |
+| [[agent-server-control-data-plane-architecture]] | Architecture for channel-owned JSON-RPC protocol and agent-server-owned data/control server cores | draft | 2026-06-10 |
 | [[session-database-store-implementation]] | End-to-end file/database session-store implementation: SessionManager, SeaORM SQLite/Postgres store, runtime/server config, channel JSON-RPC integration | active | 2026-06-10 |
 | [[file-session-agent-id-validation]] | FileSessionManager agent-id path traversal hardening with validation, InvalidInput errors, and encoded quarantine stores | active | 2026-06-09 |
 | [[seaorm-task-database-store-implementation]] | End-to-end replacement of SQLx task store with SeaORM + SeaORM Migration for SQLite and Postgres | active | 2026-06-09 |
@@ -98,7 +113,7 @@ Last updated: 2026-06-10 (session-database-store-implementation)
 | [[task-store-config-parsing]] | Runtime task store config parsing and validation for `[runtime.task_store]` | active | 2026-06-09 |
 | [[rich-text-conversation-design]] | Design spec for markdown rendering in chat (Dioxus + marked.js) | active | 2026-06-04 |
 | [[task-dependency-graph-view]] | Tasks tab "⇄ deps" button + SVG dependency-graph modal (read-only, frontend-only) | active | 2026-06-04 |
-| [[agent-channel-examples]] | WS + HTTP service examples using channel primitives | active | 2026-05-07 |
+| [[agent-channel-examples]] | Historical WS + HTTP channel examples; source files deleted after Task 4 cleanup | stale | 2026-06-10 |
 | [[react-agent-docs]] | ReAct Agent plugin system documentation and test report | active | 2026-05-04 |
 | [[agent-tool-design]] | AI Agent tool design: Tool trait, registry, built-in tools, ReAct loop | active | 2026-05-04 |
 | [[skills-as-react-native]] | Plan: move skill init from CodingAgent into ReActAgent as native capability | active | 2026-05-04 |

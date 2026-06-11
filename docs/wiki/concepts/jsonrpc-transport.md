@@ -3,44 +3,44 @@ type: concept
 category: framework
 tags: [json-rpc, transport, connection-trait, multi-agent, vol-llm-agent-channel]
 created: 2026-05-08
-updated: 2026-05-09
-source_count: 2
+updated: 2026-06-10
+source_count: 3
 ---
 
 # JSON-RPC Transport
 
-**Category:** Transport implementation via `Connection` trait
+**Category:** Generic JSON-RPC transport over the `Connection` and service abstractions
 
-**Related:** [[vol-llm-agent-channel-crate]], [[connection-trait]], [[connection-holder]], [[agent-router]], [[agent-dispatcher]], [[json-rpc-websocket]], [[jsonrpc-transport-refactoring]]
+**Related:** [[vol-llm-agent-channel-crate]], [[connection-trait]], [[connection-holder]], [[agent-router]], [[agent-dispatcher]], [[json-rpc-websocket]], [[jsonrpc-transport-refactoring]], [[task-4-quality-issues-cleanup]]
 
 ## Definition
 
-`JsonRpcConnection` in `vol-llm-agent-channel::jsonrpc::connection` implements the `Connection` trait, providing JSON-RPC 2.0 over WebSocket. It replaces the former `JsonRpcHandler`/`EventBridgePlugin` architecture that bypassed the `Connection` trait entirely [[jsonrpc-transport-refactoring]].
+JSON-RPC transport now lives under `vol_llm_agent_channel::transport::jsonrpc::*`. `JsonRpcConnection` implements the `Connection` trait for JSON-RPC 2.0 over WebSocket, while `JsonRpcServer<S>` is generic over any `JsonRpcMessageService` and accepts both the service and an explicit WebSocket mount path. Concrete agent registration, routing, dispatch, and holder attachment are owned by `vol-agent-server` data-plane code.
 
 ## Key Points
 
 - Implements `Connection` trait: `protocol() → "jsonrpc-ws"`, `send(Message)`, `recv()` [[jsonrpc-transport-refactoring]]
-- `JsonRpcServer` accepts `Vec<AgentRegistration>` at startup, builds internal `AgentRouter` [[jsonrpc-transport-refactoring]]
-- All registered agents' `ConnectionHolder`s are attached at connection startup — no detach/attach switching [[jsonrpc-transport-refactoring]]
+- `JsonRpcServer<S>` accepts a `JsonRpcMessageService` implementation plus configured route path, and does not own agent registration/routing [[agent-server-control-data-plane-implementation-plan]]
+- Concrete `ConnectionHolder`, `AgentRouter`, and `AgentDispatcher` behavior lives in `vol-agent-server::data_plane` [[agent-server-data-plane-core-move]]
 - Wire format: `{"jsonrpc":"2.0","method":"agent.event","params":{"subscription":N,"result":{"req_id":"...","event_type":"...","data":{...}}}}` [[jsonrpc-transport-refactoring]]
 - 49 integration tests cover all `AgentStreamEvent` variants, all 12 JSON-RPC methods, and error handling [[task-5-jsonrpc-integration-tests]]
 
 ## Architecture
 
 ```
-ReActAgent
-  └── ConnectionHolder (AgentPlugin)
-       listen(event) → conn.send(Message::Event)
-            ↓
-       JsonRpcConnection
-            ├── send() → wraps in JSON-RPC envelope → WebSocket text
-            ├── recv() → parse JSON-RPC → dispatch handler
-            └── run() loop → attach holders, process frames, detach on exit
-
-JsonRpcServer
-    ├── new(vec![AgentRegistration { agent_id, dispatcher, holder }])
-    ├── into_axum_router() → Router with /ws endpoint
-    └── AgentRouter (internal) → dispatches submit/cancel to correct agent
+Client WebSocket
+      ↓
+JsonRpcServer<S>
+    ├── new(service, configured_ws_path)
+    └── into_axum_router() → Router mounted at configured path
+      ↓
+JsonRpcConnection
+    ├── send() → wraps Message in JSON-RPC envelope → WebSocket text
+    ├── recv() → parse WebSocket text → Message
+    └── delegates request handling to JsonRpcMessageService
+      ↓
+JsonRpcMessageService implementation
+    └── vol-agent-server::data_plane handles concrete agent routing/dispatch
 ```
 
 ## Data Flow
@@ -54,16 +54,15 @@ AgentStreamEvent → ConnectionHolder::listen() → Connection::send(Message::Ev
 
 ### Client Requests (inbound)
 ```
-WebSocket text → parse_jsonrpc_request() → dispatch handler
-    → agent.submit → AgentRouter.send() → AgentDispatcher → ReActAgent
-    → file.list/read → std::fs operations (handled in run() loop)
+WebSocket text → parse_jsonrpc_request() → JsonRpcMessageService::handle_message()
+    → vol-agent-server data-plane service → concrete domain handlers/routing
 ```
 
 ## Method Categories
 
-### Agent Operations (via Connection trait)
-- `agent.submit` — submits via `AgentRouter`, optional `target` param for multi-agent. Returns `{ req_id }`.
-- `agent.cancel` — cancels across all registered dispatchers. Returns `{ cancelled: bool }`.
+### Agent Operations (via service abstraction)
+- `agent.submit` — handled by the configured `JsonRpcMessageService`; the concrete data-plane service routes optional `target` values and returns `{ req_id }`.
+- `agent.cancel` — handled by the configured service and returns `{ cancelled: bool }`.
 - `agent.subscribe` — adds subscription ID for event notifications. Returns `{ subscription_id }`.
 - `agent.unsubscribe` — removes subscription. Returns `{ unsubscribed: bool }`.
 - `agent.approve` — stub, always returns `{ approved: true }`.
@@ -82,22 +81,17 @@ WebSocket text → parse_jsonrpc_request() → dispatch handler
 
 ## Multi-Agent Event Model
 
-A single `JsonRpcConnection` attaches to ALL registered agents' `ConnectionHolder`s at startup. Events from all agents flow through the same WebSocket. The `agent.submit` method accepts an optional `target` parameter to specify which agent to submit to — falls back to first registered agent if omitted. The frontend distinguishes events by content rather than connection.
+The JSON-RPC transport is service-agnostic: events and requests pass through a single WebSocket connection, while the configured `JsonRpcMessageService` owns routing semantics. In the current application, `vol-agent-server::data_plane` routes agent methods and target selection.
 
 ## Server Setup
 
 ```rust
-let server = JsonRpcServer::new(
-    vec![AgentRegistration { agent_id, dispatcher, holder }],
-    working_dir, store_dir,
-).await;
+let server = JsonRpcServer::new(service, configured_ws_path);
 let app = server.into_axum_router();
 axum::serve(listener, app).await;
 ```
 
-Endpoint: `/ws` on the configured port.
-
-Example: `cargo run --example jsonrpc_agent_service -p vol-llm-agent-channel`
+Endpoint path is supplied by the server configuration. The current `vol-agent-server` startup path uses `config.control_plane.client_ws_path`, defaulting to `/ws`.
 
 ## Connection Trait Integration
 
@@ -105,9 +99,8 @@ Example: `cargo run --example jsonrpc_agent_service -p vol-llm-agent-channel`
 
 | Transport | Protocol | Bidirectional | Mount Style | Use Case |
 |-----------|----------|---------------|-------------|----------|
-| `WsConnection` | WebSocket binary | Yes | Fixed `/ws` | Real-time, native protocol |
-| `JsonRpcConnection` | JSON-RPC 2.0 text | Yes | Fixed `/ws` | Web frontend, browser-compatible |
-| `HttpTransport` | HTTP POST + SSE | Request-response | `.merge()` style | Simple REST |
+| `WsConnection` | WebSocket binary | Yes | Generic service/path | Real-time, native protocol |
+| `JsonRpcConnection` | JSON-RPC 2.0 text | Yes | Configured path via `JsonRpcServer::new` | Web frontend, browser-compatible |
 | `MemoryConnection` | mpsc channel | Yes | Direct handle | Testing |
 
 ## Previous Architecture (deleted)
@@ -117,4 +110,4 @@ Before the refactoring [[jsonrpc-transport-refactoring]], the `jsonrpc` module u
 - `EventBridgePlugin` — duplicate of `ConnectionHolder` functionality via `broadcast::Sender`
 - `jsonrpsee` crate for RPC method registration
 
-These were replaced by `JsonRpcConnection` + `JsonRpcServer`, which plug into the existing `Connection` trait and `ConnectionHolder` systems.
+Those pieces were first replaced by `JsonRpcConnection` plus a channel-owned server. The current boundary keeps `JsonRpcConnection` and generic `JsonRpcServer<S>` in the channel crate while concrete holder, router, dispatcher, and domain-handler behavior lives in `vol-agent-server`.

@@ -14,7 +14,7 @@ tags: [cleanup, web, json-rpc, crate-removal]
 
 ## TL;DR
 
-The obsolete `vol-agent-manager` crate, its Docker/Kubernetes deployment artifacts, and the legacy React `frontend/` app were removed. The active web backend remains `make web-backend`, which runs `vol-llm-agent-channel`'s `jsonrpc_agent_service` example on port 3001.
+The obsolete `vol-agent-manager` crate, its Docker/Kubernetes deployment artifacts, and the legacy React `frontend/` app were removed. The active web backend is now owned by `vol-agent-server`, which provides the JSON-RPC backend used by `make web-backend` on port 3001.
 
 ## Key Takeaways
 
@@ -32,7 +32,8 @@ The legacy React `frontend/` directory was also deleted because it referenced `v
 ## Entities Mentioned
 
 - [[vol-llm-ui-crate]]: active Dioxus/WASM frontend after cleanup.
-- [[vol-llm-agent-channel-crate]]: owns the current JSON-RPC backend example used by `make web-backend`.
+- [[vol-agent-server-crate]]: owns the current JSON-RPC backend used by `make web-backend`.
+- [[vol-llm-agent-channel-crate]]: owns the shared JSON-RPC protocol and transport abstractions used by the backend.
 
 ## Concepts Covered
 
