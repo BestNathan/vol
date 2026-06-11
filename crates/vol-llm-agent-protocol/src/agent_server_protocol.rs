@@ -2015,4 +2015,89 @@ mod tests {
             _ => panic!("unexpected payload"),
         }
     }
+
+    mod sandbox_protocol_tests {
+        use super::*;
+
+        #[test]
+        fn test_sandbox_operation_method_names() {
+            assert_eq!(SandboxOperation::List.method_name(), "sandbox.list");
+            assert_eq!(SandboxOperation::Exec.method_name(), "sandbox.exec");
+            assert_eq!(SandboxOperation::ReadFile.method_name(), "sandbox.read_file");
+            assert_eq!(SandboxOperation::WriteFile.method_name(), "sandbox.write_file");
+            assert_eq!(SandboxOperation::CreateDir.method_name(), "sandbox.create_dir");
+            assert_eq!(SandboxOperation::ReadDir.method_name(), "sandbox.read_dir");
+            assert_eq!(SandboxOperation::Metadata.method_name(), "sandbox.metadata");
+        }
+
+        #[test]
+        fn test_command_request_def_roundtrip() {
+            use std::collections::HashMap;
+            use std::time::Duration;
+
+            let orig = vol_llm_sandbox::CommandRequest {
+                program: "echo".into(),
+                args: vec!["-n".into(), "hello".into()],
+                env: HashMap::from([("FOO".into(), "bar".into())]),
+                cwd: Some(std::path::PathBuf::from("/tmp")),
+                stdin: Some(b"input".to_vec()),
+                timeout: Duration::from_secs(30),
+            };
+
+            let def: CommandRequestDef = orig.clone().into();
+            let back: vol_llm_sandbox::CommandRequest = def.into();
+
+            assert_eq!(back.program, "echo");
+            assert_eq!(back.args, vec!["-n", "hello"]);
+            assert_eq!(back.env.get("FOO"), Some(&"bar".to_string()));
+            assert_eq!(back.cwd, Some(std::path::PathBuf::from("/tmp")));
+            assert_eq!(back.stdin, Some(b"input".to_vec()));
+        }
+
+        #[test]
+        fn test_sandbox_payload_list_serde() {
+            let payload = SandboxPayload::List;
+            let json = serde_json::to_value(&payload).unwrap();
+            assert_eq!(json, serde_json::json!("List"));
+
+            let info = vec![SandboxInfo {
+                name: "local".into(),
+                kind: "local".into(),
+                root_path: "/tmp/sandbox".into(),
+            }];
+            let result = SandboxPayload::ListResult { sandboxes: info };
+            let json = serde_json::to_value(&result).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            match back {
+                SandboxPayload::ListResult { sandboxes } => {
+                    assert_eq!(sandboxes.len(), 1);
+                    assert_eq!(sandboxes[0].name, "local");
+                }
+                _ => panic!("expected ListResult"),
+            }
+        }
+
+        #[test]
+        fn test_sandbox_payload_exec_serde() {
+            let payload = SandboxPayload::Exec {
+                command: CommandRequestDef {
+                    program: "echo".into(),
+                    args: vec!["hello".into()],
+                    env: vec![],
+                    cwd: None,
+                    stdin: None,
+                    timeout_ms: 5000,
+                },
+            };
+            let json = serde_json::to_value(&payload).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            match back {
+                SandboxPayload::Exec { command } => {
+                    assert_eq!(command.program, "echo");
+                    assert_eq!(command.args, vec!["hello"]);
+                }
+                _ => panic!("expected Exec"),
+            }
+        }
+    }
 }
