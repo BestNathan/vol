@@ -227,7 +227,7 @@ pub enum ControlOperation {
 }
 
 /// Wire-compatible command request. All fields directly serializable.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CommandRequestDef {
     pub program: String,
     #[serde(default)]
@@ -283,7 +283,7 @@ impl From<vol_llm_sandbox::CommandRequest> for CommandRequestDef {
 }
 
 /// Wire-compatible command output.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CommandOutputDef {
     pub stdout: String,  // base64 encoded
     pub stderr: String,  // base64 encoded
@@ -321,7 +321,7 @@ impl From<CommandOutputDef> for vol_llm_sandbox::CommandOutput {
 }
 
 /// Wire-compatible directory entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DirEntryDef {
     pub name: String,
     pub file_type: String, // "file", "directory", "symlink", "other"
@@ -342,7 +342,7 @@ impl From<vol_llm_sandbox::DirEntry> for DirEntryDef {
 }
 
 /// Wire-compatible file metadata.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FileMetadataDef {
     pub size: u64,
     pub mtime: u64,
@@ -365,11 +365,70 @@ impl From<vol_llm_sandbox::FileMetadata> for FileMetadataDef {
 }
 
 /// Sandbox metadata returned by sandbox.list.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SandboxInfo {
     pub name: String,
     pub kind: String,
     pub root_path: String,
+}
+
+/// Sandbox protocol payload — request/response pairs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SandboxPayload {
+    // ── List ──
+    List,
+    ListResult {
+        sandboxes: Vec<SandboxInfo>,
+    },
+
+    // ── Exec ──
+    Exec {
+        command: CommandRequestDef,
+    },
+    ExecResult {
+        output: CommandOutputDef,
+    },
+
+    // ── ReadFile ──
+    ReadFile {
+        path: String,
+        #[serde(default)]
+        offset: Option<u64>,
+        #[serde(default)]
+        limit: Option<u64>,
+    },
+    ReadFileResult {
+        content: String, // base64
+    },
+
+    // ── WriteFile ──
+    WriteFile {
+        path: String,
+        content: String, // base64
+    },
+    WriteFileResult,
+
+    // ── CreateDir ──
+    CreateDir {
+        path: String,
+    },
+    CreateDirResult,
+
+    // ── ReadDir ──
+    ReadDir {
+        path: String,
+    },
+    ReadDirResult {
+        entries: Vec<DirEntryDef>,
+    },
+
+    // ── Metadata ──
+    Metadata {
+        path: String,
+    },
+    MetadataResult {
+        metadata: FileMetadataDef,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -385,6 +444,7 @@ pub enum Payload {
     System(SystemPayload),
     Task(TaskPayload),
     Control(ControlPayload),
+    Sandbox(SandboxPayload),
     Error(ErrorPayload),
 }
 
@@ -789,9 +849,12 @@ impl Payload {
                 .map(ControlPayload::RunStatus)
                 .map(Payload::Control)
                 .map_err(|_| ProtocolError::PayloadDecodeFailed("control.run_status")),
-            Operation::Sandbox(_) => Err(ProtocolError::UnknownMethod(
-                operation.method_name().to_string(),
-            )),
+            Operation::Sandbox(_) => {
+                serde_json::from_value::<SandboxPayload>(value).map(Payload::Sandbox)
+                    .map_err(|e| ProtocolError::PayloadDecodeFailedOwned(
+                        format!("sandbox: {}", e)
+                    ))
+            }
         }
     }
 
