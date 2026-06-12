@@ -2099,5 +2099,234 @@ mod tests {
                 _ => panic!("expected Exec"),
             }
         }
+
+        #[test]
+        fn test_command_output_def_roundtrip() {
+            let orig = vol_llm_sandbox::CommandOutput {
+                stdout: b"hello".to_vec(),
+                stderr: b"warn".to_vec(),
+                exit_code: 0,
+                killed_by_signal: None,
+            };
+
+            let def: CommandOutputDef = orig.clone().into();
+            assert!(!def.stdout.is_empty());
+            assert!(!def.stderr.is_empty());
+            assert_eq!(def.exit_code, 0);
+            assert!(def.killed_by_signal.is_none());
+
+            let back: vol_llm_sandbox::CommandOutput = def.into();
+            assert_eq!(back.stdout, b"hello");
+            assert_eq!(back.stderr, b"warn");
+            assert_eq!(back.exit_code, 0);
+        }
+
+        #[test]
+        fn test_command_output_def_killed_by_signal() {
+            let orig = vol_llm_sandbox::CommandOutput {
+                stdout: vec![],
+                stderr: b"killed".to_vec(),
+                exit_code: -9,
+                killed_by_signal: Some(9),
+            };
+
+            let def: CommandOutputDef = orig.clone().into();
+            assert_eq!(def.killed_by_signal, Some(9));
+
+            let back: vol_llm_sandbox::CommandOutput = def.into();
+            assert_eq!(back.killed_by_signal, Some(9));
+        }
+
+        #[test]
+        fn test_dir_entry_def_roundtrip() {
+            let variants = vec![
+                (vol_llm_sandbox::FileType::File, "file"),
+                (vol_llm_sandbox::FileType::Directory, "directory"),
+                (vol_llm_sandbox::FileType::Symlink, "symlink"),
+                (vol_llm_sandbox::FileType::Other, "other"),
+            ];
+
+            for (ft, expected_str) in variants {
+                let entry = vol_llm_sandbox::DirEntry {
+                    name: format!("test.{}", expected_str),
+                    file_type: ft.clone(),
+                };
+                let def: DirEntryDef = entry.into();
+                assert_eq!(def.name, format!("test.{}", expected_str));
+                assert_eq!(def.file_type, expected_str);
+            }
+        }
+
+        #[test]
+        fn test_file_metadata_def_roundtrip() {
+            let variants = vec![
+                (vol_llm_sandbox::FileType::File, "file"),
+                (vol_llm_sandbox::FileType::Directory, "directory"),
+                (vol_llm_sandbox::FileType::Symlink, "symlink"),
+                (vol_llm_sandbox::FileType::Other, "other"),
+            ];
+
+            for (ft, expected_str) in variants {
+                let meta = vol_llm_sandbox::FileMetadata {
+                    size: 1024,
+                    mtime: 1234567890,
+                    file_type: ft.clone(),
+                };
+                let def: FileMetadataDef = meta.into();
+                assert_eq!(def.size, 1024);
+                assert_eq!(def.mtime, 1234567890);
+                assert_eq!(def.file_type, expected_str);
+            }
+        }
+
+        #[test]
+        fn test_sandbox_payload_all_variants_serde() {
+            use base64::Engine;
+
+            // ReadFile
+            let p = SandboxPayload::ReadFile { path: "/tmp/f".into(), offset: Some(0), limit: Some(100) };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // ReadFileResult
+            let p = SandboxPayload::ReadFileResult { content: base64::engine::general_purpose::STANDARD.encode(b"data") };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // WriteFile
+            let p = SandboxPayload::WriteFile { path: "/tmp/f".into(), content: base64::engine::general_purpose::STANDARD.encode(b"data") };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // WriteFileResult
+            let p = SandboxPayload::WriteFileResult;
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // CreateDir
+            let p = SandboxPayload::CreateDir { path: "/tmp/dir".into() };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // CreateDirResult
+            let p = SandboxPayload::CreateDirResult;
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // ReadDir
+            let p = SandboxPayload::ReadDir { path: "/tmp".into() };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // ReadDirResult
+            let p = SandboxPayload::ReadDirResult { entries: vec![
+                DirEntryDef { name: "f.txt".into(), file_type: "file".into() }
+            ]};
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // Metadata
+            let p = SandboxPayload::Metadata { path: "/tmp/f".into() };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // MetadataResult
+            let p = SandboxPayload::MetadataResult {
+                metadata: FileMetadataDef { size: 42, mtime: 1000, file_type: "file".into() }
+            };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+        }
+
+        #[test]
+        fn test_payload_from_operation_sandbox() {
+            let op = Operation::Sandbox(SandboxOperation::Exec);
+            let result = Payload::from_operation(
+                &op,
+                serde_json::json!({"Exec": {
+                    "command": {
+                        "program": "ls",
+                        "args": ["-la"],
+                        "env": [],
+                        "timeout_ms": 5000
+                    }
+                }}),
+            ).unwrap();
+            match result {
+                Payload::Sandbox(SandboxPayload::Exec { command }) => {
+                    assert_eq!(command.program, "ls");
+                }
+                _ => panic!("expected Sandbox Exec"),
+            }
+        }
+
+        #[test]
+        fn test_payload_from_operation_sandbox_bad_payload() {
+            let op = Operation::Sandbox(SandboxOperation::Exec);
+            let err = Payload::from_operation(&op, serde_json::json!({"bad": "data"})).unwrap_err();
+            assert!(err.to_string().contains("sandbox"));
+        }
+
+        #[test]
+        fn test_operation_method_name_sandbox() {
+            let op = Operation::Sandbox(SandboxOperation::List);
+            assert_eq!(op.method_name(), "sandbox.list");
+            let op = Operation::Sandbox(SandboxOperation::Exec);
+            assert_eq!(op.method_name(), "sandbox.exec");
+        }
+
+        #[test]
+        fn test_command_request_def_zero_timeout_defaults() {
+            use std::time::Duration;
+            let def = CommandRequestDef {
+                program: "sleep".into(),
+                args: vec![],
+                env: vec![],
+                cwd: None,
+                stdin: None,
+                timeout_ms: 0,
+            };
+            let req: vol_llm_sandbox::CommandRequest = def.into();
+            assert_eq!(req.timeout, Duration::from_secs(30));
+        }
+
+        #[test]
+        fn test_command_request_def_no_stdin() {
+            let def = CommandRequestDef {
+                program: "echo".into(),
+                args: vec![],
+                env: vec![],
+                cwd: None,
+                stdin: None,
+                timeout_ms: 5000,
+            };
+            let req: vol_llm_sandbox::CommandRequest = def.into();
+            assert!(req.stdin.is_none());
+        }
+
+        #[test]
+        fn test_sandbox_info_serde() {
+            let info = SandboxInfo {
+                name: "test-sb".into(),
+                kind: "local".into(),
+                root_path: "/tmp/sb".into(),
+            };
+            let json = serde_json::to_value(&info).unwrap();
+            assert_eq!(json["name"], "test-sb");
+            assert_eq!(json["kind"], "local");
+            assert_eq!(json["root_path"], "/tmp/sb");
+            let back: SandboxInfo = serde_json::from_value(json).unwrap();
+            assert_eq!(back, info);
+        }
     }
 }

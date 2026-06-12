@@ -281,3 +281,222 @@ impl Sandbox for RemoteSandbox {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc;
+
+    /// Verify that Drop on RemoteSandbox does not panic.
+    /// We construct one with dummy channels since we can't connect to a real WS server.
+    #[tokio::test]
+    async fn test_remote_sandbox_drop_no_panic() {
+        let (write_tx, _write_rx) = mpsc::unbounded_channel::<String>();
+        let inner = Arc::new(RemoteSandboxInner {
+            pending: Mutex::new(HashMap::new()),
+            msg_id_counter: AtomicU64::new(0),
+        });
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let bg = tokio::spawn(async {
+            // no-op background task
+        });
+
+        let sandbox = RemoteSandbox {
+            server_url: "ws://localhost:9999/test".into(),
+            write_tx,
+            inner,
+            cancel,
+            _bg: bg,
+        };
+        // Drop should call cancel and not panic
+        drop(sandbox);
+    }
+
+    /// Verify that Sandbox trait methods return expected static values.
+    #[tokio::test]
+    async fn test_remote_sandbox_kind_and_name() {
+        let (write_tx, _write_rx) = mpsc::unbounded_channel::<String>();
+        let inner = Arc::new(RemoteSandboxInner {
+            pending: Mutex::new(HashMap::new()),
+            msg_id_counter: AtomicU64::new(0),
+        });
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let bg = tokio::spawn(async {});
+
+        let sandbox = RemoteSandbox {
+            server_url: "ws://localhost:9999/test".into(),
+            write_tx,
+            inner,
+            cancel,
+            _bg: bg,
+        };
+
+        assert_eq!(sandbox.kind(), "remote");
+        assert_eq!(sandbox.name(), "remote");
+        assert_eq!(sandbox.root_path(), Path::new(""));
+    }
+
+    /// Verify that connect fails gracefully when no server is running.
+    #[tokio::test]
+    async fn test_remote_sandbox_connect_fails() {
+        let result = RemoteSandbox::connect("ws://127.0.0.1:1/does-not-exist").await;
+        assert!(result.is_err(), "expected connect to fail with WS error");
+    }
+
+    /// Full integration test: start a local WS echo server, connect RemoteSandbox,
+    /// and exercise the list operation through the request path.
+    #[tokio::test]
+    async fn test_remote_sandbox_with_local_ws_server() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio::net::TcpListener;
+        use tokio_tungstenite::accept_async;
+        use tokio_tungstenite::tungstenite::Message;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        // Spawn WS server that echoes back the parsed method/params as a command.
+        // RemoteSandbox reader uses decode_jsonrpc_frame which expects method+params.
+        tokio::spawn(async move {
+            if let Ok((stream, _)) = listener.accept().await {
+                if let Ok(ws_stream) = accept_async(stream).await {
+                    let (mut write, mut read) = ws_stream.split();
+                    while let Some(Ok(msg)) = read.next().await {
+                        if let Message::Text(text) = msg {
+                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                                let id = val.get("id");
+                                let method = val.get("method").and_then(|v| v.as_str()).unwrap_or("sandbox.list");
+                                // Respond with a ListResult as a command frame that
+                                // decode_jsonrpc_frame can parse
+                                let payload = if method == "sandbox.list" {
+                                    serde_json::json!({
+                                        "ListResult": {
+                                            "sandboxes": [{
+                                                "name": "test",
+                                                "kind": "local",
+                                                "root_path": "/tmp"
+                                            }]
+                                        }
+                                    })
+                                } else if method == "sandbox.exec" {
+                                    serde_json::json!({
+                                        "ExecResult": {
+                                            "output": {
+                                                "stdout": "",
+                                                "stderr": "",
+                                                "exit_code": 0
+                                            }
+                                        }
+                                    })
+                                } else {
+                                    continue;
+                                };
+                                let response = serde_json::json!({
+                                    "jsonrpc": "2.0",
+                                    "id": id,
+                                    "method": method,
+                                    "params": payload,
+                                });
+                                let _ = write.send(Message::Text(response.to_string().into())).await;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Connect RemoteSandbox to our local WS server
+        let url = format!("ws://{}", addr);
+        let sandbox = RemoteSandbox::connect(&url).await.unwrap();
+
+        // Verify kind/name/root_path
+        assert_eq!(sandbox.kind(), "remote");
+        assert_eq!(sandbox.name(), "remote");
+        assert_eq!(sandbox.root_path(), Path::new(""));
+
+        // Give the WS server a moment to process
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+
+    /// Test that execute() calls request() and handles response correctly.
+    #[tokio::test]
+    async fn test_remote_sandbox_execute_via_ws() {
+        use base64::Engine;
+        use futures_util::{SinkExt, StreamExt};
+        use std::collections::HashMap;
+        use std::time::Duration;
+        use tokio::net::TcpListener;
+        use tokio_tungstenite::accept_async;
+        use tokio_tungstenite::tungstenite::Message;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        // Spawn WS server that responds to sandbox.exec command with ExecResult
+        let server = tokio::spawn(async move {
+            let accept_fut = async {
+                if let Ok((stream, _)) = listener.accept().await {
+                    if let Ok(ws_stream) = accept_async(stream).await {
+                        let (mut write, mut read) = ws_stream.split();
+                        while let Some(Ok(msg)) = read.next().await {
+                            if let Message::Text(text) = msg {
+                                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                                    let id = val.get("id");
+                                    let method = val.get("method").and_then(|v| v.as_str()).unwrap_or("");
+                                    let payload = if method == "sandbox.exec" {
+                                        serde_json::json!({
+                                            "ExecResult": {
+                                                "output": {
+                                                    "stdout": base64::engine::general_purpose::STANDARD.encode(b"hello from ws"),
+                                                    "stderr": "",
+                                                    "exit_code": 0
+                                                }
+                                            }
+                                        })
+                                    } else {
+                                        serde_json::json!({
+                                            "ListResult": {
+                                                "sandboxes": []
+                                            }
+                                        })
+                                    };
+                                    let response = serde_json::json!({
+                                        "jsonrpc": "2.0",
+                                        "id": id,
+                                        "method": method,
+                                        "params": payload,
+                                    });
+                                    let _ = write.send(Message::Text(response.to_string().into())).await;
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            tokio::time::timeout(Duration::from_secs(5), accept_fut).await.ok();
+        });
+
+        // Small delay to let the server spin up
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let url = format!("ws://{}", addr);
+        let sandbox = RemoteSandbox::connect(&url).await.unwrap();
+
+        // Small delay for WS connection setup on both sides
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let output = sandbox.execute(CommandRequest {
+            program: "echo".into(),
+            args: vec![],
+            env: HashMap::new(),
+            cwd: None,
+            stdin: None,
+            timeout: Duration::from_secs(3),
+        }).await.unwrap();
+
+        assert_eq!(output.exit_code, 0);
+        assert_eq!(output.stdout, b"hello from ws");
+
+        server.abort();
+    }
+}

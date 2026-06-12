@@ -344,4 +344,137 @@ mod tests {
             _ => panic!("expected ReadFileResult"),
         }
     }
+
+    #[tokio::test]
+    async fn test_create_dir() {
+        let handler = setup().await;
+        let msg = AgentServerMessage::new_command(
+            "5",
+            Operation::Sandbox(SandboxOperation::CreateDir),
+            Payload::Sandbox(SandboxPayload::CreateDir {
+                path: "subdir/nested".into(),
+            }),
+        );
+        let replies = handler.handle(msg).await.unwrap();
+        assert!(matches!(
+            &replies[0].payload,
+            Payload::Sandbox(SandboxPayload::CreateDirResult)
+        ));
+
+        // Verify the directory was actually created by reading dir
+        let read = AgentServerMessage::new_command(
+            "6",
+            Operation::Sandbox(SandboxOperation::ReadDir),
+            Payload::Sandbox(SandboxPayload::ReadDir {
+                path: "subdir".into(),
+            }),
+        );
+        let replies = handler.handle(read).await.unwrap();
+        match &replies[0].payload {
+            Payload::Sandbox(SandboxPayload::ReadDirResult { entries }) => {
+                assert!(!entries.is_empty(), "expected nested dir entry");
+                assert!(entries.iter().any(|e| e.name == "nested"), "expected 'nested' entry");
+            }
+            _ => panic!("expected ReadDirResult"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_metadata() {
+        let handler = setup().await;
+        // First create a file so we have something to query
+        let write = AgentServerMessage::new_command(
+            "7",
+            Operation::Sandbox(SandboxOperation::WriteFile),
+            Payload::Sandbox(SandboxPayload::WriteFile {
+                path: "meta_test.txt".into(),
+                content: base64::engine::general_purpose::STANDARD.encode(b"data"),
+            }),
+        );
+        handler.handle(write).await.unwrap();
+
+        // Query metadata
+        let meta = AgentServerMessage::new_command(
+            "8",
+            Operation::Sandbox(SandboxOperation::Metadata),
+            Payload::Sandbox(SandboxPayload::Metadata {
+                path: "meta_test.txt".into(),
+            }),
+        );
+        let replies = handler.handle(meta).await.unwrap();
+        match &replies[0].payload {
+            Payload::Sandbox(SandboxPayload::MetadataResult { metadata }) => {
+                assert_eq!(metadata.file_type, "file");
+                assert_eq!(metadata.size, 4);
+                assert!(metadata.mtime > 0);
+            }
+            _ => panic!("expected MetadataResult"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write_file_bad_base64() {
+        let handler = setup().await;
+        let msg = AgentServerMessage::new_command(
+            "9",
+            Operation::Sandbox(SandboxOperation::WriteFile),
+            Payload::Sandbox(SandboxPayload::WriteFile {
+                path: "bad.txt".into(),
+                content: "not-valid-base64!!!".into(),
+            }),
+        );
+        let err = handler.handle(msg).await.unwrap_err();
+        assert!(err.to_string().contains("sandbox.write_file base64"));
+    }
+
+    #[tokio::test]
+    async fn test_catch_all_mismatched_payload() {
+        let handler = setup().await;
+
+        // Send a List operation but with an Exec payload — should hit catch-all
+        let msg = AgentServerMessage::new_command(
+            "10",
+            Operation::Sandbox(SandboxOperation::List),
+            Payload::Sandbox(SandboxPayload::Exec {
+                command: CommandRequestDef {
+                    program: "echo".into(),
+                    args: vec![],
+                    env: vec![],
+                    cwd: None,
+                    stdin: None,
+                    timeout_ms: 0,
+                },
+            }),
+        );
+        let err = handler.handle(msg).await.unwrap_err();
+        assert_eq!(err.to_string(), "payload decode failed for sandbox.list");
+    }
+
+    #[tokio::test]
+    async fn test_exec_error_returns_result_with_stderr() {
+        let handler = setup().await;
+        let msg = AgentServerMessage::new_command(
+            "11",
+            Operation::Sandbox(SandboxOperation::Exec),
+            Payload::Sandbox(SandboxPayload::Exec {
+                command: CommandRequestDef {
+                    program: "nonexistent_cmd_xyz".into(),
+                    args: vec![],
+                    env: vec![],
+                    cwd: None,
+                    stdin: None,
+                    timeout_ms: 5000,
+                },
+            }),
+        );
+        let replies = handler.handle(msg).await.unwrap();
+        assert_eq!(replies.len(), 1);
+        match &replies[0].payload {
+            Payload::Sandbox(SandboxPayload::ExecResult { output }) => {
+                assert_eq!(output.exit_code, -1);
+                assert!(!output.stderr.is_empty(), "expected stderr from failed exec");
+            }
+            _ => panic!("expected ExecResult"),
+        }
+    }
 }
