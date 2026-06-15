@@ -49,6 +49,7 @@ pub struct AgentTool {
     agent_path: AgentPath,
     max_depth: u32,
     parent_tools: Arc<ToolRegistry>,
+    #[allow(dead_code)]
     working_dir: PathBuf,
 }
 

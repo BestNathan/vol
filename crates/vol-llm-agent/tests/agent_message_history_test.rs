@@ -15,11 +15,13 @@ use vol_llm_core::{
 };
 
 /// Tracks all messages sent to the LLM across iterations
+#[allow(dead_code)]
 struct MessageTracker {
     iterations: Arc<Mutex<Vec<Vec<vol_llm_core::Message>>>>,
 }
 
 impl MessageTracker {
+    #[allow(dead_code)]
     fn new() -> Self {
         Self {
             iterations: Arc::new(Mutex::new(Vec::new())),

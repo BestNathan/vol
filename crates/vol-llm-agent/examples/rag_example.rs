@@ -7,10 +7,7 @@
 //! Run with: `cargo run --example rag_example`
 
 use std::sync::Arc;
-use vol_llm_agent::{
-    rag::{DashScopeEmbedder, Document, EmbeddingStore, InMemoryStore},
-    RagAgent, RagConfig,
-};
+use vol_llm_agent::rag::{DashScopeEmbedder, Document, EmbeddingStore, InMemoryStore};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -18,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 1. Create embedder (uses DASHSCOPE_API_KEY from environment)
     let api_key = std::env::var("DASHSCOPE_API_KEY").unwrap_or_else(|_| "your-api-key".to_string());
-    let embedder = Arc::new(DashScopeEmbedder::new(&api_key));
+    let _embedder = Arc::new(DashScopeEmbedder::new(&api_key));
     println!("1. Created DashScopeEmbedder");
 
     // 2. Create in-memory store

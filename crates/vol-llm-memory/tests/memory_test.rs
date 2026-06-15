@@ -50,13 +50,15 @@ async fn test_list_with_filter() {
             MemoryItem::new(MemoryKind::UserPreference, "Prefers Rust")
                 .with_tags(vec!["rust".to_string()]),
         )
-        .await;
+        .await
+        .unwrap();
     store
         .add(
             MemoryItem::new(MemoryKind::ProjectFact, "Uses TDengine")
                 .with_tags(vec!["database".to_string()]),
         )
-        .await;
+        .await
+        .unwrap();
     let filter = MemoryFilter::new().kinds(vec![MemoryKind::UserPreference]);
     let results = store.list(filter).await.unwrap();
     assert_eq!(results.len(), 1);
@@ -68,13 +70,16 @@ async fn test_remove_many() {
     let store = InMemoryStore::new();
     store
         .add(MemoryItem::new(MemoryKind::Experience, "exp1"))
-        .await;
+        .await
+        .unwrap();
     store
         .add(MemoryItem::new(MemoryKind::Experience, "exp2"))
-        .await;
+        .await
+        .unwrap();
     store
         .add(MemoryItem::new(MemoryKind::UserPreference, "pref1"))
-        .await;
+        .await
+        .unwrap();
     let filter = MemoryFilter::new().kinds(vec![MemoryKind::Experience]);
     let removed = store.remove_many(filter).await.unwrap();
     assert_eq!(removed, 2);
@@ -90,13 +95,15 @@ async fn test_keyword_retriever() {
             MemoryKind::ProjectFact,
             "This project uses TDengine database",
         ))
-        .await;
+        .await
+        .unwrap();
     store
         .add(MemoryItem::new(
             MemoryKind::UserPreference,
             "User likes Rust programming",
         ))
-        .await;
+        .await
+        .unwrap();
     let retriever = KeywordRetriever::new(Box::new(store));
     let results = retriever.retrieve("TDengine database", 5).await.unwrap();
     assert_eq!(results.len(), 1);
@@ -108,10 +115,12 @@ async fn test_keyword_retriever_with_filter() {
     let store = InMemoryStore::new();
     store
         .add(MemoryItem::new(MemoryKind::ProjectFact, "Uses Rust"))
-        .await;
+        .await
+        .unwrap();
     store
         .add(MemoryItem::new(MemoryKind::UserPreference, "Rust is great"))
-        .await;
+        .await
+        .unwrap();
     let retriever = KeywordRetriever::new(Box::new(store));
     let filter = MemoryFilter::new().kinds(vec![MemoryKind::UserPreference]);
     let results = retriever
@@ -144,7 +153,8 @@ async fn test_memory_manager_inject_context() {
     let manager = MemoryManager::new(Box::new(store), Box::new(retriever));
     manager
         .add(MemoryItem::new(MemoryKind::ProjectFact, "Uses TDengine"))
-        .await;
+        .await
+        .unwrap();
     let injected = manager.inject_context("TDengine", 5).await.unwrap();
     assert!(injected.contains("Uses TDengine"));
     assert!(injected.contains("ProjectFact"));

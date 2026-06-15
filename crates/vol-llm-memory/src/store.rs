@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use crate::item::{MemoryFilter, MemoryItem};
-use crate::{MemoryError, Result};
+use crate::Result;
 
 /// Persistence trait for memory CRUD operations.
 #[async_trait]

@@ -11,7 +11,6 @@ use vol_llm_agent::{AgentConfig, ReActAgent};
 use vol_llm_context::{AttentionAnchor, ContextBuilder};
 use vol_llm_core::LLMProvider;
 use vol_llm_provider::{LLMProviderConfig, LLMProviderRegistry};
-use vol_llm_sandbox::Sandbox;
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::{ToolConfig, ToolRegistry};
 use vol_session::Session;

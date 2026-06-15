@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [[bin]]
-name = "vol-llm-tui"
+name = "vol-llm-tui-legacy"
 path = "src/main.rs"
 
 [dependencies]
