@@ -11,6 +11,7 @@ use crate::control_plane::handlers::client::ClientHandler;
 use crate::control_plane::handlers::control::ControlHandler;
 use crate::control_plane::handlers::node::NodeHandler;
 use crate::control_plane::handlers::run::RunHandler;
+use crate::data_plane::handlers::sandbox::SandboxHandler;
 use crate::control_plane::state::ControlPlaneState;
 
 pub(crate) fn make_result(
@@ -34,13 +35,23 @@ pub struct ControlPlaneServerCore {
 }
 
 impl ControlPlaneServerCore {
-    pub fn new(state: Arc<ControlPlaneState>) -> Result<Self, String> {
+    pub async fn new(state: Arc<ControlPlaneState>) -> Result<Self, String> {
         let mut handler_registry = HandlerRegistry::new();
         handler_registry.register(Arc::new(ControlHandler::new(state.clone())))?;
         handler_registry.register(Arc::new(NodeHandler::new(state.clone())))?;
         handler_registry.register(Arc::new(CapabilityHandler::new(state.clone())))?;
         handler_registry.register(Arc::new(ClientHandler::new(state.clone())))?;
         handler_registry.register(Arc::new(RunHandler::new(state.clone())))?;
+
+        let local_sandbox: Arc<dyn vol_llm_sandbox::Sandbox> =
+            Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None));
+        local_sandbox
+            .start()
+            .await
+            .map_err(|e| format!("failed to start sandbox: {e}"))?;
+        handler_registry
+            .register(Arc::new(SandboxHandler::new(local_sandbox)))
+            .map_err(|e| format!("failed to register SandboxHandler: {e}"))?;
 
         Ok(Self {
             state,
@@ -168,10 +179,10 @@ mod tests {
         }
     }
 
-    #[test]
-    fn control_plane_server_core_registers_all_handlers() {
+    #[tokio::test]
+    async fn control_plane_server_core_registers_all_handlers() {
         let state = Arc::new(ControlPlaneState::new());
-        let core = super::ControlPlaneServerCore::new(state).unwrap();
+        let core = super::ControlPlaneServerCore::new(state).await.unwrap();
         // Core doesn't expose handler_registry publicly, but construction succeeds
         // and we can verify state is wired
         assert!(core.state.nodes.list().is_empty());
@@ -180,7 +191,7 @@ mod tests {
     #[tokio::test]
     async fn control_plane_server_core_handle_unknown_operation() {
         let state = Arc::new(ControlPlaneState::new());
-        let core = super::ControlPlaneServerCore::new(state).unwrap();
+        let core = super::ControlPlaneServerCore::new(state).await.unwrap();
         let msg = AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: "1".to_string(),
@@ -235,7 +246,7 @@ mod tests {
     #[tokio::test]
     async fn control_plane_server_core_handle_node_list() {
         let state = Arc::new(ControlPlaneState::new());
-        let core = super::ControlPlaneServerCore::new(state).unwrap();
+        let core = super::ControlPlaneServerCore::new(state).await.unwrap();
         let msg = AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: "1".to_string(),

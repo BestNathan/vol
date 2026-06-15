@@ -8,14 +8,14 @@ use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision, RunContext};
-use vol_llm_agent::{AgentConfig, AgentStreamEvent, ReActAgent};
+use vol_llm_agent::react::plugin::{PluginDecision, RunContext};
+use vol_llm_agent::{AgentConfig, ReActAgent};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMProvider, Message,
     MessageRole, StreamEvent, StreamEventData, SupportedParam, TokenUsage,
 };
 use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
-use vol_llm_tool::{ToolContext, ToolRegistry};
+use vol_llm_tool::ToolRegistry;
 
 /// Simulates a real Code Agent LLM client that properly handles tool calls
 struct CodeAgentSimulator {

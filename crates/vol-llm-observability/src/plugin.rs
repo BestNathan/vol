@@ -268,6 +268,7 @@ mod tests {
         LoggerPlugin::new(temp_dir.path().to_path_buf())
     }
 
+    #[allow(dead_code)]
     fn create_test_context() -> RunContext {
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),

@@ -44,6 +44,7 @@ pub(crate) enum ParsedCommand {
         id: u64,
         block: bool,
         timeout_ms: u64,
+        #[allow(dead_code)]
         json: bool,
     },
     /// `task claim [--id <ID>]`

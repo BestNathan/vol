@@ -46,6 +46,7 @@ pub enum Operation {
     System(SystemOperation),
     Task(TaskOperation),
     Control(ControlOperation),
+    Sandbox(SandboxOperation),
 }
 
 impl Operation {
@@ -100,6 +101,7 @@ impl Operation {
             Operation::Control(ControlOperation::NodeGet) => "control.node_get",
             Operation::Control(ControlOperation::CapabilityList) => "control.capability_list",
             Operation::Control(ControlOperation::RunStatus) => "control.run_status",
+            Self::Sandbox(op) => op.method_name(),
         }
     }
 }
@@ -175,6 +177,39 @@ pub enum TaskOperation {
     Get,
 }
 
+/// Sandbox protocol operations.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SandboxOperation {
+    /// List available sandboxes.
+    List,
+    /// Execute a command inside the sandbox.
+    Exec,
+    /// Read file content from the sandbox.
+    ReadFile,
+    /// Write file content to the sandbox.
+    WriteFile,
+    /// Create a directory (and parents) inside the sandbox.
+    CreateDir,
+    /// List directory entries in the sandbox.
+    ReadDir,
+    /// Get file/directory metadata.
+    Metadata,
+}
+
+impl SandboxOperation {
+    pub fn method_name(&self) -> &'static str {
+        match self {
+            Self::List => "sandbox.list",
+            Self::Exec => "sandbox.exec",
+            Self::ReadFile => "sandbox.read_file",
+            Self::WriteFile => "sandbox.write_file",
+            Self::CreateDir => "sandbox.create_dir",
+            Self::ReadDir => "sandbox.read_dir",
+            Self::Metadata => "sandbox.metadata",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlOperation {
     Register,
@@ -191,6 +226,211 @@ pub enum ControlOperation {
     RunStatus,
 }
 
+/// Wire-compatible command request. All fields directly serializable.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CommandRequestDef {
+    pub program: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: Vec<(String, String)>,
+    #[serde(default)]
+    pub cwd: Option<String>,
+    #[serde(default)]
+    pub stdin: Option<String>, // base64 encoded
+    #[serde(default)]
+    pub timeout_ms: u64,
+}
+
+impl From<CommandRequestDef> for vol_llm_sandbox::CommandRequest {
+    fn from(d: CommandRequestDef) -> Self {
+        use std::time::Duration;
+        let timeout = if d.timeout_ms == 0 {
+            Duration::from_secs(30)
+        } else {
+            Duration::from_millis(d.timeout_ms)
+        };
+        Self {
+            program: d.program,
+            args: d.args,
+            env: d.env.into_iter().collect(),
+            cwd: d.cwd.map(std::path::PathBuf::from),
+            stdin: d.stdin.map(|s| {
+                use base64::Engine;
+                base64::engine::general_purpose::STANDARD
+                    .decode(&s)
+                    .unwrap_or_default()
+            }),
+            timeout,
+        }
+    }
+}
+
+impl From<vol_llm_sandbox::CommandRequest> for CommandRequestDef {
+    fn from(r: vol_llm_sandbox::CommandRequest) -> Self {
+        use base64::Engine;
+        Self {
+            program: r.program,
+            args: r.args,
+            env: r.env.into_iter().collect(),
+            cwd: r.cwd.map(|p| p.to_string_lossy().to_string()),
+            stdin: r.stdin.map(|s| {
+                base64::engine::general_purpose::STANDARD.encode(&s)
+            }),
+            timeout_ms: r.timeout.as_millis() as u64,
+        }
+    }
+}
+
+/// Wire-compatible command output.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CommandOutputDef {
+    pub stdout: String,  // base64 encoded
+    pub stderr: String,  // base64 encoded
+    pub exit_code: i32,
+    #[serde(default)]
+    pub killed_by_signal: Option<i32>,
+}
+
+impl From<vol_llm_sandbox::CommandOutput> for CommandOutputDef {
+    fn from(o: vol_llm_sandbox::CommandOutput) -> Self {
+        use base64::Engine;
+        Self {
+            stdout: base64::engine::general_purpose::STANDARD.encode(&o.stdout),
+            stderr: base64::engine::general_purpose::STANDARD.encode(&o.stderr),
+            exit_code: o.exit_code,
+            killed_by_signal: o.killed_by_signal,
+        }
+    }
+}
+
+impl From<CommandOutputDef> for vol_llm_sandbox::CommandOutput {
+    fn from(d: CommandOutputDef) -> Self {
+        use base64::Engine;
+        Self {
+            stdout: base64::engine::general_purpose::STANDARD
+                .decode(&d.stdout)
+                .unwrap_or_default(),
+            stderr: base64::engine::general_purpose::STANDARD
+                .decode(&d.stderr)
+                .unwrap_or_default(),
+            exit_code: d.exit_code,
+            killed_by_signal: d.killed_by_signal,
+        }
+    }
+}
+
+/// Wire-compatible directory entry.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DirEntryDef {
+    pub name: String,
+    pub file_type: String, // "file", "directory", "symlink", "other"
+}
+
+impl From<vol_llm_sandbox::DirEntry> for DirEntryDef {
+    fn from(e: vol_llm_sandbox::DirEntry) -> Self {
+        Self {
+            name: e.name,
+            file_type: match e.file_type {
+                vol_llm_sandbox::FileType::File => "file".into(),
+                vol_llm_sandbox::FileType::Directory => "directory".into(),
+                vol_llm_sandbox::FileType::Symlink => "symlink".into(),
+                vol_llm_sandbox::FileType::Other => "other".into(),
+            },
+        }
+    }
+}
+
+/// Wire-compatible file metadata.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FileMetadataDef {
+    pub size: u64,
+    pub mtime: u64,
+    pub file_type: String,
+}
+
+impl From<vol_llm_sandbox::FileMetadata> for FileMetadataDef {
+    fn from(m: vol_llm_sandbox::FileMetadata) -> Self {
+        Self {
+            size: m.size,
+            mtime: m.mtime,
+            file_type: match m.file_type {
+                vol_llm_sandbox::FileType::File => "file".into(),
+                vol_llm_sandbox::FileType::Directory => "directory".into(),
+                vol_llm_sandbox::FileType::Symlink => "symlink".into(),
+                vol_llm_sandbox::FileType::Other => "other".into(),
+            },
+        }
+    }
+}
+
+/// Sandbox metadata returned by sandbox.list.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SandboxInfo {
+    pub name: String,
+    pub kind: String,
+    pub root_path: String,
+}
+
+/// Sandbox protocol payload — request/response pairs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SandboxPayload {
+    // ── List ──
+    List,
+    ListResult {
+        sandboxes: Vec<SandboxInfo>,
+    },
+
+    // ── Exec ──
+    Exec {
+        command: CommandRequestDef,
+    },
+    ExecResult {
+        output: CommandOutputDef,
+    },
+
+    // ── ReadFile ──
+    ReadFile {
+        path: String,
+        #[serde(default)]
+        offset: Option<u64>,
+        #[serde(default)]
+        limit: Option<u64>,
+    },
+    ReadFileResult {
+        content: String, // base64
+    },
+
+    // ── WriteFile ──
+    WriteFile {
+        path: String,
+        content: String, // base64
+    },
+    WriteFileResult,
+
+    // ── CreateDir ──
+    CreateDir {
+        path: String,
+    },
+    CreateDirResult,
+
+    // ── ReadDir ──
+    ReadDir {
+        path: String,
+    },
+    ReadDirResult {
+        entries: Vec<DirEntryDef>,
+    },
+
+    // ── Metadata ──
+    Metadata {
+        path: String,
+    },
+    MetadataResult {
+        metadata: FileMetadataDef,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Payload {
@@ -204,6 +444,7 @@ pub enum Payload {
     System(SystemPayload),
     Task(TaskPayload),
     Control(ControlPayload),
+    Sandbox(SandboxPayload),
     Error(ErrorPayload),
 }
 
@@ -608,6 +849,12 @@ impl Payload {
                 .map(ControlPayload::RunStatus)
                 .map(Payload::Control)
                 .map_err(|_| ProtocolError::PayloadDecodeFailed("control.run_status")),
+            Operation::Sandbox(_) => {
+                serde_json::from_value::<SandboxPayload>(value).map(Payload::Sandbox)
+                    .map_err(|e| ProtocolError::PayloadDecodeFailedOwned(
+                        format!("sandbox: {}", e)
+                    ))
+            }
         }
     }
 
@@ -1766,6 +2013,320 @@ mod tests {
                 assert_eq!(target.as_deref(), Some("coding"));
             }
             _ => panic!("unexpected payload"),
+        }
+    }
+
+    mod sandbox_protocol_tests {
+        use super::*;
+
+        #[test]
+        fn test_sandbox_operation_method_names() {
+            assert_eq!(SandboxOperation::List.method_name(), "sandbox.list");
+            assert_eq!(SandboxOperation::Exec.method_name(), "sandbox.exec");
+            assert_eq!(SandboxOperation::ReadFile.method_name(), "sandbox.read_file");
+            assert_eq!(SandboxOperation::WriteFile.method_name(), "sandbox.write_file");
+            assert_eq!(SandboxOperation::CreateDir.method_name(), "sandbox.create_dir");
+            assert_eq!(SandboxOperation::ReadDir.method_name(), "sandbox.read_dir");
+            assert_eq!(SandboxOperation::Metadata.method_name(), "sandbox.metadata");
+        }
+
+        #[test]
+        fn test_command_request_def_roundtrip() {
+            use std::collections::HashMap;
+            use std::time::Duration;
+
+            let orig = vol_llm_sandbox::CommandRequest {
+                program: "echo".into(),
+                args: vec!["-n".into(), "hello".into()],
+                env: HashMap::from([("FOO".into(), "bar".into())]),
+                cwd: Some(std::path::PathBuf::from("/tmp")),
+                stdin: Some(b"input".to_vec()),
+                timeout: Duration::from_secs(30),
+            };
+
+            let def: CommandRequestDef = orig.clone().into();
+            let back: vol_llm_sandbox::CommandRequest = def.into();
+
+            assert_eq!(back.program, "echo");
+            assert_eq!(back.args, vec!["-n", "hello"]);
+            assert_eq!(back.env.get("FOO"), Some(&"bar".to_string()));
+            assert_eq!(back.cwd, Some(std::path::PathBuf::from("/tmp")));
+            assert_eq!(back.stdin, Some(b"input".to_vec()));
+        }
+
+        #[test]
+        fn test_sandbox_payload_list_serde() {
+            let payload = SandboxPayload::List;
+            let json = serde_json::to_value(&payload).unwrap();
+            assert_eq!(json, serde_json::json!("List"));
+
+            let info = vec![SandboxInfo {
+                name: "local".into(),
+                kind: "local".into(),
+                root_path: "/tmp/sandbox".into(),
+            }];
+            let result = SandboxPayload::ListResult { sandboxes: info };
+            let json = serde_json::to_value(&result).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            match back {
+                SandboxPayload::ListResult { sandboxes } => {
+                    assert_eq!(sandboxes.len(), 1);
+                    assert_eq!(sandboxes[0].name, "local");
+                }
+                _ => panic!("expected ListResult"),
+            }
+        }
+
+        #[test]
+        fn test_sandbox_payload_exec_serde() {
+            let payload = SandboxPayload::Exec {
+                command: CommandRequestDef {
+                    program: "echo".into(),
+                    args: vec!["hello".into()],
+                    env: vec![],
+                    cwd: None,
+                    stdin: None,
+                    timeout_ms: 5000,
+                },
+            };
+            let json = serde_json::to_value(&payload).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            match back {
+                SandboxPayload::Exec { command } => {
+                    assert_eq!(command.program, "echo");
+                    assert_eq!(command.args, vec!["hello"]);
+                }
+                _ => panic!("expected Exec"),
+            }
+        }
+
+        #[test]
+        fn test_command_output_def_roundtrip() {
+            let orig = vol_llm_sandbox::CommandOutput {
+                stdout: b"hello".to_vec(),
+                stderr: b"warn".to_vec(),
+                exit_code: 0,
+                killed_by_signal: None,
+            };
+
+            let def: CommandOutputDef = orig.clone().into();
+            assert!(!def.stdout.is_empty());
+            assert!(!def.stderr.is_empty());
+            assert_eq!(def.exit_code, 0);
+            assert!(def.killed_by_signal.is_none());
+
+            let back: vol_llm_sandbox::CommandOutput = def.into();
+            assert_eq!(back.stdout, b"hello");
+            assert_eq!(back.stderr, b"warn");
+            assert_eq!(back.exit_code, 0);
+        }
+
+        #[test]
+        fn test_command_output_def_killed_by_signal() {
+            let orig = vol_llm_sandbox::CommandOutput {
+                stdout: vec![],
+                stderr: b"killed".to_vec(),
+                exit_code: -9,
+                killed_by_signal: Some(9),
+            };
+
+            let def: CommandOutputDef = orig.clone().into();
+            assert_eq!(def.killed_by_signal, Some(9));
+
+            let back: vol_llm_sandbox::CommandOutput = def.into();
+            assert_eq!(back.killed_by_signal, Some(9));
+        }
+
+        #[test]
+        fn test_dir_entry_def_roundtrip() {
+            let variants = vec![
+                (vol_llm_sandbox::FileType::File, "file"),
+                (vol_llm_sandbox::FileType::Directory, "directory"),
+                (vol_llm_sandbox::FileType::Symlink, "symlink"),
+                (vol_llm_sandbox::FileType::Other, "other"),
+            ];
+
+            for (ft, expected_str) in variants {
+                let entry = vol_llm_sandbox::DirEntry {
+                    name: format!("test.{}", expected_str),
+                    file_type: ft.clone(),
+                };
+                let def: DirEntryDef = entry.into();
+                assert_eq!(def.name, format!("test.{}", expected_str));
+                assert_eq!(def.file_type, expected_str);
+            }
+        }
+
+        #[test]
+        fn test_file_metadata_def_roundtrip() {
+            let variants = vec![
+                (vol_llm_sandbox::FileType::File, "file"),
+                (vol_llm_sandbox::FileType::Directory, "directory"),
+                (vol_llm_sandbox::FileType::Symlink, "symlink"),
+                (vol_llm_sandbox::FileType::Other, "other"),
+            ];
+
+            for (ft, expected_str) in variants {
+                let meta = vol_llm_sandbox::FileMetadata {
+                    size: 1024,
+                    mtime: 1234567890,
+                    file_type: ft.clone(),
+                };
+                let def: FileMetadataDef = meta.into();
+                assert_eq!(def.size, 1024);
+                assert_eq!(def.mtime, 1234567890);
+                assert_eq!(def.file_type, expected_str);
+            }
+        }
+
+        #[test]
+        fn test_sandbox_payload_all_variants_serde() {
+            use base64::Engine;
+
+            // ReadFile
+            let p = SandboxPayload::ReadFile { path: "/tmp/f".into(), offset: Some(0), limit: Some(100) };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // ReadFileResult
+            let p = SandboxPayload::ReadFileResult { content: base64::engine::general_purpose::STANDARD.encode(b"data") };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // WriteFile
+            let p = SandboxPayload::WriteFile { path: "/tmp/f".into(), content: base64::engine::general_purpose::STANDARD.encode(b"data") };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // WriteFileResult
+            let p = SandboxPayload::WriteFileResult;
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // CreateDir
+            let p = SandboxPayload::CreateDir { path: "/tmp/dir".into() };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // CreateDirResult
+            let p = SandboxPayload::CreateDirResult;
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // ReadDir
+            let p = SandboxPayload::ReadDir { path: "/tmp".into() };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // ReadDirResult
+            let p = SandboxPayload::ReadDirResult { entries: vec![
+                DirEntryDef { name: "f.txt".into(), file_type: "file".into() }
+            ]};
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // Metadata
+            let p = SandboxPayload::Metadata { path: "/tmp/f".into() };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+
+            // MetadataResult
+            let p = SandboxPayload::MetadataResult {
+                metadata: FileMetadataDef { size: 42, mtime: 1000, file_type: "file".into() }
+            };
+            let json = serde_json::to_value(&p).unwrap();
+            let back: SandboxPayload = serde_json::from_value(json).unwrap();
+            assert_eq!(back, p);
+        }
+
+        #[test]
+        fn test_payload_from_operation_sandbox() {
+            let op = Operation::Sandbox(SandboxOperation::Exec);
+            let result = Payload::from_operation(
+                &op,
+                serde_json::json!({"Exec": {
+                    "command": {
+                        "program": "ls",
+                        "args": ["-la"],
+                        "env": [],
+                        "timeout_ms": 5000
+                    }
+                }}),
+            ).unwrap();
+            match result {
+                Payload::Sandbox(SandboxPayload::Exec { command }) => {
+                    assert_eq!(command.program, "ls");
+                }
+                _ => panic!("expected Sandbox Exec"),
+            }
+        }
+
+        #[test]
+        fn test_payload_from_operation_sandbox_bad_payload() {
+            let op = Operation::Sandbox(SandboxOperation::Exec);
+            let err = Payload::from_operation(&op, serde_json::json!({"bad": "data"})).unwrap_err();
+            assert!(err.to_string().contains("sandbox"));
+        }
+
+        #[test]
+        fn test_operation_method_name_sandbox() {
+            let op = Operation::Sandbox(SandboxOperation::List);
+            assert_eq!(op.method_name(), "sandbox.list");
+            let op = Operation::Sandbox(SandboxOperation::Exec);
+            assert_eq!(op.method_name(), "sandbox.exec");
+        }
+
+        #[test]
+        fn test_command_request_def_zero_timeout_defaults() {
+            use std::time::Duration;
+            let def = CommandRequestDef {
+                program: "sleep".into(),
+                args: vec![],
+                env: vec![],
+                cwd: None,
+                stdin: None,
+                timeout_ms: 0,
+            };
+            let req: vol_llm_sandbox::CommandRequest = def.into();
+            assert_eq!(req.timeout, Duration::from_secs(30));
+        }
+
+        #[test]
+        fn test_command_request_def_no_stdin() {
+            let def = CommandRequestDef {
+                program: "echo".into(),
+                args: vec![],
+                env: vec![],
+                cwd: None,
+                stdin: None,
+                timeout_ms: 5000,
+            };
+            let req: vol_llm_sandbox::CommandRequest = def.into();
+            assert!(req.stdin.is_none());
+        }
+
+        #[test]
+        fn test_sandbox_info_serde() {
+            let info = SandboxInfo {
+                name: "test-sb".into(),
+                kind: "local".into(),
+                root_path: "/tmp/sb".into(),
+            };
+            let json = serde_json::to_value(&info).unwrap();
+            assert_eq!(json["name"], "test-sb");
+            assert_eq!(json["kind"], "local");
+            assert_eq!(json["root_path"], "/tmp/sb");
+            let back: SandboxInfo = serde_json::from_value(json).unwrap();
+            assert_eq!(back, info);
         }
     }
 }

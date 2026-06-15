@@ -1,6 +1,6 @@
 //! Session management with entry-based persistence.
 
-use crate::entry::{CheckpointReason, SessionEntry, SessionEntryData, SessionEntryType};
+use crate::entry::{CheckpointReason, SessionEntry, SessionEntryData};
 use crate::message::SessionMessage;
 use crate::store::{Result, SessionEntryStore};
 use std::collections::HashMap;

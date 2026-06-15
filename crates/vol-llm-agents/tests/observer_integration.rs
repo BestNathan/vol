@@ -83,6 +83,7 @@ async fn test_observer_plugin_receives_all_events() {
             }
         }
 
+        #[allow(dead_code)]
         async fn get_events(&self) -> Vec<String> {
             self.events.lock().await.clone()
         }

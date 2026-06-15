@@ -59,6 +59,7 @@ pub enum ConversationEntry {
 /// Snapshot of the workspace file tree.
 #[derive(Debug, Clone)]
 pub struct WorkspaceTree {
+    #[allow(dead_code)]
     pub root: String,
     pub entries: Vec<WorkspaceEntry>,
 }

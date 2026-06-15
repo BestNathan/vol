@@ -35,7 +35,7 @@ impl Default for ControlPlaneState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::control_plane::store::CommandRecord;
+    
 
     #[test]
     fn state_new_creates_all_fields() {

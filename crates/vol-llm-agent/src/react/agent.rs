@@ -419,7 +419,7 @@ impl ReActAgent {
                 };
 
                 // Consume LLM stream — emits Thinking/Content streaming events internally
-                let (thinking, tool_calls, content, model, usage) =
+                let (thinking, tool_calls, content, _model, _usage) =
                     match consume_llm_stream(llm_stream, &run_ctx).await {
                         Ok(data) => data,
                         Err(e) => {
@@ -808,7 +808,7 @@ mod tests {
     };
 
     use crate::agent_def::AgentDef;
-    use crate::react::plugin::PluginRegistry;
+    
     use vol_llm_tool::ToolRegistry;
     use vol_session::InMemoryEntryStore;
 

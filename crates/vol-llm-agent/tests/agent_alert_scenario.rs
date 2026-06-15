@@ -41,6 +41,7 @@ fn write_json_to_file(path: &str, data: &Value, section: &str) {
 }
 
 /// Write text to file
+#[allow(dead_code)]
 fn write_text_to_file(path: &str, content: &str, section: &str) {
     let mut file = std::fs::OpenOptions::new()
         .create(true)
@@ -478,7 +479,7 @@ async fn test_agent_alert_scenario() {
     );
 
     // Check for API key
-    let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
+    let _api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
         .expect("ANTHROPIC_AUTH_TOKEN must be set for integration test");
 
     // Create mock with real provider

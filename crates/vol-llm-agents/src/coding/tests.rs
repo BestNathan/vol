@@ -466,7 +466,7 @@ async fn test_agent_with_methods() {
         llm: Some(llm),
         ..Default::default()
     };
-    let agent = CodingAgent::new(config).unwrap();
+    let _agent = CodingAgent::new(config).unwrap();
 }
 
 #[tokio::test]

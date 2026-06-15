@@ -12,7 +12,6 @@ use vol_llm_agent::{AgentConfig, AgentStreamEvent, ReActAgent};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, LLMProvider, StreamEvent, StreamEventData,
 };
-use vol_llm_tool::ToolContext;
 
 /// Mock LLM that returns a simple text response
 struct MockLlm {

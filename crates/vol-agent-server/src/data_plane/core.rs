@@ -28,8 +28,8 @@ use crate::data_plane::connection_holder::ConnectionHolder;
 use crate::data_plane::dispatcher::AgentDispatcher;
 use crate::data_plane::handlers::{
     agent::AgentHandler, control::DataPlaneControlHandler, file::FileHandler, log::LogHandler,
-    mcp::McpHandler, session::SessionHandler, skill::SkillHandler, system::SystemHandler,
-    task::TaskHandler, tool::ToolHandler,
+    mcp::McpHandler, sandbox::SandboxHandler, session::SessionHandler, skill::SkillHandler,
+    system::SystemHandler, task::TaskHandler, tool::ToolHandler,
 };
 use crate::data_plane::router::AgentRouter;
 use vol_llm_agent_protocol::Connection;
@@ -475,6 +475,11 @@ impl DataPlaneServerCoreBuilder {
         handler_registry
             .register(Arc::new(DataPlaneControlHandler::new()))
             .map_err(|e| format!("failed to register DataPlaneControlHandler: {e}"))?;
+        handler_registry
+            .register(Arc::new(SandboxHandler::new(
+                sandbox_registry.default(),
+            )))
+            .map_err(|e| format!("failed to register SandboxHandler: {e}"))?;
 
         for extra in self.extra_handlers {
             handler_registry
