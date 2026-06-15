@@ -1,0 +1,26 @@
+# vol-agent-server.control-plane.toml — Default config baked into control-plane image
+#
+# Built into the image at /etc/vol-agent-server/agent-server.toml. Override at deploy
+# time by mounting a ConfigMap to the same path or passing --config <path>.
+
+[server]
+host = "0.0.0.0"
+port = 3001
+
+[server.roles]
+control_plane = true
+data_plane = false
+
+[control_plane]
+client_ws_path = "/ws"
+node_ws_path = "/control/v1/ws"
+lease_timeout_secs = 90
+lease_scan_secs = 15
+
+[runtime]
+working_dir = "/app"
+store_dir = "/app/data"
+
+[tracing]
+level = "info"
+format = "json"
