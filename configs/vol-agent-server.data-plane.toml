@@ -1,0 +1,27 @@
+# vol-agent-server.data-plane.toml — Default config baked into data-plane image
+#
+# Built into the image at /etc/vol-agent-server/agent-server.toml. Override at deploy
+# time by mounting a ConfigMap to the same path or passing --config <path>.
+#
+# data_plane.control_url and auth_token must be supplied at deploy time
+# (env / overlay config), since they depend on the cluster.
+
+[server]
+host = "0.0.0.0"
+port = 3001
+
+[server.roles]
+control_plane = false
+data_plane = true
+
+[data_plane]
+heartbeat_secs = 15
+snapshot_on_connect = true
+
+[runtime]
+working_dir = "/app"
+store_dir = "/app/data"
+
+[tracing]
+level = "info"
+format = "json"

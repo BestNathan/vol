@@ -2,8 +2,17 @@
 # =============================================================================
 # Multi-stage build for the JSON-RPC agent service.
 #
+# Build args:
+#   ROLE — control-plane | data-plane (default: data-plane). Selects which
+#          default config TOML is baked into the image at
+#          /etc/vol-agent-server/agent-server.toml. The runtime config can
+#          still be overridden at deploy time via --config <path>.
+#
 # Build:
-#   docker build -t vol-agent-server:latest -f dockers/vol-agent-server.Dockerfile .
+#   docker build --build-arg ROLE=control-plane -t vol-agent-server:cp-latest \
+#     -f dockers/vol-agent-server.Dockerfile .
+#   docker build --build-arg ROLE=data-plane    -t vol-agent-server:dp-latest \
+#     -f dockers/vol-agent-server.Dockerfile .
 #
 # Run:
 #   docker run -d \
@@ -50,6 +59,8 @@ RUN cargo build --release -p vol-agent-server && \
 # ── Stage 2: Runtime ────────────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
+ARG ROLE=data-plane
+
 # Install CA certificates for HTTPS
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
     apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
@@ -60,9 +71,15 @@ WORKDIR /app
 # Copy the binary
 COPY --from=builder /app/target/release/vol-agent-server /usr/local/bin/vol-agent-server
 
+# Bake in the role-specific default config. ROLE=control-plane | data-plane.
+COPY configs/vol-agent-server.${ROLE}.toml /etc/vol-agent-server/agent-server.toml
+
+ENV VOL_AGENT_SERVER_ROLE=${ROLE}
+
 # Create data directory
 RUN mkdir -p /app/data
 
 EXPOSE 3001
 
 ENTRYPOINT ["/usr/local/bin/vol-agent-server"]
+CMD ["--config", "/etc/vol-agent-server/agent-server.toml"]
