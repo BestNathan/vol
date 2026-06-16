@@ -77,7 +77,11 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 
-# Build and strip the agent-server binary
+# Build and strip the agent-server binary. Bump cargo's net retry count to
+# survive transient crates.io flakes (we've seen "[28] Timeout" on a single
+# crate download trip the whole build).
+ENV CARGO_NET_RETRY=10 \
+    CARGO_HTTP_TIMEOUT=120
 RUN cargo build --release -p vol-agent-server && \
     strip /app/target/release/vol-agent-server
 
