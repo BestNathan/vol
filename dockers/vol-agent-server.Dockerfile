@@ -3,16 +3,22 @@
 # Multi-stage build for the JSON-RPC agent service.
 #
 # Build args:
-#   ROLE — control-plane | data-plane (default: data-plane). Selects which
-#          default config TOML is baked into the image at
-#          /etc/vol-agent-server/agent-server.toml. The runtime config can
-#          still be overridden at deploy time via --config <path>.
+#   ROLE   — control-plane | data-plane (default: data-plane). Selects which
+#            default config TOML is baked into the image at
+#            /etc/vol-agent-server/agent-server.toml. The runtime config can
+#            still be overridden at deploy time via --config <path>.
+#   REGION — cn (default) | global. cn uses aliyun apt mirror + rsproxy.cn
+#            for rustup and crates.io. global uses Debian/rustup/crates.io
+#            official sources (required when building from networks that
+#            can't reach the China mirrors, e.g. GitHub Actions runners).
 #
 # Build:
+#   # Local (China network):
 #   docker build --build-arg ROLE=control-plane -t vol-agent-server:cp-latest \
 #     -f dockers/vol-agent-server.Dockerfile .
-#   docker build --build-arg ROLE=data-plane    -t vol-agent-server:dp-latest \
-#     -f dockers/vol-agent-server.Dockerfile .
+#   # CI / outside China:
+#   docker build --build-arg ROLE=data-plane --build-arg REGION=global \
+#     -t vol-agent-server:dp-latest -f dockers/vol-agent-server.Dockerfile .
 #
 # Run:
 #   docker run -d \
@@ -30,21 +36,40 @@
 # ── Stage 1: Builder (same Debian as runtime → matching glibc) ──────────────
 FROM debian:bookworm-slim AS builder
 
-ENV RUSTUP_DIST_SERVER=https://rsproxy.cn \
-    RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup \
-    RUSTUP_HOME=/usr/local/rustup \
+ARG REGION=cn
+
+ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH
 
-# Install build dependencies via Aliyun mirror, then Rust via rsproxy
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
-    apt-get update && apt-get install -y --no-install-recommends \
-    curl gcc g++ libssl-dev pkg-config ca-certificates git && \
-    rm -rf /var/lib/apt/lists/* && \
-    curl --proto '=https' --tlsv1.2 -sSf https://rsproxy.cn/rustup-init.sh | sh -s -- -y
-
-# Copy cargo mirror config for crates.io access via rsproxy
-COPY .cargo/config.toml .cargo/config.toml
+# Install build deps + Rust toolchain. Mirrors are toggled by REGION.
+RUN set -eux; \
+    if [ "$REGION" = "cn" ]; then \
+        sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources; \
+    fi; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        curl gcc g++ make cmake perl libssl-dev pkg-config ca-certificates git; \
+    rm -rf /var/lib/apt/lists/*; \
+    if [ "$REGION" = "cn" ]; then \
+        export RUSTUP_DIST_SERVER=https://rsproxy.cn; \
+        export RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup; \
+        curl --proto '=https' --tlsv1.2 -sSf https://rsproxy.cn/rustup-init.sh \
+            | sh -s -- -y --default-toolchain stable; \
+        mkdir -p "$CARGO_HOME"; \
+        printf '%s\n' \
+            '[source.crates-io]' \
+            'replace-with = "rsproxy-sparse"' \
+            '[source.rsproxy-sparse]' \
+            'registry = "sparse+https://rsproxy.cn/index/"' \
+            '[net]' \
+            'git-fetch-with-cli = true' \
+            > "$CARGO_HOME/config.toml"; \
+    else \
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable; \
+    fi; \
+    cargo --version
 
 WORKDIR /app
 
@@ -60,10 +85,15 @@ RUN cargo build --release -p vol-agent-server && \
 FROM debian:bookworm-slim
 
 ARG ROLE=data-plane
+ARG REGION=cn
 
 # Install CA certificates for HTTPS
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
-    apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
+RUN set -eux; \
+    if [ "$REGION" = "cn" ]; then \
+        sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources; \
+    fi; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates; \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
