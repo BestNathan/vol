@@ -25,6 +25,14 @@ All GitOps-managed workloads target:
 vol-agent-system
 ```
 
+## Prerequisites
+
+ArgoCD must already be installed in your cluster, and the `Application` CRD (`argoproj.io/v1alpha1`) must exist.
+
+### Repository Access
+
+The `root.yaml` manifest uses `git@github.com:BestNathan/vol.git` as its repository URL. ArgoCD must have SSH access to this repository, or you must change the `repoURL` field to an HTTPS URL configured in your ArgoCD instance.
+
 ## Bootstrap
 
 Apply the root App-of-Apps once:
@@ -45,6 +53,15 @@ The child applications sync complete Kubernetes manifests from:
 deploy/argocd/manifests/
 ```
 
+## Verification
+
+After bootstrapping, verify the ArgoCD applications and workloads:
+
+```bash
+kubectl -n argocd get applications
+kubectl -n vol-agent-system get pods,svc
+```
+
 ## Applications
 
 | Application | Manifest path |
@@ -56,6 +73,16 @@ deploy/argocd/manifests/
 
 `deploy/argocd/manifests/agent-server/secret.example.yaml` documents required keys for `agent-server`, but it is excluded from ArgoCD sync.
 
+### Namespace Creation
+
+The `vol-agent-system` namespace is managed by GitOps, but secrets may need to be created before the first sync. Create the namespace manually if creating secrets before sync:
+
+```bash
+kubectl create namespace vol-agent-system --dry-run=client -o yaml | kubectl apply -f -
+```
+
+### Application Secrets
+
 Create the real secret in the cluster before syncing `agent-server`:
 
 ```bash
@@ -64,7 +91,16 @@ kubectl -n vol-agent-system create secret generic agent-server-secrets \
   --from-literal=OPENAI_API_KEY='<key>'
 ```
 
-`docs-rs-mcp` expects the image pull secret `acr-registry-secret` in `vol-agent-system` if the ACR repository requires authentication.
+### ACR Image Pull Secret
+
+`docs-rs-mcp` expects the image pull secret `acr-registry-secret` in `vol-agent-system` if the ACR repository requires authentication:
+
+```bash
+kubectl -n vol-agent-system create secret docker-registry acr-registry-secret \
+  --docker-server='<acr-registry>' \
+  --docker-username='<username>' \
+  --docker-password='<password>'
+```
 
 ## MCP Image Updates
 
