@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/part-of: vol-agent
     app.kubernetes.io/component: runtime-config
 data:
-  gitops/SKILL.md: |
+  gitops.SKILL.md: |
     ---
     name: gitops
     version: 1.0.0

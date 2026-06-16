@@ -158,13 +158,13 @@ Mounted path in `agent-server`:
 
 ### Shared Skills ConfigMap
 
-`deploy/argocd/manifests/runtime-config/skills-configmap.yaml` provides skill definitions. Each ConfigMap key maps to a `SKILL.md` file under `/app/.agents/skills/<skill-name>/`.
+`deploy/argocd/manifests/runtime-config/skills-configmap.yaml` provides skill definitions. Kubernetes ConfigMap keys must be path-safe, so the key can be `gitops.SKILL.md` while the `agent-server` Deployment maps that key to the runtime path `gitops/SKILL.md` using `items[].path`.
 
 Example key mapping:
 
 ```yaml
 data:
-  gitops/SKILL.md: |
+  gitops.SKILL.md: |
     ---
     name: gitops
     description: Use when working with GitOps deployment manifests

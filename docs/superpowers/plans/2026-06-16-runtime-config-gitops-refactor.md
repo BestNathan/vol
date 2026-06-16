@@ -245,7 +245,7 @@ metadata:
     app.kubernetes.io/part-of: vol-agent
     app.kubernetes.io/component: runtime-config
 data:
-  gitops/SKILL.md: |
+  gitops.SKILL.md: |
     ---
     name: gitops
     version: 1.0.0
@@ -258,6 +258,8 @@ data:
 
     Keep `deploy/argocd/` self-contained and do not point ArgoCD Applications at `k8s/`. Runtime config belongs under `.agents/agents`, `.agents/providers`, and `.agents/skills`; workload manifests belong under `workloads`.
 ```
+
+The ConfigMap key uses `gitops.SKILL.md` because Kubernetes ConfigMap keys cannot contain `/`. Task 3 maps that key to the runtime path `gitops/SKILL.md` with `items[].path`.
 
 - [ ] **Step 5: Create provider secret example**
 
@@ -457,7 +459,7 @@ spec:
           configMap:
             name: agent-skills
             items:
-              - key: gitops/SKILL.md
+              - key: gitops.SKILL.md
                 path: gitops/SKILL.md
             defaultMode: 0644
 ```
