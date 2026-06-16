@@ -1,21 +1,37 @@
-# Design: ArgoCD App-of-Apps Deployment and MCP Image Workflow
+# Design: ArgoCD App-of-Apps Deployment, Runtime Config, and MCP Image Workflow
 
 ## Background
 
-The project currently keeps Kubernetes manifests under `k8s/` for manual or script-driven deployment. The desired GitOps path is to introduce a separate `deploy/argocd/` tree in the same repository. This tree should be self-contained for ArgoCD and should not point back to, copy from, or depend on `k8s/` at sync time.
+The project currently keeps Kubernetes manifests under `k8s/` for manual or script-driven deployment. The GitOps path introduces a separate `deploy/argocd/` tree in the same repository. This tree is self-contained for ArgoCD and must not point back to, copy from, or depend on `k8s/` at sync time.
 
-The deployment is single-environment and focuses on agent and MCP services, not the existing volatility monitor deployment.
+The deployment is single-environment and focuses on the agent runtime and MCP services, not the existing volatility monitor deployment.
+
+The runtime has existing file-discovery conventions:
+
+- Agents are Markdown files loaded from `{working_dir}/.agents/agents/*.md`.
+- Providers are TOML files loaded from `{working_dir}/.agents/providers/*.toml`.
+- Skills are directory-based definitions loaded from `{working_dir}/.agents/skills/<skill-name>/SKILL.md`.
+
+Therefore, GitOps should distinguish between:
+
+1. **Runtime config**: `.agents/agents`, `.agents/providers`, `.agents/skills` content shared by one or more `agent-server` deployments.
+2. **Workloads**: Kubernetes Deployments/Services such as `agent-server` and `docs-rs-mcp`.
 
 ## Goals
 
 1. Add an ArgoCD App-of-Apps deployment entrypoint under `deploy/argocd/`.
 2. Use `vol-agent-system` as the target Kubernetes namespace for all GitOps-managed resources.
 3. Keep `deploy/argocd/` independent from `k8s/` by placing complete Kubernetes manifests under the deploy tree.
-4. Include initial GitOps applications for:
+4. Manage `.agents` runtime config as shared Kubernetes ConfigMaps/Secret examples:
+   - `agents` = agent Markdown definitions with frontmatter.
+   - `providers` = provider TOML files.
+   - `skills` = skill definition directories containing `SKILL.md`.
+5. Mount shared runtime config into `agent-server` at `/app/.agents`, so multiple `agent-server` workloads can reuse the same agents/providers/skills without duplication.
+6. Include initial workload manifests for:
    - `agent-server`
    - `docs-rs-mcp`
-5. Add a GitHub Actions workflow design for building and pushing MCP service images to ACR.
-6. Make the MCP image workflow update the GitOps manifest image tag so ArgoCD performs rollout through Git state.
+7. Add a GitHub Actions workflow for building and pushing MCP service images to ACR.
+8. Make the MCP image workflow update the GitOps manifest image tag so ArgoCD performs rollout through Git state.
 
 ## Non-Goals
 
@@ -25,6 +41,7 @@ The deployment is single-environment and focuses on agent and MCP services, not 
 4. Do not implement sealed secrets, external secrets, or secret encryption in this change.
 5. Do not make GitHub Actions run `kubectl apply` or otherwise deploy directly to the cluster.
 6. Do not build a general dynamic MCP templating system in the first version; start with `docs-rs-mcp` as a concrete service.
+7. Do not treat `agents` and `skills` as workload categories. In this design they are runtime configuration loaded by `agent-server`.
 
 ## Directory Layout
 
@@ -34,19 +51,24 @@ deploy/
     README.md
     root.yaml
     applications/
-      agent-server.yaml
-      docs-rs-mcp.yaml
+      runtime-config.yaml
+      workloads.yaml
     manifests/
-      namespace.yaml
-      agent-server/
-        configmap.yaml
-        secret.example.yaml
-        deployment.yaml
-        service.yaml
-      mcp/
-        docs-rs-mcp/
+      runtime-config/
+        namespace.yaml
+        agents-configmap.yaml
+        providers-configmap.yaml
+        skills-configmap.yaml
+        provider-secrets.example.yaml
+      workloads/
+        agent-server/
+          configmap.yaml
           deployment.yaml
           service.yaml
+        mcp/
+          docs-rs-mcp/
+            deployment.yaml
+            service.yaml
 ```
 
 ## ArgoCD Structure
@@ -69,18 +91,18 @@ Each child application lives under `deploy/argocd/applications/` and points to a
 
 Initial applications:
 
-| Application | Source path | Destination namespace |
+| Application | Source path | Purpose |
 |---|---|---|
-| `agent-server` | `deploy/argocd/manifests/agent-server` | `vol-agent-system` |
-| `docs-rs-mcp` | `deploy/argocd/manifests/mcp/docs-rs-mcp` | `vol-agent-system` |
+| `runtime-config` | `deploy/argocd/manifests/runtime-config` | Namespace, shared `.agents` runtime config, provider secret example |
+| `workloads` | `deploy/argocd/manifests/workloads` | Agent server and MCP workload manifests |
 
-Each child application should enable automated sync, prune, and self-heal. Namespace creation can be handled by `deploy/argocd/manifests/namespace.yaml`, and child applications should still target `vol-agent-system` explicitly.
+Each child application should enable automated sync, prune, and self-heal. Both target `vol-agent-system`, but `runtime-config` owns the namespace manifest and shared config primitives.
 
-## Kubernetes Manifest Design
+## Runtime Config Design
 
 ### Namespace
 
-`deploy/argocd/manifests/namespace.yaml` defines:
+`deploy/argocd/manifests/runtime-config/namespace.yaml` defines:
 
 ```yaml
 apiVersion: v1
@@ -89,22 +111,112 @@ metadata:
   name: vol-agent-system
 ```
 
-If the namespace manifest is not referenced by a child application directory, it should be included in the root-managed manifest layout or applied before child services. The preferred first implementation is to include namespace creation in the agent-server application path only if ArgoCD sync ordering is sufficient, or to add a dedicated `system` child application if ordering becomes necessary.
+### Shared Agents ConfigMap
 
-### Agent Server
+`deploy/argocd/manifests/runtime-config/agents-configmap.yaml` provides Markdown agent definitions. Each ConfigMap key maps to a file under `/app/.agents/agents/`.
 
-`deploy/argocd/manifests/agent-server/` contains a complete service deployment:
+Example key mapping:
 
-- `configmap.yaml` for non-sensitive agent server configuration.
-- `secret.example.yaml` documenting required secret keys without real values.
+```yaml
+data:
+  coding.md: |
+    ---
+    name: coding
+    description: General coding agent
+    model: qwen3.6-plus
+    ---
+
+    You are a coding agent for this project.
+```
+
+Mounted path in `agent-server`:
+
+```text
+/app/.agents/agents/coding.md
+```
+
+### Shared Providers ConfigMap
+
+`deploy/argocd/manifests/runtime-config/providers-configmap.yaml` provides provider TOML files. Each ConfigMap key maps to a file under `/app/.agents/providers/`.
+
+Example key mapping:
+
+```yaml
+data:
+  anthropic-dashscope.toml: |
+    provider = "anthropic"
+    model = "qwen3.6-plus"
+    api_key = "${ANTHROPIC_AUTH_TOKEN}"
+    base_url = "http://192.168.2.162:31693"
+```
+
+Mounted path in `agent-server`:
+
+```text
+/app/.agents/providers/anthropic-dashscope.toml
+```
+
+### Shared Skills ConfigMap
+
+`deploy/argocd/manifests/runtime-config/skills-configmap.yaml` provides skill definitions. Each ConfigMap key maps to a `SKILL.md` file under `/app/.agents/skills/<skill-name>/`.
+
+Example key mapping:
+
+```yaml
+data:
+  gitops/SKILL.md: |
+    ---
+    name: gitops
+    description: Use when working with GitOps deployment manifests
+    ---
+
+    Follow the repository GitOps conventions.
+```
+
+Mounted path in `agent-server`:
+
+```text
+/app/.agents/skills/gitops/SKILL.md
+```
+
+### Provider Secrets
+
+`deploy/argocd/manifests/runtime-config/provider-secrets.example.yaml` documents the provider API keys required by provider TOML files. It must be excluded from ArgoCD sync or left as an example-only manifest that is not applied with real placeholder values.
+
+Real secrets should be created out-of-band or later replaced by an external secret solution. The expected Secret name is:
+
+```text
+agent-provider-secrets
+```
+
+`agent-server` workloads read provider API keys through environment variables sourced from that Secret.
+
+## Workload Manifest Design
+
+### agent-server
+
+`deploy/argocd/manifests/workloads/agent-server/` contains only workload-specific resources:
+
+- `configmap.yaml` for `agent-server.toml` server/runtime/control-plane config.
 - `deployment.yaml` for the `agent-server` workload.
 - `service.yaml` for the ClusterIP service.
 
-The deployment should use the existing ACR registry convention and role-specific `vol-agent-server` image tags. A safe initial tag can be the current latest control-plane or combined role image already used by the project, but future automation may update this separately.
+Provider TOML files should not live in the agent-server workload ConfigMap. They belong in `runtime-config/providers-configmap.yaml` so multiple `agent-server` instances can reuse the same provider definitions.
+
+The `agent-server` Deployment mounts:
+
+```text
+/etc/agent-server/agent-server.toml  # workload server config
+/app/.agents/agents/*.md             # shared agent definitions
+/app/.agents/providers/*.toml        # shared providers
+/app/.agents/skills/*/SKILL.md       # shared skills
+```
+
+A second `agent-server` can be added later by creating another workload directory that mounts the same runtime-config ConfigMaps and Secret.
 
 ### docs-rs-mcp
 
-`deploy/argocd/manifests/mcp/docs-rs-mcp/` contains concrete manifests, not shell templates:
+`deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/` contains concrete manifests, not shell templates:
 
 - `deployment.yaml`
 - `service.yaml`
@@ -134,7 +246,7 @@ The workflow should:
 1. Build one or more MCP service images.
 2. Push images to ACR.
 3. Tag images with immutable git short SHA tags.
-4. Update the corresponding manifest under `deploy/argocd/manifests/mcp/<service>/deployment.yaml`.
+4. Update the corresponding manifest under `deploy/argocd/manifests/workloads/mcp/<service>/deployment.yaml`.
 5. Commit the manifest image tag update back to the repository.
 6. Let ArgoCD perform the deployment from the committed manifest change.
 
@@ -148,7 +260,7 @@ Suggested service matrix:
 matrix:
   include:
     - service: docs-rs-mcp
-      manifest: deploy/argocd/manifests/mcp/docs-rs-mcp/deployment.yaml
+      manifest: deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/deployment.yaml
 ```
 
 ### Triggers
@@ -199,13 +311,13 @@ The workflow expects an MCP Dockerfile at:
 dockers/vol-mcp-servers.Dockerfile
 ```
 
-If that Dockerfile does not exist yet, implementation should add it. It should support selecting a specific MCP binary, for example:
+It should support selecting a specific MCP binary:
 
 ```dockerfile
 ARG BIN=docs-rs-mcp
 ```
 
-The Docker build should copy `.cargo/config.toml` into the builder stage to keep the existing Rust mirror behavior.
+The Docker build should follow the project’s region-aware mirror pattern with `REGION=cn|global`.
 
 ### Image Tagging
 
@@ -222,7 +334,7 @@ Do not use `latest` as the manifest's deployment tag.
 After push, update the image field in:
 
 ```text
-deploy/argocd/manifests/mcp/docs-rs-mcp/deployment.yaml
+deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/deployment.yaml
 ```
 
 The workflow should commit only if the manifest changes. Suggested commit message:
@@ -231,18 +343,26 @@ The workflow should commit only if the manifest changes. Suggested commit messag
 ci(gitops): update docs-rs-mcp image to <short-sha> [skip ci]
 ```
 
-The push must use `contents: write` permission.
+The push must use `contents: write` permission and should avoid manifest-update races with a concurrency group and a rebase before push.
 
 ## Deployment Flow
 
 ```text
+Operator applies root.yaml
+  -> ArgoCD syncs runtime-config
+     -> creates vol-agent-system
+     -> creates shared .agents ConfigMaps
+  -> ArgoCD syncs workloads
+     -> agent-server mounts runtime config at /app/.agents
+     -> docs-rs-mcp starts as MCP HTTP service
+
 Developer merges MCP code to main
   -> GitHub Actions builds docs-rs-mcp image
   -> GitHub Actions pushes image to ACR with short SHA tag
-  -> GitHub Actions updates deploy/argocd/manifests/mcp/docs-rs-mcp/deployment.yaml
+  -> GitHub Actions updates deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/deployment.yaml
   -> GitHub Actions commits manifest update
   -> ArgoCD observes Git change
-  -> docs-rs-mcp Application syncs new manifest
+  -> workloads Application syncs new manifest
   -> Kubernetes rolls out docs-rs-mcp in vol-agent-system
 ```
 
@@ -251,20 +371,22 @@ Developer merges MCP code to main
 - If image build fails, no manifest update should be committed.
 - If image push fails, no manifest update should be committed.
 - If manifest update commit has no diff, the workflow should exit successfully without committing.
-- If ArgoCD cannot sync due to missing secrets, the application should show degraded or out-of-sync; secrets remain out of scope for this change except example manifests.
+- If ArgoCD cannot sync due to missing provider secrets, `agent-server` should show degraded or pods should fail clearly; real secret management remains out of scope except example manifests.
 - If ACR credentials are unavailable, the workflow should fail early at login.
+- If runtime ConfigMaps grow beyond Kubernetes ConfigMap size limits, split by domain or by individual agent/skill in a follow-up design.
 
 ## Testing and Validation
 
 Implementation should validate:
 
-1. YAML parses successfully for all new manifests and workflow files.
+1. YAML parses successfully for all manifests and workflow files.
 2. ArgoCD Application manifests point only under `deploy/argocd/`, not `k8s/`.
 3. All GitOps-managed Kubernetes resources use namespace `vol-agent-system`.
-4. `docs-rs-mcp` manifests contain a concrete image, not `${MCP_NAME}` placeholders.
-5. The MCP workflow does not trigger on manifest-only changes.
-6. The MCP workflow uses immutable SHA tags for deployment manifests.
+4. Runtime ConfigMap items mount to the expected `.agents/agents`, `.agents/providers`, and `.agents/skills` paths.
+5. `docs-rs-mcp` manifests contain a concrete image, not `${MCP_NAME}` placeholders.
+6. The MCP workflow does not trigger on manifest-only changes.
+7. The MCP workflow uses immutable SHA tags for deployment manifests.
 
 ## Open Questions
 
-None for the first implementation. Future work may add more MCP services, multi-arch MCP builds, sealed secret integration, or a separate image update workflow for `agent-server`.
+None for this refactor. Future work may add more agent definitions, more skills, multi-arch MCP builds, sealed secret integration, or a separate image update workflow for `agent-server`.
