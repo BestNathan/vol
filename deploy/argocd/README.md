@@ -116,7 +116,7 @@ kubectl create namespace vol-agent-system --dry-run=client -o yaml | kubectl app
 
 ### Provider Secrets
 
-Create the real provider secret in the cluster before syncing `agent-server`. **Real provider keys live in `agent-provider-secrets`, not `agent-server-secrets`:**
+Create the real provider secret in the cluster before syncing `agent-server`. **Real provider keys live in `agent-provider-secrets`:**
 
 ```bash
 kubectl -n vol-agent-system create secret generic agent-provider-secrets \
