@@ -211,3 +211,134 @@ jobs:
               echo "- \`$tag\`"
             done <<< "${{ steps.tags.outputs.list }}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── Prune old per-commit tags from ACR after a successful push ───────────
+  # Keeps the floating <prefix>-latest tag plus the N most recent commit sha
+  # tags per role (sourced from `git log` on the branch this run built).
+  # Talks to ACR via the standard Docker Registry v2 HTTP API using the
+  # same DOCKER_USERNAME / DOCKER_PASSWORD secrets — no Aliyun AccessKey
+  # required.
+  prune:
+    name: prune (${{ matrix.role }})
+    runs-on: ubuntu-24.04
+    needs: manifest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: control-plane
+            tag_prefix: cp
+          - role: data-plane
+            tag_prefix: dp
+    env:
+      KEEP_LAST: "5"
+
+    steps:
+      - name: Checkout (last 50 commits, enough for keep window)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+
+      - name: Install crane
+        run: |
+          set -eux
+          ver="v0.20.2"
+          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${ver}/go-containerregistry_Linux_x86_64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin crane
+
+      - name: Compute keep set
+        id: keep
+        env:
+          PREFIX: ${{ matrix.tag_prefix }}
+        run: |
+          set -eu
+          # The N most recent commits on the current ref → short SHAs → "<prefix>-<sha>"
+          mapfile -t SHAS < <(git log -n "$KEEP_LAST" --format='%h' --abbrev=7 HEAD)
+          KEEP=("${PREFIX}-latest")
+          for s in "${SHAS[@]}"; do KEEP+=("${PREFIX}-${s}"); done
+          {
+            echo "list<<EOF"
+            for k in "${KEEP[@]}"; do echo "$k"; done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "Keeping:"
+          printf '  - %s\n' "${KEEP[@]}"
+
+      - name: Authenticate crane
+        env:
+          REG: ${{ env.ACR_REGISTRY }}
+          USER: ${{ secrets.DOCKER_USERNAME }}
+          PASS: ${{ secrets.DOCKER_PASSWORD }}
+        run: echo "$PASS" | crane auth login "$REG" --username "$USER" --password-stdin
+
+      - name: Prune stale tags
+        env:
+          IMG: ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.IMAGE_NAME }}
+          PREFIX: ${{ matrix.tag_prefix }}
+          KEEP_TAGS: ${{ steps.keep.outputs.list }}
+        run: |
+          set -eu
+          # Build keep set + their digests so we don't accidentally delete a
+          # manifest that another kept tag still references (e.g. cp-latest
+          # often shares a digest with the most recent cp-<sha>).
+          declare -A keep_tag keep_digest
+          while IFS= read -r t; do
+            [ -n "$t" ] || continue
+            keep_tag["$t"]=1
+            d="$(crane digest "${IMG}:${t}" 2>/dev/null || true)"
+            [ -n "$d" ] && keep_digest["$d"]=1
+          done <<< "$KEEP_TAGS"
+
+          echo "Keep tags:    ${!keep_tag[*]}"
+          echo "Keep digests: ${!keep_digest[*]}"
+
+          # Iterate every tag in the repo, only consider ones for *this* role.
+          deleted=0
+          skipped_shared_digest=0
+          examined=0
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            case "$tag" in
+              "${PREFIX}-"*) ;;
+              *) continue ;;
+            esac
+            examined=$((examined + 1))
+            if [ -n "${keep_tag[$tag]:-}" ]; then
+              echo "keep    ${IMG}:${tag}"
+              continue
+            fi
+            d="$(crane digest "${IMG}:${tag}" 2>/dev/null || true)"
+            if [ -n "$d" ] && [ -n "${keep_digest[$d]:-}" ]; then
+              # Shared manifest with a kept tag — deleting by digest would also
+              # remove the kept tag. Just unname this tag if the registry
+              # supports it; otherwise leave it (cheap, manifest is shared).
+              echo "shared  ${IMG}:${tag}  -> $d (kept by another tag, skipping)"
+              skipped_shared_digest=$((skipped_shared_digest + 1))
+              continue
+            fi
+            if [ -z "$d" ]; then
+              echo "missing ${IMG}:${tag}  (cannot resolve digest, skipping)"
+              continue
+            fi
+            echo "delete  ${IMG}:${tag}  -> $d"
+            if crane delete "${IMG}@${d}"; then
+              deleted=$((deleted + 1))
+            else
+              echo "  !! delete failed for ${IMG}@${d}" >&2
+            fi
+          done < <(crane ls "$IMG")
+
+          {
+            echo "### prune ($PREFIX)"
+            echo
+            echo "- examined: $examined"
+            echo "- deleted:  $deleted"
+            echo "- shared-digest skipped: $skipped_shared_digest"
+            echo
+            echo "Kept tags:"
+            for k in "${!keep_tag[@]}"; do echo "- \`$k\`"; done
+          } >> "$GITHUB_STEP_SUMMARY"
+
