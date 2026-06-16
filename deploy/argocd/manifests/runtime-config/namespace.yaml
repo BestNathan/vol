@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vol-agent-system
+  labels:
+    app.kubernetes.io/name: vol-agent-system
+    app.kubernetes.io/part-of: vol-agent

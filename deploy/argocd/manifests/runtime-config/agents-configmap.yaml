@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-definitions
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-definitions
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: runtime-config
+data:
+  coding.md: |
+    ---
+    name: coding
+    type: coding
+    description: General coding agent for repository maintenance and implementation tasks
+    model: qwen3.6-plus
+    max_iterations: 20
+    ---
+
+    You are a coding agent for this repository. Follow the project conventions, keep changes focused, and verify behavior before reporting completion.

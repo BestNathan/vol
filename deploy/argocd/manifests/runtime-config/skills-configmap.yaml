@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-skills
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-skills
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: runtime-config
+data:
+  gitops/SKILL.md: |
+    ---
+    name: gitops
+    version: 1.0.0
+    description: Use when working with this repository's ArgoCD GitOps manifests
+    triggers:
+      - gitops
+      - argocd
+      - kubernetes
+    ---
+
+    Keep `deploy/argocd/` self-contained and do not point ArgoCD Applications at `k8s/`. Runtime config belongs under `.agents/agents`, `.agents/providers`, and `.agents/skills`; workload manifests belong under `workloads`.
