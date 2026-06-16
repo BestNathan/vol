@@ -42,6 +42,10 @@ env:
   ACR_REGISTRY: ${{ vars.ACR_REGISTRY || 'crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com' }}
   ACR_NAMESPACE: ${{ vars.ACR_NAMESPACE || 'n_common' }}
 
+concurrency:
+  group: build-mcp-images
+  cancel-in-progress: false
+
 jobs:
   build:
     name: build (${{ matrix.service }})
@@ -119,6 +123,7 @@ jobs:
         env:
           MANIFEST: ${{ matrix.manifest }}
           IMAGE: ${{ steps.image.outputs.image }}
+          SERVICE: ${{ matrix.service }}
         run: |
           python3 - <<'PY'
           import os
@@ -126,19 +131,20 @@ jobs:
 
           manifest = Path(os.environ["MANIFEST"])
           image = os.environ["IMAGE"]
+          service = os.environ["SERVICE"]
           lines = manifest.read_text().splitlines()
           updated = []
           replaced = False
           for line in lines:
               stripped = line.strip()
-              if stripped.startswith("image: ") and "docs-rs-mcp" in stripped:
+              if stripped.startswith("image: ") and service in stripped:
                   indent = line[: len(line) - len(line.lstrip())]
                   updated.append(f"{indent}image: {image}")
                   replaced = True
               else:
                   updated.append(line)
           if not replaced:
-              raise SystemExit(f"no docs-rs-mcp image field found in {manifest}")
+              raise SystemExit(f"no {service} image field found in {manifest}")
           manifest.write_text("\n".join(updated) + "\n")
           PY
 
@@ -153,6 +159,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "${{ matrix.manifest }}"
           git commit -m "ci(gitops): update ${{ matrix.service }} image to ${{ steps.image.outputs.short }} [skip ci]"
+          git pull --rebase origin main
           git push
 
       - name: Summary
