@@ -99,6 +99,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           build-args: |
             ROLE=${{ matrix.role }}
+            REGION=global
           # Push by digest only — tags are attached later in the manifest job.
           outputs: type=image,name=${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ steps.push.outputs.value == 'true' }}
           provenance: false
