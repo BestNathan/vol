@@ -1,10 +1,10 @@
 ---
 type: entity
 category: service
-tags: [server, config, json-rpc, task-store, session-store, data-plane, control-plane]
+tags: [server, config, json-rpc, task-store, session-store, data-plane, control-plane, gitops]
 created: 2026-06-09
-updated: 2026-06-10
-source_count: 16
+updated: 2026-06-16
+source_count: 17
 ---
 
 # vol-agent-server Crate
@@ -66,6 +66,11 @@ Task 9 added the control-plane router MVP [[agent-server-control-router-mvp]]. `
 Task 10 added boundary and role-mode verification [[agent-server-boundary-mode-verification]]. `crates/vol-agent-server/tests/role_modes.rs` verifies standalone data-plane `/ws` ownership, control-plane `/ws` priority in standalone-control and combined modes, and TOML validation rejection when both roles are disabled. `scripts/check-agent-boundaries.sh` verifies `vol-llm-agent-channel` and `vol-llm-runtime` do not depend on `vol-agent-server`.
 
 The addendum [[agent-server-control-data-plane-addendum]] further specifies endpoint role allowlists, command/run record separation, node record/session separation, combined-mode lifecycle, and boundary verification tests that should be implemented in this crate.
+
+## GitOps Deployment
+Source: [[argocd-gitops-deployment]]
+
+`vol-agent-server` is now one of the initial workloads in the self-contained ArgoCD GitOps tree under `deploy/argocd/`. The `agent-server` child Application syncs `deploy/argocd/manifests/agent-server/` into the `vol-agent-system` namespace, using the control-plane image tag `vol-agent-server:cp-latest`, ConfigMap-mounted server/provider configuration, `agent-server-secrets` for provider API keys, and `acr-registry-secret` for private ACR pulls.
 
 ## Related
 - [[agent-server-control-data-plane]]

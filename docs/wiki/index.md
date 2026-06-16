@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-06-10 (agent-server-boundary-mode-verification)
+Last updated: 2026-06-16 (argocd-gitops-deployment)
 
 ## Entities
 
@@ -8,7 +8,7 @@ Last updated: 2026-06-10 (agent-server-boundary-mode-verification)
 |------|---------|--------|---------|
 | [[vol-llm-runtime-crate]] | AgentRuntime owner of shared agent resources, runtime task/session store config types, and data-plane capability source | active | 2026-06-10 |
 | [[vol-llm-task-crate]] | Task models and persistence stores, including SeaORM database store for SQLite and Postgres with compiled migrations | active | 2026-06-09 |
-| [[vol-agent-server-crate]] | Standalone server crate that composes DataPlaneServerCore and ControlPlaneServerCore routes by role, verifies role-mode behavior, enforces dependency boundaries, and includes data/control-plane primitives | active | 2026-06-10 |
+| [[vol-agent-server-crate]] | Standalone server crate that composes DataPlaneServerCore/ControlPlaneServerCore routes and is deployed by the self-contained ArgoCD GitOps tree as `agent-server` | active | 2026-06-16 |
 | [[vol-llm-ui-crate]] | Shared UI state model and connection abstraction, with Dioxus as the sole active web frontend | active | 2026-05-29 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API | active | 2026-05-21 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
@@ -19,13 +19,15 @@ Last updated: 2026-06-10 (agent-server-boundary-mode-verification)
 | [[vol-llm-agent-protocol-crate]] | Protocol, JSON-RPC transport, connection, handler, registry, and generic service abstraction layer | active | 2026-06-10 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
-| [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support | active | 2026-05-10 |
+| [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support; `docs-rs-mcp` is GitOps-managed and built by the MCP image workflow | active | 2026-06-16 |
+| [[vol-repository]] | Rust workspace with crates, docs, legacy `k8s/` manifests, and self-contained `deploy/argocd/` GitOps deployment tree | active | 2026-06-16 |
 | [[vol-llm-mcp-crate]] | MCP Client protocol layer for ReAct Agent — config parsing, McpManager lifecycle, tool/resource/prompt discovery | active | 2026-05-13 |
 
 ## Concepts
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[argocd-app-of-apps-gitops]] | Self-contained ArgoCD App-of-Apps deployment pattern under `deploy/argocd/`, with CI-built MCP images updating GitOps manifests | active | 2026-06-16 |
 | [[agent-server-control-data-plane]] | Single server crate with DataPlaneServerCore/ControlPlaneServerCore, channel-owned JSON-RPC protocol, route composition, data-plane snapshot facade, command/run semantics, control-plane router MVP, role-mode verification tests, and dependency boundary checks | draft | 2026-06-10 |
 | [[runtime-session-store-configuration]] | Shared `[runtime.session_store]` TOML contract and runtime `SessionManager` behavior for file/database session persistence | active | 2026-06-10 |
 | [[runtime-task-store-configuration]] | Shared `[runtime.task_store]` TOML contract and single global runtime store behavior for file/database task persistence | active | 2026-06-09 |
@@ -87,6 +89,7 @@ Last updated: 2026-06-10 (agent-server-boundary-mode-verification)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[argocd-gitops-deployment]] | Self-contained ArgoCD GitOps implementation: App-of-Apps, vol-agent-system manifests, MCP Dockerfile, and MCP image workflow | active | 2026-06-16 |
 | [[control-plane-behavior-completion-plan]] | Follow-up plan to complete JSON-RPC notifications, endpoint roles, client handlers, control.command, run status, and combined-mode registration | draft | 2026-06-10 |
 | [[agent-server-boundary-mode-verification]] | Task 10 boundary and role-mode verification: cargo-tree dependency guard plus `/ws` ownership and disabled-role config tests | active | 2026-06-10 |
 | [[agent-server-control-router-mvp]] | Task 9 control router MVP: routes targeted or untargeted agents to online nodes using capability snapshots | active | 2026-06-10 |

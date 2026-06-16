@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-06-16] ingest | ArgoCD GitOps Deployment
+- Created sources: [[argocd-gitops-deployment]]
+- Created concepts: [[argocd-app-of-apps-gitops]]
+- Updated entities: [[vol-agent-server-crate]] (agent-server GitOps workload), [[vol-mcp-servers-crate]] (docs-rs-mcp GitOps workload and MCP image workflow), [[vol-repository]] (`deploy/argocd/` GitOps tree)
+- Updated index: new source/concept entries and refreshed entity summaries
+- Cross-references added: 18
+- Changes: Documented the self-contained `deploy/argocd/` App-of-Apps implementation for `agent-server` and `docs-rs-mcp`, the `vol-agent-system` namespace, ACR pull secret usage, `dockers/vol-mcp-servers.Dockerfile`, `build-mcp-images` workflow, and validation results including the Docker Hub timeout caveat.
+
 ## [2026-06-11] refactor | Rename crate: vol-llm-agent-channel → vol-llm-agent-protocol
 - Renamed crate directory, Cargo.toml, all workspace dependency references, all Rust source imports, scripts, Makefile, CLAUDE.md, wiki entity page
 
