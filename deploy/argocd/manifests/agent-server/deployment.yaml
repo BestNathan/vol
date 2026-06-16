@@ -25,6 +25,8 @@ spec:
       restartPolicy: Always
       nodeSelector:
         kubernetes.io/arch: arm64
+      imagePullSecrets:
+        - name: acr-registry-secret
       containers:
         - name: agent-server
           image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server:cp-latest

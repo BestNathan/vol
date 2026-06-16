@@ -93,7 +93,7 @@ kubectl -n vol-agent-system create secret generic agent-server-secrets \
 
 ### ACR Image Pull Secret
 
-`docs-rs-mcp` expects the image pull secret `acr-registry-secret` in `vol-agent-system` if the ACR repository requires authentication:
+Both `agent-server` and `docs-rs-mcp` use images from ACR and expect the image pull secret `acr-registry-secret` in `vol-agent-system` if the ACR repository requires authentication:
 
 ```bash
 kubectl -n vol-agent-system create secret docker-registry acr-registry-secret \
