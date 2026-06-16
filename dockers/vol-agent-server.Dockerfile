@@ -39,7 +39,7 @@ ENV RUSTUP_DIST_SERVER=https://rsproxy.cn \
 # Install build dependencies via Aliyun mirror, then Rust via rsproxy
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
     apt-get update && apt-get install -y --no-install-recommends \
-    curl gcc g++ libssl-dev pkg-config ca-certificates git && \
+    curl gcc g++ make cmake perl libssl-dev pkg-config ca-certificates git && \
     rm -rf /var/lib/apt/lists/* && \
     curl --proto '=https' --tlsv1.2 -sSf https://rsproxy.cn/rustup-init.sh | sh -s -- -y
 
