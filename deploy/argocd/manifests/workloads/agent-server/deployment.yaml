@@ -43,19 +43,25 @@ spec:
             - name: config
               mountPath: /etc/agent-server
               readOnly: true
-            - name: providers
+            - name: agent-definitions
+              mountPath: /app/.agents/agents
+              readOnly: true
+            - name: agent-providers
               mountPath: /app/.agents/providers
+              readOnly: true
+            - name: agent-skills
+              mountPath: /app/.agents/skills
               readOnly: true
           env:
             - name: ANTHROPIC_AUTH_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: agent-server-secrets
+                  name: agent-provider-secrets
                   key: ANTHROPIC_AUTH_TOKEN
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: agent-server-secrets
+                  name: agent-provider-secrets
                   key: OPENAI_API_KEY
             - name: HTTPS_PROXY
               value: "http://192.168.2.98:8890"
@@ -73,12 +79,26 @@ spec:
               - key: agent-server.toml
                 path: agent-server.toml
             defaultMode: 0644
-        - name: providers
+        - name: agent-definitions
           configMap:
-            name: agent-server-config
+            name: agent-definitions
+            items:
+              - key: coding.md
+                path: coding.md
+            defaultMode: 0644
+        - name: agent-providers
+          configMap:
+            name: agent-providers
             items:
               - key: anthropic-dashscope.toml
                 path: anthropic-dashscope.toml
               - key: openai-example.toml
                 path: openai-example.toml
+            defaultMode: 0644
+        - name: agent-skills
+          configMap:
+            name: agent-skills
+            items:
+              - key: gitops.SKILL.md
+                path: gitops/SKILL.md
             defaultMode: 0644
