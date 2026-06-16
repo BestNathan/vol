@@ -47,9 +47,9 @@ CLI (--http / default stdio) → transport::run_server()
 - The GitOps path adds `dockers/vol-mcp-servers.Dockerfile`, a Debian slim multi-stage build with `--build-arg BIN=docs-rs-mcp` and `REGION=cn|global` for region-aware Rust/Debian mirrors [[argocd-gitops-deployment]]
 - Builder stage compiles `cargo build --release -p vol-mcp-servers --bin "${BIN}"` and strips the binary
 - Runtime stage installs the selected binary as `/usr/local/bin/mcp-server` and exposes port 8080 for HTTP transport
-- The `build-mcp-images` GitHub Actions workflow builds `docs-rs-mcp` for `linux/amd64`, pushes a short-SHA tag to ACR, and updates `deploy/argocd/manifests/mcp/docs-rs-mcp/deployment.yaml` for ArgoCD rollout [[argocd-gitops-deployment]]
+- The `build-mcp-images` GitHub Actions workflow builds `docs-rs-mcp` for `linux/amd64`, pushes a short-SHA tag to ACR, and updates `deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/deployment.yaml` for ArgoCD rollout [[argocd-gitops-deployment]]
 
 ## GitOps Deployment
 Source: [[argocd-gitops-deployment]]
 
-`docs-rs-mcp` is the first MCP service managed by the self-contained ArgoCD tree. Its child Application syncs `deploy/argocd/manifests/mcp/docs-rs-mcp/` into `vol-agent-system`, runs the server with `--http 0.0.0.0:8080`, exposes a ClusterIP service on port 8080, and includes `/health` readiness/liveness probes, proxy environment variables, resource requests/limits, and `acr-registry-secret` for private ACR pulls.
+`docs-rs-mcp` is the first MCP service managed by the self-contained ArgoCD tree. It now lives under the `workloads` child Application, which syncs `deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/` into `vol-agent-system`. The workload runs the server with `--http 0.0.0.0:8080`, exposes a ClusterIP service on port 8080, and includes `/health` readiness/liveness probes, proxy environment variables, resource requests/limits, and `acr-registry-secret` for private ACR pulls.
