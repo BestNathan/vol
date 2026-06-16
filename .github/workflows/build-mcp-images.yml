@@ -57,7 +57,7 @@ jobs:
       matrix:
         include:
           - service: docs-rs-mcp
-            manifest: deploy/argocd/manifests/mcp/docs-rs-mcp/deployment.yaml
+            manifest: deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/deployment.yaml
 
     steps:
       - name: Checkout
