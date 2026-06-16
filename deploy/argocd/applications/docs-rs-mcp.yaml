@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: docs-rs-mcp
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: docs-rs-mcp
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: mcp
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:BestNathan/vol.git
+    targetRevision: main
+    path: deploy/argocd/manifests/mcp/docs-rs-mcp
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vol-agent-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
