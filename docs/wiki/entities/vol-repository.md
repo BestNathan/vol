@@ -45,7 +45,7 @@ source_count: 2
 
 ## Timeline
 
-- **2026-06-16**: Added self-contained ArgoCD App-of-Apps GitOps deployment tree under `deploy/argocd/` plus MCP image build workflow [[argocd-gitops-deployment]]
+- **2026-06-16**: Added self-contained ArgoCD App-of-Apps GitOps deployment tree under `deploy/argocd/` plus MCP image build workflow; later refactored into `runtime-config` (namespace + shared .agents ConfigMaps) and `workloads` child Applications [[argocd-gitops-deployment]]
 - **2026-05-19**: `CLAUDE.md` gained a Project Overview section summarizing the main repository directories and their roles [[claude-md-project-overview]]
 
 ## Related

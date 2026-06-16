@@ -14,44 +14,55 @@ tags: [gitops, argocd, kubernetes, deployment, mcp, ci]
 
 ## TL;DR
 
-The repository gained a self-contained ArgoCD GitOps deployment tree under `deploy/argocd/` for `agent-server` and `docs-rs-mcp`. It uses an App-of-Apps root application, targets the `vol-agent-system` namespace, keeps legacy `k8s/` manifests independent, and adds an MCP image workflow that builds `docs-rs-mcp`, pushes to ACR, updates the GitOps deployment manifest with an immutable short-SHA tag, and lets ArgoCD roll out from Git.
+The repository gained a self-contained ArgoCD GitOps deployment tree under `deploy/argocd/` for `agent-server` and `docs-rs-mcp`. It uses an App-of-Apps root application with two child Applications: `runtime-config` (namespace + shared `.agents` ConfigMaps for agents/providers/skills) and `workloads` (application deployments). The `agent-server` mounts `/app/.agents` from shared ConfigMaps. Real provider keys are in `agent-provider-secrets`. The MCP image workflow builds `docs-rs-mcp`, pushes to ACR, updates the GitOps deployment manifest with an immutable short-SHA tag, and lets ArgoCD roll out from Git.
 
 ## Key Takeaways
 
 - `deploy/argocd/root.yaml` bootstraps an App-of-Apps that syncs child `Application` manifests from `deploy/argocd/applications/`.
+- Child applications are split into `runtime-config` (namespace + shared ConfigMaps) and `workloads` (application deployments).
 - Child applications sync complete manifests under `deploy/argocd/manifests/`; they do not reference `k8s/`.
+- `runtime-config` owns three ConfigMaps: `agents` (`.agents/agents/*.md`), `providers` (`.agents/providers/*.toml`), and `skills` (`.agents/skills/<skill>/SKILL.md`).
+- `agent-server` mounts shared ConfigMaps into `/app/.agents/` for centralized runtime configuration.
+- Real provider keys live in `agent-provider-secrets`, not `agent-server-secrets`.
 - Initial GitOps-managed workloads are `agent-server` and `docs-rs-mcp`, both targeting `vol-agent-system`.
 - `agent-server` and `docs-rs-mcp` both use the ACR pull secret `acr-registry-secret` for private image pulls.
 - `dockers/vol-mcp-servers.Dockerfile` builds a selected MCP binary using `ARG BIN=docs-rs-mcp` and `ARG REGION=cn|global`.
-- `.github/workflows/build-mcp-images.yml` builds/pushes `docs-rs-mcp` for `linux/amd64`, updates `deploy/argocd/manifests/mcp/docs-rs-mcp/deployment.yaml`, rebases before pushing, and uses `[skip ci]` plus push path filters to avoid manifest-update loops.
+- `.github/workflows/build-mcp-images.yml` builds/pushes `docs-rs-mcp` for `linux/amd64`, updates `deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/deployment.yaml`, rebases before pushing, and uses `[skip ci]` plus push path filters to avoid manifest-update loops.
 - Validation passed for manifest location, no `k8s/` path references, no legacy namespaces, no `${MCP_NAME}` placeholders, YAML parsing, kubectl client dry-run, and workflow hardening checks.
 - Local Docker build validation could not complete because Docker Hub token fetch for `debian:bookworm-slim` timed out; this was recorded as an external network issue rather than a manifest/workflow failure.
 
 ## Detailed Summary
 
-The GitOps deployment structure is self-contained:
+The GitOps deployment structure is self-contained and split into runtime-config and workloads:
 
 ```text
 deploy/argocd/
   root.yaml
   applications/
-    agent-server.yaml
-    docs-rs-mcp.yaml
+    runtime-config.yaml    -> manifests/runtime-config/
+    workloads.yaml         -> manifests/workloads/
   manifests/
-    agent-server/
+    runtime-config/
       namespace.yaml
-      configmap.yaml
-      secret.example.yaml
-      deployment.yaml
-      service.yaml
-    mcp/docs-rs-mcp/
-      deployment.yaml
-      service.yaml
+      agents-configmap.yaml       # .agents/agents/*.md
+      providers-configmap.yaml    # .agents/providers/*.toml
+      skills-configmap.yaml       # .agents/skills/<skill>/SKILL.md
+      provider-secrets.example.yaml
+    workloads/
+      agent-server/
+        configmap.yaml
+        deployment.yaml
+        service.yaml
+      mcp/docs-rs-mcp/
+        deployment.yaml
+        service.yaml
 ```
 
-`root.yaml` is the one-time bootstrap object applied to the `argocd` namespace. It points ArgoCD at `deploy/argocd/applications/`, where the child applications define independent sync roots for `agent-server` and `docs-rs-mcp`. This preserves a hard boundary between GitOps manifests and the existing manual/scripted `k8s/` deployment tree.
+`root.yaml` is the one-time bootstrap object applied to the `argocd` namespace. It points ArgoCD at `deploy/argocd/applications/`, where two child applications define sync roots: `runtime-config` for shared configuration and `workloads` for application deployments. This preserves a hard boundary between GitOps manifests and the existing manual/scripted `k8s/` deployment tree.
 
-The `agent-server` manifests define `vol-agent-system`, non-secret runtime/provider configuration, an excluded `secret.example.yaml`, a control-plane `vol-agent-server:cp-latest` deployment, and a ClusterIP service on port `3001`. The deployment mounts config and provider files from `agent-server-config`, references `agent-server-secrets` for LLM provider credentials, and uses `acr-registry-secret` for ACR image pulls.
+The `runtime-config` manifests define the `vol-agent-system` namespace, plus three ConfigMaps for agent definitions, provider configurations, and skill definitions. These are mounted as a shared `/app/.agents` directory by workloads. An excluded `provider-secrets.example.yaml` documents required keys for `agent-provider-secrets`.
+
+The `workloads` manifests contain `agent-server` and `docs-rs-mcp` deployments. The `agent-server` deployment mounts all three runtime-config ConfigMaps into `/app/.agents`, references `agent-provider-secrets` for LLM provider credentials, uses `acr-registry-secret` for ACR image pulls, and exposes a ClusterIP service on port `3001`.
 
 The `docs-rs-mcp` manifests define a concrete deployment and service rather than using the legacy shell template. The deployment uses image `crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/docs-rs-mcp:bootstrap` until CI updates it, runs `--http 0.0.0.0:8080`, exposes port `8080`, includes `/health` readiness/liveness probes, proxy environment variables, resource requests/limits, and the same ACR pull secret.
 

@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-06-16 (argocd-gitops-deployment)
+Last updated: 2026-06-16 (runtime-config refactor)
 
 ## Entities
 
@@ -27,7 +27,7 @@ Last updated: 2026-06-16 (argocd-gitops-deployment)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[argocd-app-of-apps-gitops]] | Self-contained ArgoCD App-of-Apps deployment pattern under `deploy/argocd/`, with CI-built MCP images updating GitOps manifests | active | 2026-06-16 |
+| [[argocd-app-of-apps-gitops]] | Self-contained ArgoCD App-of-Apps deployment pattern split into `runtime-config` (namespace + shared agents/providers/skills ConfigMaps) and `workloads` (application deployments), with `agent-server` mounting `/app/.agents` and CI-built MCP images updating GitOps manifests | active | 2026-06-16 |
 | [[agent-server-control-data-plane]] | Single server crate with DataPlaneServerCore/ControlPlaneServerCore, channel-owned JSON-RPC protocol, route composition, data-plane snapshot facade, command/run semantics, control-plane router MVP, role-mode verification tests, and dependency boundary checks | draft | 2026-06-10 |
 | [[runtime-session-store-configuration]] | Shared `[runtime.session_store]` TOML contract and runtime `SessionManager` behavior for file/database session persistence | active | 2026-06-10 |
 | [[runtime-task-store-configuration]] | Shared `[runtime.task_store]` TOML contract and single global runtime store behavior for file/database task persistence | active | 2026-06-09 |
@@ -89,7 +89,7 @@ Last updated: 2026-06-16 (argocd-gitops-deployment)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[argocd-gitops-deployment]] | Self-contained ArgoCD GitOps implementation: App-of-Apps, vol-agent-system manifests, MCP Dockerfile, and MCP image workflow | active | 2026-06-16 |
+| [[argocd-gitops-deployment]] | Self-contained ArgoCD GitOps implementation: App-of-Apps split into runtime-config/workloads, shared .agents ConfigMaps mounted at /app/.agents, agent-provider-secrets, vol-agent-system manifests, MCP Dockerfile, and MCP image workflow | active | 2026-06-16 |
 | [[control-plane-behavior-completion-plan]] | Follow-up plan to complete JSON-RPC notifications, endpoint roles, client handlers, control.command, run status, and combined-mode registration | draft | 2026-06-10 |
 | [[agent-server-boundary-mode-verification]] | Task 10 boundary and role-mode verification: cargo-tree dependency guard plus `/ws` ownership and disabled-role config tests | active | 2026-06-10 |
 | [[agent-server-control-router-mvp]] | Task 9 control router MVP: routes targeted or untargeted agents to online nodes using capability snapshots | active | 2026-06-10 |

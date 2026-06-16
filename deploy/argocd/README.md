@@ -64,29 +64,62 @@ kubectl -n vol-agent-system get pods,svc
 
 ## Applications
 
-| Application | Manifest path |
+The root App-of-Apps syncs two child applications:
+
+| Application | Manifest path | Purpose |
+|---|---|---|
+| `runtime-config` | `deploy/argocd/manifests/runtime-config` | Namespace + shared runtime configuration |
+| `workloads` | `deploy/argocd/manifests/workloads` | Application workload deployments |
+
+### runtime-config
+
+The `runtime-config` application owns:
+
+| Resource | Description |
 |---|---|
-| `agent-server` | `deploy/argocd/manifests/agent-server` |
-| `docs-rs-mcp` | `deploy/argocd/manifests/mcp/docs-rs-mcp` |
+| `namespace.yaml` | `vol-agent-system` namespace |
+| `agents-configmap.yaml` | Agent definitions from `.agents/agents/*.md` |
+| `providers-configmap.yaml` | Provider definitions from `.agents/providers/*.toml` |
+| `skills-configmap.yaml` | Skill definitions from `.agents/skills/<skill>/SKILL.md` |
+| `provider-secrets.example.yaml` | Example secret for provider keys (excluded from sync) |
+
+### workloads
+
+The `workloads` application owns:
+
+| Workload | Path |
+|---|---|
+| `agent-server` | `deploy/argocd/manifests/workloads/agent-server/` |
+| `docs-rs-mcp` | `deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/` |
+
+## Runtime Config Mounts
+
+The `agent-server` deployment mounts all three shared ConfigMaps into `/app/.agents`:
+
+- `agent-definitions` → `/app/.agents/agents`
+- `agent-providers` → `/app/.agents/providers`
+- `agent-skills` → `/app/.agents/skills`
+
+This keeps runtime configuration centralized and shared across workloads.
 
 ## Secrets
 
-`deploy/argocd/manifests/agent-server/secret.example.yaml` documents required keys for `agent-server`, but it is excluded from ArgoCD sync.
+`deploy/argocd/manifests/runtime-config/provider-secrets.example.yaml` documents required keys for `agent-server`, but it is excluded from ArgoCD sync.
 
 ### Namespace Creation
 
-The `vol-agent-system` namespace is managed by GitOps, but secrets may need to be created before the first sync. Create the namespace manually if creating secrets before sync:
+The `vol-agent-system` namespace is managed by the `runtime-config` application, but secrets may need to be created before the first sync. Create the namespace manually if creating secrets before sync:
 
 ```bash
 kubectl create namespace vol-agent-system --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-### Application Secrets
+### Provider Secrets
 
-Create the real secret in the cluster before syncing `agent-server`:
+Create the real provider secret in the cluster before syncing `agent-server`. **Real provider keys live in `agent-provider-secrets`, not `agent-server-secrets`:**
 
 ```bash
-kubectl -n vol-agent-system create secret generic agent-server-secrets \
+kubectl -n vol-agent-system create secret generic agent-provider-secrets \
   --from-literal=ANTHROPIC_AUTH_TOKEN='<token>' \
   --from-literal=OPENAI_API_KEY='<key>'
 ```
@@ -107,7 +140,7 @@ kubectl -n vol-agent-system create secret docker-registry acr-registry-secret \
 The `.github/workflows/build-mcp-images.yml` workflow builds `docs-rs-mcp`, pushes it to ACR, and updates:
 
 ```text
-deploy/argocd/manifests/mcp/docs-rs-mcp/deployment.yaml
+deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/deployment.yaml
 ```
 
 The workflow uses immutable git short SHA tags. ArgoCD deploys the new image by syncing the committed manifest change.

@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-06-16] refactor | Runtime-Config GitOps Layout
+- Updated sources: [[argocd-gitops-deployment]] (runtime-config/workloads split, shared ConfigMaps, /app/.agents mounts, agent-provider-secrets)
+- Updated concepts: [[argocd-app-of-apps-gitops]] (two-child App structure, runtime-config vs workloads separation)
+- Updated index: refreshed summaries for argocd source/concept pages
+- Cross-references added: 12
+- Changes: Ingested the GitOps runtime-config refactor: ArgoCD child Applications are now `runtime-config` and `workloads`; runtime-config owns namespace plus shared `.agents` agents/providers/skills ConfigMaps and provider secret example; `agent-server` mounts `/app/.agents` from shared ConfigMaps; workloads own `agent-server` and `docs-rs-mcp` manifests; MCP workflow manifest path moved under workloads; real provider keys are in `agent-provider-secrets`.
+
 ## [2026-06-16] ingest | ArgoCD GitOps Deployment
 - Created sources: [[argocd-gitops-deployment]]
 - Created concepts: [[argocd-app-of-apps-gitops]]

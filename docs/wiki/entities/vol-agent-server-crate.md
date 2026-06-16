@@ -70,7 +70,14 @@ The addendum [[agent-server-control-data-plane-addendum]] further specifies endp
 ## GitOps Deployment
 Source: [[argocd-gitops-deployment]]
 
-`vol-agent-server` is now one of the initial workloads in the self-contained ArgoCD GitOps tree under `deploy/argocd/`. The `agent-server` child Application syncs `deploy/argocd/manifests/agent-server/` into the `vol-agent-system` namespace, using the control-plane image tag `vol-agent-server:cp-latest`, ConfigMap-mounted server/provider configuration, `agent-server-secrets` for provider API keys, and `acr-registry-secret` for private ACR pulls.
+`vol-agent-server` is now one of the initial workloads in the self-contained ArgoCD GitOps tree under `deploy/argocd/`. The GitOps tree is split into two child Applications: `runtime-config` owns the namespace and shared ConfigMaps, while `workloads` owns application deployments.
+
+The `agent-server` deployment lives under `deploy/argocd/manifests/workloads/agent-server/` in the `vol-agent-system` namespace. It uses the control-plane image tag `vol-agent-server:cp-latest`, mounts server configuration from `agent-server-config`, and mounts shared runtime configs at `/app/.agents`:
+- `agent-definitions` → `/app/.agents/agents` (`.agents/agents/*.md`)
+- `agent-providers` → `/app/.agents/providers` (`.agents/providers/*.toml`)
+- `agent-skills` → `/app/.agents/skills` (`.agents/skills/<skill>/SKILL.md`)
+
+**Important:** Real provider API keys live in `agent-provider-secrets`, not `agent-server-secrets`. Both `agent-server` and `docs-rs-mcp` use `acr-registry-secret` for private ACR pulls.
 
 ## Related
 - [[agent-server-control-data-plane]]
