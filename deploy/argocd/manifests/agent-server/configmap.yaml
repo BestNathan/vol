@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-server-config
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-server
+    app.kubernetes.io/part-of: vol-agent
+data:
+  agent-server.toml: |
+    [server]
+    host = "0.0.0.0"
+    port = 3001
+
+    [server.roles]
+    control_plane = true
+    data_plane = false
+
+    [control_plane]
+    client_ws_path = "/ws"
+    node_ws_path = "/control/v1/ws"
+    lease_timeout_secs = 90
+    lease_scan_secs = 15
+
+    [runtime]
+    working_dir = "/app"
+    store_dir = "/app/data"
+
+    [tracing]
+    level = "info"
+    format = "json"
+
+  anthropic-dashscope.toml: |
+    provider = "anthropic"
+    model = "qwen3.6-plus"
+    api_key = "${ANTHROPIC_AUTH_TOKEN}"
+    base_url = "http://192.168.2.162:31693"
+
+    [body]
+    max_tokens = 8192
+    temperature = 0.7
+
+    [headers]
+    "anthropic-version" = "2023-06-01"
+
+  openai-example.toml: |
+    provider = "openai"
+    model = "glm5.1"
+    api_key = "${OPENAI_API_KEY}"
+    base_url = "http://k8s.nhome.local:31693"
+
+    [body]
+    max_tokens = 2048
+    temperature = 0.7
