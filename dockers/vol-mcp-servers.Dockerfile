@@ -55,11 +55,33 @@ RUN set -eux; \
 
 WORKDIR /app
 
+# ── Phase 1: build dependencies (cacheable as long as Cargo.toml/Cargo.lock are unchanged) ──
+
 COPY Cargo.toml Cargo.lock ./
-COPY crates/ ./crates/
+COPY crates/*/Cargo.toml crates/
+
+RUN set -eux; \
+    for toml_path in crates/*/Cargo.toml; do \
+        crate_dir="$(dirname "$toml_path")"; \
+        src_dir="${crate_dir}/src"; \
+        mkdir -p "$src_dir"; \
+        if [ "$(basename "$crate_dir")" = "vol-mcp-servers" ]; then \
+            echo 'fn main() { println!("dummy"); }' > "${src_dir}/main.rs"; \
+        else \
+            echo '#![allow(unused)]' > "${src_dir}/lib.rs"; \
+        fi; \
+    done
 
 ENV CARGO_NET_RETRY=10 \
     CARGO_HTTP_TIMEOUT=120
+
+RUN cargo build --release -p vol-mcp-servers --bin "${BIN}"
+
+# ── Phase 2: restore real source and build final binary ──────────────────────
+
+COPY crates/ ./crates/
+COPY .cargo/ .cargo/
+
 RUN cargo build --release -p vol-mcp-servers --bin "${BIN}" && \
     strip "/app/target/release/${BIN}"
 

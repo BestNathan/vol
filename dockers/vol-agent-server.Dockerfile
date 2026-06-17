@@ -73,15 +73,39 @@ RUN set -eux; \
 
 WORKDIR /app
 
-# Copy dependency manifests first for layer caching
-COPY Cargo.toml Cargo.lock ./
-COPY crates/ ./crates/
+# ── Phase 1: build dependencies (cacheable as long as Cargo.toml/Cargo.lock are unchanged) ──
 
-# Build and strip the agent-server binary. Bump cargo's net retry count to
-# survive transient crates.io flakes (we've seen "[28] Timeout" on a single
-# crate download trip the whole build).
+# Copy only manifests + directory structure — NOT source files.
+# This layer stays cached across any .rs changes.
+COPY Cargo.toml Cargo.lock ./
+COPY crates/*/Cargo.toml crates/
+
+# Create minimal dummy source so cargo can resolve and compile all crates
+# as libraries (only needs lib.rs). Real source overwrites these in Phase 2.
+RUN set -eux; \
+    for toml_path in crates/*/Cargo.toml; do \
+        crate_dir="$(dirname "$toml_path")"; \
+        src_dir="${crate_dir}/src"; \
+        mkdir -p "$src_dir"; \
+        if [ "$(basename "$crate_dir")" = "vol-agent-server" ]; then \
+            echo 'fn main() { println!("dummy"); }' > "${src_dir}/main.rs"; \
+        else \
+            echo '#![allow(unused)]' > "${src_dir}/lib.rs"; \
+        fi; \
+    done
+
 ENV CARGO_NET_RETRY=10 \
     CARGO_HTTP_TIMEOUT=120
+
+# Compile all dependencies — this RUN layer is CACHED when Cargo.toml/Lock unchanged.
+# Keep target/ so Phase 2 does incremental compilation (dependency crates stay cached).
+RUN cargo build --release -p vol-agent-server
+
+# ── Phase 2: restore real source and build final binary ──────────────────────
+
+COPY crates/ ./crates/
+COPY .cargo/ .cargo/
+
 RUN cargo build --release -p vol-agent-server && \
     strip /app/target/release/vol-agent-server
 
