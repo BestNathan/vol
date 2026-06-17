@@ -30,8 +30,10 @@ fn spawn_data_plane_connector(
     tokio::spawn(async move {
         let mut backoff = 1u64;
         let max_backoff = 60u64;
+        let mut revision: u64 = 0;
 
         loop {
+            revision += 1;
             tracing::info!(
                 control_url = %control_url,
                 node_id = %node_id,
@@ -150,7 +152,7 @@ fn spawn_data_plane_connector(
                 payload: Payload::Control(ControlPayload::CapabilitySnapshot(
                     vol_llm_agent_protocol::agent_server_protocol::CapabilitySnapshot {
                         node_id: node_id.clone(),
-                        revision: 1,
+                        revision,
                         generated_at_ms: None,
                         agents,
                         tools: vec![],
@@ -280,6 +282,8 @@ fn spawn_data_plane_connector(
                     }
                 }
             }
+            // Send close frame before reconnecting
+            let _ = write.close().await;
         }
     });
 }
