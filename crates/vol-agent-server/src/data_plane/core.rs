@@ -306,6 +306,8 @@ impl DataPlaneServerCore {
 
     /// Serve incoming messages from a type-erased connection.
     pub async fn serve_dyn(&self, conn: Arc<dyn Connection>) {
+        tracing::info!(dir = "dp < client", "data-plane accepted client connection");
+
         // Attach to all holders so agent events are pushed to this connection.
         let holders: Vec<_> = { self.holders.lock().unwrap().values().cloned().collect() };
         for holder in &holders {
@@ -337,10 +339,12 @@ impl DataPlaneServerCore {
             for resp in responses {
                 if let Err(e) = conn.send(resp).await {
                     tracing::debug!(%e, "connection send ended");
+                    tracing::info!(dir = "dp < client", "data-plane client connection closed (send error)");
                     return;
                 }
             }
         }
+        tracing::info!(dir = "dp < client", "data-plane client connection closed");
     }
 }
 

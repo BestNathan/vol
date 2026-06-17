@@ -78,6 +78,13 @@ impl ControlPlaneServerCore {
             crate::control_plane::endpoint::ControlConnectionRole::DataPlaneNode
         );
 
+        let dir_label = if is_node {
+            "cp < dp"
+        } else {
+            "cp < client"
+        };
+        tracing::info!(dir = %dir_label, "control-plane accepted connection");
+
         while let Some(next) = conn.recv().await {
             match next {
                 Ok(message) => {
@@ -158,6 +165,18 @@ impl ControlPlaneServerCore {
                 }
             }
         }
+
+        // Clean up on disconnect
+        if is_node {
+            // Remove node connections by scanning for this conn pointer
+            let conn_ptr = format!("{:p}", Arc::as_ptr(&conn));
+            self.state
+                .node_connections
+                .write()
+                .expect("node_connections lock poisoned")
+                .retain(|_k, v| format!("{:p}", Arc::as_ptr(v)) != conn_ptr);
+        }
+        tracing::info!(dir = %dir_label, "control-plane connection closed");
     }
 }
 
