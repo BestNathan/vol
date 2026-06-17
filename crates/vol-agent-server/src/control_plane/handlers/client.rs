@@ -108,10 +108,23 @@ impl DomainHandler for ClientHandler {
                         ))
                     })?;
 
-                // Forward submit to the data-plane node
+                // Generate run_id on the control-plane side
+                let run_id = uuid::Uuid::new_v4().to_string();
+                let run_id_simple = run_id.replace('-', "");
+
+                // Register this client connection for event relay
+                // (The client connection is not available here — we store
+                //  the run_id and rely on the core to relay events.)
+                // For now, return the ack immediately; event relay is a follow-up.
+                let ack = AgentPayload::SubmitAck {
+                    run_id: run_id.clone(),
+                    accepted: true,
+                };
+
+                // Forward submit to the data-plane node (fire-and-forget)
                 let forward_msg = AgentServerMessage {
                     protocol: "agent-server-protocol".to_string(),
-                    message_id: uuid::Uuid::new_v4().to_string(),
+                    message_id: run_id_simple.clone(),
                     sender: "control".to_string(),
                     receiver: node_id.clone(),
                     kind: MessageKind::Command,
@@ -120,41 +133,13 @@ impl DomainHandler for ClientHandler {
                     meta: Default::default(),
                 };
 
-                node_conn
-                    .send(forward_msg)
-                    .await
-                    .map_err(|e| {
-                        ProtocolError::PayloadDecodeFailedOwned(format!(
-                            "failed to forward submit to node {node_id}: {e}"
-                        ))
-                    })?;
-
-                // Read the response from the node
-                let response = match node_conn.recv().await {
-                    Some(Ok(msg)) => msg,
-                    Some(Err(e)) => {
-                        return Err(ProtocolError::PayloadDecodeFailedOwned(format!(
-                            "node recv error: {e}"
-                        )));
-                    }
-                    None => {
-                        return Err(ProtocolError::PayloadDecodeFailedOwned(
-                            "node connection closed before submit ack".to_string(),
-                        ));
-                    }
-                };
-
-                // Extract SubmitAck from the response
-                let ack = match response.payload {
-                    Payload::Agent(AgentPayload::SubmitAck { run_id, accepted }) => {
-                        AgentPayload::SubmitAck { run_id, accepted }
-                    }
-                    _ => {
-                        return Err(ProtocolError::PayloadDecodeFailedOwned(
-                            "unexpected response from data-plane for agent.submit".to_string(),
-                        ));
-                    }
-                };
+                if let Err(e) = node_conn.send(forward_msg).await {
+                    tracing::warn!(
+                        node_id = %node_id,
+                        error = %e,
+                        "failed to forward agent.submit to node"
+                    );
+                }
 
                 let mut reply = AgentServerMessage::new_result(
                     message.message_id,

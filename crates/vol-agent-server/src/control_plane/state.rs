@@ -18,6 +18,8 @@ pub struct ControlPlaneState {
     /// Active data-plane node WebSocket connections, keyed by node_id.
     /// Populated when a DataPlaneNode connects via /control/v1/ws.
     pub node_connections: Arc<RwLock<HashMap<String, Arc<dyn Connection>>>>,
+    /// Pending agent submissions: run_id → client connection for event relay.
+    pub pending_submits: Arc<RwLock<HashMap<String, Arc<dyn Connection>>>>,
 }
 
 impl ControlPlaneState {
@@ -29,6 +31,7 @@ impl ControlPlaneState {
             commands: Arc::new(CommandStore::new()),
             runs: Arc::new(RunStore::new()),
             node_connections: Arc::new(RwLock::new(HashMap::new())),
+            pending_submits: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -53,6 +56,35 @@ impl ControlPlaneState {
             .expect("node_connections lock poisoned")
             .get(node_id)
             .cloned()
+    }
+
+}
+
+impl ControlPlaneState {
+    /// Store a client connection for a pending agent run, so events can be
+    /// relayed back when the data-plane node produces output.
+    pub fn register_pending_submit(&self, run_id: String, client_conn: Arc<dyn Connection>) {
+        self.pending_submits
+            .write()
+            .expect("pending_submits lock poisoned")
+            .insert(run_id, client_conn);
+    }
+
+    /// Look up the client connection waiting for events from this run_id.
+    pub fn take_pending_submit(&self, run_id: &str) -> Option<Arc<dyn Connection>> {
+        self.pending_submits
+            .write()
+            .expect("pending_submits lock poisoned")
+            .get(run_id)
+            .cloned()
+    }
+
+    /// Remove a completed/failed run_id mapping.
+    pub fn remove_pending_submit(&self, run_id: &str) {
+        self.pending_submits
+            .write()
+            .expect("pending_submits lock poisoned")
+            .remove(run_id);
     }
 }
 
