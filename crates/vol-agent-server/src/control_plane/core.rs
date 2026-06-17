@@ -73,6 +73,11 @@ impl ControlPlaneServerCore {
         role: crate::control_plane::endpoint::ControlConnectionRole,
         conn: Arc<dyn Connection>,
     ) {
+        let is_node = matches!(
+            role,
+            crate::control_plane::endpoint::ControlConnectionRole::DataPlaneNode
+        );
+
         while let Some(next) = conn.recv().await {
             match next {
                 Ok(message) => {
@@ -94,6 +99,14 @@ impl ControlPlaneServerCore {
                         continue;
                     }
 
+                    let is_register = matches!(
+                        (&message.operation, &message.payload),
+                        (
+                            Operation::Control(ControlOperation::Register),
+                            Payload::Control(ControlPayload::Register(_)),
+                        )
+                    );
+
                     let replies = match self.handle(message).await {
                         Ok(replies) => replies,
                         Err(err) => {
@@ -110,6 +123,27 @@ impl ControlPlaneServerCore {
                             )]
                         }
                     };
+
+                    // After successful register, store the connection for agent.submit forwarding
+                    if is_node && is_register {
+                        for reply in &replies {
+                            if let Payload::Control(ControlPayload::RegisterAck(ref ack)) =
+                                reply.payload
+                            {
+                                if ack.accepted {
+                                    self.state
+                                        .node_connections
+                                        .write()
+                                        .expect("node_connections lock poisoned")
+                                        .insert(ack.node_id.clone(), conn.clone());
+                                    tracing::info!(
+                                        node_id = %ack.node_id,
+                                        "stored node connection for agent forwarding"
+                                    );
+                                }
+                            }
+                        }
+                    }
 
                     for reply in replies {
                         if let Err(err) = conn.send(reply).await {

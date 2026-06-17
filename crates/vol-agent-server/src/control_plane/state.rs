@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
+
+use vol_llm_agent_protocol::Connection;
 
 use super::capability::CapabilityIndex;
 use super::event::EventBus;
@@ -12,6 +15,9 @@ pub struct ControlPlaneState {
     pub events: EventBus,
     pub commands: Arc<CommandStore>,
     pub runs: Arc<RunStore>,
+    /// Active data-plane node WebSocket connections, keyed by node_id.
+    /// Populated when a DataPlaneNode connects via /control/v1/ws.
+    pub node_connections: Arc<RwLock<HashMap<String, Arc<dyn Connection>>>>,
 }
 
 impl ControlPlaneState {
@@ -22,7 +28,31 @@ impl ControlPlaneState {
             events: EventBus::new(),
             commands: Arc::new(CommandStore::new()),
             runs: Arc::new(RunStore::new()),
+            node_connections: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+}
+
+impl ControlPlaneState {
+    /// Store or re-key a node connection. When a node registers, call with
+    /// old_temp_key (the Arc address) and the real node_id to replace the entry.
+    pub fn rekey_node_connection(&self, old_temp_key: &str, node_id: &str) {
+        let mut map = self
+            .node_connections
+            .write()
+            .expect("node_connections lock poisoned");
+        if let Some(conn) = map.remove(old_temp_key) {
+            map.insert(node_id.to_string(), conn);
+        }
+    }
+
+    /// Get a stored node connection by node_id.
+    pub fn get_node_connection(&self, node_id: &str) -> Option<Arc<dyn Connection>> {
+        self.node_connections
+            .read()
+            .expect("node_connections lock poisoned")
+            .get(node_id)
+            .cloned()
     }
 }
 
