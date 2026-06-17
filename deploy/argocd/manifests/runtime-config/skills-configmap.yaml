@@ -1,4 +1,3 @@
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,275 +8,181 @@ metadata:
     app.kubernetes.io/part-of: vol-agent
     app.kubernetes.io/component: runtime-config
 data:
-  clarifying-requirements.SKILL.md: |
-    ---
-    name: clarifying-requirements
-    description: Use when a user presents a vague, incomplete, or high-level request before exploring solutions. Use when requirements need refining, scope needs understanding, or success criteria are unclear. Use when you feel tempted to explore code or start implementing before understanding what the user actually wants.
-    ---
-
-    # Clarifying Requirements
-
-    Turn vague requests into precise, actionable requirements through structured dialogue.
-
-    This skill sits **between** the user's initial request and any design/brainstorming work. It ensures you understand *what* to build before figuring out *how* to build it.
-
-    <HARD-GATE>
-    Do NOT read any code, make any file changes, invoke brainstorming, writing-plans, or any implementation skill until you have:
-    1. Restated the request and received user confirmation
-    2. Asked at least one clarifying question and received an answer
-
-    Exploration of files is ONLY allowed AFTER initial clarification. During exploration, do NOT plan implementation — only understand what exists.
-    This applies to EVERY request, regardless of perceived simplicity or time pressure.
-    </HARD-GATE>
-
-    ## Anti-Pattern: "I Know What They Want, No Need To Clarify"
-
-    Every request goes through this process. A one-liner, a bug report, a feature ask — all of them. The clarification can be brief (a few questions for truly simple requests), but you MUST go through it and produce a written requirements document.
-
-    **CRITICAL: Do NOT read any code or explore the codebase until AFTER you have asked at least one clarifying question and received an answer.** File exploration is for refining your understanding of WHAT exists, not for planning HOW to change it. If you find yourself thinking "I should change X in file Y" during exploration, you have moved too fast.
-
-    **Violating the letter of the rules is violating the spirit of the rules.**
-
-    ## Checklist
-
-    You MUST create a task for each of these items and complete them in order:
-
-    1. **Restate the request** — paraphrase what you heard, confirm understanding
-    2. **Ask clarifying questions** — one at a time, understand purpose/constraints/scope/success criteria. MUST ask at least one question before reading any code.
-    3. **Explore current context** — AFTER initial clarification, check relevant files/docs to refine your understanding
-    4. **Ask follow-up questions** — use what you found to ask better questions
-    5. **Identify edge cases** — what happens at boundaries, what's explicitly out of scope
-    6. **Define success criteria** — how will we know this is done and working correctly
-    7. **Write requirements doc** — save to `docs/superpowers/requirement/YYYY-MM-DD-<topic>-requirement.md` and commit
-    8. **Requirements self-review** — quick inline check for placeholders, ambiguity, scope creep (see below)
-    8b. **Subagent review** — dispatch reviewer subagent, fix any issues found (see below)
-    9. **User reviews written requirements** — ask user to review before any design work
-    10. **Transition to brainstorming** — invoke brainstorming skill to explore design approaches
-
-    ## Process Flow
-
-    ```dot
-    digraph clarifying_requirements {
-        rankdir=LR;
-        "Restate request" [shape=box];
-        "Ask clarifying questions" [shape=box];
-        "User answered?" [shape=diamond];
-        "Explore context" [shape=box];
-        "Follow-up questions" [shape=box];
-        "Identify edge cases" [shape=box];
-        "Define success criteria" [shape=box];
-        "Write requirements doc" [shape=box];
-        "Self-review" [shape=box];
-        "Subagent review?" [shape=diamond];
-        "User reviews?" [shape=diamond];
-        "Invoke brainstorming" [shape=doublecircle];
-
-        "Restate request" -> "Ask clarifying questions";
-        "Ask clarifying questions" -> "User answered?";
-        "User answered?" -> "Ask clarifying questions" [label="no, ask more"];
-        "User answered?" -> "Explore context" [label="yes, move on"];
-        "Explore context" -> "Follow-up questions";
-        "Follow-up questions" -> "Identify edge cases";
-        "Identify edge cases" -> "Define success criteria";
-        "Define success criteria" -> "Write requirements doc";
-        "Write requirements doc" -> "Self-review";
-        "Self-review" -> "Subagent review?";
-        "Subagent review?" -> "Write requirements doc" [label="issues found"];
-        "Subagent review?" -> "User reviews?" [label="approved"];
-        "User reviews?" -> "Write requirements doc" [label="changes requested"];
-        "User reviews?" -> "Invoke brainstorming" [label="approved"];
-    }
-    ```
-
-    **The terminal state is invoking brainstorming.** Do NOT invoke writing-plans or any implementation skill directly. The ONLY next step after clarifying-requirements is brainstorming.
-
-    ## The Process
-
-    **Restating the request:**
-
-    - Paraphrase what you understood in your own words
-    - Ask the user: "Just to make sure I understand — you want X so that Y. Is that right?"
-    - If the user corrects you, restate again until aligned
-
-    **Exploring context:**
-
-    - This step happens AFTER initial clarifying questions, not before.
-    - Check relevant files, docs, recent commits related to the request.
-    - Understand what currently exists before clarifying what should change.
-    - If the request touches existing code, understand its current behavior and limitations.
-    - **Do NOT plan changes during exploration.** If you catch yourself thinking "I should modify X" or "the fix is Y," stop. That is implementation planning, which comes after requirements are clarified.
-    - **Do NOT make any file changes.** Read-only during this phase.
-
-    **Asking clarifying questions:**
-
-    - One question at a time — never batch multiple questions into one message
-    - Prefer multiple choice questions when possible; open-ended is fine when options aren't clear
-    - Focus on understanding: **purpose** (why), **constraints** (what limits exist), **scope** (what's in/out), **success criteria** (how we know it's done)
-    - If the request describes multiple independent features, flag this immediately. Don't refine details of a project that needs decomposition first.
-    - For large requests, help decompose into sub-requirements. Each sub-requirement can get its own clarification cycle.
-
-    **Good clarifying question examples:**
-
-    ```
-    What problem are you trying to solve? (purpose)
-      → "I want to add caching to the API" → "What's motivating this? Latency complaints, cost, something else?"
-
-    What constraints exist? (constraints)
-      → "We need real-time sync" → "What's the acceptable latency? 100ms? 1s? 10s?"
-
-    What's in and out of scope? (scope)
-      → "Build a dashboard" → "What should this dashboard show? What should it explicitly NOT show?"
-
-    How will we know it's working? (success criteria)
-      → "Make it faster" → "What does 'faster' mean? Under what load? What's the target number?"
-
-    Who is the user? (audience)
-      → "Add an admin panel" → "Who specifically counts as an admin? What permissions do they have?"
-    ```
-
-    **Identifying edge cases:**
-
-    - What happens at boundaries? (empty input, max input, concurrent access)
-    - What error conditions matter? (network failure, invalid data, timeouts)
-    - What's explicitly out of scope? (what should we NOT build even if it seems related)
-
-    **Defining success criteria:**
-
-    - Concrete, measurable outcomes
-    - "It works" is not a success criterion
-    - "API responds in <200ms at p99 under 1000 req/s" is a success criterion
-
-    ## After Clarification
-
-    **Documentation:**
-
-    - Write the validated requirements to `docs/superpowers/requirement/YYYY-MM-DD-<topic>-requirement.md`
-      - (User preferences for requirement location override this default)
-    - Use elements-of-style:writing-clearly-and-concisely skill if available
-    - Commit the requirements document to git
-
-    **Requirements Document Structure:**
-
-    ```markdown
-    # Requirements: <Topic>
-
-    ## Background
-    What problem are we solving and why now?
-
-    ## Goals
-    What must this achieve? (numbered, specific, measurable)
-
-    ## Non-Goals
-    What are we explicitly NOT doing?
-
-    ## Scope
-    What's included and what's excluded?
-
-    ## Constraints
-    Technical, business, or time constraints.
-
-    ## Success Criteria
-    How do we know this is done and working? (measurable)
-
-    ## Edge Cases
-    Known edge cases and how they should be handled.
-
-    ## Open Questions
-    Anything still undecided (minimize these).
-    ```
-
-    **Requirements Self-Review:**
-    After writing the requirements document, look at it with fresh eyes:
-
-    1. **Placeholder scan:** Any "TBD", "TODO", incomplete sections, or vague requirements? Fix them.
-    2. **Internal consistency:** Do any sections contradict each other? Do the goals match the success criteria?
-    3. **Scope check:** Is this focused enough, or does it need decomposition?
-    4. **Ambiguity check:** Could any requirement be interpreted two different ways? If so, pick one and make it explicit.
-    5. **Measurability check:** Can each success criterion be verified with a yes/no or a number? If not, make it measurable.
-
-    Fix any issues inline. No need to re-review — just fix and move on.
-
-    **Subagent Review:**
-    After the self-review passes, dispatch a requirements reviewer subagent:
-
-    > "Requirements written and self-reviewed. Dispatching reviewer subagent for independent check."
-
-    Use the prompt template from `requirements-document-reviewer-prompt.md`. Replace `[REQUIREMENTS_FILE_PATH]` with the actual path to the requirements document.
-
-    If the reviewer finds issues, fix them inline and re-run the self-review. If the reviewer approves, proceed to user review.
-
-    **User Review Gate:**
-    After the self-review passes, ask the user to review the written requirements before proceeding:
-
-    > "Requirements written and committed to `<path>`. Please review and confirm these capture what you want before we move to exploring design approaches."
-
-    Wait for the user's response. If they request changes, make them and re-run the self-review. Only proceed once the user approves.
-
-    **Implementation:**
-
-    - Invoke the brainstorming skill to explore design approaches
-    - Do NOT invoke any other skill. brainstorming is the next step.
-
-    ## Key Principles
-
-    - **One question at a time** — Don't overwhelm with multiple questions
-    - **Multiple choice preferred** — Easier to answer than open-ended when possible
-    - **Focus on WHAT, not HOW** — Requirements describe what to achieve, not how to achieve it
-    - **Measurable criteria** — Every requirement must be verifiable
-    - **Explicit non-goals** — What we're NOT building is as important as what we are
-    - **YAGNI ruthlessly** — Remove unnecessary requirements from scope
-    - **Be flexible** — Go back and clarify when something doesn't make sense
-
-    ## Common Mistakes
-
-    | Mistake | Fix |
-    |---------|-----|
-    | Jumping to solutions | Ask "what problem does this solve?" instead of "which library should we use?" |
-    | Assuming constraints | Ask about limits explicitly (time, budget, performance) |
-    | Vague success criteria | Replace "it should work" with specific, measurable outcomes |
-    | Skipping non-goals | Always define what's out of scope to prevent creep |
-    | Batching questions | One question per message, always |
-    | Requirements that prescribe implementation | "The system shall use Redis" → "The system shall cache responses with <50ms latency" |
-
-    ## Common Rationalizations
-
-    | Excuse | Reality |
-    |--------|---------|
-    | "I'll explore the code first, then implement" | Exploring is fine, but exploring WITH the intent to implement skips clarification. Explore to understand context, then clarify requirements. |
-    | "The user is in a hurry / has a meeting / needs this now" | Time pressure is exactly when clarification matters most. A 5-minute clarification saves 30 minutes of wrong implementation. |
-    | "They expect work to have started" | "Started" means clarifying requirements, not writing code. Clarification IS the first step of work. |
-    | "I already know what they mean" | You know what you think they mean. Paraphrase and confirm — if you're right, it takes 10 seconds. If you're wrong, it saves hours. |
-    | "I'll clarify while implementing" | That's not clarification, that's guessing. Clarification happens BEFORE implementation. |
-    | "This is simple enough, no need to document" | Simple requests often hide complex assumptions. Write the requirements — even if brief. |
-    | "I'll schedule a deeper discussion later" | There is no "later." Clarify NOW, before any implementation planning. |
-    | "The real problem is X, not what they asked" | You might be right. But confirm with the user before solving a different problem than they asked for. |
-    | "I found the problem while reading the code, let me fix it" | Finding a problem is not authorization to fix it. Clarify with the user first. |
-    | "I have a good idea from exploring, let me propose solutions" | Solutions come after requirements, not during exploration. Ask clarifying questions first. |
-
-    ## Red Flags - STOP and Start Over
-
-    - Reading code before asking any clarifying questions
-    - Making file changes before the requirements document is written and approved
-    - "They're in a hurry" as justification to skip clarification
-    - "I'll ask questions later" or "I'll clarify while building"
-    - Planning implementation during file exploration
-    - Writing a plan without a requirements document first
-    - "The problem is obviously X" without confirming with the user
-    - "I found the issue, let me fix it" before clarifying scope
-    - Thinking about WHICH files to change before knowing WHAT to build
-
-    **All of these mean: Stop. Restate the request. Ask clarifying questions.**
-
-    ## Relationship to Other Skills
-
-    ```
-    User Request → clarifying-requirements → brainstorming → writing-plans → executing-plans
-       (WHAT)           (clarify)            (HOW)         (steps)       (build)
-    ```
-
-    - **clarifying-requirements**: What are we building and why? (this skill)
-    - **brainstorming**: How should we design it? (explores approaches)
-    - **writing-plans**: What are the implementation steps? (creates task list)
-    - **executing-plans**: Build it step by step (implementation)
-
-    Each skill has a distinct purpose. Don't skip steps.
+  clarifying-requirements.SKILL.md: "---\nname: clarifying-requirements\ndescription:\
+    \ Use when a user presents a vague, incomplete, or high-level request before exploring\
+    \ solutions. Use when requirements need refining, scope needs understanding, or\
+    \ success criteria are unclear. Use when you feel tempted to explore code or start\
+    \ implementing before understanding what the user actually wants.\n---\n\n# Clarifying\
+    \ Requirements\n\nTurn vague requests into precise, actionable requirements through\
+    \ structured dialogue.\n\nThis skill sits **between** the user's initial request\
+    \ and any design/brainstorming work. It ensures you understand *what* to build\
+    \ before figuring out *how* to build it.\n\n<HARD-GATE>\nDo NOT read any code,\
+    \ make any file changes, invoke brainstorming, writing-plans, or any implementation\
+    \ skill until you have:\n1. Restated the request and received user confirmation\n\
+    2. Asked at least one clarifying question and received an answer\n\nExploration\
+    \ of files is ONLY allowed AFTER initial clarification. During exploration, do\
+    \ NOT plan implementation — only understand what exists.\nThis applies to EVERY\
+    \ request, regardless of perceived simplicity or time pressure.\n</HARD-GATE>\n\
+    \n## Anti-Pattern: \"I Know What They Want, No Need To Clarify\"\n\nEvery request\
+    \ goes through this process. A one-liner, a bug report, a feature ask — all of\
+    \ them. The clarification can be brief (a few questions for truly simple requests),\
+    \ but you MUST go through it and produce a written requirements document.\n\n\
+    **CRITICAL: Do NOT read any code or explore the codebase until AFTER you have\
+    \ asked at least one clarifying question and received an answer.** File exploration\
+    \ is for refining your understanding of WHAT exists, not for planning HOW to change\
+    \ it. If you find yourself thinking \"I should change X in file Y\" during exploration,\
+    \ you have moved too fast.\n\n**Violating the letter of the rules is violating\
+    \ the spirit of the rules.**\n\n## Checklist\n\nYou MUST create a task for each\
+    \ of these items and complete them in order:\n\n1. **Restate the request** — paraphrase\
+    \ what you heard, confirm understanding\n2. **Ask clarifying questions** — one\
+    \ at a time, understand purpose/constraints/scope/success criteria. MUST ask at\
+    \ least one question before reading any code.\n3. **Explore current context**\
+    \ — AFTER initial clarification, check relevant files/docs to refine your understanding\n\
+    4. **Ask follow-up questions** — use what you found to ask better questions\n\
+    5. **Identify edge cases** — what happens at boundaries, what's explicitly out\
+    \ of scope\n6. **Define success criteria** — how will we know this is done and\
+    \ working correctly\n7. **Write requirements doc** — save to `docs/superpowers/requirement/YYYY-MM-DD-<topic>-requirement.md`\
+    \ and commit\n8. **Requirements self-review** — quick inline check for placeholders,\
+    \ ambiguity, scope creep (see below)\n8b. **Subagent review** — dispatch reviewer\
+    \ subagent, fix any issues found (see below)\n9. **User reviews written requirements**\
+    \ — ask user to review before any design work\n10. **Transition to brainstorming**\
+    \ — invoke brainstorming skill to explore design approaches\n\n## Process Flow\n\
+    \n```dot\ndigraph clarifying_requirements {\n    rankdir=LR;\n    \"Restate request\"\
+    \ [shape=box];\n    \"Ask clarifying questions\" [shape=box];\n    \"User answered?\"\
+    \ [shape=diamond];\n    \"Explore context\" [shape=box];\n    \"Follow-up questions\"\
+    \ [shape=box];\n    \"Identify edge cases\" [shape=box];\n    \"Define success\
+    \ criteria\" [shape=box];\n    \"Write requirements doc\" [shape=box];\n    \"\
+    Self-review\" [shape=box];\n    \"Subagent review?\" [shape=diamond];\n    \"\
+    User reviews?\" [shape=diamond];\n    \"Invoke brainstorming\" [shape=doublecircle];\n\
+    \n    \"Restate request\" -> \"Ask clarifying questions\";\n    \"Ask clarifying\
+    \ questions\" -> \"User answered?\";\n    \"User answered?\" -> \"Ask clarifying\
+    \ questions\" [label=\"no, ask more\"];\n    \"User answered?\" -> \"Explore context\"\
+    \ [label=\"yes, move on\"];\n    \"Explore context\" -> \"Follow-up questions\"\
+    ;\n    \"Follow-up questions\" -> \"Identify edge cases\";\n    \"Identify edge\
+    \ cases\" -> \"Define success criteria\";\n    \"Define success criteria\" ->\
+    \ \"Write requirements doc\";\n    \"Write requirements doc\" -> \"Self-review\"\
+    ;\n    \"Self-review\" -> \"Subagent review?\";\n    \"Subagent review?\" -> \"\
+    Write requirements doc\" [label=\"issues found\"];\n    \"Subagent review?\" ->\
+    \ \"User reviews?\" [label=\"approved\"];\n    \"User reviews?\" -> \"Write requirements\
+    \ doc\" [label=\"changes requested\"];\n    \"User reviews?\" -> \"Invoke brainstorming\"\
+    \ [label=\"approved\"];\n}\n```\n\n**The terminal state is invoking brainstorming.**\
+    \ Do NOT invoke writing-plans or any implementation skill directly. The ONLY next\
+    \ step after clarifying-requirements is brainstorming.\n\n## The Process\n\n**Restating\
+    \ the request:**\n\n- Paraphrase what you understood in your own words\n- Ask\
+    \ the user: \"Just to make sure I understand — you want X so that Y. Is that right?\"\
+    \n- If the user corrects you, restate again until aligned\n\n**Exploring context:**\n\
+    \n- This step happens AFTER initial clarifying questions, not before.\n- Check\
+    \ relevant files, docs, recent commits related to the request.\n- Understand what\
+    \ currently exists before clarifying what should change.\n- If the request touches\
+    \ existing code, understand its current behavior and limitations.\n- **Do NOT\
+    \ plan changes during exploration.** If you catch yourself thinking \"I should\
+    \ modify X\" or \"the fix is Y,\" stop. That is implementation planning, which\
+    \ comes after requirements are clarified.\n- **Do NOT make any file changes.**\
+    \ Read-only during this phase.\n\n**Asking clarifying questions:**\n\n- One question\
+    \ at a time — never batch multiple questions into one message\n- Prefer multiple\
+    \ choice questions when possible; open-ended is fine when options aren't clear\n\
+    - Focus on understanding: **purpose** (why), **constraints** (what limits exist),\
+    \ **scope** (what's in/out), **success criteria** (how we know it's done)\n- If\
+    \ the request describes multiple independent features, flag this immediately.\
+    \ Don't refine details of a project that needs decomposition first.\n- For large\
+    \ requests, help decompose into sub-requirements. Each sub-requirement can get\
+    \ its own clarification cycle.\n\n**Good clarifying question examples:**\n\n```\n\
+    What problem are you trying to solve? (purpose)\n  → \"I want to add caching to\
+    \ the API\" → \"What's motivating this? Latency complaints, cost, something else?\"\
+    \n\nWhat constraints exist? (constraints)\n  → \"We need real-time sync\" → \"\
+    What's the acceptable latency? 100ms? 1s? 10s?\"\n\nWhat's in and out of scope?\
+    \ (scope)\n  → \"Build a dashboard\" → \"What should this dashboard show? What\
+    \ should it explicitly NOT show?\"\n\nHow will we know it's working? (success\
+    \ criteria)\n  → \"Make it faster\" → \"What does 'faster' mean? Under what load?\
+    \ What's the target number?\"\n\nWho is the user? (audience)\n  → \"Add an admin\
+    \ panel\" → \"Who specifically counts as an admin? What permissions do they have?\"\
+    \n```\n\n**Identifying edge cases:**\n\n- What happens at boundaries? (empty input,\
+    \ max input, concurrent access)\n- What error conditions matter? (network failure,\
+    \ invalid data, timeouts)\n- What's explicitly out of scope? (what should we NOT\
+    \ build even if it seems related)\n\n**Defining success criteria:**\n\n- Concrete,\
+    \ measurable outcomes\n- \"It works\" is not a success criterion\n- \"API responds\
+    \ in <200ms at p99 under 1000 req/s\" is a success criterion\n\n## After Clarification\n\
+    \n**Documentation:**\n\n- Write the validated requirements to `docs/superpowers/requirement/YYYY-MM-DD-<topic>-requirement.md`\n\
+    \  - (User preferences for requirement location override this default)\n- Use\
+    \ elements-of-style:writing-clearly-and-concisely skill if available\n- Commit\
+    \ the requirements document to git\n\n**Requirements Document Structure:**\n\n\
+    ```markdown\n# Requirements: <Topic>\n\n## Background\nWhat problem are we solving\
+    \ and why now?\n\n## Goals\nWhat must this achieve? (numbered, specific, measurable)\n\
+    \n## Non-Goals\nWhat are we explicitly NOT doing?\n\n## Scope\nWhat's included\
+    \ and what's excluded?\n\n## Constraints\nTechnical, business, or time constraints.\n\
+    \n## Success Criteria\nHow do we know this is done and working? (measurable)\n\
+    \n## Edge Cases\nKnown edge cases and how they should be handled.\n\n## Open Questions\n\
+    Anything still undecided (minimize these).\n```\n\n**Requirements Self-Review:**\n\
+    After writing the requirements document, look at it with fresh eyes:\n\n1. **Placeholder\
+    \ scan:** Any \"TBD\", \"TODO\", incomplete sections, or vague requirements? Fix\
+    \ them.\n2. **Internal consistency:** Do any sections contradict each other? Do\
+    \ the goals match the success criteria?\n3. **Scope check:** Is this focused enough,\
+    \ or does it need decomposition?\n4. **Ambiguity check:** Could any requirement\
+    \ be interpreted two different ways? If so, pick one and make it explicit.\n5.\
+    \ **Measurability check:** Can each success criterion be verified with a yes/no\
+    \ or a number? If not, make it measurable.\n\nFix any issues inline. No need to\
+    \ re-review — just fix and move on.\n\n**Subagent Review:**\nAfter the self-review\
+    \ passes, dispatch a requirements reviewer subagent:\n\n> \"Requirements written\
+    \ and self-reviewed. Dispatching reviewer subagent for independent check.\"\n\n\
+    Use the prompt template from `requirements-document-reviewer-prompt.md`. Replace\
+    \ `[REQUIREMENTS_FILE_PATH]` with the actual path to the requirements document.\n\
+    \nIf the reviewer finds issues, fix them inline and re-run the self-review. If\
+    \ the reviewer approves, proceed to user review.\n\n**User Review Gate:**\nAfter\
+    \ the self-review passes, ask the user to review the written requirements before\
+    \ proceeding:\n\n> \"Requirements written and committed to `<path>`. Please review\
+    \ and confirm these capture what you want before we move to exploring design approaches.\"\
+    \n\nWait for the user's response. If they request changes, make them and re-run\
+    \ the self-review. Only proceed once the user approves.\n\n**Implementation:**\n\
+    \n- Invoke the brainstorming skill to explore design approaches\n- Do NOT invoke\
+    \ any other skill. brainstorming is the next step.\n\n## Key Principles\n\n- **One\
+    \ question at a time** — Don't overwhelm with multiple questions\n- **Multiple\
+    \ choice preferred** — Easier to answer than open-ended when possible\n- **Focus\
+    \ on WHAT, not HOW** — Requirements describe what to achieve, not how to achieve\
+    \ it\n- **Measurable criteria** — Every requirement must be verifiable\n- **Explicit\
+    \ non-goals** — What we're NOT building is as important as what we are\n- **YAGNI\
+    \ ruthlessly** — Remove unnecessary requirements from scope\n- **Be flexible**\
+    \ — Go back and clarify when something doesn't make sense\n\n## Common Mistakes\n\
+    \n| Mistake | Fix |\n|---------|-----|\n| Jumping to solutions | Ask \"what problem\
+    \ does this solve?\" instead of \"which library should we use?\" |\n| Assuming\
+    \ constraints | Ask about limits explicitly (time, budget, performance) |\n| Vague\
+    \ success criteria | Replace \"it should work\" with specific, measurable outcomes\
+    \ |\n| Skipping non-goals | Always define what's out of scope to prevent creep\
+    \ |\n| Batching questions | One question per message, always |\n| Requirements\
+    \ that prescribe implementation | \"The system shall use Redis\" → \"The system\
+    \ shall cache responses with <50ms latency\" |\n\n## Common Rationalizations\n\
+    \n| Excuse | Reality |\n|--------|---------|\n| \"I'll explore the code first,\
+    \ then implement\" | Exploring is fine, but exploring WITH the intent to implement\
+    \ skips clarification. Explore to understand context, then clarify requirements.\
+    \ |\n| \"The user is in a hurry / has a meeting / needs this now\" | Time pressure\
+    \ is exactly when clarification matters most. A 5-minute clarification saves 30\
+    \ minutes of wrong implementation. |\n| \"They expect work to have started\" |\
+    \ \"Started\" means clarifying requirements, not writing code. Clarification IS\
+    \ the first step of work. |\n| \"I already know what they mean\" | You know what\
+    \ you think they mean. Paraphrase and confirm — if you're right, it takes 10 seconds.\
+    \ If you're wrong, it saves hours. |\n| \"I'll clarify while implementing\" |\
+    \ That's not clarification, that's guessing. Clarification happens BEFORE implementation.\
+    \ |\n| \"This is simple enough, no need to document\" | Simple requests often\
+    \ hide complex assumptions. Write the requirements — even if brief. |\n| \"I'll\
+    \ schedule a deeper discussion later\" | There is no \"later.\" Clarify NOW, before\
+    \ any implementation planning. |\n| \"The real problem is X, not what they asked\"\
+    \ | You might be right. But confirm with the user before solving a different problem\
+    \ than they asked for. |\n| \"I found the problem while reading the code, let\
+    \ me fix it\" | Finding a problem is not authorization to fix it. Clarify with\
+    \ the user first. |\n| \"I have a good idea from exploring, let me propose solutions\"\
+    \ | Solutions come after requirements, not during exploration. Ask clarifying\
+    \ questions first. |\n\n## Red Flags - STOP and Start Over\n\n- Reading code before\
+    \ asking any clarifying questions\n- Making file changes before the requirements\
+    \ document is written and approved\n- \"They're in a hurry\" as justification\
+    \ to skip clarification\n- \"I'll ask questions later\" or \"I'll clarify while\
+    \ building\"\n- Planning implementation during file exploration\n- Writing a plan\
+    \ without a requirements document first\n- \"The problem is obviously X\" without\
+    \ confirming with the user\n- \"I found the issue, let me fix it\" before clarifying\
+    \ scope\n- Thinking about WHICH files to change before knowing WHAT to build\n\
+    \n**All of these mean: Stop. Restate the request. Ask clarifying questions.**\n\
+    \n## Relationship to Other Skills\n\n```\nUser Request → clarifying-requirements\
+    \ → brainstorming → writing-plans → executing-plans\n   (WHAT)           (clarify)\
+    \            (HOW)         (steps)       (build)\n```\n\n- **clarifying-requirements**:\
+    \ What are we building and why? (this skill)\n- **brainstorming**: How should\
+    \ we design it? (explores approaches)\n- **writing-plans**: What are the implementation\
+    \ steps? (creates task list)\n- **executing-plans**: Build it step by step (implementation)\n\
+    \nEach skill has a distinct purpose. Don't skip steps.\n"

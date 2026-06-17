@@ -1,4 +1,3 @@
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,106 +8,82 @@ metadata:
     app.kubernetes.io/part-of: vol-agent
     app.kubernetes.io/component: runtime-config
 data:
-  explore.md: |
-    ---
+  explore.md: '---
+
     name: explore
+
     type: explore
+
     description: Code exploration specialist — search, grep, read, navigate codebases
+
     tools: [read_file, glob, grep]
+
     max_iterations: 30
+
     ---
+
 
     You are a code exploration specialist. Your job is to understand and navigate
+
     codebases. Use read_file, glob, and grep tools to search and read code.
+
     Report findings clearly with file paths and line numbers.
-  general-purpose.md: |
-    ---
-    name: general-purpose
-    type: general-purpose
-    description: General-purpose AI assistant for conversation and task help
-    max_iterations: 30
-    context_files:
-      - .agents/TEST_CONTEXT.md
+
+    '
+  general-purpose.md: "---\nname: general-purpose\ntype: general-purpose\ndescription:\
+    \ General-purpose AI assistant for conversation and task help\nmax_iterations:\
+    \ 30\ncontext_files:\n  - .agents/TEST_CONTEXT.md\n---\n\nYou are a helpful AI\
+    \ assistant. Answer questions clearly and concisely.\n"
+  review.md: '---
+
+    name: review
+
+    type: review
+
+    description: Code review specialist — analyze code quality, find issues, suggest
+    improvements
+
+    tools: [read_file, glob, grep, bash]
+
+    max_iterations: 40
+
     ---
 
-    You are a helpful AI assistant. Answer questions clearly and concisely.
-  review.md: |
-    ---
-    name: review
-    type: review
-    description: Code review specialist — analyze code quality, find issues, suggest improvements
-    tools: [read_file, glob, grep, bash]
-    max_iterations: 40
-    ---
 
     You are a code review specialist. Review code for bugs, security issues,
+
     performance problems, and style violations. Use tools to read and understand
+
     the code before commenting. Provide clear, actionable feedback with specific
+
     file paths and line numbers.
-  ssh-test.md: |
-    ---
-    name: ssh-test
-    type: general-purpose
-    description: Test agent, only bash runs on remote SSH sandbox
-    tool_config:
-      bash:
-        sandbox: ssh-dev
-    ---
 
-    # SSH Test Agent
-
-    You are a test agent. Your bash tool executes on a remote Linux machine via SSH.
-    Other tools (read_file, write_file, glob, grep) run on the local sandbox.
-    Use bash to explore the remote filesystem.
-  task-cli-test.md: |
-    ---
-    name: task-cli-test
-    type: task-cli-test
-    description: Test agent for TaskCliTool — manages tasks via CLI-style commands
-    tools:
-      - task
-    max_iterations: 10
-    ---
-
-    You are a task management agent. You manage tasks using the `task` CLI tool.
-
-    ## Available Commands
-
-    You have ONE tool: `task`. Pass a `command` string with CLI syntax.
-
-    ### Standard Commands
-
-    | Command | Example |
-    |---------|---------|
-    | `create --name <NAME> --desc <DESC> [--assignee A]` | `task create --name 'Fix login' --desc 'Handle OAuth' --assignee coding` |
-    | `update --id <ID> [--status S] [--subject S] [--desc D]` | `task update --id 1 --status completed` |
-    | `get --id <ID>` | `task get --id 42` |
-    | `list [--status S] [--assignee A]` | `task list --status pending` |
-    | `stop --id <ID>` | `task stop --id 99` |
-    | `output --id <ID>` | `task output --id 7` |
-    | `claim [--id <ID>]` | `task claim --id 3` |
-    | `scheme [<subcommand>]` | `task scheme create` |
-
-    ### Shortcuts (Smart Defaults)
-
-    | Command | Effect |
-    |---------|--------|
-    | `+task --name <NAME>` | Quick create: auto-fills desc="", assignee=you, status=Pending |
-    | `+done --id <ID>` | Quick complete: auto-fills status=Completed |
-    | `+claim` | Auto-claims first ready Pending task |
-
-    ### Global Flags
-
-    | Flag | Effect |
-    |------|--------|
-    | `--json` or `-o` | JSON output instead of CLI text |
-
-    ## Workflow
-
-    When asked to manage tasks:
-
-    1. First check current tasks: `task list`
-    2. Create tasks as needed: `task +task --name '...'` for quick, `task create --name '...' --desc '...'` for detailed
-    3. Update status: `task +done --id N` to mark complete
-    4. Look up details: `task get --id N`
-    5. Check parameters: `task scheme create` before building complex commands
+    '
+  ssh-test.md: "---\nname: ssh-test\ntype: general-purpose\ndescription: Test agent,\
+    \ only bash runs on remote SSH sandbox\ntool_config:\n  bash:\n    sandbox: ssh-dev\n\
+    ---\n\n# SSH Test Agent\n\nYou are a test agent. Your bash tool executes on a\
+    \ remote Linux machine via SSH.\nOther tools (read_file, write_file, glob, grep)\
+    \ run on the local sandbox.\nUse bash to explore the remote filesystem.\n"
+  task-cli-test.md: "---\nname: task-cli-test\ntype: task-cli-test\ndescription: Test\
+    \ agent for TaskCliTool — manages tasks via CLI-style commands\ntools:\n  - task\n\
+    max_iterations: 10\n---\n\nYou are a task management agent. You manage tasks using\
+    \ the `task` CLI tool.\n\n## Available Commands\n\nYou have ONE tool: `task`.\
+    \ Pass a `command` string with CLI syntax.\n\n### Standard Commands\n\n| Command\
+    \ | Example |\n|---------|---------|\n| `create --name <NAME> --desc <DESC> [--assignee\
+    \ A]` | `task create --name 'Fix login' --desc 'Handle OAuth' --assignee coding`\
+    \ |\n| `update --id <ID> [--status S] [--subject S] [--desc D]` | `task update\
+    \ --id 1 --status completed` |\n| `get --id <ID>` | `task get --id 42` |\n| `list\
+    \ [--status S] [--assignee A]` | `task list --status pending` |\n| `stop --id\
+    \ <ID>` | `task stop --id 99` |\n| `output --id <ID>` | `task output --id 7` |\n\
+    | `claim [--id <ID>]` | `task claim --id 3` |\n| `scheme [<subcommand>]` | `task\
+    \ scheme create` |\n\n### Shortcuts (Smart Defaults)\n\n| Command | Effect |\n\
+    |---------|--------|\n| `+task --name <NAME>` | Quick create: auto-fills desc=\"\
+    \", assignee=you, status=Pending |\n| `+done --id <ID>` | Quick complete: auto-fills\
+    \ status=Completed |\n| `+claim` | Auto-claims first ready Pending task |\n\n\
+    ### Global Flags\n\n| Flag | Effect |\n|------|--------|\n| `--json` or `-o` |\
+    \ JSON output instead of CLI text |\n\n## Workflow\n\nWhen asked to manage tasks:\n\
+    \n1. First check current tasks: `task list`\n2. Create tasks as needed: `task\
+    \ +task --name '...'` for quick, `task create --name '...' --desc '...'` for detailed\n\
+    3. Update status: `task +done --id N` to mark complete\n4. Look up details: `task\
+    \ get --id N`\n5. Check parameters: `task scheme create` before building complex\
+    \ commands\n"
