@@ -46,6 +46,9 @@ impl DomainHandler for ControlHandler {
                 Operation::Control(ControlOperation::Register),
                 Payload::Control(ControlPayload::Register(reg)),
             ) => {
+                // Clear old capability snapshot on re-registration so the
+                // new snapshot (which starts at revision 1) is accepted.
+                self.state.capabilities.remove_node(&reg.node_id);
                 let ack = self
                     .state
                     .nodes
