@@ -145,7 +145,7 @@ fn spawn_data_plane_connector(
                 message_id: uuid::Uuid::new_v4().to_string(),
                 sender: node_id.clone(),
                 receiver: "control-plane".to_string(),
-                kind: MessageKind::Event,
+                kind: MessageKind::Command,
                 operation: Operation::Control(ControlOperation::CapabilitySnapshot),
                 payload: Payload::Control(ControlPayload::CapabilitySnapshot(
                     vol_llm_agent_protocol::agent_server_protocol::CapabilitySnapshot {
@@ -177,6 +177,28 @@ fn spawn_data_plane_connector(
                 continue;
             }
 
+            // ── Read SnapshotAck ─────────────────────────────────
+
+            match time::timeout(Duration::from_secs(10), read.next()).await {
+                Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text)))) => {
+                    if let Ok(ack) = serde_json::from_str::<serde_json::Value>(&text) {
+                        let revision = ack.get("result")
+                            .and_then(|r| r.get("revision"))
+                            .and_then(|r| r.as_u64())
+                            .unwrap_or(0);
+                        tracing::info!(node_id = %node_id, revision = revision, "snapshot acknowledged by control-plane");
+                    } else {
+                        tracing::warn!(node_id = %node_id, text = %text, "unexpected snapshot response");
+                    }
+                }
+                Ok(Some(Err(e))) => {
+                    tracing::warn!(error = %e, "websocket error waiting for snapshot ack");
+                }
+                _ => {
+                    tracing::warn!("no snapshot ack received within timeout");
+                }
+            }
+
             // ── Heartbeat + read loop ──────────────────────────────
 
             let heartbeat_interval = Duration::from_secs(heartbeat_secs);
@@ -192,7 +214,7 @@ fn spawn_data_plane_connector(
                             message_id: uuid::Uuid::new_v4().to_string(),
                             sender: node_id.clone(),
                             receiver: "control-plane".to_string(),
-                            kind: MessageKind::Event,
+                            kind: MessageKind::Command,
                             operation: Operation::Control(ControlOperation::Heartbeat),
                             payload: Payload::Control(ControlPayload::Heartbeat(
                                 NodeHeartbeat {
@@ -217,8 +239,30 @@ fn spawn_data_plane_connector(
                         {
                             tracing::warn!("heartbeat send failed, reconnecting");
                             connected = false;
-                        } else {
-                            tracing::debug!(node_id = %node_id, "heartbeat sent");
+                            continue;
+                        }
+
+                        // Read HeartbeatAck (non-blocking with short timeout)
+                        match time::timeout(Duration::from_secs(3), read.next()).await {
+                            Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text)))) => {
+                                if let Ok(ack) = serde_json::from_str::<serde_json::Value>(&text) {
+                                    let ack_node = ack.get("result")
+                                        .and_then(|r| r.get("node_id"))
+                                        .and_then(|n| n.as_str())
+                                        .unwrap_or("");
+                                    tracing::debug!(node_id = %node_id, ack_node = %ack_node, "heartbeat acknowledged");
+                                } else {
+                                    tracing::debug!(node_id = %node_id, text = %text, "heartbeat response");
+                                }
+                            }
+                            Ok(Some(Err(e))) => {
+                                tracing::warn!(error = %e, "websocket error reading heartbeat ack, reconnecting");
+                                connected = false;
+                            }
+                            _ => {
+                                tracing::warn!("heartbeat ack timeout, reconnecting");
+                                connected = false;
+                            }
                         }
                     }
                     msg = read.next() => {

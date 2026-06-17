@@ -1143,11 +1143,13 @@ pub enum ControlPayload {
     RegisterAck(RegisterAck),
     Heartbeat(NodeHeartbeat),
     CapabilitySnapshot(CapabilitySnapshot),
+    CapabilitySnapshotAck(CapabilitySnapshotAck),
     CapabilityDelta(CapabilityDelta),
     Event(DataPlaneEvent),
     Command(ControlCommand),
     CommandAck(CommandAck),
     CommandResult(CommandResult),
+    HeartbeatAck(HeartbeatAck),
     NodeList(NodeListRequest),
     NodeListResult(NodeListResult),
     NodeGet(NodeGetRequest),
@@ -1170,6 +1172,17 @@ pub struct RegisterAck {
     pub node_id: String,
     pub accepted: bool,
     pub generation: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HeartbeatAck {
+    pub node_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CapabilitySnapshotAck {
+    pub node_id: String,
+    pub revision: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
