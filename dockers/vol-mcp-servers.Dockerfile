@@ -16,9 +16,9 @@
 #   docker run --rm -p 8080:8080 docs-rs-mcp:local --http 0.0.0.0:8080
 # =============================================================================
 
-FROM debian:bookworm-slim AS builder
+# ── Base: Rust toolchain + cargo-chef ─────────────────────────────────────────
+FROM debian:bookworm-slim AS base
 
-ARG BIN=docs-rs-mcp
 ARG REGION=cn
 
 ENV RUSTUP_HOME=/usr/local/rustup \
@@ -53,17 +53,37 @@ RUN set -eux; \
     fi; \
     cargo --version
 
+RUN cargo install cargo-chef --locked
 WORKDIR /app
+
+# ── Planner: generate dependency recipe ───────────────────────────────────────
+FROM base AS planner
 
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 COPY .cargo/ .cargo/
 
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ── Builder: compile deps from recipe (CACHED), then build workspace ──────────
+FROM base AS builder
+
+ARG BIN=docs-rs-mcp
+
+COPY --from=planner /app/recipe.json recipe.json
+
 ENV CARGO_NET_RETRY=10 \
     CARGO_HTTP_TIMEOUT=120
+RUN cargo chef cook --release --recipe-path recipe.json -p vol-mcp-servers --bin "${BIN}"
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ ./crates/
+COPY .cargo/ .cargo/
+
 RUN cargo build --release -p vol-mcp-servers --bin "${BIN}" && \
     strip "/app/target/release/${BIN}"
 
+# ── Runtime ───────────────────────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
 ARG BIN=docs-rs-mcp
