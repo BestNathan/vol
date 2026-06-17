@@ -91,6 +91,40 @@ fn spawn_data_plane_connector(
                 continue;
             }
 
+            // ── Read RegisterAck ────────────────────────────────────
+
+            match time::timeout(Duration::from_secs(10), read.next()).await {
+                Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text)))) => {
+                    if let Ok(ack) = serde_json::from_str::<serde_json::Value>(&text) {
+                        let accepted = ack.get("result")
+                            .and_then(|r| r.get("accepted"))
+                            .and_then(|a| a.as_bool())
+                            .unwrap_or(false);
+                        let generation = ack.get("result")
+                            .and_then(|r| r.get("generation"))
+                            .and_then(|g| g.as_u64())
+                            .unwrap_or(0);
+                        if accepted {
+                            tracing::info!(node_id = %node_id, generation = generation, "registered with control-plane");
+                        } else {
+                            tracing::warn!(node_id = %node_id, generation = generation, "control-plane rejected registration");
+                            continue;
+                        }
+                    } else {
+                        tracing::warn!(node_id = %node_id, text = %text, "unexpected register response");
+                        continue;
+                    }
+                }
+                Ok(Some(Err(e))) => {
+                    tracing::warn!(error = %e, "websocket error waiting for register ack");
+                    continue;
+                }
+                _ => {
+                    tracing::warn!("no register ack received within timeout");
+                    continue;
+                }
+            }
+
             // ── Send capability snapshot ───────────────────────────
 
             let agent_ids = data_core.list_agent_ids().await;
@@ -183,6 +217,8 @@ fn spawn_data_plane_connector(
                         {
                             tracing::warn!("heartbeat send failed, reconnecting");
                             connected = false;
+                        } else {
+                            tracing::debug!(node_id = %node_id, "heartbeat sent");
                         }
                     }
                     msg = read.next() => {
