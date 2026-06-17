@@ -31,7 +31,7 @@ spec:
         - name: acr-registry-secret
       containers:
         - name: docs-rs-mcp
-          image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/docs-rs-mcp:bootstrap
+          image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/docs-rs-mcp:9a07984
           imagePullPolicy: Always
           args:
             - "--http"
