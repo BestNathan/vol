@@ -330,13 +330,13 @@ impl DataPlaneServerCore {
                     )],
                 },
                 Err(e) => {
-                    tracing::warn!(%e, "connection receive error");
+                    tracing::debug!(%e, "connection receive ended");
                     break;
                 }
             };
             for resp in responses {
                 if let Err(e) = conn.send(resp).await {
-                    tracing::warn!(%e, "connection send error");
+                    tracing::debug!(%e, "connection send ended");
                     return;
                 }
             }

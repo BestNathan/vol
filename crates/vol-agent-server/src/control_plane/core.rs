@@ -153,7 +153,7 @@ impl ControlPlaneServerCore {
                     }
                 }
                 Err(err) => {
-                    tracing::warn!("control-plane connection error: {err}");
+                    tracing::debug!("control-plane connection ended: {err}");
                     break;
                 }
             }

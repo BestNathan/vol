@@ -146,5 +146,10 @@ async fn agent_list_and_submit_run() {
     assert!(completed, "agent run did not complete (got {event_count} events)");
     assert!(event_count >= 3, "expected at least 3 events, got {event_count}");
 
+    // Graceful close
+    let _ = write
+        .send(tokio_tungstenite::tungstenite::Message::Close(None))
+        .await;
+
     println!("All checks passed ✅");
 }
