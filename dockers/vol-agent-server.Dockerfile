@@ -85,8 +85,11 @@ RUN cargo chef prepare --recipe-path recipe.json
 # ── Builder: compile deps from recipe (CACHED), then build workspace ──────────
 FROM base AS builder
 
-# recipe.json is <1KB — this COPY is cached across any .rs source change
+# recipe.json is <1KB — cached across any .rs source change
 COPY --from=planner /app/recipe.json recipe.json
+# Cargo.toml/Lock are needed by cook to resolve features. Changes to these
+# files correctly invalidate the cache so deps are recompiled.
+COPY Cargo.toml Cargo.lock ./
 
 # Compile dependencies from recipe. This layer is CACHED by type=gha as long
 # as Cargo.toml / Cargo.lock don't change.
@@ -95,7 +98,6 @@ ENV CARGO_NET_RETRY=10 \
 RUN cargo chef cook --release --recipe-path recipe.json -p vol-agent-server
 
 # Copy real source and build workspace crates (fast incremental, deps already cached)
-COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 COPY .cargo/ .cargo/
 

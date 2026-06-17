@@ -71,6 +71,7 @@ FROM base AS builder
 ARG BIN=docs-rs-mcp
 
 COPY --from=planner /app/recipe.json recipe.json
+COPY Cargo.toml Cargo.lock ./
 
 ENV CARGO_NET_RETRY=10 \
     CARGO_HTTP_TIMEOUT=120
