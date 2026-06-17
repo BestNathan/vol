@@ -73,15 +73,45 @@ RUN set -eux; \
 
 WORKDIR /app
 
-# ── Phase 1: build dependencies (cacheable as long as Cargo.toml/Cargo.lock are unchanged) ──
-
-# Copy only manifests + directory structure — NOT source files.
-# This layer stays cached across any .rs changes.
+# ── Phase 1: build dependencies (cached when Cargo.toml/Lock unchanged) ──
+# Copy only Cargo.toml manifests — NOT source — so this layer is cacheable.
 COPY Cargo.toml Cargo.lock ./
-COPY crates/*/Cargo.toml crates/
+COPY \
+  crates/md-frontmatter/Cargo.toml crates/md-frontmatter/ \
+  crates/vol-alert/Cargo.toml crates/vol-alert/ \
+  crates/vol-config/Cargo.toml crates/vol-config/ \
+  crates/vol-core/Cargo.toml crates/vol-core/ \
+  crates/vol-datasource/Cargo.toml crates/vol-datasource/ \
+  crates/vol-deribit/Cargo.toml crates/vol-deribit/ \
+  crates/vol-engine/Cargo.toml crates/vol-engine/ \
+  crates/vol-eventbus/Cargo.toml crates/vol-eventbus/ \
+  crates/vol-llm-agent-protocol/Cargo.toml crates/vol-llm-agent-protocol/ \
+  crates/vol-llm-agent/Cargo.toml crates/vol-llm-agent/ \
+  crates/vol-llm-agents/Cargo.toml crates/vol-llm-agents/ \
+  crates/vol-llm-context/Cargo.toml crates/vol-llm-context/ \
+  crates/vol-llm-core/Cargo.toml crates/vol-llm-core/ \
+  crates/vol-llm-mcp/Cargo.toml crates/vol-llm-mcp/ \
+  crates/vol-llm-memory/Cargo.toml crates/vol-llm-memory/ \
+  crates/vol-llm-observability/Cargo.toml crates/vol-llm-observability/ \
+  crates/vol-llm-provider/Cargo.toml crates/vol-llm-provider/ \
+  crates/vol-llm-runtime/Cargo.toml crates/vol-llm-runtime/ \
+  crates/vol-llm-sandbox/Cargo.toml crates/vol-llm-sandbox/ \
+  crates/vol-llm-skill/Cargo.toml crates/vol-llm-skill/ \
+  crates/vol-llm-task/Cargo.toml crates/vol-llm-task/ \
+  crates/vol-llm-tdengine/Cargo.toml crates/vol-llm-tdengine/ \
+  crates/vol-llm-tool/Cargo.toml crates/vol-llm-tool/ \
+  crates/vol-llm-tools-builtin/Cargo.toml crates/vol-llm-tools-builtin/ \
+  crates/vol-llm-wiki/Cargo.toml crates/vol-llm-wiki/ \
+  crates/vol-mcp-servers/Cargo.toml crates/vol-mcp-servers/ \
+  crates/vol-notification/Cargo.toml crates/vol-notification/ \
+  crates/vol-observability/Cargo.toml crates/vol-observability/ \
+  crates/vol-rules/Cargo.toml crates/vol-rules/ \
+  crates/vol-session/Cargo.toml crates/vol-session/ \
+  crates/vol-tdengine/Cargo.toml crates/vol-tdengine/ \
+  crates/vol-tracing/Cargo.toml crates/vol-tracing/
 
-# Create minimal dummy source so cargo can resolve and compile all crates
-# as libraries (only needs lib.rs). Real source overwrites these in Phase 2.
+# Create minimal dummy source so cargo only compiles dependencies.
+# Real source is restored in Phase 2.
 RUN set -eux; \
     for toml_path in crates/*/Cargo.toml; do \
         crate_dir="$(dirname "$toml_path")"; \
@@ -97,9 +127,10 @@ RUN set -eux; \
 ENV CARGO_NET_RETRY=10 \
     CARGO_HTTP_TIMEOUT=120
 
-# Compile all dependencies — this RUN layer is CACHED when Cargo.toml/Lock unchanged.
-# Keep target/ so Phase 2 does incremental compilation (dependency crates stay cached).
-RUN cargo build --release -p vol-agent-server
+# Compile all dependencies — cached when Cargo.toml/Cargo.lock unchanged
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    cargo build --release -p vol-agent-server
 
 # ── Phase 2: restore real source and build final binary ──────────────────────
 
