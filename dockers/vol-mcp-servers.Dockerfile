@@ -61,9 +61,7 @@ COPY .cargo/ .cargo/
 
 ENV CARGO_NET_RETRY=10 \
     CARGO_HTTP_TIMEOUT=120
-RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    --mount=type=cache,target=/app/target,sharing=locked \
-    cargo build --release -p vol-mcp-servers --bin "${BIN}" && \
+RUN cargo build --release -p vol-mcp-servers --bin "${BIN}" && \
     strip "/app/target/release/${BIN}"
 
 FROM debian:bookworm-slim

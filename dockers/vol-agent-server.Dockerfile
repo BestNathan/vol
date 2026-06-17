@@ -81,13 +81,9 @@ COPY .cargo/ .cargo/
 # Build and strip the agent-server binary. Bump cargo's net retry count to
 # survive transient crates.io flakes (we've seen "[28] Timeout" on a single
 # crate download trip the whole build).
-# Cache mounts persist cargo registry + target directory to skip
-# re-downloading crates during incremental rebuilds.
 ENV CARGO_NET_RETRY=10 \
     CARGO_HTTP_TIMEOUT=120
-RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    --mount=type=cache,target=/app/target,sharing=locked \
-    cargo build --release -p vol-agent-server && \
+RUN cargo build --release -p vol-agent-server && \
     strip /app/target/release/vol-agent-server
 
 # ── Stage 2: Runtime ────────────────────────────────────────────────────────
