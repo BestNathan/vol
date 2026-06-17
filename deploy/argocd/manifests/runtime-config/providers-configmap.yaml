@@ -1,3 +1,4 @@
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -20,7 +21,6 @@ data:
 
     [headers]
     "anthropic-version" = "2023-06-01"
-
   openai-example.toml: |
     provider = "openai"
     model = "glm5.1"
@@ -30,3 +30,7 @@ data:
     [body]
     max_tokens = 2048
     temperature = 0.7
+
+    [headers]
+    # Custom headers (optional)
+    # X-Custom-Header = "value"

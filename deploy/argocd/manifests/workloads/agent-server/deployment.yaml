@@ -52,6 +52,13 @@ spec:
             - name: agent-skills
               mountPath: /app/.agents/skills
               readOnly: true
+            - name: agent-sandboxes
+              mountPath: /app/.agents/sandboxes
+              readOnly: true
+            - name: mcp-config
+              mountPath: /app/.mcp.json
+              subPath: mcp.json
+              readOnly: true
           env:
             - name: ANTHROPIC_AUTH_TOKEN
               valueFrom:
@@ -82,23 +89,23 @@ spec:
         - name: agent-definitions
           configMap:
             name: agent-definitions
-            items:
-              - key: coding.md
-                path: coding.md
             defaultMode: 0644
         - name: agent-providers
           configMap:
             name: agent-providers
-            items:
-              - key: anthropic-dashscope.toml
-                path: anthropic-dashscope.toml
-              - key: openai-example.toml
-                path: openai-example.toml
             defaultMode: 0644
         - name: agent-skills
           configMap:
             name: agent-skills
             items:
-              - key: gitops.SKILL.md
-                path: gitops/SKILL.md
+              - key: clarifying-requirements.SKILL.md
+                path: clarifying-requirements/SKILL.md
+            defaultMode: 0644
+        - name: agent-sandboxes
+          configMap:
+            name: agent-sandboxes
+            defaultMode: 0644
+        - name: mcp-config
+          configMap:
+            name: mcp-config
             defaultMode: 0644

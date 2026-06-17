@@ -1,0 +1,20 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-config
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: mcp-config
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: runtime-config
+data:
+  mcp.json: |
+    {
+      "mcpServers": {
+        "docs-rs-mcp": {
+          "type": "http",
+          "url": "http://docs-rs-mcp.vol-agent-system.svc.cluster.local:8080/mcp"
+        }
+      }
+    }

@@ -81,7 +81,11 @@ The `runtime-config` application owns:
 | `agents-configmap.yaml` | Agent definitions from `.agents/agents/*.md` |
 | `providers-configmap.yaml` | Provider definitions from `.agents/providers/*.toml` |
 | `skills-configmap.yaml` | Skill definitions from `.agents/skills/<skill>/SKILL.md` |
+| `sandboxes-configmap.yaml` | Sandbox definitions from `.agents/sandboxes/*.toml` |
+| `mcp-configmap.yaml` | MCP server configuration from `.mcp.json` |
 | `provider-secrets.example.yaml` | Example secret for provider keys (excluded from sync) |
+
+These ConfigMaps are **auto-generated** by `.github/workflows/sync-runtime-config.yml`. Any push to main that modifies source files under `.agents/` or `.mcp.json` triggers the workflow to regenerate the ConfigMap manifests, which ArgoCD then syncs.
 
 ### workloads
 
@@ -94,13 +98,27 @@ The `workloads` application owns:
 
 ## Runtime Config Mounts
 
-The `agent-server` deployment mounts all three shared ConfigMaps into `/app/.agents`:
+The `agent-server` deployment mounts shared runtime configuration into `/app/.agents`:
 
-- `agent-definitions` → `/app/.agents/agents`
-- `agent-providers` → `/app/.agents/providers`
-- `agent-skills` → `/app/.agents/skills`
+- `agent-definitions` → `/app/.agents/agents` (auto-mounts all `*.md` keys)
+- `agent-providers` → `/app/.agents/providers` (auto-mounts all `*.toml` keys)
+- `agent-skills` → `/app/.agents/skills` (explicit path mapping for subdirectory structure)
+- `agent-sandboxes` → `/app/.agents/sandboxes` (auto-mounts all `*.toml` keys)
+- `mcp-config` → `/app/.mcp.json` (subPath mount from `.mcp.json`)
 
-This keeps runtime configuration centralized and shared across workloads.
+This keeps runtime configuration centralized and shared across workloads. New agents, providers, skills, or sandboxes added to the source directories are automatically reflected in the ConfigMaps via the sync workflow.
+
+## ConfigMap Sync Workflow
+
+`.github/workflows/sync-runtime-config.yml` auto-generates the ConfigMap manifests when source files change on main:
+
+| Source | ConfigMap |
+|--------|-----------|
+| `.agents/agents/*.md` | `agents-configmap.yaml` |
+| `.agents/providers/*.toml` | `providers-configmap.yaml` |
+| `.agents/skills/*/SKILL.md` | `skills-configmap.yaml` |
+| `.agents/sandboxes/*.toml` | `sandboxes-configmap.yaml` |
+| `.mcp.json` | `mcp-configmap.yaml` |
 
 ## Secrets
 
