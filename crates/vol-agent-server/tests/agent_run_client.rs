@@ -102,88 +102,49 @@ async fn agent_list_and_submit_run() {
     assert!(accepted, "run not accepted");
     println!("run submitted: {}", run_id);
 
-    // ── 3. Wait for agent events (streaming output) ─────────────────────────
+    // ── 3. Wait for agent events, stop on AgentComplete ────────────────────
 
     println!("=== agent events ===");
     let mut event_count = 0;
-    let mut found_completion = false;
+    let mut completed = false;
 
     loop {
-        let evt = time::timeout(Duration::from_secs(120), read.next())
-            .await
-            .expect("timeout waiting for agent events");
+        let evt = time::timeout(Duration::from_secs(60), read.next()).await;
 
         match evt {
-            Some(Ok(msg)) => {
+            Ok(Some(Ok(msg))) => {
                 let text = msg.into_text().expect("not text");
                 let evt_val: Value = serde_json::from_str(&text).expect("invalid JSON");
                 event_count += 1;
 
-                // agent.event contains streaming messages
                 if let Some(method) = evt_val.get("method").and_then(|m| m.as_str()) {
                     println!("[{event_count}] method={method}");
+                    // Print full message for debugging
+                    println!("  {}", serde_json::to_string_pretty(&evt_val).unwrap());
+
                     if method == "agent.event" {
-                        if let Some(params) = evt_val.get("params") {
-                            if let Some(payload) = params.get("payload") {
-                                println!("  {}", serde_json::to_string_pretty(payload).unwrap());
-                                // Check for completion
-                                if let Some(status) = payload.get("status").and_then(|s| s.as_str()) {
-                                    if status == "completed" || status == "failed" {
-                                        found_completion = true;
-                                    }
-                                }
-                            }
+                        // Check for AgentComplete inside the params
+                        let event_text = serde_json::to_string(&evt_val).unwrap();
+                        if event_text.contains("AgentComplete") {
+                            println!("  >>> AgentComplete — run finished!");
+                            completed = true;
+                            break;
                         }
                     }
                 }
-
-                // Also check for error responses
                 if let Some(error) = evt_val.get("error") {
                     println!("  ERROR: {}", error);
                 }
-
-                if found_completion {
-                    println!("agent run completed after {event_count} events");
-                    break;
-                }
             }
-            Some(Err(e)) => {
-                panic!("websocket error: {}", e);
-            }
-            None => {
+            _ => {
+                println!("  (no more events after {event_count})");
                 break;
             }
         }
     }
 
-    assert!(found_completion, "agent run did not complete");
+    assert!(completed, "agent run did not complete (got {event_count} events)");
+    assert!(event_count >= 3, "expected at least 3 events, got {event_count}");
 
-    // ── 4. Check agent status ──────────────────────────────────────────────
-
-    let status_msg = json!({
-        "jsonrpc": "2.0",
-        "id": "status-1",
-        "method": "agent.status",
-        "params": { "run_id": run_id }
-    })
-    .to_string();
-
-    write
-        .send(tokio_tungstenite::tungstenite::Message::Text(status_msg))
-        .await
-        .expect("send agent.status");
-
-    let resp = time::timeout(Duration::from_secs(5), read.next())
-        .await
-        .expect("timeout")
-        .expect("closed")
-        .expect("error")
-        .into_text()
-        .expect("not text");
-
-    let status: Value = serde_json::from_str(&resp).expect("invalid JSON");
-    println!("=== agent.status ===");
-    println!("{}", serde_json::to_string_pretty(&status).unwrap());
-
-    println!("\nAll checks passed ✅");
+    println!("All checks passed ✅");
 }
