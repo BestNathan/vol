@@ -59,10 +59,10 @@ fn spawn_data_plane_connector(
 
             // ── Send register ─────────────────────────────────────
 
-            let register_msg = serde_json::to_string(&AgentServerMessage {
+            let register_msg = match serde_json::to_string(&AgentServerMessage {
                 protocol: "agent-server-protocol".to_string(),
                 message_id: uuid::Uuid::new_v4().to_string(),
-                sender: "system".to_string(),
+                sender: node_id.clone(),
                 receiver: "control-plane".to_string(),
                 kind: MessageKind::Command,
                 operation: Operation::Control(ControlOperation::Register),
@@ -72,8 +72,13 @@ fn spawn_data_plane_connector(
                     version: version.clone(),
                 })),
                 meta: MessageMeta::default(),
-            })
-            .unwrap();
+            }) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::error!(error = %e, "failed to serialize register message");
+                    return; // exit task
+                }
+            };
 
             if let Err(e) = write
                 .send(tokio_tungstenite::tungstenite::Message::Text(
@@ -100,7 +105,7 @@ fn spawn_data_plane_connector(
                 })
                 .collect();
 
-            let snapshot_msg = serde_json::to_string(&AgentServerMessage {
+            let snapshot_msg = match serde_json::to_string(&AgentServerMessage {
                 protocol: "agent-server-protocol".to_string(),
                 message_id: uuid::Uuid::new_v4().to_string(),
                 sender: node_id.clone(),
@@ -119,14 +124,23 @@ fn spawn_data_plane_connector(
                     },
                 )),
                 meta: MessageMeta::default(),
-            })
-            .unwrap();
+            }) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::error!(error = %e, "failed to serialize snapshot message");
+                    return; // exit task
+                }
+            };
 
-            let _ = write
+            if let Err(e) = write
                 .send(tokio_tungstenite::tungstenite::Message::Text(
                     snapshot_msg,
                 ))
-                .await;
+                .await
+            {
+                tracing::warn!(error = %e, "failed to send capability snapshot");
+                continue;
+            }
 
             // ── Heartbeat + read loop ──────────────────────────────
 
@@ -138,7 +152,7 @@ fn spawn_data_plane_connector(
             while connected {
                 tokio::select! {
                     _ = heartbeat_tick.tick() => {
-                        let hb_msg = serde_json::to_string(&AgentServerMessage {
+                        let hb_msg = match serde_json::to_string(&AgentServerMessage {
                             protocol: "agent-server-protocol".to_string(),
                             message_id: uuid::Uuid::new_v4().to_string(),
                             sender: node_id.clone(),
@@ -153,8 +167,13 @@ fn spawn_data_plane_connector(
                                 },
                             )),
                             meta: MessageMeta::default(),
-                        })
-                        .unwrap();
+                        }) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                tracing::error!(error = %e, "failed to serialize heartbeat message");
+                                continue;
+                            }
+                        };
 
                         if write
                             .send(tokio_tungstenite::tungstenite::Message::Text(hb_msg))
