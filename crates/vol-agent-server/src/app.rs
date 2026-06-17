@@ -9,6 +9,7 @@ use vol_llm_agent_protocol::agent_server_protocol::{
     AgentServerMessage, ControlOperation, ControlPayload, MessageKind, MessageMeta, NodeHeartbeat,
     NodeLoad, NodeRegistration, Operation, Payload,
 };
+use vol_llm_agent_protocol::transport::jsonrpc::codec::encode_jsonrpc_message;
 use vol_llm_agent_protocol::JsonRpcServer;
 
 use crate::config::ServerConfig;
@@ -59,7 +60,7 @@ fn spawn_data_plane_connector(
 
             // ── Send register ─────────────────────────────────────
 
-            let register_msg = match serde_json::to_string(&AgentServerMessage {
+            let register_msg = match encode_jsonrpc_message(AgentServerMessage {
                 protocol: "agent-server-protocol".to_string(),
                 message_id: uuid::Uuid::new_v4().to_string(),
                 sender: node_id.clone(),
@@ -75,8 +76,8 @@ fn spawn_data_plane_connector(
             }) {
                 Ok(s) => s,
                 Err(e) => {
-                    tracing::error!(error = %e, "failed to serialize register message");
-                    return; // exit task
+                    tracing::error!(error = %e, "failed to encode register message");
+                    return;
                 }
             };
 
@@ -105,7 +106,7 @@ fn spawn_data_plane_connector(
                 })
                 .collect();
 
-            let snapshot_msg = match serde_json::to_string(&AgentServerMessage {
+            let snapshot_msg = match encode_jsonrpc_message(AgentServerMessage {
                 protocol: "agent-server-protocol".to_string(),
                 message_id: uuid::Uuid::new_v4().to_string(),
                 sender: node_id.clone(),
@@ -127,8 +128,8 @@ fn spawn_data_plane_connector(
             }) {
                 Ok(s) => s,
                 Err(e) => {
-                    tracing::error!(error = %e, "failed to serialize snapshot message");
-                    return; // exit task
+                    tracing::error!(error = %e, "failed to encode snapshot message");
+                    return;
                 }
             };
 
@@ -152,7 +153,7 @@ fn spawn_data_plane_connector(
             while connected {
                 tokio::select! {
                     _ = heartbeat_tick.tick() => {
-                        let hb_msg = match serde_json::to_string(&AgentServerMessage {
+                        let hb_msg = match encode_jsonrpc_message(AgentServerMessage {
                             protocol: "agent-server-protocol".to_string(),
                             message_id: uuid::Uuid::new_v4().to_string(),
                             sender: node_id.clone(),
@@ -170,7 +171,7 @@ fn spawn_data_plane_connector(
                         }) {
                             Ok(s) => s,
                             Err(e) => {
-                                tracing::error!(error = %e, "failed to serialize heartbeat message");
+                                tracing::error!(error = %e, "failed to encode heartbeat message");
                                 continue;
                             }
                         };
