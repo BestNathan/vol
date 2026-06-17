@@ -62,11 +62,19 @@ impl DomainHandler for ControlHandler {
                 Operation::Control(ControlOperation::Heartbeat),
                 Payload::Control(ControlPayload::Heartbeat(hb)),
             ) => {
+                let node_id = hb.node_id.clone();
                 self.state
                     .nodes
                     .heartbeat(&hb.node_id, hb.load, now_ms())
                     .map_err(ProtocolError::PayloadDecodeFailedOwned)?;
-                Ok(vec![])
+                let ack = vol_llm_agent_protocol::agent_server_protocol::HeartbeatAck {
+                    node_id,
+                };
+                Ok(vec![make_result(
+                    message,
+                    ControlOperation::Heartbeat,
+                    ControlPayload::HeartbeatAck(ack),
+                )])
             }
             (
                 Operation::Control(ControlOperation::CapabilitySnapshot),
@@ -82,7 +90,15 @@ impl DomainHandler for ControlHandler {
                     .nodes
                     .update_capability_revision(&node_id, revision)
                     .map_err(ProtocolError::PayloadDecodeFailedOwned)?;
-                Ok(vec![])
+                let ack = vol_llm_agent_protocol::agent_server_protocol::CapabilitySnapshotAck {
+                    node_id,
+                    revision,
+                };
+                Ok(vec![make_result(
+                    message,
+                    ControlOperation::CapabilitySnapshot,
+                    ControlPayload::CapabilitySnapshotAck(ack),
+                )])
             }
             (
                 Operation::Control(ControlOperation::Event),

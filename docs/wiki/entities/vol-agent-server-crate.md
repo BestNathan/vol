@@ -1,10 +1,10 @@
 ---
 type: entity
 category: service
-tags: [server, config, json-rpc, task-store, session-store, data-plane, control-plane]
+tags: [server, config, json-rpc, task-store, session-store, data-plane, control-plane, gitops]
 created: 2026-06-09
-updated: 2026-06-10
-source_count: 16
+updated: 2026-06-17
+source_count: 18
 ---
 
 # vol-agent-server Crate
@@ -66,6 +66,32 @@ Task 9 added the control-plane router MVP [[agent-server-control-router-mvp]]. `
 Task 10 added boundary and role-mode verification [[agent-server-boundary-mode-verification]]. `crates/vol-agent-server/tests/role_modes.rs` verifies standalone data-plane `/ws` ownership, control-plane `/ws` priority in standalone-control and combined modes, and TOML validation rejection when both roles are disabled. `scripts/check-agent-boundaries.sh` verifies `vol-llm-agent-channel` and `vol-llm-runtime` do not depend on `vol-agent-server`.
 
 The addendum [[agent-server-control-data-plane-addendum]] further specifies endpoint role allowlists, command/run record separation, node record/session separation, combined-mode lifecycle, and boundary verification tests that should be implemented in this crate.
+
+## Remote Data-Plane Registration (Standalone Mode)
+Source: [[data-plane-registration-sandbox-tolerance]]
+
+When running as a standalone data-plane (`control_plane=false`, `data_plane=true`) with `config.data_plane.control_url` configured, `app::run()` spawns a background task via `spawn_data_plane_connector()` that:
+
+1. Connects to the control-plane WebSocket at `control_url` using `tokio-tungstenite`.
+2. Sends `control.register` with `node_id`, `name`, and `version`.
+3. Sends `capability_snapshot` with live agent IDs from `data_core.list_agent_ids()`.
+4. Maintains periodic heartbeats (`control.heartbeat`) with node status and load.
+5. Reads incoming WebSocket messages (future: handle control-plane commands).
+6. Auto-reconnects with exponential backoff (1s initial, 2x per attempt, max 60s) on any disconnect.
+
+The `spawn_data_plane_connector()` function uses `tokio::spawn` to run independently of the main server task. Connection failures are logged at `warn` level; successful connections reset the backoff to 1s.
+
+## GitOps Deployment
+Source: [[argocd-gitops-deployment]]
+
+`vol-agent-server` is now one of the initial workloads in the self-contained ArgoCD GitOps tree under `deploy/argocd/`. The GitOps tree is split into two child Applications: `runtime-config` owns the namespace and shared ConfigMaps, while `workloads` owns application deployments.
+
+The `agent-server` deployment lives under `deploy/argocd/manifests/workloads/agent-server/` in the `vol-agent-system` namespace. It uses the control-plane image tag `vol-agent-server:cp-latest`, mounts server configuration from `agent-server-config`, and mounts shared runtime configs at `/app/.agents`:
+- `agent-definitions` → `/app/.agents/agents` (`.agents/agents/*.md`)
+- `agent-providers` → `/app/.agents/providers` (`.agents/providers/*.toml`)
+- `agent-skills` → `/app/.agents/skills` (`.agents/skills/<skill>/SKILL.md`)
+
+**Important:** Real provider API keys live in `agent-provider-secrets`, not `agent-server-secrets`. Both `agent-server` and `docs-rs-mcp` use `acr-registry-secret` for private ACR pulls.
 
 ## Related
 - [[agent-server-control-data-plane]]

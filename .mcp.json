@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "docs-rs-mcp": {
+      "type": "http",
+      "url": "http://docs-rs-mcp.vol-agent-system.svc.cluster.local:8080/mcp"
+    }
+  }
+}

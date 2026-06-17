@@ -1,5 +1,29 @@
 # Change Log
 
+## [2026-06-17] ingest | Data-Plane Registration and Sandbox Fault Tolerance
+- Created sources: [[data-plane-registration-sandbox-tolerance]]
+- Created entities: [[vol-llm-sandbox-crate]] (sandbox abstraction with fault-tolerant registry loading)
+- Updated entities: [[vol-agent-server-crate]] (remote data-plane registration with spawn_data_plane_connector and exponential backoff reconnect, source_count 17->18)
+- Updated concepts: [[agent-server-control-data-plane]] (remote data-plane registration implementation, source_count 13->14)
+- Updated index: new entity/source entries for sandbox crate and data-plane source, refreshed summaries for server and control-data-plane concepts
+- Cross-references added: 12
+- Changes: Ingested the sandbox fault tolerance (per-file warn+continue in SandboxRegistry::load) and remote data-plane registration (standalone data-plane connects to control-plane via WebSocket, sends control.register + capability_snapshot, maintains periodic heartbeats, auto-reconnects with exponential backoff 1s->60s).
+
+## [2026-06-16] refactor | Runtime-Config GitOps Layout
+- Updated sources: [[argocd-gitops-deployment]] (runtime-config/workloads split, shared ConfigMaps, /app/.agents mounts, agent-provider-secrets)
+- Updated concepts: [[argocd-app-of-apps-gitops]] (two-child App structure, runtime-config vs workloads separation)
+- Updated index: refreshed summaries for argocd source/concept pages
+- Cross-references added: 12
+- Changes: Ingested the GitOps runtime-config refactor: ArgoCD child Applications are now `runtime-config` and `workloads`; runtime-config owns namespace plus shared `.agents` agents/providers/skills ConfigMaps and provider secret example; `agent-server` mounts `/app/.agents` from shared ConfigMaps; workloads own `agent-server` and `docs-rs-mcp` manifests; MCP workflow manifest path moved under workloads; real provider keys are in `agent-provider-secrets`.
+
+## [2026-06-16] ingest | ArgoCD GitOps Deployment
+- Created sources: [[argocd-gitops-deployment]]
+- Created concepts: [[argocd-app-of-apps-gitops]]
+- Updated entities: [[vol-agent-server-crate]] (agent-server GitOps workload), [[vol-mcp-servers-crate]] (docs-rs-mcp GitOps workload and MCP image workflow), [[vol-repository]] (`deploy/argocd/` GitOps tree)
+- Updated index: new source/concept entries and refreshed entity summaries
+- Cross-references added: 18
+- Changes: Documented the self-contained `deploy/argocd/` App-of-Apps implementation for `agent-server` and `docs-rs-mcp`, the `vol-agent-system` namespace, ACR pull secret usage, `dockers/vol-mcp-servers.Dockerfile`, `build-mcp-images` workflow, and validation results including the Docker Hub timeout caveat.
+
 ## [2026-06-11] refactor | Rename crate: vol-llm-agent-channel → vol-llm-agent-protocol
 - Renamed crate directory, Cargo.toml, all workspace dependency references, all Rust source imports, scripts, Makefile, CLAUDE.md, wiki entity page
 
