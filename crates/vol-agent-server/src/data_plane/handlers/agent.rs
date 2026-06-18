@@ -159,11 +159,9 @@ impl DomainHandler for AgentHandler {
             }
             (AgentOperation::List, _) => {
                 let defs = self.agent_defs.read().unwrap();
-                let mut agents: Vec<serde_json::Value> = self
-                    .holders
-                    .lock()
-                    .unwrap()
-                    .keys()
+                let holder_keys: Vec<String> = self.holders.lock().unwrap().keys().cloned().collect();
+                let mut agents: Vec<serde_json::Value> = holder_keys
+                    .iter()
                     .map(|k| {
                         let def = defs.get(k);
                         serde_json::json!({
