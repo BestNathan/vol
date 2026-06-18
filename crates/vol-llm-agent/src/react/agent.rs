@@ -291,6 +291,11 @@ impl ReActAgent {
             return Err(crate::AgentError::AlreadyRunning);
         }
 
+        // Ensure all MCP servers are connected before starting the run.
+        if let Some(ref mcp) = self.config.mcp_manager {
+            mcp.reconnect_all().await;
+        }
+
         let user_content = input
             .to_message_content()
             .map_err(|e| crate::AgentError::InvalidInput(e.to_string()))?;

@@ -168,6 +168,30 @@ impl McpManager {
         Ok(())
     }
 
+    /// Reconnect all servers that are not currently Connected.
+    /// Called before agent runs and when a tool call finds a dead connection.
+    pub async fn reconnect_all(&self) {
+        let to_reconnect: Vec<String> = {
+            let servers = self.servers.read().await;
+            servers
+                .iter()
+                .filter(|(_, s)| s.status != ServerStatus::Connected)
+                .map(|(n, _)| n.clone())
+                .collect()
+        };
+        for name in to_reconnect {
+            tracing::info!(server = %name, "MCP reconnecting (not connected)");
+            // Reset retry count so reconnect can proceed
+            {
+                let mut servers = self.servers.write().await;
+                if let Some(state) = servers.get_mut(&name) {
+                    state.retry_count = 0;
+                }
+            }
+            self.connect_server(&name).await;
+        }
+    }
+
     async fn connect_server(&self, name: &str) {
         let config;
         let max_retries;
@@ -216,12 +240,16 @@ impl McpManager {
                     state.retry_count += 1;
                     if state.retry_count >= max_retries {
                         state.clear_caches();
-                        state.status = ServerStatus::Error("max retries exceeded".to_string());
+                        state.status = ServerStatus::Error(
+                            "max retries exceeded, retrying with delay".to_string(),
+                        );
                         tracing::error!(
                             server = name,
                             retries = state.retry_count,
-                            "MCP server max retries exceeded"
+                            "MCP server max retries exceeded, will retry with delay"
                         );
+                        // Still spawn reconnect — it handles the delay internally
+                        self.spawn_reconnect(name, max_retries, backoff_min, backoff_max);
                     } else {
                         state.status = ServerStatus::Error(e.to_string());
                         self.spawn_reconnect(name, max_retries, backoff_min, backoff_max);
@@ -366,6 +394,25 @@ impl McpManager {
         args: serde_json::Value,
     ) -> Result<String, McpError> {
         use rmcp::model::{CallToolRequestParams, JsonObject};
+
+        // If server is not connected, try to reconnect first.
+        {
+            let servers = self.servers.read().await;
+            let needs_reconnect = servers
+                .get(server)
+                .map(|s| s.status != ServerStatus::Connected)
+                .unwrap_or(false);
+            drop(servers);
+            if needs_reconnect {
+                tracing::info!(%server, "MCP server not connected, attempting reconnect before tool call");
+                let mut servers = self.servers.write().await;
+                if let Some(state) = servers.get_mut(server) {
+                    state.retry_count = 0;
+                }
+                drop(servers);
+                self.connect_server(server).await;
+            }
+        }
 
         let (peer, server_name) = {
             let servers = self.servers.read().await;

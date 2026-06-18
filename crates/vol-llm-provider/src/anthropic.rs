@@ -36,19 +36,31 @@ impl AnthropicProvider {
 
     /// Build an HTTP client with optional proxy support.
     /// Reads HTTPS_PROXY or https_proxy from environment if set.
-    /// DashScope is accessible directly (no proxy needed in China),
-    /// so it's excluded from proxy routing.
+    /// Respects NO_PROXY / no_proxy from environment for exclusion list.
     fn build_client() -> Result<Client> {
         let proxy_url = std::env::var("HTTPS_PROXY")
-            .or_else(|_| std::env::var("https_proxy"))
-            .ok();
+            .ok()
+            .or_else(|| std::env::var("https_proxy").ok())
+            .or_else(|| std::env::var("HTTP_PROXY").ok())
+            .or_else(|| std::env::var("http_proxy").ok());
 
         let mut builder = Client::builder().danger_accept_invalid_certs(true);
 
         if let Some(url) = &proxy_url {
-            // DashScope coding endpoint is accessible directly from China,
-            // so we bypass the proxy for it to avoid CONNECT tunnel failures.
-            let no_proxy = reqwest::NoProxy::from_string("dashscope.aliyuncs.com");
+            // Build NO_PROXY exclusion list from environment + known direct-access hosts.
+            let mut no_proxy_parts = vec!["dashscope.aliyuncs.com".to_string()];
+            if let Ok(no_proxy_env) = std::env::var("NO_PROXY")
+                .or_else(|_| std::env::var("no_proxy"))
+            {
+                for part in no_proxy_env.split(',') {
+                    let part = part.trim();
+                    if !part.is_empty() {
+                        no_proxy_parts.push(part.to_string());
+                    }
+                }
+            }
+            let no_proxy_str = no_proxy_parts.join(",");
+            let no_proxy = reqwest::NoProxy::from_string(&no_proxy_str);
             let proxy = reqwest::Proxy::all(url)
                 .map_err(|e| LLMError::Network(reqwest::Error::from(e).into()))?
                 .no_proxy(no_proxy);
@@ -292,11 +304,14 @@ impl LLMClient for AnthropicProvider {
         let mut req = self
             .client
             .post(&url)
-            .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
             .header("Content-Type", "application/json")
             .header("User-Agent", "claude-code/1.0.0")
             .json(&body);
+
+        if !self.api_key.is_empty() {
+            req = req.header("x-api-key", &self.api_key);
+        }
 
         for (key, value) in &self.headers {
             req = req.header(key, value);
@@ -465,11 +480,14 @@ impl LLMClient for AnthropicProvider {
         let mut req = self
             .client
             .post(&url)
-            .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
             .header("Content-Type", "application/json")
             .header("User-Agent", "claude-code/1.0.0")
             .json(&body);
+
+        if !self.api_key.is_empty() {
+            req = req.header("x-api-key", &self.api_key);
+        }
 
         for (key, value) in &self.headers {
             req = req.header(key, value);
