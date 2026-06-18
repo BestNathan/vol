@@ -72,7 +72,7 @@ impl JsonRpcConnection {
                     tracing::debug!("Ignoring binary message");
                 }
                 Err(e) => {
-                    tracing::warn!(%e, "WebSocket receive error");
+                    tracing::debug!(%e, "WebSocket receive ended");
                     break;
                 }
             }

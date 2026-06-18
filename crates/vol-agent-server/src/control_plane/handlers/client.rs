@@ -2,10 +2,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use vol_llm_agent_protocol::agent_server_protocol::{
-    AgentOperation, AgentPayload, AgentServerMessage, Operation, Payload, ProtocolError,
+    AgentOperation, AgentPayload, AgentServerMessage, MessageKind, Operation, Payload,
+    ProtocolError,
 };
 use vol_llm_agent_protocol::DomainHandler;
 
+use crate::control_plane::router::ControlRouter;
 use crate::control_plane::state::ControlPlaneState;
 
 pub struct ClientHandler {
@@ -78,10 +80,75 @@ impl DomainHandler for ClientHandler {
                 Ok(vec![reply])
             }
             Operation::Agent(AgentOperation::Submit) => {
-                Err(ProtocolError::PayloadDecodeFailedOwned(
-                    "agent.submit routing is not implemented in this behavior-completion slice"
-                        .to_string(),
-                ))
+                // Extract submit payload
+                let (target, input) = match &message.payload {
+                    Payload::Agent(AgentPayload::Submit {
+                        target, input, ..
+                    }) => (target.clone(), input.clone()),
+                    _ => {
+                        return Err(ProtocolError::PayloadDecodeFailed(
+                            "agent.submit",
+                        ));
+                    }
+                };
+
+                // Route to a data-plane node that has the requested agent
+                let router = ControlRouter::new(&self.state.nodes, &self.state.capabilities);
+                let node_id = router
+                    .route_agent(target.as_deref())
+                    .map_err(|e| ProtocolError::PayloadDecodeFailedOwned(e))?;
+
+                // Get the node's WebSocket connection
+                let node_conn = self
+                    .state
+                    .get_node_connection(&node_id)
+                    .ok_or_else(|| {
+                        ProtocolError::PayloadDecodeFailedOwned(format!(
+                            "node {node_id} is registered but has no active connection"
+                        ))
+                    })?;
+
+                // Generate run_id on the control-plane side
+                let run_id = uuid::Uuid::new_v4().to_string();
+                let run_id_simple = run_id.replace('-', "");
+
+                // Register this client connection for event relay
+                // (The client connection is not available here — we store
+                //  the run_id and rely on the core to relay events.)
+                // For now, return the ack immediately; event relay is a follow-up.
+                let ack = AgentPayload::SubmitAck {
+                    run_id: run_id.clone(),
+                    accepted: true,
+                };
+
+                // Forward submit to the data-plane node (fire-and-forget)
+                let forward_msg = AgentServerMessage {
+                    protocol: "agent-server-protocol".to_string(),
+                    message_id: run_id_simple.clone(),
+                    sender: "control".to_string(),
+                    receiver: node_id.clone(),
+                    kind: MessageKind::Command,
+                    operation: Operation::Agent(AgentOperation::Submit),
+                    payload: Payload::Agent(AgentPayload::Submit { input, target }),
+                    meta: Default::default(),
+                };
+
+                if let Err(e) = node_conn.send(forward_msg).await {
+                    tracing::warn!(
+                        node_id = %node_id,
+                        error = %e,
+                        "failed to forward agent.submit to node"
+                    );
+                }
+
+                let mut reply = AgentServerMessage::new_result(
+                    message.message_id,
+                    Operation::Agent(AgentOperation::Submit),
+                    Payload::Agent(ack),
+                );
+                reply.sender = "control".to_string();
+                reply.receiver = message.sender;
+                Ok(vec![reply])
             }
             _ => Err(ProtocolError::PayloadDecodeFailedOwned(
                 "unsupported client operation".to_string(),
@@ -148,7 +215,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn agent_submit_returns_error() {
+    async fn agent_submit_returns_capability_not_found_when_no_nodes() {
         let state = Arc::new(ControlPlaneState::new());
         let handler = ClientHandler::new(state);
         let msg = AgentServerMessage {
@@ -166,7 +233,10 @@ mod tests {
         };
 
         let err = handler.handle(msg).await.unwrap_err();
-        assert!(err.to_string().contains("agent.submit routing"));
+        assert!(
+            err.to_string().contains("capability_not_found"),
+            "expected capability_not_found, got: {err}"
+        );
     }
 
     #[tokio::test]

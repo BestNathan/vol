@@ -14,7 +14,7 @@ spec:
     path: deploy/argocd/manifests/runtime-config
     directory:
       recurse: true
-      exclude: provider-secrets.example.yaml
+      exclude: "{provider-secrets.example.yaml,agent-dingtalk-secrets.example.yaml}"
   destination:
     server: https://kubernetes.default.svc
     namespace: vol-agent-system

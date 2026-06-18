@@ -77,6 +77,8 @@ enum RawMcpTransport {
     Stdio(RawStdioConfig),
     #[serde(rename = "http")]
     Http(RawHttpConfig),
+    #[serde(rename = "streamable-http")]
+    StreamableHttp(RawHttpConfig),
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +97,11 @@ fn try_parse_server(name: &str, value: &serde_json::Value) -> Option<McpServerCo
                     env: cfg.env,
                 },
                 RawMcpTransport::Http(cfg) => McpTransport::Http {
+                    url: cfg.url,
+                    headers: cfg.headers,
+                    env: cfg.env,
+                },
+                RawMcpTransport::StreamableHttp(cfg) => McpTransport::Http {
                     url: cfg.url,
                     headers: cfg.headers,
                     env: cfg.env,
@@ -333,6 +340,35 @@ mod tests {
         let parsed = try_parse_server("http-srv", &value).unwrap();
         assert!(matches!(parsed.transport, McpTransport::Http { .. }));
         assert_eq!(parsed.name, "http-srv");
+    }
+
+    #[test]
+    fn test_parse_streamable_http_type() {
+        let value: serde_json::Value =
+            serde_json::from_str(
+                r#"{"type":"streamable-http","url":"https://mcp-gw.dingtalk.com/server/test"}"#,
+            )
+            .unwrap();
+        let parsed = try_parse_server("dingtalk", &value).unwrap();
+        assert!(matches!(parsed.transport, McpTransport::Http { .. }));
+        assert_eq!(parsed.name, "dingtalk");
+    }
+
+    #[test]
+    fn test_parse_streamable_http_with_headers() {
+        let value: serde_json::Value = serde_json::from_str(
+            r#"{"type":"streamable-http","url":"https://example.com/mcp","headers":{"Authorization":"Bearer token"}}"#
+        ).unwrap();
+        let parsed = try_parse_server("auth-srv", &value).unwrap();
+        match &parsed.transport {
+            McpTransport::Http { headers, url, .. } => {
+                assert!(headers.is_some());
+                let h = headers.as_ref().unwrap();
+                assert_eq!(h.get("Authorization").unwrap(), "Bearer token");
+                assert_eq!(url, "https://example.com/mcp");
+            }
+            _ => panic!("expected Http transport"),
+        }
     }
 
     #[test]

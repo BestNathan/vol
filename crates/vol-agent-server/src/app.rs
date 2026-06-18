@@ -30,30 +30,40 @@ fn spawn_data_plane_connector(
     tokio::spawn(async move {
         let mut backoff = 1u64;
         let max_backoff = 60u64;
+        let mut revision: u64 = 0;
 
         loop {
+            revision += 1;
             tracing::info!(
+                dir = "dp > cp",
                 control_url = %control_url,
                 node_id = %node_id,
-                "connecting to control-plane"
+                "data-plane connecting to control-plane"
             );
 
             let ws_stream = match connect_async(&control_url).await {
-                Ok((stream, _)) => stream,
+                Ok((stream, _)) => {
+                    tracing::info!(
+                        dir = "dp > cp",
+                        remote = %control_url,
+                        node_id = %node_id,
+                        "data-plane connected to control-plane"
+                    );
+                    stream
+                }
                 Err(e) => {
                     tracing::warn!(
+                        dir = "dp > cp",
                         control_url = %control_url,
                         error = %e,
                         backoff_secs = backoff,
-                        "failed to connect to control-plane, retrying"
+                        "data-plane failed to connect to control-plane, retrying"
                     );
                     time::sleep(Duration::from_secs(backoff)).await;
                     backoff = (backoff * 2).min(max_backoff);
                     continue;
                 }
             };
-
-            tracing::info!(node_id = %node_id, "connected to control-plane");
             backoff = 1;
 
             let (mut write, mut read) = ws_stream.split();
@@ -150,7 +160,7 @@ fn spawn_data_plane_connector(
                 payload: Payload::Control(ControlPayload::CapabilitySnapshot(
                     vol_llm_agent_protocol::agent_server_protocol::CapabilitySnapshot {
                         node_id: node_id.clone(),
-                        revision: 1,
+                        revision,
                         generated_at_ms: None,
                         agents,
                         tools: vec![],
@@ -280,6 +290,13 @@ fn spawn_data_plane_connector(
                     }
                 }
             }
+            // Send close frame before reconnecting
+            let _ = write.close().await;
+            tracing::info!(
+                dir = "dp > cp",
+                node_id = %node_id,
+                "data-plane disconnected from control-plane, will reconnect"
+            );
         }
     });
 }

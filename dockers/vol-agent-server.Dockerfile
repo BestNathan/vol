@@ -33,8 +33,8 @@
 #     vol-agent-server:latest --config /app/agent-server.toml
 # =============================================================================
 
-# ── Stage 1: Builder (same Debian as runtime → matching glibc) ──────────────
-FROM debian:bookworm-slim AS builder
+# ── Base: Rust toolchain + cargo-chef (shared by planner and builder) ─────────
+FROM debian:bookworm-slim AS base
 
 ARG REGION=cn
 
@@ -42,7 +42,6 @@ ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH
 
-# Install build deps + Rust toolchain. Mirrors are toggled by REGION.
 RUN set -eux; \
     if [ "$REGION" = "cn" ]; then \
         sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources; \
@@ -71,27 +70,46 @@ RUN set -eux; \
     fi; \
     cargo --version
 
+RUN cargo install cargo-chef --locked
 WORKDIR /app
 
-# Copy dependency manifests first for layer caching
+# ── Planner: scan workspace → generate dependency recipe (always runs) ────────
+FROM base AS planner
+
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
+COPY .cargo/ .cargo/
 
-# Build and strip the agent-server binary. Bump cargo's net retry count to
-# survive transient crates.io flakes (we've seen "[28] Timeout" on a single
-# crate download trip the whole build).
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ── Builder: compile deps from recipe (CACHED), then build workspace ──────────
+FROM base AS builder
+
+# recipe.json is <1KB — cached across any .rs source change
+COPY --from=planner /app/recipe.json recipe.json
+# Cargo.toml/Lock are needed by cook to resolve features. Changes to these
+# files correctly invalidate the cache so deps are recompiled.
+COPY Cargo.toml Cargo.lock ./
+
+# Compile dependencies from recipe. This layer is CACHED by type=gha as long
+# as Cargo.toml / Cargo.lock don't change.
 ENV CARGO_NET_RETRY=10 \
     CARGO_HTTP_TIMEOUT=120
+RUN cargo chef cook --release --recipe-path recipe.json -p vol-agent-server
+
+# Copy real source and build workspace crates (fast incremental, deps already cached)
+COPY crates/ ./crates/
+COPY .cargo/ .cargo/
+
 RUN cargo build --release -p vol-agent-server && \
     strip /app/target/release/vol-agent-server
 
-# ── Stage 2: Runtime ────────────────────────────────────────────────────────
+# ── Runtime ───────────────────────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
 ARG ROLE=data-plane
 ARG REGION=cn
 
-# Install CA certificates for HTTPS
 RUN set -eux; \
     if [ "$REGION" = "cn" ]; then \
         sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources; \
@@ -102,15 +120,11 @@ RUN set -eux; \
 
 WORKDIR /app
 
-# Copy the binary
 COPY --from=builder /app/target/release/vol-agent-server /usr/local/bin/vol-agent-server
-
-# Bake in the role-specific default config. ROLE=control-plane | data-plane.
 COPY configs/vol-agent-server.${ROLE}.toml /etc/vol-agent-server/agent-server.toml
 
 ENV VOL_AGENT_SERVER_ROLE=${ROLE}
 
-# Create data directory
 RUN mkdir -p /app/data
 
 EXPOSE 3001

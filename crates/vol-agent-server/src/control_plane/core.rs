@@ -73,6 +73,18 @@ impl ControlPlaneServerCore {
         role: crate::control_plane::endpoint::ControlConnectionRole,
         conn: Arc<dyn Connection>,
     ) {
+        let is_node = matches!(
+            role,
+            crate::control_plane::endpoint::ControlConnectionRole::DataPlaneNode
+        );
+
+        let dir_label = if is_node {
+            "cp < dp"
+        } else {
+            "cp < client"
+        };
+        tracing::info!(dir = %dir_label, "control-plane accepted connection");
+
         while let Some(next) = conn.recv().await {
             match next {
                 Ok(message) => {
@@ -94,6 +106,14 @@ impl ControlPlaneServerCore {
                         continue;
                     }
 
+                    let is_register = matches!(
+                        (&message.operation, &message.payload),
+                        (
+                            Operation::Control(ControlOperation::Register),
+                            Payload::Control(ControlPayload::Register(_)),
+                        )
+                    );
+
                     let replies = match self.handle(message).await {
                         Ok(replies) => replies,
                         Err(err) => {
@@ -111,6 +131,27 @@ impl ControlPlaneServerCore {
                         }
                     };
 
+                    // After successful register, store the connection for agent.submit forwarding
+                    if is_node && is_register {
+                        for reply in &replies {
+                            if let Payload::Control(ControlPayload::RegisterAck(ref ack)) =
+                                reply.payload
+                            {
+                                if ack.accepted {
+                                    self.state
+                                        .node_connections
+                                        .write()
+                                        .expect("node_connections lock poisoned")
+                                        .insert(ack.node_id.clone(), conn.clone());
+                                    tracing::info!(
+                                        node_id = %ack.node_id,
+                                        "stored node connection for agent forwarding"
+                                    );
+                                }
+                            }
+                        }
+                    }
+
                     for reply in replies {
                         if let Err(err) = conn.send(reply).await {
                             tracing::warn!("control-plane send error: {err}");
@@ -119,11 +160,23 @@ impl ControlPlaneServerCore {
                     }
                 }
                 Err(err) => {
-                    tracing::warn!("control-plane connection error: {err}");
+                    tracing::debug!("control-plane connection ended: {err}");
                     break;
                 }
             }
         }
+
+        // Clean up on disconnect
+        if is_node {
+            // Remove node connections by scanning for this conn pointer
+            let conn_ptr = format!("{:p}", Arc::as_ptr(&conn));
+            self.state
+                .node_connections
+                .write()
+                .expect("node_connections lock poisoned")
+                .retain(|_k, v| format!("{:p}", Arc::as_ptr(v)) != conn_ptr);
+        }
+        tracing::info!(dir = %dir_label, "control-plane connection closed");
     }
 }
 
