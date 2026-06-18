@@ -73,6 +73,9 @@ pub struct AgentDef {
     /// Per-tool configurations. Key is the tool name (e.g. "bash"), value is a
     /// TOML table that may include a `sandbox` key and tool-specific fields.
     pub tool_config: Option<HashMap<String, serde_json::Value>>,
+    /// MCP server names to use. When set, only MCP tools from these servers
+    /// are registered. When absent (None), all configured MCP tools are available.
+    pub mcps: Option<Vec<String>>,
 }
 
 impl AgentDef {
@@ -95,6 +98,7 @@ impl AgentDef {
             context_files: vec![],
             sandbox: None,
             tool_config: None,
+            mcps: None,
         }
     }
 
@@ -155,6 +159,12 @@ impl AgentDef {
     /// Set per-tool configurations.
     pub fn with_tool_config(mut self, config: HashMap<String, serde_json::Value>) -> Self {
         self.tool_config = Some(config);
+        self
+    }
+
+    /// Set MCP server names to use.
+    pub fn with_mcps(mut self, mcps: Vec<String>) -> Self {
+        self.mcps = Some(mcps);
         self
     }
 }

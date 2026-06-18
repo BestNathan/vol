@@ -102,6 +102,7 @@ impl AgentLoader {
                     context_files: fm.context_files.clone().unwrap_or_default(),
                     sandbox: fm.sandbox.clone(),
                     tool_config: fm.tool_config.clone(),
+                    mcps: fm.mcps.clone(),
                 };
 
                 match agents_map.entry(doc.frontmatter.name) {
@@ -347,5 +348,33 @@ mod tests {
         let def = loader.get("helper").await.unwrap();
         assert!(def.prompt.contains("Repo content."));
         assert_eq!(def.scope, AgentScope::Repo);
+    }
+
+    #[tokio::test]
+    async fn test_discover_agent_with_mcps() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let agents_dir = temp_dir.path().join(".agents").join("agents");
+        std::fs::create_dir_all(&agents_dir).unwrap();
+
+        let mut f = std::fs::File::create(agents_dir.join("mcp-agent.md")).unwrap();
+        writeln!(f, "---").unwrap();
+        writeln!(f, "name: mcp-agent").unwrap();
+        writeln!(f, "description: An agent with MCP servers").unwrap();
+        writeln!(f, "mcps:").unwrap();
+        writeln!(f, "  - docs-rs").unwrap();
+        writeln!(f, "  - weather").unwrap();
+        writeln!(f, "---").unwrap();
+        writeln!(f, "You are an agent with MCP access.").unwrap();
+
+        let mut loader = AgentLoader::new(None);
+        loader.roots.clear();
+        loader.add_root(AgentScope::User, agents_dir.clone());
+        loader.discover_all().await.unwrap();
+
+        let def = loader.get("mcp-agent").await.unwrap();
+        assert_eq!(
+            def.mcps,
+            Some(vec!["docs-rs".to_string(), "weather".to_string()])
+        );
     }
 }

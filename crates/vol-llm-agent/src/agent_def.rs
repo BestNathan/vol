@@ -48,6 +48,10 @@ pub struct AgentFrontmatter {
     /// Optional. Per-tool configuration. Key = tool name, value = tool config (can include `sandbox` key).
     #[serde(default)]
     pub tool_config: Option<std::collections::HashMap<String, serde_json::Value>>,
+    /// Optional. MCP server names to use. When set, only MCP tools from these
+    /// servers are registered for the agent. When absent, all MCP tools are available.
+    #[serde(default)]
+    pub mcps: Option<Vec<String>>,
 }
 
 impl AgentFrontmatter {
@@ -144,6 +148,7 @@ mod tests {
             context_files: None,
             sandbox: None,
             tool_config: None,
+            mcps: None,
         };
         assert_eq!(fm.resolve_type(), "my-agent");
     }
@@ -164,6 +169,7 @@ mod tests {
             context_files: None,
             sandbox: None,
             tool_config: None,
+            mcps: None,
         };
         assert_eq!(fm.resolve_type(), "code-reviewer");
     }
@@ -184,6 +190,7 @@ mod tests {
             context_files: None,
             sandbox: None,
             tool_config: None,
+            mcps: None,
         };
         assert_eq!(fm.resolve_max_iterations(), Some(10));
     }
@@ -204,6 +211,7 @@ mod tests {
             context_files: None,
             sandbox: None,
             tool_config: None,
+            mcps: None,
         };
         assert_eq!(fm.resolve_max_iterations(), Some(20));
     }
@@ -224,6 +232,7 @@ mod tests {
             context_files: None,
             sandbox: None,
             tool_config: None,
+            mcps: None,
         };
         assert!(fm.resolve_max_iterations().is_none());
     }
@@ -232,5 +241,36 @@ mod tests {
     fn test_agent_def_with_working_dir() {
         let def = AgentDef::new("test", "prompt").with_working_dir(PathBuf::from("/tmp/project"));
         assert_eq!(def.working_dir, Some(PathBuf::from("/tmp/project")));
+    }
+
+    #[test]
+    fn test_agent_def_with_mcps() {
+        let def = AgentDef::new("test", "prompt")
+            .with_mcps(vec!["docs-rs".to_string(), "weather".to_string()]);
+        assert_eq!(
+            def.mcps,
+            Some(vec!["docs-rs".to_string(), "weather".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_frontmatter_mcps_defaults_to_none() {
+        let fm = AgentFrontmatter {
+            name: "a".to_string(),
+            r#type: None,
+            description: "d".to_string(),
+            tools: None,
+            disallowed_tools: None,
+            model: None,
+            max_iterations: None,
+            max_turns: None,
+            max_history_messages: None,
+            working_dir: None,
+            context_files: None,
+            sandbox: None,
+            tool_config: None,
+            mcps: None,
+        };
+        assert!(fm.mcps.is_none());
     }
 }
