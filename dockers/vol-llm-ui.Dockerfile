@@ -76,7 +76,9 @@ FROM base AS builder
 # Cook dependencies (cached layer)
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --target wasm32-unknown-unknown \
-    --package vol-llm-ui --bin vol-llm-ui-web --recipe-path recipe.json
+    --package vol-llm-ui --bin vol-llm-ui-web \
+    --no-default-features --features web \
+    --recipe-path recipe.json
 
 # Copy source and build
 COPY . .
