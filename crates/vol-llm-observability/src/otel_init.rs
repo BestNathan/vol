@@ -1,21 +1,13 @@
-//! OTel initialization helper.
-//!
-//! Provides `init()` which sets up the full OpenTelemetry stack:
-//! - Traces (OTLP gRPC span export)
-//! - Metrics (OTLP gRPC periodic metric export)
-//! - Logs (OTLP gRPC log export via tracing bridge)
-//!
-//! Also sets up console and rolling-file tracing layers.
+//! Full OTel initialization: traces + metrics + logs.
 
 use std::sync::OnceLock;
-use std::time::Duration;
 
 use opentelemetry::global;
-use opentelemetry::trace::TracerProvider;
+use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
-use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
+use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
 use opentelemetry_sdk::Resource;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
@@ -23,42 +15,19 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 
 static INITIALIZED: OnceLock<()> = OnceLock::new();
 
-/// Configuration for OpenTelemetry initialization.
+/// Configuration for OTel initialization.
 #[derive(Debug, Clone)]
 pub struct OtelConfig {
-    /// Whether OTel export is enabled (traces + metrics + logs).
     pub enabled: bool,
-    /// OTel Collector gRPC endpoint (e.g. `http://localhost:4317`).
     pub endpoint: String,
-    /// Service name for OTel resource attributes.
     pub service_name: String,
-    /// Service namespace (e.g. `vol-agent`).
     pub service_namespace: String,
-    /// Deployment environment (e.g. `production`, `development`).
     pub deployment_environment: String,
-    /// Trace sampling rate (0.0 = drop all, 1.0 = keep all).
     pub sample_rate: f64,
-    /// Batch export timeout in milliseconds.
     pub batch_max_export_timeout_millis: u64,
 }
 
-impl Default for OtelConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            endpoint: "http://localhost:4317".to_string(),
-            service_name: "vol-agent".to_string(),
-            service_namespace: "vol-agent".to_string(),
-            deployment_environment: "development".to_string(),
-            sample_rate: 1.0,
-            batch_max_export_timeout_millis: 30_000,
-        }
-    }
-}
-
-/// Guards holding OTel provider handles.
-///
-/// Call `shutdown()` during application teardown to flush remaining spans/metrics/logs.
+/// Guards that keep OTel providers alive. Must be held for the app's lifetime.
 pub struct OtelGuards {
     pub tracer_provider: Option<SdkTracerProvider>,
     pub logger_provider: Option<SdkLoggerProvider>,
@@ -66,86 +35,52 @@ pub struct OtelGuards {
 }
 
 impl OtelGuards {
-    /// Create empty (disabled) guards.
-    fn empty() -> Self {
-        Self {
-            tracer_provider: None,
-            logger_provider: None,
-            meter_provider: None,
+    /// Shutdown all providers gracefully, flushing pending spans/logs/metrics.
+    pub fn shutdown(self) {
+        if let Some(tp) = self.tracer_provider {
+            let _ = tp.shutdown();
         }
-    }
-
-    /// Shut down all active OTel providers, flushing pending data.
-    pub fn shutdown(&self) {
-        if let Some(ref tp) = self.tracer_provider {
-            if let Err(e) = tp.shutdown() {
-                eprintln!("tracer_provider shutdown error: {e}");
-            }
+        if let Some(lp) = self.logger_provider {
+            let _ = lp.shutdown();
         }
-        if let Some(ref lp) = self.logger_provider {
-            if let Err(e) = lp.shutdown() {
-                eprintln!("logger_provider shutdown error: {e}");
-            }
-        }
-        if let Some(ref mp) = self.meter_provider {
-            if let Err(e) = mp.shutdown() {
-                eprintln!("meter_provider shutdown error: {e}");
-            }
+        if let Some(mp) = self.meter_provider {
+            let _ = mp.shutdown();
         }
     }
 }
 
-/// Initialize the full OTel stack (traces + metrics + logs) plus console/file layers.
-///
-/// This must be called exactly once, before any tracing macros are used.
-/// Subsequent calls return empty guards (idempotent via `OnceLock`).
-///
-/// # Arguments
-///
-/// * `config` — OTel configuration (endpoint, service name, sampling, etc.).
-///   Individual fields may be overridden by environment variables:
-///   - `OTEL_EXPORTER_OTLP_ENDPOINT` overrides `config.endpoint`
-///   - `OTEL_SERVICE_NAME` overrides `config.service_name`
-///   - `OTEL_SAMPLE_RATE` overrides `config.sample_rate`
-/// * `log_level` — Fallback log level when `RUST_LOG` is not set (e.g. `"info"`).
-///
-/// # Returns
-///
-/// `OtelGuards` containing the provider handles (or `None` for disabled providers).
-/// Call `guards.shutdown()` on application exit.
+/// Initialize the full OTel stack: traces + metrics + logs.
 pub fn init(
     config: &OtelConfig,
     log_level: &str,
 ) -> Result<OtelGuards, Box<dyn std::error::Error + Send + Sync>> {
-    // Idempotent: if already initialized, return empty guards.
     if INITIALIZED.get().is_some() {
-        return Ok(OtelGuards::empty());
+        return Ok(OtelGuards {
+            tracer_provider: None,
+            logger_provider: None,
+            meter_provider: None,
+        });
     }
 
-    // Resolve config with env overrides.
-    let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
+    let resolved_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
         .unwrap_or_else(|_| config.endpoint.clone());
-    let service_name = std::env::var("OTEL_SERVICE_NAME")
+    let resolved_service_name = std::env::var("OTEL_SERVICE_NAME")
         .unwrap_or_else(|_| config.service_name.clone());
-    let sample_rate: f64 = std::env::var("OTEL_SAMPLE_RATE")
+    let resolved_sample_rate: f64 = std::env::var("OTEL_SAMPLE_RATE")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(config.sample_rate);
 
-    let timeout = Duration::from_millis(config.batch_max_export_timeout_millis);
-
     let resource = Resource::builder()
-        .with_service_name(service_name.clone())
+        .with_service_name(resolved_service_name.clone())
         .with_attributes([
             KeyValue::new("service.namespace", config.service_namespace.clone()),
-            KeyValue::new(
-                "deployment.environment",
-                config.deployment_environment.clone(),
-            ),
+            KeyValue::new("deployment.environment", config.deployment_environment.clone()),
         ])
         .build();
 
-    // Console layer (colored, human-readable).
+    let timeout = std::time::Duration::from_millis(config.batch_max_export_timeout_millis);
+
     let console_layer = fmt::layer()
         .with_target(true)
         .with_file(true)
@@ -153,23 +88,20 @@ pub fn init(
         .with_ansi(true)
         .with_writer(std::io::stdout);
 
-    // File layer (JSON, hourly rotation, 7-day retention).
     let file_appender = RollingFileAppender::builder()
         .rotation(Rotation::HOURLY)
         .filename_prefix("agent")
         .filename_suffix("log")
-        .max_log_files(168) // 7 days of hourly files
+        .max_log_files(168)
         .build(".")
         .unwrap_or_else(|_| {
             RollingFileAppender::builder()
                 .rotation(Rotation::HOURLY)
                 .filename_prefix("agent")
                 .filename_suffix("log")
-                .max_log_files(168)
                 .build("/tmp")
                 .expect("Failed to create file appender in /tmp")
         });
-
     let file_layer = fmt::layer()
         .with_ansi(false)
         .with_target(true)
@@ -180,21 +112,20 @@ pub fn init(
         .with_current_span(true)
         .with_writer(file_appender);
 
-    let env_filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(log_level));
 
-    if config.enabled && sample_rate > 0.0 {
-        // --- Traces ---
+    if config.enabled && resolved_sample_rate > 0.0 {
         let span_exporter = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
-            .with_endpoint(&endpoint)
+            .with_endpoint(&resolved_endpoint)
             .with_timeout(timeout)
             .build()?;
 
-        let sampler = if sample_rate >= 1.0 {
+        let sampler = if resolved_sample_rate >= 1.0 {
             Sampler::AlwaysOn
         } else {
-            Sampler::TraceIdRatioBased(sample_rate)
+            Sampler::TraceIdRatioBased(resolved_sample_rate)
         };
 
         let tracer_provider = SdkTracerProvider::builder()
@@ -203,7 +134,7 @@ pub fn init(
             .with_batch_exporter(span_exporter)
             .build();
 
-        let tracer = tracer_provider.tracer(service_name.clone());
+        let tracer = tracer_provider.tracer(resolved_service_name.clone());
         let otel_trace_layer = tracing_opentelemetry::layer()
             .with_tracer(tracer)
             .with_location(true)
@@ -211,10 +142,9 @@ pub fn init(
 
         global::set_tracer_provider(tracer_provider.clone());
 
-        // --- Logs ---
         let log_exporter = opentelemetry_otlp::LogExporter::builder()
             .with_tonic()
-            .with_endpoint(&endpoint)
+            .with_endpoint(&resolved_endpoint)
             .with_timeout(timeout)
             .build()?;
 
@@ -224,29 +154,21 @@ pub fn init(
             .build();
 
         let otel_log_layer =
-            opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(
-                &logger_provider,
-            );
+            opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(&logger_provider);
 
-        // --- Metrics ---
-        let metric_exporter = opentelemetry_otlp::MetricExporter::builder()
+        let metrics_exporter = opentelemetry_otlp::MetricExporter::builder()
             .with_tonic()
-            .with_endpoint(&endpoint)
+            .with_endpoint(&resolved_endpoint)
             .with_timeout(timeout)
             .build()?;
 
-        let reader = PeriodicReader::builder(metric_exporter)
-            .with_interval(Duration::from_secs(60))
-            .build();
-
         let meter_provider = SdkMeterProvider::builder()
             .with_resource(resource.clone())
-            .with_reader(reader)
+            .with_periodic_exporter(metrics_exporter)
             .build();
 
         global::set_meter_provider(meter_provider.clone());
 
-        // --- Assemble subscriber ---
         Registry::default()
             .with(env_filter)
             .with(console_layer)
@@ -256,10 +178,10 @@ pub fn init(
             .init();
 
         tracing::info!(
-            "OTel full stack initialized: endpoint={} service={} sample_rate={}",
-            endpoint,
-            service_name,
-            sample_rate
+            endpoint = %resolved_endpoint,
+            service = %resolved_service_name,
+            sample_rate = resolved_sample_rate,
+            "OpenTelemetry enabled: traces + metrics + logs"
         );
 
         INITIALIZED.get_or_init(|| ());
@@ -270,49 +192,44 @@ pub fn init(
             meter_provider: Some(meter_provider),
         })
     } else {
-        // OTel disabled — console + file only.
+        type OtelLogLayer = opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge<
+            SdkLoggerProvider,
+            opentelemetry_sdk::logs::SdkLogger,
+        >;
+
         Registry::default()
             .with(env_filter)
             .with(console_layer)
             .with(file_layer)
+            .with(Option::<OtelLogLayer>::None)
             .init();
 
-        tracing::info!("OTel disabled — console + file layers only");
+        tracing::info!("OpenTelemetry disabled: console + file logging only");
 
         INITIALIZED.get_or_init(|| ());
 
-        Ok(OtelGuards::empty())
+        Ok(OtelGuards {
+            tracer_provider: None,
+            logger_provider: None,
+            meter_provider: None,
+        })
     }
 }
 
-/// Initialize the tracing-subscriber with OTel log export (backward-compatible).
-///
-/// This is a thin wrapper around `init()` with default trace/metric sampling disabled.
-/// Prefer `init()` for new code.
-///
-/// # Arguments
-///
-/// * `endpoint` — OTel Collector gRPC endpoint (e.g., `http://localhost:4317`).
-///   Falls back to `OTEL_EXPORTER_OTLP_ENDPOINT` env var, then the provided value.
-/// * `service_name` — Service name for OTel resource attributes.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// vol_llm_observability::init_otel_logs(
-///     "http://localhost:4317",
-///     "my-agent",
-/// ).expect("Failed to initialize OTel logs");
-/// ```
+/// Backward-compatible init_otel_logs. Deprecated: prefer init().
 pub fn init_otel_logs(
     endpoint: &str,
     service_name: &str,
-) -> Result<OtelGuards, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = OtelConfig {
-        enabled: false, // backward-compat: logs-only mode, no traces/metrics
+        enabled: true,
         endpoint: endpoint.to_string(),
         service_name: service_name.to_string(),
-        ..OtelConfig::default()
+        service_namespace: "vol-agent".to_string(),
+        deployment_environment: "development".to_string(),
+        sample_rate: 1.0,
+        batch_max_export_timeout_millis: 5000,
     };
-    init(&config, "info")
+    let _guards = init(&config, "info")?;
+    Ok(())
 }
