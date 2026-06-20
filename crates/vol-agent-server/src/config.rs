@@ -165,18 +165,23 @@ fn default_format() -> String {
 fn default_otel_endpoint() -> String {
     "http://otel-collector.observability.svc.cluster.local:4317".to_string()
 }
+
 fn default_otel_service_name() -> String {
     "agent-server".to_string()
 }
+
 fn default_otel_service_namespace() -> String {
     "vol-agent".to_string()
 }
+
 fn default_otel_deployment_env() -> String {
     "production".to_string()
 }
+
 fn default_sample_rate() -> f64 {
     1.0
 }
+
 fn default_max_export_timeout_millis() -> u64 {
     5000
 }
@@ -305,6 +310,12 @@ impl ServerConfig {
         }
         if let Some(session_store) = &self.runtime.session_store {
             session_store.validate()?;
+        }
+        if !(0.0..=1.0).contains(&self.opentelemetry.sample_rate) {
+            return Err(format!(
+                "opentelemetry.sample_rate must be between 0.0 and 1.0, got {}",
+                self.opentelemetry.sample_rate
+            ));
         }
         Ok(())
     }
@@ -687,5 +698,16 @@ sample_rate = 0.5
         assert_eq!(config.opentelemetry.service_namespace, "vol-agent");
         assert_eq!(config.opentelemetry.deployment_environment, "production");
         assert_eq!(config.opentelemetry.batch_max_export_timeout_millis, 5000);
+    }
+
+    #[test]
+    fn test_reject_invalid_sample_rate() {
+        let toml_str = r#"
+[opentelemetry]
+sample_rate = 1.5
+"#;
+        let config: ServerConfig = toml::from_str(toml_str).unwrap();
+        let err = config.validate().unwrap_err();
+        assert!(err.contains("opentelemetry.sample_rate must be between 0.0 and 1.0"));
     }
 }
