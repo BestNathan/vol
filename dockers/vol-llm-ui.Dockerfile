@@ -30,32 +30,33 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         curl gcc g++ make cmake perl libssl-dev pkg-config ca-certificates git; \
-    curl --proto '=https' --tlsv1.2 -sSf "https://sh.rustup.rs" \
-        | sh -s -- -y --default-toolchain stable --profile minimal; \
-    rustup target add wasm32-unknown-unknown; \
-    # Install Dioxus CLI (pinned version matching the project)
-    cargo install dioxus-cli --version 0.6.3 --locked; \
-    # Install cargo-chef for dependency caching
-    cargo install cargo-chef --locked; \
-    # Copy .cargo/config.toml for rsproxy.cn mirror (cn region)
+    rm -rf /var/lib/apt/lists/*; \
     if [ "$REGION" = "cn" ]; then \
-        mkdir -p /usr/local/cargo; \
-        cat > /usr/local/cargo/config.toml <<'CARGO_EOF'
-[source.crates-io]
-replace-with = 'rsproxy-sparse'
-
-[source.rsproxy-sparse]
-registry = "sparse+https://rsproxy.cn/crates.io-index/"
-
-[registries.rsproxy]
-index = "https://rsproxy.cn/crates.io-index"
-
-[net]
-git-fetch-with-cli = true
-CARGO_EOF
+        export RUSTUP_DIST_SERVER=https://rsproxy.cn; \
+        export RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup; \
+        curl --proto '=https' --tlsv1.2 -sSf https://rsproxy.cn/rustup-init.sh \
+            | sh -s -- -y --default-toolchain stable; \
+        mkdir -p "$CARGO_HOME"; \
+        printf '%s\n' \
+            '[source.crates-io]' \
+            'replace-with = "rsproxy-sparse"' \
+            '[source.rsproxy-sparse]' \
+            'registry = "sparse+https://rsproxy.cn/index/"' \
+            '[net]' \
+            'git-fetch-with-cli = true' \
+            > "$CARGO_HOME/config.toml"; \
+    else \
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable; \
     fi; \
-    apt-get clean; \
-    rm -rf /var/lib/apt/lists/*
+    rustup target add wasm32-unknown-unknown; \
+    cargo --version
+
+# Install cargo-chef for dependency caching
+RUN cargo install cargo-chef --locked
+
+# Install Dioxus CLI (pinned version matching the project)
+RUN cargo install dioxus-cli --version 0.6.3 --locked
 
 WORKDIR /app
 
