@@ -72,6 +72,11 @@ spec:
           mountPath: /app/.agents/providers
           readOnly: true
         env:
+        # OpenTelemetry
+        - name: OTEL_SERVICE_NAME
+          value: "agent-server"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://otel-collector.observability.svc.cluster.local:4317"
         # LLM auth token
         - name: ANTHROPIC_AUTH_TOKEN
           valueFrom:

@@ -284,6 +284,7 @@ impl RunContext {
     ///
     /// Only executes tools that are in the effective (filtered) set.
     /// Returns an error if the tool is not in the allowed set.
+    #[tracing::instrument(skip(self, ctx), fields(tool.name = %call.name))]
     pub async fn execute_tool(
         &self,
         call: &vol_llm_core::ToolCall,

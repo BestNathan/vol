@@ -16,6 +16,7 @@ opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 opentelemetry-otlp = { workspace = true, features = ["tokio", "grpc-tonic", "logs"] }
 opentelemetry-appender-tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 tempfile = "3"
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-agent = { path = "../vol-llm-agent" }

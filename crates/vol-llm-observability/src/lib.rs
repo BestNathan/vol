@@ -2,7 +2,7 @@
 //!
 //! Provides:
 //! - A `LoggerPlugin` that writes structured run logs as JSONL files
-//! - An `init_otel_logs()` helper to initialize the OTel log layer
+//! - An `init()` function for full OTel initialization (traces + metrics + logs)
 //! - A `LokiPlugin` that sends agent events to OTel via tracing macros
 //! - A `MetricsPlugin` that records OTel metrics from agent events
 
@@ -14,6 +14,6 @@ pub mod run_log;
 
 pub use loki_plugin::LokiPlugin;
 pub use metrics_plugin::MetricsPlugin;
-pub use otel_init::init_otel_logs;
+pub use otel_init::{init, init_otel_logs, OtelConfig, OtelGuards};
 pub use plugin::LoggerPlugin;
 pub use run_log::{append_log, LogEntry};

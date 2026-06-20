@@ -18,6 +18,8 @@ pub struct ServerConfig {
     pub runtime: RuntimeSection,
     #[serde(default)]
     pub tracing: TracingSection,
+    #[serde(default)]
+    pub opentelemetry: OpenTelemetrySection,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -88,6 +90,24 @@ pub struct TracingSection {
     pub format: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct OpenTelemetrySection {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_otel_endpoint")]
+    pub endpoint: String,
+    #[serde(default = "default_otel_service_name")]
+    pub service_name: String,
+    #[serde(default = "default_otel_service_namespace")]
+    pub service_namespace: String,
+    #[serde(default = "default_otel_deployment_env")]
+    pub deployment_environment: String,
+    #[serde(default = "default_sample_rate")]
+    pub sample_rate: f64,
+    #[serde(default = "default_max_export_timeout_millis")]
+    pub batch_max_export_timeout_millis: u64,
+}
+
 // --- Defaults ---
 
 fn default_host() -> String {
@@ -140,6 +160,30 @@ fn default_level() -> String {
 
 fn default_format() -> String {
     "text".to_string()
+}
+
+fn default_otel_endpoint() -> String {
+    "http://otel-collector.observability.svc.cluster.local:4317".to_string()
+}
+
+fn default_otel_service_name() -> String {
+    "agent-server".to_string()
+}
+
+fn default_otel_service_namespace() -> String {
+    "vol-agent".to_string()
+}
+
+fn default_otel_deployment_env() -> String {
+    "production".to_string()
+}
+
+fn default_sample_rate() -> f64 {
+    1.0
+}
+
+fn default_max_export_timeout_millis() -> u64 {
+    5000
 }
 
 // --- Default trait implementations ---
@@ -208,6 +252,20 @@ impl Default for TracingSection {
     }
 }
 
+impl Default for OpenTelemetrySection {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            endpoint: default_otel_endpoint(),
+            service_name: default_otel_service_name(),
+            service_namespace: default_otel_service_namespace(),
+            deployment_environment: default_otel_deployment_env(),
+            sample_rate: default_sample_rate(),
+            batch_max_export_timeout_millis: default_max_export_timeout_millis(),
+        }
+    }
+}
+
 // --- Load ---
 
 impl ServerConfig {
@@ -252,6 +310,12 @@ impl ServerConfig {
         }
         if let Some(session_store) = &self.runtime.session_store {
             session_store.validate()?;
+        }
+        if !(0.0..=1.0).contains(&self.opentelemetry.sample_rate) {
+            return Err(format!(
+                "opentelemetry.sample_rate must be between 0.0 and 1.0, got {}",
+                self.opentelemetry.sample_rate
+            ));
         }
         Ok(())
     }
@@ -599,5 +663,51 @@ url = "oracle://localhost/tasks"
         let config: ServerConfig = toml::from_str(toml_str).unwrap();
         let err = config.validate().unwrap_err();
         assert_eq!(err, "unsupported task store database url scheme: oracle");
+    }
+
+    #[test]
+    fn test_opentelemetry_defaults() {
+        let config = ServerConfig::default();
+        assert!(!config.opentelemetry.enabled);
+        assert_eq!(
+            config.opentelemetry.endpoint,
+            "http://otel-collector.observability.svc.cluster.local:4317"
+        );
+        assert_eq!(config.opentelemetry.service_name, "agent-server");
+        assert_eq!(config.opentelemetry.service_namespace, "vol-agent");
+        assert_eq!(config.opentelemetry.deployment_environment, "production");
+        assert_eq!(config.opentelemetry.sample_rate, 1.0);
+        assert_eq!(config.opentelemetry.batch_max_export_timeout_millis, 5000);
+    }
+
+    #[test]
+    fn test_parse_opentelemetry_toml() {
+        let toml_str = r#"
+[opentelemetry]
+enabled = true
+endpoint = "http://localhost:4317"
+service_name = "test-agent"
+sample_rate = 0.5
+"#;
+        let config: ServerConfig = toml::from_str(toml_str).unwrap();
+        assert!(config.opentelemetry.enabled);
+        assert_eq!(config.opentelemetry.endpoint, "http://localhost:4317");
+        assert_eq!(config.opentelemetry.service_name, "test-agent");
+        assert_eq!(config.opentelemetry.sample_rate, 0.5);
+        // Defaults preserved for unset fields
+        assert_eq!(config.opentelemetry.service_namespace, "vol-agent");
+        assert_eq!(config.opentelemetry.deployment_environment, "production");
+        assert_eq!(config.opentelemetry.batch_max_export_timeout_millis, 5000);
+    }
+
+    #[test]
+    fn test_reject_invalid_sample_rate() {
+        let toml_str = r#"
+[opentelemetry]
+sample_rate = 1.5
+"#;
+        let config: ServerConfig = toml::from_str(toml_str).unwrap();
+        let err = config.validate().unwrap_err();
+        assert!(err.contains("opentelemetry.sample_rate must be between 0.0 and 1.0"));
     }
 }
