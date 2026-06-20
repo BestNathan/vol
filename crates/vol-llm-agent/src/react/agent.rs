@@ -281,6 +281,7 @@ impl ReActAgent {
         self.run_input(AgentInput::text(user_input)).await
     }
 
+    #[tracing::instrument(skip(self, input), fields(agent.run_id))]
     pub async fn run_input(&self, input: AgentInput) -> Result<AgentResponse, crate::AgentError> {
         // Re-entrancy guard
         if self
@@ -304,6 +305,7 @@ impl ReActAgent {
             .run_id
             .clone()
             .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string());
+        tracing::Span::current().record("agent.run_id", &run_id);
 
         // Set status metadata
         *self.run_state.current_input.write().unwrap() = Some(user_input.clone());
