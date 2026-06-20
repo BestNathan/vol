@@ -387,6 +387,7 @@ impl McpManager {
 
     // ── Tool call ──────────────────────────────────────────────────────
 
+    #[tracing::instrument(skip(self, args), fields(mcp.server = server, mcp.tool = tool_name))]
     pub async fn call_tool(
         &self,
         server: &str,
