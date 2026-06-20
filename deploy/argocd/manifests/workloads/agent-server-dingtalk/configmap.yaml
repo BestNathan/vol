@@ -30,6 +30,14 @@ data:
     level = "info"
     format = "json"
 
+    [opentelemetry]
+    enabled = true
+    endpoint = "http://otel-collector.observability.svc.cluster.local:4317"
+    service_name = "agent-server-dingtalk"
+    service_namespace = "vol-agent"
+    deployment_environment = "production"
+    sample_rate = 1.0
+
 ---
 # ── Agent definitions: only general-purpose ──────────────────────────────
 apiVersion: v1

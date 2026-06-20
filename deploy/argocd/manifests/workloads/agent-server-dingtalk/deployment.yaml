@@ -60,6 +60,10 @@ spec:
               subPath: mcp.json
               readOnly: true
           env:
+            - name: OTEL_SERVICE_NAME
+              value: "agent-server-dingtalk"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability.svc.cluster.local:4317"
             - name: ANTHROPIC_AUTH_TOKEN
               valueFrom:
                 secretKeyRef:
