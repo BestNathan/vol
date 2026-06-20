@@ -8,14 +8,14 @@ metadata:
     app.kubernetes.io/part-of: vol-agent
     app.kubernetes.io/component: frontend
   annotations:
-    higress.io/domain: dingtalk.vol-agent.nhome.local
+    higress.io/domain: dingtalk.vol.bestnathan.top
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
 spec:
   ingressClassName: higress
   rules:
-    - host: dingtalk.vol-agent.nhome.local
+    - host: dingtalk.vol.bestnathan.top
       http:
         paths:
           - path: /
