@@ -1,0 +1,149 @@
+# Build and push vol-llm-ui frontend image to ACR, then update GitOps manifest.
+#
+# Builds Dioxus WASM + nginx runtime image for the web frontend.
+#
+# Required secrets:
+#   DOCKER_USERNAME — ACR login user
+#   DOCKER_PASSWORD — ACR login password
+#
+# Optional repo/org variables:
+#   vars.ACR_REGISTRY  (default: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com)
+#   vars.ACR_NAMESPACE (default: n_common)
+
+name: build-vol-llm-ui
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/vol-llm-ui/**"
+      - "dockers/vol-llm-ui.Dockerfile"
+      - "dockers/nginx-frontend.conf"
+      - ".cargo/config.toml"
+      - ".github/workflows/build-vol-llm-ui.yml"
+  workflow_dispatch:
+    inputs:
+      push_image:
+        description: "Push image to ACR and update GitOps manifest"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+env:
+  ACR_REGISTRY: ${{ vars.ACR_REGISTRY || 'crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com' }}
+  ACR_NAMESPACE: ${{ vars.ACR_NAMESPACE || 'n_common' }}
+
+concurrency:
+  group: build-vol-llm-ui
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build (vol-llm-ui)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Decide whether to push
+        id: push
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.push_image }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute image tag
+        id: image
+        run: |
+          short="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          image="${ACR_REGISTRY}/${ACR_NAMESPACE}/vol-llm-ui:${short}"
+          {
+            echo "short=${short}"
+            echo "image=${image}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to ACR
+        if: steps.push.outputs.value == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and optionally push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: dockers/vol-llm-ui.Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            REGION=global
+          tags: ${{ steps.image.outputs.image }}
+          push: ${{ steps.push.outputs.value == 'true' }}
+          provenance: false
+          cache-from: type=gha,scope=vol-llm-ui-amd64
+          cache-to: type=gha,mode=max,scope=vol-llm-ui-amd64
+
+      - name: Update GitOps manifest image
+        if: steps.push.outputs.value == 'true'
+        env:
+          MANIFEST: deploy/argocd/manifests/workloads/vol-llm-ui/deployment.yaml
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          manifest = Path(os.environ["MANIFEST"])
+          image = os.environ["IMAGE"]
+          lines = manifest.read_text().splitlines()
+          updated = []
+          replaced = False
+          for line in lines:
+              stripped = line.strip()
+              if stripped.startswith("image: ") and "vol-llm-ui" in stripped:
+                  indent = line[: len(line) - len(line.lstrip())]
+                  updated.append(f"{indent}image: {image}")
+                  replaced = True
+              else:
+                  updated.append(line)
+          if not replaced:
+              raise SystemExit(f"no vol-llm-ui image field found in {manifest}")
+          manifest.write_text("\n".join(updated) + "\n")
+          PY
+
+      - name: Commit GitOps manifest update
+        if: steps.push.outputs.value == 'true'
+        run: |
+          if git diff --quiet -- "deploy/argocd/manifests/workloads/vol-llm-ui/deployment.yaml"; then
+            echo "No GitOps manifest change to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "deploy/argocd/manifests/workloads/vol-llm-ui/deployment.yaml"
+          git commit -m "ci(gitops): update vol-llm-ui image to ${{ steps.image.outputs.short }} [skip ci]"
+          git pull --rebase origin main
+          git push
+
+      - name: Summary
+        run: |
+          {
+            echo "### vol-llm-ui"
+            echo
+            echo "- image: \`${{ steps.image.outputs.image }}\`"
+            echo "- manifest: \`deploy/argocd/manifests/workloads/vol-llm-ui/deployment.yaml\`"
+            echo "- pushed: \`${{ steps.push.outputs.value }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
