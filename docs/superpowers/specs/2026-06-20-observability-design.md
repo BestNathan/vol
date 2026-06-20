@@ -217,6 +217,21 @@ opentelemetry-otlp = { workspace = true, features = ["tokio", "grpc-tonic", "log
 opentelemetry-appender-tracing = { workspace = true }
 ```
 
+agent-server also needs the dependency:
+
+```toml
+# crates/vol-agent-server/Cargo.toml (add)
+vol-llm-observability = { path = "../vol-llm-observability" }
+tower-http = { workspace = true, features = ["trace"] }  # add "trace" feature
+```
+
+docs-rs-mcp also needs the dependency:
+
+```toml
+# crates/vol-mcp-servers/Cargo.toml (add)
+vol-llm-observability = { path = "../vol-llm-observability" }
+```
+
 ### Data Flow
 
 ```
@@ -265,9 +280,13 @@ Console    OTel Layer
 
 ### Implementation Strategy
 
-1. **AgentPlugin reuse**: Existing `MetricsPlugin` and `LokiPlugin` already listen to `AgentStreamEvent` — enable them in agent-server
-2. **Axum middleware**: Add `tower-http` `TraceLayer` + custom metrics middleware for HTTP/WS
-3. **Span nesting**: `agent.run` → `agent.iteration` → `llm.call` / `tool.call` → `mcp.call`
+1. **AgentPlugin reuse**: In `DataPlaneServerCoreBuilder::build()` (or the agent run handler), register `MetricsPlugin` and `LokiPlugin` from `vol-llm-observability` on the ReAct agent. These plugins listen to `AgentStreamEvent` and automatically record OTel metrics / export logs.
+
+2. **Axum HTTP middleware**: Add `tower_http::trace::TraceLayer` to the axum router for automatic HTTP request spans. Apply to all routes via `.layer(TraceLayer::new_for_http())`. For WebSocket handlers, add manual spans since TraceLayer doesn't cover WS upgrades.
+
+3. **MCP client spans**: In `vol-llm-mcp` crate's call path (e.g., `McpManager::call_tool`), wrap each tool call in a `tracing::instrument` span named `mcp.call`.
+
+4. **Span nesting**: `agent.run` → `agent.iteration` → `llm.call` / `tool.call` → `mcp.call`. Use `#[tracing::instrument]` on the relevant functions to achieve automatic parent-child relationships via the tracing context.
 
 ### Example Trace (Tempo)
 
