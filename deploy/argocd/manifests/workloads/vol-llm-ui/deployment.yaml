@@ -31,7 +31,7 @@ spec:
         - name: acr-registry-secret
       containers:
         - name: vol-llm-ui
-          image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-llm-ui:0476cee
+          image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-llm-ui:de6cf4f
           imagePullPolicy: Always
           ports:
             - containerPort: 80
