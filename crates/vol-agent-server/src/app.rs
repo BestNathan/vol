@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
+use tower_http::trace::TraceLayer;
 use futures_util::{SinkExt, StreamExt};
 use tokio::time;
 use tokio_tungstenite::connect_async;
@@ -395,6 +396,8 @@ pub async fn run(mut config: ServerConfig) -> Result<(), String> {
         &config.control_plane.client_ws_path,
         &config.control_plane.node_ws_path,
     )?;
+
+    app = app.layer(TraceLayer::new_for_http());
 
     let addr = format!("{}:{}", config.server.host, config.server.port);
     let listener = tokio::net::TcpListener::bind(&addr)
