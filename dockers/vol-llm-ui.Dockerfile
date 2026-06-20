@@ -63,22 +63,10 @@ WORKDIR /app
 # ── Planner: generate cargo-chef recipe ──────────────────────────────────────
 FROM base AS planner
 
-# Copy workspace Cargo.toml + crate Cargo.tomls for recipe generation
+# Copy workspace Cargo.toml + all crate Cargo.tomls for recipe generation
 COPY Cargo.toml Cargo.lock ./
-COPY crates/vol-llm-ui/Cargo.toml crates/vol-llm-ui/Cargo.toml
-COPY crates/vol-llm-core/Cargo.toml crates/vol-llm-core/Cargo.toml
-COPY crates/vol-llm-provider/Cargo.toml crates/vol-llm-provider/Cargo.toml
-COPY crates/vol-llm-tool/Cargo.toml crates/vol-llm-tool/Cargo.toml
-COPY crates/vol-llm-agent/Cargo.toml crates/vol-llm-agent/Cargo.toml
-COPY crates/vol-llm-mcp/Cargo.toml crates/vol-llm-mcp/Cargo.toml
-COPY crates/vol-llm-runtime/Cargo.toml crates/vol-llm-runtime/Cargo.toml
-COPY crates/vol-llm-skill/Cargo.toml crates/vol-llm-skill/Cargo.toml
-COPY crates/vol-llm-task/Cargo.toml crates/vol-llm-task/Cargo.toml
-COPY crates/vol-session/Cargo.toml crates/vol-session/Cargo.toml
-COPY crates/vol-llm-context/Cargo.toml crates/vol-llm-context/Cargo.toml
-COPY crates/vol-llm-memory/Cargo.toml crates/vol-llm-memory/Cargo.toml
-COPY crates/vol-llm-sandbox/Cargo.toml crates/vol-llm-sandbox/Cargo.toml
-COPY crates/vol-llm-wiki/Cargo.toml crates/vol-llm-wiki/Cargo.toml
+COPY crates/ ./crates/
+COPY .cargo/ .cargo/
 
 RUN cargo chef prepare --recipe-path recipe.json
 
