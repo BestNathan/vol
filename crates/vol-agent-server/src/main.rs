@@ -34,21 +34,18 @@ async fn main() {
             std::process::exit(1);
         });
 
-    // --- Init tracing ---
-    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.tracing.level));
-
-    match config.tracing.format.as_str() {
-        "json" => {
-            tracing_subscriber::fmt()
-                .with_env_filter(env_filter)
-                .json()
-                .init();
-        }
-        _ => {
-            tracing_subscriber::fmt().with_env_filter(env_filter).init();
-        }
-    }
+    // --- Init tracing + OTel ---
+    let otel_config = vol_llm_observability::OtelConfig {
+        enabled: config.opentelemetry.enabled,
+        endpoint: config.opentelemetry.endpoint.clone(),
+        service_name: config.opentelemetry.service_name.clone(),
+        service_namespace: config.opentelemetry.service_namespace.clone(),
+        deployment_environment: config.opentelemetry.deployment_environment.clone(),
+        sample_rate: config.opentelemetry.sample_rate,
+        batch_max_export_timeout_millis: config.opentelemetry.batch_max_export_timeout_millis,
+    };
+    let otel_guards = vol_llm_observability::init(&otel_config, &config.tracing.level)
+        .expect("Failed to initialize tracing");
 
     if let Some(ref path) = config_path {
         tracing::info!("Config loaded from {:?}", path);
@@ -74,7 +71,9 @@ async fn main() {
         tracing::info!("Using default file session store");
     }
 
-    if let Err(err) = app::run(config).await {
+    let result = app::run(config).await;
+    otel_guards.shutdown();
+    if let Err(err) = result {
         tracing::error!("Server error: {}", err);
         std::process::exit(1);
     }
