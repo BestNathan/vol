@@ -149,6 +149,44 @@ pub struct SandboxRegistry {
 }
 
 impl SandboxRegistry {
+    /// Construct a single sandbox from a parsed config.
+    ///
+    /// Extracted from `SandboxRegistry::load` so that other crates
+    /// (e.g. `vol-llm-cli-tool`) can build inline sandboxes without
+    /// going through the directory loader.
+    pub async fn build_sandbox(
+        config: SandboxConfig,
+    ) -> SandboxResult<Arc<dyn Sandbox>> {
+        let sandbox: Arc<dyn Sandbox> = match config.sandbox_type.as_str() {
+            "local" => Arc::new(LocalSandbox::new(
+                config.work_dir.as_ref().map(std::path::PathBuf::from),
+            )),
+            #[cfg(feature = "ssh")]
+            "ssh" => {
+                let ssh_config = config.ssh.ok_or_else(|| {
+                    SandboxError::Config(format!(
+                        "SSH sandbox '{}' requires [ssh] section",
+                        config.name
+                    ))
+                })?;
+                let sb = crate::ssh::SSHSandbox::new(
+                    config.name.clone(),
+                    config.work_dir.clone(),
+                    ssh_config,
+                )?;
+                let sandbox: Arc<dyn Sandbox> = Arc::new(sb);
+                sandbox.start().await?;
+                sandbox
+            }
+            other => {
+                return Err(SandboxError::Config(format!(
+                    "unsupported sandbox type: {other}"
+                )));
+            }
+        };
+        Ok(sandbox)
+    }
+
     /// Load sandboxes from a config directory.
     ///
     /// Always registers a built-in `LocalSandbox` named "local".
@@ -208,38 +246,14 @@ impl SandboxRegistry {
                 }
 
                 match config.sandbox_type.as_str() {
-                    "local" => {
-                        let sandbox: Arc<dyn Sandbox> =
-                            Arc::new(LocalSandbox::new(
-                                config.work_dir.as_ref().map(std::path::PathBuf::from),
-                            ));
-                        sandboxes.insert(config.name.clone(), sandbox);
-                    }
-                    #[cfg(feature = "ssh")]
-                    "ssh" => {
-                        let ssh_config = match config.ssh {
-                            Some(c) => c,
-                            None => {
-                                tracing::warn!(name = %config.name, "SSH sandbox requires [sandbox.ssh] section, skipping");
-                                continue;
-                            }
-                        };
-                        let sb = match crate::ssh::SSHSandbox::new(
-                            config.name.clone(),
-                            config.work_dir.clone(),
-                            ssh_config,
-                        ) {
+                    "local" | "ssh" => {
+                        let sandbox = match Self::build_sandbox(config.clone()).await {
                             Ok(s) => s,
                             Err(e) => {
-                                tracing::warn!(name = %config.name, error = %e, "Failed to create SSH sandbox, skipping");
+                                tracing::warn!(path = %path.display(), error = %e, "Failed to build sandbox, skipping");
                                 continue;
                             }
                         };
-                        let sandbox: Arc<dyn Sandbox> = Arc::new(sb);
-                        if let Err(e) = sandbox.start().await {
-                            tracing::warn!(name = %config.name, error = %e, "Failed to start sandbox, skipping");
-                            continue;
-                        }
                         sandboxes.insert(config.name.clone(), sandbox);
                     }
                     #[cfg(feature = "firecracker")]
