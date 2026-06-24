@@ -67,16 +67,11 @@ impl ExecutableTool for CliToolExecutable {
 
         match self.inner.run(command).await {
             Ok(output) => {
-                let mut result = if output.success {
+                let result = if output.success {
                     ToolResult::success(output.content)
                 } else {
                     ToolResult::failure(output.content)
                 };
-                result.call_id = args
-                    .get("call_id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
                 Ok(result)
             }
             Err(e @ CliToolError::InvalidArguments(_))
@@ -103,8 +98,18 @@ pub async fn register_all(
     let count = tools.len();
     for tool in tools {
         let (config, sandbox) = tool.into_parts();
+        let name = config.name.clone();
         let exe = CliToolExecutable::from_config(config, sandbox);
+        if registry.contains(&name) {
+            return Err(format!(
+                "cli-tool `{name}` collides with an already-registered tool"
+            ));
+        }
+        tracing::debug!(name = %name, "registered cli-tool");
         registry.register(exe);
+    }
+    if count > 0 {
+        tracing::info!(dir = %dir.display(), count, "registered cli-tools");
     }
     Ok(count)
 }

@@ -8238,6 +8238,7 @@ dependencies = [
  "tracing",
  "vol-llm-tool",
  "vol-llm-tools-builtin-bash",
+ "vol-llm-tools-builtin-cli-tool",
  "vol-llm-tools-builtin-edit",
  "vol-llm-tools-builtin-glob",
  "vol-llm-tools-builtin-grep",
@@ -8258,6 +8259,19 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "vol-llm-sandbox",
+ "vol-llm-tool",
+]
+
+[[package]]
+name = "vol-llm-tools-builtin-cli-tool"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "vol-llm-cli-tool",
  "vol-llm-sandbox",
  "vol-llm-tool",
 ]
