@@ -8519,7 +8519,9 @@ dependencies = [
  "tower-http 0.5.2",
  "tracing",
  "tracing-subscriber",
+ "vol-llm-cli-tool",
  "vol-llm-observability",
+ "vol-llm-sandbox",
 ]
 
 [[package]]

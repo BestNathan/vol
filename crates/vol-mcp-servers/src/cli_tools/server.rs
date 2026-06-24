@@ -4,15 +4,8 @@ use rmcp::model::{
 };
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ErrorData, ServerHandler};
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use vol_llm_cli_tool::CliTool;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CommandParams {
-    /// CLI command to run. First token must match one of the tool's declared binaries.
-    pub command: String,
-}
 
 #[derive(Clone)]
 struct ToolEntry {
@@ -92,12 +85,15 @@ impl ServerHandler for CliToolsMcpServer {
     ) -> impl std::future::Future<Output = Result<CallToolResult, ErrorData>> + Send + '_ {
         async move {
             let tool_name = request.name.to_string();
-            let params: CommandParams = serde_json::from_value(
-                serde_json::to_value(&request.arguments).unwrap_or_default(),
-            )
-            .unwrap_or(CommandParams {
-                command: String::new(),
-            });
+            let command = request
+                .arguments
+                .as_ref()
+                .and_then(|m| m.get("command"))
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| {
+                    ErrorData::invalid_params("missing required parameter: 'command'", None)
+                })?
+                .to_string();
 
             let entry = self
                 .tools
@@ -109,7 +105,7 @@ impl ServerHandler for CliToolsMcpServer {
 
             let output = entry
                 .cli_tool
-                .run(&params.command)
+                .run(&command)
                 .await
                 .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
 
