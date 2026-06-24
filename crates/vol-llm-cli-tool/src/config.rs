@@ -8,6 +8,11 @@ pub struct CliToolConfig {
     pub description: String,
     pub binaries: Vec<String>,
 
+    /// Whether this tool is enabled. Default: true.
+    /// Set to false for example configs that should not be loaded.
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+
     /// Inline sandbox config (XOR with `sandbox_ref`).
     #[serde(default)]
     pub sandbox: Option<SandboxConfig>,
@@ -40,6 +45,7 @@ pub struct CliToolConfig {
 fn default_shell() -> String { "/bin/sh".to_string() }
 fn default_timeout_secs() -> u64 { 60 }
 fn default_max_output_bytes() -> usize { 65_536 }
+fn default_enabled() -> bool { true }
 
 impl CliToolConfig {
     /// Parse a TOML document into a CliToolConfig.

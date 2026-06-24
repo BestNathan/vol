@@ -64,6 +64,11 @@ pub async fn load_dir(
             }
         };
 
+        if !config.enabled {
+            tracing::debug!(name = %config.name, path = %path.display(), "skipping disabled cli-tool");
+            continue;
+        }
+
         if let Some(first_path) = seen_names.get(&config.name) {
             return Err(CliToolError::Config(format!(
                 "duplicate cli-tool name `{}` (first in {}, also in {})",
@@ -220,5 +225,27 @@ mod tests {
 
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].config.name, "inline-tool");
+    }
+
+    #[tokio::test]
+    async fn load_dir_skips_disabled_configs() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("disabled.toml"),
+            r#"
+                name = "disabled-tool"
+                description = "should not load"
+                binaries = ["echo"]
+                cwd = "/tmp"
+                sandbox_ref = "local"
+                enabled = false
+            "#,
+        )
+        .unwrap();
+
+        let sandbox_dir = tempdir().unwrap();
+        let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
+        let tools = load_dir(dir.path(), &registry).await.unwrap();
+        assert_eq!(tools.len(), 0, "disabled config should be skipped");
     }
 }

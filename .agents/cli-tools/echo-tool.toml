@@ -1,0 +1,5 @@
+name = "echo-tool"
+description = "Test tool that runs echo via local sandbox"
+binaries = ["echo", "date"]
+sandbox_ref = "local-for-cli"
+cwd = "/tmp"

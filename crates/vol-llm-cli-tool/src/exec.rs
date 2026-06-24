@@ -167,6 +167,7 @@ mod tests {
             name: "ansible".into(),
             description: "Ansible suite".into(),
             binaries: vec!["ansible".into(), "ansible-playbook".into()],
+            enabled: true,
             sandbox: None,
             sandbox_ref: Some("mock".into()),
             cwd: "/opt/ansible".into(),

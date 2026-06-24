@@ -1,4 +1,5 @@
 name = "ansible"
+enabled = false  # set to true once ansible-prod sandbox is configured
 description = """
 Ansible automation suite.
 
