@@ -17,7 +17,8 @@ where
     let mut chars = input.chars().peekable();
 
     while let Some(c) = chars.next() {
-        // escaped opening: `\{{` → literal `{{`
+        // escape sequence `\{{` → literal `{{`: consume BOTH opening braces so the
+        // remainder of the input isn't misread as a placeholder.
         if c == '\\' && chars.peek() == Some(&'{') {
             let mut maybe = chars.clone();
             maybe.next();
@@ -91,12 +92,24 @@ pub fn interpolate(input: &str) -> String {
 }
 
 /// Apply interpolation to every value in a HashMap, returning a new HashMap.
+/// Uses the provided lookup closure (useful for testing without touching process env).
+pub fn interpolate_map_with<F>(
+    m: &std::collections::HashMap<String, String>,
+    lookup: F,
+) -> std::collections::HashMap<String, String>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    m.iter()
+        .map(|(k, v)| (k.clone(), interpolate_with(v, &lookup)))
+        .collect()
+}
+
+/// Apply interpolation to every value in a HashMap, returning a new HashMap.
 pub fn interpolate_map(
     m: &std::collections::HashMap<String, String>,
 ) -> std::collections::HashMap<String, String> {
-    m.iter()
-        .map(|(k, v)| (k.clone(), interpolate(v)))
-        .collect()
+    interpolate_map_with(m, |var| std::env::var(var).ok())
 }
 
 #[cfg(test)]
@@ -157,10 +170,7 @@ mod tests {
         let mut m: HashMap<String, String> = HashMap::new();
         m.insert("A".into(), "{{env.HOME}}/a".into());
         m.insert("B".into(), "literal".into());
-        let out_map: HashMap<String, String> = m
-            .iter()
-            .map(|(k, v)| (k.clone(), interpolate_with(v, lookup)))
-            .collect();
+        let out_map = interpolate_map_with(&m, lookup);
         assert_eq!(out_map.get("A").map(String::as_str), Some("/home/alice/a"));
         assert_eq!(out_map.get("B").map(String::as_str), Some("literal"));
     }
