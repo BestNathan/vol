@@ -34,7 +34,7 @@ pub async fn load_dir(
     registry: &SandboxRegistry,
 ) -> Result<Vec<CliTool>, CliToolError> {
     let mut tools = Vec::new();
-    let mut seen_names = std::collections::HashSet::new();
+    let mut seen_names: std::collections::HashMap<String, std::path::PathBuf> = std::collections::HashMap::new();
 
     if !dir.exists() {
         return Ok(tools);
@@ -64,13 +64,15 @@ pub async fn load_dir(
             }
         };
 
-        if !seen_names.insert(config.name.clone()) {
+        if let Some(first_path) = seen_names.get(&config.name) {
             return Err(CliToolError::Config(format!(
-                "duplicate cli-tool name `{}` in {}",
+                "duplicate cli-tool name `{}` (first in {}, also in {})",
                 config.name,
+                first_path.display(),
                 path.display()
             )));
         }
+        seen_names.insert(config.name.clone(), path.clone());
 
         let sandbox: Arc<dyn vol_llm_sandbox::Sandbox> = if let Some(ref name) = config.sandbox_ref {
             registry.get(name).ok_or_else(|| {
@@ -168,5 +170,55 @@ mod tests {
 
         let err = load_dir(dir.path(), &registry).await.err().unwrap().to_string();
         assert!(err.contains("duplicate"), "unexpected: {err}");
+    }
+
+    #[tokio::test]
+    async fn load_dir_resolves_sandbox_ref() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("my-tool.toml"),
+            r#"
+                name = "my-tool"
+                description = "test tool"
+                binaries = ["echo"]
+                cwd = "/tmp"
+                sandbox_ref = "local"
+            "#,
+        )
+        .unwrap();
+
+        let sandbox_dir = tempdir().unwrap();
+        let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
+        let tools = load_dir(dir.path(), &registry).await.unwrap();
+
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].config.name, "my-tool");
+        assert_eq!(tools[0].config.binaries, vec!["echo"]);
+    }
+
+    #[tokio::test]
+    async fn load_dir_builds_inline_sandbox() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("inline-tool.toml"),
+            r#"
+                name = "inline-tool"
+                description = "test tool with inline sandbox"
+                binaries = ["ls"]
+                cwd = "/tmp"
+
+                [sandbox]
+                name = "inline-sandbox"
+                type = "local"
+            "#,
+        )
+        .unwrap();
+
+        let sandbox_dir = tempdir().unwrap();
+        let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
+        let tools = load_dir(dir.path(), &registry).await.unwrap();
+
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].config.name, "inline-tool");
     }
 }
