@@ -15,4 +15,4 @@ pub mod validate;
 
 pub use config::CliToolConfig;
 pub use error::CliToolError;
-pub use exec::CliTool;
+pub use exec::{CliTool, ToolOutput};
