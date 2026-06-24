@@ -27,6 +27,7 @@ use vol_llm_sandbox::registry::SandboxRegistry;
 /// - Inline `[sandbox]` entries are constructed via
 ///   `vol_llm_sandbox::registry::SandboxRegistry::build_sandbox`.
 /// - Files that fail to parse are logged as warnings and skipped.
+/// - Unknown `sandbox_ref` entries are logged as warnings and skipped.
 /// - Name collisions: if a config's `name` matches an already-loaded tool,
 ///   returns an error (fail-fast).
 pub async fn load_dir(
@@ -75,21 +76,31 @@ pub async fn load_dir(
         seen_names.insert(config.name.clone(), path.clone());
 
         let sandbox: Arc<dyn vol_llm_sandbox::Sandbox> = if let Some(ref name) = config.sandbox_ref {
-            registry.get(name).ok_or_else(|| {
-                CliToolError::Config(format!(
-                    "cli-tool `{}` references unknown sandbox `{}`",
-                    config.name, name
-                ))
-            })?
+            match registry.get(name) {
+                Some(sb) => sb,
+                None => {
+                    tracing::warn!(
+                        tool = %config.name,
+                        sandbox_ref = %name,
+                        path = %path.display(),
+                        "cli-tool: unknown sandbox_ref, skipping"
+                    );
+                    continue;
+                }
+            }
         } else if let Some(sb_cfg) = config.sandbox.clone() {
-            SandboxRegistry::build_sandbox(sb_cfg)
-                .await
-                .map_err(|e| {
-                    CliToolError::Config(format!(
-                        "cli-tool `{}` inline sandbox build failed: {e}",
-                        config.name
-                    ))
-                })?
+            match SandboxRegistry::build_sandbox(sb_cfg).await {
+                Ok(sb) => sb,
+                Err(e) => {
+                    tracing::warn!(
+                        tool = %config.name,
+                        path = %path.display(),
+                        error = %e,
+                        "cli-tool: inline sandbox build failed, skipping"
+                    );
+                    continue;
+                }
+            }
         } else {
             unreachable!("validate() guarantees one of sandbox/sandbox_ref");
         };
@@ -131,7 +142,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_dir_fails_fast_on_unknown_sandbox_ref() {
+    async fn load_dir_skips_unknown_sandbox_ref() {
         let dir = tempdir().unwrap();
         fs::write(
             dir.path().join("t.toml"),
@@ -148,8 +159,42 @@ mod tests {
         let sandbox_dir = tempdir().unwrap();
         let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
 
-        let err = load_dir(dir.path(), &registry).await.err().unwrap().to_string();
-        assert!(err.contains("no-such-sandbox"), "unexpected: {err}");
+        let tools = load_dir(dir.path(), &registry).await.unwrap();
+        assert!(tools.is_empty(), "unknown sandbox_ref should be skipped, not error");
+    }
+
+    #[tokio::test]
+    async fn load_dir_skips_bad_ref_but_loads_good_ones() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("bad.toml"),
+            r#"
+                name = "bad"
+                description = "x"
+                binaries = ["x"]
+                cwd = "/"
+                sandbox_ref = "no-such-sandbox"
+            "#,
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("good.toml"),
+            r#"
+                name = "good"
+                description = "y"
+                binaries = ["echo"]
+                cwd = "/tmp"
+                sandbox_ref = "local"
+            "#,
+        )
+        .unwrap();
+
+        let sandbox_dir = tempdir().unwrap();
+        let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
+
+        let tools = load_dir(dir.path(), &registry).await.unwrap();
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].config.name, "good");
     }
 
     #[tokio::test]
