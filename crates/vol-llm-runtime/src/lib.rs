@@ -495,6 +495,21 @@ impl AgentRuntimeBuilder {
         vol_llm_tools_builtin::register_all(&mut tool_registry);
         // Register the unified CLI-style `task` tool (agents using `tools: [task]`).
         vol_llm_task::tools::register_cli(&mut tool_registry, task_store.clone());
+        // Register declarative CLI-as-Tool entries from .agents/cli-tools/*.toml
+        {
+            let cli_tools_dir = self.working_dir.join(".agents").join("cli-tools");
+            match vol_llm_tools_builtin::cli_tool::register_all(
+                &mut tool_registry,
+                &sandbox_registry,
+                &cli_tools_dir,
+            )
+            .await
+            {
+                Ok(0) => {}
+                Ok(n) => tracing::info!(n, "cli-tools registered"),
+                Err(e) => return Err(format!("cli-tool registration failed: {e}")),
+            }
+        }
         let tool_config = vol_llm_tool::ToolConfig::default();
         vol_llm_tools_builtin::register_web_all(&mut tool_registry, &tool_config);
         tool_registry.register(SkillTool::new(skill_loader.clone()));
