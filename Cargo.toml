@@ -41,6 +41,7 @@ members = [
     "crates/vol-observability",
     "crates/vol-llm-sandbox",
     "crates/vol-llm-cli-tool",
+    "crates/vol-llm-tools-builtin/cli-tool",
 ]
 
 [workspace.package]
@@ -143,6 +144,7 @@ fd-lock = "4"
 vol-observability = { path = "crates/vol-observability" }
 vol-llm-sandbox = { path = "crates/vol-llm-sandbox" }
 vol-llm-cli-tool = { path = "crates/vol-llm-cli-tool" }
+vol-llm-tools-builtin-cli-tool = { path = "crates/vol-llm-tools-builtin/cli-tool" }
 
 # SSH
 ssh2 = { version = "0.9", features = ["vendored-openssl"] }
