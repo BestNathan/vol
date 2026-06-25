@@ -57,6 +57,10 @@ pub mod web_fetch_provider {
     pub use vol_llm_tools_builtin_web_fetch::*;
 }
 
+pub mod cli_tool {
+    pub use vol_llm_tools_builtin_cli_tool::*;
+}
+
 // Re-export all tools for convenience
 pub use bash_tool::BashTool;
 pub use config::{WebFetchConfig, WebSearchConfig};

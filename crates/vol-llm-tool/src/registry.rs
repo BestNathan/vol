@@ -58,6 +58,10 @@ impl ToolRegistry {
         self.tools.keys().map(|s| s.as_str()).collect()
     }
 
+    pub fn contains(&self, name: &str) -> bool {
+        self.tools.contains_key(name)
+    }
+
     /// Get the sensitivity level of a tool for the given arguments.
     /// Returns Safe if the tool is not found (fails open for registry lookup).
     pub fn tool_sensitivity(&self, name: &str, args: &serde_json::Value) -> ToolSensitivity {
@@ -126,6 +130,42 @@ impl ToolRegistry {
             count += 1;
         }
         count
+    }
+
+    /// Keep non-MCP tools (all builtins) + only MCP tools from named servers.
+    ///
+    /// MCP tools follow the naming convention `mcp__{server}__{tool}`.
+    /// Server names are matched after sanitization (same normalisation McpManager uses).
+    /// Returns a new ToolRegistry — does not mutate self.
+    pub fn filter_mcp_servers(&self, server_names: &[String]) -> Self {
+        let allowed: std::collections::HashSet<String> = server_names
+            .iter()
+            .map(|n| vol_llm_mcp::session::sanitize_name(n))
+            .collect();
+
+        let tools = self
+            .tools
+            .iter()
+            .filter(|(name, _)| {
+                // Keep non-MCP tools (no "mcp__" prefix)
+                if !name.starts_with("mcp__") {
+                    return true;
+                }
+                // For MCP tools, extract the server name segment and check allowlist.
+                // Format: mcp__{server}__{tool}
+                let rest = &name[5..]; // strip "mcp__"
+                if let Some(server_end) = rest.find("__") {
+                    let server = &rest[..server_end];
+                    allowed.contains(server)
+                } else {
+                    // Malformed name — keep it (shouldn't happen, but be safe).
+                    true
+                }
+            })
+            .map(|(name, tool)| (name.clone(), Arc::clone(tool)))
+            .collect();
+
+        Self { tools }
     }
 }
 
@@ -239,5 +279,56 @@ mod tests {
         let count = registry.register_from_mcp(manager).await;
         assert_eq!(count, 0);
         assert!(registry.tool_names().is_empty());
+    }
+
+    #[test]
+    fn test_filter_mcp_servers_keeps_non_mcp_tools() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        registry.register(DummyTool::new("read_file"));
+        registry.register(DummyTool::new("skill"));
+        let filtered = registry.filter_mcp_servers(&["docs-rs".to_string()]);
+        let names = filtered.tool_names();
+        assert!(names.contains(&"bash"));
+        assert!(names.contains(&"read_file"));
+        assert!(names.contains(&"skill"));
+    }
+
+    #[test]
+    fn test_filter_mcp_servers_filters_mcp_by_name() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("mcp__docs_rs__search"));
+        registry.register(DummyTool::new("mcp__weather__forecast"));
+        registry.register(DummyTool::new("bash"));
+        registry.register(DummyTool::new("read_file"));
+
+        let filtered = registry.filter_mcp_servers(&["docs.rs".to_string()]);
+        let names = filtered.tool_names();
+        assert!(names.contains(&"mcp__docs_rs__search"));
+        assert!(!names.contains(&"mcp__weather__forecast"));
+        assert!(names.contains(&"bash"));
+        assert!(names.contains(&"read_file"));
+    }
+
+    #[test]
+    fn test_filter_mcp_servers_empty_list_removes_all_mcp() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("mcp__docs_rs__search"));
+        registry.register(DummyTool::new("bash"));
+
+        let filtered = registry.filter_mcp_servers(&[]);
+        let names = filtered.tool_names();
+        assert!(names.contains(&"bash"));
+        assert!(!names.contains(&"mcp__docs_rs__search"));
+    }
+
+    #[test]
+    fn test_filter_mcp_servers_sanitizes_names() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("mcp__docs_rs__search")); // sanitized: docs_rs
+
+        let filtered = registry.filter_mcp_servers(&["docs.rs".to_string()]);
+        // "docs.rs" sanitizes to "docs_rs" — should match
+        assert!(filtered.tool_names().contains(&"mcp__docs_rs__search"));
     }
 }

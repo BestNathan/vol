@@ -356,6 +356,7 @@ pub fn spawn_custom_approval_handler(
 mod tests {
     use super::*;
 
+    #[allow(dead_code)]
     struct MockChannel;
 
     #[async_trait]

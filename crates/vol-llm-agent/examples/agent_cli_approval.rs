@@ -271,7 +271,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mock_llm = Arc::new(MockLlmWithTools::new());
 
     // Build agent with HITL plugin and observability
-    let working_dir = std::path::PathBuf::from(".");
+    let _working_dir = std::path::PathBuf::from(".");
 
     let config = AgentConfig::builder()
         .with_llm(mock_llm)

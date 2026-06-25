@@ -10,6 +10,7 @@ use crate::model::TaskId;
 use crate::store::TaskStore;
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct TaskOutputParams {
     task_id: String,
     #[serde(default = "default_block")]

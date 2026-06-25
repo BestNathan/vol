@@ -28,6 +28,14 @@ impl CapabilityIndex {
         Ok(())
     }
 
+    /// Remove a node's capability snapshot (called on re-registration).
+    pub fn remove_node(&self, node_id: &str) {
+        self.snapshots
+            .write()
+            .expect("capability index snapshots lock poisoned while removing node")
+            .remove(node_id);
+    }
+
     pub fn list(&self, node_id: Option<&str>) -> Vec<CapabilitySnapshot> {
         let snapshots = self
             .snapshots

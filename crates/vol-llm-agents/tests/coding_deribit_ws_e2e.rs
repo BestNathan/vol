@@ -220,13 +220,12 @@ async fn test_coding_agent_develops_deribit_ws_client() {
 
     // 4. Try to build the project
     eprintln!("\n=== Building the agent-created project ===");
-    let mut build_succeeded = false;
     let build_output = std::process::Command::new("cargo")
         .args(["build", "--manifest-path", cargo_path.to_str().unwrap()])
         .output()
         .expect("Failed to execute cargo build");
 
-    build_succeeded = build_output.status.success();
+    let mut build_succeeded = build_output.status.success();
     if build_succeeded {
         eprintln!("Build succeeded on first try!");
     } else {

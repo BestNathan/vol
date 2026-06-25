@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use crate::item::{MemoryFilter, MemoryItem};
-use crate::{MemoryError, Result};
+use crate::Result;
 
 /// Relevance search trait for retrieving memories.
 #[async_trait]

@@ -1,0 +1,344 @@
+# Build and push vol-agent-server multi-arch images (amd64 + arm64) to ACR.
+#
+# Strategy: build amd64 and arm64 on native runners in parallel, then merge
+# the two per-arch manifests into a single multi-arch tag with buildx
+# imagetools. This avoids QEMU emulation entirely (qemu + aws-lc-sys turns
+# a 5-minute compile into a 40-minute one).
+#
+# Two role-specific images per commit, sharing one repo:
+#   crpi-...aliyuncs.com/n_common/vol-agent-server:cp-<sha>   (control plane)
+#   crpi-...aliyuncs.com/n_common/vol-agent-server:dp-<sha>   (data plane)
+#
+# main pushes also get cp-latest / dp-latest moving tags.
+#
+# Required secrets:
+#   DOCKER_USERNAME — ACR login user
+#   DOCKER_PASSWORD — ACR login password
+#
+# Override the ACR endpoint or repo via repo / org variables:
+#   vars.ACR_REGISTRY  (default: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com)
+#   vars.ACR_NAMESPACE (default: n_common)
+
+name: build-vol-agent-server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - "configs/vol-agent-server.*.toml"
+      - "dockers/vol-agent-server.Dockerfile"
+      - ".cargo/config.toml"
+      - ".github/workflows/build-vol-agent-server.yml"
+  workflow_dispatch:
+    inputs:
+      push_image:
+        description: "Push images to ACR (uncheck to build-only)"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+env:
+  ACR_REGISTRY: ${{ vars.ACR_REGISTRY || 'crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com' }}
+  ACR_NAMESPACE: ${{ vars.ACR_NAMESPACE || 'n_common' }}
+  IMAGE_NAME: vol-agent-server
+
+jobs:
+  # ── Per-arch builds run on native runners ────────────────────────────────
+  build:
+    name: build (${{ matrix.role }}, ${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [control-plane, data-plane]
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Decide whether to push
+        id: push
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.push_image }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to ACR
+        if: steps.push.outputs.value == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: dockers/vol-agent-server.Dockerfile
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            ROLE=${{ matrix.role }}
+            REGION=global
+          # Push by digest only — tags are attached later in the manifest job.
+          outputs: type=image,name=${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ steps.push.outputs.value == 'true' }}
+          provenance: false
+          cache-from: type=gha,scope=vol-agent-server-${{ matrix.role }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=vol-agent-server-${{ matrix.role }}-${{ matrix.arch }}
+
+      - name: Export digest
+        if: steps.push.outputs.value == 'true'
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: steps.push.outputs.value == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.role }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ── Merge per-arch images into one multi-arch tag, per role ──────────────
+  manifest:
+    name: manifest (${{ matrix.role }})
+    runs-on: ubuntu-24.04
+    needs: build
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.push_image == 'true'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: control-plane
+            tag_prefix: cp
+          - role: data-plane
+            tag_prefix: dp
+
+    steps:
+      - name: Compute short SHA
+        id: sha
+        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-${{ matrix.role }}-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Compose tag args
+        id: tags
+        run: |
+          IMG="${ACR_REGISTRY}/${ACR_NAMESPACE}/${IMAGE_NAME}"
+          PREFIX="${{ matrix.tag_prefix }}"
+          SHA="${{ steps.sha.outputs.short }}"
+          TAGS=("${IMG}:${PREFIX}-${SHA}")
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            TAGS+=("${IMG}:${PREFIX}-latest")
+          fi
+          ARGS=""
+          for t in "${TAGS[@]}"; do ARGS="$ARGS -t $t"; done
+          {
+            echo "args=$ARGS"
+            echo "img=$IMG"
+            echo "list<<EOF"
+            for t in "${TAGS[@]}"; do echo "$t"; done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create multi-arch manifest
+        working-directory: /tmp/digests
+        # shellcheck disable=SC2046,SC2086
+        run: |
+          digests=$(printf '${{ steps.tags.outputs.img }}@sha256:%s ' *)
+          # shellcheck disable=SC2086
+          docker buildx imagetools create ${{ steps.tags.outputs.args }} $digests
+
+      - name: Inspect
+        run: |
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            echo "── $tag"
+            docker buildx imagetools inspect "$tag"
+          done <<< "${{ steps.tags.outputs.list }}"
+
+      - name: Summary
+        run: |
+          {
+            echo "### vol-agent-server (${{ matrix.role }})"
+            echo
+            echo "- short SHA: \`${{ steps.sha.outputs.short }}\`"
+            echo "- platforms: linux/amd64, linux/arm64"
+            echo
+            echo "Tags:"
+            while IFS= read -r tag; do
+              [ -n "$tag" ] || continue
+              echo "- \`$tag\`"
+            done <<< "${{ steps.tags.outputs.list }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── Prune old per-commit tags from ACR after a successful push ───────────
+  # Keeps the floating <prefix>-latest tag plus the N most recent commit sha
+  # tags per role (sourced from `git log` on the branch this run built).
+  # Talks to ACR via the standard Docker Registry v2 HTTP API using the
+  # same DOCKER_USERNAME / DOCKER_PASSWORD secrets — no Aliyun AccessKey
+  # required.
+  prune:
+    name: prune (${{ matrix.role }})
+    runs-on: ubuntu-24.04
+    needs: manifest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: control-plane
+            tag_prefix: cp
+          - role: data-plane
+            tag_prefix: dp
+    env:
+      KEEP_LAST: "5"
+
+    steps:
+      - name: Checkout (last 50 commits, enough for keep window)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+
+      - name: Install crane
+        run: |
+          set -eux
+          ver="v0.20.2"
+          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${ver}/go-containerregistry_Linux_x86_64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin crane
+
+      - name: Compute keep set
+        id: keep
+        env:
+          PREFIX: ${{ matrix.tag_prefix }}
+        run: |
+          set -eu
+          # The N most recent commits on the current ref → short SHAs → "<prefix>-<sha>"
+          mapfile -t SHAS < <(git log -n "$KEEP_LAST" --format='%h' --abbrev=7 HEAD)
+          KEEP=("${PREFIX}-latest")
+          for s in "${SHAS[@]}"; do KEEP+=("${PREFIX}-${s}"); done
+          {
+            echo "list<<EOF"
+            for k in "${KEEP[@]}"; do echo "$k"; done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "Keeping:"
+          printf '  - %s\n' "${KEEP[@]}"
+
+      - name: Authenticate crane
+        env:
+          REG: ${{ env.ACR_REGISTRY }}
+          USER: ${{ secrets.DOCKER_USERNAME }}
+          PASS: ${{ secrets.DOCKER_PASSWORD }}
+        run: echo "$PASS" | crane auth login "$REG" --username "$USER" --password-stdin
+
+      - name: Prune stale tags
+        env:
+          IMG: ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.IMAGE_NAME }}
+          PREFIX: ${{ matrix.tag_prefix }}
+          KEEP_TAGS: ${{ steps.keep.outputs.list }}
+        run: |
+          set -eu
+          # Build keep set + their digests so we don't accidentally delete a
+          # manifest that another kept tag still references (e.g. cp-latest
+          # often shares a digest with the most recent cp-<sha>).
+          declare -A keep_tag keep_digest
+          while IFS= read -r t; do
+            [ -n "$t" ] || continue
+            keep_tag["$t"]=1
+            d="$(crane digest "${IMG}:${t}" 2>/dev/null || true)"
+            [ -n "$d" ] && keep_digest["$d"]=1
+          done <<< "$KEEP_TAGS"
+
+          echo "Keep tags:    ${!keep_tag[*]}"
+          echo "Keep digests: ${!keep_digest[*]}"
+
+          # Iterate every tag in the repo, only consider ones for *this* role.
+          deleted=0
+          skipped_shared_digest=0
+          examined=0
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            case "$tag" in
+              "${PREFIX}-"*) ;;
+              *) continue ;;
+            esac
+            examined=$((examined + 1))
+            if [ -n "${keep_tag[$tag]:-}" ]; then
+              echo "keep    ${IMG}:${tag}"
+              continue
+            fi
+            d="$(crane digest "${IMG}:${tag}" 2>/dev/null || true)"
+            if [ -n "$d" ] && [ -n "${keep_digest[$d]:-}" ]; then
+              # Shared manifest with a kept tag — deleting by digest would also
+              # remove the kept tag. Just unname this tag if the registry
+              # supports it; otherwise leave it (cheap, manifest is shared).
+              echo "shared  ${IMG}:${tag}  -> $d (kept by another tag, skipping)"
+              skipped_shared_digest=$((skipped_shared_digest + 1))
+              continue
+            fi
+            if [ -z "$d" ]; then
+              echo "missing ${IMG}:${tag}  (cannot resolve digest, skipping)"
+              continue
+            fi
+            echo "delete  ${IMG}:${tag}  -> $d"
+            if crane delete "${IMG}@${d}"; then
+              deleted=$((deleted + 1))
+            else
+              echo "  !! delete failed for ${IMG}@${d}" >&2
+            fi
+          done < <(crane ls "$IMG")
+
+          {
+            echo "### prune ($PREFIX)"
+            echo
+            echo "- examined: $examined"
+            echo "- deleted:  $deleted"
+            echo "- shared-digest skipped: $skipped_shared_digest"
+            echo
+            echo "Kept tags:"
+            for k in "${!keep_tag[@]}"; do echo "- \`$k\`"; done
+          } >> "$GITHUB_STEP_SUMMARY"
+

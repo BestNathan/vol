@@ -28,6 +28,14 @@ data:
     level = "info"
     format = "text"
 
+    [opentelemetry]
+    enabled = true
+    endpoint = "http://otel-collector.observability.svc.cluster.local:4317"
+    service_name = "agent-server"
+    service_namespace = "vol-agent"
+    deployment_environment = "production"
+    sample_rate = 1.0
+
   # ── LLM Provider: Anthropic via DashScope proxy ──────────────────────────
   anthropic-dashscope.toml: |
     provider = "anthropic"

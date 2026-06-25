@@ -36,6 +36,14 @@ impl LocalSandbox {
     }
 }
 
+impl Drop for LocalSandbox {
+    fn drop(&mut self) {
+        if self.is_temp && self.root_path.exists() {
+            let _ = std::fs::remove_dir_all(&self.root_path);
+        }
+    }
+}
+
 #[async_trait]
 impl Sandbox for LocalSandbox {
     fn kind(&self) -> &str {

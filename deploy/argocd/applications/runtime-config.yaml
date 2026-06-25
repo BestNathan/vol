@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: runtime-config
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: runtime-config
+    app.kubernetes.io/part-of: vol-agent
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:BestNathan/vol.git
+    targetRevision: main
+    path: deploy/argocd/manifests/runtime-config
+    directory:
+      recurse: true
+      exclude: "{provider-secrets.example.yaml,agent-dingtalk-secrets.example.yaml}"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vol-agent-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -216,7 +216,22 @@ impl DataPlaneServerCore {
             .map_err(|e| format!("failed to create agent dirs: {e}"))?;
 
         let llm = self.llm.clone();
-        let tools = self.tool_registry.clone();
+
+        // Clone the full shared registry and apply per-agent filters (mcps, tools, disallowed_tools).
+        let mut tool_registry = (*self.tool_registry).clone();
+        if let Some(ref server_names) = def.mcps {
+            tool_registry = tool_registry.filter_mcp_servers(server_names);
+        }
+        let allowed_refs: Option<Vec<&str>> = def
+            .tools
+            .as_ref()
+            .map(|v| v.iter().map(|s| s.as_str()).collect());
+        let disallowed_refs: Option<Vec<&str>> = def
+            .disallowed_tools
+            .as_ref()
+            .map(|v| v.iter().map(|s| s.as_str()).collect());
+        let tools = tool_registry.filter(allowed_refs.as_deref(), disallowed_refs.as_deref());
+
         let mcp = self.mcp_manager.clone();
 
         let session_store = self
@@ -244,14 +259,21 @@ impl DataPlaneServerCore {
         );
         config.plugin_registry.register(holder.clone());
 
+        // Register observability plugins
+        config.plugin_registry.register(vol_llm_observability::MetricsPlugin::new());
+        config.plugin_registry.register(vol_llm_observability::LokiPlugin::new());
+
         let agent = vol_llm_agent::ReActAgent::new(config);
         let dispatcher = Arc::new(AgentDispatcher::new(agent));
 
         self.router.register(agent_id.clone(), dispatcher).await;
-        self.holders
-            .lock()
-            .unwrap()
-            .insert(agent_id, Arc::new(holder));
+        let count = {
+            let mut holders = self.holders.lock().unwrap();
+            holders.insert(agent_id.clone(), Arc::new(holder));
+            holders.len()
+        };
+
+        tracing::info!(name = %agent_id, holders_count = count, "Agent registered");
 
         Ok(())
     }
@@ -267,8 +289,10 @@ impl DataPlaneServerCore {
         loader.discover_all().await.map_err(|e| e.to_string())?;
 
         let agents = loader.list_metadata().await;
+        tracing::info!(count = agents.len(), "Discovered agents from disk");
         for meta in agents {
             if let Some(def) = loader.get(&meta.name).await {
+                tracing::info!(name = %meta.name, r#type = %meta.r#type, "Registering agent");
                 // Store def for metadata queries
                 self.agent_defs
                     .write()
@@ -306,6 +330,8 @@ impl DataPlaneServerCore {
 
     /// Serve incoming messages from a type-erased connection.
     pub async fn serve_dyn(&self, conn: Arc<dyn Connection>) {
+        tracing::info!(dir = "dp < client", "data-plane accepted client connection");
+
         // Attach to all holders so agent events are pushed to this connection.
         let holders: Vec<_> = { self.holders.lock().unwrap().values().cloned().collect() };
         for holder in &holders {
@@ -330,17 +356,19 @@ impl DataPlaneServerCore {
                     )],
                 },
                 Err(e) => {
-                    tracing::warn!(%e, "connection receive error");
+                    tracing::debug!(%e, "connection receive ended");
                     break;
                 }
             };
             for resp in responses {
                 if let Err(e) = conn.send(resp).await {
-                    tracing::warn!(%e, "connection send error");
+                    tracing::debug!(%e, "connection send ended");
+                    tracing::info!(dir = "dp < client", "data-plane client connection closed (send error)");
                     return;
                 }
             }
         }
+        tracing::info!(dir = "dp < client", "data-plane client connection closed");
     }
 }
 

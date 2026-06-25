@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: workloads
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: workloads
+    app.kubernetes.io/part-of: vol-agent
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:BestNathan/vol.git
+    targetRevision: main
+    path: deploy/argocd/manifests/workloads
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vol-agent-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

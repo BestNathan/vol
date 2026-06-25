@@ -281,6 +281,7 @@ impl ReActAgent {
         self.run_input(AgentInput::text(user_input)).await
     }
 
+    #[tracing::instrument(skip(self, input), fields(agent.run_id))]
     pub async fn run_input(&self, input: AgentInput) -> Result<AgentResponse, crate::AgentError> {
         // Re-entrancy guard
         if self
@@ -291,6 +292,11 @@ impl ReActAgent {
             return Err(crate::AgentError::AlreadyRunning);
         }
 
+        // Ensure all MCP servers are connected before starting the run.
+        if let Some(ref mcp) = self.config.mcp_manager {
+            mcp.reconnect_all().await;
+        }
+
         let user_content = input
             .to_message_content()
             .map_err(|e| crate::AgentError::InvalidInput(e.to_string()))?;
@@ -299,6 +305,7 @@ impl ReActAgent {
             .run_id
             .clone()
             .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string());
+        tracing::Span::current().record("agent.run_id", &run_id);
 
         // Set status metadata
         *self.run_state.current_input.write().unwrap() = Some(user_input.clone());
@@ -419,7 +426,7 @@ impl ReActAgent {
                 };
 
                 // Consume LLM stream — emits Thinking/Content streaming events internally
-                let (thinking, tool_calls, content, model, usage) =
+                let (thinking, tool_calls, content, _model, _usage) =
                     match consume_llm_stream(llm_stream, &run_ctx).await {
                         Ok(data) => data,
                         Err(e) => {
@@ -808,7 +815,7 @@ mod tests {
     };
 
     use crate::agent_def::AgentDef;
-    use crate::react::plugin::PluginRegistry;
+    
     use vol_llm_tool::ToolRegistry;
     use vol_session::InMemoryEntryStore;
 

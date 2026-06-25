@@ -1,0 +1,171 @@
+# Sync runtime configuration from source files into GitOps ConfigMap manifests.
+#
+# Reads source configuration files from the repository and generates Kubernetes
+# ConfigMap manifests under deploy/argocd/manifests/runtime-config/. When any
+# source file changes on main, this workflow regenerates the ConfigMaps and
+# commits them so ArgoCD can sync the updated runtime configuration.
+#
+# Source → ConfigMap mapping:
+#   .agents/agents/*.md       → agents-configmap.yaml     (auto-mount keys as files)
+#   .agents/providers/*.toml  → providers-configmap.yaml   (auto-mount keys as files)
+#   .agents/skills/*/SKILL.md → skills-configmap.yaml      (explicit items: key→subdir/path)
+#   .agents/sandboxes/*.toml  → sandboxes-configmap.yaml   (auto-mount keys as files)
+#   .mcp.json                 → mcp-configmap.yaml         (explicit items: key→.mcp.json)
+#
+# Required permissions:
+#   contents: write  (commit generated ConfigMaps)
+
+name: sync-runtime-config
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".agents/agents/*.md"
+      - ".agents/providers/*.toml"
+      - ".agents/skills/**"
+      - ".agents/sandboxes/*.toml"
+      - ".mcp.json"
+      - ".github/workflows/sync-runtime-config.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: sync-runtime-config
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: sync-configmaps
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate ConfigMap manifests
+        run: |
+          python3 - <<'PY'
+          import os, json, yaml
+          from pathlib import Path
+
+          MANIFEST_DIR = Path("deploy/argocd/manifests/runtime-config")
+          MANIFEST_DIR.mkdir(parents=True, exist_ok=True)
+
+          # ── helpers ──────────────────────────────────────────────────────────
+
+          def cm_header(name):
+              return {
+                  "apiVersion": "v1",
+                  "kind": "ConfigMap",
+                  "metadata": {
+                      "name": name,
+                      "namespace": "vol-agent-system",
+                      "labels": {
+                          "app.kubernetes.io/name": name,
+                          "app.kubernetes.io/part-of": "vol-agent",
+                          "app.kubernetes.io/component": "runtime-config",
+                      },
+                  },
+                  "data": {},
+              }
+
+          def yaml_str(obj):
+              # Produce clean YAML without Python-specific tags
+              class Dumper(yaml.Dumper):
+                  pass
+              Dumper.ignore_aliases = lambda self, data: True
+              return yaml.dump(obj, Dumper=Dumper, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+          def write_cm(path, cm):
+              path.write_text(yaml_str(cm))
+
+          changed = False
+
+          # ── agents-configmap.yaml ────────────────────────────────────────────
+
+          agents_dir = Path(".agents/agents")
+          cm = cm_header("agent-definitions")
+          if agents_dir.is_dir():
+              for f in sorted(agents_dir.glob("*.md")):
+                  cm["data"][f.name] = f.read_text()
+          if cm["data"]:
+              write_cm(MANIFEST_DIR / "agents-configmap.yaml", cm)
+              changed = True
+
+          # ── providers-configmap.yaml ─────────────────────────────────────────
+
+          providers_dir = Path(".agents/providers")
+          cm = cm_header("agent-providers")
+          if providers_dir.is_dir():
+              for f in sorted(providers_dir.glob("*.toml")):
+                  cm["data"][f.name] = f.read_text()
+          if cm["data"]:
+              write_cm(MANIFEST_DIR / "providers-configmap.yaml", cm)
+              changed = True
+
+          # ── skills-configmap.yaml ────────────────────────────────────────────
+
+          skills_dir = Path(".agents/skills")
+          cm = cm_header("agent-skills")
+          if skills_dir.is_dir():
+              for skill_dir in sorted(skills_dir.iterdir()):
+                  if not skill_dir.is_dir():
+                      continue
+                  skill_md = skill_dir / "SKILL.md"
+                  if not skill_md.is_file():
+                      continue
+                  # ConfigMap key is path-safe: gitops.SKILL.md
+                  key = f"{skill_dir.name}.SKILL.md"
+                  cm["data"][key] = skill_md.read_text()
+          if cm["data"]:
+              write_cm(MANIFEST_DIR / "skills-configmap.yaml", cm)
+              changed = True
+
+          # ── sandboxes-configmap.yaml ─────────────────────────────────────────
+
+          sandboxes_dir = Path(".agents/sandboxes")
+          cm = cm_header("agent-sandboxes")
+          if sandboxes_dir.is_dir():
+              for f in sorted(sandboxes_dir.glob("*.toml")):
+                  cm["data"][f.name] = f.read_text()
+          if cm["data"]:
+              write_cm(MANIFEST_DIR / "sandboxes-configmap.yaml", cm)
+              changed = True
+
+          # ── mcp-configmap.yaml ───────────────────────────────────────────────
+
+          mcp_file = Path(".mcp.json")
+          if mcp_file.is_file():
+              cm = cm_header("mcp-config")
+              cm["data"]["mcp.json"] = mcp_file.read_text()
+              write_cm(MANIFEST_DIR / "mcp-configmap.yaml", cm)
+              changed = True
+
+          # ── report ───────────────────────────────────────────────────────────
+
+          if changed:
+              print("ConfigMap manifests regenerated.")
+          else:
+              print("No source files found. ConfigMaps unchanged.")
+          PY
+
+      - name: Commit generated manifests
+        run: |
+          if git diff --quiet -- deploy/argocd/manifests/runtime-config; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/argocd/manifests/runtime-config/agents-configmap.yaml \
+                  deploy/argocd/manifests/runtime-config/providers-configmap.yaml \
+                  deploy/argocd/manifests/runtime-config/skills-configmap.yaml \
+                  deploy/argocd/manifests/runtime-config/sandboxes-configmap.yaml \
+                  deploy/argocd/manifests/runtime-config/mcp-configmap.yaml
+          git commit -m "ci(gitops): sync runtime config configmaps [skip ci]"
+          git pull --rebase origin main
+          git push

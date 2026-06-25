@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-config
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: mcp-config
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: runtime-config
+data:
+  mcp.json: "{\n  \"mcpServers\": {\n    \"docs-rs-mcp\": {\n      \"type\": \"http\"\
+    ,\n      \"url\": \"http://docs-rs-mcp.vol-agent-system.svc.cluster.local:8080/mcp\"\
+    \n    },\n    \"钉钉文档\": {\n      \"type\": \"streamable-http\",\n      \"url\"\
+    : \"https://mcp-gw.dingtalk.com/server/621fdbe4ef3a5dfbfca57542962095496bfdd56e03f755aeab6a50791ff167ca?key=f297c79708995fb16c3fd0b3fca48d3d\"\
+    \n    },\n    \"playwright\": {\n      \"type\": \"stdio\",\n      \"command\"\
+    : \"npx\",\n      \"args\": [\"@playwright/mcp@latest\", \"--headless\"]\n   \
+    \ }\n  }\n}\n"

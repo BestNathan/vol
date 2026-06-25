@@ -1,7 +1,6 @@
 //! Unit tests for WasmSandbox.
 
-use vol_llm_sandbox::registry::{SandboxConfig, WasmConfig, WasmModuleConfig};
-use vol_llm_sandbox::Sandbox;
+use vol_llm_sandbox::registry::SandboxConfig;
 
 #[test]
 fn test_wasm_config_defaults() {

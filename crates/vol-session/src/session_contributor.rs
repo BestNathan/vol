@@ -6,7 +6,7 @@ use vol_llm_core::Message;
 use crate::compressor::MessageCompressor;
 use crate::compressors::PositionSampleCompressor;
 use crate::entry::{CheckpointReason, SessionEntry};
-use crate::{Session, SessionMessage};
+use crate::Session;
 
 /// Session contributor — retrieves historical messages from a session
 /// and supports compression to manage context size.
@@ -95,7 +95,7 @@ impl ContextContributor for SessionContributor {
 
         // 3. Write checkpoint (seal old messages)
         let session = self.session.lock().await;
-        let mut cp_entry =
+        let cp_entry =
             SessionEntry::new_checkpoint(session_id.clone(), CheckpointReason::Compression, None);
         let base_ts = cp_entry.created_at;
         if let Err(e) = session.entry_store.save(cp_entry).await {

@@ -1,10 +1,10 @@
 ---
 type: entity
 category: product
-tags: [repository, rust, cargo-workspace, deribit, llm]
+tags: [repository, rust, cargo-workspace, deribit, llm, gitops]
 created: 2026-05-19
-updated: 2026-05-19
-source_count: 1
+updated: 2026-06-16
+source_count: 2
 ---
 
 # vol Repository
@@ -27,6 +27,7 @@ source_count: 1
 - Project wiki: `docs/wiki`
 - OpenSpec artifacts: `openspec/`
 - Kubernetes manifests: `k8s/`
+- Self-contained ArgoCD GitOps manifests: `deploy/argocd/` [[argocd-gitops-deployment]]
 - Cargo mirror config for Docker Rust builds: `.cargo/`
 
 ## Module Structure
@@ -39,10 +40,12 @@ source_count: 1
 | Agent orchestration | `vol-llm-agent`, `vol-llm-agents` |
 | Agent communication and MCP | `vol-llm-agent-channel`, `vol-llm-mcp`, `vol-mcp-servers` |
 | User interfaces | `vol-llm-ui`, `vol-llm-tui` |
+| Deployment | `k8s/` legacy/manual manifests; `deploy/argocd/` self-contained ArgoCD GitOps manifests |
 | Documentation and artifacts | `docs/`, `docs/wiki/`, `docs/superpowers/`, `openspec/` |
 
 ## Timeline
 
+- **2026-06-16**: Added self-contained ArgoCD App-of-Apps GitOps deployment tree under `deploy/argocd/` plus MCP image build workflow; later refactored into `runtime-config` (namespace + shared .agents ConfigMaps) and `workloads` child Applications [[argocd-gitops-deployment]]
 - **2026-05-19**: `CLAUDE.md` gained a Project Overview section summarizing the main repository directories and their roles [[claude-md-project-overview]]
 
 ## Related

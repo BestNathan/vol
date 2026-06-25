@@ -149,6 +149,44 @@ pub struct SandboxRegistry {
 }
 
 impl SandboxRegistry {
+    /// Construct a single sandbox from a parsed config.
+    ///
+    /// Extracted from `SandboxRegistry::load` so that other crates
+    /// (e.g. `vol-llm-cli-tool`) can build inline sandboxes without
+    /// going through the directory loader.
+    pub async fn build_sandbox(
+        config: SandboxConfig,
+    ) -> SandboxResult<Arc<dyn Sandbox>> {
+        let sandbox: Arc<dyn Sandbox> = match config.sandbox_type.as_str() {
+            "local" => Arc::new(LocalSandbox::new(
+                config.work_dir.as_ref().map(std::path::PathBuf::from),
+            )),
+            #[cfg(feature = "ssh")]
+            "ssh" => {
+                let ssh_config = config.ssh.ok_or_else(|| {
+                    SandboxError::Config(format!(
+                        "SSH sandbox '{}' requires [ssh] section",
+                        config.name
+                    ))
+                })?;
+                let sb = crate::ssh::SSHSandbox::new(
+                    config.name.clone(),
+                    config.work_dir.clone(),
+                    ssh_config,
+                )?;
+                let sandbox: Arc<dyn Sandbox> = Arc::new(sb);
+                sandbox.start().await?;
+                sandbox
+            }
+            other => {
+                return Err(SandboxError::Config(format!(
+                    "unsupported sandbox type: {other}"
+                )));
+            }
+        };
+        Ok(sandbox)
+    }
+
     /// Load sandboxes from a config directory.
     ///
     /// Always registers a built-in `LocalSandbox` named "local".
@@ -167,100 +205,123 @@ impl SandboxRegistry {
             Arc<crate::firecracker::FirecrackerPool>,
         > = HashMap::new();
 
-        // Load *.toml files
+        // Load *.toml files — individual failures are non-fatal
         if sandboxes_dir.exists() {
             for entry in std::fs::read_dir(sandboxes_dir).map_err(SandboxError::Io)? {
-                let entry = entry.map_err(SandboxError::Io)?;
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(e) => {
+                        tracing::warn!("Failed to read sandbox directory entry: {}", e);
+                        continue;
+                    }
+                };
                 let path = entry.path();
-                if path.extension().is_some_and(|ext| ext == "toml") {
-                    let content = std::fs::read_to_string(&path).map_err(SandboxError::Io)?;
-                    let config: SandboxConfig = toml::from_str(&content).map_err(|e| {
-                        SandboxError::UnknownType(format!(
-                            "failed to parse {}: {}",
-                            path.display(),
-                            e
-                        ))
-                    })?;
+                if !path.extension().is_some_and(|ext| ext == "toml") {
+                    continue;
+                }
 
-                    if config.name == "local" {
-                        return Err(SandboxError::LocalOverride);
+                let content = match std::fs::read_to_string(&path) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        tracing::warn!(path = %path.display(), error = %e, "Failed to read sandbox config, skipping");
+                        continue;
                     }
-                    if sandboxes.contains_key(&config.name) {
-                        return Err(SandboxError::DuplicateName(config.name.clone()));
+                };
+
+                let config: SandboxConfig = match toml::from_str(&content) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        tracing::warn!(path = %path.display(), error = %e, "Failed to parse sandbox config, skipping");
+                        continue;
                     }
+                };
 
-                    match config.sandbox_type.as_str() {
-                        #[cfg(feature = "ssh")]
-                        "ssh" => {
-                            let ssh_config = config.ssh.ok_or_else(|| {
-                                SandboxError::UnknownType(
-                                    "SSH sandbox requires [sandbox.ssh] section".to_string(),
-                                )
-                            })?;
-                            let sb = crate::ssh::SSHSandbox::new(
-                                config.name.clone(),
-                                config.work_dir.clone(),
-                                ssh_config,
-                            )?;
-                            let sandbox: Arc<dyn Sandbox> = Arc::new(sb);
-                            sandbox.start().await?;
-                            sandboxes.insert(config.name.clone(), sandbox);
-                        }
-                        #[cfg(feature = "firecracker")]
-                        "firecracker" => {
-                            let fc_config = config.firecracker.ok_or_else(|| {
-                                SandboxError::UnknownType(
-                                    "Firecracker sandbox requires [sandbox.firecracker] section"
-                                        .to_string(),
-                                )
-                            })?;
+                if config.name == "local" {
+                    tracing::warn!(path = %path.display(), name = %config.name, "Sandbox name 'local' is reserved, skipping");
+                    continue;
+                }
+                if sandboxes.contains_key(&config.name) {
+                    tracing::warn!(path = %path.display(), name = %config.name, "Duplicate sandbox name, skipping");
+                    continue;
+                }
 
-                            #[cfg(target_os = "linux")]
-                            {
-                                let pool = crate::firecracker::FirecrackerPool::new(
-                                    fc_config.clone(),
-                                    tokio::runtime::Handle::current(),
-                                );
-                                let sandbox: Arc<dyn Sandbox> =
-                                    Arc::new(crate::firecracker::FirecrackerSandbox::new(
-                                        config.name.clone(),
-                                        std::path::PathBuf::from(
-                                            config.work_dir.as_deref().unwrap_or("/tmp/fc-sandbox"),
-                                        ),
-                                        pool.clone(),
-                                    ));
-                                sandboxes.insert(config.name.clone(), sandbox);
-                                firecracker_pools.insert(config.name.clone(), pool);
+                match config.sandbox_type.as_str() {
+                    "local" | "ssh" => {
+                        let sandbox = match Self::build_sandbox(config.clone()).await {
+                            Ok(s) => s,
+                            Err(e) => {
+                                tracing::warn!(path = %path.display(), error = %e, "Failed to build sandbox, skipping");
+                                continue;
                             }
-
-                            #[cfg(not(target_os = "linux"))]
-                            {
-                                let _ = fc_config;
-                                tracing::warn!(
-                                    "Firecracker sandbox '{}' requires Linux/KVM — skipping registration",
-                                    config.name
-                                );
+                        };
+                        sandboxes.insert(config.name.clone(), sandbox);
+                    }
+                    #[cfg(feature = "firecracker")]
+                    "firecracker" => {
+                        let fc_config = match config.firecracker {
+                            Some(c) => c,
+                            None => {
+                                tracing::warn!(name = %config.name, "Firecracker sandbox requires [sandbox.firecracker] section, skipping");
+                                continue;
                             }
-                        }
-                        #[cfg(feature = "wasm")]
-                        "wasm" => {
-                            let wasm_config = config.wasm.ok_or_else(|| {
-                                SandboxError::UnknownType(
-                                    "Wasm sandbox requires [wasm] section".to_string(),
-                                )
-                            })?;
+                        };
 
-                            let sb = crate::wasm::WasmSandbox::new(
-                                config.name.clone(),
-                                std::path::PathBuf::from(
-                                    config.work_dir.as_deref().unwrap_or("/tmp/wasm-sandbox"),
-                                ),
-                                wasm_config,
-                            )?;
-                            let sandbox: Arc<dyn Sandbox> = Arc::new(sb);
+                        #[cfg(target_os = "linux")]
+                        {
+                            let pool = crate::firecracker::FirecrackerPool::new(
+                                fc_config.clone(),
+                                tokio::runtime::Handle::current(),
+                            );
+                            let sandbox: Arc<dyn Sandbox> =
+                                Arc::new(crate::firecracker::FirecrackerSandbox::new(
+                                    config.name.clone(),
+                                    std::path::PathBuf::from(
+                                        config.work_dir.as_deref().unwrap_or("/tmp/fc-sandbox"),
+                                    ),
+                                    pool.clone(),
+                                ));
                             sandboxes.insert(config.name.clone(), sandbox);
+                            firecracker_pools.insert(config.name.clone(), pool);
                         }
-                        other => return Err(SandboxError::UnknownType(other.to_string())),
+
+                        #[cfg(not(target_os = "linux"))]
+                        {
+                            let _ = fc_config;
+                            tracing::warn!(
+                                "Firecracker sandbox '{}' requires Linux/KVM — skipping registration",
+                                config.name
+                            );
+                        }
+                    }
+                    #[cfg(feature = "wasm")]
+                    "wasm" => {
+                        let wasm_config = match config.wasm {
+                            Some(c) => c,
+                            None => {
+                                tracing::warn!(name = %config.name, "Wasm sandbox requires [wasm] section, skipping");
+                                continue;
+                            }
+                        };
+
+                        let sb = match crate::wasm::WasmSandbox::new(
+                            config.name.clone(),
+                            std::path::PathBuf::from(
+                                config.work_dir.as_deref().unwrap_or("/tmp/wasm-sandbox"),
+                            ),
+                            wasm_config,
+                        ) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                tracing::warn!(name = %config.name, error = %e, "Failed to create Wasm sandbox, skipping");
+                                continue;
+                            }
+                        };
+                        let sandbox: Arc<dyn Sandbox> = Arc::new(sb);
+                        sandboxes.insert(config.name.clone(), sandbox);
+                    }
+                    other => {
+                        tracing::warn!(name = %config.name, sandbox_type = %other, "Unknown sandbox type, skipping");
+                        continue;
                     }
                 }
             }
@@ -348,26 +409,29 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_registry_rejects_local_override() {
+    async fn test_registry_skips_local_override() {
         let tmp = std::env::temp_dir().join("sandbox_test_local_override2");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
         let config = r#"
 name = "local"
-type = "ssh"
+type = "local"
 work_dir = "/tmp"
 "#;
-        std::fs::write(tmp.join("bad.toml"), config).unwrap();
+        std::fs::write(tmp.join("local.toml"), config).unwrap();
 
         let result = SandboxRegistry::load(&tmp).await;
-        assert!(result.is_err());
+        assert!(result.is_ok());
+        let registry = result.unwrap();
+        assert!(registry.get("local").is_some());
+        assert_eq!(registry.len(), 1);
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[tokio::test]
-    async fn test_registry_unknown_type() {
+    async fn test_registry_skips_unknown_type() {
         let tmp = std::env::temp_dir().join("sandbox_test_unknown_type");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
@@ -379,7 +443,10 @@ type = "nonexistent"
         std::fs::write(tmp.join("bad.toml"), config).unwrap();
 
         let result = SandboxRegistry::load(&tmp).await;
-        assert!(result.is_err());
+        assert!(result.is_ok());
+        let registry = result.unwrap();
+        assert!(registry.get("local").is_some());
+        assert_eq!(registry.len(), 1);
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -396,5 +463,44 @@ type = "nonexistent"
         assert_eq!(names.len(), 1);
 
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[tokio::test]
+    async fn load_skips_invalid_sandbox_keeps_valid() {
+        let tmp = tempfile::tempdir().unwrap();
+        // valid sandbox
+        std::fs::write(
+            tmp.path().join("good.toml"),
+            r#"
+name = "good"
+type = "local"
+"#,
+        )
+        .unwrap();
+        // invalid sandbox (bad TOML syntax — missing `=`)
+        std::fs::write(
+            tmp.path().join("bad.toml"),
+            r#"name "bad""#,
+        )
+        .unwrap();
+        // duplicate name with good — should be skipped (warn)
+        std::fs::write(
+            tmp.path().join("dup.toml"),
+            r#"
+name = "good"
+type = "local"
+"#,
+        )
+        .unwrap();
+
+        let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
+        // "good" is present once, "local" is always present
+        assert!(registry.get("local").is_some(), "local must always exist");
+        assert!(registry.get("good").is_some(), "good must be loaded");
+        // "good" is not duplicated
+        assert_eq!(
+            registry.names().iter().filter(|n| **n == "good").count(),
+            1
+        );
     }
 }

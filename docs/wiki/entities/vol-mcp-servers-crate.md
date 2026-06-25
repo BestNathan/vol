@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, mcp, transport, rust, docker]
 created: 2026-05-10
-updated: 2026-05-10
-source_count: 1
+updated: 2026-06-16
+source_count: 2
 ---
 
 # vol-mcp-servers Crate
@@ -43,8 +43,13 @@ CLI (--http / default stdio) → transport::run_server()
 
 ## Docker Packaging
 
-- Multi-stage Alpine 3.21 Dockerfile packages any binary via `--build-arg BIN_NAME=<name>`
-- Builder stage: Rust toolchain + rsproxy mirror (via `.cargo/config.toml`)
-- Runtime stage: ~30MB Alpine image
-- Registry: `crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:<name>`
-- Alibaba mirrors: apk → `mirrors.aliyun.com`, crates.io → `rsproxy.cn`
+- Multi-stage Alpine 3.21 Dockerfile packages any binary via `--build-arg BIN_NAME=<name>` [[vol-mcp-servers-dockerfile]]
+- The GitOps path adds `dockers/vol-mcp-servers.Dockerfile`, a Debian slim multi-stage build with `--build-arg BIN=docs-rs-mcp` and `REGION=cn|global` for region-aware Rust/Debian mirrors [[argocd-gitops-deployment]]
+- Builder stage compiles `cargo build --release -p vol-mcp-servers --bin "${BIN}"` and strips the binary
+- Runtime stage installs the selected binary as `/usr/local/bin/mcp-server` and exposes port 8080 for HTTP transport
+- The `build-mcp-images` GitHub Actions workflow builds `docs-rs-mcp` for `linux/amd64`, pushes a short-SHA tag to ACR, and updates `deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/deployment.yaml` for ArgoCD rollout [[argocd-gitops-deployment]]
+
+## GitOps Deployment
+Source: [[argocd-gitops-deployment]]
+
+`docs-rs-mcp` is the first MCP service managed by the self-contained ArgoCD tree. It now lives under the `workloads` child Application, which syncs `deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/` into `vol-agent-system`. The workload runs the server with `--http 0.0.0.0:8080`, exposes a ClusterIP service on port 8080, and includes `/health` readiness/liveness probes, proxy environment variables, resource requests/limits, and `acr-registry-secret` for private ACR pulls.

@@ -1,4 +1,4 @@
-use vol_llm_tool::{ExecutableTool, ToolContext, ToolError};
+use vol_llm_tool::{ExecutableTool, ToolContext};
 use vol_llm_tools_builtin_write::WriteTool;
 
 #[tokio::test]

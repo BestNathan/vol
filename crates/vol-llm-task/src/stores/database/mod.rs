@@ -39,6 +39,7 @@ fn infer_backend(url: &str) -> Result<DatabaseBackend> {
 
 pub struct DatabaseTaskStore {
     db: DatabaseConnection,
+    #[allow(dead_code)]
     backend: DatabaseBackend,
 }
 

@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-providers
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-providers
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: runtime-config
+data:
+  anthropic-dashscope.toml: 'provider = "anthropic"
+
+    model = "qwen3.6-plus"
+
+    api_key = "${ANTHROPIC_AUTH_TOKEN}"
+
+    base_url = "http://192.168.2.162:31693"
+
+
+    [body]
+
+    max_tokens = 8192
+
+    temperature = 0.7
+
+
+    [headers]
+
+    "anthropic-version" = "2023-06-01"
+
+    '
+  openai-example.toml: 'provider = "openai"
+
+    model = "glm5.1"
+
+    api_key = "${OPENAI_API_KEY}"
+
+    base_url = "http://k8s.nhome.local:31693"
+
+
+    [body]
+
+    max_tokens = 2048
+
+    temperature = 0.7
+
+
+    [headers]
+
+    # Custom headers (optional)
+
+    # X-Custom-Header = "value"
+
+    '

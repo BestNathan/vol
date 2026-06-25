@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docs-rs-mcp
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: docs-rs-mcp
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: docs-rs-mcp
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: docs-rs-mcp
+        app.kubernetes.io/part-of: vol-agent
+        app.kubernetes.io/component: mcp
+    spec:
+      restartPolicy: Always
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      imagePullSecrets:
+        - name: acr-registry-secret
+      containers:
+        - name: docs-rs-mcp
+          image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/docs-rs-mcp:404232f
+          imagePullPolicy: Always
+          args:
+            - "--http"
+            - "0.0.0.0:8080"
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+          env:
+            - name: OTEL_ENABLED
+              value: "true"
+            - name: OTEL_SERVICE_NAME
+              value: "docs-rs-mcp"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability.svc.cluster.local:4317"
+            - name: RUST_LOG
+              value: "info"
+            - name: HTTPS_PROXY
+              value: "http://192.168.2.98:8890"
+            - name: HTTP_PROXY
+              value: "http://192.168.2.98:8890"
+            - name: NO_PROXY
+              value: "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,kubernetes.default.svc,.svc.cluster.local,docs.rs,crates.io"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

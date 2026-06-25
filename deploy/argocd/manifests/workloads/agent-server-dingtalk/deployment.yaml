@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-server-dingtalk
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-server-dingtalk
+    app.kubernetes.io/part-of: vol-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-server-dingtalk
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-server-dingtalk
+        app.kubernetes.io/part-of: vol-agent
+    spec:
+      restartPolicy: Always
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      imagePullSecrets:
+        - name: acr-registry-secret
+      containers:
+        - name: agent-server-dingtalk
+          image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server:dp-latest
+          imagePullPolicy: Always
+          workingDir: /app
+          args:
+            - "--config"
+            - "/etc/agent-server/agent-server.toml"
+          ports:
+            - containerPort: 3001
+              name: ws
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/agent-server
+              readOnly: true
+            - name: agent-definitions
+              mountPath: /app/.agents/agents
+              readOnly: true
+            - name: agent-providers
+              mountPath: /app/.agents/providers
+              readOnly: true
+            - name: agent-skills
+              mountPath: /app/.agents/skills
+              readOnly: true
+            - name: agent-sandboxes
+              mountPath: /app/.agents/sandboxes
+              readOnly: true
+            - name: mcp-config
+              mountPath: /app/.mcp.json
+              subPath: mcp.json
+              readOnly: true
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: "agent-server-dingtalk"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability.svc.cluster.local:4317"
+            - name: ANTHROPIC_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agent-provider-secrets
+                  key: ANTHROPIC_AUTH_TOKEN
+            - name: RUST_LOG
+              value: "info"
+      volumes:
+        - name: config
+          configMap:
+            name: agent-server-dingtalk-config
+            items:
+              - key: agent-server.toml
+                path: agent-server.toml
+            defaultMode: 0644
+        - name: agent-definitions
+          configMap:
+            name: agent-definitions-dingtalk
+            defaultMode: 0644
+        - name: agent-providers
+          configMap:
+            name: agent-providers-dingtalk
+            defaultMode: 0644
+        - name: agent-skills
+          configMap:
+            name: agent-skills
+            defaultMode: 0644
+        - name: agent-sandboxes
+          configMap:
+            name: agent-sandboxes
+            defaultMode: 0644
+        - name: mcp-config
+          secret:
+            secretName: agent-dingtalk-secrets
+            defaultMode: 0644

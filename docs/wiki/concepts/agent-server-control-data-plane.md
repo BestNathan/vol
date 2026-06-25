@@ -3,8 +3,8 @@ type: concept
 category: architecture
 tags: [control-plane, data-plane, agent-server, distributed-agents, routing, json-rpc, channel]
 created: 2026-06-10
-updated: 2026-06-10
-source_count: 13
+updated: 2026-06-17
+source_count: 14
 ---
 
 # Agent Server Control Plane / Data Plane
@@ -13,7 +13,7 @@ source_count: 13
 
 The agent server control/data-plane architecture separates cluster-wide coordination from local execution while keeping protocol definitions in [[vol-llm-agent-protocol-crate]] and concrete server behavior in [[vol-agent-server-crate]]. Both planes use JSON-RPC 2.0 over WebSocket: `/ws` for client-facing requests and `/control/v1/ws` for data-plane node links.
 
-Sources: [[agent-server-control-data-plane-architecture]], [[agent-server-control-data-plane-addendum]], [[agent-server-control-data-plane-implementation-plan]], [[control-payload-flat-jsonrpc-encoding-fix]], [[agent-server-role-config-route-skeleton]], [[agent-server-data-plane-core-move]], [[agent-server-control-plane-core-handlers]], [[agent-server-role-route-composition]], [[agent-server-health-route-collision-validation]], [[agent-server-data-plane-snapshot-command]], [[agent-server-control-router-mvp]], [[agent-server-boundary-mode-verification]], [[control-plane-behavior-completion-plan]]
+Sources: [[agent-server-control-data-plane-architecture]], [[agent-server-control-data-plane-addendum]], [[agent-server-control-data-plane-implementation-plan]], [[control-payload-flat-jsonrpc-encoding-fix]], [[agent-server-role-config-route-skeleton]], [[agent-server-data-plane-core-move]], [[agent-server-control-plane-core-handlers]], [[agent-server-role-route-composition]], [[agent-server-health-route-collision-validation]], [[agent-server-data-plane-snapshot-command]], [[agent-server-control-router-mvp]], [[agent-server-boundary-mode-verification]], [[control-plane-behavior-completion-plan]], [[data-plane-registration-sandbox-tolerance]]
 
 ## Key Points
 
@@ -84,6 +84,17 @@ Task 8 added data-plane reporting primitives [[agent-server-data-plane-snapshot-
 Task 9 added the control router MVP [[agent-server-control-router-mvp]]. `ControlRouter<'a>` uses `CapabilityIndex` snapshots and `NodeRegistry` status to select online nodes with matching agent capabilities. Explicit targets match `agent_id` or `name`; untargeted routing selects the first online snapshot with any agent; missing capability returns `capability_not_found`.
 
 Task 10 added boundary and mode verification [[agent-server-boundary-mode-verification]]. Integration tests assert `/ws` maps to the data plane only in standalone data-plane mode, maps to the control plane whenever the control-plane role is enabled, and rejects TOML configs where both roles are disabled. The boundary script verifies `vol-llm-agent-channel` and `vol-llm-runtime` do not depend on `vol-agent-server`.
+
+### Remote Data-Plane Registration (New)
+Source: [[data-plane-registration-sandbox-tolerance]]
+
+After Tasks 1-10, two additional implementation tasks were completed:
+
+1. **Sandbox fault tolerance**: `SandboxRegistry::load()` in [[vol-llm-sandbox-crate]] wraps per-file errors in `tracing::warn!` + `continue` instead of propagating via `?`. Invalid TOML, missing SSH config, duplicate names, and `sandbox.start()` failures are all handled gracefully — server starts even when some sandbox configs are broken.
+
+2. **Remote data-plane registration**: `spawn_data_plane_connector()` in `app.rs` spawns a `tokio::spawn` task that connects a standalone data-plane to a remote control-plane via WebSocket when `control_url` is configured. The connection sequence is: connect -> send `control.register` -> send `capability_snapshot` -> maintain periodic heartbeats. On disconnect, it auto-reconnects with exponential backoff (1s to 60s).
+
+The registration task runs independently of the main server loop. Heartbeats are fire-and-forget notifications (no server response expected). Capability snapshots include live agent IDs from `data_core.list_agent_ids()`.
 
 ## Follow-up Behavior Completion Plan
 

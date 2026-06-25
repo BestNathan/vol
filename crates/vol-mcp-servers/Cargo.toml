@@ -7,6 +7,10 @@ edition = "2021"
 name = "docs-rs-mcp"
 path = "src/bin/docs_rs.rs"
 
+[[bin]]
+name = "cli-tools-mcp"
+path = "src/bin/cli_tools_mcp.rs"
+
 [dependencies]
 rmcp = { version = "1.6", features = ["server", "macros", "schemars", "transport-io", "transport-streamable-http-server", "transport-streamable-http-server-session"] }
 tokio = { version = "1.35", features = ["full"] }
@@ -20,7 +24,10 @@ clap = { version = "4", features = ["derive"] }
 anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+vol-llm-observability = { path = "../vol-llm-observability" }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.5", features = ["cors"] }
 axum = { version = "0.7", features = ["query"] }
 http = "1"
+vol-llm-cli-tool = { path = "../vol-llm-cli-tool" }
+vol-llm-sandbox = { path = "../vol-llm-sandbox", features = ["ssh"] }

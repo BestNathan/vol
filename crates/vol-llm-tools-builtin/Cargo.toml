@@ -13,5 +13,6 @@ vol-llm-tools-builtin-grep = { path = "grep-tool" }
 vol-llm-tools-builtin-bash = { path = "bash-tool" }
 vol-llm-tools-builtin-web-search = { path = "web-search-tool" }
 vol-llm-tools-builtin-web-fetch = { path = "web-fetch" }
+vol-llm-tools-builtin-cli-tool = { path = "cli-tool" }
 serde = { workspace = true }
 tracing = { workspace = true }

@@ -698,7 +698,7 @@ mod tests {
 
     impl PostgresTestLock {
         fn acquire() -> Self {
-            use fd_lock::RwLock;
+            
             let path = std::env::temp_dir().join("vol-agent-postgres-session-store-test.lock");
             let file = std::fs::OpenOptions::new()
                 .create(true)
@@ -714,7 +714,7 @@ mod tests {
 
     impl Drop for PostgresTestLock {
         fn drop(&mut self) {
-            use fd_lock::RwLock;
+            
             self.0
                 .unlock()
                 .expect("postgres session test lock should release");

@@ -162,6 +162,9 @@ pub enum SandboxError {
 
     #[error("Local sandbox cannot be overridden by config")]
     LocalOverride,
+
+    #[error("Config error: {0}")]
+    Config(String),
 }
 
 pub type SandboxResult<T> = Result<T, SandboxError>;

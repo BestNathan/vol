@@ -131,10 +131,32 @@ impl AgentRuntime {
         let session_store = self.session_manager.entry_store_for_agent(&agent_id);
         let session = Arc::new(Session::new(session_store));
 
+        // Clone the full shared registry, then apply per-agent filters.
+        let mut tool_registry = (*self.tool_registry).clone();
+
+        // Filter MCP servers if mcps is set
+        if let Some(ref server_names) = def.mcps {
+            tool_registry = tool_registry.filter_mcp_servers(server_names);
+        }
+
+        // Filter allowed/disallowed tools (existing mechanism)
+        let allowed_refs: Option<Vec<&str>> = def
+            .tools
+            .as_ref()
+            .map(|v| v.iter().map(|s| s.as_str()).collect());
+        let disallowed_refs: Option<Vec<&str>> = def
+            .disallowed_tools
+            .as_ref()
+            .map(|v| v.iter().map(|s| s.as_str()).collect());
+        let tool_registry = tool_registry.filter(
+            allowed_refs.as_deref(),
+            disallowed_refs.as_deref(),
+        );
+
         let mut config = AgentConfig::builder()
             .with_def(def.clone())
             .with_llm(llm)
-            .with_tools(self.tool_registry.clone())
+            .with_tools(tool_registry)
             .with_session(session)
             .with_working_dir(agent_dir.clone())
             .build()
@@ -473,6 +495,15 @@ impl AgentRuntimeBuilder {
         vol_llm_tools_builtin::register_all(&mut tool_registry);
         // Register the unified CLI-style `task` tool (agents using `tools: [task]`).
         vol_llm_task::tools::register_cli(&mut tool_registry, task_store.clone());
+        // Register declarative CLI-as-Tool entries from .agents/cli-tools/*.toml
+        // (inner register_all logs its own INFO on success)
+        vol_llm_tools_builtin::cli_tool::register_all(
+            &mut tool_registry,
+            &sandbox_registry,
+            &self.working_dir.join(".agents").join("cli-tools"),
+        )
+        .await
+        .map_err(|e| format!("cli-tool registration failed: {e}"))?;
         let tool_config = vol_llm_tool::ToolConfig::default();
         vol_llm_tools_builtin::register_web_all(&mut tool_registry, &tool_config);
         tool_registry.register(SkillTool::new(skill_loader.clone()));
@@ -1277,6 +1308,100 @@ base_url = "https://api.test.com"
         assert!(rt.agent_status.read().unwrap().is_empty());
         // for_test registers builtin tools, so tool_names should be non-empty
         assert!(!rt.tool_registry.tool_names().is_empty());
+    }
+
+    #[tokio::test]
+    async fn register_agent_with_mcps_creates_filtered_tool_registry() {
+        let temp = tempfile::tempdir().unwrap();
+        let providers_dir = temp.path().join(".agents/providers");
+        std::fs::create_dir_all(&providers_dir).unwrap();
+        std::fs::write(
+            providers_dir.join("test.toml"),
+            r#"
+provider = "anthropic"
+model = "claude-test"
+api_key = "sk-test"
+base_url = "https://api.test.com"
+"#,
+        )
+        .unwrap();
+
+        let wd = temp.path().to_path_buf();
+        // Build a runtime, then register directly without discover_agents.
+        // Use the builder so we get a real provider, then call register_agent manually.
+        let rt = AgentRuntime::builder(wd.clone(), wd.clone())
+            .build()
+            .await
+            .expect("runtime build should succeed");
+
+        // Agent with mcps: ["nonexistent-server"] — no MCP tools should be registered
+        // since the test McpManager has no servers configured.
+        let def = AgentDef::new("filtered-agent", "You are a filtered agent.")
+            .with_type("test")
+            .with_description("Agent with filtered MCP")
+            .with_mcps(vec!["nonexistent-server".to_string()]);
+
+        let agent = rt
+            .register_agent("filtered-agent", def)
+            .await
+            .expect("register_agent should succeed");
+
+        // The agent should have built-in tools but no MCP tools
+        let tool_names = agent.config().tools.tool_names();
+        assert!(
+            !tool_names.is_empty(),
+            "agent should have built-in tools"
+        );
+        // No MCP tools should be present (the test McpManager has no servers)
+        let mcp_tools: Vec<_> = tool_names
+            .iter()
+            .filter(|n| n.starts_with("mcp__"))
+            .collect();
+        assert!(
+            mcp_tools.is_empty(),
+            "agent with mcps filter should have no MCP tools when no matching servers exist, got: {:?}",
+            mcp_tools
+        );
+    }
+
+    #[tokio::test]
+    async fn register_agent_without_mcps_uses_shared_registry() {
+        let temp = tempfile::tempdir().unwrap();
+        let providers_dir = temp.path().join(".agents/providers");
+        std::fs::create_dir_all(&providers_dir).unwrap();
+        std::fs::write(
+            providers_dir.join("test.toml"),
+            r#"
+provider = "anthropic"
+model = "claude-test"
+api_key = "sk-test"
+base_url = "https://api.test.com"
+"#,
+        )
+        .unwrap();
+
+        let wd = temp.path().to_path_buf();
+        let rt = AgentRuntime::builder(wd.clone(), wd.clone())
+            .build()
+            .await
+            .expect("runtime build should succeed");
+
+        let def = AgentDef::new("unfiltered-agent", "You are an unfiltered agent.")
+            .with_type("test")
+            .with_description("Agent without MCP filter");
+
+        let agent = rt
+            .register_agent("unfiltered-agent", def)
+            .await
+            .expect("register_agent should succeed");
+
+        let tool_names = agent.config().tools.tool_names();
+        assert!(
+            !tool_names.is_empty(),
+            "agent should have built-in tools"
+        );
+        // No MCP tools since test McpManager has no servers — same outcome,
+        // but the code path uses the shared registry (no filtering).
     }
 
     #[tokio::test]

@@ -48,14 +48,31 @@ use super::tasks_panel::TasksPanel;
 use super::tools_tab::ToolsTabContent;
 
 /// Derive WebSocket URL from the page's host at runtime.
+///
+/// - Local dev (`localhost`/`127.0.0.1`): connects to `ws://localhost:3001/ws`
+///   (dx serve on 8080, backend on 3001).
+/// - Deployed: same-origin — uses the page's protocol + host so nginx/ingress
+///   can proxy `/ws` to the backend.
 fn derive_ws_url() -> String {
     if let Some(window) = web_sys::window() {
         let location = window.location();
         if let Ok(hostname) = location.hostname() {
-            return format!("ws://{}:3001/ws", hostname);
+            // Local dev: dx serve on 8080, backend on 3001
+            if hostname == "localhost" || hostname == "127.0.0.1" {
+                return "ws://localhost:3001/ws".to_string();
+            }
+            // Deployed: same origin, reverse proxy handles /ws
+            if let Ok(host) = location.host() {
+                let protocol = location
+                    .protocol()
+                    .ok()
+                    .map(|p| if p == "https:" { "wss:" } else { "ws:" })
+                    .unwrap_or("ws:");
+                return format!("{}//{}/ws", protocol, host);
+            }
         }
     }
-    "ws://localhost:3001".to_string()
+    "ws://localhost:3001/ws".to_string()
 }
 
 /// Shared application state — no longer holds Signal<UiState>.
