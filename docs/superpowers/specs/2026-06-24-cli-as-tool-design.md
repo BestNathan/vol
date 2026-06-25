@@ -102,7 +102,7 @@ type = "ssh"
 host = "ansible-prod.example.com"
 port = 22
 user = "deploy"
-key_file = "{{env.HOME}}/.ssh/id_ed25519"
+identity_file = "{{env.HOME}}/.ssh/id_ed25519"
 
 # Style 2: reference an existing sandbox (shares connection config across tools)
 # sandbox_ref = "ansible-prod"       # points to .agents/sandboxes/ansible-prod.toml
@@ -137,7 +137,7 @@ ANSIBLE_INVENTORY = "inventories/production"   # literal values are also fine
 ### Placeholder Interpolation
 
 - Syntax: `{{env.VAR}}` — replaced with the value of the local env var `VAR` at load time.
-- Scope: every string-valued field in the config (`host`, `user`, `key_file`, `cwd`, each `env` value, etc.).
+- Scope: every string-valued field in the config (`host`, `user`, `identity_file`, `cwd`, each `env` value, etc.).
 - Missing variable: replaced with empty string and a `warn!` at load time. No hard error by default.
 - Escaping: literal `{{` must be written as `\{{` (one level of backslash escape).
 - Reserved for future expansion: `{{config.X}}`, `{{sandbox.X}}`, `{{agent.X}}`. The interpolator must reject unknown namespaces with a warning.

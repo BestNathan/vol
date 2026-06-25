@@ -26,7 +26,7 @@ use vol_llm_sandbox::registry::SandboxRegistry;
 /// - `sandbox_ref` entries are resolved against `registry`.
 /// - Inline `[sandbox]` entries are constructed via
 ///   `vol_llm_sandbox::registry::SandboxRegistry::build_sandbox`.
-/// - Files that fail to parse are logged as warnings and skipped.
+/// - Files that fail to parse return an error (fail-fast per spec N2).
 /// - Name collisions: if a config's `name` matches an already-loaded tool,
 ///   returns an error (fail-fast).
 pub async fn load_dir(
@@ -49,20 +49,12 @@ pub async fn load_dir(
 
     for entry in entries {
         let path = entry.path();
-        let content = match std::fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::warn!(path = %path.display(), error = %e, "cli-tool: read failed, skipping");
-                continue;
-            }
-        };
-        let config = match CliToolConfig::from_toml(&content) {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::warn!(path = %path.display(), error = %e, "cli-tool: parse failed, skipping");
-                continue;
-            }
-        };
+        let content = std::fs::read_to_string(&path).map_err(|e| {
+            CliToolError::Config(format!("read {}: {e}", path.display()))
+        })?;
+        let config = CliToolConfig::from_toml(&content).map_err(|e| {
+            CliToolError::Config(format!("parse {}: {e}", path.display()))
+        })?;
 
         if !config.enabled {
             tracing::debug!(name = %config.name, path = %path.display(), "skipping disabled cli-tool");
@@ -122,17 +114,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_dir_skips_unparseable_files() {
+    async fn load_dir_fails_on_unparseable_files() {
         let dir = tempdir().unwrap();
         fs::write(dir.path().join("bad.toml"), "this is not valid toml {{{").unwrap();
-        fs::write(dir.path().join("also_bad.toml"), "name = 42").unwrap();
-        fs::write(dir.path().join("ignore.txt"), "not a toml").unwrap();
 
         let sandbox_dir = tempdir().unwrap();
         let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
 
-        let tools = load_dir(dir.path(), &registry).await.unwrap();
-        assert!(tools.is_empty());
+        let err = load_dir(dir.path(), &registry).await.err().unwrap().to_string();
+        assert!(err.contains("bad.toml") || err.contains("parse"), "unexpected: {err}");
     }
 
     #[tokio::test]

@@ -31,11 +31,12 @@ impl CliToolsMcpServer {
         let tools = raw_tools
             .into_iter()
             .map(|t| {
-                let (cfg, sandbox) = t.into_parts();
+                let name = t.config.name.clone();
+                let desc = t.config.description.clone();
                 ToolEntry {
-                    description: cfg.description.clone(),
-                    config_name: cfg.name.clone(),
-                    cli_tool: Arc::new(CliTool::new(cfg, sandbox)),
+                    config_name: name,
+                    description: desc,
+                    cli_tool: Arc::new(t),  // keep intact, no into_parts
                 }
             })
             .collect();

@@ -9,7 +9,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/BestNathan/vol.git
+    repoURL: git@github.com:BestNathan/vol.git
     targetRevision: main
     path: deploy/argocd/applications
     directory:

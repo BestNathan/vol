@@ -27,11 +27,6 @@ impl CliTool {
         Self { config, sandbox, env, cwd }
     }
 
-    /// Decompose back into (config, sandbox) for wrapper layers.
-    pub fn into_parts(self) -> (CliToolConfig, Arc<dyn Sandbox>) {
-        (self.config, self.sandbox)
-    }
-
     /// Run a command string through this tool.
     pub async fn run(
         &self,
@@ -80,7 +75,7 @@ pub fn format_output(
     max_bytes: usize,
 ) -> ToolOutput {
     let mut text = String::new();
-    text.push_str(&format!("exit_code: {}\n", output.exit_code));
+    text.push_str(&format!("{}\n", output.exit_code));
 
     text.push_str("--- stdout ---\n");
     append_truncated(&mut text, &output.stdout, max_bytes);
@@ -104,7 +99,9 @@ fn append_truncated(out: &mut String, bytes: &[u8], max_bytes: usize) {
         out.push_str(&s);
     } else {
         let truncated_len = s.len() - max_bytes;
-        out.push_str(&s[..max_bytes]);
+        // Find largest char boundary <= max_bytes to avoid UTF-8 slice panic
+        let cut = (0..=max_bytes).rev().find(|&i| s.is_char_boundary(i)).unwrap_or(0);
+        out.push_str(&s[..cut]);
         out.push_str(&format!("\n... [truncated {truncated_len} bytes]"));
     }
 }
@@ -193,7 +190,7 @@ mod tests {
 
         let out = tool.run("ansible all -m ping").await.unwrap();
         assert!(out.success);
-        assert!(out.content.contains("exit_code: 0"));
+        assert!(out.content.starts_with("0\n"));
         assert!(out.content.contains("ok\n"));
 
         let req = last_req.lock().unwrap().clone().unwrap();
@@ -225,7 +222,7 @@ mod tests {
         let tool = CliTool::new(minimal_config(), Arc::new(sandbox));
         let out = tool.run("ansible-playbook missing.yml").await.unwrap();
         assert!(!out.success);
-        assert!(out.content.contains("exit_code: 4"));
+        assert!(out.content.starts_with("4\n"));
         assert!(out.content.contains("ERROR: playbook not found"));
     }
 
@@ -276,5 +273,26 @@ mod tests {
         let req = last_req.lock().unwrap().clone().unwrap();
         assert_eq!(req.env.get("TOKEN").map(String::as_str), Some("secret-token"));
         std::env::remove_var("CLI_TOOL_TEST_TOKEN");
+    }
+
+    #[tokio::test]
+    async fn truncation_handles_multibyte_utf8() {
+        // 10 CJK chars = 30 bytes in UTF-8
+        let big = "你好世界测试数据一二三四".repeat(10); // 300 bytes
+        let output = CommandOutput {
+            stdout: big.into_bytes(),
+            stderr: vec![],
+            exit_code: 0,
+            killed_by_signal: None,
+        };
+        let (sandbox, _) = MockSandbox::new(output);
+        let mut cfg = minimal_config();
+        cfg.max_output_bytes = 35; // cuts mid-character
+        let tool = CliTool::new(cfg, Arc::new(sandbox));
+        // Should not panic
+        let out = tool.run("ansible --version").await.unwrap();
+        // Output should be valid UTF-8
+        assert!(out.content.is_ascii() || out.content.chars().all(|c| !c.is_control() || c == '\n'));
+        assert!(out.content.contains("[truncated"));
     }
 }

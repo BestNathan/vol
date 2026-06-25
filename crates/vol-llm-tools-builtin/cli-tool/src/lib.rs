@@ -6,10 +6,9 @@
 //! required by `ExecutableTool` is satisfied.
 
 use std::path::Path;
-use std::sync::Arc;
 
 use async_trait::async_trait;
-use vol_llm_cli_tool::{CliTool, CliToolConfig, CliToolError};
+use vol_llm_cli_tool::{CliTool, CliToolError};
 use vol_llm_sandbox::registry::SandboxRegistry;
 use vol_llm_tool::{ExecutableTool, ToolRegistry, ToolResult, ToolResultType, ToolSensitivity};
 
@@ -21,14 +20,9 @@ pub struct CliToolExecutable {
 }
 
 impl CliToolExecutable {
-    pub fn from_config(
-        config: CliToolConfig,
-        sandbox: Arc<dyn vol_llm_sandbox::Sandbox>,
-    ) -> Self {
-        let name: &'static str =
-            Box::leak(config.name.clone().into_boxed_str());
-        let description: &'static str =
-            Box::leak(config.description.clone().into_boxed_str());
+    pub fn from_cli_tool(tool: CliTool) -> Self {
+        let name: &'static str = Box::leak(tool.config.name.clone().into_boxed_str());
+        let description: &'static str = Box::leak(tool.config.description.clone().into_boxed_str());
         let parameters = serde_json::json!({
             "type": "object",
             "properties": {
@@ -39,8 +33,7 @@ impl CliToolExecutable {
             },
             "required": ["command"]
         });
-        let inner = CliTool::new(config, sandbox);
-        Self { name, description, parameters, inner }
+        Self { name, description, parameters, inner: tool }
     }
 }
 
@@ -97,9 +90,8 @@ pub async fn register_all(
         .map_err(|e| e.to_string())?;
     let count = tools.len();
     for tool in tools {
-        let (config, sandbox) = tool.into_parts();
-        let name = config.name.clone();
-        let exe = CliToolExecutable::from_config(config, sandbox);
+        let name = tool.config.name.clone();
+        let exe = CliToolExecutable::from_cli_tool(tool);
         if registry.contains(&name) {
             return Err(format!(
                 "cli-tool `{name}` collides with an already-registered tool"
