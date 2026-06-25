@@ -31,6 +31,7 @@ on:
         type: choice
         options:
           - docs-rs-mcp
+          - cli-tools-mcp
       push_image:
         description: "Push image to ACR and update GitOps manifest"
         required: false
@@ -58,6 +59,8 @@ jobs:
         include:
           - service: docs-rs-mcp
             manifest: deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/deployment.yaml
+          - service: cli-tools-mcp
+            manifest: deploy/argocd/manifests/workloads/mcp/cli-tools-mcp/deployment.yaml
 
     steps:
       - name: Checkout

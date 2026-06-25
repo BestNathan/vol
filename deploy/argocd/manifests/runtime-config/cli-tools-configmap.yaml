@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cli-tools
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: cli-tools
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: runtime-config
+data:
+  ansible.toml: |
+    name = "ansible"
+    enabled = true
+    description = """
+    Ansible automation suite.
+
+    Available CLIs:
+    - `ansible <pattern> -m <module> -a <args>` - ad-hoc commands
+      Examples:
+      - `ansible all -m ping`
+      - `ansible webservers -a "uptime"`
+    - `ansible-playbook <playbook.yml> [options]` - run playbooks
+      Options: --limit, --tags, --skip-tags, --check, --diff, --extra-vars
+      Examples:
+      - `ansible-playbook site.yml --limit web`
+    - `ansible-galaxy <action>` - manage roles/collections
+    - `ansible-vault <action>` - encrypt/decrypt secrets
+    """
+    binaries = ["ansible", "ansible-playbook", "ansible-galaxy", "ansible-vault"]
+    sandbox_ref = "ansible-prod"
+    cwd = "/opt/ansible"
+    shell = "/bin/bash"
+    timeout_secs = 300
+    max_output_bytes = 65536
+
+    [env]
+    ANSIBLE_CONFIG = "/opt/ansible/ansible.cfg"

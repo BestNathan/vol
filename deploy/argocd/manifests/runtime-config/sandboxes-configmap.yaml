@@ -32,3 +32,25 @@ data:
     connect_timeout_secs = 10
 
     '
+  ansible-prod.toml: 'name = "ansible-prod"
+
+    type = "ssh"
+
+    work_dir = "/"
+
+
+    [ssh]
+
+    host = "ansible-prod.example.com"
+
+    port = 22
+
+    user = "deploy"
+
+    identity_file = "/app/.ssh/id_ed25519"
+
+    idle_timeout_secs = 300
+
+    connect_timeout_secs = 10
+
+    '
