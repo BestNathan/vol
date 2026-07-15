@@ -23,9 +23,9 @@ data:
 
     user = "root"
 
-    identity_file = "~/.ssh/id_rsa"
+    identity_file = "/app/.ssh/id_ed25519"
 
-    known_hosts_file = "~/.ssh/known_hosts"
+    host_key = "SHA256:8Y3g9hVzSz+KhN4oyodOoP4a+UOMUM0j3C9+CSDB1Ek="
 
     idle_timeout_secs = 300
 
@@ -37,28 +37,6 @@ data:
     type = "local"
 
     work_dir = "/tmp"
-
-    '
-  ansible-prod.toml: 'name = "ansible-prod"
-
-    type = "ssh"
-
-    work_dir = "/opt/ansible"
-
-
-    [ssh]
-
-    host = "192.168.2.106"
-
-    port = 22
-
-    user = "root"
-
-    identity_file = "/app/.ssh/id_ed25519"
-
-    idle_timeout_secs = 300
-
-    connect_timeout_secs = 10
 
     '
   ssh-dev.toml: 'name = "ssh-dev"
