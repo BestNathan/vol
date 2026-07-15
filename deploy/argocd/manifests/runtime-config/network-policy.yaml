@@ -36,6 +36,49 @@ spec:
             matchLabels:
               app.kubernetes.io/name: agent-server-dp
 ---
+# ── Allow MCP services egress (SSH, HTTPS, OTel) ────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-mcp-egress
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: mcp
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: mcp
+  policyTypes:
+    - Egress
+  egress:
+    # SSH to sandbox hosts on local network
+    - to:
+        - ipBlock:
+            cidr: 192.168.0.0/16
+      ports:
+        - port: 22
+          protocol: TCP
+    # HTTPS to external (docs.rs, crates.io, LLM APIs)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 80
+          protocol: TCP
+    # OTel collector (any namespace)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 4317
+          protocol: TCP
+---
 # ── Allow data-plane to talk to control-plane ───────────────────────────────
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -75,11 +118,30 @@ spec:
             except:
               - 10.0.0.0/8
               - 172.16.0.0/12
-              - 192.168.0.0/16
       ports:
         - port: 443
           protocol: TCP
         - port: 80
+          protocol: TCP
+    # SSH to sandbox hosts on local network
+    - to:
+        - ipBlock:
+            cidr: 192.168.0.0/16
+      ports:
+        - port: 22
+          protocol: TCP
+    # Model service on local network (HTTP)
+    - to:
+        - ipBlock:
+            cidr: 192.168.0.0/16
+      ports:
+        - port: 31693
+          protocol: TCP
+    # OTel collector
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 4317
           protocol: TCP
 ---
 # ── Allow MCP services to receive from agent-server pods ────────────────────
@@ -113,6 +175,47 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
+---
+# ── Allow agent-server (control-plane, dingtalk, etc.) egress ─────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-agent-server-egress
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/part-of: vol-agent
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: vol-agent
+  policyTypes:
+    - Egress
+  egress:
+    # HTTPS to external (LLM APIs)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 80
+          protocol: TCP
+    # Model service on local network
+    - to:
+        - ipBlock:
+            cidr: 192.168.0.0/16
+      ports:
+        - port: 31693
+          protocol: TCP
+    # OTel collector
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 4317
+          protocol: TCP
 ---
 # ── Deny all other traffic by default ──────────────────────────────────────
 apiVersion: networking.k8s.io/v1
