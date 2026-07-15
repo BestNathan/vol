@@ -96,6 +96,8 @@ spec:
             - name: sandboxes
               mountPath: /app/.agents/sandboxes
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
             - name: ssh-key
               mountPath: /app/.ssh
               readOnly: true
@@ -110,3 +112,5 @@ spec:
           secret:
             secretName: ansible-ssh-key
             defaultMode: 0400
+        - name: tmp
+          emptyDir: {}

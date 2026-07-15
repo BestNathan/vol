@@ -89,6 +89,8 @@ spec:
               readOnly: true
             - name: data
               mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
           env:
             - name: OTEL_SERVICE_NAME
               value: "agent-server-dp"
@@ -146,3 +148,5 @@ spec:
         - name: data
           emptyDir:
             sizeLimit: 2Gi
+        - name: tmp
+          emptyDir: {}
