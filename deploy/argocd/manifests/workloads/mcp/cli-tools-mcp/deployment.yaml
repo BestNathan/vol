@@ -35,7 +35,6 @@ spec:
           image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/cli-tools-mcp:9f33d70
           imagePullPolicy: Always
           securityContext:
-            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities:
               drop:
