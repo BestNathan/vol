@@ -76,6 +76,8 @@ spec:
               readOnly: true
             - name: data
               mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
           env:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://otel-collector.observability.svc.cluster.local:4317"
@@ -128,3 +130,5 @@ spec:
         - name: data
           emptyDir:
             sizeLimit: 1Gi
+        - name: tmp
+          emptyDir: {}

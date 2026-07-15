@@ -79,6 +79,9 @@ spec:
               value: "http://192.168.2.98:8890"
             - name: NO_PROXY
               value: "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,kubernetes.default.svc,.svc.cluster.local,docs.rs,crates.io"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: 100m
@@ -86,3 +89,6 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
+      volumes:
+        - name: tmp
+          emptyDir: {}
