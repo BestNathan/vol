@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-server-ansible
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-server-ansible
+    app.kubernetes.io/part-of: vol-agent
+spec:
+  selector:
+    app.kubernetes.io/name: agent-server-ansible
+  ports:
+    - name: ws
+      port: 3003
+      targetPort: 3003
+      protocol: TCP
+  type: ClusterIP
