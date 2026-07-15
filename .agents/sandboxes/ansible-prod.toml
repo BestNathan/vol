@@ -7,6 +7,6 @@ host = "192.168.2.106"
 port = 22
 user = "root"
 identity_file = "/app/.ssh/id_ed25519"
-known_hosts_file = "/app/.ssh/known_hosts"
+host_key = "l0SDUWmHIuvGbr8OOSrzDTCAJ2DsLoGHYN/TYrzd/Jw"
 idle_timeout_secs = 300
 connect_timeout_secs = 10

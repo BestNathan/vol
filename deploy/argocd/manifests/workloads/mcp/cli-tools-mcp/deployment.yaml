@@ -29,11 +29,7 @@ spec:
         kubernetes.io/arch: amd64
       imagePullSecrets:
         - name: acr-registry-secret
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
+      # NOTE: runs as root — required for SSH key access (mode 0600, root-owned secret)
       containers:
         - name: cli-tools-mcp
           image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/cli-tools-mcp:9f33d70
@@ -111,6 +107,6 @@ spec:
         - name: ssh-key
           secret:
             secretName: ansible-ssh-key
-            defaultMode: 0440
+            defaultMode: 0600
         - name: tmp
           emptyDir: {}
