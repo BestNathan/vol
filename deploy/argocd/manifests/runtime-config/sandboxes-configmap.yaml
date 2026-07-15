@@ -8,6 +8,30 @@ metadata:
     app.kubernetes.io/part-of: vol-agent
     app.kubernetes.io/component: runtime-config
 data:
+  ansible-prod.toml: 'name = "ansible-prod"
+
+    type = "ssh"
+
+    work_dir = "/opt/ansible"
+
+
+    [ssh]
+
+    host = "192.168.2.106"
+
+    port = 22
+
+    user = "root"
+
+    identity_file = "~/.ssh/id_rsa"
+
+    known_hosts_file = "~/.ssh/known_hosts"
+
+    idle_timeout_secs = 300
+
+    connect_timeout_secs = 10
+
+    '
   local-for-cli.toml: 'name = "local-for-cli"
 
     type = "local"
