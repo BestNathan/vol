@@ -91,6 +91,9 @@ spec:
               mountPath: /app/data
             - name: tmp
               mountPath: /tmp
+            - name: ssh-key
+              mountPath: /app/.ssh
+              readOnly: true
           env:
             - name: OTEL_SERVICE_NAME
               value: "agent-server-ansible"
@@ -147,3 +150,7 @@ spec:
             sizeLimit: 1Gi
         - name: tmp
           emptyDir: {}
+        - name: ssh-key
+          secret:
+            secretName: ansible-ssh-key
+            defaultMode: 0644
