@@ -203,6 +203,13 @@ spec:
           protocol: TCP
         - port: 80
           protocol: TCP
+    # SSH to sandbox hosts on local network
+    - to:
+        - ipBlock:
+            cidr: 192.168.0.0/16
+      ports:
+        - port: 22
+          protocol: TCP
     # Model service on local network
     - to:
         - ipBlock:

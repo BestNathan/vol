@@ -1,0 +1,157 @@
+---
+# ── Main server config: standalone data-plane with ansible agent ──────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-server-ansible-config
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-server-ansible
+    app.kubernetes.io/part-of: vol-agent
+data:
+  agent-server.toml: |
+    [server]
+    host = "0.0.0.0"
+    port = 3003
+
+    [server.roles]
+    control_plane = false
+    data_plane = true
+
+    [data_plane]
+    name = "ansible-agent"
+    # Register with control-plane if available
+    control_url = "ws://agent-server.vol-agent-system.svc.cluster.local:3001/control/v1/ws"
+    heartbeat_secs = 15
+    snapshot_on_connect = true
+
+    [runtime]
+    working_dir = "/app"
+    store_dir = "/app/data"
+
+    [tracing]
+    level = "info"
+    format = "json"
+
+    [opentelemetry]
+    enabled = true
+    endpoint = "http://otel-collector.observability.svc.cluster.local:4317"
+    service_name = "agent-server-ansible"
+    service_namespace = "vol-agent"
+    deployment_environment = "production"
+    sample_rate = 1.0
+
+---
+# ── Agent definitions: ansible agent only ─────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-definitions-ansible
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-definitions-ansible
+    app.kubernetes.io/part-of: vol-agent
+data:
+  ansible.md: |
+    ---
+    name: ansible
+    type: general-purpose
+    description: Ansible automation agent — run playbooks, ad-hoc commands, manage roles on ansible-prod sandbox (192.168.2.106:/opt/ansible)
+    mcps: [cli-tools-mcp]
+    max_iterations: 30
+    tool_config:
+      bash:
+        sandbox: ansible-prod
+    ---
+
+    # Ansible Automation Agent
+
+    You are an Ansible automation specialist. Your commands execute on the
+    **ansible-prod** control node: `192.168.2.106:/opt/ansible` via SSH sandbox.
+
+    ## Available Capabilities
+
+    ### Ansible CLI (via `ansible` MCP tool)
+    Uses the ansible-prod SSH sandbox with `cwd=/opt/ansible` and `ANSIBLE_CONFIG=/opt/ansible/ansible.cfg`.
+
+    ### Bash (direct SSH to ansible-prod)
+    For inspecting files, checking inventory, reading logs, and other shell operations
+    directly on the ansible control node.
+
+    ### File Operations
+    `read_file`, `write_file`, `glob`, `grep` — operate on the ansible-prod sandbox filesystem.
+
+    ## Inventory
+    Located at `/opt/ansible/inventories/production/hosts.yml`:
+    - `localhost` — local connection
+    - `target-host` — `192.168.2.106`, user `root`
+    - Groups: `webservers` (target-host), `dev` (localhost)
+
+    ## Best Practices
+
+    1. **Check first**: Always `--check --diff` before applying changes
+    2. **Limit scope**: Use `--limit` to target specific hosts
+    3. **Explain before acting**: Tell the user what the command will do
+    4. **Inventory first**: Use `ansible all -m ping` to verify connectivity
+    5. **Use bash for exploration**: Check existing playbooks before writing new ones
+
+    ## Workflow
+    1. Understand what the user wants to accomplish
+    2. Explore inventory and existing playbooks using bash/file tools
+    3. Show the planned command with explanation
+    4. Dry-run with `--check --diff` for destructive changes
+    5. Execute and report results clearly
+
+---
+# ── LLM Providers ────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-providers-ansible
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-providers-ansible
+    app.kubernetes.io/part-of: vol-agent
+data:
+  anthropic-dashscope.toml: |
+    provider = "anthropic"
+    model = "qwen3.6-plus"
+    api_key = "${ANTHROPIC_AUTH_TOKEN}"
+    base_url = "http://192.168.2.162:31693"
+
+    [body]
+    max_tokens = 8192
+    temperature = 0.7
+
+    [headers]
+    "anthropic-version" = "2023-06-01"
+  openai-glm.toml: |
+    provider = "openai"
+    model = "glm5.1"
+    api_key = "${OPENAI_API_KEY}"
+    base_url = "http://k8s.nhome.local:31693"
+
+    [body]
+    max_tokens = 2048
+    temperature = 0.7
+
+---
+# ── MCP config: only cli-tools-mcp ────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-config-ansible
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: mcp-config-ansible
+    app.kubernetes.io/part-of: vol-agent
+data:
+  mcp.json: |
+    {
+      "mcpServers": {
+        "cli-tools-mcp": {
+          "type": "http",
+          "url": "http://cli-tools-mcp.vol-agent-system.svc.cluster.local:8080/mcp"
+        }
+      }
+    }
