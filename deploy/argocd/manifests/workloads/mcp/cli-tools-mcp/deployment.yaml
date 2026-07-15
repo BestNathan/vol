@@ -111,6 +111,6 @@ spec:
         - name: ssh-key
           secret:
             secretName: ansible-ssh-key
-            defaultMode: 0400
+            defaultMode: 0440
         - name: tmp
           emptyDir: {}
