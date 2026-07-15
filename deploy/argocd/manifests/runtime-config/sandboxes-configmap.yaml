@@ -30,9 +30,7 @@ data:
 
     user = "root"
 
-    identity_file = "~/.ssh/id_rsa"
-
-    known_hosts_file = "~/.ssh/known_hosts"
+    identity_file = "/app/.ssh/id_ed25519"
 
     idle_timeout_secs = 300
 
