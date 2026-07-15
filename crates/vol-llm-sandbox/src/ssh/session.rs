@@ -244,7 +244,7 @@ fn authenticate(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxResul
             )))?;
         let key_str = std::str::from_utf8(&key_data)
             .map_err(|e| SandboxError::Ssh(format!("key file is not valid UTF-8: {}", e)))?;
-        sess.userauth_pubkey_memory(&config.user, Some(passphrase.as_str()), "", key_str)
+        sess.userauth_pubkey_memory(&config.user, Some(passphrase.as_str()), None, key_str)
             .map_err(|e| SandboxError::Ssh(format!("auth failed: {}", e)))?;
         return Ok(());
     }
@@ -274,7 +274,7 @@ fn authenticate(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxResul
             )))?;
         let key_str = std::str::from_utf8(&key_data)
             .map_err(|e| SandboxError::Ssh(format!("key file is not valid UTF-8: {}", e)))?;
-        sess.userauth_pubkey_memory(&config.user, None, "", key_str)
+        sess.userauth_pubkey_memory(&config.user, None, None, key_str)
             .map_err(|e| SandboxError::Ssh(format!("auth failed: {}", e)))?;
     }
 
