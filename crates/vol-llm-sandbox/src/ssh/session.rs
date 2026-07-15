@@ -237,14 +237,7 @@ fn authenticate(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxResul
 
     // Try with passphrase if provided
     if let Some(ref passphrase) = config.passphrase {
-        let key_data = std::fs::read(&identity_path)
-            .map_err(|e| SandboxError::Ssh(format!(
-                "failed to read key file {}: {}",
-                identity_path.display(), e
-            )))?;
-        let key_str = std::str::from_utf8(&key_data)
-            .map_err(|e| SandboxError::Ssh(format!("key file is not valid UTF-8: {}", e)))?;
-        sess.userauth_pubkey_memory(&config.user, None, key_str, Some(passphrase.as_str()))
+        sess.userauth_pubkey_file(&config.user, None, &identity_path, Some(passphrase))
             .map_err(|e| SandboxError::Ssh(format!("auth failed: {}", e)))?;
         return Ok(());
     }
@@ -265,16 +258,7 @@ fn authenticate(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxResul
     };
 
     if !agent_authed {
-        // Read key into memory because K8s secret volumes use symlinks which
-        // libssh2's pubkey_fromfile cannot follow.
-        let key_data = std::fs::read(&identity_path)
-            .map_err(|e| SandboxError::Ssh(format!(
-                "failed to read key file {}: {}",
-                identity_path.display(), e
-            )))?;
-        let key_str = std::str::from_utf8(&key_data)
-            .map_err(|e| SandboxError::Ssh(format!("key file is not valid UTF-8: {}", e)))?;
-        sess.userauth_pubkey_memory(&config.user, None, key_str, None)
+        sess.userauth_pubkey_file(&config.user, None, &identity_path, None)
             .map_err(|e| SandboxError::Ssh(format!("auth failed: {}", e)))?;
     }
 
