@@ -217,11 +217,23 @@ spec:
       ports:
         - port: 31693
           protocol: TCP
-    # OTel collector
+    # OTel collector (any namespace)
     - to:
         - namespaceSelector: {}
       ports:
         - port: 4317
+          protocol: TCP
+    # Cluster-internal services (MCP, control-plane, etc.)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 8080
+          protocol: TCP
+        - port: 3001
+          protocol: TCP
+        - port: 3002
+          protocol: TCP
+        - port: 3003
           protocol: TCP
 ---
 # ── Deny all other traffic by default ──────────────────────────────────────
