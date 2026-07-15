@@ -1,14 +1,22 @@
 # init-ansible-workspace — one-time Job to bootstrap /opt/ansible on target
 # =============================================================================
 # SSHs into the ansible-prod sandbox host (192.168.2.106) and creates a demo
-# Ansible workspace with sample inventory, playbook, and config.
+# Ansible workspace.
 #
-# Apply:
+# PREREQUISITE: a real SSH private key must be in the ansible-ssh-key secret.
+#   kubectl create secret generic ansible-ssh-key -n vol-agent-system \
+#     --from-file=id_ed25519=/path/to/real/key \
+#     --dry-run=client -o yaml | kubectl apply -f -
+#
+# Usage:
 #   kubectl apply -f deploy/argocd/manifests/workloads/jobs/init-ansible-workspace.yaml
 #
-# Re-run (after key rotation etc):
+# Re-run:
 #   kubectl delete job init-ansible-workspace -n vol-agent-system
 #   kubectl apply -f deploy/argocd/manifests/workloads/jobs/init-ansible-workspace.yaml
+#
+# Local alternative (faster, doesn't need K8s):
+#   SSH_KEY=~/.ssh/id_ed25519 ./scripts/init-ansible-workspace.sh
 # =============================================================================
 apiVersion: batch/v1
 kind: Job
@@ -22,8 +30,8 @@ metadata:
   annotations:
     description: "One-time bootstrap of /opt/ansible on ansible-prod target"
 spec:
-  ttlSecondsAfterFinished: 86400  # keep logs for 24h
-  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 1
   template:
     metadata:
       labels:
@@ -35,123 +43,62 @@ spec:
         kubernetes.io/arch: amd64
       containers:
         - name: ansible-init
-          # Alpine with openssh for SCP/SFTP
           image: alpine:3.21
-          command:
-            - sh
-            - -euc
+          command: ["sh", "-euc"]
+          args:
             - |
-              # =================================================================
-              # Ansible Workspace Initialization Script
-              # =================================================================
-              # Creates a demo Ansible workspace on the target machine.
-              # Target: 192.168.2.106  User: root  Workspace: /opt/ansible
-              # =================================================================
+              # Install SSH client using aliyun mirror
+              sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+              apk add --no-cache openssh-client
 
-              apk add --no-cache openssh-client-default > /dev/null 2>&1
+              SSH="ssh -o StrictHostKeyChecking=accept-new -i /app/.ssh/id_ed25519 root@192.168.2.106"
 
-              SSH="ssh -o StrictHostKeyChecking=accept-new -i /app/.ssh/id_ed25519 -p 22 root@192.168.2.106"
-              SCP="scp -o StrictHostKeyChecking=accept-new -i /app/.ssh/id_ed25519 -P 22"
+              echo "=== Init Ansible Workspace ==="
+              echo "Creating directories..."
+              $SSH 'mkdir -p /opt/ansible/{inventories/{production,staging},playbooks,roles,group_vars,host_vars,files,templates,.cache/facts}'
 
-              echo "=== Initializing Ansible Workspace on 192.168.2.106 ==="
-
-              # ── Create directory structure ─────────────────────────────────
-              echo "[1/4] Creating directories..."
-              $SSH 'mkdir -p /opt/ansible/{inventories/{production,staging},playbooks,roles,group_vars,host_vars,files,templates}'
-
-              # ── Install ansible (if not present) ───────────────────────────
-              echo "[2/4] Checking ansible installation..."
-              $SSH 'which ansible 2>/dev/null || (apt-get update -qq && apt-get install -y -qq ansible > /dev/null 2>&1)' || \
-                $SSH 'which ansible 2>/dev/null || (apk add --no-cache ansible > /dev/null 2>&1)' || \
-                echo "WARNING: could not install ansible — install it manually on the target"
-
-              # ── ansible.cfg ───────────────────────────────────────────────
-              echo "[3/4] Writing ansible.cfg..."
-              $SSH 'cat > /opt/ansible/ansible.cfg << "ANSCFG"
+              echo "Writing ansible.cfg..."
+              $SSH 'cat > /opt/ansible/ansible.cfg << EOF
               [defaults]
-              inventory      = /opt/ansible/inventories/production/hosts.yml
+              inventory = /opt/ansible/inventories/production/hosts.yml
               host_key_checking = False
-              retry_files_enabled = False
-              gathering        = implicit
-              fact_caching     = jsonfile
-              fact_caching_connection = /opt/ansible/.cache/facts
-              fact_caching_timeout = 86400
-              stdout_callback  = yaml
-              callback_whitelist = profile_tasks
-              forks            = 5
-              timeout          = 60
-              remote_user      = root
-
+              stdout_callback = yaml
+              forks = 5
+              timeout = 60
+              remote_user = root
               [ssh_connection]
               pipelining = True
-              control_path = /tmp/ansible-%%h-%%p-%%r
-              control_path_dir = /tmp
-              ANSCFG'
+              EOF'
 
-              # ── Inventory (demo hosts) ─────────────────────────────────────
-              echo "[4/4] Writing inventory..."
-              $SSH 'cat > /opt/ansible/inventories/production/hosts.yml << "YML"
+              echo "Writing inventory..."
+              $SSH 'cat > /opt/ansible/inventories/production/hosts.yml << EOF
               all:
                 hosts:
-                  localhost:
-                    ansible_connection: local
                   target-host:
                     ansible_host: 192.168.2.106
                     ansible_user: root
-                children:
-                  webservers:
-                    hosts:
-                      target-host:
-                  dev:
-                    hosts:
-                      localhost:
-              YML'
+              EOF'
 
-              # ── Demo playbook ─────────────────────────────────────────────
-              $SSH 'cat > /opt/ansible/playbooks/ping.yml << "YML"
+              echo "Writing demo playbook..."
+              $SSH 'cat > /opt/ansible/playbooks/ping.yml << EOF
               ---
               - name: Demo — ping all hosts
                 hosts: all
-                gather_facts: false
                 tasks:
-                  - name: Ping
-                    ansible.builtin.ping:
-
-                  - name: Show uptime
-                    ansible.builtin.command: uptime
+                  - ansible.builtin.ping:
+                  - ansible.builtin.command: uptime
                     changed_when: false
-              YML'
+              EOF'
 
-              $SSH 'cat > /opt/ansible/playbooks/system-info.yml << "YML"
-              ---
-              - name: Gather system information
-                hosts: all
-                gather_facts: true
-                tasks:
-                  - name: OS version
-                    ansible.builtin.debug:
-                      msg: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
-
-                  - name: Disk usage
-                    ansible.builtin.shell: df -h /
-                    changed_when: false
-
-                  - name: Memory
-                    ansible.builtin.debug:
-                      msg: "{{ ansible_memtotal_mb }} MB total, {{ ansible_memfree_mb }} MB free"
-              YML'
-
-              # ── Verify ────────────────────────────────────────────────────
-              echo ""
-              echo "=== Initialization Complete ==="
-              $SSH 'tree /opt/ansible 2>/dev/null || find /opt/ansible -type f | sort'
-              echo ""
-              echo "Test with:"
-              echo "  kubectl exec deploy/cli-tools-mcp -n vol-agent-system -- \\"
-              echo "    ansible all -i /opt/ansible/inventories/production/hosts.yml -m ping"
+              echo "=== Done ==="
+              $SSH 'find /opt/ansible -type f | sort'
           env:
-            - name: HOME
-              value: /app
+            - name: HTTPS_PROXY
+              value: "http://192.168.2.98:8890"
+            - name: HTTP_PROXY
+              value: "http://192.168.2.98:8890"
+            - name: NO_PROXY
+              value: "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,.svc.cluster.local"
           volumeMounts:
             - name: ssh-key
               mountPath: /app/.ssh
