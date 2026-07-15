@@ -29,20 +29,17 @@ spec:
         kubernetes.io/arch: amd64
       imagePullSecrets:
         - name: acr-registry-secret
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
       containers:
         - name: vol-llm-ui
           image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-llm-ui:9f33d70
           imagePullPolicy: Always
           securityContext:
-            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities:
               drop:
                 - ALL
+              add:
+                - NET_BIND_SERVICE
           ports:
             - containerPort: 80
               name: http
