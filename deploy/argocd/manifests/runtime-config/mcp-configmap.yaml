@@ -14,5 +14,4 @@ data:
     : \"https://mcp-gw.dingtalk.com/server/621fdbe4ef3a5dfbfca57542962095496bfdd56e03f755aeab6a50791ff167ca?key=f297c79708995fb16c3fd0b3fca48d3d\"\
     \n    },\n    \"playwright\": {\n      \"type\": \"stdio\",\n      \"command\"\
     : \"npx\",\n      \"args\": [\"@playwright/mcp@latest\", \"--headless\"]\n   \
-    \ },\n    \"cli-tools-mcp\": {\n      \"type\": \"http\",\n      \"url\": \"http://cli-tools-mcp.vol-agent-system.svc.cluster.local:8080/mcp\"\
-    \n    }\n  }\n}\n"
+    \ }\n  }\n}\n"
