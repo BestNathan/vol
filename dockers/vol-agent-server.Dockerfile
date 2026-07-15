@@ -116,7 +116,10 @@ RUN set -eux; \
     fi; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates; \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/*; \
+    # Create non-root user for running the service
+    addgroup --system --gid 1000 vol-agent; \
+    adduser --system --uid 1000 --gid 1000 --no-create-home vol-agent
 
 WORKDIR /app
 
@@ -125,7 +128,11 @@ COPY configs/vol-agent-server.${ROLE}.toml /etc/vol-agent-server/agent-server.to
 
 ENV VOL_AGENT_SERVER_ROLE=${ROLE}
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data && \
+    chown -R vol-agent:vol-agent /app /etc/vol-agent-server
+
+# Run as non-root user
+USER vol-agent:vol-agent
 
 EXPOSE 3001
 

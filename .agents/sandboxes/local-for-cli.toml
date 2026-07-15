@@ -1,0 +1,3 @@
+name = "local-for-cli"
+type = "local"
+work_dir = "/tmp"

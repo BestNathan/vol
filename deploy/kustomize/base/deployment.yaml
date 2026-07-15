@@ -1,0 +1,130 @@
+# Kustomize base: shared agent-server deployment template
+# =============================================================================
+# Overlays provide: image tag, configmap, service port, and role-specific env.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-server
+  labels:
+    app.kubernetes.io/part-of: vol-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: vol-agent
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: vol-agent
+    spec:
+      restartPolicy: Always
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      imagePullSecrets:
+        - name: acr-registry-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: agent-server
+          image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server:latest
+          imagePullPolicy: Always
+          workingDir: /app
+          args:
+            - "--config"
+            - "/etc/agent-server/agent-server.toml"
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/agent-server
+              readOnly: true
+            - name: agent-definitions
+              mountPath: /app/.agents/agents
+              readOnly: true
+            - name: agent-providers
+              mountPath: /app/.agents/providers
+              readOnly: true
+            - name: agent-skills
+              mountPath: /app/.agents/skills
+              readOnly: true
+            - name: agent-sandboxes
+              mountPath: /app/.agents/sandboxes
+              readOnly: true
+            - name: mcp-config
+              mountPath: /app/.mcp.json
+              subPath: mcp.json
+              readOnly: true
+            - name: data
+              mountPath: /app/data
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability.svc.cluster.local:4317"
+            - name: ANTHROPIC_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agent-provider-secrets
+                  key: ANTHROPIC_AUTH_TOKEN
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agent-provider-secrets
+                  key: OPENAI_API_KEY
+            - name: HTTPS_PROXY
+              value: "http://192.168.2.98:8890"
+            - name: HTTP_PROXY
+              value: "http://192.168.2.98:8890"
+            - name: NO_PROXY
+              value: "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,kubernetes.default.svc,.svc.cluster.local"
+            - name: RUST_LOG
+              value: "info"
+      volumes:
+        - name: config
+          configMap:
+            name: agent-server-config
+            items:
+              - key: agent-server.toml
+                path: agent-server.toml
+            defaultMode: 0644
+        - name: agent-definitions
+          configMap:
+            name: agent-definitions
+            defaultMode: 0644
+        - name: agent-providers
+          configMap:
+            name: agent-providers
+            defaultMode: 0644
+        - name: agent-skills
+          configMap:
+            name: agent-skills
+            defaultMode: 0644
+        - name: agent-sandboxes
+          configMap:
+            name: agent-sandboxes
+            defaultMode: 0644
+        - name: mcp-config
+          configMap:
+            name: mcp-config
+            defaultMode: 0644
+        - name: data
+          emptyDir:
+            sizeLimit: 1Gi

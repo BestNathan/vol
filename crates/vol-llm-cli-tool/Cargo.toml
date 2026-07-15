@@ -1,0 +1,18 @@
+[package]
+name = "vol-llm-cli-tool"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+vol-llm-sandbox = { workspace = true, features = ["ssh"] }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["rt", "macros", "rt-multi-thread"] }

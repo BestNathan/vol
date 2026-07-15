@@ -47,15 +47,56 @@ env:
   IMAGE_NAME: vol-agent-server
 
 jobs:
+  # ── Test gate: run tests and clippy before building images ─────────────────
+  test:
+    name: test (${{ matrix.crate }})
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - vol-agent-server
+          - vol-llm-agent-protocol
+          - vol-llm-runtime
+          - vol-llm-sandbox
+          - vol-llm-task
+          - vol-session
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-test-${{ matrix.crate }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-test-${{ matrix.crate }}-
+
+      - name: Run tests
+        run: cargo test -p ${{ matrix.crate }} --no-fail-fast
+
+      - name: Run clippy
+        run: cargo clippy -p ${{ matrix.crate }} -- -D warnings
+
   # ── Per-arch builds run on native runners ────────────────────────────────
   build:
-    name: build (${{ matrix.role }}, ${{ matrix.arch }})
+    name: build (${{ matrix.variant }}, ${{ matrix.role }}, ${{ matrix.arch }})
+    needs: test
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
+        variant: [debian, alpine]
         role: [control-plane, data-plane]
         arch: [amd64, arm64]
         include:
@@ -95,7 +136,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: dockers/vol-agent-server.Dockerfile
+          file: dockers/vol-agent-server${{ matrix.variant == 'alpine' && '.alpine' || '' }}.Dockerfile
           platforms: ${{ matrix.platform }}
           build-args: |
             ROLE=${{ matrix.role }}
@@ -103,8 +144,8 @@ jobs:
           # Push by digest only — tags are attached later in the manifest job.
           outputs: type=image,name=${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ steps.push.outputs.value == 'true' }}
           provenance: false
-          cache-from: type=gha,scope=vol-agent-server-${{ matrix.role }}-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=vol-agent-server-${{ matrix.role }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=vol-agent-server-${{ matrix.variant }}-${{ matrix.role }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=vol-agent-server-${{ matrix.variant }}-${{ matrix.role }}-${{ matrix.arch }}
 
       - name: Export digest
         if: steps.push.outputs.value == 'true'
@@ -117,14 +158,14 @@ jobs:
         if: steps.push.outputs.value == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: digest-${{ matrix.role }}-${{ matrix.arch }}
+          name: digest-${{ matrix.variant }}-${{ matrix.role }}-${{ matrix.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
 
-  # ── Merge per-arch images into one multi-arch tag, per role ──────────────
+  # ── Merge per-arch images into one multi-arch tag, per variant + role ────
   manifest:
-    name: manifest (${{ matrix.role }})
+    name: manifest (${{ matrix.variant }}, ${{ matrix.role }})
     runs-on: ubuntu-24.04
     needs: build
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.push_image == 'true'
@@ -134,10 +175,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - role: control-plane
+          - variant: debian
+            role: control-plane
             tag_prefix: cp
-          - role: data-plane
+          - variant: debian
+            role: data-plane
             tag_prefix: dp
+          - variant: alpine
+            role: control-plane
+            tag_prefix: cp-alpine
+          - variant: alpine
+            role: data-plane
+            tag_prefix: dp-alpine
 
     steps:
       - name: Compute short SHA
@@ -148,7 +197,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
-          pattern: digest-${{ matrix.role }}-*
+          pattern: digest-${{ matrix.variant }}-${{ matrix.role }}-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
@@ -200,7 +249,7 @@ jobs:
       - name: Summary
         run: |
           {
-            echo "### vol-agent-server (${{ matrix.role }})"
+            echo "### vol-agent-server (${{ matrix.variant }}, ${{ matrix.role }})"
             echo
             echo "- short SHA: \`${{ steps.sha.outputs.short }}\`"
             echo "- platforms: linux/amd64, linux/arm64"
@@ -219,7 +268,7 @@ jobs:
   # same DOCKER_USERNAME / DOCKER_PASSWORD secrets — no Aliyun AccessKey
   # required.
   prune:
-    name: prune (${{ matrix.role }})
+    name: prune (${{ matrix.variant }}, ${{ matrix.role }})
     runs-on: ubuntu-24.04
     needs: manifest
     if: github.ref == 'refs/heads/main'
@@ -229,10 +278,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - role: control-plane
+          - variant: debian
+            role: control-plane
             tag_prefix: cp
-          - role: data-plane
+          - variant: debian
+            role: data-plane
             tag_prefix: dp
+          - variant: alpine
+            role: control-plane
+            tag_prefix: cp-alpine
+          - variant: alpine
+            role: data-plane
+            tag_prefix: dp-alpine
     env:
       KEEP_LAST: "5"
 
@@ -332,7 +389,7 @@ jobs:
           done < <(crane ls "$IMG")
 
           {
-            echo "### prune ($PREFIX)"
+            echo "### prune (${{ matrix.variant }}, $PREFIX)"
             echo
             echo "- examined: $examined"
             echo "- deleted:  $deleted"

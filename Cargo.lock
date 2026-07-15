@@ -7994,6 +7994,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "vol-llm-cli-tool"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "toml",
+ "tracing",
+ "vol-llm-sandbox",
+]
+
+[[package]]
 name = "vol-llm-context"
 version = "0.1.0"
 dependencies = [
@@ -8223,6 +8238,7 @@ dependencies = [
  "tracing",
  "vol-llm-tool",
  "vol-llm-tools-builtin-bash",
+ "vol-llm-tools-builtin-cli-tool",
  "vol-llm-tools-builtin-edit",
  "vol-llm-tools-builtin-glob",
  "vol-llm-tools-builtin-grep",
@@ -8243,6 +8259,19 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "vol-llm-sandbox",
+ "vol-llm-tool",
+]
+
+[[package]]
+name = "vol-llm-tools-builtin-cli-tool"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "vol-llm-cli-tool",
  "vol-llm-sandbox",
  "vol-llm-tool",
 ]
@@ -8490,7 +8519,9 @@ dependencies = [
  "tower-http 0.5.2",
  "tracing",
  "tracing-subscriber",
+ "vol-llm-cli-tool",
  "vol-llm-observability",
+ "vol-llm-sandbox",
 ]
 
 [[package]]

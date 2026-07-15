@@ -107,12 +107,34 @@ lark-cli docs +update --api-version v2 --doc "<url-or-token>" \
 ### K8s
 
 ```bash
+# ArgoCD GitOps (primary)
+kubectl apply -f deploy/argocd/root.yaml
+
+# Kustomize (alternative, less duplication)
+kubectl apply -k deploy/kustomize/overlays/control-plane
+kubectl apply -k deploy/kustomize/overlays/data-plane
+
+# Legacy (deprecated — prefer ArgoCD)
 kubectl apply -f k8s/namespace.yaml
 ./k8s/vol-monitor/deploy.sh latest
 kubectl apply -f k8s/agent-server/deployment.yaml
 ```
 
+### Post-deploy Verification
+
+```bash
+./scripts/smoke-test.sh --all                    # test all components
+./scripts/smoke-test.sh -H localhost:3001        # direct endpoint
+```
+
+### Runtime Config Sync
+
+```bash
+python3 scripts/sync-configmaps.py               # regenerate ConfigMap manifests
+```
+
 [[docs/deployment/k8s-deployment]] — full deployment guide.
+[[docs/wiki/concepts/argocd-app-of-apps-gitops]] — GitOps architecture.
 
 ## Model Service
 

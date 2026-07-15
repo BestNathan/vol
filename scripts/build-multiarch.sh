@@ -35,9 +35,18 @@ echo ""
 
 # Step 0: Login to ACR
 echo "[0/4] Logging in to ACR..."
+# Credentials must be provided via environment variables:
+#   DOCKER_USERNAME — ACR login user
+#   DOCKER_PASSWORD — ACR login password
+if [ -z "${DOCKER_USERNAME:-}" ] || [ -z "${DOCKER_PASSWORD:-}" ]; then
+    echo "ERROR: DOCKER_USERNAME and DOCKER_PASSWORD env vars are required."
+    echo "  export DOCKER_USERNAME=<your-acr-user>"
+    echo "  export DOCKER_PASSWORD=<your-acr-password>"
+    exit 1
+fi
 if ! docker info 2>&1 | grep -q "$DOCKER_REGISTRY"; then
     echo "Logging in to $DOCKER_REGISTRY..."
-    docker login "$DOCKER_REGISTRY" -u "308719298@qq.com" -p "zhangdage2011"
+    echo "$DOCKER_PASSWORD" | docker login "$DOCKER_REGISTRY" -u "$DOCKER_USERNAME" --password-stdin
 fi
 
 # Step 1: Pull base images

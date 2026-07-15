@@ -58,6 +58,10 @@ impl ToolRegistry {
         self.tools.keys().map(|s| s.as_str()).collect()
     }
 
+    pub fn contains(&self, name: &str) -> bool {
+        self.tools.contains_key(name)
+    }
+
     /// Get the sensitivity level of a tool for the given arguments.
     /// Returns Safe if the tool is not found (fails open for registry lookup).
     pub fn tool_sensitivity(&self, name: &str, args: &serde_json::Value) -> ToolSensitivity {

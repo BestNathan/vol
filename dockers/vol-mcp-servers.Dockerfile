@@ -96,9 +96,15 @@ RUN set -eux; \
     fi; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates; \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/*; \
+    # Create non-root user for running the service
+    addgroup --system --gid 1000 mcp; \
+    adduser --system --uid 1000 --gid 1000 --no-create-home mcp
 
 COPY --from=builder "/app/target/release/${BIN}" /usr/local/bin/mcp-server
+
+# Run as non-root user
+USER mcp:mcp
 
 EXPOSE 8080
 
