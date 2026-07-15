@@ -78,7 +78,7 @@ data:
 
     identity_file = "/app/.ssh/id_ed25519"
 
-    host_key = "8Y3g9hVzSz+KhN4oyodOoP4a+UOMUM0j3C9+CSDB1Ek="
+    host_key = "SHA256:8Y3g9hVzSz+KhN4oyodOoP4a+UOMUM0j3C9+CSDB1Ek="
 
     idle_timeout_secs = 300
 
