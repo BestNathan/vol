@@ -1,0 +1,163 @@
+# init-ansible-workspace — one-time Job to bootstrap /opt/ansible on target
+# =============================================================================
+# SSHs into the ansible-prod sandbox host (192.168.2.106) and creates a demo
+# Ansible workspace with sample inventory, playbook, and config.
+#
+# Apply:
+#   kubectl apply -f deploy/argocd/manifests/workloads/jobs/init-ansible-workspace.yaml
+#
+# Re-run (after key rotation etc):
+#   kubectl delete job init-ansible-workspace -n vol-agent-system
+#   kubectl apply -f deploy/argocd/manifests/workloads/jobs/init-ansible-workspace.yaml
+# =============================================================================
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: init-ansible-workspace
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: init-ansible-workspace
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: ops
+  annotations:
+    description: "One-time bootstrap of /opt/ansible on ansible-prod target"
+spec:
+  ttlSecondsAfterFinished: 86400  # keep logs for 24h
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: init-ansible-workspace
+        app.kubernetes.io/part-of: vol-agent
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      containers:
+        - name: ansible-init
+          # Alpine with openssh for SCP/SFTP
+          image: alpine:3.21
+          command:
+            - sh
+            - -euc
+            - |
+              # =================================================================
+              # Ansible Workspace Initialization Script
+              # =================================================================
+              # Creates a demo Ansible workspace on the target machine.
+              # Target: 192.168.2.106  User: root  Workspace: /opt/ansible
+              # =================================================================
+
+              apk add --no-cache openssh-client-default > /dev/null 2>&1
+
+              SSH="ssh -o StrictHostKeyChecking=accept-new -i /app/.ssh/id_ed25519 -p 22 root@192.168.2.106"
+              SCP="scp -o StrictHostKeyChecking=accept-new -i /app/.ssh/id_ed25519 -P 22"
+
+              echo "=== Initializing Ansible Workspace on 192.168.2.106 ==="
+
+              # ── Create directory structure ─────────────────────────────────
+              echo "[1/4] Creating directories..."
+              $SSH 'mkdir -p /opt/ansible/{inventories/{production,staging},playbooks,roles,group_vars,host_vars,files,templates}'
+
+              # ── Install ansible (if not present) ───────────────────────────
+              echo "[2/4] Checking ansible installation..."
+              $SSH 'which ansible 2>/dev/null || (apt-get update -qq && apt-get install -y -qq ansible > /dev/null 2>&1)' || \
+                $SSH 'which ansible 2>/dev/null || (apk add --no-cache ansible > /dev/null 2>&1)' || \
+                echo "WARNING: could not install ansible — install it manually on the target"
+
+              # ── ansible.cfg ───────────────────────────────────────────────
+              echo "[3/4] Writing ansible.cfg..."
+              $SSH 'cat > /opt/ansible/ansible.cfg << "ANSCFG"
+              [defaults]
+              inventory      = /opt/ansible/inventories/production/hosts.yml
+              host_key_checking = False
+              retry_files_enabled = False
+              gathering        = implicit
+              fact_caching     = jsonfile
+              fact_caching_connection = /opt/ansible/.cache/facts
+              fact_caching_timeout = 86400
+              stdout_callback  = yaml
+              callback_whitelist = profile_tasks
+              forks            = 5
+              timeout          = 60
+              remote_user      = root
+
+              [ssh_connection]
+              pipelining = True
+              control_path = /tmp/ansible-%%h-%%p-%%r
+              control_path_dir = /tmp
+              ANSCFG'
+
+              # ── Inventory (demo hosts) ─────────────────────────────────────
+              echo "[4/4] Writing inventory..."
+              $SSH 'cat > /opt/ansible/inventories/production/hosts.yml << "YML"
+              all:
+                hosts:
+                  localhost:
+                    ansible_connection: local
+                  target-host:
+                    ansible_host: 192.168.2.106
+                    ansible_user: root
+                children:
+                  webservers:
+                    hosts:
+                      target-host:
+                  dev:
+                    hosts:
+                      localhost:
+              YML'
+
+              # ── Demo playbook ─────────────────────────────────────────────
+              $SSH 'cat > /opt/ansible/playbooks/ping.yml << "YML"
+              ---
+              - name: Demo — ping all hosts
+                hosts: all
+                gather_facts: false
+                tasks:
+                  - name: Ping
+                    ansible.builtin.ping:
+
+                  - name: Show uptime
+                    ansible.builtin.command: uptime
+                    changed_when: false
+              YML'
+
+              $SSH 'cat > /opt/ansible/playbooks/system-info.yml << "YML"
+              ---
+              - name: Gather system information
+                hosts: all
+                gather_facts: true
+                tasks:
+                  - name: OS version
+                    ansible.builtin.debug:
+                      msg: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+                  - name: Disk usage
+                    ansible.builtin.shell: df -h /
+                    changed_when: false
+
+                  - name: Memory
+                    ansible.builtin.debug:
+                      msg: "{{ ansible_memtotal_mb }} MB total, {{ ansible_memfree_mb }} MB free"
+              YML'
+
+              # ── Verify ────────────────────────────────────────────────────
+              echo ""
+              echo "=== Initialization Complete ==="
+              $SSH 'tree /opt/ansible 2>/dev/null || find /opt/ansible -type f | sort'
+              echo ""
+              echo "Test with:"
+              echo "  kubectl exec deploy/cli-tools-mcp -n vol-agent-system -- \\"
+              echo "    ansible all -i /opt/ansible/inventories/production/hosts.yml -m ping"
+          env:
+            - name: HOME
+              value: /app
+          volumeMounts:
+            - name: ssh-key
+              mountPath: /app/.ssh
+              readOnly: true
+      volumes:
+        - name: ssh-key
+          secret:
+            secretName: ansible-ssh-key
+            defaultMode: 0600
