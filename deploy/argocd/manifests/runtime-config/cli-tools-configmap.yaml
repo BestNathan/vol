@@ -27,7 +27,7 @@ data:
     - `ansible-vault <action>` - encrypt/decrypt secrets
     """
     binaries = ["ansible", "ansible-playbook", "ansible-galaxy", "ansible-vault"]
-    sandbox_ref = "ansible-prod"
+    sandbox_ref = "ssh-dev"
     cwd = "/opt/ansible"
     shell = "/bin/bash"
     timeout_secs = 300
