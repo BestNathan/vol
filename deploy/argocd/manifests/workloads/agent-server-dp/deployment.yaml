@@ -27,6 +27,11 @@ spec:
         kubernetes.io/arch: arm64
       imagePullSecrets:
         - name: acr-registry-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
         - name: agent-server
           image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server:dp-latest
@@ -39,6 +44,19 @@ spec:
             - containerPort: 3002
               name: ws
               protocol: TCP
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
           readinessProbe:
             tcpSocket:
               port: 3002
@@ -69,6 +87,8 @@ spec:
               mountPath: /app/.mcp.json
               subPath: mcp.json
               readOnly: true
+            - name: data
+              mountPath: /app/data
           env:
             - name: OTEL_SERVICE_NAME
               value: "agent-server-dp"
@@ -123,3 +143,6 @@ spec:
           configMap:
             name: mcp-config
             defaultMode: 0644
+        - name: data
+          emptyDir:
+            sizeLimit: 2Gi

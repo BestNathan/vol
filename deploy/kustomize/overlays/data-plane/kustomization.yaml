@@ -1,0 +1,76 @@
+# Data-plane overlay — registers with remote control-plane
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namePrefix: ""
+namespace: vol-agent-system
+
+resources:
+  - ../../base
+
+configMapGenerator:
+  - name: agent-server-config
+    files:
+      - config/agent-server.toml
+
+commonLabels:
+  app.kubernetes.io/name: agent-server-dp
+  app.kubernetes.io/component: data-plane
+
+images:
+  - name: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server
+    newTag: dp-latest
+
+patches:
+  - target:
+      kind: Deployment
+      name: agent-server
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: agent-server-dp
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: "agent-server-dp"
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 3002
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "2000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "2Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "200m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "256Mi"
+      - op: add
+        path: /spec/template/spec/containers/0/readinessProbe
+        value:
+          tcpSocket:
+            port: 3002
+          initialDelaySeconds: 3
+          periodSeconds: 5
+      - op: add
+        path: /spec/template/spec/containers/0/livenessProbe
+        value:
+          tcpSocket:
+            port: 3002
+          initialDelaySeconds: 10
+          periodSeconds: 30
+  - target:
+      kind: Service
+      name: agent-server
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: agent-server-dp
+      - op: replace
+        path: /spec/ports/0/port
+        value: 3002
+      - op: replace
+        path: /spec/ports/0/targetPort
+        value: 3002

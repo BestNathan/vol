@@ -1,0 +1,33 @@
+# PodDisruptionBudgets for vol-agent workloads
+# =============================================================================
+# Ensures at least one pod of each critical service is available during
+# voluntary disruptions (node drains, cluster upgrades).
+# =============================================================================
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-server-pdb
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-server
+    app.kubernetes.io/part-of: vol-agent
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-server
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-server-dp-pdb
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-server-dp
+    app.kubernetes.io/part-of: vol-agent
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-server-dp

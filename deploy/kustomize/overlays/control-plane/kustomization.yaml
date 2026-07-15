@@ -1,0 +1,47 @@
+# Control-plane overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+nameSuffix: ""
+namespace: vol-agent-system
+
+resources:
+  - ../../base
+
+configMapGenerator:
+  - name: agent-server-config
+    files:
+      - config/agent-server.toml
+
+commonLabels:
+  app.kubernetes.io/name: agent-server
+  app.kubernetes.io/component: control-plane
+
+images:
+  - name: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server
+    newTag: cp-latest
+
+patches:
+  - target:
+      kind: Deployment
+      name: agent-server
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: "agent-server-cp"
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 3001
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 512Mi
+  - target:
+      kind: Service
+      name: agent-server
+    patch: |-
+      - op: replace
+        path: /spec/ports/0/port
+        value: 3001
+      - op: replace
+        path: /spec/ports/0/targetPort
+        value: 3001

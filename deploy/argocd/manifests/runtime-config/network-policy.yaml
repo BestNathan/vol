@@ -1,0 +1,139 @@
+# NetworkPolicy for vol-agent-system namespace
+# =============================================================================
+# Control plane accepts WebSocket connections from clients and data-plane nodes.
+# Data-plane nodes only need egress to the control plane.
+# MCP services only need ingress from agent-server pods.
+# =============================================================================
+---
+# ── Allow all ingress to control-plane client endpoint ──────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-control-plane-ingress
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-server
+    app.kubernetes.io/part-of: vol-agent
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agent-server
+  policyTypes:
+    - Ingress
+  ingress:
+    # Client WebSocket connections
+    - ports:
+        - port: 3001
+          protocol: TCP
+      from:
+        - namespaceSelector: {}
+    # Control-plane node WebSocket from data-planes
+    - ports:
+        - port: 3001
+          protocol: TCP
+      from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agent-server-dp
+---
+# ── Allow data-plane to talk to control-plane ───────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-data-plane-egress
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-server-dp
+    app.kubernetes.io/part-of: vol-agent
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agent-server-dp
+  policyTypes:
+    - Egress
+  egress:
+    # Talk to control-plane
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agent-server
+      ports:
+        - port: 3001
+          protocol: TCP
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+    # External (LLM providers, etc.) — HTTP/HTTPS only
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 80
+          protocol: TCP
+---
+# ── Allow MCP services to receive from agent-server pods ────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-mcp-ingress
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: mcp
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: mcp
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 8080
+          protocol: TCP
+      from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: vol-agent
+    # Health checks from anywhere
+    - ports:
+        - port: 8080
+          protocol: TCP
+      from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+---
+# ── Deny all other traffic by default ──────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-by-default
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/part-of: vol-agent
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    # Allow DNS (needed by all pods)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP

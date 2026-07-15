@@ -1,0 +1,11 @@
+# Base kustomization — shared across all agent-server variants
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment.yaml
+  - service.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/part-of: vol-agent

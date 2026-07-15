@@ -27,6 +27,11 @@ spec:
         kubernetes.io/arch: arm64
       imagePullSecrets:
         - name: acr-registry-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
         - name: agent-server-dingtalk
           image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server:dp-latest
@@ -39,6 +44,19 @@ spec:
             - containerPort: 3001
               name: ws
               protocol: TCP
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           volumeMounts:
             - name: config
               mountPath: /etc/agent-server
@@ -59,6 +77,8 @@ spec:
               mountPath: /app/.mcp.json
               subPath: mcp.json
               readOnly: true
+            - name: data
+              mountPath: /app/data
           env:
             - name: OTEL_SERVICE_NAME
               value: "agent-server-dingtalk"
@@ -99,3 +119,6 @@ spec:
           secret:
             secretName: agent-dingtalk-secrets
             defaultMode: 0644
+        - name: data
+          emptyDir:
+            sizeLimit: 1Gi

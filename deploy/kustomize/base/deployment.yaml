@@ -1,16 +1,18 @@
+# Kustomize base: shared agent-server deployment template
+# =============================================================================
+# Overlays provide: image tag, configmap, service port, and role-specific env.
+# =============================================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: agent-server
-  namespace: vol-agent-system
   labels:
-    app.kubernetes.io/name: agent-server
     app.kubernetes.io/part-of: vol-agent
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: agent-server
+      app.kubernetes.io/part-of: vol-agent
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -19,7 +21,6 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: agent-server
         app.kubernetes.io/part-of: vol-agent
     spec:
       restartPolicy: Always
@@ -34,16 +35,12 @@ spec:
         fsGroup: 1000
       containers:
         - name: agent-server
-          image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server:cp-latest
+          image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server:latest
           imagePullPolicy: Always
           workingDir: /app
           args:
             - "--config"
             - "/etc/agent-server/agent-server.toml"
-          ports:
-            - containerPort: 3001
-              name: ws
-              protocol: TCP
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
@@ -80,8 +77,6 @@ spec:
             - name: data
               mountPath: /app/data
           env:
-            - name: OTEL_SERVICE_NAME
-              value: "agent-server-cp"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://otel-collector.observability.svc.cluster.local:4317"
             - name: ANTHROPIC_AUTH_TOKEN
@@ -121,9 +116,6 @@ spec:
         - name: agent-skills
           configMap:
             name: agent-skills
-            items:
-              - key: clarifying-requirements.SKILL.md
-                path: clarifying-requirements/SKILL.md
             defaultMode: 0644
         - name: agent-sandboxes
           configMap:

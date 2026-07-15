@@ -50,6 +50,11 @@ spec:
       # Run on arm64 since we built the Alpine image natively (Apple Silicon)
       nodeSelector:
         kubernetes.io/arch: arm64
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
       - name: agent-server
         image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server:alpine
@@ -62,6 +67,19 @@ spec:
         - containerPort: 3001
           name: ws
           protocol: TCP
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
         volumeMounts:
         # Main config
         - name: config
@@ -71,6 +89,9 @@ spec:
         - name: providers
           mountPath: /app/.agents/providers
           readOnly: true
+        # Writable data directory
+        - name: data
+          mountPath: /app/data
         env:
         # OpenTelemetry
         - name: OTEL_SERVICE_NAME
@@ -115,3 +136,6 @@ spec:
           - key: openai-example.toml
             path: openai-example.toml
           defaultMode: 0644
+      - name: data
+        emptyDir:
+          sizeLimit: 1Gi

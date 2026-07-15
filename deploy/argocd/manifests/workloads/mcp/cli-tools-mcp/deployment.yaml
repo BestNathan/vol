@@ -29,10 +29,21 @@ spec:
         kubernetes.io/arch: amd64
       imagePullSecrets:
         - name: acr-registry-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
         - name: cli-tools-mcp
           image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/cli-tools-mcp:PLACEHOLDER
           imagePullPolicy: Always
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           args:
             - "--http"
             - "0.0.0.0:8080"

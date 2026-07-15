@@ -1,0 +1,64 @@
+# DingTalk-specific data-plane overlay
+# Uses dedicated agent definitions and provider config
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namePrefix: ""
+namespace: vol-agent-system
+
+resources:
+  - ../../base
+
+configMapGenerator:
+  - name: agent-server-config
+    files:
+      - config/agent-server.toml
+
+commonLabels:
+  app.kubernetes.io/name: agent-server-dingtalk
+  app.kubernetes.io/component: dingtalk-agent
+
+images:
+  - name: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server
+    newTag: dp-latest
+
+patches:
+  - target:
+      kind: Deployment
+      name: agent-server
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: agent-server-dingtalk
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: "agent-server-dingtalk"
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 3001
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "500m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "512Mi"
+      - op: remove
+        path: /spec/template/spec/containers/0/env/3
+      - op: replace
+        path: /spec/template/spec/volumes/1/configMap/name
+        value: agent-definitions-dingtalk
+      - op: replace
+        path: /spec/template/spec/volumes/2/configMap/name
+        value: agent-providers-dingtalk
+      - op: replace
+        path: /spec/template/spec/volumes/7/configMap
+        value:
+          secretName: agent-dingtalk-secrets
+          defaultMode: 0644
+  - target:
+      kind: Service
+      name: agent-server
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: agent-server-dingtalk
