@@ -167,8 +167,8 @@ impl ContextBuilder {
         }
 
         // Sort within zones by position (ascending)
-        head_blocks.sort_by(|a, b| a.anchor.position().cmp(&b.anchor.position()));
-        middle_blocks.sort_by(|a, b| a.anchor.position().cmp(&b.anchor.position()));
+        head_blocks.sort_by_key(|a| a.anchor.position());
+        middle_blocks.sort_by_key(|a| a.anchor.position());
 
         // Step 6: Drop lowest-priority middle blocks if over budget
         let middle_budget = self

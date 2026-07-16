@@ -20,7 +20,7 @@ pub struct NamedProviderConfig {
 }
 
 /// Loaded provider registry.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ProviderLoader {
     providers: HashMap<String, ProviderFileConfig>,
 }
@@ -80,14 +80,6 @@ impl ProviderLoader {
                 config: config.clone(),
             })
             .collect()
-    }
-}
-
-impl Default for ProviderLoader {
-    fn default() -> Self {
-        Self {
-            providers: HashMap::new(),
-        }
     }
 }
 

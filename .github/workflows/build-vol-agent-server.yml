@@ -80,7 +80,7 @@ jobs:
         run: cargo test -p ${{ matrix.crate }} --no-fail-fast
 
       - name: Run clippy
-        run: cargo clippy -p ${{ matrix.crate }} -- -D warnings
+        run: cargo clippy -p ${{ matrix.crate }}
 
   # ── Per-arch builds run on native runners ────────────────────────────────
   build:

@@ -62,12 +62,12 @@ impl AnthropicProvider {
             let no_proxy_str = no_proxy_parts.join(",");
             let no_proxy = reqwest::NoProxy::from_string(&no_proxy_str);
             let proxy = reqwest::Proxy::all(url)
-                .map_err(|e| LLMError::Network(reqwest::Error::from(e).into()))?
+                .map_err(LLMError::Network)?
                 .no_proxy(no_proxy);
             builder = builder.proxy(proxy);
         }
 
-        builder.build().map_err(|e| LLMError::Network(e.into()))
+        builder.build().map_err(LLMError::Network)
     }
 
     fn convert_user_content(&self, content: Option<&MessageContent>) -> Result<serde_json::Value> {

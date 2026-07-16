@@ -64,7 +64,7 @@ impl ExecutableTool for TaskCliTool {
 
     fn sensitivity(&self, args: &serde_json::Value) -> ToolSensitivity {
         let cmd_str = args.get("command").and_then(|v| v.as_str()).unwrap_or("");
-        let first_token = cmd_str.trim().split_whitespace().next().unwrap_or("");
+        let first_token = cmd_str.split_whitespace().next().unwrap_or("");
 
         match first_token {
             "update" | "stop" | "+done" | "+claim" => ToolSensitivity::RequiresApproval {
@@ -90,7 +90,7 @@ impl ExecutableTool for TaskCliTool {
             })?;
 
         let cmd: ParsedCommand =
-            parser::parse(command).map_err(|e| vol_llm_tool::ToolError::InvalidArguments(e))?;
+            parser::parse(command).map_err(vol_llm_tool::ToolError::InvalidArguments)?;
 
         crate::cli::executor::execute(cmd, &self.store, context)
             .await

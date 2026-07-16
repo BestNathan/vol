@@ -46,14 +46,17 @@ impl MemoryStore for InMemoryStore {
     async fn update(&self, item: MemoryItem) -> Result<()> {
         let id = item.id.clone();
         let mut items = self.items.write().await;
-        if items.contains_key(&id) {
-            items.insert(id, item);
-            Ok(())
-        } else {
-            Err(MemoryError::NotFound(format!(
-                "Memory item with id '{}' not found",
-                id
-            )))
+        match items.entry(item.id.clone()) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                entry.insert(item);
+                Ok(())
+            }
+            std::collections::hash_map::Entry::Vacant(_) => {
+                Err(MemoryError::NotFound(format!(
+                    "Memory item with id '{}' not found",
+                    id
+                )))
+            }
         }
     }
 

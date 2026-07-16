@@ -248,7 +248,7 @@ fn authenticate(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxResul
         if let Some(ref mut agent) = agent {
             agent.connect().is_ok()
                 && agent.list_identities().is_ok()
-                && agent.identities().ok().map_or(false, |ids| {
+                && agent.identities().ok().is_some_and(|ids| {
                     ids.iter()
                         .any(|id| agent.userauth(&config.user, id).is_ok())
                 })

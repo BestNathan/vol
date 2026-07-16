@@ -216,7 +216,7 @@ impl SandboxRegistry {
                     }
                 };
                 let path = entry.path();
-                if !path.extension().is_some_and(|ext| ext == "toml") {
+                if path.extension().is_none_or(|ext| ext != "toml") {
                     continue;
                 }
 

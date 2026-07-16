@@ -26,6 +26,7 @@ pub enum CheckpointReason {
 
 /// Polymorphic entry data — serialized with inline `type` discriminator.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum SessionEntryData {
     #[serde(rename = "message")]
     Message { message: SessionMessage },

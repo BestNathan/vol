@@ -46,12 +46,12 @@ impl OpenaiProvider {
         if let Some(url) = &proxy_url {
             let no_proxy = reqwest::NoProxy::from_string("api.openai.com");
             let proxy = reqwest::Proxy::all(url)
-                .map_err(|e| LLMError::Network(reqwest::Error::from(e).into()))?
+                .map_err(LLMError::Network)?
                 .no_proxy(no_proxy);
             builder = builder.proxy(proxy);
         }
 
-        builder.build().map_err(|e| LLMError::Network(e.into()))
+        builder.build().map_err(LLMError::Network)
     }
 
     /// Convert messages to OpenAI format.

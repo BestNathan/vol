@@ -111,7 +111,7 @@ impl ExecutableTool for GlobTool {
         }
 
         // Sort results by modification time (newest first)
-        results.sort_by(|a, b| b.1.cmp(&a.1));
+        results.sort_by_key(|x| std::cmp::Reverse(x.1));
 
         // Return newline-separated file paths
         if results.is_empty() {

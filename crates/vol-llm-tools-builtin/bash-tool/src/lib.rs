@@ -82,9 +82,9 @@ impl BashTool {
     fn check_security(&self, command: &str) -> Result<(), BashToolError> {
         for pattern in &self.dangerous_patterns {
             if pattern.is_match(command) {
-                return Err(BashToolError::SecurityViolation(format!(
-                    "Command matches dangerous pattern and was blocked"
-                )));
+                return Err(BashToolError::SecurityViolation(
+                    "Command matches dangerous pattern and was blocked".to_string()
+                ));
             }
         }
         Ok(())
@@ -203,7 +203,7 @@ impl ExecutableTool for BashTool {
         }
         if !stderr.is_empty() {
             if !stdout.is_empty() {
-                content.push_str("\n");
+                content.push('\n');
             }
             content.push_str("stderr:\n");
             content.push_str(&stderr);
