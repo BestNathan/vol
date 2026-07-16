@@ -31,7 +31,7 @@ spec:
         kubernetes.io/arch: arm64
       containers:
       - name: vol-monitor
-        image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:beta
+        image: ghcr.io/bestnathan/vol-monitor:beta
         imagePullPolicy: Always
         workingDir: /etc/vol-monitor
         args:

@@ -5,7 +5,7 @@
 
 set -e
 
-IMAGE_NAME="crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor"
+IMAGE_NAME="ghcr.io/bestnathan/vol-monitor"
 K8S_DIR="$(dirname "$0")"
 BINARY_NAME="${1:?Usage: $0 <binary-name>}"
 VERSION="${2:-latest}"

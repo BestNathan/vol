@@ -1,4 +1,4 @@
-# Build and push vol-agent-server multi-arch images (amd64 + arm64) to ACR.
+# Build and push vol-agent-server multi-arch images (amd64 + arm64) to GHCR.
 #
 # Strategy: build amd64 and arm64 on native runners in parallel, then merge
 # the two per-arch manifests into a single multi-arch tag with buildx
@@ -6,18 +6,11 @@
 # a 5-minute compile into a 40-minute one).
 #
 # Two role-specific images per commit, sharing one repo:
-#   crpi-...aliyuncs.com/n_common/vol-agent-server:cp-<sha>   (control plane)
-#   crpi-...aliyuncs.com/n_common/vol-agent-server:dp-<sha>   (data plane)
+#   ghcr.io/bestnathan/vol-agent-server:cp-<sha>   (control plane)
+#   ghcr.io/bestnathan/vol-agent-server:dp-<sha>   (data plane)
 #
-# main pushes also get cp-latest / dp-latest moving tags.
-#
-# Required secrets:
-#   DOCKER_USERNAME — ACR login user
-#   DOCKER_PASSWORD — ACR login password
-#
-# Override the ACR endpoint or repo via repo / org variables:
-#   vars.ACR_REGISTRY  (default: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com)
-#   vars.ACR_NAMESPACE (default: n_common)
+# Uses the built-in GITHUB_TOKEN for GHCR auth — no extra secrets needed.
+# Requires packages: write permission on the job.
 
 name: build-vol-agent-server
 
@@ -35,16 +28,19 @@ on:
   workflow_dispatch:
     inputs:
       push_image:
-        description: "Push images to ACR (uncheck to build-only)"
+        description: "Push images to GHCR (uncheck to build-only)"
         required: false
         default: "true"
         type: choice
         options: ["true", "false"]
 
 env:
-  ACR_REGISTRY: ${{ vars.ACR_REGISTRY || 'crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com' }}
-  ACR_NAMESPACE: ${{ vars.ACR_NAMESPACE || 'n_common' }}
+  GHCR_REPO: ghcr.io/bestnathan
   IMAGE_NAME: vol-agent-server
+
+concurrency:
+  group: build-vol-agent-server
+  cancel-in-progress: false
 
 jobs:
   # ── Test gate: run tests and clippy before building images ─────────────────
@@ -93,6 +89,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -123,13 +120,13 @@ jobs:
             echo "value=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Log in to ACR
+      - name: Log in to GHCR
         if: steps.push.outputs.value == 'true'
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.ACR_REGISTRY }}
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
       - name: Build and push by digest
         id: build
@@ -142,7 +139,7 @@ jobs:
             ROLE=${{ matrix.role }}
             REGION=global
           # Push by digest only — tags are attached later in the manifest job.
-          outputs: type=image,name=${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ steps.push.outputs.value == 'true' }}
+          outputs: type=image,name=${{ env.GHCR_REPO }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ steps.push.outputs.value == 'true' }}
           provenance: false
           cache-from: type=gha,scope=vol-agent-server-${{ matrix.variant }}-${{ matrix.role }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=vol-agent-server-${{ matrix.variant }}-${{ matrix.role }}-${{ matrix.arch }}
@@ -170,7 +167,8 @@ jobs:
     needs: build
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.push_image == 'true'
     permissions:
-      contents: read
+      contents: write
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -203,17 +201,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to ACR
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.ACR_REGISTRY }}
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
       - name: Compose tag args
         id: tags
         run: |
-          IMG="${ACR_REGISTRY}/${ACR_NAMESPACE}/${IMAGE_NAME}"
+          IMG="${GHCR_REPO}/${IMAGE_NAME}"
           PREFIX="${{ matrix.tag_prefix }}"
           SHA="${{ steps.sha.outputs.short }}"
           TAGS=("${IMG}:${PREFIX}-${SHA}")
@@ -261,12 +259,70 @@ jobs:
             done <<< "${{ steps.tags.outputs.list }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # ── Prune old per-commit tags from ACR after a successful push ───────────
+      - name: Update GitOps manifests
+        if: matrix.variant == 'debian'
+        env:
+          TAG_PREFIX: ${{ matrix.tag_prefix }}
+          SHORT_SHA: ${{ steps.sha.outputs.short }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          short_sha = os.environ["SHORT_SHA"]
+          prefix = os.environ["TAG_PREFIX"]
+          image = f"ghcr.io/bestnathan/vol-agent-server:{prefix}-{short_sha}"
+
+          if prefix == "cp":
+              manifests = ["deploy/argocd/manifests/workloads/agent-server/deployment.yaml"]
+          else:  # dp
+              manifests = [
+                  "deploy/argocd/manifests/workloads/agent-server-dp/deployment.yaml",
+                  "deploy/argocd/manifests/workloads/agent-server-ansible/deployment.yaml",
+                  "deploy/argocd/manifests/workloads/agent-server-dingtalk/deployment.yaml",
+              ]
+
+          for manifest_path in manifests:
+              manifest = Path(manifest_path)
+              lines = manifest.read_text().splitlines()
+              updated = []
+              replaced = False
+              for line in lines:
+                  stripped = line.strip()
+                  if stripped.startswith("image: ") and "vol-agent-server" in stripped:
+                      indent = line[: len(line) - len(line.lstrip())]
+                      updated.append(f"{indent}image: {image}")
+                      replaced = True
+                  else:
+                      updated.append(line)
+              if not replaced:
+                  raise SystemExit(f"no image field found in {manifest_path}")
+              manifest.write_text("\n".join(updated) + "\n")
+              print(f"Updated {manifest_path} -> {image}")
+          PY
+
+      - name: Commit GitOps manifest update
+        if: matrix.variant == 'debian'
+        run: |
+          if git diff --quiet -- deploy/argocd/manifests/workloads/agent-server*/deployment.yaml; then
+            echo "No GitOps manifest change to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/argocd/manifests/workloads/agent-server/deployment.yaml \
+                  deploy/argocd/manifests/workloads/agent-server-dp/deployment.yaml \
+                  deploy/argocd/manifests/workloads/agent-server-ansible/deployment.yaml \
+                  deploy/argocd/manifests/workloads/agent-server-dingtalk/deployment.yaml
+          git commit -m "ci(gitops): update agent-server image to cp-${{ steps.sha.outputs.short }} / dp-${{ steps.sha.outputs.short }} [skip ci]"
+          git pull --rebase origin main
+          git push
+
+  # ── Prune old per-commit tags from GHCR after a successful push ──────────
   # Keeps the floating <prefix>-latest tag plus the N most recent commit sha
   # tags per role (sourced from `git log` on the branch this run built).
-  # Talks to ACR via the standard Docker Registry v2 HTTP API using the
-  # same DOCKER_USERNAME / DOCKER_PASSWORD secrets — no Aliyun AccessKey
-  # required.
+  # Uses the gh CLI (pre-installed on GitHub runners) to talk to the GHCR
+  # Packages API.
   prune:
     name: prune (${{ matrix.variant }}, ${{ matrix.role }})
     runs-on: ubuntu-24.04
@@ -274,6 +330,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -299,13 +356,6 @@ jobs:
         with:
           fetch-depth: 50
 
-      - name: Install crane
-        run: |
-          set -eux
-          ver="v0.20.2"
-          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${ver}/go-containerregistry_Linux_x86_64.tar.gz" \
-            | sudo tar -xz -C /usr/local/bin crane
-
       - name: Compute keep set
         id: keep
         env:
@@ -324,76 +374,75 @@ jobs:
           echo "Keeping:"
           printf '  - %s\n' "${KEEP[@]}"
 
-      - name: Authenticate crane
-        env:
-          REG: ${{ env.ACR_REGISTRY }}
-          USER: ${{ secrets.DOCKER_USERNAME }}
-          PASS: ${{ secrets.DOCKER_PASSWORD }}
-        run: echo "$PASS" | crane auth login "$REG" --username "$USER" --password-stdin
+      - name: Authenticate gh CLI
+        run: echo "${{ github.token }}" | gh auth login --with-token
 
       - name: Prune stale tags
         env:
-          IMG: ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.IMAGE_NAME }}
+          PACKAGE: vol-agent-server
+          OWNER: ${{ github.repository_owner }}
           PREFIX: ${{ matrix.tag_prefix }}
           KEEP_TAGS: ${{ steps.keep.outputs.list }}
         run: |
           set -eu
-          # Build keep set + their digests so we don't accidentally delete a
-          # manifest that another kept tag still references (e.g. cp-latest
-          # often shares a digest with the most recent cp-<sha>).
-          declare -A keep_tag keep_digest
+          # Build keep set from the tag names we computed above.
+          declare -A keep_tag
           while IFS= read -r t; do
             [ -n "$t" ] || continue
             keep_tag["$t"]=1
-            d="$(crane digest "${IMG}:${t}" 2>/dev/null || true)"
-            [ -n "$d" ] && keep_digest["$d"]=1
           done <<< "$KEEP_TAGS"
 
-          echo "Keep tags:    ${!keep_tag[*]}"
-          echo "Keep digests: ${!keep_digest[*]}"
+          echo "Keep tags: ${!keep_tag[*]}"
 
-          # Iterate every tag in the repo, only consider ones for *this* role.
+          # Iterate all package versions, delete any that don't have a kept tag.
           deleted=0
-          skipped_shared_digest=0
           examined=0
-          while IFS= read -r tag; do
-            [ -n "$tag" ] || continue
-            case "$tag" in
-              "${PREFIX}-"*) ;;
-              *) continue ;;
-            esac
+          while IFS=$'\t' read -r version_id tags; do
+            [ -n "$version_id" ] || continue
             examined=$((examined + 1))
-            if [ -n "${keep_tag[$tag]:-}" ]; then
-              echo "keep    ${IMG}:${tag}"
+            IFS=',' read -ra tag_array <<< "$tags"
+
+            # Check if any tag on this version is in the keep set.
+            keep=false
+            for tag in "${tag_array[@]}"; do
+              if [ -n "${keep_tag[$tag]:-}" ]; then
+                keep=true
+                break
+              fi
+            done
+
+            # Check if this version is relevant (has a tag matching our prefix).
+            relevant=false
+            for tag in "${tag_array[@]}"; do
+              case "$tag" in
+                "${PREFIX}-"*) relevant=true; break ;;
+              esac
+            done
+
+            if $keep; then
+              echo "keep    ${version_id}  tags: $tags"
               continue
             fi
-            d="$(crane digest "${IMG}:${tag}" 2>/dev/null || true)"
-            if [ -n "$d" ] && [ -n "${keep_digest[$d]:-}" ]; then
-              # Shared manifest with a kept tag — deleting by digest would also
-              # remove the kept tag. Just unname this tag if the registry
-              # supports it; otherwise leave it (cheap, manifest is shared).
-              echo "shared  ${IMG}:${tag}  -> $d (kept by another tag, skipping)"
-              skipped_shared_digest=$((skipped_shared_digest + 1))
+
+            if ! $relevant; then
+              echo "skip    ${version_id}  tags: $tags (no ${PREFIX}-* tags)"
               continue
             fi
-            if [ -z "$d" ]; then
-              echo "missing ${IMG}:${tag}  (cannot resolve digest, skipping)"
-              continue
-            fi
-            echo "delete  ${IMG}:${tag}  -> $d"
-            if crane delete "${IMG}@${d}"; then
+
+            echo "delete  ${version_id}  (tags: $tags)"
+            if gh api --method DELETE "/users/${OWNER}/packages/container/${PACKAGE}/versions/${version_id}"; then
               deleted=$((deleted + 1))
             else
-              echo "  !! delete failed for ${IMG}@${d}" >&2
+              echo "  !! delete failed for ${version_id}" >&2
             fi
-          done < <(crane ls "$IMG")
+          done < <(gh api --paginate "/users/${OWNER}/packages/container/${PACKAGE}/versions" \
+            --jq '.[] | [.id, (.metadata.container.tags | join(","))] | @tsv')
 
           {
             echo "### prune (${{ matrix.variant }}, $PREFIX)"
             echo
             echo "- examined: $examined"
             echo "- deleted:  $deleted"
-            echo "- shared-digest skipped: $skipped_shared_digest"
             echo
             echo "Kept tags:"
             for k in "${!keep_tag[@]}"; do echo "- \`$k\`"; done

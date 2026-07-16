@@ -24,10 +24,10 @@ spec:
       nodeSelector:
         kubernetes.io/arch: amd64
       imagePullSecrets:
-      - name: acr-registry-secret
+      - name: ghcr-bestnathan
       containers:
       - name: ${MCP_NAME}
-        image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:${MCP_NAME}
+        image: ghcr.io/bestnathan/vol-monitor:${MCP_NAME}
         imagePullPolicy: Always
         args:
           - "--http"

@@ -57,7 +57,7 @@ spec:
         fsGroup: 1000
       containers:
       - name: agent-server
-        image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server:alpine
+        image: ghcr.io/bestnathan/vol-agent-server:alpine
         imagePullPolicy: Always
         workingDir: /app
         args:
