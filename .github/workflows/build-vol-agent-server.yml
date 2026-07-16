@@ -259,6 +259,10 @@ jobs:
             done <<< "${{ steps.tags.outputs.list }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Checkout
+        if: matrix.variant == 'debian'
+        uses: actions/checkout@v4
+
       - name: Update GitOps manifests
         if: matrix.variant == 'debian'
         env:
