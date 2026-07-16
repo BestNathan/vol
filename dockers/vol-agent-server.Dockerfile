@@ -33,14 +33,17 @@
 #     vol-agent-server:latest --config /app/agent-server.toml
 # =============================================================================
 
-# ── Base: Rust toolchain + cargo-chef (shared by planner and builder) ─────────
+# ── Base: Rust toolchain + cargo-chef + sccache + mold (shared by planner and builder) ─
 FROM debian:bookworm-slim AS base
 
 ARG REGION=cn
 
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
-    PATH=/usr/local/cargo/bin:$PATH
+    PATH=/usr/local/cargo/bin:$PATH \
+    SCCACHE_CACHE_SIZE=10G \
+    SCCACHE_IDLE_TIMEOUT=0 \
+    CARGO_INCREMENTAL=0
 
 RUN set -eux; \
     if [ "$REGION" = "cn" ]; then \
@@ -48,7 +51,8 @@ RUN set -eux; \
     fi; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-        curl gcc g++ make cmake perl libssl-dev pkg-config ca-certificates git; \
+        curl gcc g++ make cmake perl libssl-dev pkg-config ca-certificates git \
+        clang; \
     rm -rf /var/lib/apt/lists/*; \
     if [ "$REGION" = "cn" ]; then \
         export RUSTUP_DIST_SERVER=https://rsproxy.cn; \
@@ -70,39 +74,78 @@ RUN set -eux; \
     fi; \
     cargo --version
 
+# Install sccache (Rust compile cache — huge speedup in CI)
+RUN set -eux; \
+    arch=$(uname -m); \
+    case "$arch" in \
+        x86_64) sccache_arch="x86_64-unknown-linux-musl" ;; \
+        aarch64) sccache_arch="aarch64-unknown-linux-musl" ;; \
+        *) echo "unsupported arch: $arch"; exit 1 ;; \
+    esac; \
+    ver="v0.9.1"; \
+    url="https://github.com/mozilla/sccache/releases/download/${ver}/sccache-${ver}-${sccache_arch}.tar.gz"; \
+    curl -fsSL "$url" | tar -xz -C /usr/local/bin --strip-components=1 "sccache-${ver}-${sccache_arch}/sccache"; \
+    chmod +x /usr/local/bin/sccache; \
+    sccache --version
+
+# Install mold (fast linker — 5-10x faster than GNU ld)
+RUN set -eux; \
+    arch=$(uname -m); \
+    case "$arch" in \
+        x86_64) mold_arch="x86_64" ;; \
+        aarch64) mold_arch="aarch64" ;; \
+        *) echo "unsupported arch: $arch"; exit 1 ;; \
+    esac; \
+    ver="2.37.0"; \
+    url="https://github.com/rui314/mold/releases/download/v${ver}/mold-${ver}-${mold_arch}-linux.tar.gz"; \
+    curl -fsSL "$url" | tar -xz -C /usr/local --strip-components=1; \
+    chmod +x /usr/local/bin/mold; \
+    mold --version
+
 RUN cargo install cargo-chef --locked
 WORKDIR /app
 
-# ── Planner: scan workspace → generate dependency recipe (always runs) ────────
+# ── Planner: scan workspace → generate dependency recipe ──────────────────────
 FROM base AS planner
 
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 COPY .cargo/ .cargo/
 
-RUN cargo chef prepare --recipe-path recipe.json
+RUN --mount=type=cache,target=/root/.cache/sccache \
+    cargo chef prepare --recipe-path recipe.json
 
 # ── Builder: compile deps from recipe (CACHED), then build workspace ──────────
 FROM base AS builder
 
+# Environment for sccache (local disk cache) + mold linker
+ENV RUSTC_WRAPPER=sccache \
+    CARGO_NET_RETRY=10 \
+    CARGO_HTTP_TIMEOUT=120
+
 # recipe.json is <1KB — cached across any .rs source change
 COPY --from=planner /app/recipe.json recipe.json
-# Cargo.toml/Lock are needed by cook to resolve features. Changes to these
-# files correctly invalidate the cache so deps are recompiled.
 COPY Cargo.toml Cargo.lock ./
 
-# Compile dependencies from recipe. This layer is CACHED by type=gha as long
-# as Cargo.toml / Cargo.lock don't change.
-ENV CARGO_NET_RETRY=10 \
-    CARGO_HTTP_TIMEOUT=120
-RUN cargo chef cook --release --recipe-path recipe.json -p vol-agent-server
+# Compile dependencies from recipe. CACHED by type=gha Docker layer cache.
+# sccache cache mount persists across builds on the same runner.
+RUN --mount=type=cache,target=/root/.cache/sccache \
+    cargo chef cook --release --recipe-path recipe.json -p vol-agent-server
 
-# Copy real source and build workspace crates (fast incremental, deps already cached)
+# Copy real source and build workspace crates
 COPY crates/ ./crates/
 COPY .cargo/ .cargo/
 
-RUN cargo build --release -p vol-agent-server && \
-    strip /app/target/release/vol-agent-server
+# Build with mold linker + sccache. The sccache cache is non-blocking —
+# if the mount is empty (no prior cache), it just starts fresh.
+RUN --mount=type=cache,target=/root/.cache/sccache \
+    cargo build --release -p vol-agent-server \
+        --config 'target.x86_64-unknown-linux-gnu.linker="clang"' \
+        --config 'target.x86_64-unknown-linux-gnu.rustflags=["-C", "link-arg=-fuse-ld=mold"]' \
+        --config 'target.aarch64-unknown-linux-gnu.linker="clang"' \
+        --config 'target.aarch64-unknown-linux-gnu.rustflags=["-C", "link-arg=-fuse-ld=mold"]' \
+    && strip /app/target/release/vol-agent-server \
+    && sccache --show-stats
 
 # ── Runtime ───────────────────────────────────────────────────────────────────
 FROM debian:bookworm-slim
@@ -117,7 +160,6 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates; \
     rm -rf /var/lib/apt/lists/*; \
-    # Create non-root user for running the service
     addgroup --system --gid 1000 vol-agent; \
     adduser --system --uid 1000 --gid 1000 --no-create-home vol-agent
 
@@ -131,7 +173,6 @@ ENV VOL_AGENT_SERVER_ROLE=${ROLE}
 RUN mkdir -p /app/data && \
     chown -R vol-agent:vol-agent /app /etc/vol-agent-server
 
-# Run as non-root user
 USER vol-agent:vol-agent
 
 EXPOSE 3001
