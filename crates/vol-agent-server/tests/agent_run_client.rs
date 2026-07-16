@@ -14,6 +14,7 @@ use futures_util::{SinkExt, StreamExt};
 const DEFAULT_URL: &str = "ws://127.0.0.1:3001/ws";
 
 #[tokio::test]
+#[ignore = "requires running control-plane server"]
 async fn agent_list_and_submit_run() {
     let url = env::var("CONTROL_PLANE_URL").unwrap_or_else(|_| DEFAULT_URL.to_string());
 

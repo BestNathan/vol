@@ -299,13 +299,11 @@ impl StreamProtocol for AnthropicProtocol {
                     Some(Ok(ParsedEvent::ThinkingDelta(thinking.to_string())))
                 } else if let Some(text) = data["delta"]["text"].as_str() {
                     Some(Ok(ParsedEvent::ContentDelta(text.to_string())))
-                } else if let Some(input) = data["delta"]["partial_json"].as_str() {
-                    Some(Ok(ParsedEvent::ToolCallDelta {
+                } else {
+                    data["delta"]["partial_json"].as_str().map(|input| Ok(ParsedEvent::ToolCallDelta {
                         index: 0,
                         delta: input.to_string(),
                     }))
-                } else {
-                    None
                 }
             }
             "content_block_stop" => Some(Ok(ParsedEvent::ContentBlockStop)),

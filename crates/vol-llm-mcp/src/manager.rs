@@ -268,8 +268,6 @@ impl McpManager {
     ) {
         let name = name.to_string();
         let servers = self.servers.clone();
-        let backoff_min = backoff_min;
-        let backoff_max = backoff_max;
 
         // Clone name for the handle-storing spawn
         let name_for_handle = name.clone();
@@ -566,6 +564,7 @@ impl McpManager {
                     },
                 )?;
 
+        #[allow(clippy::unnecessary_filter_map)]
         let texts: Vec<String> = result
             .contents
             .into_iter()
@@ -635,6 +634,7 @@ impl McpManager {
 
         let arguments = match args {
             Some(args) if !args.is_empty() => {
+                #[allow(clippy::map_identity)]
                 Some(JsonObject::from_iter(args.into_iter().map(|(k, v)| (k, v))))
             }
             _ => None,
