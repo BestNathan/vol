@@ -28,10 +28,10 @@ spec:
       nodeSelector:
         kubernetes.io/arch: amd64
       imagePullSecrets:
-        - name: acr-registry-secret
+        - name: ghcr-bestnathan
       containers:
         - name: vol-llm-ui
-          image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-llm-ui:9f33d70
+          image: ghcr.io/bestnathan/vol-llm-ui:9f33d70
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false

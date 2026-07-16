@@ -142,20 +142,29 @@ kubectl -n vol-agent-system create secret generic agent-provider-secrets \
   --from-literal=OPENAI_API_KEY='<key>'
 ```
 
-### ACR Image Pull Secret
+### GHCR Image Pull Secret
 
-Both `agent-server` and `docs-rs-mcp` use images from ACR and expect the image pull secret `acr-registry-secret` in `vol-agent-system` if the ACR repository requires authentication:
+All workloads use images from GHCR (`ghcr.io/bestnathan/*`) and expect the image pull secret `ghcr-bestnathan` in `vol-agent-system`:
 
 ```bash
-kubectl -n vol-agent-system create secret docker-registry acr-registry-secret \
-  --docker-server='<acr-registry>' \
-  --docker-username='<username>' \
-  --docker-password='<password>'
+kubectl -n vol-agent-system create secret docker-registry ghcr-bestnathan \
+  --docker-server='ghcr.io' \
+  --docker-username='<github-username>' \
+  --docker-password='<github-pat-with-read-packages-scope>'
+```
+
+The same secret is needed in `deribit` for vol-monitor:
+
+```bash
+kubectl -n deribit create secret docker-registry ghcr-bestnathan \
+  --docker-server='ghcr.io' \
+  --docker-username='<github-username>' \
+  --docker-password='<github-pat-with-read-packages-scope>'
 ```
 
 ## MCP Image Updates
 
-The `.github/workflows/build-mcp-images.yml` workflow builds `docs-rs-mcp`, pushes it to ACR, and updates:
+The `.github/workflows/build-mcp-images.yml` workflow builds `docs-rs-mcp`, pushes it to GHCR, and updates:
 
 ```text
 deploy/argocd/manifests/workloads/mcp/docs-rs-mcp/deployment.yaml

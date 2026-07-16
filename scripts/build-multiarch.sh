@@ -14,9 +14,9 @@
 
 set -e
 
-# Configuration - Aliyun Container Registry (ACR)
-DOCKER_REGISTRY="${DOCKER_REGISTRY:-crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com}"
-IMAGE_NAME="${DOCKER_REGISTRY}/n_common/vol-monitor"
+# Configuration - GitHub Container Registry (GHCR)
+DOCKER_REGISTRY="${DOCKER_REGISTRY:-ghcr.io}"
+IMAGE_NAME="${DOCKER_REGISTRY}/bestnathan/vol-monitor"
 VERSION="beta"
 DOCKERFILE="dockers/vol-monitor.cross.Dockerfile"
 
@@ -33,26 +33,22 @@ echo "  - Single image contains both binaries"
 echo "  - Runtime selects correct binary via uname -m"
 echo ""
 
-# Step 0: Login to ACR
-echo "[0/4] Logging in to ACR..."
+# Step 0: Login to GHCR
+echo "[0/4] Logging in to GHCR..."
 # Credentials must be provided via environment variables:
-#   DOCKER_USERNAME — ACR login user
-#   DOCKER_PASSWORD — ACR login password
-if [ -z "${DOCKER_USERNAME:-}" ] || [ -z "${DOCKER_PASSWORD:-}" ]; then
-    echo "ERROR: DOCKER_USERNAME and DOCKER_PASSWORD env vars are required."
-    echo "  export DOCKER_USERNAME=<your-acr-user>"
-    echo "  export DOCKER_PASSWORD=<your-acr-password>"
+#   GITHUB_USER — GitHub username (default: BestNathan)
+#   GITHUB_TOKEN — GitHub PAT with write:packages scope
+if [ -z "${GITHUB_TOKEN:-}" ] && [ -z "${DOCKER_PASSWORD:-}" ]; then
+    echo "ERROR: Set GITHUB_TOKEN (or DOCKER_PASSWORD) env var with a GitHub PAT (write:packages scope)"
+    echo "  export GITHUB_TOKEN=<your-github-pat>"
     exit 1
 fi
-if ! docker info 2>&1 | grep -q "$DOCKER_REGISTRY"; then
-    echo "Logging in to $DOCKER_REGISTRY..."
-    echo "$DOCKER_PASSWORD" | docker login "$DOCKER_REGISTRY" -u "$DOCKER_USERNAME" --password-stdin
-fi
+echo "${GITHUB_TOKEN:-$DOCKER_PASSWORD}" | docker login ghcr.io -u "${GITHUB_USER:-BestNathan}" --password-stdin
 
-# Step 1: Pull base images
+# Step 1: Pull base images (from Docker Hub)
 echo "[1/4] Pulling base images..."
-docker pull docker.1panel.live/library/rust:latest || true
-docker pull docker.1panel.live/library/debian:bookworm-slim || true
+docker pull rust:latest || true
+docker pull debian:bookworm-slim || true
 
 # Step 2: Build the image (single command, cross-compiles both architectures)
 echo "[2/4] Building image with cross-compilation..."
@@ -94,6 +90,7 @@ echo "  docker run --rm $IMAGE_NAME:$VERSION sh -c 'uname -m && cat /proc/cpuinf
 echo ""
 echo "To deploy to Kubernetes:"
 echo "  kubectl set image deployment/vol-monitor -n deribit vol-monitor=$IMAGE_NAME:$VERSION"
+echo "  (ensuring ghcr-registry-secret exists in the deribit namespace)"
 echo ""
 echo "To rollback:"
 echo "  kubectl rollout undo deployment/vol-monitor -n deribit"

@@ -53,7 +53,7 @@ Point the ArgoCD Application at `deploy/kustomize/overlays/<name>` instead of
 | `env` | OTEL, ANTHROPIC_AUTH_TOKEN, OPENAI_API_KEY, proxy, RUST_LOG |
 | `securityContext` | non-root (1000:1000), readOnlyRootFilesystem, drop ALL capabilities |
 | `resources` | sensible defaults (100m CPU / 128Mi memory requests) |
-| `imagePullSecrets` | acr-registry-secret |
+| `imagePullSecrets` | ghcr-bestnathan |
 
 ## What each overlay customizes
 

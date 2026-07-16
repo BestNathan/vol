@@ -28,11 +28,11 @@ spec:
       nodeSelector:
         kubernetes.io/arch: amd64
       imagePullSecrets:
-        - name: acr-registry-secret
+        - name: ghcr-bestnathan
       # NOTE: runs as root — required for SSH key access (mode 0600, root-owned secret)
       containers:
         - name: cli-tools-mcp
-          image: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/cli-tools-mcp:9f33d70
+          image: ghcr.io/bestnathan/cli-tools-mcp:9f33d70
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false

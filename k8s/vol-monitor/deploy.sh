@@ -3,9 +3,9 @@
 
 set -e
 
-# Configuration - Aliyun Container Registry (ACR)
-DOCKER_REGISTRY="${DOCKER_REGISTRY:-crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com}"
-IMAGE_NAME="${DOCKER_REGISTRY}/n_common/vol-monitor"
+# Configuration - GitHub Container Registry (GHCR)
+DOCKER_REGISTRY="${DOCKER_REGISTRY:-ghcr.io}"
+IMAGE_NAME="${DOCKER_REGISTRY}/bestnathan/vol-monitor"
 VERSION="${1:-latest}"
 K8S_DIR="$(dirname "$0")"
 
@@ -17,12 +17,13 @@ echo "Image: $IMAGE_NAME:$VERSION"
 echo "Version: $VERSION"
 echo ""
 
-# Step 0: Login to ACR
-echo "[0/7] Logging in to ACR..."
-if ! docker info 2>&1 | grep -q "$DOCKER_REGISTRY"; then
-    echo "Logging in to $DOCKER_REGISTRY..."
-    docker login "$DOCKER_REGISTRY" -u "308719298@qq.com" -p "zhangdage2011"
+# Step 0: Login to GHCR
+echo "[0/7] Logging in to GHCR..."
+if [ -z "${GITHUB_TOKEN:-}" ] && [ -z "${DOCKER_PASSWORD:-}" ]; then
+    echo "ERROR: Set GITHUB_TOKEN or DOCKER_PASSWORD env var with a GitHub PAT (write:packages scope)"
+    exit 1
 fi
+echo "${GITHUB_TOKEN:-$DOCKER_PASSWORD}" | docker login ghcr.io -u "${GITHUB_USER:-BestNathan}" --password-stdin
 
 # Step 1: Pull base images (Docker will use configured registry mirrors)
 echo "[1/7] Pulling base images..."
@@ -92,7 +93,7 @@ echo "View logs:"
 echo "  kubectl -n deribit logs -f deployment/vol-monitor"
 echo ""
 echo "Update version:"
-echo "  $0 v0.1.1"
+echo "  GITHUB_TOKEN=<pat> $0 <version>"
 echo ""
 echo "Rollback:"
 echo "  kubectl -n deribit rollout undo deployment/vol-monitor"

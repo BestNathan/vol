@@ -19,7 +19,7 @@ commonLabels:
   app.kubernetes.io/component: dingtalk-agent
 
 images:
-  - name: crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-agent-server
+  - name: ghcr.io/bestnathan/vol-agent-server
     newTag: dp-latest
 
 patches:
