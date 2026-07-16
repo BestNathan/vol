@@ -37,8 +37,12 @@ impl AgentLoader {
         };
 
         if let Some(home) = dirs::home_dir() {
-            let user_root = home.join(".agents").join("agents");
-            loader.add_root(AgentScope::User, user_root);
+            // Skip non-existent or placeholder home dirs (e.g. /nonexistent for
+            // system users with --no-create-home).
+            if home.exists() && home.join(".agents").exists() {
+                let user_root = home.join(".agents").join("agents");
+                loader.add_root(AgentScope::User, user_root);
+            }
         }
 
         if let Some(ref wd) = working_dir {

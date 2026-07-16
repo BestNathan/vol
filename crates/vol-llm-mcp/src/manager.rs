@@ -234,9 +234,19 @@ impl McpManager {
                 }
             }
             Err(e) => {
-                tracing::error!(server = name, error = %e, "MCP server connection failed");
+                let err_msg = e.to_string();
+                tracing::error!(server = name, error = %err_msg, "MCP server connection failed");
                 let mut servers = self.servers.write().await;
                 if let Some(state) = servers.get_mut(name) {
+                    // Don't retry if the binary simply doesn't exist.
+                    if err_msg.contains("No such file or directory") {
+                        state.status = ServerStatus::Error(err_msg);
+                        tracing::warn!(
+                            server = name,
+                            "MCP server binary not found, skipping retries"
+                        );
+                        return;
+                    }
                     state.retry_count += 1;
                     if state.retry_count >= max_retries {
                         state.clear_caches();
@@ -251,7 +261,7 @@ impl McpManager {
                         // Still spawn reconnect — it handles the delay internally
                         self.spawn_reconnect(name, max_retries, backoff_min, backoff_max);
                     } else {
-                        state.status = ServerStatus::Error(e.to_string());
+                        state.status = ServerStatus::Error(err_msg);
                         self.spawn_reconnect(name, max_retries, backoff_min, backoff_max);
                     }
                 }
