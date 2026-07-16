@@ -35,7 +35,7 @@ spec:
         runAsGroup: 1000
       containers:
         - name: docs-rs-mcp
-          image: ghcr.io/bestnathan/docs-rs-mcp:9f33d70
+          image: ghcr.io/bestnathan/docs-rs-mcp:e9837d4
           imagePullPolicy: Always
           securityContext:
             readOnlyRootFilesystem: true
