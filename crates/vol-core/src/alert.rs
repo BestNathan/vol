@@ -130,6 +130,7 @@ impl Alert {
         self.mark_price_coin * self.index_price
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         alert_type: AlertType,
         tenor: Tenor,

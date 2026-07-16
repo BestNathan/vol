@@ -125,7 +125,7 @@ pub fn classify_tenor(dte: u32) -> Option<Tenor> {
         Some(Tenor::Short)
     } else if dte > 20 && dte < 40 {
         Some(Tenor::Medium)
-    } else if dte >= 80 && dte <= 200 {
+    } else if (80..=200).contains(&dte) {
         Some(Tenor::Long)
     } else {
         // Gap regions: 8-20 days, 40-79 days, 201+ days
