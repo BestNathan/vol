@@ -65,10 +65,10 @@ jobs:
           cache-all-crates: "true"
           components: "llvm-tools-preview"
 
-      - name: Install cargo-llvm-cov (pre-built via binstall)
-        run: |
-          cargo install cargo-binstall --locked
-          cargo binstall cargo-llvm-cov -y --no-confirm
+      - name: Install cargo-llvm-cov (pre-built binary)
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
 
       - name: Coverage (single pass, workspace)
         run: cargo llvm-cov --workspace --summary-only || echo "⚠ Coverage failed (non-blocking)"
