@@ -23,12 +23,15 @@ impl DataSourceRegistry {
 
     /// Get a data source by name
     pub fn get(&self, name: &str) -> Option<&dyn DataSource> {
-        self.sources.get(name).map(|s| s.as_ref())
+        self.sources.get(name).map(std::convert::AsRef::as_ref)
     }
 
     /// Get all registered data source names
     pub fn names(&self) -> Vec<&str> {
-        self.sources.keys().map(|s| s.as_str()).collect()
+        self.sources
+            .keys()
+            .map(std::string::String::as_str)
+            .collect()
     }
 
     /// Check if a data source is registered

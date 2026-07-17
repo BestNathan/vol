@@ -32,7 +32,7 @@ pub fn render_workspace(frame: &mut Frame, area: Rect, state: &AppState) {
                     "{}{}{}",
                     indent,
                     dir_icon(),
-                    entry.path.split('/').last().unwrap_or(&entry.path)
+                    entry.path.split('/').next_back().unwrap_or(&entry.path)
                 )
             } else {
                 let modified = if entry.modified { " ✎ M" } else { "" };
@@ -40,7 +40,7 @@ pub fn render_workspace(frame: &mut Frame, area: Rect, state: &AppState) {
                     "{}{}{}{}",
                     indent,
                     file_icon(),
-                    entry.path.split('/').last().unwrap_or(&entry.path),
+                    entry.path.split('/').next_back().unwrap_or(&entry.path),
                     modified
                 )
             };

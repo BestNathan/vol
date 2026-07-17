@@ -24,6 +24,7 @@ impl NodeRegistry {
         }
     }
 
+    #[allow(clippy::expect_used)]
     pub fn register(
         &self,
         reg: NodeRegistration,
@@ -73,6 +74,7 @@ impl NodeRegistry {
         })
     }
 
+    #[allow(clippy::expect_used)]
     pub fn heartbeat(&self, node_id: &str, load: NodeLoad, now_ms: u64) -> Result<(), String> {
         let mut nodes = self
             .nodes
@@ -87,6 +89,7 @@ impl NodeRegistry {
         Ok(())
     }
 
+    #[allow(clippy::expect_used)]
     pub fn get(&self, node_id: &str) -> Option<NodeRecord> {
         self.nodes
             .read()
@@ -95,6 +98,7 @@ impl NodeRegistry {
             .cloned()
     }
 
+    #[allow(clippy::expect_used)]
     pub fn update_capability_revision(&self, node_id: &str, revision: u64) -> Result<(), String> {
         let mut nodes = self
             .nodes
@@ -107,6 +111,7 @@ impl NodeRegistry {
         Ok(())
     }
 
+    #[allow(clippy::expect_used)]
     pub fn list(&self) -> Vec<NodeRecord> {
         self.nodes
             .read()
@@ -220,7 +225,9 @@ mod tests {
     #[test]
     fn update_capability_revision_fails_for_unregistered_node() {
         let registry = NodeRegistry::new();
-        let err = registry.update_capability_revision("unknown", 1).unwrap_err();
+        let err = registry
+            .update_capability_revision("unknown", 1)
+            .unwrap_err();
         assert!(err.contains("not_registered"));
     }
 

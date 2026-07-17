@@ -115,7 +115,7 @@ Build it: cargo build --bin docs-rs-mcp -p vol-mcp-servers"
     println!("═══════════════════════════════════════════════════════════");
     println!("  Running Agent");
     println!("═══════════════════════════════════════════════════════════");
-    println!("Query: {}", query);
+    println!("Query: {query}");
     println!();
 
     let result = agent.run(query).await;
@@ -142,7 +142,7 @@ Build it: cargo build --bin docs-rs-mcp -p vol-mcp-servers"
             println!("{}", response.content);
         }
         Err(e) => {
-            eprintln!("Agent run failed: {:?}", e);
+            eprintln!("Agent run failed: {e:?}");
         }
     }
 

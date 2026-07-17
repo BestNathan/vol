@@ -48,7 +48,9 @@ impl ContextBuilder {
     /// exists, adds the new contributor as a fallback.
     pub fn replace_contributor(&mut self, name: &str, contributor: Box<dyn ContextContributor>) {
         if let Some(pos) = self.contributors.iter().position(|c| c.name() == name) {
-            self.contributors[pos] = contributor;
+            if let Some(c) = self.contributors.get_mut(pos) {
+                *c = contributor;
+            }
         } else {
             self.contributors.push(contributor);
         }
@@ -336,11 +338,11 @@ mod tests {
         let output = builder.build().await.unwrap();
         assert_eq!(output.messages.len(), 2);
         assert_eq!(
-            output.messages[0].role,
+            output.messages.get(0).unwrap().role,
             vol_llm_core::message::MessageRole::System
         );
         assert_eq!(
-            output.messages[1].role,
+            output.messages.get(1).unwrap().role,
             vol_llm_core::message::MessageRole::User
         );
     }
@@ -372,19 +374,47 @@ mod tests {
 
         let output = builder.build().await.unwrap();
         assert_eq!(
-            output.messages[0].content.as_ref().unwrap().as_str(),
+            output
+                .messages
+                .get(0)
+                .unwrap()
+                .content
+                .as_ref()
+                .unwrap()
+                .as_str(),
             "Head first"
         );
         assert_eq!(
-            output.messages[1].content.as_ref().unwrap().as_str(),
+            output
+                .messages
+                .get(1)
+                .unwrap()
+                .content
+                .as_ref()
+                .unwrap()
+                .as_str(),
             "Head second"
         );
         assert_eq!(
-            output.messages[2].content.as_ref().unwrap().as_str(),
+            output
+                .messages
+                .get(2)
+                .unwrap()
+                .content
+                .as_ref()
+                .unwrap()
+                .as_str(),
             "Middle data"
         );
         assert_eq!(
-            output.messages[3].content.as_ref().unwrap().as_str(),
+            output
+                .messages
+                .get(3)
+                .unwrap()
+                .content
+                .as_ref()
+                .unwrap()
+                .as_str(),
             "Tail message"
         );
     }

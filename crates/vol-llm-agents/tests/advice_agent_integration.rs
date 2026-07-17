@@ -97,7 +97,7 @@ async fn test_advice_agent_end_to_end() {
 
     let feishu = FeishuNotification::new(feishu_config)
         .map_err(|e| {
-            eprintln!("Skipping test: Failed to create Feishu notification: {}", e);
+            eprintln!("Skipping test: Failed to create Feishu notification: {e}");
         })
         .ok();
 
@@ -159,7 +159,7 @@ async fn test_advice_agent_end_to_end() {
     let agent_clone = advice_agent.clone();
     let handle = tokio::spawn(async move {
         if let Err(e) = agent_clone.run(alert_rx).await {
-            eprintln!("AdviceAgent error: {}", e);
+            eprintln!("AdviceAgent error: {e}");
         }
     });
 
@@ -187,14 +187,14 @@ async fn test_advice_agent_end_to_end() {
     // Verify log directory was created
     let log_path = std::path::PathBuf::from("logs/agents/advice_agent");
     if log_path.exists() {
-        println!("✓ Agent log directory exists: {:?}", log_path);
+        println!("✓ Agent log directory exists: {log_path:?}");
 
         // Check for run logs
         let runs_path = log_path.join("runs");
         if runs_path.exists() {
             if let Ok(entries) = std::fs::read_dir(&runs_path) {
                 let count = entries.count();
-                println!("✓ {} run log(s) created", count);
+                println!("✓ {count} run log(s) created");
             }
         }
     }

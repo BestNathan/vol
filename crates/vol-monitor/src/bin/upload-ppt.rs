@@ -9,6 +9,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -21,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Check file exists
     if !Path::new(pptx_path).exists() {
-        eprintln!("Error: File not found: {}", pptx_path);
+        eprintln!("Error: File not found: {pptx_path}");
         std::process::exit(1);
     }
 
@@ -33,14 +34,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("═══════════════════════════════════════════════════════════");
     println!("  Uploading PPT to Feishu");
     println!("═══════════════════════════════════════════════════════════");
-    println!("  File: {}", pptx_path);
-    println!("  To:   {}", receive_id);
+    println!("  File: {pptx_path}");
+    println!("  To:   {receive_id}");
 
     // Read the PPTX file
-    let mut file = File::open(pptx_path).map_err(|e| format!("Failed to open file: {}", e))?;
+    let mut file = File::open(pptx_path).map_err(|e| format!("Failed to open file: {e}"))?;
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+        .map_err(|e| format!("Failed to read file: {e}"))?;
 
     let file_size = buffer.len();
     let file_name = Path::new(pptx_path)
@@ -70,16 +71,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }))
         .send()
         .await
-        .map_err(|e| format!("Failed to get token: {}", e))?;
+        .map_err(|e| format!("Failed to get token: {e}"))?;
 
     let token_json: serde_json::Value = token_resp
         .json()
         .await
-        .map_err(|e| format!("Failed to parse token response: {}", e))?;
+        .map_err(|e| format!("Failed to parse token response: {e}"))?;
 
-    if token_json.get("code").and_then(|v| v.as_i64()) != Some(0) {
-        eprintln!("  ✗ Failed to get token: {:?}", token_json);
-        return Err(format!("Token request failed: {:?}", token_json).into());
+    if token_json.get("code").and_then(serde_json::Value::as_i64) != Some(0) {
+        eprintln!("  ✗ Failed to get token: {token_json:?}");
+        return Err(format!("Token request failed: {token_json:?}").into());
     }
 
     let tenant_token = token_json
@@ -105,20 +106,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let upload_resp = client
         .post(upload_url)
-        .header("Authorization", format!("Bearer {}", tenant_token))
+        .header("Authorization", format!("Bearer {tenant_token}"))
         .multipart(form)
         .send()
         .await
-        .map_err(|e| format!("Failed to upload file: {}", e))?;
+        .map_err(|e| format!("Failed to upload file: {e}"))?;
 
     let upload_json: serde_json::Value = upload_resp
         .json()
         .await
-        .map_err(|e| format!("Failed to parse upload response: {}", e))?;
+        .map_err(|e| format!("Failed to parse upload response: {e}"))?;
 
-    if upload_json.get("code").and_then(|v| v.as_i64()) != Some(0) {
-        eprintln!("  ✗ Upload failed: {:?}", upload_json);
-        return Err(format!("Upload failed: {:?}", upload_json).into());
+    if upload_json.get("code").and_then(serde_json::Value::as_i64) != Some(0) {
+        eprintln!("  ✗ Upload failed: {upload_json:?}");
+        return Err(format!("Upload failed: {upload_json:?}").into());
     }
 
     let file_key = upload_json
@@ -127,7 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|fk| fk.as_str())
         .ok_or("No file_key in upload response")?;
 
-    println!("  ✓ File uploaded, file_key: {}", file_key);
+    println!("  ✓ File uploaded, file_key: {file_key}");
     println!();
 
     // Step 3: Send file message
@@ -150,13 +151,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Send message with receive_id_type as query parameter
     let msg_url = format!(
-        "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type={}",
-        receive_id_type
+        "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type={receive_id_type}"
     );
 
     let msg_resp = client
         .post(msg_url)
-        .header("Authorization", format!("Bearer {}", tenant_token))
+        .header("Authorization", format!("Bearer {tenant_token}"))
         .json(&json!({
             "receive_id": receive_id,
             "msg_type": "file",
@@ -164,16 +164,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }))
         .send()
         .await
-        .map_err(|e| format!("Failed to send message: {}", e))?;
+        .map_err(|e| format!("Failed to send message: {e}"))?;
 
     let msg_json: serde_json::Value = msg_resp
         .json()
         .await
-        .map_err(|e| format!("Failed to parse message response: {}", e))?;
+        .map_err(|e| format!("Failed to parse message response: {e}"))?;
 
-    if msg_json.get("code").and_then(|v| v.as_i64()) != Some(0) {
-        eprintln!("  ✗ Send message failed: {:?}", msg_json);
-        return Err(format!("Send message failed: {:?}", msg_json).into());
+    if msg_json.get("code").and_then(serde_json::Value::as_i64) != Some(0) {
+        eprintln!("  ✗ Send message failed: {msg_json:?}");
+        return Err(format!("Send message failed: {msg_json:?}").into());
     }
 
     let msg_id = msg_json
@@ -183,7 +183,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or("unknown");
 
     println!("  ✓ File message sent successfully!");
-    println!("    Message ID: {}", msg_id);
+    println!("    Message ID: {msg_id}");
 
     println!();
     println!("═══════════════════════════════════════════════════════════");

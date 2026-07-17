@@ -79,9 +79,7 @@ mod tests {
         let err = handler
             .handle(msg(
                 "1",
-                Operation::Log(
-                    vol_llm_agent_protocol::agent_server_protocol::LogOperation::List,
-                ),
+                Operation::Log(vol_llm_agent_protocol::agent_server_protocol::LogOperation::List),
                 Payload::Log(vol_llm_agent_protocol::agent_server_protocol::LogPayload::List),
             ))
             .await

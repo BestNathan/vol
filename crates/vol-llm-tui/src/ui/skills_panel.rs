@@ -80,9 +80,9 @@ fn pad_or_truncate(s: &str, width: usize) -> String {
     let char_count = s.chars().count();
     if char_count <= width {
         let padding = " ".repeat(width.saturating_sub(char_count));
-        format!("{}{}", s, padding)
+        format!("{s}{padding}")
     } else {
         let truncated: String = s.chars().take(width.saturating_sub(1)).collect();
-        format!("{}\u{2026}", truncated)
+        format!("{truncated}\u{2026}")
     }
 }

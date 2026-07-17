@@ -3,6 +3,10 @@ name = "vol-llm-tools-builtin-cli-tool"
 version.workspace = true
 edition.workspace = true
 
+
+[lints]
+workspace = true
+
 [dependencies]
 vol-llm-tool = { workspace = true }
 vol-llm-sandbox = { workspace = true, features = ["ssh"] }

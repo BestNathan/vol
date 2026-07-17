@@ -96,15 +96,15 @@ impl ExecutableTool for TaskUpdate {
         _context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         let params: TaskUpdateParams = serde_json::from_value(args.clone()).map_err(|e| {
-            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
+            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {e}"))
         })?;
 
         let task_id: TaskId = params.task_id.parse::<u64>().map(TaskId).map_err(|e| {
-            vol_llm_tool::ToolError::InvalidArguments(format!("Invalid task ID: {}", e))
+            vol_llm_tool::ToolError::InvalidArguments(format!("Invalid task ID: {e}"))
         })?;
 
         let task = self.store.get(&task_id).await.map_err(|e| {
-            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to get task: {}", e))
+            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to get task: {e}"))
         })?;
 
         let mut task = match task {
@@ -148,8 +148,8 @@ impl ExecutableTool for TaskUpdate {
                 other => {
                     return Ok(ToolResult {
                         success: false,
-                        content: format!("Invalid status: {}", other),
-                        error: Some(format!("Invalid status: {}", other)),
+                        content: format!("Invalid status: {other}"),
+                        error: Some(format!("Invalid status: {other}")),
                         data: Some(serde_json::json!({
                             "success": false,
                             "taskId": task_id.0.to_string(),
@@ -186,7 +186,7 @@ impl ExecutableTool for TaskUpdate {
         }
 
         self.store.update(task).await.map_err(|e| {
-            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to update task: {}", e))
+            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to update task: {e}"))
         })?;
 
         Ok(ToolResult {

@@ -3,9 +3,13 @@ name = "vol-llm-tui"
 version.workspace = true
 edition.workspace = true
 
+
 [[bin]]
 name = "vol-llm-tui-legacy"
 path = "src/main.rs"
+
+[lints]
+workspace = true
 
 [dependencies]
 vol-llm-agent = { path = "../vol-llm-agent" }

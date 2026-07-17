@@ -18,6 +18,7 @@ pub struct PptxRenderer {
 
 impl PptxRenderer {
     /// 创建新的渲染器
+    #[allow(clippy::expect_used)]
     pub fn new(template: Arc<PptTemplate>) -> Self {
         Self {
             presentation: Presentation::new().expect("Failed to create presentation"),
@@ -125,7 +126,7 @@ impl PptxRenderer {
         let mut y_offset = 1_371_600; // 1.5 inches
         for bullet in bullets {
             let text_color = self.resolve_color("{{text_primary}}");
-            let bullet_text = format!("• {}", bullet);
+            let bullet_text = format!("• {bullet}");
             self.add_textbox_to_slide(
                 &slide,
                 &bullet_text,
@@ -211,6 +212,7 @@ impl PptxRenderer {
     }
 
     /// Generate textbox XML with text content
+    #[allow(clippy::cast_possible_truncation, clippy::too_many_arguments)]
     fn create_textbox_xml(
         shape_id: u32,
         text: &str,
@@ -274,6 +276,7 @@ impl PptxRenderer {
     }
 
     /// 添加 textbox 到幻灯片
+    #[allow(clippy::indexing_slicing, clippy::too_many_arguments)]
     fn add_textbox_to_slide(
         &mut self,
         slide: &SlideRef,

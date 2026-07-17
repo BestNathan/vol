@@ -61,7 +61,11 @@ pub fn session_model_to_info(model: sessions::Model) -> SessionInfo {
         id: model.id.clone(),
         agent_id: model.agent_id,
         session_id: model.id,
-        entry_count: model.entry_count.max(0) as usize,
+        entry_count: {
+            #[allow(clippy::cast_sign_loss)]
+            let c = model.entry_count.max(0) as usize;
+            c
+        },
         created_at: model.created_at,
         updated_at: Some(model.updated_at),
     }

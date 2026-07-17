@@ -42,7 +42,7 @@ impl ContentGeneratorTool {
             .message
             .content
             .as_ref()
-            .map(|c| c.as_str())
+            .map(vol_llm_core::MessageContent::as_str)
             .unwrap_or("");
         let json: Value = serde_json::from_str(content_str)
             .map_err(|e| ContentError::JsonParseError(e.to_string()))?;
@@ -58,7 +58,7 @@ impl ContentGeneratorTool {
                 // Try to get by slide index as key
                 slides_obj
                     .get(&i.to_string())
-                    .or_else(|| slides_obj.get(&format!("slide_{}", i)))
+                    .or_else(|| slides_obj.get(&format!("slide_{i}")))
                     .and_then(|v| v.as_array())
             } else if let Some(slides_arr) = json.as_array() {
                 // Or the response might be an array
@@ -70,7 +70,7 @@ impl ContentGeneratorTool {
             if let Some(bullets) = expanded_bullets {
                 slide.bullets = bullets
                     .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                     .collect();
             }
 
@@ -110,7 +110,7 @@ impl ExecutableTool for ContentGeneratorTool {
         })?;
 
         let outline: Outline = serde_json::from_str(outline_str)
-            .map_err(|e| ToolError::InvalidArguments(format!("Invalid outline JSON: {}", e)))?;
+            .map_err(|e| ToolError::InvalidArguments(format!("Invalid outline JSON: {e}")))?;
 
         match self.expand(&outline).await {
             Ok(expanded) => {
@@ -126,7 +126,7 @@ impl ExecutableTool for ContentGeneratorTool {
             Err(e) => Ok(ToolResult {
                 call_id: String::new(),
                 success: false,
-                content: format!("Error: {}", e),
+                content: format!("Error: {e}"),
                 error: Some(e.to_string()),
                 data: None,
             }),

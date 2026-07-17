@@ -15,7 +15,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use vol_llm_agent::react::*;
+use vol_llm_agent::react::{AgentConfig, ReActAgent};
 use vol_llm_core::LLMProvider;
 use vol_llm_provider::LLMConfig;
 use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create Anthropic provider
     let llm = vol_llm_provider::anthropic::AnthropicProvider::new(&llm_config)
-        .map_err(|e| format!("Failed to create Anthropic provider: {}", e))?;
+        .map_err(|e| format!("Failed to create Anthropic provider: {e}"))?;
 
     println!("  ✓ Anthropic provider initialized (qwen3.5-plus via DashScope)");
     println!();
@@ -107,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("═══════════════════════════════════════════════════════════");
     println!("  Running Agent");
     println!("═══════════════════════════════════════════════════════════");
-    println!("Query: {}", query);
+    println!("Query: {query}");
     println!();
 
     let result = agent.run(query).await;
@@ -125,7 +125,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Events were logged to observability plugin.");
         }
         Err(e) => {
-            eprintln!("Agent run failed: {:?}", e);
+            eprintln!("Agent run failed: {e:?}");
         }
     }
 
@@ -135,8 +135,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("═══════════════════════════════════════════════════════════");
     println!();
     println!("Log files written to:");
-    println!("  Session logs: logs/agents/{}/sessions/", agent_id);
-    println!("  Run logs:     logs/agents/{}/runs/", agent_id);
+    println!("  Session logs: logs/agents/{agent_id}/sessions/");
+    println!("  Run logs:     logs/agents/{agent_id}/runs/");
     println!();
     println!("Log format: JSONL (one JSON object per line)");
     println!();

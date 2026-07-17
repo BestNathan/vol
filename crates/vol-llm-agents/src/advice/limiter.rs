@@ -44,12 +44,15 @@ impl FrequencyLimiter {
         let key = limiter_key(alert);
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         // Check cooldown
         {
-            let last = self.last_analysis.lock().unwrap();
+            let last = self
+                .last_analysis
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(&last_time) = last.get(&key) {
                 if now - last_time < self.cooldown_secs {
                     return false;
@@ -58,7 +61,10 @@ impl FrequencyLimiter {
         }
 
         // Check hourly limit
-        let mut hour_start = self.hour_start.lock().unwrap();
+        let mut hour_start = self
+            .hour_start
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let current_hour = now / 3600;
 
         if *hour_start != current_hour {
@@ -75,17 +81,23 @@ impl FrequencyLimiter {
         let key = limiter_key(alert);
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         // Update last analysis time
         {
-            let mut last = self.last_analysis.lock().unwrap();
+            let mut last = self
+                .last_analysis
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             last.insert(key, now);
         }
 
         // Increment hourly count
-        let mut hour_start = self.hour_start.lock().unwrap();
+        let mut hour_start = self
+            .hour_start
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let current_hour = now / 3600;
 
         if *hour_start != current_hour {

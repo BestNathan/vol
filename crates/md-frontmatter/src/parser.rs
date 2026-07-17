@@ -63,10 +63,10 @@ pub fn update_frontmatter<T>(doc: &mut ParsedDoc<T>, new: &T)
 where
     T: Serialize + DeserializeOwned,
 {
-    doc.frontmatter = serde_yaml::from_value(
-        serde_yaml::to_value(new).expect("failed to serialize new frontmatter"),
-    )
-    .expect("failed to deserialize new frontmatter");
+    let serialized = serde_yaml::to_value(new)
+        .unwrap_or_else(|e| panic!("failed to serialize new frontmatter: {e}"));
+    doc.frontmatter = serde_yaml::from_value(serialized)
+        .unwrap_or_else(|e| panic!("failed to deserialize new frontmatter: {e}"));
 }
 
 #[cfg(test)]
@@ -97,7 +97,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             MdFmError::MissingFrontmatter { path } => assert!(path.to_string_lossy().is_empty()),
-            e => panic!("Expected MissingFrontmatter, got {:?}", e),
+            e => panic!("Expected MissingFrontmatter, got {e:?}"),
         }
     }
 
@@ -111,7 +111,7 @@ mod tests {
                 assert!(line > 0, "line should be > 0");
                 assert!(!message.is_empty());
             }
-            e => panic!("Expected ParseError, got {:?}", e),
+            e => panic!("Expected ParseError, got {e:?}"),
         }
     }
 
@@ -152,7 +152,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             MdFmError::MissingFrontmatter { .. } => {}
-            e => panic!("Expected MissingFrontmatter, got {:?}", e),
+            e => panic!("Expected MissingFrontmatter, got {e:?}"),
         }
     }
 
@@ -207,6 +207,6 @@ mod tests {
         let content = "---\ntitle: Post\n---\nbody";
         let doc = parse::<DefaultsFm>(content).unwrap();
         assert_eq!(doc.frontmatter.title, "Post");
-        assert_eq!(doc.frontmatter.draft, false);
+        assert!(!doc.frontmatter.draft);
     }
 }

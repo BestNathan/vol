@@ -3,6 +3,10 @@ name = "ppt-agent"
 version.workspace = true
 edition.workspace = true
 
+
+[lints]
+workspace = true
+
 [dependencies]
 vol-llm-agents = { path = "../vol-llm-agents" }
 vol-llm-provider = { path = "../vol-llm-provider" }

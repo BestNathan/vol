@@ -275,10 +275,10 @@ async fn test_agent_max_iterations() {
 
     match result {
         Err(vol_llm_agent::AgentError::MaxIterationsReached { max }) => {
-            println!("Correctly hit max iterations: {}", max);
+            println!("Correctly hit max iterations: {max}");
             assert_eq!(max, 3);
         }
-        Err(e) => panic!("Expected MaxIterationsReached, got: {:?}", e),
+        Err(e) => panic!("Expected MaxIterationsReached, got: {e:?}"),
         Ok(_) => panic!("Expected MaxIterationsReached error but got Ok"),
     }
 }

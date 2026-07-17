@@ -121,7 +121,7 @@ mod tests {
             AttentionAnchor::Head(0),
             AttentionAnchor::Middle(0),
         ];
-        let mut sorted = anchors.clone();
+        let mut sorted = anchors;
         sorted.sort();
         sorted.reverse(); // highest priority first
         assert_eq!(sorted[0], AttentionAnchor::Head(0));
@@ -137,7 +137,7 @@ mod tests {
         assert_eq!(budget.middle_budget(), 700);
         assert!(!budget.clone().with_used(500).is_exceeded());
         assert!(budget.clone().with_used(800).is_exceeded());
-        assert_eq!(budget.clone().with_used(600).remaining(), 100);
+        assert_eq!(budget.with_used(600).remaining(), 100);
     }
 
     #[test]

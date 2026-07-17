@@ -41,11 +41,11 @@ pub(crate) async fn execute(
             let id = store
                 .create(task)
                 .await
-                .map_err(|e| format!("Failed to create task: {}", e))?;
+                .map_err(|e| format!("Failed to create task: {e}"))?;
             let created = store
                 .get(&id)
                 .await
-                .map_err(|e| format!("Failed to read task: {}", e))?
+                .map_err(|e| format!("Failed to read task: {e}"))?
                 .ok_or_else(|| "Task not found after creation".to_string())?;
 
             let content = if json {
@@ -77,8 +77,8 @@ pub(crate) async fn execute(
             let task = store
                 .get(&task_id)
                 .await
-                .map_err(|e| format!("Failed to get task: {}", e))?
-                .ok_or_else(|| format!("Task {} not found", task_id))?;
+                .map_err(|e| format!("Failed to get task: {e}"))?
+                .ok_or_else(|| format!("Task {task_id} not found"))?;
 
             let mut task = task;
             let mut updated = Vec::new();
@@ -125,12 +125,12 @@ pub(crate) async fn execute(
             store
                 .update(task)
                 .await
-                .map_err(|e| format!("Failed to update task: {}", e))?;
+                .map_err(|e| format!("Failed to update task: {e}"))?;
 
             let updated_task = store
                 .get(&task_id)
                 .await
-                .map_err(|e| format!("Failed to read task: {}", e))?
+                .map_err(|e| format!("Failed to read task: {e}"))?
                 .ok_or_else(|| "Task not found after update".to_string())?;
 
             let content = if json {
@@ -155,8 +155,8 @@ pub(crate) async fn execute(
             let task = store
                 .get(&task_id)
                 .await
-                .map_err(|e| format!("Failed to get task: {}", e))?
-                .ok_or_else(|| format!("Task {} not found", task_id))?;
+                .map_err(|e| format!("Failed to get task: {e}"))?
+                .ok_or_else(|| format!("Task {task_id} not found"))?;
 
             let content = if json {
                 super::format::to_json(&task)
@@ -181,7 +181,7 @@ pub(crate) async fn execute(
             let all = store
                 .list(status_filter)
                 .await
-                .map_err(|e| format!("Failed to list tasks: {}", e))?;
+                .map_err(|e| format!("Failed to list tasks: {e}"))?;
 
             let tasks: Vec<Task> = if let Some(ref a) = assignee {
                 all.into_iter()
@@ -210,23 +210,20 @@ pub(crate) async fn execute(
             let task = store
                 .get(&task_id)
                 .await
-                .map_err(|e| format!("Failed to get task: {}", e))?
-                .ok_or_else(|| format!("Task {} not found", task_id))?;
+                .map_err(|e| format!("Failed to get task: {e}"))?
+                .ok_or_else(|| format!("Task {task_id} not found"))?;
 
             let mut task = task;
             task.status = TaskStatus::Killed;
             store
                 .update(task)
                 .await
-                .map_err(|e| format!("Failed to stop task: {}", e))?;
+                .map_err(|e| format!("Failed to stop task: {e}"))?;
 
             let content = if json {
-                format!(
-                    "{{\"success\": true, \"taskId\": \"{}\", \"status\": \"killed\"}}",
-                    id
-                )
+                format!("{{\"success\": true, \"taskId\": \"{id}\", \"status\": \"killed\"}}")
             } else {
-                format!("Task {} stopped (killed)", task_id)
+                format!("Task {task_id} stopped (killed)")
             };
             Ok(ToolResult {
                 success: true,
@@ -251,18 +248,19 @@ pub(crate) async fn execute(
                     let task = store
                         .get(&task_id)
                         .await
-                        .map_err(|e| format!("Failed to get task: {}", e))?
-                        .ok_or_else(|| format!("Task {} not found", task_id))?;
+                        .map_err(|e| format!("Failed to get task: {e}"))?
+                        .ok_or_else(|| format!("Task {task_id} not found"))?;
 
                     match task.status {
                         TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Killed => break,
                         _ => {
-                            if start.elapsed().as_millis() as u64 >= timeout_ms {
+                            #[allow(clippy::cast_possible_truncation)]
+                            let elapsed_ms = start.elapsed().as_millis() as u64;
+                            if elapsed_ms >= timeout_ms {
                                 return Ok(ToolResult {
                                     success: false,
                                     content: format!(
-                                        "Timeout waiting for task {} ({}ms)",
-                                        task_id, timeout_ms
+                                        "Timeout waiting for task {task_id} ({timeout_ms}ms)"
                                     ),
                                     error: Some("timeout".to_string()),
                                     data: Some(serde_json::json!({
@@ -282,8 +280,8 @@ pub(crate) async fn execute(
             let task = store
                 .get(&task_id)
                 .await
-                .map_err(|e| format!("Failed to get task: {}", e))?
-                .ok_or_else(|| format!("Task {} not found", task_id))?;
+                .map_err(|e| format!("Failed to get task: {e}"))?
+                .ok_or_else(|| format!("Task {task_id} not found"))?;
 
             match (task.output_file.as_ref(), task.result.as_ref()) {
                 (Some(path), _) => match tokio::fs::read_to_string(path).await {
@@ -296,8 +294,8 @@ pub(crate) async fn execute(
                     }),
                     Err(e) => Ok(ToolResult {
                         success: false,
-                        content: format!("Failed to read output file: {}", e),
-                        error: Some(format!("IO error: {}", e)),
+                        content: format!("Failed to read output file: {e}"),
+                        error: Some(format!("IO error: {e}")),
                         data: Some(serde_json::json!({"taskId": id.to_string()})),
                         call_id: String::new(),
                     }),
@@ -311,7 +309,7 @@ pub(crate) async fn execute(
                 }),
                 _ => Ok(ToolResult {
                     success: false,
-                    content: format!("No output for task {}", task_id),
+                    content: format!("No output for task {task_id}"),
                     error: Some("No output available".to_string()),
                     data: Some(serde_json::json!({"taskId": id.to_string()})),
                     call_id: String::new(),
@@ -325,20 +323,20 @@ pub(crate) async fn execute(
                 store
                     .get(&task_id)
                     .await
-                    .map_err(|e| format!("Failed to get task: {}", e))?
-                    .ok_or_else(|| format!("Task {} not found", task_id))?
+                    .map_err(|e| format!("Failed to get task: {e}"))?
+                    .ok_or_else(|| format!("Task {task_id} not found"))?
             } else {
                 let ready = store
                     .get_ready_tasks()
                     .await
-                    .map_err(|e| format!("Failed to get ready tasks: {}", e))?;
+                    .map_err(|e| format!("Failed to get ready tasks: {e}"))?;
                 let first = ready
                     .first()
                     .ok_or_else(|| "No pending tasks available to claim".to_string())?;
                 store
                     .get(first)
                     .await
-                    .map_err(|e| format!("Failed to get task: {}", e))?
+                    .map_err(|e| format!("Failed to get task: {e}"))?
                     .ok_or_else(|| "Task not found".to_string())?
             };
 
@@ -354,7 +352,7 @@ pub(crate) async fn execute(
             store
                 .update(task)
                 .await
-                .map_err(|e| format!("Failed to claim task: {}", e))?;
+                .map_err(|e| format!("Failed to claim task: {e}"))?;
 
             let content = if json {
                 format!(
@@ -362,7 +360,7 @@ pub(crate) async fn execute(
                     task_id.0
                 )
             } else {
-                format!("Task {} claimed and set to Running", task_id)
+                format!("Task {task_id} claimed and set to Running")
             };
             Ok(ToolResult {
                 success: true,
@@ -436,8 +434,7 @@ fn parse_status(s: &str) -> Result<TaskStatus, String> {
         "failed" => Ok(TaskStatus::Failed),
         "killed" => Ok(TaskStatus::Killed),
         _ => Err(format!(
-            "Invalid status: {}. Valid: pending, running, completed, failed, killed",
-            s
+            "Invalid status: {s}. Valid: pending, running, completed, failed, killed"
         )),
     }
 }
@@ -525,7 +522,7 @@ fn scheme_for(subcommand: Option<&str>) -> String {
                 ("+done", "Quick complete a task"),
                 ("+claim", "Quick claim first ready task"),
             ] {
-                out.push_str(&format!("  {:<12} {}\n", name, desc));
+                out.push_str(&format!("  {name:<12} {desc}\n"));
             }
             out.push_str("\nUse 'task scheme <subcommand>' for detailed parameters.");
             out

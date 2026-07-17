@@ -83,7 +83,7 @@ impl BashTool {
         for pattern in &self.dangerous_patterns {
             if pattern.is_match(command) {
                 return Err(BashToolError::SecurityViolation(
-                    "Command matches dangerous pattern and was blocked".to_string()
+                    "Command matches dangerous pattern and was blocked".to_string(),
                 ));
             }
         }
@@ -96,7 +96,7 @@ impl BashTool {
             output
         } else {
             let truncated = output[..self.max_output_size].to_string();
-            format!("{}...", truncated)
+            format!("{truncated}...")
         }
     }
 }
@@ -144,7 +144,7 @@ impl ExecutableTool for BashTool {
             // All bash commands require human approval since they execute arbitrary shell code.
             // check_security() in execute() provides defense-in-depth for truly dangerous patterns.
             ToolSensitivity::RequiresApproval {
-                reason: format!("Running shell command: {}", cmd),
+                reason: format!("Running shell command: {cmd}"),
             }
         } else {
             ToolSensitivity::Safe
@@ -157,9 +157,8 @@ impl ExecutableTool for BashTool {
         context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         // Parse arguments
-        let params: BashParams = serde_json::from_value(args.clone()).map_err(|e| {
-            ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
-        })?;
+        let params: BashParams = serde_json::from_value(args.clone())
+            .map_err(|e| ToolError::InvalidArguments(format!("Failed to parse arguments: {e}")))?;
 
         // Security check - block dangerous patterns BEFORE execution
         if let Err(e) = self.check_security(&params.command) {
@@ -184,7 +183,7 @@ impl ExecutableTool for BashTool {
 
         let output =
             context.sandbox.execute(req).await.map_err(|e| {
-                ToolError::ExecutionFailed(format!("Command execution failed: {}", e))
+                ToolError::ExecutionFailed(format!("Command execution failed: {e}"))
             })?;
 
         // Convert output to strings

@@ -69,18 +69,17 @@ impl ExecutableTool for GlobTool {
         context: &ToolContext,
     ) -> vol_llm_tool::ToolResultType<ToolResult> {
         // Parse arguments
-        let params: GlobParams = serde_json::from_value(args.clone()).map_err(|e| {
-            ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
-        })?;
+        let params: GlobParams = serde_json::from_value(args.clone())
+            .map_err(|e| ToolError::InvalidArguments(format!("Failed to parse arguments: {e}")))?;
 
         let search_path = params.path.unwrap_or_else(|| ".".to_string());
         let resolved_path = context
             .resolve_path(&search_path)
-            .map_err(|e| ToolError::ExecutionFailed(format!("Path resolution failed: {}", e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!("Path resolution failed: {e}")))?;
 
         // Build glob pattern matcher (matches against relative paths from search root)
         let glob_pattern = Pattern::new(&params.pattern)
-            .map_err(|e| ToolError::ExecutionFailed(format!("Invalid glob pattern: {}", e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!("Invalid glob pattern: {e}")))?;
 
         // Walk directory tree using sandbox.read_dir()
         let mut results: Vec<(String, u64)> = Vec::new();
@@ -88,7 +87,7 @@ impl ExecutableTool for GlobTool {
 
         while let Some(dir) = dirs_to_visit.pop() {
             let entries = context.sandbox.read_dir(&dir).await.map_err(|e| {
-                ToolError::ExecutionFailed(format!("Failed to read directory: {}", e))
+                ToolError::ExecutionFailed(format!("Failed to read directory: {e}"))
             })?;
 
             for entry in entries {

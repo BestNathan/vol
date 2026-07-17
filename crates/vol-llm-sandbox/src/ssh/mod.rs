@@ -74,14 +74,20 @@ impl SSHSandbox {
         let _idle_task = tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                let elapsed = idle_task_last_activity.lock().unwrap().elapsed();
+                let elapsed = idle_task_last_activity
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .elapsed();
                 if elapsed > idle_dur {
                     debug!(
                         idle_dur = ?idle_dur,
                         "SSH sandbox idle timeout reached, disconnecting"
                     );
                     let _ = session_clone.disconnect().await;
-                    *idle_task_last_activity.lock().unwrap() = std::time::Instant::now();
+                    *idle_task_last_activity
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                        std::time::Instant::now();
                 }
             }
         });
@@ -144,7 +150,7 @@ impl Sandbox for SSHSandbox {
         let session = self.session.clone();
         tokio::task::spawn_blocking(move || session.execute_blocking(&req))
             .await
-            .map_err(|e| SandboxError::Ssh(format!("spawn_blocking: {}", e)))?
+            .map_err(|e| SandboxError::Ssh(format!("spawn_blocking: {e}")))?
             .map(|_| ())?;
 
         info!(
@@ -183,7 +189,7 @@ impl Sandbox for SSHSandbox {
         let session = self.session.clone();
         tokio::task::spawn_blocking(move || session.execute_blocking(&req))
             .await
-            .map_err(|e| SandboxError::Ssh(format!("join error: {}", e)))?
+            .map_err(|e| SandboxError::Ssh(format!("join error: {e}")))?
     }
 
     async fn read_file(
@@ -205,6 +211,7 @@ impl Sandbox for SSHSandbox {
                 .map_err(|e| SandboxError::Ssh(e.to_string()))?;
         }
 
+        #[allow(clippy::cast_possible_truncation)]
         let limit = limit.unwrap_or(u64::MAX) as usize;
         let mut buf = Vec::new();
         let mut chunk = vec![0u8; 65536.min(limit)];
@@ -216,7 +223,8 @@ impl Sandbox for SSHSandbox {
             if n == 0 {
                 break;
             }
-            buf.extend_from_slice(&chunk[..n]);
+            let slice = chunk.get(..n).unwrap_or(&[]);
+            buf.extend_from_slice(slice);
             if buf.len() >= limit {
                 break;
             }

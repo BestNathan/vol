@@ -44,7 +44,7 @@ fn scan_dir(base: &Path, dir: &Path, dir_name: &str) -> WorkspaceTreeNode {
     };
 
     let mut entries: Vec<_> = read_dir
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| {
             let name = e.file_name();
             let name_str = name.to_string_lossy();
@@ -129,8 +129,8 @@ mod tests {
         let tree = scan_workspace(dir.to_str().unwrap());
 
         let names: Vec<_> = tree.children.iter().map(|e| e.name.as_str()).collect();
-        assert!(names.iter().any(|n| *n == "README.md"));
-        assert!(names.iter().any(|n| *n == "src"));
+        assert!(names.contains(&"README.md"));
+        assert!(names.contains(&"src"));
 
         let src = tree.children.iter().find(|c| c.name == "src").unwrap();
         assert!(src.children.iter().any(|c| c.name == "main.rs"));

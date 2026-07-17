@@ -113,7 +113,7 @@ impl FetchFn for DefaultFetchProvider {
 
         // Extract readable content using readability extractor
         let product = extractor::extract(&mut Cursor::new(&bytes), &parsed)
-            .map_err(|e| FetchError::NotAccessible(format!("Failed to extract content: {}", e)))?;
+            .map_err(|e| FetchError::NotAccessible(format!("Failed to extract content: {e}")))?;
 
         // Use extracted text (plain text version)
         let content = if product.text.is_empty() {

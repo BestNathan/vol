@@ -48,7 +48,7 @@ async fn test_full_ppt_generation() {
 
     let template_dir = get_template_dir();
 
-    println!("Using template directory: {:?}", template_dir);
+    println!("Using template directory: {template_dir:?}");
 
     let config = PptAgentConfig::default()
         .with_llm_provider("anthropic-main")

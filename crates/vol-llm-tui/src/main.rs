@@ -62,6 +62,7 @@ impl RatatuiObserver {
 }
 
 #[tokio::main]
+#[allow(clippy::expect_used)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Verify API key
     let _api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").expect("ANTHROPIC_AUTH_TOKEN must be set");
@@ -154,7 +155,7 @@ fn create_session() -> Result<Arc<Session>, Box<dyn std::error::Error>> {
     let (_base_dir, session_dir) = derive_store_paths();
 
     if let Err(e) = std::fs::create_dir_all(&session_dir) {
-        eprintln!("Warning: cannot create session dir: {}", e);
+        eprintln!("Warning: cannot create session dir: {e}");
         eprintln!("Using in-memory session (no history persistence)");
         let entry_store = Arc::new(vol_session::InMemoryEntryStore::new());
         return Ok(Arc::new(Session::new(entry_store)));
@@ -249,7 +250,7 @@ async fn run_event_loop(
                                         Err(e) => {
                                             let mut state = state.lock().await;
                                             state.session_dialog.open = false;
-                                            state.last_error = Some(format!("Failed to resume session: {}", e));
+                                            state.last_error = Some(format!("Failed to resume session: {e}"));
                                         }
                                     }
                                 });
@@ -308,6 +309,7 @@ fn respond_approval(
     });
 }
 
+#[allow(clippy::indexing_slicing)]
 fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
     // Handle approval response keys — highest priority
     if state.approval_state.has_pending_approval() {
@@ -432,10 +434,9 @@ fn handle_key(key: KeyEvent, state: &mut AppState) -> KeyAction {
                                 .session_dialog
                                 .sessions
                                 .remove(state.session_dialog.selected);
-                            state.session_dialog.selected =
-                                0.min(state.session_dialog.sessions.len().saturating_sub(1));
+                            state.session_dialog.selected = 0;
                         } else {
-                            state.last_error = Some(format!("Failed to delete session: {}", id));
+                            state.last_error = Some(format!("Failed to delete session: {id}"));
                         }
                     }
                 }
@@ -616,12 +617,14 @@ fn spawn_agent(
         let hitl_plugin = approval_state.clone().into_hitl_plugin();
 
         // Build config directly so we can register the HitlPlugin
-        let mut config = vol_llm_agents::coding::CodingAgentConfig::default();
-        config.working_dir = cache.working_dir.clone();
-        config.store_dir = cache.store_dir.clone();
-        config.max_iterations = 10;
-        config.session = Some(session);
-        config.tool_config = cache.tool_config.clone();
+        let mut config = vol_llm_agents::coding::CodingAgentConfig {
+            working_dir: cache.working_dir.clone(),
+            store_dir: cache.store_dir.clone(),
+            max_iterations: 10,
+            session: Some(session),
+            tool_config: cache.tool_config.clone(),
+            ..Default::default()
+        };
         config.plugin_registry.register(hitl_plugin);
 
         let agent = match vol_llm_agents::coding::CodingAgent::new(config) {
@@ -629,7 +632,7 @@ fn spawn_agent(
             Err(e) => {
                 let mut state = state.lock().await;
                 state.conversation.push(app::ConversationEntry::Error {
-                    message: format!("Error creating agent: {}", e),
+                    message: format!("Error creating agent: {e}"),
                 });
                 state.is_running = false;
                 return;
@@ -644,7 +647,7 @@ fn spawn_agent(
             Err(e) => {
                 let mut state = state.lock().await;
                 state.conversation.push(app::ConversationEntry::Error {
-                    message: format!("Error: {}", e),
+                    message: format!("Error: {e}"),
                 });
                 state.is_running = false;
             }

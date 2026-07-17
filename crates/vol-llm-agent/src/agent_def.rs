@@ -91,7 +91,7 @@ mod tests {
     #[test]
     fn test_agent_path_display() {
         let path = AgentPath::root().push("a").push("b");
-        assert_eq!(format!("{}", path), "root/a/b");
+        assert_eq!(format!("{path}"), "root/a/b");
     }
 
     #[test]

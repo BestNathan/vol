@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 
 use vol_llm_agent_protocol::agent_server_protocol::{
-    AgentServerMessage, Operation, Payload, SandboxOperation, SandboxPayload, SandboxInfo,
+    AgentServerMessage, Operation, Payload, SandboxInfo, SandboxOperation, SandboxPayload,
 };
 use vol_llm_agent_protocol::DomainHandler;
 use vol_llm_agent_protocol::ProtocolError;
@@ -64,10 +64,7 @@ impl DomainHandler for SandboxHandler {
                 )])
             }
 
-            (
-                SandboxOperation::Exec,
-                Payload::Sandbox(SandboxPayload::Exec { command }),
-            ) => {
+            (SandboxOperation::Exec, Payload::Sandbox(SandboxPayload::Exec { command })) => {
                 let req: vol_llm_sandbox::CommandRequest = command.into();
                 match self.sandbox.execute(req).await {
                     Ok(output) => Ok(vec![AgentServerMessage::new_result(
@@ -109,14 +106,12 @@ impl DomainHandler for SandboxHandler {
                         Ok(vec![AgentServerMessage::new_result(
                             mid,
                             Operation::Sandbox(SandboxOperation::ReadFile),
-                            Payload::Sandbox(SandboxPayload::ReadFileResult {
-                                content: encoded,
-                            }),
+                            Payload::Sandbox(SandboxPayload::ReadFileResult { content: encoded }),
                         )])
                     }
-                    Err(e) => Err(ProtocolError::PayloadDecodeFailedOwned(
-                        format!("sandbox.read_file: {}", e),
-                    )),
+                    Err(e) => Err(ProtocolError::PayloadDecodeFailedOwned(format!(
+                        "sandbox.read_file: {e}"
+                    ))),
                 }
             }
 
@@ -125,14 +120,13 @@ impl DomainHandler for SandboxHandler {
                 Payload::Sandbox(SandboxPayload::WriteFile { path, content }),
             ) => {
                 use base64::Engine;
-                let data = base64::engine::general_purpose::STANDARD.decode(&content).map_err(
-                    |e| {
+                let data = base64::engine::general_purpose::STANDARD
+                    .decode(&content)
+                    .map_err(|e| {
                         ProtocolError::PayloadDecodeFailedOwned(format!(
-                            "sandbox.write_file base64: {}",
-                            e
+                            "sandbox.write_file base64: {e}"
                         ))
-                    },
-                )?;
+                    })?;
                 let p = std::path::Path::new(&path);
                 match self.sandbox.write_file(p, &data).await {
                     Ok(()) => Ok(vec![AgentServerMessage::new_result(
@@ -140,16 +134,13 @@ impl DomainHandler for SandboxHandler {
                         Operation::Sandbox(SandboxOperation::WriteFile),
                         Payload::Sandbox(SandboxPayload::WriteFileResult),
                     )]),
-                    Err(e) => Err(ProtocolError::PayloadDecodeFailedOwned(
-                        format!("sandbox.write_file: {}", e),
-                    )),
+                    Err(e) => Err(ProtocolError::PayloadDecodeFailedOwned(format!(
+                        "sandbox.write_file: {e}"
+                    ))),
                 }
             }
 
-            (
-                SandboxOperation::CreateDir,
-                Payload::Sandbox(SandboxPayload::CreateDir { path }),
-            ) => {
+            (SandboxOperation::CreateDir, Payload::Sandbox(SandboxPayload::CreateDir { path })) => {
                 let p = std::path::Path::new(&path);
                 match self.sandbox.create_dir_all(p).await {
                     Ok(()) => Ok(vec![AgentServerMessage::new_result(
@@ -157,36 +148,31 @@ impl DomainHandler for SandboxHandler {
                         Operation::Sandbox(SandboxOperation::CreateDir),
                         Payload::Sandbox(SandboxPayload::CreateDirResult),
                     )]),
-                    Err(e) => Err(ProtocolError::PayloadDecodeFailedOwned(
-                        format!("sandbox.create_dir: {}", e),
-                    )),
+                    Err(e) => Err(ProtocolError::PayloadDecodeFailedOwned(format!(
+                        "sandbox.create_dir: {e}"
+                    ))),
                 }
             }
 
-            (
-                SandboxOperation::ReadDir,
-                Payload::Sandbox(SandboxPayload::ReadDir { path }),
-            ) => {
+            (SandboxOperation::ReadDir, Payload::Sandbox(SandboxPayload::ReadDir { path })) => {
                 let p = std::path::Path::new(&path);
                 match self.sandbox.read_dir(p).await {
                     Ok(entries) => {
-                        let defs: Vec<_> = entries.into_iter().map(|e| e.into()).collect();
+                        let defs: Vec<_> =
+                            entries.into_iter().map(std::convert::Into::into).collect();
                         Ok(vec![AgentServerMessage::new_result(
                             mid,
                             Operation::Sandbox(SandboxOperation::ReadDir),
                             Payload::Sandbox(SandboxPayload::ReadDirResult { entries: defs }),
                         )])
                     }
-                    Err(e) => Err(ProtocolError::PayloadDecodeFailedOwned(
-                        format!("sandbox.read_dir: {}", e),
-                    )),
+                    Err(e) => Err(ProtocolError::PayloadDecodeFailedOwned(format!(
+                        "sandbox.read_dir: {e}"
+                    ))),
                 }
             }
 
-            (
-                SandboxOperation::Metadata,
-                Payload::Sandbox(SandboxPayload::Metadata { path }),
-            ) => {
+            (SandboxOperation::Metadata, Payload::Sandbox(SandboxPayload::Metadata { path })) => {
                 let p = std::path::Path::new(&path);
                 match self.sandbox.metadata(p).await {
                     Ok(meta) => Ok(vec![AgentServerMessage::new_result(
@@ -196,9 +182,9 @@ impl DomainHandler for SandboxHandler {
                             metadata: meta.into(),
                         }),
                     )]),
-                    Err(e) => Err(ProtocolError::PayloadDecodeFailedOwned(
-                        format!("sandbox.metadata: {}", e),
-                    )),
+                    Err(e) => Err(ProtocolError::PayloadDecodeFailedOwned(format!(
+                        "sandbox.metadata: {e}"
+                    ))),
                 }
             }
 
@@ -298,7 +284,8 @@ mod tests {
                 assert_eq!(output.exit_code, 0);
                 // stdout is base64 encoded
                 let stdout = base64::engine::general_purpose::STANDARD
-                    .decode(&output.stdout).unwrap_or_default();
+                    .decode(&output.stdout)
+                    .unwrap_or_default();
                 assert_eq!(stdout, b"hello");
             }
             _ => panic!("expected ExecResult"),
@@ -338,7 +325,8 @@ mod tests {
         match &replies[0].payload {
             Payload::Sandbox(SandboxPayload::ReadFileResult { content }) => {
                 let decoded = base64::engine::general_purpose::STANDARD
-                    .decode(content).unwrap();
+                    .decode(content)
+                    .unwrap();
                 assert_eq!(decoded, b"hello world");
             }
             _ => panic!("expected ReadFileResult"),
@@ -373,7 +361,10 @@ mod tests {
         match &replies[0].payload {
             Payload::Sandbox(SandboxPayload::ReadDirResult { entries }) => {
                 assert!(!entries.is_empty(), "expected nested dir entry");
-                assert!(entries.iter().any(|e| e.name == "nested"), "expected 'nested' entry");
+                assert!(
+                    entries.iter().any(|e| e.name == "nested"),
+                    "expected 'nested' entry"
+                );
             }
             _ => panic!("expected ReadDirResult"),
         }
@@ -472,7 +463,10 @@ mod tests {
         match &replies[0].payload {
             Payload::Sandbox(SandboxPayload::ExecResult { output }) => {
                 assert_eq!(output.exit_code, -1);
-                assert!(!output.stderr.is_empty(), "expected stderr from failed exec");
+                assert!(
+                    !output.stderr.is_empty(),
+                    "expected stderr from failed exec"
+                );
             }
             _ => panic!("expected ExecResult"),
         }

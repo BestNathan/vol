@@ -59,15 +59,15 @@ impl ExecutableTool for TaskStop {
         _context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         let params: TaskStopParams = serde_json::from_value(args.clone()).map_err(|e| {
-            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
+            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {e}"))
         })?;
 
         let task_id: TaskId = params.task_id.parse::<u64>().map(TaskId).map_err(|e| {
-            vol_llm_tool::ToolError::InvalidArguments(format!("Invalid task ID: {}", e))
+            vol_llm_tool::ToolError::InvalidArguments(format!("Invalid task ID: {e}"))
         })?;
 
         let task = self.store.get(&task_id).await.map_err(|e| {
-            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to get task: {}", e))
+            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to get task: {e}"))
         })?;
 
         let mut task = match task {
@@ -92,7 +92,7 @@ impl ExecutableTool for TaskStop {
         let subject = task.subject.clone();
 
         self.store.update(task).await.map_err(|e| {
-            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to stop task: {}", e))
+            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to stop task: {e}"))
         })?;
 
         Ok(ToolResult {

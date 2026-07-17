@@ -39,9 +39,9 @@ Be concise. Output only the summary."#;
                     .message
                     .content
                     .as_ref()
-                    .map(|c| c.as_str())
+                    .map(vol_llm_core::MessageContent::as_str)
                     .unwrap_or("");
-                Some(format!("{}: {}", role, content))
+                Some(format!("{role}: {content}"))
             })
             .collect::<Vec<_>>()
             .join("\n\n");
@@ -54,7 +54,7 @@ Be concise. Output only the summary."#;
                     .message
                     .content
                     .as_ref()
-                    .map(|c| c.as_str())
+                    .map(vol_llm_core::MessageContent::as_str)
                     .unwrap_or("")
                     .to_string();
 
@@ -62,7 +62,7 @@ Be concise. Output only the summary."#;
                     return None;
                 }
 
-                let prefixed = format!("[Session Summary]: {}", summary_text);
+                let prefixed = format!("[Session Summary]: {summary_text}");
                 let session_id = messages
                     .first()
                     .map(|m| m.session_id.clone())

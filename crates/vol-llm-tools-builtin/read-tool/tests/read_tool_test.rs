@@ -27,7 +27,7 @@ async fn test_read_file_with_limit() {
     // Create a temp file with 10 lines
     let temp_file = tempfile::NamedTempFile::new().unwrap();
     let content = (1..=10)
-        .map(|i| format!("line {}", i))
+        .map(|i| format!("line {i}"))
         .collect::<Vec<_>>()
         .join("\n");
     std::fs::write(temp_file.path(), content).unwrap();
@@ -44,12 +44,12 @@ async fn test_read_file_with_limit() {
 
     // Verify only lines 1-5 are present
     for i in 1..=5 {
-        assert!(result.content.contains(&format!("{}  |  line {}", i, i)));
+        assert!(result.content.contains(&format!("{i}  |  line {i}")));
     }
 
     // Verify lines 6-10 are NOT present
     for i in 6..=10 {
-        assert!(!result.content.contains(&format!("{}  |  line {}", i, i)));
+        assert!(!result.content.contains(&format!("{i}  |  line {i}")));
     }
 }
 
@@ -58,7 +58,7 @@ async fn test_read_file_with_offset() {
     // Create a temp file with 5 lines
     let temp_file = tempfile::NamedTempFile::new().unwrap();
     let content = (1..=5)
-        .map(|i| format!("line {}", i))
+        .map(|i| format!("line {i}"))
         .collect::<Vec<_>>()
         .join("\n");
     std::fs::write(temp_file.path(), content).unwrap();
@@ -75,12 +75,12 @@ async fn test_read_file_with_offset() {
 
     // Verify lines 3-5 are present (offset 2 means skip first 2 lines)
     for i in 3..=5 {
-        assert!(result.content.contains(&format!("{}  |  line {}", i, i)));
+        assert!(result.content.contains(&format!("{i}  |  line {i}")));
     }
 
     // Verify lines 1-2 are NOT present
     for i in 1..=2 {
-        assert!(!result.content.contains(&format!("{}  |  line {}", i, i)));
+        assert!(!result.content.contains(&format!("{i}  |  line {i}")));
     }
 }
 

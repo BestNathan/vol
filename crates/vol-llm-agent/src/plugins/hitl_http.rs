@@ -1,6 +1,6 @@
 //! HTTP-based approval channel with axum router.
 
-use crate::react::hitl::*;
+use crate::react::hitl::{ApprovalChannel, ApprovalError, ApprovalRequest, ApprovalResponse};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::oneshot;

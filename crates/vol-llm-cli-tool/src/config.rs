@@ -42,18 +42,26 @@ pub struct CliToolConfig {
     pub env: std::collections::HashMap<String, String>,
 }
 
-fn default_shell() -> String { "/bin/sh".to_string() }
-fn default_timeout_secs() -> u64 { 60 }
-fn default_max_output_bytes() -> usize { 65_536 }
-fn default_enabled() -> bool { true }
+fn default_shell() -> String {
+    "/bin/sh".to_string()
+}
+fn default_timeout_secs() -> u64 {
+    60
+}
+fn default_max_output_bytes() -> usize {
+    65_536
+}
+fn default_enabled() -> bool {
+    true
+}
 
 impl CliToolConfig {
     /// Parse a TOML document into a CliToolConfig.
     /// Returns an error if required fields are missing, or if both
     /// `sandbox` and `sandbox_ref` are set.
     pub fn from_toml(s: &str) -> Result<Self, crate::CliToolError> {
-        let cfg: CliToolConfig = toml::from_str(s)
-            .map_err(|e| crate::CliToolError::Config(e.to_string()))?;
+        let cfg: CliToolConfig =
+            toml::from_str(s).map_err(|e| crate::CliToolError::Config(e.to_string()))?;
         cfg.validate()?;
         Ok(cfg)
     }
@@ -119,8 +127,8 @@ mod tests {
         assert_eq!(cfg.binaries, vec!["ansible", "ansible-playbook"]);
         assert_eq!(cfg.sandbox_ref.as_deref(), Some("ansible-prod"));
         assert!(cfg.sandbox.is_none());
-        assert_eq!(cfg.shell, "/bin/sh");       // default
-        assert_eq!(cfg.timeout_secs, 60);       // default
+        assert_eq!(cfg.shell, "/bin/sh"); // default
+        assert_eq!(cfg.timeout_secs, 60); // default
         assert_eq!(cfg.max_output_bytes, 65536); // default
         assert!(cfg.env.is_empty());
     }
@@ -136,7 +144,10 @@ mod tests {
         let sb = cfg.sandbox.as_ref().unwrap();
         assert_eq!(sb.sandbox_type, "ssh");
         assert_eq!(sb.ssh.as_ref().unwrap().host, "ansible-prod.example.com");
-        assert_eq!(cfg.env.get("ANSIBLE_CONFIG").map(String::as_str), Some("/opt/ansible/ansible.cfg"));
+        assert_eq!(
+            cfg.env.get("ANSIBLE_CONFIG").map(String::as_str),
+            Some("/opt/ansible/ansible.cfg")
+        );
     }
 
     #[test]

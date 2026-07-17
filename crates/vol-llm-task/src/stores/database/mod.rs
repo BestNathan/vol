@@ -195,7 +195,7 @@ impl crate::store::TaskStore for DatabaseTaskStore {
         let model = entity::Entity::find_by_id(id)
             .one(&self.db)
             .await
-            .map_err(|e| StoreError::Database(format!("failed to get task {}: {e}", task_id)))?;
+            .map_err(|e| StoreError::Database(format!("failed to get task {task_id}: {e}")))?;
         model.map(mapping::model_to_task).transpose()
     }
 
@@ -227,7 +227,7 @@ impl crate::store::TaskStore for DatabaseTaskStore {
         entity::Entity::delete_by_id(id)
             .exec(&self.db)
             .await
-            .map_err(|e| StoreError::Database(format!("failed to delete task {}: {e}", task_id)))?;
+            .map_err(|e| StoreError::Database(format!("failed to delete task {task_id}: {e}")))?;
         Ok(())
     }
 

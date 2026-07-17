@@ -46,7 +46,7 @@ pub async fn search_crates(
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        return Err(format!("crates.io API returned error {}: {}", status, body));
+        return Err(format!("crates.io API returned error {status}: {body}"));
     }
 
     let body: CratesIoResponse = resp

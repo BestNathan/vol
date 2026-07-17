@@ -71,7 +71,7 @@ fn test_config_with_session() {
 #[test]
 fn test_config_debug_impl() {
     let config = CodingAgentConfig::default();
-    let debug_str = format!("{:?}", config);
+    let debug_str = format!("{config:?}");
     assert!(debug_str.contains("<LLMClient>"));
     assert!(debug_str.contains("<PluginRegistry>"));
 }
@@ -106,7 +106,7 @@ fn test_coding_agent_error_display() {
     let agent_err = CodingAgentError::Config("missing llm".to_string());
     assert!(agent_err.to_string().contains("missing llm"));
 
-    let io_err = CodingAgentError::Io(std::io::Error::new(std::io::ErrorKind::Other, "io failed"));
+    let io_err = CodingAgentError::Io(std::io::Error::other("io failed"));
     assert!(io_err.to_string().contains("io failed"));
 
     let task_err = CodingAgentError::TaskFailed("task failed".to_string());
@@ -134,7 +134,7 @@ fn test_hitl_error_display() {
 #[test]
 fn test_error_from_impls() {
     // Test From impls work (compile-time check + runtime)
-    let io_err = std::io::Error::new(std::io::ErrorKind::Other, "io");
+    let io_err = std::io::Error::other("io");
     let coding_err: CodingAgentError = io_err.into();
     assert!(coding_err.to_string().contains("io"));
 }
@@ -183,8 +183,7 @@ async fn test_hitl_handler_dangerous_patterns() {
         let decision = handler.check_operation("bash", cmd).await.unwrap();
         assert!(
             matches!(decision, HITLDecision::Reject { .. }),
-            "Expected Reject for: {}",
-            cmd
+            "Expected Reject for: {cmd}"
         );
     }
 }
@@ -326,14 +325,14 @@ async fn test_channelled_observer_collects_events() {
 #[tokio::test]
 async fn test_observer_plugin_new() {
     let observer = Arc::new(ChannelledEventObserver::new());
-    let plugin = ObserverPlugin::new(observer.clone());
+    let plugin = ObserverPlugin::new(observer);
     assert_eq!(plugin.id(), "observer");
 }
 
 #[tokio::test]
 async fn test_observer_plugin_observer_method() {
     let observer = Arc::new(ChannelledEventObserver::new());
-    let plugin = ObserverPlugin::new(observer.clone());
+    let plugin = ObserverPlugin::new(observer);
     let _ = plugin.observer();
 }
 
@@ -400,7 +399,7 @@ async fn test_builder_store_dir_derived_from_workdir() {
     let llm = Arc::new(DummyLlm);
     let agent = CodingAgentBuilder::new()
         .llm(llm)
-        .working_dir(project_dir.clone())
+        .working_dir(project_dir)
         .build()
         .unwrap();
 

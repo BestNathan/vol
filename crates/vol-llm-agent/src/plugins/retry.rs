@@ -1,6 +1,6 @@
 //! Retry plugin with exponential backoff.
 
-use crate::react::plugin::*;
+use crate::react::plugin::{AgentPlugin, PluginDecision, PluginId, RunContext};
 use crate::AgentStreamEvent;
 
 /// Retry configuration
@@ -52,15 +52,12 @@ impl AgentPlugin for RetryPlugin {
 
     /// Listener hook - logs retry events
     async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
-        match event {
-            AgentStreamEvent::AgentAborted { reason, .. } => {
-                tracing::warn!(
-                    run_id = %ctx.run_id,
-                    reason = %reason,
-                    "Retry: agent aborted"
-                );
-            }
-            _ => {}
+        if let AgentStreamEvent::AgentAborted { reason, .. } = event {
+            tracing::warn!(
+                run_id = %ctx.run_id,
+                reason = %reason,
+                "Retry: agent aborted"
+            );
         }
     }
 }
@@ -70,7 +67,6 @@ mod tests {
     use super::*;
     use crate::react::{AgentConfig, RunContext};
     use std::sync::Arc;
-    
 
     fn create_test_run_context() -> RunContext {
         let (ctx, _rx) = RunContext::new(

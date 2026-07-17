@@ -12,7 +12,7 @@ pub fn register_local_data_plane(
 ) -> Result<(), String> {
     state.nodes.register(
         NodeRegistration {
-            node_id: node_id.clone(),
+            node_id,
             name,
             version,
         },
@@ -22,6 +22,7 @@ pub fn register_local_data_plane(
     Ok(())
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn now_ms() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
@@ -58,7 +59,7 @@ mod tests {
     fn register_local_data_plane_fails_on_empty_node_id() {
         let state = Arc::new(ControlPlaneState::new());
         let result = register_local_data_plane(
-            state.clone(),
+            state,
             "".to_string(),
             "Empty ID".to_string(),
             "test".to_string(),

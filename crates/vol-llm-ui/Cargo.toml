@@ -3,6 +3,7 @@ name = "vol-llm-ui"
 version.workspace = true
 edition.workspace = true
 
+
 [lib]
 path = "src/lib.rs"
 
@@ -15,6 +16,9 @@ required-features = ["tui"]
 name = "vol-llm-ui-web"
 path = "src/web/bin/web.rs"
 required-features = ["web"]
+
+[lints]
+workspace = true
 
 [dependencies]
 # Core deps (WASM-compatible)

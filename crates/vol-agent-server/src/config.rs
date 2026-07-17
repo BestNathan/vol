@@ -272,9 +272,9 @@ impl ServerConfig {
     /// Load config from a TOML file path.
     pub fn load(path: &std::path::Path) -> Result<Self, String> {
         let content = std::fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read config file {:?}: {}", path, e))?;
+            .map_err(|e| format!("Failed to read config file {path:?}: {e}"))?;
         let config: Self = toml::from_str(&content)
-            .map_err(|e| format!("Failed to parse config {:?}: {}", path, e))?;
+            .map_err(|e| format!("Failed to parse config {path:?}: {e}"))?;
         config.validate()?;
         Ok(config)
     }
@@ -345,7 +345,7 @@ impl ServerConfig {
 /// Default config path: `~/.vol/agent-server.toml`
 fn default_config_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    PathBuf::from(format!("{}/.vol/agent-server.toml", home))
+    PathBuf::from(format!("{home}/.vol/agent-server.toml"))
 }
 
 fn expand_tilde_str(s: &str) -> String {
@@ -355,7 +355,7 @@ fn expand_tilde_str(s: &str) -> String {
         if rest.is_empty() {
             home
         } else {
-            format!("{}/{}", home, rest)
+            format!("{home}/{rest}")
         }
     } else {
         s.to_string()
@@ -383,7 +383,7 @@ mod tests {
     fn test_expand_tilde() {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/home/user".to_string());
         let result = expand_tilde_str("~/foo/bar");
-        assert_eq!(result, format!("{}/foo/bar", home));
+        assert_eq!(result, format!("{home}/foo/bar"));
     }
 
     #[test]

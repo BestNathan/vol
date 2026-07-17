@@ -3,6 +3,7 @@ name = "vol-monitor"
 version.workspace = true
 edition.workspace = true
 
+
 [[bin]]
 name = "vol-monitor"
 path = "src/main.rs"
@@ -14,6 +15,9 @@ path = "src/bin/upload-doc.rs"
 [[bin]]
 name = "upload-ppt"
 path = "src/bin/upload-ppt.rs"
+
+[lints]
+workspace = true
 
 [dependencies]
 tokio = { workspace = true }

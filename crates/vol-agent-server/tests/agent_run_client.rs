@@ -4,12 +4,12 @@
 //! Requires a running control-plane (e.g. port-forward or NodePort).
 //! Set `CONTROL_PLANE_URL` env var to override the default.
 
+use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use std::env;
 use std::time::Duration;
 use tokio::time;
 use tokio_tungstenite::connect_async;
-use futures_util::{SinkExt, StreamExt};
 
 const DEFAULT_URL: &str = "ws://127.0.0.1:3001/ws";
 
@@ -59,7 +59,7 @@ async fn agent_list_and_submit_run() {
     // Pick the first agent
     let first_agent = &agents[0];
     let agent_name = first_agent["name"].as_str().unwrap_or("unknown");
-    println!("selected agent: {}", agent_name);
+    println!("selected agent: {agent_name}");
 
     // ── 2. Submit agent run ────────────────────────────────────────────────
 
@@ -101,7 +101,7 @@ async fn agent_list_and_submit_run() {
         .expect("run_id missing from submit response");
     let accepted = submit_resp["result"]["accepted"].as_bool().unwrap_or(false);
     assert!(accepted, "run not accepted");
-    println!("run submitted: {}", run_id);
+    println!("run submitted: {run_id}");
 
     // ── 3. Wait for agent events, stop on AgentComplete ────────────────────
 
@@ -134,7 +134,7 @@ async fn agent_list_and_submit_run() {
                     }
                 }
                 if let Some(error) = evt_val.get("error") {
-                    println!("  ERROR: {}", error);
+                    println!("  ERROR: {error}");
                 }
             }
             _ => {
@@ -144,8 +144,14 @@ async fn agent_list_and_submit_run() {
         }
     }
 
-    assert!(completed, "agent run did not complete (got {event_count} events)");
-    assert!(event_count >= 3, "expected at least 3 events, got {event_count}");
+    assert!(
+        completed,
+        "agent run did not complete (got {event_count} events)"
+    );
+    assert!(
+        event_count >= 3,
+        "expected at least 3 events, got {event_count}"
+    );
 
     // Graceful close
     let _ = write

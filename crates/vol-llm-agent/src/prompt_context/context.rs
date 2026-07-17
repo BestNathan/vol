@@ -166,7 +166,7 @@ impl PromptContext {
 
         // Replace fixed fragments first
         for (id, fragment) in &self.fragments {
-            let placeholder = format!("{{{}}}", id);
+            let placeholder = format!("{{{id}}}");
             if content.contains(&placeholder) {
                 content = content.replace(&placeholder, &fragment.content);
             }
@@ -175,7 +175,7 @@ impl PromptContext {
         // Replace dynamic variables (for injection points without fragments)
         for injection in &self.template.injections {
             if !self.fragments.contains_key(injection) {
-                let placeholder = format!("{{{}}}", injection);
+                let placeholder = format!("{{{injection}}}");
                 if content.contains(&placeholder) {
                     let dynamic_value = self
                         .dynamic_vars
@@ -216,11 +216,11 @@ impl PromptContext {
 
         // RAG context (if provided)
         if let Some(ctx) = rag_context {
-            parts.push(format!("参考资料:\n{}\n", ctx));
+            parts.push(format!("参考资料:\n{ctx}\n"));
         }
 
         // User question
-        parts.push(format!("问题：{}", query));
+        parts.push(format!("问题：{query}"));
 
         parts.join("\n\n")
     }
@@ -284,7 +284,7 @@ mod tests {
     #[test]
     fn test_prompt_context_new() {
         let template = PromptTemplate::new("test-template", "You are a helpful assistant.");
-        let context = PromptContext::new(template.clone());
+        let context = PromptContext::new(template);
 
         assert!(context.cache_key().starts_with("prompt_"));
     }

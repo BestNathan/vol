@@ -1,6 +1,6 @@
 //! Caching plugin with semantic cache support.
 
-use crate::react::plugin::*;
+use crate::react::plugin::{AgentPlugin, PluginDecision, PluginId, RunContext};
 use crate::{AgentResponse, AgentStreamEvent};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -17,7 +17,7 @@ impl CacheEntry {
     pub fn new(response: AgentResponse, ttl_secs: u64) -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
         Self {
             response,
@@ -28,7 +28,7 @@ impl CacheEntry {
     pub fn is_expired(&self) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
         now >= self.expires_at
     }
@@ -148,7 +148,6 @@ mod tests {
     use super::*;
     use crate::react::{AgentConfig, RunContext};
     use std::sync::Arc;
-    
 
     fn create_test_run_context() -> RunContext {
         let (ctx, _rx) = RunContext::new(

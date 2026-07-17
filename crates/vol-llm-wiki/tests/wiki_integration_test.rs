@@ -73,7 +73,7 @@ async fn test_compress_real_session() {
             // Verify wiki directory has content
             let entries: Vec<_> = std::fs::read_dir(&wiki_dir)
                 .unwrap()
-                .filter_map(|e| e.ok())
+                .filter_map(std::result::Result::ok)
                 .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("md"))
                 .collect();
 
@@ -83,11 +83,14 @@ async fn test_compress_real_session() {
             );
             println!(
                 "Wiki files created: {:?}",
-                entries.iter().map(|e| e.file_name()).collect::<Vec<_>>()
+                entries
+                    .iter()
+                    .map(std::fs::DirEntry::file_name)
+                    .collect::<Vec<_>>()
             );
         }
         Err(e) => {
-            println!("Compression failed (expected if no API key): {}", e);
+            println!("Compression failed (expected if no API key): {e}");
         }
     }
 }

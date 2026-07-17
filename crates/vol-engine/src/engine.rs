@@ -222,7 +222,7 @@ impl MonitoringEngine {
             .notifications
             .iter()
             .filter(|n| n.is_enabled())
-            .map(|n| n.clone_box())
+            .map(vol_core::NotificationHandler::clone_box)
             .collect();
 
         if notifications.is_empty() {

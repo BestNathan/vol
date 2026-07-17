@@ -23,7 +23,7 @@ pub(crate) fn fmt_task_detail(task: &Task) -> String {
         out.push_str(&format!("\nDesc:         {}", task.description));
     }
     if let Some(ref af) = task.active_form {
-        out.push_str(&format!("\nActiveForm:   {}", af));
+        out.push_str(&format!("\nActiveForm:   {af}"));
     }
     out
 }
@@ -59,21 +59,21 @@ pub(crate) fn fmt_create_confirm(task: &Task) -> String {
 
 /// Format a scheme (parameter list) for a specific subcommand.
 pub(crate) fn fmt_scheme(subcommand: &str, params: &[(&str, bool, &str)]) -> String {
-    let mut out = format!("{} parameters:\n", subcommand);
+    let mut out = format!("{subcommand} parameters:\n");
     for (name, required, desc) in params {
         let req = if *required {
             "(required)"
         } else {
             "(optional)"
         };
-        out.push_str(&format!("  --{:<14} {:<10} {}\n", name, req, desc));
+        out.push_str(&format!("  --{name:<14} {req:<10} {desc}\n"));
     }
     out.trim_end().to_string()
 }
 
 /// Serialize a value to JSON string, with error fallback.
 pub(crate) fn to_json<T: serde::Serialize>(value: &T) -> String {
-    serde_json::to_string(value).unwrap_or_else(|e| format!("{{\"error\": \"{}\"}}", e))
+    serde_json::to_string(value).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}"))
 }
 
 fn fmt_task_ids(ids: &[TaskId]) -> String {
@@ -81,7 +81,7 @@ fn fmt_task_ids(ids: &[TaskId]) -> String {
         "-".to_string()
     } else {
         ids.iter()
-            .map(|id| id.to_string())
+            .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join(", ")
     }

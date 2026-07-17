@@ -11,8 +11,8 @@ use crate::control_plane::handlers::client::ClientHandler;
 use crate::control_plane::handlers::control::ControlHandler;
 use crate::control_plane::handlers::node::NodeHandler;
 use crate::control_plane::handlers::run::RunHandler;
-use crate::data_plane::handlers::sandbox::SandboxHandler;
 use crate::control_plane::state::ControlPlaneState;
+use crate::data_plane::handlers::sandbox::SandboxHandler;
 
 pub(crate) fn make_result(
     message: AgentServerMessage,
@@ -68,6 +68,7 @@ impl ControlPlaneServerCore {
 }
 
 impl ControlPlaneServerCore {
+    #[allow(clippy::expect_used)]
     pub async fn serve_connection_with_role(
         &self,
         role: crate::control_plane::endpoint::ControlConnectionRole,
@@ -78,11 +79,7 @@ impl ControlPlaneServerCore {
             crate::control_plane::endpoint::ControlConnectionRole::DataPlaneNode
         );
 
-        let dir_label = if is_node {
-            "cp < dp"
-        } else {
-            "cp < client"
-        };
+        let dir_label = if is_node { "cp < dp" } else { "cp < client" };
         tracing::info!(dir = %dir_label, "control-plane accepted connection");
 
         while let Some(next) = conn.recv().await {
@@ -195,8 +192,8 @@ impl JsonRpcMessageService for ControlPlaneServerCore {
 mod tests {
     use std::sync::Arc;
 
-    use crate::control_plane::state::ControlPlaneState;
     use crate::control_plane::core::make_result;
+    use crate::control_plane::state::ControlPlaneState;
     use vol_llm_agent_protocol::agent_server_protocol::{
         AgentServerMessage, ControlOperation, ControlPayload, MessageKind, Operation, Payload,
     };

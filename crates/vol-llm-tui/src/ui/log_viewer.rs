@@ -37,7 +37,7 @@ fn render_run_list(frame: &mut Frame, area: Rect, state: &AppState) {
                 &run.run_id
             };
             lines.push(Line::from(vec![
-                Span::styled(format!(" {:<14}", short_id), style),
+                Span::styled(format!(" {short_id:<14}"), style),
                 Span::styled(
                     format!(" {:>5} events", run.event_count),
                     Style::default().fg(Color::DarkGray),
@@ -116,6 +116,7 @@ fn event_color(event_type: &str) -> Color {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn compute_scroll(scroll: u16, auto_scroll: bool, total_lines: usize, view_height: u16) -> u16 {
     if auto_scroll && total_lines > view_height as usize {
         (total_lines - view_height as usize) as u16

@@ -154,9 +154,7 @@ impl SandboxRegistry {
     /// Extracted from `SandboxRegistry::load` so that other crates
     /// (e.g. `vol-llm-cli-tool`) can build inline sandboxes without
     /// going through the directory loader.
-    pub async fn build_sandbox(
-        config: SandboxConfig,
-    ) -> SandboxResult<Arc<dyn Sandbox>> {
+    pub async fn build_sandbox(config: SandboxConfig) -> SandboxResult<Arc<dyn Sandbox>> {
         let sandbox: Arc<dyn Sandbox> = match config.sandbox_type.as_str() {
             "local" => Arc::new(LocalSandbox::new(
                 config.work_dir.as_ref().map(std::path::PathBuf::from),
@@ -366,6 +364,7 @@ impl SandboxRegistry {
     }
 
     /// Get the default sandbox (always "local").
+    #[allow(clippy::expect_used)]
     pub fn default(&self) -> Arc<dyn Sandbox> {
         self.sandboxes
             .get(&self.default_name)
@@ -385,7 +384,10 @@ impl SandboxRegistry {
 
     /// Names of all registered sandboxes.
     pub fn names(&self) -> Vec<&str> {
-        self.sandboxes.keys().map(|s| s.as_str()).collect()
+        self.sandboxes
+            .keys()
+            .map(std::string::String::as_str)
+            .collect()
     }
 }
 
@@ -478,11 +480,7 @@ type = "local"
         )
         .unwrap();
         // invalid sandbox (bad TOML syntax — missing `=`)
-        std::fs::write(
-            tmp.path().join("bad.toml"),
-            r#"name "bad""#,
-        )
-        .unwrap();
+        std::fs::write(tmp.path().join("bad.toml"), r#"name "bad""#).unwrap();
         // duplicate name with good — should be skipped (warn)
         std::fs::write(
             tmp.path().join("dup.toml"),
@@ -498,9 +496,6 @@ type = "local"
         assert!(registry.get("local").is_some(), "local must always exist");
         assert!(registry.get("good").is_some(), "good must be loaded");
         // "good" is not duplicated
-        assert_eq!(
-            registry.names().iter().filter(|n| **n == "good").count(),
-            1
-        );
+        assert_eq!(registry.names().iter().filter(|n| **n == "good").count(), 1);
     }
 }

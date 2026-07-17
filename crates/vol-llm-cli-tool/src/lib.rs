@@ -34,7 +34,8 @@ pub async fn load_dir(
     registry: &SandboxRegistry,
 ) -> Result<Vec<CliTool>, CliToolError> {
     let mut tools = Vec::new();
-    let mut seen_names: std::collections::HashMap<String, std::path::PathBuf> = std::collections::HashMap::new();
+    let mut seen_names: std::collections::HashMap<String, std::path::PathBuf> =
+        std::collections::HashMap::new();
 
     if !dir.exists() {
         return Ok(tools);
@@ -42,19 +43,17 @@ pub async fn load_dir(
 
     let mut entries: Vec<_> = std::fs::read_dir(dir)
         .map_err(|e| CliToolError::Config(format!("read_dir {}: {e}", dir.display())))?
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| e.path().extension().is_some_and(|x| x == "toml"))
         .collect();
-    entries.sort_by_key(|e| e.path());
+    entries.sort_by_key(std::fs::DirEntry::path);
 
     for entry in entries {
         let path = entry.path();
-        let content = std::fs::read_to_string(&path).map_err(|e| {
-            CliToolError::Config(format!("read {}: {e}", path.display()))
-        })?;
-        let config = CliToolConfig::from_toml(&content).map_err(|e| {
-            CliToolError::Config(format!("parse {}: {e}", path.display()))
-        })?;
+        let content = std::fs::read_to_string(&path)
+            .map_err(|e| CliToolError::Config(format!("read {}: {e}", path.display())))?;
+        let config = CliToolConfig::from_toml(&content)
+            .map_err(|e| CliToolError::Config(format!("parse {}: {e}", path.display())))?;
 
         if !config.enabled {
             tracing::debug!(name = %config.name, path = %path.display(), "skipping disabled cli-tool");
@@ -71,7 +70,8 @@ pub async fn load_dir(
         }
         seen_names.insert(config.name.clone(), path.clone());
 
-        let sandbox: Arc<dyn vol_llm_sandbox::Sandbox> = if let Some(ref name) = config.sandbox_ref {
+        let sandbox: Arc<dyn vol_llm_sandbox::Sandbox> = if let Some(ref name) = config.sandbox_ref
+        {
             registry.get(name).ok_or_else(|| {
                 CliToolError::Config(format!(
                     "cli-tool `{}` references unknown sandbox `{}`",
@@ -79,14 +79,12 @@ pub async fn load_dir(
                 ))
             })?
         } else if let Some(sb_cfg) = config.sandbox.clone() {
-            SandboxRegistry::build_sandbox(sb_cfg)
-                .await
-                .map_err(|e| {
-                    CliToolError::Config(format!(
-                        "cli-tool `{}` inline sandbox build failed: {e}",
-                        config.name
-                    ))
-                })?
+            SandboxRegistry::build_sandbox(sb_cfg).await.map_err(|e| {
+                CliToolError::Config(format!(
+                    "cli-tool `{}` inline sandbox build failed: {e}",
+                    config.name
+                ))
+            })?
         } else {
             unreachable!("validate() guarantees one of sandbox/sandbox_ref");
         };
@@ -121,8 +119,15 @@ mod tests {
         let sandbox_dir = tempdir().unwrap();
         let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
 
-        let err = load_dir(dir.path(), &registry).await.err().unwrap().to_string();
-        assert!(err.contains("bad.toml") || err.contains("parse"), "unexpected: {err}");
+        let err = load_dir(dir.path(), &registry)
+            .await
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(
+            err.contains("bad.toml") || err.contains("parse"),
+            "unexpected: {err}"
+        );
     }
 
     #[tokio::test]
@@ -143,7 +148,11 @@ mod tests {
         let sandbox_dir = tempdir().unwrap();
         let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
 
-        let err = load_dir(dir.path(), &registry).await.err().unwrap().to_string();
+        let err = load_dir(dir.path(), &registry)
+            .await
+            .err()
+            .unwrap()
+            .to_string();
         assert!(err.contains("no-such-sandbox"), "unexpected: {err}");
     }
 
@@ -163,7 +172,11 @@ mod tests {
         let sandbox_dir = tempdir().unwrap();
         let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
 
-        let err = load_dir(dir.path(), &registry).await.err().unwrap().to_string();
+        let err = load_dir(dir.path(), &registry)
+            .await
+            .err()
+            .unwrap()
+            .to_string();
         assert!(err.contains("duplicate"), "unexpected: {err}");
     }
 

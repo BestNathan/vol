@@ -23,6 +23,7 @@ impl EventBuffer {
     }
 
     /// Process an event and mutate AppState accordingly.
+    #[allow(clippy::cast_possible_truncation)]
     pub fn apply(&mut self, event: &AgentStreamEvent, state: &mut AppState) {
         match event {
             AgentStreamEvent::AgentStart { input, .. } => {
@@ -67,8 +68,7 @@ impl EventBuffer {
                 self.flush_content();
                 state.conversation.push(ConversationEntry::Error {
                     message: format!(
-                        "Max iterations reached ({}/{}) — waiting for user decision...",
-                        current_iteration, max_iterations,
+                        "Max iterations reached ({current_iteration}/{max_iterations}) — waiting for user decision...",
                     ),
                 });
             }
@@ -76,8 +76,7 @@ impl EventBuffer {
             AgentStreamEvent::IterationContinued { from_iteration, .. } => {
                 state.conversation.push(ConversationEntry::AgentAnswer {
                     text: format!(
-                        "Continuing from iteration {} (counter reset to 0)",
-                        from_iteration,
+                        "Continuing from iteration {from_iteration} (counter reset to 0)",
                     ),
                 });
             }
@@ -130,9 +129,9 @@ impl EventBuffer {
 
             AgentStreamEvent::ContentComplete { content, .. } => {
                 // Mutate last ContentStreaming to AgentAnswer (single source)
-                if let Some(ConversationEntry::ContentStreaming { .. }) = state.conversation.last()
+                if let Some(entry @ ConversationEntry::ContentStreaming { .. }) =
+                    state.conversation.last_mut()
                 {
-                    let entry = state.conversation.last_mut().unwrap();
                     *entry = ConversationEntry::AgentAnswer {
                         text: content.clone(),
                     };
@@ -312,24 +311,24 @@ fn extract_arg_preview(arguments: &str) -> String {
         if let Some(cmd) = parsed.get("command").and_then(|v| v.as_str()) {
             if cmd.chars().count() > 80 {
                 let truncated: String = cmd.chars().take(77).collect();
-                return format!("Command: {}...", truncated);
+                return format!("Command: {truncated}...");
             }
-            return format!("Command: {}", cmd);
+            return format!("Command: {cmd}");
         }
         if let Some(path) = parsed.get("path").and_then(|v| v.as_str()) {
-            return format!("Path: {}", path);
+            return format!("Path: {path}");
         }
         if let Some(file_path) = parsed.get("file_path").and_then(|v| v.as_str()) {
-            return format!("File: {}", file_path);
+            return format!("File: {file_path}");
         }
         if let Some(url) = parsed.get("url").and_then(|v| v.as_str()) {
-            return format!("URL: {}", url);
+            return format!("URL: {url}");
         }
         if arguments.chars().count() > 80 {
             let truncated: String = arguments.chars().take(77).collect();
-            return format!("Args: {}...", truncated);
+            return format!("Args: {truncated}...");
         }
-        return format!("Args: {}", arguments);
+        return format!("Args: {arguments}");
     }
     String::new()
 }
@@ -340,5 +339,5 @@ fn truncate_preview(s: &str, max_chars: usize) -> String {
         return s.to_string();
     }
     let truncated: String = s.chars().take(max_chars).collect();
-    format!("{}...", truncated)
+    format!("{truncated}...")
 }

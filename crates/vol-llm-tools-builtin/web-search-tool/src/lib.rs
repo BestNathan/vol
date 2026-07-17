@@ -76,9 +76,8 @@ impl ExecutableTool for WebSearchTool {
         args: &serde_json::Value,
         _context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
-        let params: WebSearchParams = serde_json::from_value(args.clone()).map_err(|e| {
-            ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
-        })?;
+        let params: WebSearchParams = serde_json::from_value(args.clone())
+            .map_err(|e| ToolError::InvalidArguments(format!("Failed to parse arguments: {e}")))?;
 
         let opts = SearchOptions {
             num_results: params.num_results,
@@ -164,9 +163,8 @@ impl ExecutableTool for WebFetchTool {
         args: &serde_json::Value,
         _context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
-        let params: WebFetchParams = serde_json::from_value(args.clone()).map_err(|e| {
-            ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
-        })?;
+        let params: WebFetchParams = serde_json::from_value(args.clone())
+            .map_err(|e| ToolError::InvalidArguments(format!("Failed to parse arguments: {e}")))?;
 
         let opts = FetchOptions {
             prompt: params.prompt,
@@ -182,7 +180,7 @@ impl ExecutableTool for WebFetchTool {
 
         let mut content = String::new();
         if let Some(title) = &result.title {
-            content.push_str(&format!("Title: {}\n\n", title));
+            content.push_str(&format!("Title: {title}\n\n"));
         }
         content.push_str(&format!("URL: {}\n\n", result.url));
         content.push_str(&result.content);

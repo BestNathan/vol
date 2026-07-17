@@ -28,7 +28,7 @@ impl LocalSandbox {
             None => {
                 let pid = std::process::id();
                 let count = SANDBOX_COUNTER.fetch_add(1, Ordering::Relaxed);
-                let temp = std::env::temp_dir().join(format!("sandbox_{:x}_{:x}", pid, count));
+                let temp = std::env::temp_dir().join(format!("sandbox_{pid:x}_{count:x}"));
                 (temp, true)
             }
         };
@@ -142,13 +142,13 @@ impl Sandbox for LocalSandbox {
                                 // Send SIGTERM to the process group (negative pid)
                                 let _ = KillCommand::new("kill")
                                     .arg("-TERM")
-                                    .arg(format!("-{}", pid))
+                                    .arg(format!("-{pid}"))
                                     .status();
                                 std::thread::sleep(Duration::from_secs(5));
                                 // Send SIGKILL if still alive
                                 let _ = KillCommand::new("kill")
                                     .arg("-KILL")
-                                    .arg(format!("-{}", pid))
+                                    .arg(format!("-{pid}"))
                                     .status();
                             }
                             let _ = child.wait();
@@ -170,10 +170,13 @@ impl Sandbox for LocalSandbox {
         limit: Option<u64>,
     ) -> SandboxResult<Vec<u8>> {
         let content = std::fs::read(path).map_err(SandboxError::Io)?;
+        #[allow(clippy::cast_possible_truncation)]
         let start = offset.unwrap_or(0) as usize;
+        #[allow(clippy::cast_possible_truncation)]
         let end = limit.map(|l| start + l as usize).unwrap_or(content.len());
         let end = end.min(content.len());
-        Ok(content[start..end].to_vec())
+        let slice = content.get(start..end).unwrap_or(&[]);
+        Ok(slice.to_vec())
     }
 
     async fn write_file(&self, path: &Path, content: &[u8]) -> SandboxResult<()> {
@@ -190,7 +193,7 @@ impl Sandbox for LocalSandbox {
     async fn read_dir(&self, path: &Path) -> SandboxResult<Vec<DirEntry>> {
         let entries: Vec<DirEntry> = std::fs::read_dir(path)
             .map_err(SandboxError::Io)?
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .map(|e| {
                 let name = e.file_name().to_string_lossy().to_string();
                 let file_type = e
@@ -213,6 +216,7 @@ impl Sandbox for LocalSandbox {
         Ok(entries)
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     async fn metadata(&self, path: &Path) -> SandboxResult<FileMetadata> {
         let meta = std::fs::metadata(path).map_err(SandboxError::Io)?;
         let mtime = meta

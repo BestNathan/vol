@@ -53,7 +53,7 @@ impl AbsoluteIvRule {
             .dte_atm_thresholds
             .get(&dte_key)
             .copied()
-            .unwrap_or_else(|| match tenor {
+            .unwrap_or(match tenor {
                 Tenor::Short => self.config.short_atm_threshold,
                 Tenor::Medium => self.config.medium_atm_threshold,
                 Tenor::Long => self.config.long_atm_threshold,
@@ -70,7 +70,7 @@ impl AbsoluteIvRule {
             let mark_price = data
                 .extra
                 .get("mark_price_coin")
-                .and_then(|v| v.as_f64())
+                .and_then(serde_json::value::Value::as_f64)
                 .unwrap_or(0.0);
             Some(Alert::new(
                 AlertType::AbsoluteIv {

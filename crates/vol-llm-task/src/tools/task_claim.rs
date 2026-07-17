@@ -62,7 +62,7 @@ impl ExecutableTool for TaskClaim {
         context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         let params: TaskClaimParams = serde_json::from_value(args.clone())
-            .map_err(|e| ToolError::InvalidArguments(format!("Failed to parse task ID: {}", e)))?;
+            .map_err(|e| ToolError::InvalidArguments(format!("Failed to parse task ID: {e}")))?;
 
         let raw = params.task_id.trim_start_matches('t');
         let id_num: u64 = raw.parse().map_err(|_| {
@@ -104,7 +104,7 @@ impl ExecutableTool for TaskClaim {
                 .dependencies
                 .iter()
                 .filter(|d| !ready_ids.contains(d))
-                .map(|d| d.to_string())
+                .map(std::string::ToString::to_string)
                 .collect();
             return Err(ToolError::ExecutionFailed(format!(
                 "Task {} has uncompleted dependencies: [{}]",

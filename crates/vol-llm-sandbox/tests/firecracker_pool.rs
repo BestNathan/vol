@@ -25,7 +25,7 @@ ssh_identity_file = "/opt/key"
     assert_eq!(fc.pool_size, 1); // default
     assert_eq!(fc.idle_timeout_secs, 300); // default
     assert_eq!(fc.guest_ip, "172.16.0.2"); // default
-    assert_eq!(fc.rootfs_readonly, false); // default
+    assert!(!fc.rootfs_readonly); // default
     assert_eq!(fc.guest_ssh_port, 22); // default
     assert_eq!(fc.firecracker_binary, None); // default
     assert_eq!(fc.ssh_passphrase, None); // default
@@ -63,7 +63,7 @@ ssh_passphrase = "secret"
     );
     assert_eq!(fc.guest_ip, "10.0.0.1");
     assert_eq!(fc.guest_ssh_port, 2222);
-    assert_eq!(fc.rootfs_readonly, true);
+    assert!(fc.rootfs_readonly);
     assert_eq!(fc.ssh_passphrase, Some("secret".to_string()));
 }
 

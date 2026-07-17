@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .join("examples")
         .join("coding_task.txt");
     let task = std::fs::read_to_string(&task_path)
-        .unwrap_or_else(|e| panic!("Failed to read task file {:?}: {}", task_path, e));
+        .unwrap_or_else(|e| panic!("Failed to read task file {task_path:?}: {e}"));
     println!("=== Task ===\n{}\n============\n", task.trim());
 
     // Configure web fetch with proxy for Deribit docs access
@@ -36,11 +36,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Set up unique agent ID for this run
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-    let agent_id = format!("deribit-ws-client-{}", timestamp);
+    let agent_id = format!("deribit-ws-client-{timestamp}");
     let working_dir = PathBuf::from("/tmp/deribit-ws-client");
 
-    println!("Agent ID: {}", agent_id);
-    println!("Working dir: {:?}", working_dir);
+    println!("Agent ID: {agent_id}");
+    println!("Working dir: {working_dir:?}");
 
     // Construct LLM externally — CodingAgent does not read env vars
     let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN")
@@ -76,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let agent = CodingAgent::new(config)?;
 
     // Create observer for HTML report
-    let report_path = PathBuf::from(format!("coding-report-{}.html", timestamp));
+    let report_path = PathBuf::from(format!("coding-report-{timestamp}.html"));
     let observer = Arc::new(HTMLReporter::new(
         report_path.clone(),
         task.trim().to_string(),
@@ -94,7 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Iterations: {}, Tool calls: {}",
         result.iterations, result.tool_calls
     );
-    println!("HTML Report: {:?}", report_path);
+    println!("HTML Report: {report_path:?}");
 
     // Verify session and run logs
     let session_log_dir = working_dir.join("logs/agents").join(&agent_id);
@@ -105,7 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Ok(entries) = std::fs::read_dir(&session_log_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().map_or(false, |e| e == "jsonl") {
+                if path.extension().is_some_and(|e| e == "jsonl") {
                     let size = path.metadata().map(|m| m.len()).unwrap_or(0);
                     println!("  {} ({} bytes)", path.display(), size);
 
@@ -113,7 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Ok(content) = std::fs::read_to_string(&path) {
                         let lines: Vec<&str> = content.lines().collect();
                         let total = lines.len();
-                        println!("    Lines: {}", total);
+                        println!("    Lines: {total}");
                         // Show last 3 events
                         for line in lines.iter().rev().take(3).rev() {
                             if let Ok(event) = serde_json::from_str::<serde_json::Value>(line) {
@@ -121,7 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .get("type")
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("unknown");
-                                println!("    Last event: type={}", event_type);
+                                println!("    Last event: type={event_type}");
                             }
                         }
                     }
@@ -129,7 +129,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     } else {
-        println!("  Session log directory not found: {:?}", session_log_dir);
+        println!("  Session log directory not found: {session_log_dir:?}");
     }
 
     println!("\n=== Run Logs ===");
@@ -137,21 +137,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Ok(entries) = std::fs::read_dir(&run_log_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().map_or(false, |e| e == "jsonl") {
+                if path.extension().is_some_and(|e| e == "jsonl") {
                     let size = path.metadata().map(|m| m.len()).unwrap_or(0);
                     println!("  {} ({} bytes)", path.display(), size);
 
                     if let Ok(content) = std::fs::read_to_string(&path) {
                         let lines: Vec<&str> = content.lines().collect();
                         let total = lines.len();
-                        println!("    Lines: {}", total);
+                        println!("    Lines: {total}");
                         for line in lines.iter().rev().take(3).rev() {
                             if let Ok(event) = serde_json::from_str::<serde_json::Value>(line) {
                                 let event_type = event
                                     .get("type")
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("unknown");
-                                println!("    Last event: type={}", event_type);
+                                println!("    Last event: type={event_type}");
                             }
                         }
                     }
@@ -159,7 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     } else {
-        println!("  Run log directory not found: {:?}", run_log_dir);
+        println!("  Run log directory not found: {run_log_dir:?}");
     }
 
     // Check if the agent created any Go source files

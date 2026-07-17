@@ -102,7 +102,7 @@ fn render_approval_panel(frame: &mut Frame, area: Rect, state: &AppState) {
     frame.render_widget(block, area);
 
     let tool_line = Line::from(vec![Span::styled(
-        format!(" \u{26A0} {}", tool_name),
+        format!(" \u{26A0} {tool_name}"),
         Style::default()
             .fg(Color::Yellow)
             .add_modifier(Modifier::BOLD),
@@ -112,7 +112,7 @@ fn render_approval_panel(frame: &mut Frame, area: Rect, state: &AppState) {
         Line::from(Span::styled(" ", Style::default().fg(Color::DarkGray)))
     } else {
         Line::from(vec![Span::styled(
-            format!("  {}", arguments_preview),
+            format!("  {arguments_preview}"),
             Style::default().fg(Color::DarkGray),
         )])
     };
@@ -150,10 +150,10 @@ fn extract_command_preview(arguments: &str) -> String {
             return truncate(cmd, 100);
         }
         if let Some(path) = parsed.get("path").and_then(|v| v.as_str()) {
-            return format!("Path: {}", path);
+            return format!("Path: {path}");
         }
         if let Some(file_path) = parsed.get("file_path").and_then(|v| v.as_str()) {
-            return format!("File: {}", file_path);
+            return format!("File: {file_path}");
         }
         // Fall back to pretty-printed JSON snippet
         return truncate(

@@ -116,7 +116,7 @@ impl AdviceAgent {
         let advice = self
             .generate_advice(alert)
             .await
-            .unwrap_or_else(|e| format!("Failed to generate advice: {}", e));
+            .unwrap_or_else(|e| format!("Failed to generate advice: {e}"));
 
         // Send advice to Feishu
         self.send_advice(&advice, alert, trace_id).await?;

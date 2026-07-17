@@ -9,6 +9,7 @@ use vol_llm_agent::react::{ApprovalChannel, ApprovalRequest, ApprovalResponse};
 
 /// Shared state for pending approval requests in the TUI.
 #[derive(Clone)]
+#[allow(clippy::type_complexity)]
 pub struct ApprovalState {
     /// Current pending tool name (for display).
     pub tool_name: Arc<Mutex<Option<String>>>,
@@ -56,9 +57,7 @@ impl ApprovalState {
     pub fn into_hitl_plugin(self) -> vol_llm_agent::react::hitl::HitlPlugin<TuiApprovalChannel> {
         use vol_llm_agent::react::{ApprovalTrigger, HitlConfig};
 
-        let channel = TuiApprovalChannel {
-            state: self.clone(),
-        };
+        let channel = TuiApprovalChannel { state: self };
         let config = HitlConfig {
             triggers: vec![ApprovalTrigger::ToolExecution { tools: None }],
             timeout_secs: 0,

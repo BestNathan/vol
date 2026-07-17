@@ -30,6 +30,7 @@ impl CommandStore {
         }
     }
 
+    #[allow(clippy::expect_used)]
     pub fn insert(&self, record: CommandRecord) {
         self.records
             .write()
@@ -37,6 +38,7 @@ impl CommandStore {
             .insert(record.command_id.clone(), record);
     }
 
+    #[allow(clippy::expect_used)]
     pub fn get(&self, command_id: &str) -> Option<CommandRecord> {
         self.records
             .read()
@@ -63,6 +65,7 @@ impl RunStore {
         }
     }
 
+    #[allow(clippy::expect_used)]
     pub fn insert(&self, record: RunRecord) {
         self.records
             .write()
@@ -70,6 +73,7 @@ impl RunStore {
             .insert(record.run_id.clone(), record);
     }
 
+    #[allow(clippy::expect_used)]
     pub fn get(&self, run_id: &str) -> Option<RunRecord> {
         self.records
             .read()
@@ -99,7 +103,7 @@ mod tests {
             status: "pending".to_string(),
             run_id: None,
         };
-        store.insert(record.clone());
+        store.insert(record);
         let fetched = store.get("cmd-1").unwrap();
         assert_eq!(fetched.command_id, "cmd-1");
         assert_eq!(fetched.status, "pending");
@@ -121,7 +125,7 @@ mod tests {
             agent_id: "coding".to_string(),
             status: "running".to_string(),
         };
-        store.insert(record.clone());
+        store.insert(record);
         let fetched = store.get("run-1").unwrap();
         assert_eq!(fetched.run_id, "run-1");
         assert_eq!(fetched.node_id, "node-a");

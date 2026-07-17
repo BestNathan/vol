@@ -83,7 +83,7 @@ impl AgentDef {
     pub fn new(name: &str, content: impl Into<String>) -> Self {
         let content_str = content.into();
         Self {
-            id: format!("code:{}", name),
+            id: format!("code:{name}"),
             name: name.to_string(),
             r#type: name.to_string(),
             description: String::new(),

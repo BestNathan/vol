@@ -60,6 +60,7 @@ impl AgentConfig {
     }
 
     /// Add a context contributor.
+    #[allow(clippy::unwrap_used)]
     pub fn add_contributor(&mut self, contributor: Box<dyn ContextContributor>) {
         self.context_builder
             .write()
@@ -68,12 +69,14 @@ impl AgentConfig {
     }
 
     /// List contributor info (for RPC / UI queries).
+    #[allow(clippy::unwrap_used)]
     pub async fn contributor_infos(&self) -> Result<Vec<ContributorInfo>, ContextError> {
         let cb = self.context_builder.read().unwrap().clone();
         cb.contributor_infos().await
     }
 
     /// Get message snapshot from a specific contributor.
+    #[allow(clippy::unwrap_used)]
     pub async fn snapshot_by_name(&self, name: &str) -> Result<Vec<ContextMessage>, ContextError> {
         let cb = self.context_builder.read().unwrap().clone();
         cb.snapshot_by_name(name).await
@@ -103,10 +106,7 @@ impl Default for AgentConfig {
 }
 
 fn generate_agent_id() -> String {
-    format!(
-        "agent-{}",
-        uuid::Uuid::new_v4().simple().to_string()[..8].to_string()
-    )
+    format!("agent-{}", &uuid::Uuid::new_v4().simple().to_string()[..8])
 }
 
 /// Dummy LLM for Default impl (tests only — will panic if used).
@@ -165,6 +165,7 @@ struct RunningGuard<'a> {
 }
 
 impl Drop for RunningGuard<'_> {
+    #[allow(clippy::unwrap_used)]
     fn drop(&mut self) {
         self.run_state
             .is_running
@@ -199,6 +200,7 @@ impl ReActAgent {
     // ── Contributor API ──
 
     /// Add a context contributor at runtime.
+    #[allow(clippy::unwrap_used)]
     pub fn add_contributor(&mut self, contributor: Box<dyn ContextContributor>) {
         self.config
             .context_builder
@@ -218,6 +220,7 @@ impl ReActAgent {
     }
 
     /// Cheap clone of the shared session handle.
+    #[allow(clippy::unwrap_used)]
     pub fn session(&self) -> Arc<Session> {
         self.config.session.read().unwrap().clone()
     }
@@ -238,6 +241,7 @@ impl ReActAgent {
 
     /// Replace the session. Rejected if agent is running.
     /// Also replaces the SessionContributor with a new one pointing to the new session.
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     pub fn set_session(&self, session: Arc<Session>) -> Result<(), AgentBusyError> {
         if self.is_running() {
             return Err(AgentBusyError {
@@ -255,11 +259,15 @@ impl ReActAgent {
             max_history,
             AttentionAnchor::Tail(0),
         ));
-        *self.config.session.write().unwrap() = session;
+        *self
+            .config
+            .session
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = session;
         self.config
             .context_builder
             .write()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .replace_contributor("session", session_contributor);
         Ok(())
     }
@@ -267,6 +275,7 @@ impl ReActAgent {
     // ── Builder-style (consuming self, initial setup only) ──
 
     /// Set the sandbox for tool execution (builder pattern, consumes self).
+    #[allow(clippy::expect_used)]
     pub fn with_sandbox(mut self, sandbox: SandboxRef) -> Self {
         Arc::get_mut(&mut self.config)
             .expect("with_sandbox called after config was shared")
@@ -282,6 +291,7 @@ impl ReActAgent {
     }
 
     #[tracing::instrument(skip(self, input), fields(agent.run_id))]
+    #[allow(clippy::unwrap_used, clippy::cast_possible_truncation)]
     pub async fn run_input(&self, input: AgentInput) -> Result<AgentResponse, crate::AgentError> {
         // Re-entrancy guard
         if self
@@ -308,8 +318,16 @@ impl ReActAgent {
         tracing::Span::current().record("agent.run_id", &run_id);
 
         // Set status metadata
-        *self.run_state.current_input.write().unwrap() = Some(user_input.clone());
-        *self.run_state.current_run_id.write().unwrap() = Some(run_id.clone());
+        *self
+            .run_state
+            .current_input
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(user_input.clone());
+        *self
+            .run_state
+            .current_run_id
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(run_id.clone());
 
         // RAII guard: clears running state on drop (even on panic)
         let _guard = RunningGuard {
@@ -326,7 +344,7 @@ impl ReActAgent {
         // Persist user message to session so it's available via SessionContributor.
         let user_msg = Message::user(user_content);
         run_ctx.add_message(user_msg).await.map_err(|e| {
-            crate::AgentError::SessionError(format!("Failed to persist user message: {}", e))
+            crate::AgentError::SessionError(format!("Failed to persist user message: {e}"))
         })?;
 
         // === Phase 2: Context is built per-iteration via get_context ===
@@ -390,7 +408,7 @@ impl ReActAgent {
                         ))
                         .await;
 
-                    let reason = format!("Max iterations ({}) reached", max_iterations);
+                    let reason = format!("Max iterations ({max_iterations}) reached");
                     run_ctx
                         .emit(AgentStreamEvent::agent_aborted(reason.clone()))
                         .await;
@@ -403,10 +421,7 @@ impl ReActAgent {
                 let tools_defs = run_ctx.effective_tools();
 
                 // Get messages from ctx (not local variable)
-                let messages = run_ctx
-                    .get_context()
-                    .await
-                    .map_err(|e| crate::AgentError::from(e))?;
+                let messages = run_ctx.get_context().await?;
 
                 let request = ConversationRequest::with_history(None, messages)
                     .with_tools(tools_defs)
@@ -417,8 +432,7 @@ impl ReActAgent {
                     Err(e) => {
                         run_ctx
                             .emit(AgentStreamEvent::agent_aborted(format!(
-                                "LLM request failed: {}",
-                                e
+                                "LLM request failed: {e}"
                             )))
                             .await;
                         return Err(crate::AgentError::Llm(e));
@@ -432,8 +446,7 @@ impl ReActAgent {
                         Err(e) => {
                             run_ctx
                                 .emit(AgentStreamEvent::agent_aborted(format!(
-                                    "LLM stream failed: {}",
-                                    e
+                                    "LLM stream failed: {e}"
                                 )))
                                 .await;
                             return Err(e);
@@ -463,9 +476,7 @@ impl ReActAgent {
                             msg
                         }
                     };
-                    if let Err(e) = run_ctx.add_message(assistant_message).await {
-                        return Err(crate::AgentError::from(e));
-                    }
+                    run_ctx.add_message(assistant_message).await?;
 
                     // Act phase - execute tools
                     for call in &tool_calls {
@@ -492,6 +503,7 @@ impl ReActAgent {
                             }
                             PluginDecision::Skip => {
                                 tracing::warn!("Plugin intercepted to skip tool: {}", call.name);
+                                #[allow(clippy::cast_possible_truncation)]
                                 let duration_ms = tool_begin.elapsed().as_millis() as u64;
 
                                 run_ctx
@@ -542,6 +554,7 @@ impl ReActAgent {
                         let result = match run_ctx.execute_tool(call, &tool_ctx).await {
                             Ok(r) => r,
                             Err(e) => {
+                                #[allow(clippy::cast_possible_truncation)]
                                 let duration_ms = tool_begin.elapsed().as_millis() as u64;
                                 run_ctx
                                     .emit(AgentStreamEvent::tool_call_error(
@@ -556,7 +569,7 @@ impl ReActAgent {
                                     .record_tool_call(ToolCallRecord {
                                         tool_name: call.name.clone(),
                                         arguments: call.arguments.clone(),
-                                        result: format!("Error: {}", e),
+                                        result: format!("Error: {e}"),
                                         iteration,
                                         success: false,
                                     })
@@ -564,12 +577,9 @@ impl ReActAgent {
 
                                 // Add error message to session — LLM sees it on next turn
                                 let error_content = format!("Tool '{}' error: {}", call.name, e);
-                                if let Err(e) = run_ctx
+                                run_ctx
                                     .add_message(Message::tool(error_content, call.id.clone()))
-                                    .await
-                                {
-                                    return Err(crate::AgentError::from(e));
-                                }
+                                    .await?;
 
                                 continue;
                             }
@@ -587,6 +597,7 @@ impl ReActAgent {
                             .await;
 
                         // Emit ToolCallComplete
+                        #[allow(clippy::cast_possible_truncation)]
                         let duration_ms = tool_begin.elapsed().as_millis() as u64;
                         run_ctx
                             .emit(AgentStreamEvent::tool_call_complete(
@@ -598,12 +609,9 @@ impl ReActAgent {
                             .await;
 
                         // Add tool result to ctx
-                        if let Err(e) = run_ctx
+                        run_ctx
                             .add_message(Message::tool(result.content.clone(), call.id.clone()))
-                            .await
-                        {
-                            return Err(crate::AgentError::from(e));
-                        }
+                            .await?;
 
                         // Clear current tool calls for next iteration
                         run_ctx.clear_current_tool_calls().await;
@@ -635,9 +643,7 @@ impl ReActAgent {
                 if !thinking.is_empty() {
                     final_msg = final_msg.with_thinking(thinking.clone());
                 }
-                if let Err(e) = run_ctx.add_message(final_msg).await {
-                    return Err(crate::AgentError::from(e));
-                }
+                run_ctx.add_message(final_msg).await?;
 
                 // Store final response data
                 run_ctx.set_final_content(content.clone()).await;
@@ -672,8 +678,7 @@ impl ReActAgent {
             Ok(result) => result,
             Err(join_err) => {
                 return Err(crate::AgentError::Context(format!(
-                    "Agent task panicked: {}",
-                    join_err
+                    "Agent task panicked: {join_err}"
                 )));
             }
         };
@@ -732,7 +737,7 @@ async fn consume_llm_stream(
     let mut content_started = false;
 
     while let Some(result) = stream.recv().await {
-        let event = result.map_err(|e| crate::AgentError::Llm(e))?;
+        let event = result.map_err(crate::AgentError::Llm)?;
 
         match event.data {
             StreamEventData::ThinkingDelta { thinking: delta } => {
@@ -815,7 +820,7 @@ mod tests {
     };
 
     use crate::agent_def::AgentDef;
-    
+
     use vol_llm_tool::ToolRegistry;
     use vol_session::InMemoryEntryStore;
 

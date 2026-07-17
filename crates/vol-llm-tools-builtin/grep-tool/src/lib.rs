@@ -111,9 +111,8 @@ impl ExecutableTool for GrepTool {
         args: &serde_json::Value,
         context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
-        let params: GrepParams = serde_json::from_value(args.clone()).map_err(|e| {
-            ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
-        })?;
+        let params: GrepParams = serde_json::from_value(args.clone())
+            .map_err(|e| ToolError::InvalidArguments(format!("Failed to parse arguments: {e}")))?;
 
         let valid_modes = [MODE_FILES, MODE_COUNT, MODE_CONTENT];
         if !valid_modes.contains(&params.output_mode.as_str()) {

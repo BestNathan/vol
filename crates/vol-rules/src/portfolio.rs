@@ -45,7 +45,7 @@ impl PortfolioRule {
         if let Some(&timestamp) = last.get(key) {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs();
             return now - timestamp < self.cooldown_secs;
         }
@@ -56,7 +56,7 @@ impl PortfolioRule {
     async fn record_alert(&self, key: String) {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
         let mut last = self.last_alert.write().await;
         last.insert(key, now);
@@ -89,8 +89,7 @@ impl PortfolioRule {
                                         symbol: format!("PORTFOLIO_{}", snapshot.currency),
                                         iv: 0.0,
                                         message: format!(
-                                            "Margin ratio {:.2} below threshold {:.2}",
-                                            ratio, min
+                                            "Margin ratio {ratio:.2} below threshold {min:.2}"
                                         ),
                                         timestamp: snapshot.timestamp,
                                         source: "deribit".to_string(),
@@ -151,7 +150,7 @@ impl PortfolioRule {
                                 tenor: Tenor::Medium,
                                 symbol: format!("PORTFOLIO_{}", snapshot.currency),
                                 iv: 0.0,
-                                message: format!("Delta exposure {:.2} outside thresholds", delta),
+                                message: format!("Delta exposure {delta:.2} outside thresholds"),
                                 timestamp: snapshot.timestamp,
                                 source: "deribit".to_string(),
                                 index_price: 0.0,

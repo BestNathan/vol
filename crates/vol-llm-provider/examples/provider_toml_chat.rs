@@ -54,11 +54,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Pick the first provider
     let provider_id = env::var("LLM_PROVIDER_ID")
         .ok()
-        .or_else(|| loader.ids().first().map(|s| s.to_string()))
+        .or_else(|| loader.ids().first().map(std::string::ToString::to_string))
         .unwrap();
     let client = registry
         .get(&provider_id)
-        .ok_or_else(|| format!("Provider '{}' not found", provider_id))?;
+        .ok_or_else(|| format!("Provider '{provider_id}' not found"))?;
 
     println!(
         "Using provider: {} (model: {})",
@@ -89,9 +89,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .message
         .content
         .as_ref()
-        .map(|c| c.as_str())
+        .map(vol_llm_core::MessageContent::as_str)
         .unwrap_or("(no content)");
-    println!("{}", content);
+    println!("{content}");
 
     Ok(())
 }

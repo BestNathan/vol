@@ -70,6 +70,7 @@ impl AgentDispatcher {
     }
 
     /// Cancel a queued request. Returns false if already executing or completed.
+    #[allow(clippy::unwrap_used)]
     pub async fn cancel(&self, run_id: &str) -> bool {
         let mut queue = self.state.queue.lock().await;
 
@@ -92,6 +93,7 @@ impl AgentDispatcher {
     }
 
     /// Atomically replace the agent's session. Fails if agent is running.
+    #[allow(clippy::unwrap_used)]
     pub fn swap_session(
         &self,
         new_session: Arc<Session>,
@@ -108,11 +110,13 @@ impl AgentDispatcher {
     }
 
     /// Clone the wrapped agent (read-only access via Arc clone).
+    #[allow(clippy::unwrap_used)]
     pub fn get_agent(&self) -> Arc<ReActAgent> {
         self.agent.read().unwrap().clone()
     }
 
     /// Background loop that processes requests FIFO.
+    #[allow(clippy::unwrap_used)]
     async fn run_loop(agent: Arc<std::sync::RwLock<Arc<ReActAgent>>>, state: Arc<DispatcherState>) {
         loop {
             // Wait for a notification.

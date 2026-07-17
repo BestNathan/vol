@@ -17,6 +17,7 @@ pub struct PortfolioDataSource {
 
 impl PortfolioDataSource {
     /// Create a new PortfolioDataSource from client configuration
+    #[allow(clippy::expect_used)]
     pub fn from_config(
         client_config: DeribitClientConfig,
         portfolio_config: PortfolioConfig,
@@ -74,10 +75,14 @@ impl PortfolioDataSource {
 
         Ok(PortfolioSnapshot {
             currency: summary.currency,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
+            timestamp: {
+                #[allow(clippy::cast_possible_truncation)]
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_else(|e| e.duration())
+                    .as_millis() as u64;
+                ts
+            },
             equity: summary.equity,
             balance: summary.balance,
             available_funds: summary.available_funds,

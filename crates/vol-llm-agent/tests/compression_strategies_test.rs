@@ -16,18 +16,18 @@ fn make_conversation(n_pairs: usize) -> Vec<SessionMessage> {
         // User message
         messages.push(SessionMessage::new(
             "sess".to_string(),
-            Message::user(format!("User question {}", i)),
+            Message::user(format!("User question {i}")),
         ));
         // Assistant response
         messages.push(SessionMessage::new(
             "sess".to_string(),
-            Message::assistant(format!("Assistant reply {}", i)),
+            Message::assistant(format!("Assistant reply {i}")),
         ));
         // Tool call (every other pair)
         if i % 2 == 0 {
             let mut tool_msg = SessionMessage::new(
                 "sess".to_string(),
-                Message::assistant(format!("Tool result {}", i)),
+                Message::assistant(format!("Tool result {i}")),
             );
             tool_msg.message.role = MessageRole::Tool;
             messages.push(tool_msg);
@@ -88,7 +88,7 @@ async fn test_role_filter_compressor_removes_tool_messages() {
         .count();
     assert_eq!(remaining_tool, 0);
     // User and Assistant should survive
-    assert!(result.len() > 0);
+    assert!(!result.is_empty());
 }
 
 #[tokio::test]

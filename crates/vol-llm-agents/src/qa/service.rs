@@ -137,7 +137,7 @@ impl QaResponse {
                 let source = doc
                     .metadata
                     .get("source")
-                    .map(|s| s.as_str())
+                    .map(std::string::String::as_str)
                     .unwrap_or("unknown");
                 result.push_str(&format!(
                     "{}. [{}] {}\n",

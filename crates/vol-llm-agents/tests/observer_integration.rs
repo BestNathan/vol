@@ -91,7 +91,7 @@ async fn test_observer_plugin_receives_all_events() {
 
     // This test verifies plugin registration without requiring a real LLM
     let tracker = Arc::new(EventTracker::new());
-    let plugin = ObserverPlugin::new(tracker.clone());
+    let plugin = ObserverPlugin::new(tracker);
 
     // Verify plugin is created correctly
     assert_eq!(plugin.id(), "observer");

@@ -82,9 +82,8 @@ impl ExecutableTool for EditTool {
         context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         // Parse arguments
-        let params: EditParams = serde_json::from_value(args.clone()).map_err(|e| {
-            ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
-        })?;
+        let params: EditParams = serde_json::from_value(args.clone())
+            .map_err(|e| ToolError::InvalidArguments(format!("Failed to parse arguments: {e}")))?;
 
         // Validate old_string is not empty
         if params.old_string.is_empty() {
@@ -96,14 +95,14 @@ impl ExecutableTool for EditTool {
         // Resolve path through sandbox
         let file_path = context
             .resolve_path(&params.file_path)
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to resolve path: {e}")))?;
 
         // Read file contents via sandbox
         let raw = context
             .sandbox
             .read_file(&file_path, None, None)
             .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file: {e}")))?;
 
         let content = String::from_utf8_lossy(&raw).to_string();
 
@@ -138,7 +137,7 @@ impl ExecutableTool for EditTool {
             .sandbox
             .write_file(&file_path, new_content.as_bytes())
             .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write file: {}", e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write file: {e}")))?;
 
         let output = format!(
             "Successfully replaced {} occurrence(s) of '{}' with '{}' in {}",

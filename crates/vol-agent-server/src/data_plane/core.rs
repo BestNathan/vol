@@ -63,39 +63,6 @@ impl StorePaths {
     }
 }
 
-#[cfg(test)]
-mod store_paths_tests {
-    use super::StorePaths;
-    use std::path::PathBuf;
-
-    #[test]
-    fn store_paths_agent_dir_joins_agents_root() {
-        let paths = StorePaths {
-            root: PathBuf::from("/tmp/store"),
-            sessions: PathBuf::from("/tmp/store/sessions"),
-            agents_root: PathBuf::from("/tmp/store/agents"),
-        };
-        assert_eq!(paths.agent_dir("agent-a"), PathBuf::from("/tmp/store/agents/agent-a"));
-    }
-
-    #[test]
-    fn store_paths_ensure_dirs_creates_directories() {
-        let tmp = std::env::temp_dir().join("vol-agent-test-store-paths");
-        let sessions = tmp.join("sessions");
-        let agents_root = tmp.join("agents");
-        let paths = StorePaths {
-            root: tmp.clone(),
-            sessions: sessions.clone(),
-            agents_root: agents_root.clone(),
-        };
-        paths.ensure_dirs().unwrap();
-        assert!(sessions.exists());
-        assert!(agents_root.exists());
-        // Cleanup
-        let _ = std::fs::remove_dir_all(&tmp);
-    }
-}
-
 pub use vol_llm_runtime::AgentStatus;
 
 /// Shared core for the agent server.
@@ -205,6 +172,7 @@ impl DataPlaneServerCore {
     /// Register a new agent with the given id and definition.
     ///
     /// Agent 所有资源归 `{store_dir}/agents/{agent_id}/` 下，不污染用户工作区。
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     pub async fn register_agent(
         &self,
         agent_id: impl Into<String>,
@@ -225,11 +193,11 @@ impl DataPlaneServerCore {
         let allowed_refs: Option<Vec<&str>> = def
             .tools
             .as_ref()
-            .map(|v| v.iter().map(|s| s.as_str()).collect());
+            .map(|v| v.iter().map(std::string::String::as_str).collect());
         let disallowed_refs: Option<Vec<&str>> = def
             .disallowed_tools
             .as_ref()
-            .map(|v| v.iter().map(|s| s.as_str()).collect());
+            .map(|v| v.iter().map(std::string::String::as_str).collect());
         let tools = tool_registry.filter(allowed_refs.as_deref(), disallowed_refs.as_deref());
 
         let mcp = self.mcp_manager.clone();
@@ -260,8 +228,12 @@ impl DataPlaneServerCore {
         config.plugin_registry.register(holder.clone());
 
         // Register observability plugins
-        config.plugin_registry.register(vol_llm_observability::MetricsPlugin::new());
-        config.plugin_registry.register(vol_llm_observability::LokiPlugin::new());
+        config
+            .plugin_registry
+            .register(vol_llm_observability::MetricsPlugin::new());
+        config
+            .plugin_registry
+            .register(vol_llm_observability::LokiPlugin::new());
 
         let agent = vol_llm_agent::ReActAgent::new(config);
         let dispatcher = Arc::new(AgentDispatcher::new(agent));
@@ -279,11 +251,13 @@ impl DataPlaneServerCore {
     }
 
     /// List all registered agent IDs.
+    #[allow(clippy::unwrap_used)]
     pub async fn list_agent_ids(&self) -> Vec<String> {
         self.holders.lock().unwrap().keys().cloned().collect()
     }
 
     /// Discover and register all agents from .agents/agents/ directories.
+    #[allow(clippy::unwrap_used)]
     pub async fn discover_agents(&self) -> Result<(), String> {
         let loader = vol_llm_agent::AgentLoader::new(Some(self.working_dir.clone()));
         loader.discover_all().await.map_err(|e| e.to_string())?;
@@ -329,6 +303,7 @@ impl DataPlaneServerCore {
     }
 
     /// Serve incoming messages from a type-erased connection.
+    #[allow(clippy::unwrap_used)]
     pub async fn serve_dyn(&self, conn: Arc<dyn Connection>) {
         tracing::info!(dir = "dp < client", "data-plane accepted client connection");
 
@@ -363,7 +338,10 @@ impl DataPlaneServerCore {
             for resp in responses {
                 if let Err(e) = conn.send(resp).await {
                     tracing::debug!(%e, "connection send ended");
-                    tracing::info!(dir = "dp < client", "data-plane client connection closed (send error)");
+                    tracing::info!(
+                        dir = "dp < client",
+                        "data-plane client connection closed (send error)"
+                    );
                     return;
                 }
             }
@@ -504,9 +482,7 @@ impl DataPlaneServerCoreBuilder {
             .register(Arc::new(DataPlaneControlHandler::new()))
             .map_err(|e| format!("failed to register DataPlaneControlHandler: {e}"))?;
         handler_registry
-            .register(Arc::new(SandboxHandler::new(
-                sandbox_registry.default(),
-            )))
+            .register(Arc::new(SandboxHandler::new(sandbox_registry.default())))
             .map_err(|e| format!("failed to register SandboxHandler: {e}"))?;
 
         for extra in self.extra_handlers {
@@ -533,6 +509,7 @@ impl DataPlaneServerCoreBuilder {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 fn derive_llm_client(working_dir: &std::path::Path) -> Result<Arc<dyn LLMClient>, String> {
     let loader = ProviderLoader::load(Some(working_dir));
     if loader.is_empty() {
@@ -545,7 +522,7 @@ fn derive_llm_client(working_dir: &std::path::Path) -> Result<Arc<dyn LLMClient>
         let llm_config = file_config.to_llm_config();
         match create_provider(&llm_config) {
             Ok(client) => return Ok(Arc::from(client)),
-            Err(e) => errors.push(format!("{}: {}", id, e)),
+            Err(e) => errors.push(format!("{id}: {e}")),
         }
     }
     Err(format!(
@@ -557,6 +534,7 @@ fn derive_llm_client(working_dir: &std::path::Path) -> Result<Arc<dyn LLMClient>
 /// Test constructor that provides minimal defaults for all optional fields.
 impl DataPlaneServerCore {
     #[doc(hidden)]
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     pub async fn for_test() -> Self {
         use std::sync::Arc;
 
@@ -688,5 +666,41 @@ impl DataPlaneServerCore {
             agent_status,
             handler_registry,
         }
+    }
+}
+
+#[cfg(test)]
+mod store_paths_tests {
+    use super::StorePaths;
+    use std::path::PathBuf;
+
+    #[test]
+    fn store_paths_agent_dir_joins_agents_root() {
+        let paths = StorePaths {
+            root: PathBuf::from("/tmp/store"),
+            sessions: PathBuf::from("/tmp/store/sessions"),
+            agents_root: PathBuf::from("/tmp/store/agents"),
+        };
+        assert_eq!(
+            paths.agent_dir("agent-a"),
+            PathBuf::from("/tmp/store/agents/agent-a")
+        );
+    }
+
+    #[test]
+    fn store_paths_ensure_dirs_creates_directories() {
+        let tmp = std::env::temp_dir().join("vol-agent-test-store-paths");
+        let sessions = tmp.join("sessions");
+        let agents_root = tmp.join("agents");
+        let paths = StorePaths {
+            root: tmp.clone(),
+            sessions: sessions.clone(),
+            agents_root: agents_root.clone(),
+        };
+        paths.ensure_dirs().unwrap();
+        assert!(sessions.exists());
+        assert!(agents_root.exists());
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

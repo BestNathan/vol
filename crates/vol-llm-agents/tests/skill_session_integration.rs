@@ -47,7 +47,7 @@ async fn make_session(n: usize) -> Arc<Mutex<Session>> {
     let store = Arc::new(InMemoryEntryStore::new());
     let session = Session::new(store);
     for i in 0..n {
-        let msg = SessionMessage::new(session.id.clone(), Message::user(format!("msg-{}", i)));
+        let msg = SessionMessage::new(session.id.clone(), Message::user(format!("msg-{i}")));
         session.add_message(msg).await.unwrap();
     }
     Arc::new(Mutex::new(session))
@@ -222,12 +222,11 @@ async fn test_skill_injector_from_workdir_path_resolution() {
         .iter()
         .flat_map(|b| &b.messages)
         .filter_map(|m| m.content.as_ref())
-        .map(|c| c.as_str())
+        .map(vol_llm_core::MessageContent::as_str)
         .collect();
     assert!(
         content.contains("test-skill"),
-        "Should have skill content, got: {:?}",
-        content
+        "Should have skill content, got: {content:?}"
     );
 }
 
