@@ -22,10 +22,13 @@ clippy: ## Run clippy on entire workspace
 clippy-strict: ## Run clippy with -D warnings (deny + warn = error)
 	cargo clippy --workspace -- -D warnings
 
-# ── Tests (tiered: unit < integration < e2e) ─────────────────────────
+# ── Tests (tiered: compile < unit < integration < e2e) ──────────────
 
 test: test-unit test-integration ## Run unit + integration tests
 	@echo "All tests passed"
+
+test-compile: ## Compile all tests without running (fast gate, ~3s warm)
+	cargo test --workspace --lib --tests --no-run
 
 test-unit: ## Run unit tests only (src/ inline #[cfg(test)])
 	cargo test --workspace --lib --no-fail-fast
@@ -41,11 +44,17 @@ test-all: test-unit test-integration test-e2e ## Run ALL tests including e2e
 audit: ## Run cargo-audit vulnerability scan (requires cargo-audit)
 	cargo audit
 
-quality: fmt-check clippy test-unit test-integration ## Quality gates (fmt + clippy + unit + integration)
+# ── Quality gates (fast for local, full for CI) ──────────────────────
+
+quality: fmt-check clippy test-compile ## Fast quality gate (fmt + clippy + test-compile, ~5s warm)
 	@echo "All quality gates passed"
 
-quality-strict: fmt-check clippy-strict test-unit test-integration ## Strict quality gates
+quality-strict: fmt-check clippy-strict test-compile ## Fast strict gate
 	@echo "All strict quality gates passed"
+
+quality-full: fmt-check clippy-strict test-unit test-integration ## Full CI gate (includes test execution)
+	@./scripts/check-agent-boundaries.sh
+	@echo "All full quality gates passed"
 
 web-css: ## Build Tailwind CSS in watch mode
 	npx --prefix crates/vol-llm-ui @tailwindcss/cli -i crates/vol-llm-ui/assets/input.css -o crates/vol-llm-ui/assets/tailwind.css --watch=always

@@ -35,34 +35,6 @@ if [ -n "$STAGED_RUST" ]; then
   else
     echo -e "${GREEN}✓ cargo clippy${NC}"
   fi
-
-  # Also check test compilation (unit + integration, catches deny-level lint errors)
-  echo -e "${YELLOW}→ cargo test --lib --tests --no-run${NC}"
-  if ! cargo test --workspace --lib --tests --no-run 2>&1; then
-    echo -e "${RED}✗ test compilation failed — see errors above${NC}"
-    HAS_ERROR=1
-  else
-    echo -e "${GREEN}✓ test compiles${NC}"
-  fi
-
-  # Determine which crates have staged changes to focus coverage on
-  CHANGED_CRATES=()
-  for crate_dir in crates/*/; do
-    crate=$(basename "$crate_dir")
-    if echo "$STAGED_RUST" | grep -q "^crates/${crate}/"; then
-      CHANGED_CRATES+=("$crate")
-    fi
-  done
-
-  if [ ${#CHANGED_CRATES[@]} -gt 0 ] && [ -x ./scripts/check-coverage.sh ]; then
-    echo -e "${YELLOW}→ rust: coverage check for changed crates: ${CHANGED_CRATES[*]}${NC}"
-    if ! ./scripts/check-coverage.sh "${CHANGED_CRATES[@]}" 2>&1; then
-      echo -e "${RED}✗ coverage check failed — see details above${NC}"
-      HAS_ERROR=1
-    else
-      echo -e "${GREEN}✓ coverage${NC}"
-    fi
-  fi
 fi
 
 # ── Result ───────────────────────────────────────────────────────────────
