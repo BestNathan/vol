@@ -70,10 +70,12 @@ impl Sandbox for LocalSandbox {
     }
 
     fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf> {
-        if rel.starts_with('/') {
-            return Err(SandboxError::PathTraversal(rel.to_string()));
-        }
-        let resolved = self.root_path.join(rel);
+        // Accept absolute paths — join to the filesystem root and check containment.
+        let resolved = if rel.starts_with('/') {
+            PathBuf::from(rel)
+        } else {
+            self.root_path.join(rel)
+        };
         let normalized = crate::normalize_path(&resolved);
         let normalized_root = crate::normalize_path(&self.root_path);
         if !normalized.starts_with(&normalized_root) {

@@ -41,8 +41,11 @@ jobs:
       - name: Clippy (workspace)
         run: cargo clippy --workspace
 
-      - name: Unit tests (workspace)
-        run: cargo test --workspace --no-fail-fast
+      - name: Unit tests (src/ inline, fast)
+        run: cargo test --workspace --lib --no-fail-fast
+
+      - name: Integration tests (tests/ directory)
+        run: cargo test --workspace --tests --no-fail-fast
 
       - name: Check agent boundaries
         run: ./scripts/check-agent-boundaries.sh

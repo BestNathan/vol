@@ -11,7 +11,7 @@ async fn test_bash_simple_command() {
         "command": "echo hello"
     });
 
-    let result = tool.execute(&args, &ToolContext::default()).await.unwrap();
+    let result = tool.execute(&args, &ToolContext::for_test()).await.unwrap();
     assert!(result.success);
     assert!(result.content.contains("hello"));
 }
@@ -23,7 +23,7 @@ async fn test_bash_rm_rf_blocked() {
         "command": "rm -rf /"
     });
 
-    let result = tool.execute(&args, &ToolContext::default()).await;
+    let result = tool.execute(&args, &ToolContext::for_test()).await;
     assert!(result.is_err());
     let err = result.unwrap_err();
     // The security violation should cause the command to be blocked
@@ -42,7 +42,7 @@ async fn test_bash_fork_bomb_blocked() {
         "command": ":(){:|:&}:"
     });
 
-    let result = tool.execute(&args, &ToolContext::default()).await;
+    let result = tool.execute(&args, &ToolContext::for_test()).await;
     assert!(result.is_err());
     let err = result.unwrap_err();
     let err_str = format!("{err}");
@@ -62,7 +62,7 @@ async fn test_bash_rm_file_allowed() {
         "command": "rm /tmp/nonexistent_file_test_12345"
     });
 
-    let result = tool.execute(&args, &ToolContext::default()).await;
+    let result = tool.execute(&args, &ToolContext::for_test()).await;
     // Should not error due to security - may succeed or fail due to file not existing
     let err_str = result.map_or_else(|e| format!("{e}"), |r| r.content.clone());
     // The key is that it's NOT a security block - either it succeeds or fails with "No such file"
@@ -81,7 +81,7 @@ async fn test_bash_timeout() {
         "timeout": 100
     });
 
-    let result = tool.execute(&args, &ToolContext::default()).await;
+    let result = tool.execute(&args, &ToolContext::for_test()).await;
     assert!(result.is_err());
     let err = result.unwrap_err();
     let err_str = format!("{err}");
@@ -107,7 +107,7 @@ async fn test_bash_timeout_kills_process() {
         "timeout": 100
     });
 
-    let result = tool.execute(&args, &ToolContext::default()).await;
+    let result = tool.execute(&args, &ToolContext::for_test()).await;
     assert!(result.is_err());
     let err = result.unwrap_err();
     let err_str = format!("{err}");

@@ -12,3 +12,6 @@ serde = { workspace = true }
 toml = { workspace = true }
 vol-core = { workspace = true }
 vol-llm-provider = { workspace = true }
+
+[dev-dependencies]
+serial_test = "3"

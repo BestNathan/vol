@@ -1,6 +1,6 @@
 .PHONY: help web-css web-dev web-backend web-check web-build web-clippy web-serve \
         coverage coverage-html coverage-threshold \
-        fmt fmt-check check clippy test audit quality
+        fmt fmt-check check clippy clippy-strict test test-unit test-integration test-e2e audit quality quality-strict
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
@@ -22,16 +22,29 @@ clippy: ## Run clippy on entire workspace
 clippy-strict: ## Run clippy with -D warnings (deny + warn = error)
 	cargo clippy --workspace -- -D warnings
 
-test: ## Run all workspace tests
-	cargo test --workspace --no-fail-fast
+# ── Tests (tiered: unit < integration < e2e) ─────────────────────────
+
+test: test-unit test-integration ## Run unit + integration tests
+	@echo "All tests passed"
+
+test-unit: ## Run unit tests only (src/ inline #[cfg(test)])
+	cargo test --workspace --lib --no-fail-fast
+
+test-integration: ## Run integration tests (tests/ directory)
+	cargo test --workspace --tests --no-fail-fast
+
+test-e2e: ## Run e2e tests (require external services, mostly #[ignore]d)
+	cargo test --workspace --tests --no-fail-fast -- --ignored
+
+test-all: test-unit test-integration test-e2e ## Run ALL tests including e2e
 
 audit: ## Run cargo-audit vulnerability scan (requires cargo-audit)
 	cargo audit
 
-quality: fmt-check clippy test ## Run all quality gates (fmt + clippy + test)
+quality: fmt-check clippy test-unit test-integration ## Quality gates (fmt + clippy + unit + integration)
 	@echo "All quality gates passed"
 
-quality-strict: fmt-check clippy-strict test ## Run all quality gates in strict mode
+quality-strict: fmt-check clippy-strict test-unit test-integration ## Strict quality gates
 	@echo "All strict quality gates passed"
 
 web-css: ## Build Tailwind CSS in watch mode

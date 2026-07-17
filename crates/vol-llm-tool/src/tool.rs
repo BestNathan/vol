@@ -73,6 +73,18 @@ impl std::fmt::Debug for ToolContext {
 }
 
 impl ToolContext {
+    /// Create a permissive ToolContext for testing — sandbox rooted at `/`
+    /// so that absolute paths from `tempfile` are accepted.
+    pub fn for_test() -> Self {
+        Self {
+            messages: Vec::new(),
+            sandbox: Arc::new(vol_llm_sandbox::local::LocalSandbox::new(Some(
+                std::path::PathBuf::from("/"),
+            ))),
+            agent_def: None,
+        }
+    }
+
     /// Set the sandbox for this tool context
     pub fn with_sandbox(mut self, sandbox: SandboxRef) -> Self {
         self.sandbox = sandbox;

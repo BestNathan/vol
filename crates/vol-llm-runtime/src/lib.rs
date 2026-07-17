@@ -1341,6 +1341,7 @@ base_url = "https://api.test.com"
     }
 
     #[tokio::test]
+    #[ignore = "requires isolated MCP configuration (no local MCP servers)"]
     async fn register_agent_with_mcps_creates_filtered_tool_registry() {
         let temp = tempfile::tempdir().unwrap();
         let providers_dir = temp.path().join(".agents/providers");
