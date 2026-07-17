@@ -24,22 +24,22 @@ clippy-strict: ## Run clippy with -D warnings (deny + warn = error)
 
 # ── Tests (tiered: compile < unit < integration < e2e) ──────────────
 
-test: test-unit test-integration ## Run unit + integration tests
-	@echo "All tests passed"
+test: ## Run all tests in a single pass (fast path)
+	cargo test --workspace --no-fail-fast
 
 test-compile: ## Compile all tests without running (fast gate, ~3s warm)
-	cargo test --workspace --lib --tests --no-run
+	cargo test --workspace --no-run
 
 test-unit: ## Run unit tests only (src/ inline #[cfg(test)])
 	cargo test --workspace --lib --no-fail-fast
 
-test-integration: ## Run integration tests (tests/ directory)
-	cargo test --workspace --tests --no-fail-fast
+test-integration: ## Run all tests including integration (single pass)
+	cargo test --workspace --no-fail-fast
 
 test-e2e: ## Run e2e tests (require external services, mostly #[ignore]d)
-	cargo test --workspace --tests --no-fail-fast -- --ignored
+	cargo test --workspace --no-fail-fast -- --ignored
 
-test-all: test-unit test-integration test-e2e ## Run ALL tests including e2e
+test-all: test-unit test-e2e ## Run ALL tests including e2e
 
 audit: ## Run cargo-audit vulnerability scan (requires cargo-audit)
 	cargo audit
