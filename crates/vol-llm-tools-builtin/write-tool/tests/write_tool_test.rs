@@ -13,7 +13,7 @@ async fn test_write_new_file() {
         "file_path": file_path.to_str().unwrap(),
         "content": content
     });
-    let context = ToolContext::default();
+    let context = ToolContext::for_test();
 
     let result = tool.execute(&args, &context).await.unwrap();
     assert!(result.success);
@@ -41,7 +41,7 @@ async fn test_write_overwrite_file() {
         "file_path": file_path.to_str().unwrap(),
         "content": new_content
     });
-    let context = ToolContext::default();
+    let context = ToolContext::for_test();
 
     let result = tool.execute(&args, &context).await.unwrap();
     assert!(result.success);
@@ -68,7 +68,7 @@ async fn test_write_creates_parent_dirs() {
         "file_path": nested_path.to_str().unwrap(),
         "content": content
     });
-    let context = ToolContext::default();
+    let context = ToolContext::for_test();
 
     let result = tool.execute(&args, &context).await.unwrap();
     assert!(result.success);

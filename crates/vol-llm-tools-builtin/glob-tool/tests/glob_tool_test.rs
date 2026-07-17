@@ -16,7 +16,7 @@ async fn test_glob_basic() {
         "pattern": "*.rs",
         "path": src_dir.to_str().unwrap()
     });
-    let context = ToolContext::default();
+    let context = ToolContext::for_test();
 
     let result = tool.execute(&args, &context).await.unwrap();
     assert!(result.success);
@@ -37,7 +37,7 @@ async fn test_glob_no_matches() {
         "pattern": "*.nonexistent",
         "path": temp_dir.path().to_str().unwrap()
     });
-    let context = ToolContext::default();
+    let context = ToolContext::for_test();
 
     let result = tool.execute(&args, &context).await.unwrap();
     assert!(result.success);

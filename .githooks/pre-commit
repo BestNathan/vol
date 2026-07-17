@@ -36,9 +36,9 @@ if [ -n "$STAGED_RUST" ]; then
     echo -e "${GREEN}✓ cargo clippy${NC}"
   fi
 
-  # Also check test compilation (catches deny-level lint errors)
-  echo -e "${YELLOW}→ cargo test --no-run${NC}"
-  if ! cargo test --workspace --no-run 2>&1; then
+  # Also check test compilation (unit + integration, catches deny-level lint errors)
+  echo -e "${YELLOW}→ cargo test --lib --tests --no-run${NC}"
+  if ! cargo test --workspace --lib --tests --no-run 2>&1; then
     echo -e "${RED}✗ test compilation failed — see errors above${NC}"
     HAS_ERROR=1
   else

@@ -24,7 +24,7 @@ async fn test_edit_unique_string() {
         "new_string": "Rust"
     });
 
-    let result = tool.execute(&args, &ToolContext::default()).await.unwrap();
+    let result = tool.execute(&args, &ToolContext::for_test()).await.unwrap();
     assert!(result.success);
     assert!(result
         .content
@@ -47,7 +47,7 @@ async fn test_edit_multiple_replace_all() {
         "replace_all": true
     });
 
-    let result = tool.execute(&args, &ToolContext::default()).await.unwrap();
+    let result = tool.execute(&args, &ToolContext::for_test()).await.unwrap();
     assert!(result.success);
     assert!(result
         .content
@@ -69,7 +69,7 @@ async fn test_edit_not_unique_error() {
         "new_string": "QUX"
     });
 
-    let result = tool.execute(&args, &ToolContext::default()).await;
+    let result = tool.execute(&args, &ToolContext::for_test()).await;
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.to_string().contains("Found 2 occurrences"));
@@ -91,7 +91,7 @@ async fn test_edit_not_found_error() {
         "new_string": "replacement"
     });
 
-    let result = tool.execute(&args, &ToolContext::default()).await;
+    let result = tool.execute(&args, &ToolContext::for_test()).await;
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.to_string().contains("not found in file"));

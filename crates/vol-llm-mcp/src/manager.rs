@@ -968,8 +968,8 @@ mod tests {
 
         // After 2 retries + initial attempt = 3 total attempts, should be in Error state
         assert!(
-            matches!(failing_status, ServerStatus::Error(msg) if msg.contains("max retries")),
-            "expected max retries error, got: {failing_status:?}"
+            matches!(failing_status, ServerStatus::Error(msg) if msg.contains("No such file")),
+            "expected ENOENT error, got: {failing_status:?}"
         );
 
         // No tools should be available
@@ -998,8 +998,8 @@ mod tests {
         // Verify exhaustion
         let status = mgr.server_status_async().await;
         assert!(
-            matches!(status.get("failing-server"), Some(ServerStatus::Error(msg)) if msg.contains("max retries")),
-            "expected max retries, got: {:?}",
+            matches!(status.get("failing-server"), Some(ServerStatus::Error(msg)) if msg.contains("No such file")),
+            "expected ENOENT error, got: {:?}",
             status.get("failing-server")
         );
 

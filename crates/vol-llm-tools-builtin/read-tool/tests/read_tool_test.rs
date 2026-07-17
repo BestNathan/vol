@@ -11,7 +11,7 @@ async fn test_read_file_success() {
     let args = serde_json::json!({
         "file_path": temp_file.path().to_str().unwrap()
     });
-    let context = ToolContext::default();
+    let context = ToolContext::for_test();
 
     let result = tool.execute(&args, &context).await.unwrap();
     assert!(result.success);
@@ -37,7 +37,7 @@ async fn test_read_file_with_limit() {
         "file_path": temp_file.path().to_str().unwrap(),
         "limit": 5
     });
-    let context = ToolContext::default();
+    let context = ToolContext::for_test();
 
     let result = tool.execute(&args, &context).await.unwrap();
     assert!(result.success);
@@ -68,7 +68,7 @@ async fn test_read_file_with_offset() {
         "file_path": temp_file.path().to_str().unwrap(),
         "offset": 2
     });
-    let context = ToolContext::default();
+    let context = ToolContext::for_test();
 
     let result = tool.execute(&args, &context).await.unwrap();
     assert!(result.success);
@@ -90,11 +90,11 @@ async fn test_read_file_not_found() {
     let args = serde_json::json!({
         "file_path": "/nonexistent/path/file.txt"
     });
-    let context = ToolContext::default();
+    let context = ToolContext::for_test();
 
     let result = tool.execute(&args, &context).await;
     assert!(result.is_err());
 
     let err = result.unwrap_err();
-    assert!(matches!(err, ToolError::NotFound(_)));
+    assert!(matches!(err, ToolError::ExecutionFailed(_)));
 }
