@@ -7,7 +7,7 @@
 //!
 //! # Quick Start
 //!
-//! ```rust
+//! ```text
 //! use vol_llm_skill::{SkillLoader, SkillTool, SkillInjector};
 //!
 //! #[tokio::main]

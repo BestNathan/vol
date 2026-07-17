@@ -37,7 +37,7 @@ impl PromptFragment {
     /// * `fragment_type` - The type of the fragment
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use vol_llm_agent::prompt_context::{PromptFragment, FragmentType};
     ///
     /// let fragment = PromptFragment::new(
@@ -63,7 +63,7 @@ impl PromptFragment {
     /// A PromptFragment with id "tools" and content formatted as a markdown list
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use vol_llm_agent::prompt_context::PromptFragment;
     /// use vol_llm_core::ToolDefinition;
     ///

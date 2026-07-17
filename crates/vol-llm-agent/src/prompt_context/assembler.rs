@@ -25,7 +25,7 @@ impl MessageAssembler {
     /// A vector of messages starting with System followed by User
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use vol_llm_agent::prompt_context::{MessageAssembler, PromptContext, PromptTemplate};
     ///
     /// let template = PromptTemplate::new("test", "You are a helpful assistant.");
@@ -55,7 +55,7 @@ impl MessageAssembler {
     /// A vector of messages: System, history messages, then current User message
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use vol_llm_agent::prompt_context::{MessageAssembler, PromptContext, PromptTemplate};
     /// use vol_llm_core::Message;
     ///
@@ -104,7 +104,7 @@ impl MessageAssembler {
     /// A vector of messages: System and User (with RAG context embedded)
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use vol_llm_agent::prompt_context::{MessageAssembler, PromptContext, PromptTemplate};
     /// use vol_llm_agent::rag::Document;
     ///

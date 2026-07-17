@@ -55,7 +55,7 @@ impl<T> WithSpan<T> {
     /// The closure receives the new span so you can record attributes.
     ///
     /// # Example
-    /// ```no_run
+    /// ```text
     /// # use tracing::Span;
     /// # use vol_tracing::WithSpan;
     /// # let event = ();

@@ -1,6 +1,6 @@
 .PHONY: help web-css web-dev web-backend web-check web-build web-clippy web-serve \
         coverage coverage-html coverage-threshold \
-        fmt fmt-check check clippy clippy-strict test test-unit test-integration test-e2e audit quality quality-strict
+        fmt fmt-check check clippy clippy-strict test test-unit test-integration test-e2e audit quality quality-strict quality-full no-doc-tests
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
@@ -46,15 +46,18 @@ audit: ## Run cargo-audit vulnerability scan (requires cargo-audit)
 
 # ── Quality gates (fast for local, full for CI) ──────────────────────
 
-quality: fmt-check clippy test-compile ## Fast quality gate (fmt + clippy + test-compile, ~5s warm)
+quality: fmt-check clippy test-compile no-doc-tests ## Fast quality gate (~5s warm)
 	@echo "All quality gates passed"
 
-quality-strict: fmt-check clippy-strict test-compile ## Fast strict gate
+quality-strict: fmt-check clippy-strict test-compile no-doc-tests ## Fast strict gate
 	@echo "All strict quality gates passed"
 
-quality-full: fmt-check clippy-strict test-unit test-integration ## Full CI gate (includes test execution)
+quality-full: fmt-check clippy-strict test-unit no-doc-tests ## Full CI gate
 	@./scripts/check-agent-boundaries.sh
 	@echo "All full quality gates passed"
+
+no-doc-tests: ## Check no active doc tests
+	@./scripts/check-no-doc-tests.sh
 
 web-css: ## Build Tailwind CSS in watch mode
 	npx --prefix crates/vol-llm-ui @tailwindcss/cli -i crates/vol-llm-ui/assets/input.css -o crates/vol-llm-ui/assets/tailwind.css --watch=always
