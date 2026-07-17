@@ -65,13 +65,10 @@ jobs:
           cache-all-crates: "true"
           components: "llvm-tools-preview"
 
-      - name: Install cargo-llvm-cov
-        run: cargo install cargo-llvm-cov --locked
-
-      - name: Coverage check (core crates)
+      - name: Install cargo-llvm-cov (pre-built via binstall)
         run: |
-          ./scripts/check-coverage.sh \
-            vol-agent-server vol-llm-agent-protocol vol-llm-runtime \
-            vol-llm-sandbox vol-llm-task vol-session vol-llm-core \
-            vol-llm-agent vol-llm-tool vol-llm-skill vol-llm-mcp \
-            || echo "⚠ Coverage below threshold (non-blocking)"
+          cargo install cargo-binstall --locked
+          cargo binstall cargo-llvm-cov -y --no-confirm
+
+      - name: Coverage (single pass, workspace)
+        run: cargo llvm-cov --workspace --summary-only || echo "⚠ Coverage failed (non-blocking)"
