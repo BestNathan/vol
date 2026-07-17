@@ -35,6 +35,7 @@ scripts/                  # Build / deploy helpers
 - **`docs/superpowers/*` → Lark**: upload new/updated superpowers docs to the corresponding Lark wiki node.
 - **Coverage ≥ 80%**: `make coverage-threshold PKG=<crate>` before claiming done. Exception: `main.rs`, `app.rs`, `health.rs`.
 - **Every new `pub fn` / handler → at least one test**.
+- **No doc tests**: write `#[cfg(test)]` unit tests or `tests/` integration tests instead. Doc comment code examples must use ` ```text` (not ` ```rust`). Check with `./scripts/check-no-doc-tests.sh`.
 - **Tool registration**: `AgentRuntimeBuilder::build()` is the primary place. `DataPlaneServerCoreBuilder` inherits from it; do not duplicate.
 - **`vol-llm-agent-protocol` owns wire types**: `Operation`, `Payload`, `control.*`, JSON-RPC codec. No wire type definitions in `vol-agent-server`.
 - **`vol-llm-runtime` knows nothing about control-plane**. No `NodeRegistry` / `ControlRouter` imports there.

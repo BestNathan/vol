@@ -20,7 +20,7 @@
 //!
 //! # Usage
 //!
-//! ```rust,no_run
+//! ```text,no_run
 //! use vol_llm_agent::{RagAgent, RagConfig};
 //! use vol_llm_agent::rag::{Embedder, EmbeddingStore, InMemoryStore, DashScopeEmbedder};
 //!

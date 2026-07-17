@@ -38,7 +38,7 @@ impl PromptContext {
     /// A new PromptContext with empty fragments and dynamic vars
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use vol_llm_agent::prompt_context::{PromptContext, PromptTemplate};
     ///
     /// let template = PromptTemplate::new("simple", "You are a helpful assistant.");
@@ -65,7 +65,7 @@ impl PromptContext {
     /// Self for method chaining
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use vol_llm_agent::prompt_context::{PromptContext, PromptTemplate, PromptFragment, FragmentType};
     ///
     /// let template = PromptTemplate::new("test", "Role: {role}");
@@ -92,7 +92,7 @@ impl PromptContext {
     /// Self for method chaining
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use vol_llm_agent::prompt_context::{PromptContext, PromptTemplate};
     /// use vol_llm_core::ToolDefinition;
     ///
@@ -128,7 +128,7 @@ impl PromptContext {
     /// Self for method chaining
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use vol_llm_agent::prompt_context::{PromptContext, PromptTemplate};
     ///
     /// let template = PromptTemplate::new("test", "Role: {role}");
@@ -149,7 +149,7 @@ impl PromptContext {
     /// The fully rendered system message content as a String
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use vol_llm_agent::prompt_context::{PromptContext, PromptTemplate, PromptFragment, FragmentType};
     ///
     /// let template = PromptTemplate::new("test", "Role: {role}\nRules: {rules}");
@@ -202,7 +202,7 @@ impl PromptContext {
     /// The formatted user message content as a String
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use vol_llm_agent::prompt_context::{PromptContext, PromptTemplate};
     ///
     /// let template = PromptTemplate::new("test", "System prompt");

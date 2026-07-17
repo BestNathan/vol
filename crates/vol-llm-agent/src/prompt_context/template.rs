@@ -27,7 +27,7 @@ impl PromptTemplate {
     /// * `content` - Template content with optional `{name}` placeholders
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use vol_llm_agent::prompt_context::PromptTemplate;
     ///
     /// let template = PromptTemplate::new(

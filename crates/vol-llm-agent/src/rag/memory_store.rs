@@ -26,7 +26,7 @@ struct StoredDocument {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```text
 /// use vol_llm_agent::rag::{InMemoryStore, EmbeddingStore, Document};
 ///
 /// let store = InMemoryStore::new();

@@ -35,11 +35,11 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-      - name: Cargo check (workspace)
-        run: cargo check --workspace
-
-      - name: Clippy (workspace)
+      - name: Clippy (workspace, covers check)
         run: cargo clippy --workspace
+
+      - name: Check no doc tests
+        run: ./scripts/check-no-doc-tests.sh
 
       - name: Run all tests (unit + integration in one pass)
         run: cargo test --workspace --no-fail-fast

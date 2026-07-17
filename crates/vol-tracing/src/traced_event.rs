@@ -28,7 +28,7 @@ impl<T> TracedEvent<T> {
     /// * `trace_id` - The trace identifier for distributed tracing
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use tracing::Span;
     /// use vol_tracing::TracedEvent;
     ///
@@ -66,7 +66,7 @@ impl<T> TracedEvent<T> {
     /// * `trace_id` - The trace identifier to associate with this event
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use tracing::Span;
     /// use vol_tracing::TracedEvent;
     ///
