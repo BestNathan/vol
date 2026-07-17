@@ -24,14 +24,16 @@ impl CliTool {
     pub fn new(config: CliToolConfig, sandbox: Arc<dyn Sandbox>) -> Self {
         let env = interpolate::interpolate_map(&config.env);
         let cwd = interpolate::interpolate(&config.cwd);
-        Self { config, sandbox, env, cwd }
+        Self {
+            config,
+            sandbox,
+            env,
+            cwd,
+        }
     }
 
     /// Run a command string through this tool.
-    pub async fn run(
-        &self,
-        command: &str,
-    ) -> Result<ToolOutput, crate::CliToolError> {
+    pub async fn run(&self, command: &str) -> Result<ToolOutput, crate::CliToolError> {
         // 1. Validate first token
         crate::validate::validate_first_token(command, &self.config.binaries)?;
 
@@ -53,9 +55,11 @@ impl CliTool {
         };
 
         // 3. Execute via sandbox
-        let output = self.sandbox.execute(req).await.map_err(|e| {
-            crate::CliToolError::SandboxFailed(e.to_string())
-        })?;
+        let output = self
+            .sandbox
+            .execute(req)
+            .await
+            .map_err(|e| crate::CliToolError::SandboxFailed(e.to_string()))?;
 
         // 4. Format output
         Ok(format_output(&output, self.config.max_output_bytes))
@@ -70,10 +74,7 @@ pub struct ToolOutput {
 }
 
 /// Format a CommandOutput into LLM-readable text with per-stream truncation.
-pub fn format_output(
-    output: &CommandOutput,
-    max_bytes: usize,
-) -> ToolOutput {
+pub fn format_output(output: &CommandOutput, max_bytes: usize) -> ToolOutput {
     let mut text = String::new();
     text.push_str(&format!("{}\n", output.exit_code));
 
@@ -100,7 +101,10 @@ fn append_truncated(out: &mut String, bytes: &[u8], max_bytes: usize) {
     } else {
         let truncated_len = s.len() - max_bytes;
         // Find largest char boundary <= max_bytes to avoid UTF-8 slice panic
-        let cut = (0..=max_bytes).rev().find(|&i| s.is_char_boundary(i)).unwrap_or(0);
+        let cut = (0..=max_bytes)
+            .rev()
+            .find(|&i| s.is_char_boundary(i))
+            .unwrap_or(0);
         out.push_str(&s[..cut]);
         out.push_str(&format!("\n... [truncated {truncated_len} bytes]"));
     }
@@ -132,17 +136,33 @@ mod tests {
     impl MockSandbox {
         fn new(output: CommandOutput) -> (Self, Arc<Mutex<Option<CommandRequest>>>) {
             let last = Arc::new(Mutex::new(None));
-            (Self { output, last_request: Arc::clone(&last) }, last)
+            (
+                Self {
+                    output,
+                    last_request: Arc::clone(&last),
+                },
+                last,
+            )
         }
     }
 
     #[async_trait]
     impl Sandbox for MockSandbox {
-        fn kind(&self) -> &str { "mock" }
-        fn name(&self) -> &str { "mock" }
-        async fn start(&self) -> SandboxResult<()> { Ok(()) }
-        async fn cleanup(&self) -> SandboxResult<()> { Ok(()) }
-        fn root_path(&self) -> &Path { Path::new("/") }
+        fn kind(&self) -> &str {
+            "mock"
+        }
+        fn name(&self) -> &str {
+            "mock"
+        }
+        async fn start(&self) -> SandboxResult<()> {
+            Ok(())
+        }
+        async fn cleanup(&self) -> SandboxResult<()> {
+            Ok(())
+        }
+        fn root_path(&self) -> &Path {
+            Path::new("/")
+        }
         fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf> {
             Ok(PathBuf::from(rel))
         }
@@ -150,12 +170,25 @@ mod tests {
             *self.last_request.lock().unwrap() = Some(req);
             Ok(self.output.clone())
         }
-        async fn read_file(&self, _p: &Path, _o: Option<u64>, _l: Option<u64>) -> SandboxResult<Vec<u8>> { Ok(vec![]) }
-        async fn write_file(&self, _p: &Path, _c: &[u8]) -> SandboxResult<()> { Ok(()) }
-        async fn create_dir_all(&self, _p: &Path) -> SandboxResult<()> { Ok(()) }
-        async fn read_dir(&self, _p: &Path) -> SandboxResult<Vec<DirEntry>> { Ok(vec![]) }
+        async fn read_file(
+            &self,
+            _p: &Path,
+            _o: Option<u64>,
+            _l: Option<u64>,
+        ) -> SandboxResult<Vec<u8>> {
+            Ok(vec![])
+        }
+        async fn write_file(&self, _p: &Path, _c: &[u8]) -> SandboxResult<()> {
+            Ok(())
+        }
+        async fn create_dir_all(&self, _p: &Path) -> SandboxResult<()> {
+            Ok(())
+        }
+        async fn read_dir(&self, _p: &Path) -> SandboxResult<Vec<DirEntry>> {
+            Ok(vec![])
+        }
         async fn metadata(&self, _p: &Path) -> SandboxResult<FileMetadata> {
-            Err(SandboxError::Io(std::io::Error::new(std::io::ErrorKind::Other, "mock")))
+            Err(SandboxError::Io(std::io::Error::other("mock")))
         }
     }
 
@@ -185,7 +218,8 @@ mod tests {
         };
         let (sandbox, last_req) = MockSandbox::new(output);
         let mut cfg = minimal_config();
-        cfg.env.insert("ANSIBLE_CONFIG".into(), "/etc/ansible.cfg".into());
+        cfg.env
+            .insert("ANSIBLE_CONFIG".into(), "/etc/ansible.cfg".into());
         let tool = CliTool::new(cfg, Arc::new(sandbox));
 
         let out = tool.run("ansible all -m ping").await.unwrap();
@@ -195,15 +229,24 @@ mod tests {
 
         let req = last_req.lock().unwrap().clone().unwrap();
         assert_eq!(req.program, "/bin/bash");
-        assert_eq!(req.args, vec!["-c", "cd '/opt/ansible' && ansible all -m ping"]);
-        assert_eq!(req.env.get("ANSIBLE_CONFIG").map(String::as_str), Some("/etc/ansible.cfg"));
+        assert_eq!(
+            req.args,
+            vec!["-c", "cd '/opt/ansible' && ansible all -m ping"]
+        );
+        assert_eq!(
+            req.env.get("ANSIBLE_CONFIG").map(String::as_str),
+            Some("/etc/ansible.cfg")
+        );
         assert!(req.cwd.is_none());
     }
 
     #[tokio::test]
     async fn invalid_first_token_rejected() {
         let (sandbox, _) = MockSandbox::new(CommandOutput {
-            stdout: vec![], stderr: vec![], exit_code: 0, killed_by_signal: None,
+            stdout: vec![],
+            stderr: vec![],
+            exit_code: 0,
+            killed_by_signal: None,
         });
         let tool = CliTool::new(minimal_config(), Arc::new(sandbox));
         let err = tool.run("rm -rf /").await.unwrap_err();
@@ -264,14 +307,21 @@ mod tests {
     async fn env_placeholders_interpolated_at_construction() {
         std::env::set_var("CLI_TOOL_TEST_TOKEN", "secret-token");
         let (sandbox, last_req) = MockSandbox::new(CommandOutput {
-            stdout: vec![], stderr: vec![], exit_code: 0, killed_by_signal: None,
+            stdout: vec![],
+            stderr: vec![],
+            exit_code: 0,
+            killed_by_signal: None,
         });
         let mut cfg = minimal_config();
-        cfg.env.insert("TOKEN".into(), "{{env.CLI_TOOL_TEST_TOKEN}}".into());
+        cfg.env
+            .insert("TOKEN".into(), "{{env.CLI_TOOL_TEST_TOKEN}}".into());
         let tool = CliTool::new(cfg, Arc::new(sandbox));
         let _ = tool.run("ansible --version").await.unwrap();
         let req = last_req.lock().unwrap().clone().unwrap();
-        assert_eq!(req.env.get("TOKEN").map(String::as_str), Some("secret-token"));
+        assert_eq!(
+            req.env.get("TOKEN").map(String::as_str),
+            Some("secret-token")
+        );
         std::env::remove_var("CLI_TOOL_TEST_TOKEN");
     }
 
@@ -292,7 +342,9 @@ mod tests {
         // Should not panic
         let out = tool.run("ansible --version").await.unwrap();
         // Output should be valid UTF-8
-        assert!(out.content.is_ascii() || out.content.chars().all(|c| !c.is_control() || c == '\n'));
+        assert!(
+            out.content.is_ascii() || out.content.chars().all(|c| !c.is_control() || c == '\n')
+        );
         assert!(out.content.contains("[truncated"));
     }
 }

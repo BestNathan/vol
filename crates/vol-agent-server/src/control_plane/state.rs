@@ -39,6 +39,7 @@ impl ControlPlaneState {
 impl ControlPlaneState {
     /// Store or re-key a node connection. When a node registers, call with
     /// old_temp_key (the Arc address) and the real node_id to replace the entry.
+    #[allow(clippy::expect_used)]
     pub fn rekey_node_connection(&self, old_temp_key: &str, node_id: &str) {
         let mut map = self
             .node_connections
@@ -50,6 +51,7 @@ impl ControlPlaneState {
     }
 
     /// Get a stored node connection by node_id.
+    #[allow(clippy::expect_used)]
     pub fn get_node_connection(&self, node_id: &str) -> Option<Arc<dyn Connection>> {
         self.node_connections
             .read()
@@ -57,12 +59,12 @@ impl ControlPlaneState {
             .get(node_id)
             .cloned()
     }
-
 }
 
 impl ControlPlaneState {
     /// Store a client connection for a pending agent run, so events can be
     /// relayed back when the data-plane node produces output.
+    #[allow(clippy::expect_used)]
     pub fn register_pending_submit(&self, run_id: String, client_conn: Arc<dyn Connection>) {
         self.pending_submits
             .write()
@@ -71,6 +73,7 @@ impl ControlPlaneState {
     }
 
     /// Look up the client connection waiting for events from this run_id.
+    #[allow(clippy::expect_used)]
     pub fn take_pending_submit(&self, run_id: &str) -> Option<Arc<dyn Connection>> {
         self.pending_submits
             .write()
@@ -80,6 +83,7 @@ impl ControlPlaneState {
     }
 
     /// Remove a completed/failed run_id mapping.
+    #[allow(clippy::expect_used)]
     pub fn remove_pending_submit(&self, run_id: &str) {
         self.pending_submits
             .write()
@@ -97,7 +101,6 @@ impl Default for ControlPlaneState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     #[test]
     fn state_new_creates_all_fields() {

@@ -7803,6 +7803,7 @@ dependencies = [
  "async-trait",
  "opentelemetry",
  "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-opentelemetry",

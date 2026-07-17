@@ -27,11 +27,9 @@ pub fn sanitize_name(name: &str) -> String {
                 prev_underscore = false;
             }
             result.push(c);
-        } else {
-            if !prev_underscore {
-                result.push('_');
-                prev_underscore = true;
-            }
+        } else if !prev_underscore {
+            result.push('_');
+            prev_underscore = true;
         }
     }
     // Remove trailing underscore
@@ -167,7 +165,7 @@ impl McpSession {
             .iter()
             .map(|t| McpToolInfo {
                 name: t.name.to_string(),
-                description: t.description.as_ref().map(|s| s.to_string()),
+                description: t.description.as_ref().map(std::string::ToString::to_string),
                 input_schema: Some(t.schema_as_json_value()),
             })
             .collect())
@@ -183,7 +181,10 @@ impl McpSession {
                     server.clone(),
                     McpToolInfo {
                         name: tool.name.to_string(),
-                        description: tool.description.as_ref().map(|s| s.to_string()),
+                        description: tool
+                            .description
+                            .as_ref()
+                            .map(std::string::ToString::to_string),
                         input_schema: Some(tool.schema_as_json_value()),
                     },
                 ));
@@ -261,7 +262,7 @@ impl McpSession {
                         rmcp::model::ResourceContents::TextResourceContents { uri, .. } => uri,
                         rmcp::model::ResourceContents::BlobResourceContents { uri, .. } => uri,
                     };
-                    Some(format!("[resource: {}]", uri))
+                    Some(format!("[resource: {uri}]"))
                 }
                 _ => None,
             })

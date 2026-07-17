@@ -19,6 +19,7 @@ use tracing_subscriber::{self, EnvFilter};
 // Using root folder for now - user should manually move file
 const PARENT_FOLDER_TOKEN: &str = ""; // Empty means root folder
 
+#[allow(clippy::unwrap_used)]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
@@ -54,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("\n❌ Upload failed: {}", e);
             info!("\nDocument saved locally: {}", doc_path);
             info!("Please upload manually to Feishu Drive.");
-            Err(e.into())
+            Err(e)
         }
     }
 }
@@ -255,18 +256,19 @@ async fn get_access_token(client: &Client) -> Result<String, Box<dyn std::error:
     if !response.status().is_success() {
         let status = response.status();
         let text = response.text().await.unwrap_or_default();
-        return Err(format!("Failed to get access token: {} - {}", status, text).into());
+        return Err(format!("Failed to get access token: {status} - {text}").into());
     }
 
     let json: serde_json::Value = response.json().await?;
 
     json.get("app_access_token")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .ok_or_else(|| "No app_access_token in response".into())
 }
 
 /// Create a cloud document in Feishu Drive
+#[allow(clippy::indexing_slicing)]
 async fn upload_to_feishu(_content: &str) -> Result<(String, String), Box<dyn std::error::Error>> {
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(30))
@@ -295,7 +297,7 @@ async fn upload_to_feishu(_content: &str) -> Result<(String, String), Box<dyn st
 
     let create_response: reqwest::Response = client
         .post(url)
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Authorization", format!("Bearer {token}"))
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
@@ -324,13 +326,13 @@ async fn upload_to_feishu(_content: &str) -> Result<(String, String), Box<dyn st
     info!("Create file response JSON: {:?}", create_json);
 
     // Check for API error code
-    if let Some(code) = create_json.get("code").and_then(|v| v.as_i64()) {
+    if let Some(code) = create_json.get("code").and_then(serde_json::Value::as_i64) {
         if code != 0 {
             let msg = create_json
                 .get("msg")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown error");
-            return Err(format!("Feishu API error {}: {}", code, msg).into());
+            return Err(format!("Feishu API error {code}: {msg}").into());
         }
     }
 
@@ -339,11 +341,11 @@ async fn upload_to_feishu(_content: &str) -> Result<(String, String), Box<dyn st
         .get("obj_token")
         .or_else(|| create_json.get("token"))
         .and_then(|v| v.as_str())
-        .ok_or_else(|| format!("No file token in response: {}", create_text))?;
+        .ok_or_else(|| format!("No file token in response: {create_text}"))?;
 
     info!("File created with token: {}", file_token);
 
-    let url = format!("https://open.feishu.cn/drive/file/{}", file_token);
+    let url = format!("https://open.feishu.cn/drive/file/{file_token}");
 
     Ok((file_token.to_string(), url))
 }

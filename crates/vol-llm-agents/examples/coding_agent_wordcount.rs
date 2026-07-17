@@ -75,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Use only standard library (no external crates except clap). Create the files using write_file tool, then build it using bash tool."#;
 
-    println!("Task: {}", task);
+    println!("Task: {task}");
     println!("Working directory: {}", work_dir.display());
     println!("Report path: {}", report_path.display());
     println!("---");

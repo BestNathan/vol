@@ -19,10 +19,14 @@ impl Session {
     pub fn new(entry_store: Arc<dyn SessionEntryStore>) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
-            created_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64,
+            created_at: {
+                #[allow(clippy::unwrap_used)]
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64;
+                ts
+            },
             entry_store,
         }
     }

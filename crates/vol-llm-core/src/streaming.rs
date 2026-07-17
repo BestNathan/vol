@@ -272,49 +272,85 @@ impl StreamProtocol for AnthropicProtocol {
             Ok(v) => v,
             Err(_) => return None,
         };
-        let event_type = data["type"].as_str()?;
+        let event_type = data.get("type").and_then(|v| v.as_str())?;
 
         match event_type {
             "message_start" => Some(Ok(ParsedEvent::ResponseStart {
-                model: data["message"]["model"]
-                    .as_str()
+                model: data
+                    .get("message")
+                    .and_then(|v| v.get("model"))
+                    .and_then(|v| v.as_str())
                     .unwrap_or("unknown")
                     .to_string(),
             })),
             "content_block_start" => {
-                let block_type = data["content_block"]["type"].as_str()?;
+                let block_type = data
+                    .get("content_block")
+                    .and_then(|v| v.get("type"))
+                    .and_then(|v| v.as_str())?;
                 match block_type {
                     "tool_use" => Some(Ok(ParsedEvent::ToolCallStart {
                         index: 0,
-                        id: data["content_block"]["id"].as_str().map(|s| s.to_string()),
-                        name: data["content_block"]["name"]
-                            .as_str()
-                            .map(|s| s.to_string()),
+                        id: data
+                            .get("content_block")
+                            .and_then(|v| v.get("id"))
+                            .and_then(|v| v.as_str())
+                            .map(std::string::ToString::to_string),
+                        name: data
+                            .get("content_block")
+                            .and_then(|v| v.get("name"))
+                            .and_then(|v| v.as_str())
+                            .map(std::string::ToString::to_string),
                     })),
                     _ => None,
                 }
             }
             "content_block_delta" => {
-                if let Some(thinking) = data["delta"]["thinking"].as_str() {
+                if let Some(thinking) = data
+                    .get("delta")
+                    .and_then(|v| v.get("thinking"))
+                    .and_then(|v| v.as_str())
+                {
                     Some(Ok(ParsedEvent::ThinkingDelta(thinking.to_string())))
-                } else if let Some(text) = data["delta"]["text"].as_str() {
+                } else if let Some(text) = data
+                    .get("delta")
+                    .and_then(|v| v.get("text"))
+                    .and_then(|v| v.as_str())
+                {
                     Some(Ok(ParsedEvent::ContentDelta(text.to_string())))
                 } else {
-                    data["delta"]["partial_json"].as_str().map(|input| Ok(ParsedEvent::ToolCallDelta {
-                        index: 0,
-                        delta: input.to_string(),
-                    }))
+                    data.get("delta")
+                        .and_then(|v| v.get("partial_json"))
+                        .and_then(|v| v.as_str())
+                        .map(|input| {
+                            Ok(ParsedEvent::ToolCallDelta {
+                                index: 0,
+                                delta: input.to_string(),
+                            })
+                        })
                 }
             }
             "content_block_stop" => Some(Ok(ParsedEvent::ContentBlockStop)),
             "message_delta" => {
+                #[allow(clippy::cast_possible_truncation)]
                 let usage = if let Some(usage_data) = data.get("usage") {
                     TokenUsage {
-                        prompt_tokens: usage_data["input_tokens"].as_u64().unwrap_or(0) as u32,
-                        completion_tokens: usage_data["output_tokens"].as_u64().unwrap_or(0) as u32,
-                        total_tokens: (usage_data["input_tokens"].as_u64().unwrap_or(0)
-                            + usage_data["output_tokens"].as_u64().unwrap_or(0))
-                            as u32,
+                        prompt_tokens: usage_data
+                            .get("input_tokens")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0) as u32,
+                        completion_tokens: usage_data
+                            .get("output_tokens")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0) as u32,
+                        total_tokens: (usage_data
+                            .get("input_tokens")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0)
+                            + usage_data
+                                .get("output_tokens")
+                                .and_then(serde_json::Value::as_u64)
+                                .unwrap_or(0)) as u32,
                         cached_tokens: None,
                     }
                 } else {
@@ -323,7 +359,7 @@ impl StreamProtocol for AnthropicProtocol {
                 Some(Ok(ParsedEvent::Usage(usage)))
             }
             "message_stop" => {
-                let finish_reason = match data["stop_reason"].as_str() {
+                let finish_reason = match data.get("stop_reason").and_then(|v| v.as_str()) {
                     Some("end_turn") | Some("stop_sequence") => FinishReason::Stop,
                     Some("max_tokens") => FinishReason::Length,
                     Some("tool_use") => FinishReason::ToolCalls,
@@ -397,10 +433,10 @@ mod tests {
         let events = session.process_sse(&protocol, start);
 
         assert!(!events.is_empty());
-        if let Ok(StreamEvent {
+        if let Some(Ok(StreamEvent {
             data: StreamEventData::ResponseStart { model },
             ..
-        }) = &events[0]
+        })) = events.first()
         {
             assert_eq!(model, "qwen3.5-plus");
         } else {
@@ -441,7 +477,7 @@ mod tests {
         let events = session.process_sse(&protocol, delta);
 
         assert!(!events.is_empty(), "Expected ToolCallArgumentDelta event");
-        if let Ok(StreamEvent {
+        if let Some(Ok(StreamEvent {
             data:
                 StreamEventData::ToolCallArgumentDelta {
                     tool_call_id,
@@ -449,13 +485,16 @@ mod tests {
                     delta,
                 },
             ..
-        }) = &events[0]
+        })) = events.first()
         {
             assert_eq!(tool_call_id, "call_1");
             assert_eq!(tool_name, "get_weather");
             assert_eq!(delta, r#"{"city": "Beijing"}"#);
         } else {
-            panic!("Expected ToolCallArgumentDelta, got: {:?}", events[0]);
+            panic!(
+                "Expected ToolCallArgumentDelta, got: {:?}",
+                events.first().unwrap()
+            );
         }
     }
 

@@ -62,10 +62,10 @@ pub fn init(
         });
     }
 
-    let resolved_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
-        .unwrap_or_else(|_| config.endpoint.clone());
-    let resolved_service_name = std::env::var("OTEL_SERVICE_NAME")
-        .unwrap_or_else(|_| config.service_name.clone());
+    let resolved_endpoint =
+        std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_else(|_| config.endpoint.clone());
+    let resolved_service_name =
+        std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| config.service_name.clone());
     let resolved_sample_rate: f64 = std::env::var("OTEL_SAMPLE_RATE")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -75,7 +75,10 @@ pub fn init(
         .with_service_name(resolved_service_name.clone())
         .with_attributes([
             KeyValue::new("service.namespace", config.service_namespace.clone()),
-            KeyValue::new("deployment.environment", config.deployment_environment.clone()),
+            KeyValue::new(
+                "deployment.environment",
+                config.deployment_environment.clone(),
+            ),
         ])
         .build();
 
@@ -100,7 +103,7 @@ pub fn init(
                 .filename_prefix("agent")
                 .filename_suffix("log")
                 .build("/tmp")
-                .expect("Failed to create file appender in /tmp")
+                .unwrap_or_else(|_| panic!("Failed to create file appender in /tmp"))
         });
     let file_layer = fmt::layer()
         .with_ansi(false)
@@ -112,8 +115,8 @@ pub fn init(
         .with_current_span(true)
         .with_writer(file_appender);
 
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(log_level));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
     if config.enabled && resolved_sample_rate > 0.0 {
         let span_exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -153,8 +156,9 @@ pub fn init(
             .with_batch_exporter(log_exporter)
             .build();
 
-        let otel_log_layer =
-            opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(&logger_provider);
+        let otel_log_layer = opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(
+            &logger_provider,
+        );
 
         let metrics_exporter = opentelemetry_otlp::MetricExporter::builder()
             .with_tonic()
@@ -163,7 +167,7 @@ pub fn init(
             .build()?;
 
         let meter_provider = SdkMeterProvider::builder()
-            .with_resource(resource.clone())
+            .with_resource(resource)
             .with_periodic_exporter(metrics_exporter)
             .build();
 

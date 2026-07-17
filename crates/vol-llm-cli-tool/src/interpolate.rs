@@ -33,7 +33,7 @@ where
 
         if c == '{' && chars.peek() == Some(&'{') {
             chars.next(); // consume second `{`
-            // read until `}}`
+                          // read until `}}`
             let mut tag = String::new();
             let mut closed = false;
             while let Some(ch) = chars.next() {
@@ -127,7 +127,10 @@ mod tests {
 
     #[test]
     fn replaces_known_var() {
-        assert_eq!(interpolate_with("path={{env.HOME}}/bin", lookup), "path=/home/alice/bin");
+        assert_eq!(
+            interpolate_with("path={{env.HOME}}/bin", lookup),
+            "path=/home/alice/bin"
+        );
     }
 
     #[test]
@@ -145,7 +148,10 @@ mod tests {
 
     #[test]
     fn escaped_braces_become_literal() {
-        assert_eq!(interpolate_with("literal \\{{env.HOME}}", lookup), "literal {{env.HOME}}");
+        assert_eq!(
+            interpolate_with("literal \\{{env.HOME}}", lookup),
+            "literal {{env.HOME}}"
+        );
     }
 
     #[test]

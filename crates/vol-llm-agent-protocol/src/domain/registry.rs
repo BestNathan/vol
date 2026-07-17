@@ -27,15 +27,16 @@ impl HandlerRegistry {
     }
 
     /// Register a handler with type-safe Operation declarations.
+    #[allow(clippy::indexing_slicing)]
     pub fn register(&mut self, handler: HandlerRef) -> Result<(), String> {
         let idx = self.handlers.len();
         for op in &handler.operations() {
             let method = op.method_name().to_string();
-            if self.method_index.contains_key(&method) {
+            if let Some(&idx) = self.method_index.get(&method) {
                 return Err(format!(
                     "method '{}' already claimed by handler '{}'",
                     method,
-                    self.handlers[self.method_index[&method]].name()
+                    self.handlers[idx].name()
                 ));
             }
         }
@@ -47,14 +48,15 @@ impl HandlerRegistry {
     }
 
     /// Register a custom handler with explicit method name strings.
+    #[allow(clippy::indexing_slicing)]
     pub fn register_custom(&mut self, handler: HandlerRef, methods: &[&str]) -> Result<(), String> {
         let idx = self.handlers.len();
         for method in methods {
-            if self.method_index.contains_key(*method) {
+            if let Some(&idx) = self.method_index.get(*method) {
                 return Err(format!(
                     "method '{}' already claimed by handler '{}'",
                     method,
-                    self.handlers[self.method_index[*method]].name()
+                    self.handlers[idx].name()
                 ));
             }
             self.method_index.insert(method.to_string(), idx);
@@ -64,6 +66,7 @@ impl HandlerRegistry {
     }
 
     /// Dispatch a message to the appropriate handler.
+    #[allow(clippy::indexing_slicing)]
     pub async fn dispatch(
         &self,
         message: AgentServerMessage,

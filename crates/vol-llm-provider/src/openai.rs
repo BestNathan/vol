@@ -8,7 +8,11 @@ use serde_json::json;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing::info;
-use vol_llm_core::*;
+use vol_llm_core::{
+    ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMError, LLMProvider,
+    Message, MessageRole, Result, StreamReceiver, StreamingSession, SupportedParam, TokenUsage,
+    ToolCall, ToolDefinition,
+};
 
 /// OpenAI Provider
 pub struct OpenaiProvider {
@@ -61,14 +65,22 @@ impl OpenaiProvider {
             .iter()
             .map(|msg| match msg.role {
                 MessageRole::System => {
-                    let content = msg.content.as_ref().map(|c| c.as_str()).unwrap_or("");
+                    let content = msg
+                        .content
+                        .as_ref()
+                        .map(vol_llm_core::MessageContent::as_str)
+                        .unwrap_or("");
                     json!({
                         "role": "system",
                         "content": content,
                     })
                 }
                 MessageRole::User => {
-                    let content = msg.content.as_ref().map(|c| c.as_str()).unwrap_or("");
+                    let content = msg
+                        .content
+                        .as_ref()
+                        .map(vol_llm_core::MessageContent::as_str)
+                        .unwrap_or("");
                     json!({
                         "role": "user",
                         "content": content,
@@ -106,7 +118,11 @@ impl OpenaiProvider {
                     serde_json::Value::Object(obj)
                 }
                 MessageRole::Tool => {
-                    let content = msg.content.as_ref().map(|c| c.as_str()).unwrap_or("");
+                    let content = msg
+                        .content
+                        .as_ref()
+                        .map(vol_llm_core::MessageContent::as_str)
+                        .unwrap_or("");
                     let tool_call_id = msg.tool_call_id.as_deref().unwrap_or("");
                     json!({
                         "role": "tool",
@@ -164,6 +180,7 @@ impl LLMClient for OpenaiProvider {
         ]
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     async fn converse(&self, request: ConversationRequest) -> Result<ConversationResponse> {
         // Convert messages
         let openai_messages = self.convert_messages(&request.messages);
@@ -181,39 +198,49 @@ impl LLMClient for OpenaiProvider {
             .or_else(|| {
                 self.body_defaults
                     .get("max_tokens")
-                    .and_then(|v| v.as_u64())
+                    .and_then(serde_json::Value::as_u64)
                     .map(|v| v as u32)
             })
             .unwrap_or(4096);
-        body["max_tokens"] = json!(max_tokens);
+        body.as_object_mut()
+            .map(|o| o.insert("max_tokens".to_string(), json!(max_tokens)));
 
         // Optional parameters
         if let Some(temp) = request.model_config.temperature {
-            body["temperature"] = json!(temp);
+            body.as_object_mut()
+                .map(|o| o.insert("temperature".to_string(), json!(temp)));
         }
         if let Some(top_p) = request.model_config.top_p {
-            body["top_p"] = json!(top_p);
+            body.as_object_mut()
+                .map(|o| o.insert("top_p".to_string(), json!(top_p)));
         }
         if let Some(top_k) = request.model_config.top_k {
-            body["top_k"] = json!(top_k);
+            body.as_object_mut()
+                .map(|o| o.insert("top_k".to_string(), json!(top_k)));
         }
         if let Some(freq) = request.model_config.frequency_penalty {
-            body["frequency_penalty"] = json!(freq);
+            body.as_object_mut()
+                .map(|o| o.insert("frequency_penalty".to_string(), json!(freq)));
         }
         if let Some(pres) = request.model_config.presence_penalty {
-            body["presence_penalty"] = json!(pres);
+            body.as_object_mut()
+                .map(|o| o.insert("presence_penalty".to_string(), json!(pres)));
         }
         if let Some(ref stop) = request.model_config.stop {
-            body["stop"] = json!(stop);
+            body.as_object_mut()
+                .map(|o| o.insert("stop".to_string(), json!(stop)));
         }
         if let Some(seed) = request.model_config.seed {
-            body["seed"] = json!(seed);
+            body.as_object_mut()
+                .map(|o| o.insert("seed".to_string(), json!(seed)));
         }
         if let Some(logprobs) = request.model_config.logprobs {
-            body["logprobs"] = json!(logprobs);
+            body.as_object_mut()
+                .map(|o| o.insert("logprobs".to_string(), json!(logprobs)));
         }
         if let Some(tools) = request.tools {
-            body["tools"] = self.convert_tools(&tools);
+            body.as_object_mut()
+                .map(|o| o.insert("tools".to_string(), self.convert_tools(&tools)));
         }
 
         // Apply body defaults (skip keys already set)
@@ -233,7 +260,8 @@ impl LLMClient for OpenaiProvider {
                 _ => false,
             };
             if !overridden {
-                body[key] = value.clone();
+                body.as_object_mut()
+                    .map(|o| o.insert(key.clone(), value.clone()));
             }
         }
 
@@ -260,8 +288,10 @@ impl LLMClient for OpenaiProvider {
             let error_text = response.text().await.unwrap_or_default();
 
             if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
-                let message = error_json["error"]["message"]
-                    .as_str()
+                let message = error_json
+                    .get("error")
+                    .and_then(|v| v.get("message"))
+                    .and_then(|v| v.as_str())
                     .unwrap_or(&error_text)
                     .to_string();
                 return Err(LLMError::Api { status, message });
@@ -277,20 +307,41 @@ impl LLMClient for OpenaiProvider {
         let result: serde_json::Value = response.json().await?;
 
         // Extract content from choices[0].message.content
-        let content = result["choices"][0]["message"]["content"]
-            .as_str()
+        let content = result
+            .get("choices")
+            .and_then(|c| c.get(0))
+            .and_then(|c| c.get("message"))
+            .and_then(|m| m.get("content"))
+            .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
 
         // Extract tool calls from choices[0].message.tool_calls
-        let tool_calls = result["choices"][0]["message"]["tool_calls"]
-            .as_array()
+        let tool_calls = result
+            .get("choices")
+            .and_then(|c| c.get(0))
+            .and_then(|c| c.get("message"))
+            .and_then(|m| m.get("tool_calls"))
+            .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
                     .map(|item| ToolCall {
-                        id: item["id"].as_str().unwrap_or("").to_string(),
-                        name: item["function"]["name"].as_str().unwrap_or("").to_string(),
-                        arguments: item["function"]["arguments"].to_string(),
+                        id: item
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        name: item
+                            .get("function")
+                            .and_then(|f| f.get("name"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        arguments: item
+                            .get("function")
+                            .and_then(|f| f.get("arguments"))
+                            .map(ToString::to_string)
+                            .unwrap_or_default(),
                         r#type: "function".to_string(),
                     })
                     .collect::<Vec<_>>()
@@ -298,17 +349,30 @@ impl LLMClient for OpenaiProvider {
             .unwrap_or_default();
 
         // Extract usage
+        let prompt_tokens = result
+            .get("usage")
+            .and_then(|v| v.get("prompt_tokens"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0) as u32;
+        let completion_tokens = result
+            .get("usage")
+            .and_then(|v| v.get("completion_tokens"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0) as u32;
         let usage = TokenUsage {
-            prompt_tokens: result["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32,
-            completion_tokens: result["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32,
-            total_tokens: (result["usage"]["prompt_tokens"].as_u64().unwrap_or(0)
-                + result["usage"]["completion_tokens"].as_u64().unwrap_or(0))
-                as u32,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens: prompt_tokens + completion_tokens,
             cached_tokens: None,
         };
 
         // Extract finish reason
-        let finish_reason = match result["choices"][0]["finish_reason"].as_str() {
+        let finish_reason = match result
+            .get("choices")
+            .and_then(|c| c.get(0))
+            .and_then(|c| c.get("finish_reason"))
+            .and_then(|v| v.as_str())
+        {
             Some("stop") => FinishReason::Stop,
             Some("length") => FinishReason::Length,
             Some("tool_calls") => FinishReason::ToolCalls,
@@ -332,13 +396,18 @@ impl LLMClient for OpenaiProvider {
 
         Ok(ConversationResponse {
             message,
-            model: result["model"].as_str().unwrap_or(&self.model).to_string(),
+            model: result
+                .get("model")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&self.model)
+                .to_string(),
             usage,
             finish_reason,
             raw: Some(result),
         })
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     async fn converse_stream(&self, request: ConversationRequest) -> Result<StreamReceiver> {
         // Convert messages
         let openai_messages = self.convert_messages(&request.messages);
@@ -358,39 +427,49 @@ impl LLMClient for OpenaiProvider {
             .or_else(|| {
                 self.body_defaults
                     .get("max_tokens")
-                    .and_then(|v| v.as_u64())
+                    .and_then(serde_json::Value::as_u64)
                     .map(|v| v as u32)
             })
             .unwrap_or(4096);
-        body["max_tokens"] = json!(max_tokens);
+        body.as_object_mut()
+            .map(|o| o.insert("max_tokens".to_string(), json!(max_tokens)));
 
         // Optional parameters
         if let Some(temp) = request.model_config.temperature {
-            body["temperature"] = json!(temp);
+            body.as_object_mut()
+                .map(|o| o.insert("temperature".to_string(), json!(temp)));
         }
         if let Some(top_p) = request.model_config.top_p {
-            body["top_p"] = json!(top_p);
+            body.as_object_mut()
+                .map(|o| o.insert("top_p".to_string(), json!(top_p)));
         }
         if let Some(top_k) = request.model_config.top_k {
-            body["top_k"] = json!(top_k);
+            body.as_object_mut()
+                .map(|o| o.insert("top_k".to_string(), json!(top_k)));
         }
         if let Some(freq) = request.model_config.frequency_penalty {
-            body["frequency_penalty"] = json!(freq);
+            body.as_object_mut()
+                .map(|o| o.insert("frequency_penalty".to_string(), json!(freq)));
         }
         if let Some(pres) = request.model_config.presence_penalty {
-            body["presence_penalty"] = json!(pres);
+            body.as_object_mut()
+                .map(|o| o.insert("presence_penalty".to_string(), json!(pres)));
         }
         if let Some(ref stop) = request.model_config.stop {
-            body["stop"] = json!(stop);
+            body.as_object_mut()
+                .map(|o| o.insert("stop".to_string(), json!(stop)));
         }
         if let Some(seed) = request.model_config.seed {
-            body["seed"] = json!(seed);
+            body.as_object_mut()
+                .map(|o| o.insert("seed".to_string(), json!(seed)));
         }
         if let Some(logprobs) = request.model_config.logprobs {
-            body["logprobs"] = json!(logprobs);
+            body.as_object_mut()
+                .map(|o| o.insert("logprobs".to_string(), json!(logprobs)));
         }
         if let Some(tools) = request.tools {
-            body["tools"] = self.convert_tools(&tools);
+            body.as_object_mut()
+                .map(|o| o.insert("tools".to_string(), self.convert_tools(&tools)));
         }
 
         // Apply body defaults
@@ -410,7 +489,8 @@ impl LLMClient for OpenaiProvider {
                 _ => false,
             };
             if !overridden {
-                body[key] = value.clone();
+                body.as_object_mut()
+                    .map(|o| o.insert(key.clone(), value.clone()));
             }
         }
 
@@ -437,8 +517,10 @@ impl LLMClient for OpenaiProvider {
             let error_text = response.text().await.unwrap_or_default();
 
             if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
-                let message = error_json["error"]["message"]
-                    .as_str()
+                let message = error_json
+                    .get("error")
+                    .and_then(|v| v.get("message"))
+                    .and_then(|v| v.as_str())
                     .unwrap_or(&error_text)
                     .to_string();
                 return Err(LLMError::Api { status, message });
@@ -518,6 +600,7 @@ impl LLMClient for OpenaiProvider {
 }
 
 #[cfg(test)]
+#[allow(clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use vol_llm_core::{LLMProvider, Message, ToolDefinition};

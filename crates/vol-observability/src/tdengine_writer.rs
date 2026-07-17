@@ -158,8 +158,7 @@ async fn flush_to_tdengine(
                     sql_escape(&agent_type),
                 );
                 let values = format!(
-                    "({},{},{},{},{},{})",
-                    ts, duration_ms, iterations, tool_calls, final_answer_len, status,
+                    "({ts},{duration_ms},{iterations},{tool_calls},{final_answer_len},{status})",
                 );
                 agent_tags_values.push((tags, values));
             }
@@ -188,14 +187,7 @@ async fn flush_to_tdengine(
                     sql_escape(&model),
                 );
                 let values = format!(
-                    "({},{},{},{},{},{},{})",
-                    ts,
-                    duration_ms,
-                    iteration,
-                    input_tokens,
-                    output_tokens,
-                    total_tokens,
-                    error_flag,
+                    "({ts},{duration_ms},{iteration},{input_tokens},{output_tokens},{total_tokens},{error_flag})",
                 );
                 llm_tags_values.push((tags, values));
             }
@@ -218,14 +210,14 @@ async fn flush_to_tdengine(
                     sql_escape(&agent_type),
                     sql_escape(&tool_name),
                 );
-                let values = format!("({},{},{})", ts, duration_ms, status,);
+                let values = format!("({ts},{duration_ms},{status})",);
                 tool_tags_values.push((tags, values));
             }
         }
     }
 
     let base_url = base_url.trim_end_matches('/');
-    let url = format!("{}/rest/sql/{}", base_url, database);
+    let url = format!("{base_url}/rest/sql/{database}");
 
     let mut ok = true;
 
@@ -382,8 +374,7 @@ mod tests {
                         sql_escape(&agent_type)
                     );
                     let values = format!(
-                        "({},{},{},{},{},{})",
-                        ts, duration_ms, iterations, tool_calls, final_answer_len, status
+                        "({ts},{duration_ms},{iterations},{tool_calls},{final_answer_len},{status})"
                     );
                     agent_tags_values.push((tags, values));
                 }
@@ -412,14 +403,7 @@ mod tests {
                     );
                     let error_flag = if is_error { -1 } else { 0 };
                     let values = format!(
-                        "({},{},{},{},{},{},{})",
-                        ts,
-                        duration_ms,
-                        iteration,
-                        input_tokens,
-                        output_tokens,
-                        total_tokens,
-                        error_flag
+                        "({ts},{duration_ms},{iteration},{input_tokens},{output_tokens},{total_tokens},{error_flag})"
                     );
                     llm_tags_values.push((tags, values));
                 }
@@ -442,7 +426,7 @@ mod tests {
                         sql_escape(&agent_type),
                         sql_escape(&tool_name)
                     );
-                    let values = format!("({},{},{})", ts, duration_ms, status);
+                    let values = format!("({ts},{duration_ms},{status})");
                     tool_tags_values.push((tags, values));
                 }
             }

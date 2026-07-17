@@ -1,6 +1,6 @@
 //! CLI-based approval channel - prompts user in terminal.
 
-use crate::react::hitl::*;
+use crate::react::hitl::{ApprovalChannel, ApprovalError, ApprovalRequest, ApprovalResponse};
 use std::io::{self, Write};
 
 /// CLI-based approval channel - prompts user in terminal

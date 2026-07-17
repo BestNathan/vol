@@ -25,6 +25,7 @@ struct LokiStream {
 
 // -- Command sent into the writer channel --
 
+#[allow(clippy::large_enum_variant)]
 pub enum LokiCommand {
     Event(IngestEvent),
     Flush,
@@ -110,6 +111,7 @@ pub fn spawn_loki_writer(
 
 /// Group entries by label set, build a `LokiPushRequest`, and POST to Loki.
 /// Retries once on failure, then drops the batch and logs ERROR.
+#[allow(clippy::unwrap_used)]
 async fn flush_to_loki(
     client: &reqwest::Client,
     url: &str,
@@ -160,7 +162,7 @@ async fn flush_to_loki(
                     health.last_flush_ok.store(true, Ordering::SeqCst);
                     return;
                 }
-                last_err = Some(format!("status={}", status));
+                last_err = Some(format!("status={status}"));
             }
             Err(err) => {
                 last_err = Some(err.to_string());

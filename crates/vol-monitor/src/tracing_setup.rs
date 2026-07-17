@@ -268,6 +268,7 @@ pub fn init(config: &TracingConfig) -> Result<(), Box<dyn std::error::Error + Se
     Ok(())
 }
 
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 fn create_file_appender(config: &LoggingConfig) -> RollingFileAppender {
     RollingFileAppender::builder()
         .rotation(Rotation::HOURLY)
@@ -278,6 +279,7 @@ fn create_file_appender(config: &LoggingConfig) -> RollingFileAppender {
         .expect("Failed to create file appender")
 }
 
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 fn create_error_appender(config: &LoggingConfig) -> RollingFileAppender {
     RollingFileAppender::builder()
         .rotation(Rotation::HOURLY)

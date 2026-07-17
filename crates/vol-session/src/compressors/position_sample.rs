@@ -40,10 +40,10 @@ impl MessageCompressor for PositionSampleCompressor {
 
         // Keep first N messages
         let keep = self.keep_first.min(messages.len());
-        result.extend(messages[..keep].iter().cloned());
+        result.extend(messages.get(..keep).unwrap_or(&[]).iter().cloned());
 
         // Sample every M-th from the rest
-        for (i, msg) in messages[keep..].iter().enumerate() {
+        for (i, msg) in messages.get(keep..).unwrap_or(&[]).iter().enumerate() {
             if i % self.sample_every == 0 {
                 result.push(msg.clone());
             }
@@ -51,7 +51,7 @@ impl MessageCompressor for PositionSampleCompressor {
 
         // Always include the last message if not already included
         if let Some(last) = messages.last() {
-            if result.is_empty() || result.last().unwrap().id != last.id {
+            if result.last().map(|m| m.id != last.id).unwrap_or(true) {
                 result.push(last.clone());
             }
         }

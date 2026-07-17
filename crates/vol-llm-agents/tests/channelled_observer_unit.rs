@@ -113,8 +113,8 @@ async fn test_channelled_observer_handles_many_events() {
         let event = AgentStreamEvent::ToolCallBegin {
             timestamp: chrono::Utc::now(),
             tool_call_id: i.to_string(),
-            tool_name: format!("tool_{}", i),
-            arguments: format!("arg_{}", i),
+            tool_name: format!("tool_{i}"),
+            arguments: format!("arg_{i}"),
         };
         observer.on_event(&event).await.unwrap();
     }
@@ -131,8 +131,8 @@ async fn test_channelled_observer_handles_many_events() {
             ..
         } = event
         {
-            assert_eq!(tool_name, &format!("tool_{}", i));
-            assert_eq!(arguments, &format!("arg_{}", i));
+            assert_eq!(tool_name, &format!("tool_{i}"));
+            assert_eq!(arguments, &format!("arg_{i}"));
         } else {
             panic!("Expected ToolCallBegin event");
         }

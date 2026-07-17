@@ -14,6 +14,7 @@ use ratatui::Frame;
 use crate::state::{ActiveTab, ConversationEntry, ToolCallStatus, UiState};
 
 /// Render the full UI to the frame.
+#[allow(clippy::indexing_slicing)]
 pub fn render_ui(frame: &mut Frame, state: &UiState) {
     let area = frame.area();
 
@@ -36,6 +37,7 @@ pub fn render_ui(frame: &mut Frame, state: &UiState) {
     render_session_dialog(frame, area, state);
 }
 
+#[allow(clippy::indexing_slicing)]
 fn render_right_panel(frame: &mut Frame, area: Rect, state: &UiState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -163,6 +165,7 @@ fn render_conversation(frame: &mut Frame, area: Rect, state: &UiState) {
     frame.render_widget(paragraph, inner);
 }
 
+#[allow(clippy::indexing_slicing)]
 fn wrap_line(text: &str, max_chars: usize) -> Vec<String> {
     let chars: Vec<char> = text.chars().collect();
     if chars.len() <= max_chars || max_chars == 0 {
@@ -227,7 +230,7 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                 for line in content.lines() {
                     for w in wrap_line(line, wrap) {
                         lines.push(Line::from(vec![Span::styled(
-                            format!("  {}", w),
+                            format!("  {w}"),
                             Style::default().fg(Color::DarkGray),
                         )]));
                     }
@@ -257,7 +260,7 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                 ..
             } => {
                 lines.push(Line::from(vec![Span::styled(
-                    format!("[{}]", tool_name),
+                    format!("[{tool_name}]"),
                     Style::default()
                         .fg(Color::Blue)
                         .add_modifier(Modifier::BOLD),
@@ -265,7 +268,7 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                 if !arg_preview.is_empty() {
                     for w in wrap_line(arg_preview, max_width.saturating_sub(2)) {
                         lines.push(Line::from(vec![Span::styled(
-                            format!("  {}", w),
+                            format!("  {w}"),
                             Style::default().fg(Color::DarkGray),
                         )]));
                     }
@@ -280,14 +283,14 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                 let status = if *success { "OK" } else { "ERR" };
                 let color = if *success { Color::Green } else { Color::Red };
                 lines.push(Line::from(vec![Span::styled(
-                    format!("  {} {} ", status, tool_name),
+                    format!("  {status} {tool_name} "),
                     Style::default().fg(color),
                 )]));
                 let wrap = max_width.saturating_sub(4);
                 for line in preview.lines().take(6) {
                     for w in wrap_line(line, wrap) {
                         lines.push(Line::from(vec![Span::styled(
-                            format!("    {}", w),
+                            format!("    {w}"),
                             Style::default().fg(Color::DarkGray),
                         )]));
                     }
@@ -327,7 +330,7 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
             }
             ConversationEntry::Error { message } => {
                 lines.push(Line::from(vec![Span::styled(
-                    format!("Error: {}", message),
+                    format!("Error: {message}"),
                     Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                 )]));
             }
@@ -336,10 +339,10 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
                 note,
                 created_at,
             } => {
-                let label = format!("[Checkpoint: {}] {}", created_at, reason);
+                let label = format!("[Checkpoint: {created_at}] {reason}");
                 let label = note
                     .as_ref()
-                    .map(|n| format!("{} ({})", label, n))
+                    .map(|n| format!("{label} ({n})"))
                     .unwrap_or(label);
                 lines.push(Line::from(vec![Span::styled(
                     label,
@@ -350,7 +353,7 @@ fn build_conversation_lines(state: &UiState, max_width: usize) -> Vec<Line<'stat
             }
             ConversationEntry::RunningBanner { run_id } => {
                 lines.push(Line::from(vec![Span::styled(
-                    format!("\u{2b24} Agent running  [{}]", run_id),
+                    format!("\u{2b24} Agent running  [{run_id}]"),
                     Style::default()
                         .fg(Color::LightBlue)
                         .add_modifier(Modifier::BOLD),
@@ -475,7 +478,7 @@ fn render_approval_panel(frame: &mut Frame, area: Rect, state: &UiState) {
 
     let text = Text::from(vec![
         Line::from(vec![Span::styled(
-            format!(" [!] {}", tool_name),
+            format!(" [!] {tool_name}"),
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
@@ -586,10 +589,7 @@ fn render_run_list(frame: &mut Frame, area: Rect, state: &UiState) {
                 &run.run_id
             };
             lines.push(Line::from(vec![
-                Span::styled(
-                    format!(" {:<14}", short_id),
-                    Style::default().fg(Color::Gray),
-                ),
+                Span::styled(format!(" {short_id:<14}"), Style::default().fg(Color::Gray)),
                 Span::styled(
                     format!(" {:>5} events", run.event_count),
                     Style::default().fg(Color::DarkGray),
@@ -642,7 +642,7 @@ fn render_log_entries(frame: &mut Frame, area: Rect, state: &UiState) {
     let paragraph = Paragraph::new(lines)
         .block(
             Block::default()
-                .title(format!(" Log: {} ", run_id))
+                .title(format!(" Log: {run_id} "))
                 .borders(Borders::ALL),
         )
         .scroll((state.log_viewer_scroll, 0));
@@ -776,6 +776,7 @@ fn pad_or_truncate(s: &str, width: usize) -> String {
 
 // === Session Dialog =========================================================
 
+#[allow(clippy::cast_possible_truncation)]
 fn render_session_dialog(frame: &mut Frame, area: Rect, state: &UiState) {
     if !state.session_dialog_open {
         return;
@@ -814,7 +815,7 @@ fn render_session_dialog(frame: &mut Frame, area: Rect, state: &UiState) {
             };
             lines.push(Line::from(vec![
                 Span::styled(prefix, style),
-                Span::styled(format!("{:<10}", short_id), style),
+                Span::styled(format!("{short_id:<10}"), style),
                 Span::styled(
                     format!(" {:>4} entries", entry.entry_count),
                     Style::default().fg(Color::DarkGray),

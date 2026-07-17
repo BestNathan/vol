@@ -28,30 +28,32 @@ impl VolatilityIndexTool {
         }
 
         let data = response.data.unwrap_or(json!([]));
-        let rows = data.as_array().map(|a| a.len()).unwrap_or(0);
+        let rows = data.as_array().map(std::vec::Vec::len).unwrap_or(0);
 
         if rows == 0 {
-            return format!("No data found for {}", index_name);
+            return format!("No data found for {index_name}");
         }
 
         // Format: [[timestamp, volatility, index_name], ...]
-        let first_row = data[0].as_array();
+        let first_row = data.get(0).and_then(|v| v.as_array());
         if let Some(row) = first_row {
             if row.len() >= 3 {
-                let timestamp = row[0].to_string();
-                let volatility = row[1].as_f64().unwrap_or(0.0);
-                let name = row[2].as_str().unwrap_or(index_name);
+                let timestamp = row.first().map(ToString::to_string).unwrap_or_default();
+                let volatility = row
+                    .get(1)
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                let name = row
+                    .get(2)
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or(index_name);
                 return format!(
-                    "Index: {} | Volatility: {:.2}% | Timestamp: {} | Rows: {}",
-                    name, volatility, timestamp, rows
+                    "Index: {name} | Volatility: {volatility:.2}% | Timestamp: {timestamp} | Rows: {rows}"
                 );
             }
         }
 
-        format!(
-            "Retrieved {} rows for {} (volatility index)",
-            rows, index_name
-        )
+        format!("Retrieved {rows} rows for {index_name} (volatility index)")
     }
 }
 
@@ -92,12 +94,21 @@ impl ExecutableTool for VolatilityIndexTool {
         args: &serde_json::Value,
         _context: &ToolContext,
     ) -> Result<ToolResult, ToolError> {
-        let symbol = args["symbol"]
-            .as_str()
+        let symbol = args
+            .get("symbol")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::InvalidArguments("symbol required".to_string()))?;
 
-        let limit = args["limit"].as_u64().unwrap_or(10) as u32;
-        let hours = args["hours"].as_u64().map(|h| h as u32);
+        #[allow(clippy::cast_possible_truncation)]
+        let limit = args
+            .get("limit")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(10) as u32;
+        #[allow(clippy::cast_possible_truncation)]
+        let hours = args
+            .get("hours")
+            .and_then(serde_json::Value::as_u64)
+            .map(|h| h as u32);
 
         info!(
             "Querying volatility index for {} (limit={}, hours={:?})",
@@ -105,7 +116,7 @@ impl ExecutableTool for VolatilityIndexTool {
         );
 
         let time_filter = match hours {
-            Some(h) => format!("AND _ts >= NOW - {}h", h),
+            Some(h) => format!("AND _ts >= NOW - {h}h"),
             None => String::new(),
         };
 
@@ -118,10 +129,9 @@ impl ExecutableTool for VolatilityIndexTool {
         let sql = format!(
             "SELECT _ts, volatility, index_name \
              FROM deribit_volatility_index \
-             WHERE index_name = '{}' {} \
+             WHERE index_name = '{index_name}' {time_filter} \
              ORDER BY _ts DESC \
-             LIMIT {}",
-            index_name, time_filter, limit
+             LIMIT {limit}"
         );
 
         match self.client.query_with_db(&sql).await {
@@ -133,7 +143,7 @@ impl ExecutableTool for VolatilityIndexTool {
                     Ok(ToolResult::success(result))
                 }
             }
-            Err(e) => Err(ToolError::ExecutionFailed(format!("TDengine error: {}", e))),
+            Err(e) => Err(ToolError::ExecutionFailed(format!("TDengine error: {e}"))),
         }
     }
 }

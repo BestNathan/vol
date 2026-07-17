@@ -96,9 +96,9 @@ impl Secret {
         match self {
             Secret::Literal(s) => Ok(s.clone()),
             Secret::Env { env, default } => std::env::var(env).or_else(|_| {
-                default.clone().ok_or_else(|| {
-                    LLMError::Auth(format!("Environment variable '{}' not set", env))
-                })
+                default
+                    .clone()
+                    .ok_or_else(|| LLMError::Auth(format!("Environment variable '{env}' not set")))
             }),
         }
     }

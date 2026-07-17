@@ -28,27 +28,32 @@ impl IndexPriceTool {
         }
 
         let data = response.data.unwrap_or(json!([]));
-        let rows = data.as_array().map(|a| a.len()).unwrap_or(0);
+        let rows = data.as_array().map(std::vec::Vec::len).unwrap_or(0);
 
         if rows == 0 {
-            return format!("No data found for {}", index_name);
+            return format!("No data found for {index_name}");
         }
 
         // Format: [[timestamp, price, index_name], ...]
-        let first_row = data[0].as_array();
+        let first_row = data.get(0).and_then(|v| v.as_array());
         if let Some(row) = first_row {
             if row.len() >= 3 {
-                let timestamp = row[0].to_string();
-                let price = row[1].as_f64().unwrap_or(0.0);
-                let name = row[2].as_str().unwrap_or(index_name);
+                let timestamp = row.first().map(ToString::to_string).unwrap_or_default();
+                let price = row
+                    .get(1)
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                let name = row
+                    .get(2)
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or(index_name);
                 return format!(
-                    "Index: {} | Price: ${:.2} | Timestamp: {} | Rows: {}",
-                    name, price, timestamp, rows
+                    "Index: {name} | Price: ${price:.2} | Timestamp: {timestamp} | Rows: {rows}"
                 );
             }
         }
 
-        format!("Retrieved {} rows for {}", rows, index_name)
+        format!("Retrieved {rows} rows for {index_name}")
     }
 }
 
@@ -85,11 +90,16 @@ impl ExecutableTool for IndexPriceTool {
         args: &serde_json::Value,
         _context: &ToolContext,
     ) -> Result<ToolResult, ToolError> {
-        let instrument = args["instrument"]
-            .as_str()
+        let instrument = args
+            .get("instrument")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::InvalidArguments("instrument required".to_string()))?;
 
-        let limit = args["limit"].as_u64().unwrap_or(1) as u32;
+        #[allow(clippy::cast_possible_truncation)]
+        let limit = args
+            .get("limit")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(1) as u32;
 
         info!("Querying index price for {} (limit={})", instrument, limit);
 
@@ -104,10 +114,9 @@ impl ExecutableTool for IndexPriceTool {
         let sql = format!(
             "SELECT _ts, price, index_name \
              FROM deribit_index_price \
-             WHERE index_name = '{}' \
+             WHERE index_name = '{index_name}' \
              ORDER BY _ts DESC \
-             LIMIT {}",
-            index_name, limit
+             LIMIT {limit}"
         );
 
         match self.client.query_with_db(&sql).await {
@@ -119,7 +128,7 @@ impl ExecutableTool for IndexPriceTool {
                     Ok(ToolResult::success(result))
                 }
             }
-            Err(e) => Err(ToolError::ExecutionFailed(format!("TDengine error: {}", e))),
+            Err(e) => Err(ToolError::ExecutionFailed(format!("TDengine error: {e}"))),
         }
     }
 }

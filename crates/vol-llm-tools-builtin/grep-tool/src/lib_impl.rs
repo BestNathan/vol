@@ -26,7 +26,7 @@ impl RustLibBackend {
             .replace("<<<DS>>>/", "(.*/)?")
             .replace(r"\*", "[^/]*")
             .replace(r"\?", "[^/]");
-        regex::Regex::new(&format!("^{}$", regex_str))
+        regex::Regex::new(&format!("^{regex_str}$"))
             .unwrap_or_else(|_| regex::Regex::new(".*").unwrap())
     }
 }
@@ -48,7 +48,7 @@ impl GrepBackend for RustLibBackend {
             search_blocking(&pattern, case_sensitive, &glob, &output_mode, &root_path)
         })
         .await
-        .map_err(|e| format!("Search task panicked: {}", e))?
+        .map_err(|e| format!("Search task panicked: {e}"))?
     }
 }
 
@@ -64,10 +64,10 @@ fn search_blocking(
     let regex_pattern = if case_sensitive {
         pattern.to_string()
     } else {
-        format!("(?i){}", pattern)
+        format!("(?i){pattern}")
     };
     let matcher =
-        RegexMatcher::new(&regex_pattern).map_err(|e| format!("Invalid regex pattern: {}", e))?;
+        RegexMatcher::new(&regex_pattern).map_err(|e| format!("Invalid regex pattern: {e}"))?;
 
     // Build walker that auto-respects .gitignore and skips hidden dirs
     let mut walker = WalkBuilder::new(root);
@@ -78,13 +78,13 @@ fn search_blocking(
         let mut type_builder = ignore::types::TypesBuilder::new();
         type_builder
             .add("custom", g)
-            .map_err(|e| format!("Invalid glob: {}", e))?;
+            .map_err(|e| format!("Invalid glob: {e}"))?;
         type_builder.select("custom");
         walker
             .types(
                 type_builder
                     .build()
-                    .map_err(|e| format!("Glob error: {}", e))?,
+                    .map_err(|e| format!("Glob error: {e}"))?,
             )
             .git_ignore(true);
     }

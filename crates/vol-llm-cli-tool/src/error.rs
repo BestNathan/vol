@@ -6,10 +6,7 @@ pub enum CliToolError {
     Config(String),
 
     #[error("binary not allowed: first token `{token}` is not in {allowed:?}")]
-    BinaryNotAllowed {
-        token: String,
-        allowed: Vec<String>,
-    },
+    BinaryNotAllowed { token: String, allowed: Vec<String> },
 
     #[error("invalid arguments: {0}")]
     InvalidArguments(String),

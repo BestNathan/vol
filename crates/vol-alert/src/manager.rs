@@ -24,7 +24,10 @@ impl AlertManager {
     pub fn can_send(&self, alert: &Alert) -> bool {
         let key = format!("{}:{}:{}", alert.alert_type, alert.tenor, alert.symbol);
 
-        let mut last_times = self.last_alert_time.lock().unwrap();
+        let mut last_times = self
+            .last_alert_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let now = alert.timestamp;
         let cooldown_secs = self.config.get_cooldown_for_tenor(alert.tenor);
         let cooldown_ms = cooldown_secs * 1000;
@@ -42,13 +45,19 @@ impl AlertManager {
 
     /// Load last alert times from state (called during startup)
     pub fn load_state(&self, state: HashMap<String, u64>) {
-        let mut last_times = self.last_alert_time.lock().unwrap();
+        let mut last_times = self
+            .last_alert_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         *last_times = state;
     }
 
     /// Get current state for persistence
     pub fn get_state(&self) -> HashMap<String, u64> {
-        self.last_alert_time.lock().unwrap().clone()
+        self.last_alert_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 }
 

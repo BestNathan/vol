@@ -93,7 +93,7 @@ impl YamlAgentBuilder {
             .with_context_builder(context_builder)
             .with_plugin_registry(plugin_registry)
             .build()
-            .map_err(|e| YamlAgentError::Config(format!("Failed to build agent config: {}", e)))?;
+            .map_err(|e| YamlAgentError::Config(format!("Failed to build agent config: {e}")))?;
 
         Ok(ReActAgent::new(agent_config))
     }

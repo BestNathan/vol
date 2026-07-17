@@ -56,6 +56,7 @@ impl DomainHandler for AgentHandler {
         ]
     }
 
+    #[allow(clippy::unwrap_used)]
     async fn handle(
         &self,
         message: AgentServerMessage,
@@ -159,7 +160,8 @@ impl DomainHandler for AgentHandler {
             }
             (AgentOperation::List, _) => {
                 let defs = self.agent_defs.read().unwrap();
-                let holder_keys: Vec<String> = self.holders.lock().unwrap().keys().cloned().collect();
+                let holder_keys: Vec<String> =
+                    self.holders.lock().unwrap().keys().cloned().collect();
                 let mut agents: Vec<serde_json::Value> = holder_keys
                     .iter()
                     .map(|k| {
@@ -252,7 +254,7 @@ impl DomainHandler for AgentHandler {
                             Operation::Agent(AgentOperation::ContextConfig),
                             vol_llm_agent_protocol::agent_server_protocol::ErrorPayload {
                                 code: "agent_not_found".to_string(),
-                                message: format!("agent '{}' not found", agent_id),
+                                message: format!("agent '{agent_id}' not found"),
                                 detail: None,
                                 terminal: true,
                             },
@@ -299,7 +301,7 @@ impl DomainHandler for AgentHandler {
                             Operation::Agent(AgentOperation::ContextSnapshot),
                             vol_llm_agent_protocol::agent_server_protocol::ErrorPayload {
                                 code: "agent_not_found".to_string(),
-                                message: format!("agent '{}' not found", agent_id),
+                                message: format!("agent '{agent_id}' not found"),
                                 detail: None,
                                 terminal: true,
                             },

@@ -99,7 +99,7 @@ impl AgentRuntime {
             if let Some(fc) = self.llm_registry.get(model_name) {
                 return create_provider(&fc.to_llm_config())
                     .map(Arc::from)
-                    .map_err(|e| format!("LLM error for '{}': {}", model_name, e));
+                    .map_err(|e| format!("LLM error for '{model_name}': {e}"));
             }
         }
         let ids = self.llm_registry.ids();
@@ -112,10 +112,11 @@ impl AgentRuntime {
             .ok_or_else(|| "Provider not found".to_string())?;
         create_provider(&fc.to_llm_config())
             .map(Arc::from)
-            .map_err(|e| format!("LLM error: {}", e))
+            .map_err(|e| format!("LLM error: {e}"))
     }
 
     /// Register an agent into the runtime. Returns the created ReActAgent.
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     pub async fn register_agent(
         &self,
         agent_id: impl Into<String>,
@@ -143,22 +144,20 @@ impl AgentRuntime {
         let allowed_refs: Option<Vec<&str>> = def
             .tools
             .as_ref()
-            .map(|v| v.iter().map(|s| s.as_str()).collect());
+            .map(|v| v.iter().map(std::string::String::as_str).collect());
         let disallowed_refs: Option<Vec<&str>> = def
             .disallowed_tools
             .as_ref()
-            .map(|v| v.iter().map(|s| s.as_str()).collect());
-        let tool_registry = tool_registry.filter(
-            allowed_refs.as_deref(),
-            disallowed_refs.as_deref(),
-        );
+            .map(|v| v.iter().map(std::string::String::as_str).collect());
+        let tool_registry =
+            tool_registry.filter(allowed_refs.as_deref(), disallowed_refs.as_deref());
 
         let mut config = AgentConfig::builder()
             .with_def(def.clone())
             .with_llm(llm)
             .with_tools(tool_registry)
             .with_session(session)
-            .with_working_dir(agent_dir.clone())
+            .with_working_dir(agent_dir)
             .build()
             .expect("AgentConfig build failed — all required fields provided");
 
@@ -220,7 +219,7 @@ impl AgentRuntime {
             loop {
                 let all_idle = status_map
                     .read()
-                    .unwrap()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .values()
                     .all(|s| s.status == "idle");
                 if all_idle || tokio::time::Instant::now() > deadline {
@@ -240,6 +239,7 @@ impl AgentRuntime {
 
 impl AgentRuntime {
     #[doc(hidden)]
+    #[allow(clippy::expect_used)]
     pub async fn for_test() -> Self {
         let store_dir = PathBuf::from("/tmp/vol-llm-runtime-test");
         let working_dir = PathBuf::from(".");
@@ -457,7 +457,7 @@ impl AgentRuntimeBuilder {
             let sandboxes_dir = self.working_dir.join(".agents").join("sandboxes");
             vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir)
                 .await
-                .map_err(|e| format!("Sandbox registry init failed: {}", e))?
+                .map_err(|e| format!("Sandbox registry init failed: {e}"))?
         };
         let sandbox_registry = Arc::new(sandbox_registry);
         let skill_loader = {
@@ -565,7 +565,7 @@ fn expand_tilde(path: PathBuf) -> PathBuf {
     if s.starts_with('~') {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
         let rest = s.trim_start_matches('~').trim_start_matches('/');
-        PathBuf::from(format!("{}/{}", home, rest))
+        PathBuf::from(format!("{home}/{rest}"))
     } else {
         path
     }
@@ -1050,7 +1050,12 @@ base_url = "https://api.test.com"
 
     #[test]
     fn validate_session_url_accepts_valid_schemes() {
-        for url in ["sqlite:///tmp/db", "postgres://localhost/db", "postgresql://localhost/db", "mysql://localhost/db"] {
+        for url in [
+            "sqlite:///tmp/db",
+            "postgres://localhost/db",
+            "postgresql://localhost/db",
+            "mysql://localhost/db",
+        ] {
             validate_session_database_url_scheme(url).unwrap();
         }
     }
@@ -1095,11 +1100,12 @@ base_url = "https://api.test.com"
 
     #[tokio::test]
     async fn resolve_llm_no_providers_returns_error() {
-
         let temp = tempfile::tempdir().unwrap();
         let sandboxes_dir = temp.path().join(".sandboxes");
         std::fs::create_dir_all(&sandboxes_dir).unwrap();
-        let registry = vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir).await.unwrap();
+        let registry = vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir)
+            .await
+            .unwrap();
         let runtime = AgentRuntime {
             working_dir: PathBuf::from("/tmp"),
             store_dir: PathBuf::from("/tmp/store"),
@@ -1115,7 +1121,11 @@ base_url = "https://api.test.com"
         };
         let def = AgentDef::new("test-agent", "You are a test agent.");
         match runtime.resolve_llm_for_agent(&def) {
-            Err(e) => assert!(e.contains("No LLM providers configured"), "unexpected error: {}", e),
+            Err(e) => assert!(
+                e.contains("No LLM providers configured"),
+                "unexpected error: {}",
+                e
+            ),
             Ok(_) => panic!("expected error, got Ok"),
         }
     }
@@ -1125,7 +1135,9 @@ base_url = "https://api.test.com"
         let temp = tempfile::tempdir().unwrap();
         let sandboxes_dir = temp.path().join(".sandboxes");
         std::fs::create_dir_all(&sandboxes_dir).unwrap();
-        let registry = vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir).await.unwrap();
+        let registry = vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir)
+            .await
+            .unwrap();
         let runtime = AgentRuntime {
             working_dir: PathBuf::from("/tmp"),
             store_dir: PathBuf::from("/tmp/store"),
@@ -1142,18 +1154,29 @@ base_url = "https://api.test.com"
         let mut def = AgentDef::new("test-agent", "You are a test agent.");
         def.model = Some("non-existent-model".into());
         match runtime.resolve_llm_for_agent(&def) {
-            Err(e) => assert!(e.contains("No LLM providers configured"), "unexpected error: {}", e),
+            Err(e) => assert!(
+                e.contains("No LLM providers configured"),
+                "unexpected error: {}",
+                e
+            ),
             Ok(_) => panic!("expected error, got Ok"),
         }
     }
 
-// ── Builder build() error paths ──
+    // ── Builder build() error paths ──
 
     #[tokio::test]
     async fn builder_build_fails_without_providers() {
         let temp = tempfile::tempdir().unwrap();
-        match AgentRuntime::builder(temp.path(), temp.path()).build().await {
-            Err(e) => assert!(e.contains("No LLM provider configured"), "expected provider error, got: {}", e),
+        match AgentRuntime::builder(temp.path(), temp.path())
+            .build()
+            .await
+        {
+            Err(e) => assert!(
+                e.contains("No LLM provider configured"),
+                "expected provider error, got: {}",
+                e
+            ),
             Ok(_) => panic!("expected build to fail without providers"),
         }
     }
@@ -1281,7 +1304,11 @@ base_url = "https://api.test.com"
             ))
             .await
             .unwrap();
-        let sessions = runtime.session_manager.list_sessions(Some("test-agent")).await.unwrap();
+        let sessions = runtime
+            .session_manager
+            .list_sessions(Some("test-agent"))
+            .await
+            .unwrap();
         assert_eq!(sessions.len(), 1);
     }
 
@@ -1296,7 +1323,10 @@ base_url = "https://api.test.com"
     #[tokio::test]
     async fn runtime_store_dir_accessor() {
         let rt = AgentRuntime::for_test().await;
-        assert_eq!(rt.store_dir(), std::path::Path::new("/tmp/vol-llm-runtime-test"));
+        assert_eq!(
+            rt.store_dir(),
+            std::path::Path::new("/tmp/vol-llm-runtime-test")
+        );
     }
 
     // ── AgentRuntime for_test builder provides all defaults ──
@@ -1348,10 +1378,7 @@ base_url = "https://api.test.com"
 
         // The agent should have built-in tools but no MCP tools
         let tool_names = agent.config().tools.tool_names();
-        assert!(
-            !tool_names.is_empty(),
-            "agent should have built-in tools"
-        );
+        assert!(!tool_names.is_empty(), "agent should have built-in tools");
         // No MCP tools should be present (the test McpManager has no servers)
         let mcp_tools: Vec<_> = tool_names
             .iter()
@@ -1396,10 +1423,7 @@ base_url = "https://api.test.com"
             .expect("register_agent should succeed");
 
         let tool_names = agent.config().tools.tool_names();
-        assert!(
-            !tool_names.is_empty(),
-            "agent should have built-in tools"
-        );
+        assert!(!tool_names.is_empty(), "agent should have built-in tools");
         // No MCP tools since test McpManager has no servers — same outcome,
         // but the code path uses the shared registry (no filtering).
     }
@@ -1505,7 +1529,8 @@ base_url = "https://api.test.com"
 
     #[test]
     fn agent_runtime_builder_new_returns_agentruntimebuilder() {
-        let builder = AgentRuntimeBuilder::new(PathBuf::from("/tmp/work"), PathBuf::from("/tmp/store"));
+        let builder =
+            AgentRuntimeBuilder::new(PathBuf::from("/tmp/work"), PathBuf::from("/tmp/store"));
         // Chaining with_task_store_config confirms builder type is correct
         let _ = builder.with_task_store_config(None);
     }

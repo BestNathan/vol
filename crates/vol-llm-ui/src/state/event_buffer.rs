@@ -7,6 +7,12 @@ use vol_llm_core::AgentStreamEvent;
 /// Remote mode: UiEvent -> apply_event() -> UiState mutation.
 pub struct EventBuffer;
 
+impl Default for EventBuffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EventBuffer {
     pub fn new() -> Self {
         Self
@@ -22,7 +28,10 @@ impl EventBuffer {
                 });
             }
             AgentStreamEvent::AgentComplete { response, .. } => {
-                let response = response.as_ref().map(|v| v.to_string()).unwrap_or_default();
+                let response = response
+                    .as_ref()
+                    .map(std::string::ToString::to_string)
+                    .unwrap_or_default();
                 state.apply(UiEvent::AgentComplete {
                     run_id: String::new(),
                     response,

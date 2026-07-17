@@ -3,6 +3,10 @@ name = "vol-llm-wiki"
 version.workspace = true
 edition.workspace = true
 
+
+[lints]
+workspace = true
+
 [dependencies]
 vol-llm-agent = { path = "../vol-llm-agent" }
 vol-llm-context = { path = "../vol-llm-context" }

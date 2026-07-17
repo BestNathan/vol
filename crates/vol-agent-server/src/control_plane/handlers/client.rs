@@ -82,13 +82,11 @@ impl DomainHandler for ClientHandler {
             Operation::Agent(AgentOperation::Submit) => {
                 // Extract submit payload
                 let (target, input) = match &message.payload {
-                    Payload::Agent(AgentPayload::Submit {
-                        target, input, ..
-                    }) => (target.clone(), input.clone()),
+                    Payload::Agent(AgentPayload::Submit { target, input, .. }) => {
+                        (target.clone(), input.clone())
+                    }
                     _ => {
-                        return Err(ProtocolError::PayloadDecodeFailed(
-                            "agent.submit",
-                        ));
+                        return Err(ProtocolError::PayloadDecodeFailed("agent.submit"));
                     }
                 };
 
@@ -96,17 +94,14 @@ impl DomainHandler for ClientHandler {
                 let router = ControlRouter::new(&self.state.nodes, &self.state.capabilities);
                 let node_id = router
                     .route_agent(target.as_deref())
-                    .map_err(|e| ProtocolError::PayloadDecodeFailedOwned(e))?;
+                    .map_err(ProtocolError::PayloadDecodeFailedOwned)?;
 
                 // Get the node's WebSocket connection
-                let node_conn = self
-                    .state
-                    .get_node_connection(&node_id)
-                    .ok_or_else(|| {
-                        ProtocolError::PayloadDecodeFailedOwned(format!(
-                            "node {node_id} is registered but has no active connection"
-                        ))
-                    })?;
+                let node_conn = self.state.get_node_connection(&node_id).ok_or_else(|| {
+                    ProtocolError::PayloadDecodeFailedOwned(format!(
+                        "node {node_id} is registered but has no active connection"
+                    ))
+                })?;
 
                 // Generate run_id on the control-plane side
                 let run_id = uuid::Uuid::new_v4().to_string();
@@ -241,9 +236,7 @@ mod tests {
 
     #[tokio::test]
     async fn agent_list_returns_agents_from_capability_snapshots() {
-        use vol_llm_agent_protocol::agent_server_protocol::{
-            AgentCapability, CapabilitySnapshot,
-        };
+        use vol_llm_agent_protocol::agent_server_protocol::{AgentCapability, CapabilitySnapshot};
 
         let state = Arc::new(ControlPlaneState::new());
         state
@@ -252,14 +245,12 @@ mod tests {
                 node_id: "node-a".to_string(),
                 revision: 1,
                 generated_at_ms: Some(1000),
-                agents: vec![
-                    AgentCapability {
-                        agent_id: "coding".to_string(),
-                        name: "Coding Agent".to_string(),
-                        description: Some("A coding agent".to_string()),
-                        status: Some("idle".to_string()),
-                    },
-                ],
+                agents: vec![AgentCapability {
+                    agent_id: "coding".to_string(),
+                    name: "Coding Agent".to_string(),
+                    description: Some("A coding agent".to_string()),
+                    status: Some("idle".to_string()),
+                }],
                 tools: vec![],
                 mcp_servers: vec![],
                 skills: vec![],

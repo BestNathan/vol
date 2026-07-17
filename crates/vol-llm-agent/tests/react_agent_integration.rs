@@ -76,12 +76,12 @@ async fn make_session_with_messages(n: usize) -> Arc<Session> {
         let msg = if i % 2 == 0 {
             SessionMessage::new(
                 "test-session".to_string(),
-                Message::user(format!("session-msg-{}", i)),
+                Message::user(format!("session-msg-{i}")),
             )
         } else {
             SessionMessage::new(
                 "test-session".to_string(),
-                Message::assistant(format!("session-reply-{}", i)),
+                Message::assistant(format!("session-reply-{i}")),
             )
         };
         session.add_message(msg).await.unwrap();

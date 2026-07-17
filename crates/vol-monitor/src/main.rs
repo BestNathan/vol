@@ -19,6 +19,7 @@ use vol_rules::{AbsoluteIvRule, PortfolioRule, RateChangeRule, SkewRule, TermStr
 use vol_tdengine::{TdengineClient, TdengineConfig};
 
 /// Parse command line arguments
+#[allow(clippy::indexing_slicing)]
 fn parse_args() -> Option<String> {
     let args: Vec<String> = std::env::args().collect();
     let mut config_path = None;
@@ -64,6 +65,7 @@ fn parse_args() -> Option<String> {
     config_path
 }
 
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command line arguments

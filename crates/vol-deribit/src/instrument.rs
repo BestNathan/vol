@@ -99,10 +99,10 @@ pub fn parse_instrument_name(name: &str) -> Option<(String, u32, u32, u32, f64, 
         return None;
     }
 
-    let underlying = parts[0].to_string();
-    let expiry_str = parts[1];
-    let strike_str = parts[2];
-    let option_type_str = parts[3];
+    let underlying = parts.first().copied()?.to_string();
+    let expiry_str = parts.get(1).copied()?;
+    let strike_str = parts.get(2).copied()?;
+    let option_type_str = parts.get(3).copied()?;
 
     let (day, month, year) = parse_expiry(expiry_str)?;
     let strike = strike_str.parse::<f64>().ok()?;
@@ -173,6 +173,7 @@ pub fn calculate_dte(expiry: &str) -> Option<u32> {
     if dte < 0 {
         Some(0)
     } else {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         Some(dte as u32)
     }
 }

@@ -74,6 +74,7 @@ impl AgentPlugin for ConnectionHolder {
         50
     }
 
+    #[allow(clippy::unwrap_used)]
     async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
         // Update agent status
         if let Some(ref status_map) = self.agent_status {

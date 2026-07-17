@@ -1,8 +1,38 @@
 .PHONY: help web-css web-dev web-backend web-check web-build web-clippy web-serve \
-        coverage coverage-html coverage-threshold
+        coverage coverage-html coverage-threshold \
+        fmt fmt-check check clippy test audit quality
 
 help: ## Show available commands
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
+
+# ── Rust Quality Gates ──────────────────────────────────────────────────
+
+fmt: ## Run cargo fmt on all crates
+	cargo fmt --all
+
+fmt-check: ## Check formatting (CI gate)
+	cargo fmt --all -- --check
+
+check: ## Run cargo check on entire workspace
+	cargo check --workspace
+
+clippy: ## Run clippy on entire workspace
+	cargo clippy --workspace
+
+clippy-strict: ## Run clippy with -D warnings (deny + warn = error)
+	cargo clippy --workspace -- -D warnings
+
+test: ## Run all workspace tests
+	cargo test --workspace --no-fail-fast
+
+audit: ## Run cargo-audit vulnerability scan (requires cargo-audit)
+	cargo audit
+
+quality: fmt-check clippy test ## Run all quality gates (fmt + clippy + test)
+	@echo "All quality gates passed"
+
+quality-strict: fmt-check clippy-strict test ## Run all quality gates in strict mode
+	@echo "All strict quality gates passed"
 
 web-css: ## Build Tailwind CSS in watch mode
 	npx --prefix crates/vol-llm-ui @tailwindcss/cli -i crates/vol-llm-ui/assets/input.css -o crates/vol-llm-ui/assets/tailwind.css --watch=always

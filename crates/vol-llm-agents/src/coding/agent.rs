@@ -79,16 +79,13 @@ impl CodingAgent {
             },
         };
         let registry = LLMProviderRegistry::from_configs(&[llm_config])
-            .map_err(|e| CodingAgentError::Config(format!("LLM provider error: {}", e)))?;
-        registry
-            .get(&config.llm_provider_id)
-            .ok_or_else(|| {
-                CodingAgentError::Config(format!(
-                    "LLM provider '{}' not found",
-                    config.llm_provider_id
-                ))
-            })
-            .map(|llm| llm.clone())
+            .map_err(|e| CodingAgentError::Config(format!("LLM provider error: {e}")))?;
+        registry.get(&config.llm_provider_id).ok_or_else(|| {
+            CodingAgentError::Config(format!(
+                "LLM provider '{}' not found",
+                config.llm_provider_id
+            ))
+        })
     }
 
     /// Build tool registry and context builder together.
@@ -126,8 +123,7 @@ impl CodingAgent {
         // so we create the dir directly here in this sync constructor).
         std::fs::create_dir_all(working_dir).map_err(|e| {
             CodingAgentError::Config(format!(
-                "Failed to create working directory {:?}: {}",
-                working_dir, e
+                "Failed to create working directory {working_dir:?}: {e}"
             ))
         })?;
         Ok(Some(sandbox))
@@ -212,6 +208,7 @@ impl CodingAgent {
     }
 
     /// Build an AgentConfig for a single ReActAgent run.
+    #[allow(clippy::expect_used)]
     fn build_agent_config(&self, session: Arc<Session>) -> AgentConfig {
         AgentConfig::builder()
             .with_llm(self.llm.clone())
@@ -246,19 +243,20 @@ impl CodingAgent {
         let response = react_agent
             .run(task)
             .await
-            .map_err(|e| CodingAgentError::Agent(e))?;
+            .map_err(CodingAgentError::Agent)?;
 
         // Signal completion to observer (for report generation)
         if let Some(ref observer) = self.observer {
             observer
                 .on_complete()
                 .await
-                .map_err(|e| CodingAgentError::Observer(e))?;
+                .map_err(CodingAgentError::Observer)?;
         }
 
         // Extract summary from response
         let summary = response.content.clone();
         let iterations = response.iterations;
+        #[allow(clippy::cast_possible_truncation)]
         let tool_calls = response.tool_calls.len() as u32;
 
         Ok(CodingAgentResponse {

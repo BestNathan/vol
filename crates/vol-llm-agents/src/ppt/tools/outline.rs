@@ -65,19 +65,21 @@ Generate title slide, table of contents, 5-10 content slides, and summary. Retur
             .message
             .content
             .as_ref()
-            .map(|c| c.as_str())
+            .map(vol_llm_core::MessageContent::as_str)
             .unwrap_or("");
         let json: Value = serde_json::from_str(content_str)
             .map_err(|e| OutlineError::JsonParseError(e.to_string()))?;
 
         // Parse into Outline struct
-        let title = json["title"]
-            .as_str()
+        let title = json
+            .get("title")
+            .and_then(Value::as_str)
             .ok_or_else(|| OutlineError::MissingField("title".to_string()))?
             .to_string();
 
-        let slides_array = json["slides"]
-            .as_array()
+        let slides_array = json
+            .get("slides")
+            .and_then(Value::as_array)
             .ok_or_else(|| OutlineError::MissingField("slides".to_string()))?;
 
         let mut slides = Vec::new();
@@ -102,14 +104,14 @@ Generate title slide, table of contents, 5-10 content slides, and summary. Retur
                 subtitle: slide_json
                     .get("subtitle")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_string()),
+                    .map(std::string::ToString::to_string),
                 bullets: slide_json
                     .get("bullets")
                     .and_then(|v| v.as_array())
                     .map(|arr| {
                         arr.iter()
                             .filter_map(|v| v.as_str())
-                            .map(|s| s.to_string())
+                            .map(std::string::ToString::to_string)
                             .collect()
                     })
                     .unwrap_or_default(),
@@ -119,7 +121,7 @@ Generate title slide, table of contents, 5-10 content slides, and summary. Retur
                     .map(|arr| {
                         arr.iter()
                             .filter_map(|v| v.as_str())
-                            .map(|s| s.to_string())
+                            .map(std::string::ToString::to_string)
                             .collect()
                     })
                     .unwrap_or_default(),
@@ -178,7 +180,7 @@ impl ExecutableTool for OutlineGeneratorTool {
             Err(e) => Ok(ToolResult {
                 call_id: String::new(),
                 success: false,
-                content: format!("Error: {}", e),
+                content: format!("Error: {e}"),
                 error: Some(e.to_string()),
                 data: None,
             }),

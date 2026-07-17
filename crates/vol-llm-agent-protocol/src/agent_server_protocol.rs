@@ -267,6 +267,7 @@ impl From<CommandRequestDef> for vol_llm_sandbox::CommandRequest {
 }
 
 impl From<vol_llm_sandbox::CommandRequest> for CommandRequestDef {
+    #[allow(clippy::cast_possible_truncation)]
     fn from(r: vol_llm_sandbox::CommandRequest) -> Self {
         use base64::Engine;
         Self {
@@ -274,9 +275,9 @@ impl From<vol_llm_sandbox::CommandRequest> for CommandRequestDef {
             args: r.args,
             env: r.env.into_iter().collect(),
             cwd: r.cwd.map(|p| p.to_string_lossy().to_string()),
-            stdin: r.stdin.map(|s| {
-                base64::engine::general_purpose::STANDARD.encode(&s)
-            }),
+            stdin: r
+                .stdin
+                .map(|s| base64::engine::general_purpose::STANDARD.encode(&s)),
             timeout_ms: r.timeout.as_millis() as u64,
         }
     }
@@ -285,8 +286,8 @@ impl From<vol_llm_sandbox::CommandRequest> for CommandRequestDef {
 /// Wire-compatible command output.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CommandOutputDef {
-    pub stdout: String,  // base64 encoded
-    pub stderr: String,  // base64 encoded
+    pub stdout: String, // base64 encoded
+    pub stderr: String, // base64 encoded
     pub exit_code: i32,
     #[serde(default)]
     pub killed_by_signal: Option<i32>,
@@ -849,12 +850,9 @@ impl Payload {
                 .map(ControlPayload::RunStatus)
                 .map(Payload::Control)
                 .map_err(|_| ProtocolError::PayloadDecodeFailed("control.run_status")),
-            Operation::Sandbox(_) => {
-                serde_json::from_value::<SandboxPayload>(value).map(Payload::Sandbox)
-                    .map_err(|e| ProtocolError::PayloadDecodeFailedOwned(
-                        format!("sandbox: {}", e)
-                    ))
-            }
+            Operation::Sandbox(_) => serde_json::from_value::<SandboxPayload>(value)
+                .map(Payload::Sandbox)
+                .map_err(|e| ProtocolError::PayloadDecodeFailedOwned(format!("sandbox: {e}"))),
         }
     }
 
@@ -1546,64 +1544,199 @@ mod tests {
     #[test]
     fn operation_method_names_all_variants() {
         // Agent
-        assert_eq!(Operation::Agent(AgentOperation::Submit).method_name(), "agent.submit");
-        assert_eq!(Operation::Agent(AgentOperation::Cancel).method_name(), "agent.cancel");
-        assert_eq!(Operation::Agent(AgentOperation::Subscribe).method_name(), "agent.subscribe");
-        assert_eq!(Operation::Agent(AgentOperation::Unsubscribe).method_name(), "agent.unsubscribe");
-        assert_eq!(Operation::Agent(AgentOperation::Approve).method_name(), "agent.approve");
-        assert_eq!(Operation::Agent(AgentOperation::List).method_name(), "agent.list");
-        assert_eq!(Operation::Agent(AgentOperation::Event).method_name(), "agent.event");
-        assert_eq!(Operation::Agent(AgentOperation::Status).method_name(), "agent.status");
-        assert_eq!(Operation::Agent(AgentOperation::ContextConfig).method_name(), "agent.context_config");
-        assert_eq!(Operation::Agent(AgentOperation::ContextSnapshot).method_name(), "agent.context_snapshot");
+        assert_eq!(
+            Operation::Agent(AgentOperation::Submit).method_name(),
+            "agent.submit"
+        );
+        assert_eq!(
+            Operation::Agent(AgentOperation::Cancel).method_name(),
+            "agent.cancel"
+        );
+        assert_eq!(
+            Operation::Agent(AgentOperation::Subscribe).method_name(),
+            "agent.subscribe"
+        );
+        assert_eq!(
+            Operation::Agent(AgentOperation::Unsubscribe).method_name(),
+            "agent.unsubscribe"
+        );
+        assert_eq!(
+            Operation::Agent(AgentOperation::Approve).method_name(),
+            "agent.approve"
+        );
+        assert_eq!(
+            Operation::Agent(AgentOperation::List).method_name(),
+            "agent.list"
+        );
+        assert_eq!(
+            Operation::Agent(AgentOperation::Event).method_name(),
+            "agent.event"
+        );
+        assert_eq!(
+            Operation::Agent(AgentOperation::Status).method_name(),
+            "agent.status"
+        );
+        assert_eq!(
+            Operation::Agent(AgentOperation::ContextConfig).method_name(),
+            "agent.context_config"
+        );
+        assert_eq!(
+            Operation::Agent(AgentOperation::ContextSnapshot).method_name(),
+            "agent.context_snapshot"
+        );
         // Task
-        assert_eq!(Operation::Task(TaskOperation::List).method_name(), "task.list");
-        assert_eq!(Operation::Task(TaskOperation::Get).method_name(), "task.get");
+        assert_eq!(
+            Operation::Task(TaskOperation::List).method_name(),
+            "task.list"
+        );
+        assert_eq!(
+            Operation::Task(TaskOperation::Get).method_name(),
+            "task.get"
+        );
         // File
-        assert_eq!(Operation::File(FileOperation::List).method_name(), "file.list");
-        assert_eq!(Operation::File(FileOperation::Read).method_name(), "file.read");
+        assert_eq!(
+            Operation::File(FileOperation::List).method_name(),
+            "file.list"
+        );
+        assert_eq!(
+            Operation::File(FileOperation::Read).method_name(),
+            "file.read"
+        );
         // Session
-        assert_eq!(Operation::Session(SessionOperation::List).method_name(), "session.list");
-        assert_eq!(Operation::Session(SessionOperation::Resume).method_name(), "session.resume");
-        assert_eq!(Operation::Session(SessionOperation::Entries).method_name(), "session.entries");
+        assert_eq!(
+            Operation::Session(SessionOperation::List).method_name(),
+            "session.list"
+        );
+        assert_eq!(
+            Operation::Session(SessionOperation::Resume).method_name(),
+            "session.resume"
+        );
+        assert_eq!(
+            Operation::Session(SessionOperation::Entries).method_name(),
+            "session.entries"
+        );
     }
 
     #[test]
     fn operation_method_names_mcp() {
-        assert_eq!(Operation::Mcp(McpOperation::ListServers).method_name(), "mcp.list_servers");
-        assert_eq!(Operation::Mcp(McpOperation::ListTools).method_name(), "mcp.list_tools");
-        assert_eq!(Operation::Mcp(McpOperation::CallTool).method_name(), "mcp.call_tool");
-        assert_eq!(Operation::Mcp(McpOperation::ListResources).method_name(), "mcp.list_resources");
-        assert_eq!(Operation::Mcp(McpOperation::ListResourceTemplates).method_name(), "mcp.list_resource_templates");
-        assert_eq!(Operation::Mcp(McpOperation::ReadResource).method_name(), "mcp.read_resource");
-        assert_eq!(Operation::Mcp(McpOperation::ListPrompts).method_name(), "mcp.list_prompts");
-        assert_eq!(Operation::Mcp(McpOperation::GetPrompt).method_name(), "mcp.get_prompt");
-        assert_eq!(Operation::Mcp(McpOperation::Reconnect).method_name(), "mcp.reconnect");
-        assert_eq!(Operation::Mcp(McpOperation::ServerStatus).method_name(), "mcp.server_status");
+        assert_eq!(
+            Operation::Mcp(McpOperation::ListServers).method_name(),
+            "mcp.list_servers"
+        );
+        assert_eq!(
+            Operation::Mcp(McpOperation::ListTools).method_name(),
+            "mcp.list_tools"
+        );
+        assert_eq!(
+            Operation::Mcp(McpOperation::CallTool).method_name(),
+            "mcp.call_tool"
+        );
+        assert_eq!(
+            Operation::Mcp(McpOperation::ListResources).method_name(),
+            "mcp.list_resources"
+        );
+        assert_eq!(
+            Operation::Mcp(McpOperation::ListResourceTemplates).method_name(),
+            "mcp.list_resource_templates"
+        );
+        assert_eq!(
+            Operation::Mcp(McpOperation::ReadResource).method_name(),
+            "mcp.read_resource"
+        );
+        assert_eq!(
+            Operation::Mcp(McpOperation::ListPrompts).method_name(),
+            "mcp.list_prompts"
+        );
+        assert_eq!(
+            Operation::Mcp(McpOperation::GetPrompt).method_name(),
+            "mcp.get_prompt"
+        );
+        assert_eq!(
+            Operation::Mcp(McpOperation::Reconnect).method_name(),
+            "mcp.reconnect"
+        );
+        assert_eq!(
+            Operation::Mcp(McpOperation::ServerStatus).method_name(),
+            "mcp.server_status"
+        );
     }
 
     #[test]
     fn operation_method_names_skill_tool_log_system_control() {
-        assert_eq!(Operation::Skill(SkillOperation::List).method_name(), "skill.list");
-        assert_eq!(Operation::Skill(SkillOperation::Get).method_name(), "skill.get");
-        assert_eq!(Operation::Skill(SkillOperation::Refresh).method_name(), "skill.refresh");
-        assert_eq!(Operation::Tool(ToolOperation::List).method_name(), "tool.list");
-        assert_eq!(Operation::Tool(ToolOperation::Call).method_name(), "tool.call");
+        assert_eq!(
+            Operation::Skill(SkillOperation::List).method_name(),
+            "skill.list"
+        );
+        assert_eq!(
+            Operation::Skill(SkillOperation::Get).method_name(),
+            "skill.get"
+        );
+        assert_eq!(
+            Operation::Skill(SkillOperation::Refresh).method_name(),
+            "skill.refresh"
+        );
+        assert_eq!(
+            Operation::Tool(ToolOperation::List).method_name(),
+            "tool.list"
+        );
+        assert_eq!(
+            Operation::Tool(ToolOperation::Call).method_name(),
+            "tool.call"
+        );
         assert_eq!(Operation::Log(LogOperation::List).method_name(), "log.list");
         assert_eq!(Operation::Log(LogOperation::Read).method_name(), "log.read");
-        assert_eq!(Operation::System(SystemOperation::Connected).method_name(), "system.connected");
-        assert_eq!(Operation::Control(ControlOperation::Register).method_name(), "control.register");
-        assert_eq!(Operation::Control(ControlOperation::Heartbeat).method_name(), "control.heartbeat");
-        assert_eq!(Operation::Control(ControlOperation::CapabilitySnapshot).method_name(), "control.capability_snapshot");
-        assert_eq!(Operation::Control(ControlOperation::CapabilityDelta).method_name(), "control.capability_delta");
-        assert_eq!(Operation::Control(ControlOperation::Event).method_name(), "control.event");
-        assert_eq!(Operation::Control(ControlOperation::Command).method_name(), "control.command");
-        assert_eq!(Operation::Control(ControlOperation::CommandAck).method_name(), "control.command_ack");
-        assert_eq!(Operation::Control(ControlOperation::CommandResult).method_name(), "control.command_result");
-        assert_eq!(Operation::Control(ControlOperation::NodeList).method_name(), "control.node_list");
-        assert_eq!(Operation::Control(ControlOperation::NodeGet).method_name(), "control.node_get");
-        assert_eq!(Operation::Control(ControlOperation::CapabilityList).method_name(), "control.capability_list");
-        assert_eq!(Operation::Control(ControlOperation::RunStatus).method_name(), "control.run_status");
+        assert_eq!(
+            Operation::System(SystemOperation::Connected).method_name(),
+            "system.connected"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::Register).method_name(),
+            "control.register"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::Heartbeat).method_name(),
+            "control.heartbeat"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::CapabilitySnapshot).method_name(),
+            "control.capability_snapshot"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::CapabilityDelta).method_name(),
+            "control.capability_delta"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::Event).method_name(),
+            "control.event"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::Command).method_name(),
+            "control.command"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::CommandAck).method_name(),
+            "control.command_ack"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::CommandResult).method_name(),
+            "control.command_result"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::NodeList).method_name(),
+            "control.node_list"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::NodeGet).method_name(),
+            "control.node_get"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::CapabilityList).method_name(),
+            "control.capability_list"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::RunStatus).method_name(),
+            "control.run_status"
+        );
     }
 
     // ── Payload::from_operation tests for previously uncovered arms ──
@@ -1619,21 +1752,39 @@ mod tests {
     fn payload_from_operation_session_resume() {
         let op = Operation::Session(SessionOperation::Resume);
         let p = Payload::from_operation(&op, serde_json::json!({"session_id": "s1"})).unwrap();
-        assert_eq!(p, Payload::Session(SessionPayload::Resume { session_id: "s1".into(), agent_id: None }));
+        assert_eq!(
+            p,
+            Payload::Session(SessionPayload::Resume {
+                session_id: "s1".into(),
+                agent_id: None
+            })
+        );
     }
 
     #[test]
     fn payload_from_operation_session_entries() {
         let op = Operation::Session(SessionOperation::Entries);
         let p = Payload::from_operation(&op, serde_json::json!({"session_id": "s1"})).unwrap();
-        assert_eq!(p, Payload::Session(SessionPayload::Entries { session_id: "s1".into(), agent_id: None }));
+        assert_eq!(
+            p,
+            Payload::Session(SessionPayload::Entries {
+                session_id: "s1".into(),
+                agent_id: None
+            })
+        );
     }
 
     #[test]
     fn payload_from_operation_task_list() {
         let op = Operation::Task(TaskOperation::List);
         let p = Payload::from_operation(&op, serde_json::json!({})).unwrap();
-        assert_eq!(p, Payload::Task(TaskPayload::List { status: None, assignee: None }));
+        assert_eq!(
+            p,
+            Payload::Task(TaskPayload::List {
+                status: None,
+                assignee: None
+            })
+        );
     }
 
     #[test]
@@ -1654,7 +1805,12 @@ mod tests {
     fn payload_from_operation_log_read() {
         let op = Operation::Log(LogOperation::Read);
         let p = Payload::from_operation(&op, serde_json::json!({"run_id": "run-1"})).unwrap();
-        assert_eq!(p, Payload::Log(LogPayload::Read { run_id: "run-1".into() }));
+        assert_eq!(
+            p,
+            Payload::Log(LogPayload::Read {
+                run_id: "run-1".into()
+            })
+        );
     }
 
     #[test]
@@ -1695,36 +1851,73 @@ mod tests {
     #[test]
     fn payload_from_operation_agent_unsubscribe() {
         let op = Operation::Agent(AgentOperation::Unsubscribe);
-        let p = Payload::from_operation(&op, serde_json::json!({"subscription_id": "sub-1"})).unwrap();
-        assert_eq!(p, Payload::Agent(AgentPayload::Unsubscribe { subscription_id: "sub-1".into() }));
+        let p =
+            Payload::from_operation(&op, serde_json::json!({"subscription_id": "sub-1"})).unwrap();
+        assert_eq!(
+            p,
+            Payload::Agent(AgentPayload::Unsubscribe {
+                subscription_id: "sub-1".into()
+            })
+        );
     }
 
     #[test]
     fn payload_from_operation_agent_approve() {
         let op = Operation::Agent(AgentOperation::Approve);
-        let p = Payload::from_operation(&op, serde_json::json!({"run_id": "run-1", "approved": true, "reason": "looks good"})).unwrap();
-        assert_eq!(p, Payload::Agent(AgentPayload::Approve { run_id: "run-1".into(), approved: true, reason: Some("looks good".into()) }));
+        let p = Payload::from_operation(
+            &op,
+            serde_json::json!({"run_id": "run-1", "approved": true, "reason": "looks good"}),
+        )
+        .unwrap();
+        assert_eq!(
+            p,
+            Payload::Agent(AgentPayload::Approve {
+                run_id: "run-1".into(),
+                approved: true,
+                reason: Some("looks good".into())
+            })
+        );
     }
 
     #[test]
     fn payload_from_operation_agent_status() {
         let op = Operation::Agent(AgentOperation::Status);
         let p = Payload::from_operation(&op, serde_json::json!({"agent_id": "agent-a"})).unwrap();
-        assert_eq!(p, Payload::Agent(AgentPayload::Status { agent_id: "agent-a".into() }));
+        assert_eq!(
+            p,
+            Payload::Agent(AgentPayload::Status {
+                agent_id: "agent-a".into()
+            })
+        );
     }
 
     #[test]
     fn payload_from_operation_agent_context_config() {
         let op = Operation::Agent(AgentOperation::ContextConfig);
         let p = Payload::from_operation(&op, serde_json::json!({"agent_id": "agent-a"})).unwrap();
-        assert_eq!(p, Payload::Agent(AgentPayload::ContextConfig { agent_id: "agent-a".into() }));
+        assert_eq!(
+            p,
+            Payload::Agent(AgentPayload::ContextConfig {
+                agent_id: "agent-a".into()
+            })
+        );
     }
 
     #[test]
     fn payload_from_operation_agent_context_snapshot() {
         let op = Operation::Agent(AgentOperation::ContextSnapshot);
-        let p = Payload::from_operation(&op, serde_json::json!({"agent_id": "agent-a", "contributor_name": "skills"})).unwrap();
-        assert_eq!(p, Payload::Agent(AgentPayload::ContextSnapshot { agent_id: "agent-a".into(), contributor_name: "skills".into() }));
+        let p = Payload::from_operation(
+            &op,
+            serde_json::json!({"agent_id": "agent-a", "contributor_name": "skills"}),
+        )
+        .unwrap();
+        assert_eq!(
+            p,
+            Payload::Agent(AgentPayload::ContextSnapshot {
+                agent_id: "agent-a".into(),
+                contributor_name: "skills".into()
+            })
+        );
     }
 
     #[test]
@@ -1738,24 +1931,48 @@ mod tests {
     fn payload_from_operation_mcp_call_tool() {
         let op = Operation::Mcp(McpOperation::CallTool);
         let p = Payload::from_operation(&op, serde_json::json!({"server": "mcp-srv", "tool_name": "read", "arguments": {"path": "/tmp"}})).unwrap();
-        assert_eq!(p, Payload::Mcp(McpPayload::CallTool { server: "mcp-srv".into(), tool_name: "read".into(), arguments: serde_json::json!({"path": "/tmp"}) }));
+        assert_eq!(
+            p,
+            Payload::Mcp(McpPayload::CallTool {
+                server: "mcp-srv".into(),
+                tool_name: "read".into(),
+                arguments: serde_json::json!({"path": "/tmp"})
+            })
+        );
     }
 
     #[test]
     fn payload_from_operation_mcp_reconnect() {
         let op = Operation::Mcp(McpOperation::Reconnect);
         let p = Payload::from_operation(&op, serde_json::json!({"server": "mcp-srv"})).unwrap();
-        assert_eq!(p, Payload::Mcp(McpPayload::Reconnect { server: "mcp-srv".into() }));
+        assert_eq!(
+            p,
+            Payload::Mcp(McpPayload::Reconnect {
+                server: "mcp-srv".into()
+            })
+        );
     }
 
     #[test]
     fn payload_from_operation_mcp_get_prompt() {
         let op = Operation::Mcp(McpOperation::GetPrompt);
-        let p = Payload::from_operation(&op, serde_json::json!({"name": "greet", "arguments": {"lang": "en"}})).unwrap();
+        let p = Payload::from_operation(
+            &op,
+            serde_json::json!({"name": "greet", "arguments": {"lang": "en"}}),
+        )
+        .unwrap();
         let expected_args: Option<serde_json::Map<String, serde_json::Value>> = Some(
-            [("lang".into(), serde_json::json!("en"))].into_iter().collect(),
+            [("lang".into(), serde_json::json!("en"))]
+                .into_iter()
+                .collect(),
         );
-        assert_eq!(p, Payload::Mcp(McpPayload::GetPrompt { name: "greet".into(), arguments: expected_args }));
+        assert_eq!(
+            p,
+            Payload::Mcp(McpPayload::GetPrompt {
+                name: "greet".into(),
+                arguments: expected_args
+            })
+        );
     }
 
     #[test]
@@ -1769,7 +1986,12 @@ mod tests {
     fn payload_from_operation_file_read() {
         let op = Operation::File(FileOperation::Read);
         let p = Payload::from_operation(&op, serde_json::json!({"path": "/tmp/f.txt"})).unwrap();
-        assert_eq!(p, Payload::File(FilePayload::Read { path: "/tmp/f.txt".into() }));
+        assert_eq!(
+            p,
+            Payload::File(FilePayload::Read {
+                path: "/tmp/f.txt".into()
+            })
+        );
     }
 
     // ── Error payload tests ──
@@ -1807,7 +2029,9 @@ mod tests {
 
     #[test]
     fn payload_data_json_strips_variant_wrapper() {
-        let p = Payload::File(FilePayload::Read { path: "/tmp/f.txt".into() });
+        let p = Payload::File(FilePayload::Read {
+            path: "/tmp/f.txt".into(),
+        });
         let json = p.data_json();
         assert_eq!(json, serde_json::json!({"path": "/tmp/f.txt"}));
     }
@@ -1821,23 +2045,43 @@ mod tests {
 
     #[test]
     fn payload_data_json_submit_ack() {
-        let p = Payload::Agent(AgentPayload::SubmitAck { run_id: "run-1".into(), accepted: true });
+        let p = Payload::Agent(AgentPayload::SubmitAck {
+            run_id: "run-1".into(),
+            accepted: true,
+        });
         let json = p.data_json();
-        assert_eq!(json, serde_json::json!({"run_id": "run-1", "accepted": true}));
+        assert_eq!(
+            json,
+            serde_json::json!({"run_id": "run-1", "accepted": true})
+        );
     }
 
     #[test]
     fn payload_data_json_control_payload() {
-        let p = Payload::Control(ControlPayload::Register(NodeRegistration { node_id: "n1".into(), name: "Node 1".into(), version: "1.0".into() }));
+        let p = Payload::Control(ControlPayload::Register(NodeRegistration {
+            node_id: "n1".into(),
+            name: "Node 1".into(),
+            version: "1.0".into(),
+        }));
         let json = p.data_json();
-        assert_eq!(json, serde_json::json!({"node_id": "n1", "name": "Node 1", "version": "1.0"}));
+        assert_eq!(
+            json,
+            serde_json::json!({"node_id": "n1", "name": "Node 1", "version": "1.0"})
+        );
     }
 
     // ── AgentServerMessage constructor tests ──
 
     #[test]
     fn agent_server_message_new_command() {
-        let msg = AgentServerMessage::new_command("msg-1", Operation::Agent(AgentOperation::Submit), Payload::Agent(AgentPayload::Submit { input: AgentInput::text("hello"), target: None }));
+        let msg = AgentServerMessage::new_command(
+            "msg-1",
+            Operation::Agent(AgentOperation::Submit),
+            Payload::Agent(AgentPayload::Submit {
+                input: AgentInput::text("hello"),
+                target: None,
+            }),
+        );
         assert_eq!(msg.protocol, "agent-server/1");
         assert_eq!(msg.message_id, "msg-1");
         assert_eq!(msg.sender, "client");
@@ -1847,25 +2091,55 @@ mod tests {
 
     #[test]
     fn agent_server_message_new_ack() {
-        let msg = AgentServerMessage::new_ack("msg-1", Operation::Agent(AgentOperation::Submit), Payload::Agent(AgentPayload::SubmitAck { run_id: "run-1".into(), accepted: true }));
+        let msg = AgentServerMessage::new_ack(
+            "msg-1",
+            Operation::Agent(AgentOperation::Submit),
+            Payload::Agent(AgentPayload::SubmitAck {
+                run_id: "run-1".into(),
+                accepted: true,
+            }),
+        );
         assert_eq!(msg.kind, MessageKind::Ack);
     }
 
     #[test]
     fn agent_server_message_new_result() {
-        let msg = AgentServerMessage::new_result("msg-1", Operation::Agent(AgentOperation::Submit), Payload::Agent(AgentPayload::SubmitResult { run_id: "run-1".into(), response: serde_json::json!({"agents": []}) }));
+        let msg = AgentServerMessage::new_result(
+            "msg-1",
+            Operation::Agent(AgentOperation::Submit),
+            Payload::Agent(AgentPayload::SubmitResult {
+                run_id: "run-1".into(),
+                response: serde_json::json!({"agents": []}),
+            }),
+        );
         assert_eq!(msg.kind, MessageKind::Result);
     }
 
     #[test]
     fn agent_server_message_new_event() {
-        let msg = AgentServerMessage::new_event("msg-1", Operation::Agent(AgentOperation::Event), Payload::Agent(AgentPayload::Event { run_id: "run-1".into(), event: serde_json::json!({"type": "thought"}) }));
+        let msg = AgentServerMessage::new_event(
+            "msg-1",
+            Operation::Agent(AgentOperation::Event),
+            Payload::Agent(AgentPayload::Event {
+                run_id: "run-1".into(),
+                event: serde_json::json!({"type": "thought"}),
+            }),
+        );
         assert_eq!(msg.kind, MessageKind::Event);
     }
 
     #[test]
     fn agent_server_message_new_error() {
-        let msg = AgentServerMessage::new_error("msg-1", Operation::Agent(AgentOperation::Submit), ErrorPayload { code: "timeout".into(), message: "request timed out".into(), detail: None, terminal: true });
+        let msg = AgentServerMessage::new_error(
+            "msg-1",
+            Operation::Agent(AgentOperation::Submit),
+            ErrorPayload {
+                code: "timeout".into(),
+                message: "request timed out".into(),
+                detail: None,
+                terminal: true,
+            },
+        );
         assert_eq!(msg.kind, MessageKind::Error);
         match msg.payload {
             Payload::Error(ref e) => assert_eq!(e.code, "timeout"),
@@ -1878,24 +2152,67 @@ mod tests {
     #[test]
     fn agent_payload_round_trip_all_variants() {
         let variants: Vec<AgentPayload> = vec![
-            AgentPayload::Submit { input: AgentInput::text("hi"), target: None },
-            AgentPayload::SubmitAck { run_id: "r1".into(), accepted: true },
-            AgentPayload::SubmitResult { run_id: "r1".into(), response: serde_json::json!("ok") },
-            AgentPayload::Cancel { run_id: "r1".into() },
-            AgentPayload::CancelResult { run_id: "r1".into(), cancelled: true },
+            AgentPayload::Submit {
+                input: AgentInput::text("hi"),
+                target: None,
+            },
+            AgentPayload::SubmitAck {
+                run_id: "r1".into(),
+                accepted: true,
+            },
+            AgentPayload::SubmitResult {
+                run_id: "r1".into(),
+                response: serde_json::json!("ok"),
+            },
+            AgentPayload::Cancel {
+                run_id: "r1".into(),
+            },
+            AgentPayload::CancelResult {
+                run_id: "r1".into(),
+                cancelled: true,
+            },
             AgentPayload::Subscribe { target: None },
-            AgentPayload::SubscribeResult { subscription_id: "s1".into() },
-            AgentPayload::Unsubscribe { subscription_id: "s1".into() },
-            AgentPayload::UnsubscribeResult { subscription_id: "s1".into(), removed: true },
-            AgentPayload::Approve { run_id: "r1".into(), approved: true, reason: None },
-            AgentPayload::ApproveResult { run_id: "r1".into(), accepted: true },
+            AgentPayload::SubscribeResult {
+                subscription_id: "s1".into(),
+            },
+            AgentPayload::Unsubscribe {
+                subscription_id: "s1".into(),
+            },
+            AgentPayload::UnsubscribeResult {
+                subscription_id: "s1".into(),
+                removed: true,
+            },
+            AgentPayload::Approve {
+                run_id: "r1".into(),
+                approved: true,
+                reason: None,
+            },
+            AgentPayload::ApproveResult {
+                run_id: "r1".into(),
+                accepted: true,
+            },
             AgentPayload::ListResult { agents: vec![] },
-            AgentPayload::Event { run_id: "r1".into(), event: serde_json::json!({"type": "start"}) },
-            AgentPayload::Status { agent_id: "a1".into() },
-            AgentPayload::StatusResult { status: "idle".into(), run_id: None },
-            AgentPayload::ContextConfig { agent_id: "a1".into() },
-            AgentPayload::ContextConfigResult { contributors: vec![] },
-            AgentPayload::ContextSnapshot { agent_id: "a1".into(), contributor_name: "skills".into() },
+            AgentPayload::Event {
+                run_id: "r1".into(),
+                event: serde_json::json!({"type": "start"}),
+            },
+            AgentPayload::Status {
+                agent_id: "a1".into(),
+            },
+            AgentPayload::StatusResult {
+                status: "idle".into(),
+                run_id: None,
+            },
+            AgentPayload::ContextConfig {
+                agent_id: "a1".into(),
+            },
+            AgentPayload::ContextConfigResult {
+                contributors: vec![],
+            },
+            AgentPayload::ContextSnapshot {
+                agent_id: "a1".into(),
+                contributor_name: "skills".into(),
+            },
             AgentPayload::ContextSnapshotResult { messages: vec![] },
         ];
         for v in variants {
@@ -1910,23 +2227,73 @@ mod tests {
     #[test]
     fn control_payload_round_trip() {
         let variants: Vec<ControlPayload> = vec![
-            ControlPayload::Register(NodeRegistration { node_id: "n1".into(), name: "node-1".into(), version: "1.0".into() }),
-            ControlPayload::RegisterAck(RegisterAck { node_id: "n1".into(), accepted: true, generation: 1 }),
-            ControlPayload::Heartbeat(NodeHeartbeat { node_id: "n1".into(), status: "online".into(), load: NodeLoad::default() }),
-            ControlPayload::CapabilitySnapshot(CapabilitySnapshot { node_id: "n1".into(), revision: 1, generated_at_ms: None, agents: vec![], tools: vec![], mcp_servers: vec![], skills: vec![] }),
-            ControlPayload::CapabilityDelta(CapabilityDelta { node_id: "n1".into(), base_revision: 0, revision: 1 }),
-            ControlPayload::Event(DataPlaneEvent { node_id: "n1".into(), event_type: "status_change".into(), data: serde_json::json!({}) }),
-            ControlPayload::Command(ControlCommand { command_id: "cmd-1".into(), node_id: "n1".into(), operation: ControlCommandOperation::HealthCheck, deadline_ms: None }),
-            ControlPayload::CommandAck(CommandAck { command_id: "cmd-1".into(), accepted: true, run_id: None }),
-            ControlPayload::CommandResult(CommandResult { command_id: "cmd-1".into(), status: "completed".into(), result: serde_json::json!({}), error: None }),
+            ControlPayload::Register(NodeRegistration {
+                node_id: "n1".into(),
+                name: "node-1".into(),
+                version: "1.0".into(),
+            }),
+            ControlPayload::RegisterAck(RegisterAck {
+                node_id: "n1".into(),
+                accepted: true,
+                generation: 1,
+            }),
+            ControlPayload::Heartbeat(NodeHeartbeat {
+                node_id: "n1".into(),
+                status: "online".into(),
+                load: NodeLoad::default(),
+            }),
+            ControlPayload::CapabilitySnapshot(CapabilitySnapshot {
+                node_id: "n1".into(),
+                revision: 1,
+                generated_at_ms: None,
+                agents: vec![],
+                tools: vec![],
+                mcp_servers: vec![],
+                skills: vec![],
+            }),
+            ControlPayload::CapabilityDelta(CapabilityDelta {
+                node_id: "n1".into(),
+                base_revision: 0,
+                revision: 1,
+            }),
+            ControlPayload::Event(DataPlaneEvent {
+                node_id: "n1".into(),
+                event_type: "status_change".into(),
+                data: serde_json::json!({}),
+            }),
+            ControlPayload::Command(ControlCommand {
+                command_id: "cmd-1".into(),
+                node_id: "n1".into(),
+                operation: ControlCommandOperation::HealthCheck,
+                deadline_ms: None,
+            }),
+            ControlPayload::CommandAck(CommandAck {
+                command_id: "cmd-1".into(),
+                accepted: true,
+                run_id: None,
+            }),
+            ControlPayload::CommandResult(CommandResult {
+                command_id: "cmd-1".into(),
+                status: "completed".into(),
+                result: serde_json::json!({}),
+                error: None,
+            }),
             ControlPayload::NodeList(NodeListRequest {}),
             ControlPayload::NodeListResult(NodeListResult { nodes: vec![] }),
-            ControlPayload::NodeGet(NodeGetRequest { node_id: "n1".into() }),
+            ControlPayload::NodeGet(NodeGetRequest {
+                node_id: "n1".into(),
+            }),
             ControlPayload::NodeGetResult(NodeGetResult { node: None }),
             ControlPayload::CapabilityList(CapabilityListRequest { node_id: None }),
             ControlPayload::CapabilityListResult(CapabilityListResult { snapshots: vec![] }),
-            ControlPayload::RunStatus(RunStatusRequest { run_id: "run-1".into() }),
-            ControlPayload::RunStatusResult(RunStatusResult { run_id: "run-1".into(), status: "running".into(), node_id: None }),
+            ControlPayload::RunStatus(RunStatusRequest {
+                run_id: "run-1".into(),
+            }),
+            ControlPayload::RunStatusResult(RunStatusResult {
+                run_id: "run-1".into(),
+                status: "running".into(),
+                node_id: None,
+            }),
         ];
         for v in variants {
             let json = serde_json::to_value(&v).unwrap();
@@ -1939,7 +2306,10 @@ mod tests {
 
     #[test]
     fn control_command_operation_serde() {
-        let submit = ControlCommandOperation::SubmitAgent { target: Some("agent-a".into()), input: AgentInput::text("hello") };
+        let submit = ControlCommandOperation::SubmitAgent {
+            target: Some("agent-a".into()),
+            input: AgentInput::text("hello"),
+        };
         let json = serde_json::to_value(&submit).unwrap();
         assert_eq!(json["op"], "SubmitAgent");
         assert_eq!(json["payload"]["target"], "agent-a");
@@ -1958,25 +2328,84 @@ mod tests {
     #[test]
     fn payload_from_operation_decode_errors() {
         let cases: Vec<(Operation, serde_json::Value, &str)> = vec![
-            (Operation::Agent(AgentOperation::Submit), serde_json::json!({}), "agent.submit"),
-            (Operation::Agent(AgentOperation::Cancel), serde_json::json!({}), "agent.cancel"),
-            (Operation::Agent(AgentOperation::Unsubscribe), serde_json::json!({}), "agent.unsubscribe"),
-            (Operation::Agent(AgentOperation::Status), serde_json::json!({}), "agent.status"),
-            (Operation::Agent(AgentOperation::ContextSnapshot), serde_json::json!({}), "agent.context_snapshot"),
-            (Operation::File(FileOperation::List), serde_json::json!({}), "file.list"),
-            (Operation::Session(SessionOperation::Resume), serde_json::json!({}), "session.resume"),
-            (Operation::Mcp(McpOperation::CallTool), serde_json::json!({}), "mcp.call_tool"),
-            (Operation::Mcp(McpOperation::ReadResource), serde_json::json!({}), "mcp.read_resource"),
-            (Operation::Mcp(McpOperation::Reconnect), serde_json::json!({}), "mcp.reconnect"),
-            (Operation::Skill(SkillOperation::Get), serde_json::json!({}), "skill.get"),
-            (Operation::Tool(ToolOperation::Call), serde_json::json!({}), "tool.call"),
-            (Operation::Log(LogOperation::Read), serde_json::json!({}), "log.read"),
-            (Operation::Task(TaskOperation::Get), serde_json::json!({}), "task.get"),
+            (
+                Operation::Agent(AgentOperation::Submit),
+                serde_json::json!({}),
+                "agent.submit",
+            ),
+            (
+                Operation::Agent(AgentOperation::Cancel),
+                serde_json::json!({}),
+                "agent.cancel",
+            ),
+            (
+                Operation::Agent(AgentOperation::Unsubscribe),
+                serde_json::json!({}),
+                "agent.unsubscribe",
+            ),
+            (
+                Operation::Agent(AgentOperation::Status),
+                serde_json::json!({}),
+                "agent.status",
+            ),
+            (
+                Operation::Agent(AgentOperation::ContextSnapshot),
+                serde_json::json!({}),
+                "agent.context_snapshot",
+            ),
+            (
+                Operation::File(FileOperation::List),
+                serde_json::json!({}),
+                "file.list",
+            ),
+            (
+                Operation::Session(SessionOperation::Resume),
+                serde_json::json!({}),
+                "session.resume",
+            ),
+            (
+                Operation::Mcp(McpOperation::CallTool),
+                serde_json::json!({}),
+                "mcp.call_tool",
+            ),
+            (
+                Operation::Mcp(McpOperation::ReadResource),
+                serde_json::json!({}),
+                "mcp.read_resource",
+            ),
+            (
+                Operation::Mcp(McpOperation::Reconnect),
+                serde_json::json!({}),
+                "mcp.reconnect",
+            ),
+            (
+                Operation::Skill(SkillOperation::Get),
+                serde_json::json!({}),
+                "skill.get",
+            ),
+            (
+                Operation::Tool(ToolOperation::Call),
+                serde_json::json!({}),
+                "tool.call",
+            ),
+            (
+                Operation::Log(LogOperation::Read),
+                serde_json::json!({}),
+                "log.read",
+            ),
+            (
+                Operation::Task(TaskOperation::Get),
+                serde_json::json!({}),
+                "task.get",
+            ),
         ];
         for (op, value, expected_method) in cases {
             let err = Payload::from_operation(&op, value).unwrap_err();
             let msg = err.to_string();
-            assert!(msg.contains(expected_method), "expected '{}' in '{:?}'", expected_method, msg);
+            assert!(
+                msg.contains(expected_method),
+                "expected '{expected_method}' in '{msg:?}'"
+            );
         }
     }
 
@@ -1984,23 +2413,39 @@ mod tests {
 
     #[test]
     fn capability_structures_serde() {
-        let agent_cap = AgentCapability { agent_id: "a1".into(), name: "agent-a".into(), description: Some("test agent".into()), status: Some("idle".into()) };
+        let agent_cap = AgentCapability {
+            agent_id: "a1".into(),
+            name: "agent-a".into(),
+            description: Some("test agent".into()),
+            status: Some("idle".into()),
+        };
         let json = serde_json::to_value(&agent_cap).unwrap();
         assert_eq!(json["agent_id"], "a1");
         let back: AgentCapability = serde_json::from_value(json).unwrap();
         assert_eq!(back, agent_cap);
 
-        let tool_cap = ToolCapability { name: "read_file".into(), description: Some("Reads a file".into()), sensitivity: Some("medium".into()), requires_approval: true };
+        let tool_cap = ToolCapability {
+            name: "read_file".into(),
+            description: Some("Reads a file".into()),
+            sensitivity: Some("medium".into()),
+            requires_approval: true,
+        };
         let json = serde_json::to_value(&tool_cap).unwrap();
         let back: ToolCapability = serde_json::from_value(json).unwrap();
         assert_eq!(back, tool_cap);
 
-        let mcp_cap = McpServerCapability { name: "mcp-srv".into(), status: Some("connected".into()) };
+        let mcp_cap = McpServerCapability {
+            name: "mcp-srv".into(),
+            status: Some("connected".into()),
+        };
         let json = serde_json::to_value(&mcp_cap).unwrap();
         let back: McpServerCapability = serde_json::from_value(json).unwrap();
         assert_eq!(back, mcp_cap);
 
-        let skill_cap = SkillCapability { name: "test-skill".into(), description: Some("a skill".into()) };
+        let skill_cap = SkillCapability {
+            name: "test-skill".into(),
+            description: Some("a skill".into()),
+        };
         let json = serde_json::to_value(&skill_cap).unwrap();
         let back: SkillCapability = serde_json::from_value(json).unwrap();
         assert_eq!(back, skill_cap);
@@ -2015,13 +2460,23 @@ mod tests {
 
     #[test]
     fn agent_server_message_round_trip() {
-        let msg = AgentServerMessage::new_command("msg-1", Operation::Agent(AgentOperation::Submit), Payload::Agent(AgentPayload::Submit { input: AgentInput::text("hello world"), target: Some("coding".into()) }));
+        let msg = AgentServerMessage::new_command(
+            "msg-1",
+            Operation::Agent(AgentOperation::Submit),
+            Payload::Agent(AgentPayload::Submit {
+                input: AgentInput::text("hello world"),
+                target: Some("coding".into()),
+            }),
+        );
         let json = serde_json::to_string(&msg).unwrap();
         let decoded: AgentServerMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.message_id, msg.message_id);
         assert_eq!(decoded.operation.method_name(), "agent.submit");
         match decoded.payload {
-            Payload::Agent(AgentPayload::Submit { ref input, ref target }) => {
+            Payload::Agent(AgentPayload::Submit {
+                ref input,
+                ref target,
+            }) => {
                 assert_eq!(input.display_text(), "hello world");
                 assert_eq!(target.as_deref(), Some("coding"));
             }
@@ -2036,9 +2491,18 @@ mod tests {
         fn test_sandbox_operation_method_names() {
             assert_eq!(SandboxOperation::List.method_name(), "sandbox.list");
             assert_eq!(SandboxOperation::Exec.method_name(), "sandbox.exec");
-            assert_eq!(SandboxOperation::ReadFile.method_name(), "sandbox.read_file");
-            assert_eq!(SandboxOperation::WriteFile.method_name(), "sandbox.write_file");
-            assert_eq!(SandboxOperation::CreateDir.method_name(), "sandbox.create_dir");
+            assert_eq!(
+                SandboxOperation::ReadFile.method_name(),
+                "sandbox.read_file"
+            );
+            assert_eq!(
+                SandboxOperation::WriteFile.method_name(),
+                "sandbox.write_file"
+            );
+            assert_eq!(
+                SandboxOperation::CreateDir.method_name(),
+                "sandbox.create_dir"
+            );
             assert_eq!(SandboxOperation::ReadDir.method_name(), "sandbox.read_dir");
             assert_eq!(SandboxOperation::Metadata.method_name(), "sandbox.metadata");
         }
@@ -2057,7 +2521,7 @@ mod tests {
                 timeout: Duration::from_secs(30),
             };
 
-            let def: CommandRequestDef = orig.clone().into();
+            let def: CommandRequestDef = orig.into();
             let back: vol_llm_sandbox::CommandRequest = def.into();
 
             assert_eq!(back.program, "echo");
@@ -2122,7 +2586,7 @@ mod tests {
                 killed_by_signal: None,
             };
 
-            let def: CommandOutputDef = orig.clone().into();
+            let def: CommandOutputDef = orig.into();
             assert!(!def.stdout.is_empty());
             assert!(!def.stderr.is_empty());
             assert_eq!(def.exit_code, 0);
@@ -2143,7 +2607,7 @@ mod tests {
                 killed_by_signal: Some(9),
             };
 
-            let def: CommandOutputDef = orig.clone().into();
+            let def: CommandOutputDef = orig.into();
             assert_eq!(def.killed_by_signal, Some(9));
 
             let back: vol_llm_sandbox::CommandOutput = def.into();
@@ -2161,11 +2625,11 @@ mod tests {
 
             for (ft, expected_str) in variants {
                 let entry = vol_llm_sandbox::DirEntry {
-                    name: format!("test.{}", expected_str),
+                    name: format!("test.{expected_str}"),
                     file_type: ft.clone(),
                 };
                 let def: DirEntryDef = entry.into();
-                assert_eq!(def.name, format!("test.{}", expected_str));
+                assert_eq!(def.name, format!("test.{expected_str}"));
                 assert_eq!(def.file_type, expected_str);
             }
         }
@@ -2197,19 +2661,28 @@ mod tests {
             use base64::Engine;
 
             // ReadFile
-            let p = SandboxPayload::ReadFile { path: "/tmp/f".into(), offset: Some(0), limit: Some(100) };
+            let p = SandboxPayload::ReadFile {
+                path: "/tmp/f".into(),
+                offset: Some(0),
+                limit: Some(100),
+            };
             let json = serde_json::to_value(&p).unwrap();
             let back: SandboxPayload = serde_json::from_value(json).unwrap();
             assert_eq!(back, p);
 
             // ReadFileResult
-            let p = SandboxPayload::ReadFileResult { content: base64::engine::general_purpose::STANDARD.encode(b"data") };
+            let p = SandboxPayload::ReadFileResult {
+                content: base64::engine::general_purpose::STANDARD.encode(b"data"),
+            };
             let json = serde_json::to_value(&p).unwrap();
             let back: SandboxPayload = serde_json::from_value(json).unwrap();
             assert_eq!(back, p);
 
             // WriteFile
-            let p = SandboxPayload::WriteFile { path: "/tmp/f".into(), content: base64::engine::general_purpose::STANDARD.encode(b"data") };
+            let p = SandboxPayload::WriteFile {
+                path: "/tmp/f".into(),
+                content: base64::engine::general_purpose::STANDARD.encode(b"data"),
+            };
             let json = serde_json::to_value(&p).unwrap();
             let back: SandboxPayload = serde_json::from_value(json).unwrap();
             assert_eq!(back, p);
@@ -2221,7 +2694,9 @@ mod tests {
             assert_eq!(back, p);
 
             // CreateDir
-            let p = SandboxPayload::CreateDir { path: "/tmp/dir".into() };
+            let p = SandboxPayload::CreateDir {
+                path: "/tmp/dir".into(),
+            };
             let json = serde_json::to_value(&p).unwrap();
             let back: SandboxPayload = serde_json::from_value(json).unwrap();
             assert_eq!(back, p);
@@ -2233,28 +2708,39 @@ mod tests {
             assert_eq!(back, p);
 
             // ReadDir
-            let p = SandboxPayload::ReadDir { path: "/tmp".into() };
+            let p = SandboxPayload::ReadDir {
+                path: "/tmp".into(),
+            };
             let json = serde_json::to_value(&p).unwrap();
             let back: SandboxPayload = serde_json::from_value(json).unwrap();
             assert_eq!(back, p);
 
             // ReadDirResult
-            let p = SandboxPayload::ReadDirResult { entries: vec![
-                DirEntryDef { name: "f.txt".into(), file_type: "file".into() }
-            ]};
+            let p = SandboxPayload::ReadDirResult {
+                entries: vec![DirEntryDef {
+                    name: "f.txt".into(),
+                    file_type: "file".into(),
+                }],
+            };
             let json = serde_json::to_value(&p).unwrap();
             let back: SandboxPayload = serde_json::from_value(json).unwrap();
             assert_eq!(back, p);
 
             // Metadata
-            let p = SandboxPayload::Metadata { path: "/tmp/f".into() };
+            let p = SandboxPayload::Metadata {
+                path: "/tmp/f".into(),
+            };
             let json = serde_json::to_value(&p).unwrap();
             let back: SandboxPayload = serde_json::from_value(json).unwrap();
             assert_eq!(back, p);
 
             // MetadataResult
             let p = SandboxPayload::MetadataResult {
-                metadata: FileMetadataDef { size: 42, mtime: 1000, file_type: "file".into() }
+                metadata: FileMetadataDef {
+                    size: 42,
+                    mtime: 1000,
+                    file_type: "file".into(),
+                },
             };
             let json = serde_json::to_value(&p).unwrap();
             let back: SandboxPayload = serde_json::from_value(json).unwrap();
@@ -2274,7 +2760,8 @@ mod tests {
                         "timeout_ms": 5000
                     }
                 }}),
-            ).unwrap();
+            )
+            .unwrap();
             match result {
                 Payload::Sandbox(SandboxPayload::Exec { command }) => {
                     assert_eq!(command.program, "ls");

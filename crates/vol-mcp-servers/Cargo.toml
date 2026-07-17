@@ -3,6 +3,7 @@ name = "vol-mcp-servers"
 version = "0.1.0"
 edition = "2021"
 
+
 [[bin]]
 name = "docs-rs-mcp"
 path = "src/bin/docs_rs.rs"
@@ -10,6 +11,9 @@ path = "src/bin/docs_rs.rs"
 [[bin]]
 name = "cli-tools-mcp"
 path = "src/bin/cli_tools_mcp.rs"
+
+[lints]
+workspace = true
 
 [dependencies]
 rmcp = { version = "1.6", features = ["server", "macros", "schemars", "transport-io", "transport-streamable-http-server", "transport-streamable-http-server-session"] }

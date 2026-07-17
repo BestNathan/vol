@@ -14,6 +14,7 @@ impl CapabilityIndex {
         }
     }
 
+    #[allow(clippy::expect_used)]
     pub fn apply_snapshot(&self, snapshot: CapabilitySnapshot) -> Result<(), String> {
         let mut snapshots = self
             .snapshots
@@ -29,6 +30,7 @@ impl CapabilityIndex {
     }
 
     /// Remove a node's capability snapshot (called on re-registration).
+    #[allow(clippy::expect_used)]
     pub fn remove_node(&self, node_id: &str) {
         self.snapshots
             .write()
@@ -36,6 +38,7 @@ impl CapabilityIndex {
             .remove(node_id);
     }
 
+    #[allow(clippy::expect_used)]
     pub fn list(&self, node_id: Option<&str>) -> Vec<CapabilitySnapshot> {
         let snapshots = self
             .snapshots

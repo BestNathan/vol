@@ -82,7 +82,7 @@ impl LoggerPlugin {
                                 let s = c.as_str();
                                 if s.chars().count() > 100 {
                                     let truncated: String = s.chars().take(100).collect();
-                                    format!("{}...", truncated)
+                                    format!("{truncated}...")
                                 } else {
                                     s.to_string()
                                 }

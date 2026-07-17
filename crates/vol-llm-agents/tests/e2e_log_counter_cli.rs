@@ -177,10 +177,7 @@ async fn test_html_report_shows_ordered_timeline() {
         if *pos != usize::MAX {
             assert!(
                 *pos >= last_pos,
-                "Event '{}' at position {} should come after previous event at {}",
-                name,
-                pos,
-                last_pos
+                "Event '{name}' at position {pos} should come after previous event at {last_pos}"
             );
             last_pos = *pos;
         }

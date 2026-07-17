@@ -67,7 +67,7 @@ pub(crate) async fn fetch_docs_rs_page(
     Ok(resp.text().await?)
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, clippy::unwrap_used)]
 fn extract_doc_content(html: &str) -> String {
     let document = scraper::Html::parse_document(html);
     let selector = scraper::Selector::parse("#main-content").unwrap();

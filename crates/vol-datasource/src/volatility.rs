@@ -46,6 +46,7 @@ pub struct VolatilityDataSource {
 
 impl VolatilityDataSource {
     /// Create a new VolatilityDataSource from client configuration
+    #[allow(clippy::expect_used)]
     pub fn from_config(
         client_config: DeribitClientConfig,
         symbols: Vec<String>,

@@ -60,8 +60,8 @@ impl FileSessionEntryStore {
             Some(agent) => self
                 .entry_dir
                 .join(agent)
-                .join(format!("{}.jsonl", session_id)),
-            None => self.entry_dir.join(format!("{}.jsonl", session_id)),
+                .join(format!("{session_id}.jsonl")),
+            None => self.entry_dir.join(format!("{session_id}.jsonl")),
         }
     }
 
@@ -80,7 +80,7 @@ impl FileSessionEntryStore {
             .create(true)
             .append(true)
             .open(&file_path)?;
-        writeln!(file, "{}", line)?;
+        writeln!(file, "{line}")?;
         Ok(())
     }
 
@@ -96,11 +96,11 @@ impl FileSessionEntryStore {
                 SessionEntryType::Summary => "summary".to_string(),
             },
             data: serde_json::to_value(&entry.data).map_err(|e| {
-                StoreError::Serialization(format!("Failed to serialize entry data: {}", e))
+                StoreError::Serialization(format!("Failed to serialize entry data: {e}"))
             })?,
         };
         serde_json::to_string(&line)
-            .map_err(|e| StoreError::Serialization(format!("Failed to serialize entry: {}", e)))
+            .map_err(|e| StoreError::Serialization(format!("Failed to serialize entry: {e}")))
     }
 
     /// Parse a single JSONL line. Returns `None` for unparseable or non-matching lines.

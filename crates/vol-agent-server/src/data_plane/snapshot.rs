@@ -1,4 +1,6 @@
-use vol_llm_agent_protocol::agent_server_protocol::{AgentCapability, CapabilitySnapshot, NodeLoad};
+use vol_llm_agent_protocol::agent_server_protocol::{
+    AgentCapability, CapabilitySnapshot, NodeLoad,
+};
 
 #[async_trait::async_trait]
 pub trait RuntimeCapabilitySource {

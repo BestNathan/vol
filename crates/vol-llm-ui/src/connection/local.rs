@@ -61,7 +61,7 @@ impl LocalConnection {
                 let _ = tx
                     .send(UiEvent::AgentError {
                         run_id: String::new(),
-                        message: format!("Failed to create agent: {}", e),
+                        message: format!("Failed to create agent: {e}"),
                     })
                     .await;
                 return;
@@ -86,7 +86,7 @@ impl LocalConnection {
                     let _ = tx
                         .send(UiEvent::AgentError {
                             run_id: String::new(),
-                            message: format!("{}", e),
+                            message: format!("{e}"),
                         })
                         .await;
                 }

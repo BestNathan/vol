@@ -26,21 +26,11 @@ type WsWriter = WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::Tc
 type WsSplitSink = futures_util::stream::SplitSink<WsWriter, Message>;
 
 /// Deribit WebSocket client state
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ClientState {
     pub connected: bool,
     pub subscriptions: Vec<String>,
     connection_started: bool, // Track if connection task has been started
-}
-
-impl Default for ClientState {
-    fn default() -> Self {
-        Self {
-            connected: false,
-            subscriptions: Vec::new(),
-            connection_started: false,
-        }
-    }
 }
 
 /// Deribit WebSocket client for low-level connection management
@@ -223,23 +213,28 @@ impl DeribitClient {
             error!("Invalid proxy URL format: {}", proxy_url);
             return None;
         }
-        let proxy_host = proxy_parts[0];
-        let proxy_port: u16 = proxy_parts[1].parse().ok()?;
+        let proxy_host = proxy_parts.first().copied().unwrap_or("");
+        let proxy_port: u16 = proxy_parts.get(1).and_then(|s| s.parse().ok())?;
 
         // Parse WebSocket host for CONNECT request
         let ws_host = ws_url
             .trim_start_matches("wss://")
             .trim_start_matches("ws://");
         let ws_host_parts: Vec<&str> = ws_host.split('/').collect();
-        let target_host = format!("{}:443", ws_host_parts[0]);
+        let target_host = match ws_host_parts.first() {
+            Some(part) => format!("{part}:443"),
+            None => {
+                error!("Invalid WebSocket URL: {}", ws_url);
+                return None;
+            }
+        };
 
         // Connect to proxy
         let mut proxy_stream = TcpStream::connect((proxy_host, proxy_port)).await.ok()?;
 
         // Send CONNECT request
         let connect_request = format!(
-            "CONNECT {} HTTP/1.1\r\nHost: {}\r\nProxy-Connection: Keep-Alive\r\n\r\n",
-            target_host, target_host
+            "CONNECT {target_host} HTTP/1.1\r\nHost: {target_host}\r\nProxy-Connection: Keep-Alive\r\n\r\n"
         );
         proxy_stream
             .write_all(connect_request.as_bytes())
@@ -278,7 +273,7 @@ impl DeribitClient {
             .with_no_client_auth();
 
         // Extract domain for TLS (without port)
-        let domain = target_host.split(':').next().unwrap();
+        let domain = target_host.split(':').next().unwrap_or("");
         let server_name = ServerName::try_from(domain).ok()?.to_owned();
         let tls_connector = Arc::new(config);
 
@@ -381,7 +376,10 @@ impl DeribitClient {
         // Get all channels to subscribe to
         let channels: Vec<String> = {
             let channel_types = self.subscribed_channels.lock().await.clone();
-            channel_types.iter().map(|c| c.channel_name()).collect()
+            channel_types
+                .iter()
+                .map(super::message::ChannelType::channel_name)
+                .collect()
         };
 
         // Get current subscriptions to check if we need to resubscribe
@@ -407,7 +405,7 @@ impl DeribitClient {
                 "id": 1,
                 "method": "public/subscribe",
                 "params": {
-                    "channels": channels.iter().map(|s| s.as_str()).collect::<Vec<&str>>()
+                    "channels": channels.iter().map(std::string::String::as_str).collect::<Vec<&str>>()
                 }
             });
 
@@ -453,18 +451,18 @@ impl DeribitClient {
             }))
             .send()
             .await
-            .map_err(|e| vol_core::VolError::Auth(format!("Token request failed: {}", e)))?;
+            .map_err(|e| vol_core::VolError::Auth(format!("Token request failed: {e}")))?;
 
         let result: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| vol_core::VolError::Auth(format!("Token parse failed: {}", e)))?;
+            .map_err(|e| vol_core::VolError::Auth(format!("Token parse failed: {e}")))?;
 
         result
             .get("result")
             .and_then(|r| r.get("access_token"))
             .and_then(|t| t.as_str())
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .ok_or_else(|| vol_core::VolError::Auth("No access token in response".into()))
     }
 
@@ -498,27 +496,28 @@ impl DeribitClient {
         });
 
         if let Some(p) = params {
-            payload["params"] = serde_json::Value::Object(p);
+            if let Some(obj) = payload.as_object_mut() {
+                obj.insert("params".to_string(), serde_json::Value::Object(p));
+            }
         }
 
         let response = client
             .post("https://www.deribit.com/api/v2/")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Authorization", format!("Bearer {access_token}"))
             .json(&payload)
             .send()
             .await
-            .map_err(|e| vol_core::VolError::Connection(format!("REST request failed: {}", e)))?;
+            .map_err(|e| vol_core::VolError::Connection(format!("REST request failed: {e}")))?;
 
         let result: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| vol_core::VolError::Parse(format!("REST response parse failed: {}", e)))?;
+            .map_err(|e| vol_core::VolError::Parse(format!("REST response parse failed: {e}")))?;
 
         // Check for error response
         if let Some(error) = result.get("error") {
             return Err(vol_core::VolError::Internal(format!(
-                "Deribit API error: {}",
-                error
+                "Deribit API error: {error}"
             )));
         }
 
@@ -543,7 +542,7 @@ impl DeribitClient {
 
         let response = self.request("private/get_positions", Some(params)).await?;
         let positions: Vec<Position> = serde_json::from_value(response)
-            .map_err(|e| vol_core::VolError::Parse(format!("Position parse failed: {}", e)))?;
+            .map_err(|e| vol_core::VolError::Parse(format!("Position parse failed: {e}")))?;
         Ok(positions)
     }
 
@@ -561,9 +560,8 @@ impl DeribitClient {
         let response = self
             .request("private/get_account_summary", Some(params))
             .await?;
-        let summary: PortfolioSummary = serde_json::from_value(response).map_err(|e| {
-            vol_core::VolError::Parse(format!("AccountSummary parse failed: {}", e))
-        })?;
+        let summary: PortfolioSummary = serde_json::from_value(response)
+            .map_err(|e| vol_core::VolError::Parse(format!("AccountSummary parse failed: {e}")))?;
         Ok(summary)
     }
 
@@ -616,8 +614,10 @@ impl DeribitClient {
 
                         // Get the FULL list of channels at connect time
                         let channel_types = channels.lock().await.clone();
-                        let channel_names: Vec<String> =
-                            channel_types.iter().map(|c| c.channel_name()).collect();
+                        let channel_names: Vec<String> = channel_types
+                            .iter()
+                            .map(super::message::ChannelType::channel_name)
+                            .collect();
 
                         // Authenticate if credentials are present
                         let access_token =
@@ -658,16 +658,14 @@ impl DeribitClient {
                                 }
 
                                 // Wait for auth response
-                                if let Some(Ok(msg)) = read.next().await {
-                                    if let Message::Text(text) = msg {
-                                        if let Ok(resp) =
-                                            serde_json::from_str::<serde_json::Value>(&text)
-                                        {
-                                            if let Some(error) = resp.get("error") {
-                                                error!("Auth failed: {}", error);
-                                            } else {
-                                                info!("private/auth succeeded");
-                                            }
+                                if let Some(Ok(Message::Text(text))) = read.next().await {
+                                    if let Ok(resp) =
+                                        serde_json::from_str::<serde_json::Value>(&text)
+                                    {
+                                        if let Some(error) = resp.get("error") {
+                                            error!("Auth failed: {}", error);
+                                        } else {
+                                            info!("private/auth succeeded");
                                         }
                                     }
                                 }
@@ -679,7 +677,7 @@ impl DeribitClient {
                                 "id": 1,
                                 "method": "public/subscribe",
                                 "params": {
-                                    "channels": channel_names.iter().map(|s| s.as_str()).collect::<Vec<&str>>()
+                                    "channels": channel_names.iter().map(std::string::String::as_str).collect::<Vec<&str>>()
                                 }
                             });
 

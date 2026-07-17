@@ -240,7 +240,7 @@ pub(crate) fn parse(input: &str) -> Result<ParsedCommand, String> {
     let cli = build_cli();
 
     // Ensure the "task" prefix is present so clap sees a proper argv.
-    let full_tokens = if tokens.first().map(|s| s.as_str()) == Some("task") {
+    let full_tokens = if tokens.first().map(std::string::String::as_str) == Some("task") {
         tokens
     } else {
         let mut with_prefix = vec!["task".to_string()];
@@ -250,9 +250,8 @@ pub(crate) fn parse(input: &str) -> Result<ParsedCommand, String> {
 
     let matches = cli.try_get_matches_from(&full_tokens).map_err(|e| {
         format!(
-            "Parse error: {}\nUsage: task <subcommand> [--flags]. \
-                 Use 'task scheme <sub>' to see parameters.",
-            e
+            "Parse error: {e}\nUsage: task <subcommand> [--flags]. \
+                 Use 'task scheme <sub>' to see parameters."
         )
     })?;
 

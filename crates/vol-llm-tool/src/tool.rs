@@ -195,17 +195,14 @@ impl<T: ?Sized + ExecutableTool + Send + Sync> Tool for T {
             serde_json::from_str(args).map_err(|e| -> Box<dyn Error + Send> {
                 Box::new(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
-                    format!("Invalid JSON: {}", e),
+                    format!("Invalid JSON: {e}"),
                 ))
             })?;
 
         self.execute(&json_args, context)
             .await
             .map_err(|e| -> Box<dyn Error + Send> {
-                Box::new(std::io::Error::other(format!(
-                    "Tool execution failed: {}",
-                    e
-                )))
+                Box::new(std::io::Error::other(format!("Tool execution failed: {e}")))
             })
     }
 }

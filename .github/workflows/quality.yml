@@ -1,0 +1,77 @@
+# Quality gate — runs on pull requests and manual dispatch.
+# Fast feedback loop: fmt → check → clippy → test → boundaries.
+# Uses rust-toolchain.toml (pinned toolchain with rustfmt + clippy components).
+
+name: quality
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  RUSTFLAGS: ""
+
+concurrency:
+  group: quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (from rust-toolchain.toml)
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-workspaces: "."
+          cache-all-crates: "true"
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Cargo check (workspace)
+        run: cargo check --workspace
+
+      - name: Clippy (workspace)
+        run: cargo clippy --workspace
+
+      - name: Unit tests (workspace)
+        run: cargo test --workspace --no-fail-fast
+
+      - name: Check agent boundaries
+        run: ./scripts/check-agent-boundaries.sh
+
+  # ── Coverage (informational, non-blocking) ──────────────────────────
+  coverage:
+    name: coverage
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (from rust-toolchain.toml)
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-workspaces: "."
+          cache-all-crates: "true"
+          components: "llvm-tools-preview"
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --locked
+
+      - name: Coverage check (core crates)
+        run: |
+          ./scripts/check-coverage.sh \
+            vol-agent-server vol-llm-agent-protocol vol-llm-runtime \
+            vol-llm-sandbox vol-llm-task vol-session vol-llm-core \
+            vol-llm-agent vol-llm-tool vol-llm-skill vol-llm-mcp \
+            || echo "⚠ Coverage below threshold (non-blocking)"

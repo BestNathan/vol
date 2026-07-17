@@ -10,9 +10,8 @@ pub fn validate_first_token<'a>(
     command: &'a str,
     binaries: &[String],
 ) -> Result<&'a str, crate::CliToolError> {
-    let token = first_token(command).ok_or_else(|| {
-        crate::CliToolError::InvalidArguments("command is empty".into())
-    })?;
+    let token = first_token(command)
+        .ok_or_else(|| crate::CliToolError::InvalidArguments("command is empty".into()))?;
     if binaries.iter().any(|b| b == token) {
         Ok(token)
     } else {

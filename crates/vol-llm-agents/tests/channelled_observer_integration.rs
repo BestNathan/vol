@@ -15,9 +15,9 @@ async fn test_concurrent_on_event_receives_all_events() {
         let handle = tokio::spawn(async move {
             let event = AgentStreamEvent::ToolCallBegin {
                 timestamp: chrono::Utc::now(),
-                tool_call_id: format!("{}", i),
-                tool_name: format!("tool_{}", i),
-                arguments: format!("arg_{}", i),
+                tool_call_id: format!("{i}"),
+                tool_name: format!("tool_{i}"),
+                arguments: format!("arg_{i}"),
             };
             obs.on_event(&event).await.unwrap();
         });
@@ -123,9 +123,9 @@ async fn test_rapid_sequential_events() {
     for i in 0..100 {
         let event = AgentStreamEvent::ToolCallComplete {
             timestamp: chrono::Utc::now(),
-            tool_call_id: format!("{}", i),
-            tool_name: format!("tool"),
-            result: format!("result_{}", i),
+            tool_call_id: format!("{i}"),
+            tool_name: "tool".to_string(),
+            result: format!("result_{i}"),
             duration_ms: None,
         };
         observer.on_event(&event).await.unwrap();
@@ -140,9 +140,9 @@ async fn test_rapid_sequential_events() {
     // Verify order is preserved
     for (i, event) in events.iter().enumerate() {
         if let AgentStreamEvent::ToolCallComplete { result, .. } = event {
-            assert_eq!(result, &format!("result_{}", i));
+            assert_eq!(result, &format!("result_{i}"));
         } else {
-            panic!("Expected ToolCallComplete event at index {}", i);
+            panic!("Expected ToolCallComplete event at index {i}");
         }
     }
 }

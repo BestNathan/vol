@@ -64,10 +64,7 @@ async fn create_test_server() -> MemoryHandle {
 }
 
 /// Send a command message through the handle and receive the response.
-async fn send_and_recv(
-    handle: &mut MemoryHandle,
-    msg: AgentServerMessage,
-) -> AgentServerMessage {
+async fn send_and_recv(handle: &mut MemoryHandle, msg: AgentServerMessage) -> AgentServerMessage {
     handle.send(msg).unwrap();
     handle.recv().await.unwrap()
 }
@@ -84,13 +81,16 @@ async fn test_sandbox_list_round_trip() {
 
     let reply = send_and_recv(&mut handle, msg).await;
 
-    assert_eq!(reply.kind, vol_llm_agent_protocol::agent_server_protocol::MessageKind::Result);
+    assert_eq!(
+        reply.kind,
+        vol_llm_agent_protocol::agent_server_protocol::MessageKind::Result
+    );
     match &reply.payload {
         Payload::Sandbox(SandboxPayload::ListResult { sandboxes }) => {
             assert_eq!(sandboxes.len(), 1, "expected exactly one sandbox");
             assert_eq!(sandboxes[0].name, "local");
         }
-        other => panic!("expected ListResult, got: {:?}", other),
+        other => panic!("expected ListResult, got: {other:?}"),
     }
 }
 
@@ -115,7 +115,10 @@ async fn test_sandbox_exec_round_trip() {
 
     let reply = send_and_recv(&mut handle, msg).await;
 
-    assert_eq!(reply.kind, vol_llm_agent_protocol::agent_server_protocol::MessageKind::Result);
+    assert_eq!(
+        reply.kind,
+        vol_llm_agent_protocol::agent_server_protocol::MessageKind::Result
+    );
     match &reply.payload {
         Payload::Sandbox(SandboxPayload::ExecResult { output }) => {
             assert_eq!(output.exit_code, 0, "expected exit_code 0");
@@ -126,7 +129,7 @@ async fn test_sandbox_exec_round_trip() {
                 .unwrap_or_default();
             assert_eq!(String::from_utf8_lossy(&stdout), "hello");
         }
-        other => panic!("expected ExecResult, got: {:?}", other),
+        other => panic!("expected ExecResult, got: {other:?}"),
     }
 }
 
@@ -157,8 +160,7 @@ async fn test_path_traversal_rejected() {
         Payload::Sandbox(SandboxPayload::ReadFileResult { content }) => {
             // If it somehow succeeded (unlikely), that's a problem
             panic!(
-                "path traversal should have been rejected, got ReadFileResult with content {:?}",
-                content
+                "path traversal should have been rejected, got ReadFileResult with content {content:?}"
             );
         }
         Payload::Error(err) => {
@@ -192,7 +194,7 @@ async fn test_concurrent_exec_requests() {
     // but tests that multiple requests/responses work through the same connection).
     for i in 0..4 {
         let msg = AgentServerMessage::new_command(
-            format!("test-exec-concurrent-{}", i),
+            format!("test-exec-concurrent-{i}"),
             Operation::Sandbox(SandboxOperation::Exec),
             Payload::Sandbox(SandboxPayload::Exec {
                 command: CommandRequestDef {
@@ -214,19 +216,19 @@ async fn test_concurrent_exec_requests() {
         );
         match &reply.payload {
             Payload::Sandbox(SandboxPayload::ExecResult { output }) => {
-                assert_eq!(output.exit_code, 0, "exec #{} had non-zero exit", i);
+                assert_eq!(output.exit_code, 0, "exec #{i} had non-zero exit");
                 use base64::Engine;
                 let stdout = base64::engine::general_purpose::STANDARD
                     .decode(&output.stdout)
                     .unwrap_or_default();
                 assert_eq!(
                     String::from_utf8_lossy(&stdout),
-                    format!("msg-{}", i),
+                    format!("msg-{i}"),
                     "exec #{} had unexpected stdout",
                     i
                 );
             }
-            other => panic!("exec #{} expected ExecResult, got: {:?}", i, other),
+            other => panic!("exec #{i} expected ExecResult, got: {other:?}"),
         }
     }
 }

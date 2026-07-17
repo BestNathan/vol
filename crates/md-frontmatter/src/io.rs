@@ -103,7 +103,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             MdFmError::Io(_) => {}
-            e => panic!("Expected Io error, got {:?}", e),
+            e => panic!("Expected Io error, got {e:?}"),
         }
     }
 
@@ -120,7 +120,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             MdFmError::Io(_) => {}
-            e => panic!("Expected Io error, got {:?}", e),
+            e => panic!("Expected Io error, got {e:?}"),
         }
     }
 
@@ -156,7 +156,7 @@ mod tests {
         let file_path = dir.path().join("preserve.md");
 
         let original_body = "\n\n# Heading\n\n---\n\nHorizontal rule above\n";
-        let original = format!("---\ntitle: Original\n---{}", original_body);
+        let original = format!("---\ntitle: Original\n---{original_body}");
         tokio::fs::write(&file_path, &original).await.unwrap();
 
         let mut doc = from_path::<TestFm>(&file_path).await.unwrap();

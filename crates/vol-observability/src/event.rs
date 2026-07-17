@@ -98,6 +98,7 @@ pub enum ExtractedMetric {
 
 impl ExtractedMetric {
     /// Extract metrics from an ingest event, if applicable.
+    #[allow(clippy::cast_possible_truncation)]
     pub fn from_event(event: &IngestEvent) -> Option<Self> {
         match event.event.as_str() {
             "AgentComplete" => {
@@ -107,7 +108,7 @@ impl ExtractedMetric {
                 let tool_calls = response
                     .get("tool_calls")?
                     .as_array()
-                    .map(|a| a.len())
+                    .map(std::vec::Vec::len)
                     .unwrap_or(0) as i32;
                 let content = response.get("content")?.as_str().unwrap_or("");
 
@@ -140,9 +141,15 @@ impl ExtractedMetric {
                 let usage = event.data.get("usage");
                 let (input_tokens, output_tokens, total_tokens) = if let Some(u) = usage {
                     (
-                        u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as i32,
-                        u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as i32,
-                        u.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as i32,
+                        u.get("input_tokens")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0) as i32,
+                        u.get("output_tokens")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0) as i32,
+                        u.get("total_tokens")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0) as i32,
                     )
                 } else {
                     (0, 0, 0)
@@ -164,7 +171,7 @@ impl ExtractedMetric {
                     iteration: event
                         .data
                         .get("iteration")
-                        .and_then(|v| v.as_u64())
+                        .and_then(serde_json::Value::as_u64)
                         .unwrap_or(0) as i32,
                     input_tokens,
                     output_tokens,
@@ -191,7 +198,7 @@ impl ExtractedMetric {
                 let duration_ms = event
                     .data
                     .get("duration_ms")
-                    .and_then(|v| v.as_u64())
+                    .and_then(serde_json::Value::as_u64)
                     .unwrap_or(0) as i64;
                 let tool_name = event
                     .data
@@ -215,7 +222,7 @@ impl ExtractedMetric {
                 let duration_ms = event
                     .data
                     .get("duration_ms")
-                    .and_then(|v| v.as_u64())
+                    .and_then(serde_json::Value::as_u64)
                     .unwrap_or(0) as i64;
                 let tool_name = event
                     .data

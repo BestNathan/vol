@@ -255,12 +255,11 @@ pub struct StateConfig {
 impl Config {
     /// Load configuration from a TOML file
     pub fn load(path: &str) -> Result<Self, vol_core::VolError> {
-        let content = std::fs::read_to_string(path).map_err(|e| {
-            vol_core::VolError::Config(format!("Failed to read config file: {}", e))
-        })?;
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| vol_core::VolError::Config(format!("Failed to read config file: {e}")))?;
 
         toml::from_str(&content)
-            .map_err(|e| vol_core::VolError::Config(format!("Failed to parse config: {}", e)))
+            .map_err(|e| vol_core::VolError::Config(format!("Failed to parse config: {e}")))
     }
 }
 

@@ -54,7 +54,7 @@ impl LogEntry {
                 "Iteration {} complete",
                 self.data
                     .get("iteration")
-                    .and_then(|v| v.as_u64())
+                    .and_then(serde_json::Value::as_u64)
                     .unwrap_or(0)
             ),
             "AgentComplete" => "Agent completed".to_string(),

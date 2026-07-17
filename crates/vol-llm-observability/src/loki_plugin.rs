@@ -11,6 +11,12 @@ use vol_llm_core::AgentStreamEvent;
 /// Stateless — no fields, no config. Clone is trivial.
 pub struct LokiPlugin;
 
+impl Default for LokiPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LokiPlugin {
     /// Create a new LokiPlugin.
     pub fn new() -> Self {
@@ -38,6 +44,7 @@ impl LokiPlugin {
         let line_map = match serde_json::to_value(event) {
             Ok(Value::Object(mut map)) => {
                 if map.len() == 1 {
+                    #[allow(clippy::unwrap_used)]
                     let (variant, fields) = map.iter().next().unwrap();
                     let mut flat = serde_json::Map::new();
                     flat.insert("event".to_string(), json!(variant));

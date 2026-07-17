@@ -1,3 +1,4 @@
+#[allow(clippy::indexing_slicing, clippy::unwrap_used)]
 pub async fn get_item(
     client: &reqwest::Client,
     params: &super::GetItemParams,
@@ -12,7 +13,7 @@ pub async fn get_item(
         // Other items: split path, last segment is item_name, rest is module_path
         let segments: Vec<&str> = params.item_path.split("::").collect();
         let item_name = if segments.len() == 1 {
-            segments[0]
+            segments.first().unwrap()
         } else {
             segments.last().unwrap()
         };
@@ -20,7 +21,7 @@ pub async fn get_item(
         let module_path: &str = if segments.len() == 1 {
             &params.crate_name
         } else {
-            module_path_owned = segments[..segments.len() - 1].join("/");
+            module_path_owned = segments.get(..segments.len() - 1).unwrap().join("/");
             &module_path_owned
         };
         format!(

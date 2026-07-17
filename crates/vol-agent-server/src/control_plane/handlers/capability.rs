@@ -67,15 +67,9 @@ mod tests {
 
     use crate::control_plane::handlers::capability::CapabilityHandler;
     use crate::control_plane::state::ControlPlaneState;
-    use vol_llm_agent_protocol::agent_server_protocol::{
-        AgentCapability, CapabilitySnapshot,
-    };
+    use vol_llm_agent_protocol::agent_server_protocol::{AgentCapability, CapabilitySnapshot};
 
-    fn msg(
-        id: &str,
-        op: Operation,
-        payload: Payload,
-    ) -> AgentServerMessage {
+    fn msg(id: &str, op: Operation, payload: Payload) -> AgentServerMessage {
         AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: id.to_string(),
@@ -94,8 +88,8 @@ mod tests {
             revision,
             generated_at_ms: Some(1000 + revision),
             agents: vec![AgentCapability {
-                agent_id: format!("{}-agent", node_id),
-                name: format!("{}-agent", node_id),
+                agent_id: format!("{node_id}-agent"),
+                name: format!("{node_id}-agent"),
                 description: None,
                 status: Some("idle".to_string()),
             }],
@@ -123,7 +117,9 @@ mod tests {
                 "1",
                 Operation::Control(ControlOperation::CapabilityList),
                 Payload::Control(ControlPayload::CapabilityList(
-                    vol_llm_agent_protocol::agent_server_protocol::CapabilityListRequest { node_id: None },
+                    vol_llm_agent_protocol::agent_server_protocol::CapabilityListRequest {
+                        node_id: None,
+                    },
                 )),
             ))
             .await
@@ -174,7 +170,9 @@ mod tests {
                 "1",
                 Operation::Control(ControlOperation::CapabilityList),
                 Payload::Control(ControlPayload::CapabilityList(
-                    vol_llm_agent_protocol::agent_server_protocol::CapabilityListRequest { node_id: None },
+                    vol_llm_agent_protocol::agent_server_protocol::CapabilityListRequest {
+                        node_id: None,
+                    },
                 )),
             ))
             .await

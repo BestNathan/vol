@@ -48,7 +48,7 @@ fn test_cache_key_stability_same_config() {
         ));
 
     // Second call with identical configuration
-    let context2 = PromptContext::new(template.clone())
+    let context2 = PromptContext::new(template)
         .with_fragment(PromptFragment::new(
             "role",
             "Financial analyst",
@@ -225,7 +225,7 @@ fn test_multi_turn_conversation_system_once() {
     // Turn 2: Build history from turn 1 (exclude System, as assemble_with_history adds fresh System)
     let history = vec![
         turn1_messages[1].clone(), // User turn 1
-        turn1_response.clone(),    // Assistant turn 1
+        turn1_response,            // Assistant turn 1
     ];
 
     let turn2_messages =
@@ -334,7 +334,7 @@ fn test_multi_turn_accumulates_history_correctly() {
     let resp1 = Message::assistant("A1");
 
     // Turn 2: history excludes System
-    let history2 = vec![msg1[1].clone(), resp1.clone()]; // User1 + Assistant1
+    let history2 = vec![msg1[1].clone(), resp1]; // User1 + Assistant1
     let msg2 = MessageAssembler::assemble_with_history(&prompt_ctx, "Q2", &history2);
     let _resp2 = Message::assistant("A2");
 

@@ -22,6 +22,12 @@ pub struct ChannelledEventObserver {
     shutdown_tx: Option<oneshot::Sender<()>>,
 }
 
+impl Default for ChannelledEventObserver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ChannelledEventObserver {
     /// Create a new ChannelledEventObserver with spawned consumer task.
     pub fn new() -> Self {

@@ -39,7 +39,7 @@ impl RuleRegistry {
         rules
             .values()
             .filter(|r| r.interests().contains(event_type))
-            .map(|r| r.clone_box_rule())
+            .map(vol_core::RuleProcessor::clone_box_rule)
             .collect()
     }
 
@@ -61,6 +61,11 @@ impl RuleRegistry {
     /// Get count of registered rules
     pub async fn len(&self) -> usize {
         self.rules.read().await.len()
+    }
+
+    /// Check if the registry has no rules registered
+    pub async fn is_empty(&self) -> bool {
+        self.rules.read().await.is_empty()
     }
 }
 

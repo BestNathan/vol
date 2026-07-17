@@ -103,11 +103,11 @@ impl SshSession {
         if let Some(ref stdin_data) = req.stdin {
             channel
                 .write_all(stdin_data)
-                .map_err(|e| SandboxError::Ssh(format!("stdin write failed: {}", e)))?;
+                .map_err(|e| SandboxError::Ssh(format!("stdin write failed: {e}")))?;
         }
         channel
             .send_eof()
-            .map_err(|e| SandboxError::Ssh(format!("send_eof failed: {}", e)))?;
+            .map_err(|e| SandboxError::Ssh(format!("send_eof failed: {e}")))?;
 
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
@@ -146,10 +146,10 @@ impl SshSession {
         let tcp = TcpStream::connect_timeout(
             &addr
                 .parse()
-                .map_err(|e| SandboxError::Ssh(format!("bad address: {}", e)))?,
+                .map_err(|e| SandboxError::Ssh(format!("bad address: {e}")))?,
             Duration::from_secs(config.connect_timeout_secs),
         )
-        .map_err(|e| SandboxError::Ssh(format!("connection failed: {}", e)))?;
+        .map_err(|e| SandboxError::Ssh(format!("connection failed: {e}")))?;
 
         tcp.set_read_timeout(Some(Duration::from_secs(30))).ok();
 
@@ -159,7 +159,7 @@ impl SshSession {
                 .map_err(|e| SandboxError::Ssh(e.to_string()))?,
         );
         sess.handshake()
-            .map_err(|e| SandboxError::Ssh(format!("handshake failed: {}", e)))?;
+            .map_err(|e| SandboxError::Ssh(format!("handshake failed: {e}")))?;
 
         // Host key verification — REQUIRED
         verify_host_key(&sess, config)?;
@@ -188,8 +188,7 @@ fn verify_host_key(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxRe
         let fp = format!("SHA256:{}", base64_encode(hash));
         if fp.to_uppercase() != fingerprint.to_uppercase() {
             return Err(SandboxError::Ssh(format!(
-                "host key mismatch: expected {}, got {}",
-                fingerprint, fp
+                "host key mismatch: expected {fingerprint}, got {fp}"
             )));
         }
     } else if let Some(ref known_hosts) = config.known_hosts_file {
@@ -199,7 +198,7 @@ fn verify_host_key(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxRe
             .map_err(|e| SandboxError::Ssh(e.to_string()))?;
         known
             .read_file(Path::new(&known_hosts), ssh2::KnownHostFileKind::OpenSSH)
-            .map_err(|e| SandboxError::Ssh(format!("failed to read known_hosts: {}", e)))?;
+            .map_err(|e| SandboxError::Ssh(format!("failed to read known_hosts: {e}")))?;
         let key = known.check(&config.host, remote_key.0);
         match key {
             ssh2::CheckResult::Match => {}
@@ -238,7 +237,7 @@ fn authenticate(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxResul
     // Try with passphrase if provided
     if let Some(ref passphrase) = config.passphrase {
         sess.userauth_pubkey_file(&config.user, None, &identity_path, Some(passphrase))
-            .map_err(|e| SandboxError::Ssh(format!("auth failed: {}", e)))?;
+            .map_err(|e| SandboxError::Ssh(format!("auth failed: {e}")))?;
         return Ok(());
     }
 
@@ -259,7 +258,7 @@ fn authenticate(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxResul
 
     if !agent_authed {
         sess.userauth_pubkey_file(&config.user, None, &identity_path, None)
-            .map_err(|e| SandboxError::Ssh(format!("auth failed: {}", e)))?;
+            .map_err(|e| SandboxError::Ssh(format!("auth failed: {e}")))?;
     }
 
     if !sess.authenticated() {
@@ -313,5 +312,5 @@ fn shell_quote(s: &str) -> String {
     }
     // Wrap in single quotes, escape embedded single quotes: ' -> '\''
     let escaped = s.replace('\'', r"'\''");
-    format!("'{}'", escaped)
+    format!("'{escaped}'")
 }

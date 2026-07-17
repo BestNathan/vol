@@ -61,16 +61,19 @@ impl InMemoryStore {
     }
 
     /// Get the number of documents stored
+    #[allow(clippy::unwrap_used)]
     pub fn len(&self) -> usize {
         self.documents.read().unwrap().len()
     }
 
     /// Check if the store is empty
+    #[allow(clippy::unwrap_used)]
     pub fn is_empty(&self) -> bool {
         self.documents.read().unwrap().is_empty()
     }
 
     /// Clear all documents from the store
+    #[allow(clippy::unwrap_used)]
     pub fn clear(&self) {
         let mut docs = self.documents.write().unwrap();
         docs.clear();
@@ -92,6 +95,7 @@ impl InMemoryStore {
 
 #[async_trait]
 impl EmbeddingStore for InMemoryStore {
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     async fn search(&self, query: &[f32], k: usize) -> Result<Vec<Document>> {
         let docs = self.documents.read().unwrap();
 
@@ -110,7 +114,7 @@ impl EmbeddingStore for InMemoryStore {
             .into_iter()
             .take(k)
             .map(|(i, score)| {
-                let mut doc = docs[i].document.clone();
+                let mut doc = docs.get(i).expect("valid index").document.clone();
                 doc = doc.with_score(score);
                 doc
             })
@@ -119,6 +123,7 @@ impl EmbeddingStore for InMemoryStore {
         Ok(results)
     }
 
+    #[allow(clippy::unwrap_used)]
     async fn insert(&self, document: Document, embedding: Vec<f32>) -> Result<()> {
         let id = uuid::Uuid::new_v4().to_string();
 
@@ -215,7 +220,7 @@ mod tests {
         let store = InMemoryStore::with_capacity(10);
 
         for i in 0..10 {
-            let doc = Document::new(format!("Document {}", i));
+            let doc = Document::new(format!("Document {i}"));
             let emb = vec![1.0; 128]; // All same embedding
             store.insert(doc, emb).await.unwrap();
         }

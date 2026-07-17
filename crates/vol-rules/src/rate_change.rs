@@ -1,6 +1,6 @@
 //! Rate of change rule.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use vol_config::RateChangeRuleConfig;
@@ -8,12 +8,15 @@ use vol_core::{
     Alert, AlertType, EventType, MonitoringEvent, Result, RuleAction, RuleProcessor, VolatilityData,
 };
 
+/// Buffer type: rolling buffers per symbol storing (timestamp, iv) pairs.
+type BufferMap = HashMap<String, VecDeque<(u64, f64)>>;
+
 /// Rate of change rule for IV changes over time
 pub struct RateChangeRule {
     config: RateChangeRuleConfig,
     id: String,
     // Rolling buffers per symbol: stores (timestamp, iv) pairs
-    buffers: Arc<Mutex<std::collections::HashMap<String, VecDeque<(u64, f64)>>>>,
+    buffers: Arc<Mutex<BufferMap>>,
 }
 
 impl RateChangeRule {
@@ -21,7 +24,7 @@ impl RateChangeRule {
         Self {
             id: config.id.clone(),
             config,
-            buffers: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            buffers: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -90,7 +93,7 @@ impl RateChangeRule {
                         data.moneyness(),
                         data.extra
                             .get("mark_price_coin")
-                            .and_then(|v| v.as_f64())
+                            .and_then(serde_json::value::Value::as_f64)
                             .unwrap_or(0.0),
                         String::new(), // trace_id - set by engine layer
                     ));
@@ -125,7 +128,7 @@ impl RateChangeRule {
                         data.moneyness(),
                         data.extra
                             .get("mark_price_coin")
-                            .and_then(|v| v.as_f64())
+                            .and_then(serde_json::value::Value::as_f64)
                             .unwrap_or(0.0),
                         String::new(), // trace_id - set by engine layer
                     ));
@@ -160,7 +163,7 @@ impl RateChangeRule {
                         data.moneyness(),
                         data.extra
                             .get("mark_price_coin")
-                            .and_then(|v| v.as_f64())
+                            .and_then(serde_json::value::Value::as_f64)
                             .unwrap_or(0.0),
                         String::new(), // trace_id - set by engine layer
                     ));

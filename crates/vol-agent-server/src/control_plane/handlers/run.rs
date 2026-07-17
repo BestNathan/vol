@@ -150,6 +150,8 @@ mod tests {
         };
 
         let err = handler.handle(msg).await.unwrap_err();
-        assert!(err.to_string().contains("expected control.run_status payload"));
+        assert!(err
+            .to_string()
+            .contains("expected control.run_status payload"));
     }
 }

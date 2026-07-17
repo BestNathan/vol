@@ -48,14 +48,14 @@ impl FileTaskStore {
         let next = current + 1;
         guard.rewind().map_err(StoreError::Io)?;
         guard.set_len(0).map_err(StoreError::Io)?;
-        write!(guard, "{}", next).map_err(StoreError::Io)?;
+        write!(guard, "{next}").map_err(StoreError::Io)?;
         guard.flush().map_err(StoreError::Io)?;
 
         Ok(TaskId(next))
     }
 
     fn write_task_file(&self, task: &Task) -> Result<()> {
-        let path = self.task_path(&task.id);
+        let path = self.task_path(task.id);
         let content = serde_json::to_string_pretty(task)
             .map_err(|e| StoreError::Serialization(e.to_string()))?;
         let tmp = path.with_extension("tmp");
@@ -76,7 +76,7 @@ impl FileTaskStore {
         }
     }
 
-    fn task_path(&self, task_id: &TaskId) -> PathBuf {
+    fn task_path(&self, task_id: TaskId) -> PathBuf {
         self.tasks_dir.join(format!("{}.json", task_id.0))
     }
 
@@ -99,7 +99,7 @@ impl FileTaskStore {
         let ids = self.scan_task_ids()?;
         let mut tasks = Vec::with_capacity(ids.len());
         for id in &ids {
-            let path = self.task_path(&TaskId(*id));
+            let path = self.task_path(TaskId(*id));
             if let Some(task) = self.read_task_file(&path)? {
                 tasks.push(task);
             }
@@ -118,12 +118,12 @@ impl TaskStore for FileTaskStore {
     }
 
     async fn get(&self, task_id: &TaskId) -> Result<Option<Task>> {
-        let path = self.task_path(task_id);
+        let path = self.task_path(*task_id);
         self.read_task_file(&path)
     }
 
     async fn update(&self, task: Task) -> Result<()> {
-        let path = self.task_path(&task.id);
+        let path = self.task_path(task.id);
         if !path.exists() {
             return Err(StoreError::NotFound(format!("Task {}", task.id)));
         }
@@ -135,7 +135,7 @@ impl TaskStore for FileTaskStore {
     }
 
     async fn delete(&self, task_id: &TaskId) -> Result<()> {
-        let path = self.task_path(task_id);
+        let path = self.task_path(*task_id);
         match std::fs::remove_file(&path) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),

@@ -193,13 +193,13 @@ mod tests {
         description: &str,
         content: &str,
     ) {
-        let mut f = std::fs::File::create(dir.join(format!("{}.md", name))).unwrap();
+        let mut f = std::fs::File::create(dir.join(format!("{name}.md"))).unwrap();
         writeln!(f, "---").unwrap();
-        writeln!(f, "name: {}", name).unwrap();
-        writeln!(f, "type: {}", r#type).unwrap();
-        writeln!(f, "description: {}", description).unwrap();
+        writeln!(f, "name: {name}").unwrap();
+        writeln!(f, "type: {type}").unwrap();
+        writeln!(f, "description: {description}").unwrap();
         writeln!(f, "---").unwrap();
-        writeln!(f, "{}", content).unwrap();
+        writeln!(f, "{content}").unwrap();
     }
 
     #[tokio::test]

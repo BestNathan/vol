@@ -82,7 +82,7 @@ impl SessionRecorderPlugin {
                 result,
                 ..
             } => {
-                let content = format!("Tool '{}' returned: {}", tool_name, result);
+                let content = format!("Tool '{tool_name}' returned: {result}");
                 Some(SessionMessage::new(
                     self.session.id.clone(),
                     Message::tool(content, tool_call_id.clone()),
@@ -94,7 +94,7 @@ impl SessionRecorderPlugin {
                 error,
                 ..
             } => {
-                let content = format!("Tool '{}' error: {}", tool_name, error);
+                let content = format!("Tool '{tool_name}' error: {error}");
                 Some(SessionMessage::new(
                     self.session.id.clone(),
                     Message::tool(content, tool_call_id.clone()),
@@ -106,7 +106,7 @@ impl SessionRecorderPlugin {
                 reason,
                 ..
             } => {
-                let content = format!("Tool '{}' skipped: {}", tool_name, reason);
+                let content = format!("Tool '{tool_name}' skipped: {reason}");
                 Some(SessionMessage::new(
                     self.session.id.clone(),
                     Message::tool(content, tool_call_id.clone()),

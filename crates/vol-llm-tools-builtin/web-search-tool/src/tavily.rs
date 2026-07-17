@@ -110,8 +110,7 @@ impl SearchFn for TavilySearchProvider {
                 return Err(SearchError::InvalidApiKey);
             }
             return Err(SearchError::RequestFailed(format!(
-                "Tavily API error: {} — {}",
-                status, text
+                "Tavily API error: {status} — {text}"
             )));
         }
 

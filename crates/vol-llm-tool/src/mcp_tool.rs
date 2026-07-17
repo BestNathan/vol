@@ -30,7 +30,7 @@ impl McpTool {
     ) -> Self {
         let sanitized = vol_llm_mcp::session::sanitize_name(server_name);
         let sanitized_tool = vol_llm_mcp::session::sanitize_name(tool_name);
-        let display_name = format!("mcp__{}_{}", sanitized, sanitized_tool);
+        let display_name = format!("mcp__{sanitized}_{sanitized_tool}");
 
         // Leak strings to satisfy ExecutableTool::name() -> &'static str
         // Acceptable because tools are registered once at startup.

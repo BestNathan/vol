@@ -148,7 +148,9 @@ impl MessageStore for InMemoryMessageStore {
         let mut messages = self.messages.write().await;
         if let Some(msgs) = messages.get_mut(&message.session_id) {
             if let Some(pos) = msgs.iter().position(|m| m.id == id) {
-                msgs[pos] = message;
+                if let Some(m) = msgs.get_mut(pos) {
+                    *m = message;
+                }
             }
         }
         Ok(())
@@ -156,7 +158,10 @@ impl MessageStore for InMemoryMessageStore {
 
     async fn get_count(&self, session_id: &str) -> Result<usize> {
         let messages = self.messages.read().await;
-        Ok(messages.get(session_id).map(|msgs| msgs.len()).unwrap_or(0))
+        Ok(messages
+            .get(session_id)
+            .map(std::vec::Vec::len)
+            .unwrap_or(0))
     }
 
     async fn cleanup_expired(&self, before: i64) -> Result<()> {
@@ -245,7 +250,7 @@ impl crate::store::SessionEntryStore for InMemoryEntryStore {
 
     async fn get_count(&self, session_id: &str) -> crate::store::Result<usize> {
         let entries = self.entries.read().await;
-        Ok(entries.get(session_id).map(|msgs| msgs.len()).unwrap_or(0))
+        Ok(entries.get(session_id).map(std::vec::Vec::len).unwrap_or(0))
     }
 }
 

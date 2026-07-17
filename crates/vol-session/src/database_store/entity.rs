@@ -1,7 +1,10 @@
 use sea_orm::entity::prelude::*;
 
 pub mod sessions {
-    use super::*;
+    use super::{
+        ActiveModelBehavior, DeriveEntityModel, DerivePrimaryKey, DeriveRelation, EntityTrait,
+        EnumIter, PrimaryKeyTrait, Related, RelationDef, RelationTrait,
+    };
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
     #[sea_orm(table_name = "sessions")]
@@ -31,7 +34,10 @@ pub mod sessions {
 }
 
 pub mod session_entries {
-    use super::*;
+    use super::{
+        ActiveModelBehavior, DeriveEntityModel, DerivePrimaryKey, DeriveRelation, EntityTrait,
+        EnumIter, PrimaryKeyTrait, Related, RelationDef, RelationTrait,
+    };
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
     #[sea_orm(table_name = "session_entries")]

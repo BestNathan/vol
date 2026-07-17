@@ -60,7 +60,7 @@ impl TdengineClient {
         hours: Option<u32>,
     ) -> Result<TdengineResponse, reqwest::Error> {
         let time_filter = match hours {
-            Some(h) => format!("AND _ts >= NOW - {}h", h),
+            Some(h) => format!("AND _ts >= NOW - {h}h"),
             None => String::new(),
         };
 
@@ -74,10 +74,9 @@ impl TdengineClient {
         let sql = format!(
             "SELECT _ts, volatility, index_name \
              FROM deribit_volatility_index \
-             WHERE index_name = '{}' {} \
+             WHERE index_name = '{index_name}' {time_filter} \
              ORDER BY _ts DESC \
-             LIMIT {}",
-            index_name, time_filter, limit
+             LIMIT {limit}"
         );
 
         self.query_with_db(&sql).await
@@ -117,10 +116,9 @@ impl TdengineClient {
         let sql = format!(
             "SELECT _ts, price, index_name \
              FROM deribit_index_price \
-             WHERE index_name = '{}' \
+             WHERE index_name = '{index_name}' \
              ORDER BY _ts DESC \
-             LIMIT 1",
-            index_name
+             LIMIT 1"
         );
 
         self.query_with_db(&sql).await
@@ -143,8 +141,7 @@ impl TdengineClient {
                 format!(
                     "SELECT _ts, rv, index_name \
                      FROM deribit_rv \
-                     WHERE index_name = '{}'",
-                    index_name
+                     WHERE index_name = '{index_name}'"
                 )
             }
             None => {

@@ -2,10 +2,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
-use tower_http::trace::TraceLayer;
 use futures_util::{SinkExt, StreamExt};
 use tokio::time;
 use tokio_tungstenite::connect_async;
+use tower_http::trace::TraceLayer;
 use vol_llm_agent_protocol::agent_server_protocol::{
     AgentServerMessage, ControlOperation, ControlPayload, MessageKind, MessageMeta, NodeHeartbeat,
     NodeLoad, NodeRegistration, Operation, Payload,
@@ -93,9 +93,7 @@ fn spawn_data_plane_connector(
             };
 
             if let Err(e) = write
-                .send(tokio_tungstenite::tungstenite::Message::Text(
-                    register_msg,
-                ))
+                .send(tokio_tungstenite::tungstenite::Message::Text(register_msg))
                 .await
             {
                 tracing::warn!(error = %e, "failed to send register message");
@@ -107,13 +105,15 @@ fn spawn_data_plane_connector(
             match time::timeout(Duration::from_secs(10), read.next()).await {
                 Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text)))) => {
                     if let Ok(ack) = serde_json::from_str::<serde_json::Value>(&text) {
-                        let accepted = ack.get("result")
+                        let accepted = ack
+                            .get("result")
                             .and_then(|r| r.get("accepted"))
-                            .and_then(|a| a.as_bool())
+                            .and_then(serde_json::Value::as_bool)
                             .unwrap_or(false);
-                        let generation = ack.get("result")
+                        let generation = ack
+                            .get("result")
                             .and_then(|r| r.get("generation"))
-                            .and_then(|g| g.as_u64())
+                            .and_then(serde_json::Value::as_u64)
                             .unwrap_or(0);
                         if accepted {
                             tracing::info!(node_id = %node_id, generation = generation, "registered with control-plane");
@@ -141,14 +141,14 @@ fn spawn_data_plane_connector(
             let agent_ids = data_core.list_agent_ids().await;
             let agents: Vec<_> = agent_ids
                 .into_iter()
-                .map(|id| {
-                    vol_llm_agent_protocol::agent_server_protocol::AgentCapability {
+                .map(
+                    |id| vol_llm_agent_protocol::agent_server_protocol::AgentCapability {
                         agent_id: id.clone(),
                         name: id,
                         description: None,
                         status: Some("idle".to_string()),
-                    }
-                })
+                    },
+                )
                 .collect();
 
             let snapshot_msg = match encode_jsonrpc_message(AgentServerMessage {
@@ -179,9 +179,7 @@ fn spawn_data_plane_connector(
             };
 
             if let Err(e) = write
-                .send(tokio_tungstenite::tungstenite::Message::Text(
-                    snapshot_msg,
-                ))
+                .send(tokio_tungstenite::tungstenite::Message::Text(snapshot_msg))
                 .await
             {
                 tracing::warn!(error = %e, "failed to send capability snapshot");
@@ -193,9 +191,10 @@ fn spawn_data_plane_connector(
             match time::timeout(Duration::from_secs(10), read.next()).await {
                 Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text)))) => {
                     if let Ok(ack) = serde_json::from_str::<serde_json::Value>(&text) {
-                        let revision = ack.get("result")
+                        let revision = ack
+                            .get("result")
                             .and_then(|r| r.get("revision"))
-                            .and_then(|r| r.as_u64())
+                            .and_then(serde_json::Value::as_u64)
                             .unwrap_or(0);
                         tracing::info!(node_id = %node_id, revision = revision, "snapshot acknowledged by control-plane");
                     } else {

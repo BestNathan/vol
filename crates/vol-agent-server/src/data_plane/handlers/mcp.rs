@@ -259,15 +259,15 @@ impl DomainHandler for McpHandler {
             (McpOperation::ServerStatus, Payload::Mcp(McpPayload::ServerStatus { server: _ })) => {
                 let mgr = self.mgr()?;
                 let status = mgr.server_status_async().await;
-                let servers: Vec<serde_json::Value> = status.iter().map(|(name, s)| {
+                let count = status.iter().map(|(name, s)| {
                     serde_json::json!({ "name": name, "status": Self::server_status_to_str(s) })
-                }).collect();
+                }).count();
                 Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Mcp(McpOperation::ServerStatus),
                     Payload::Mcp(McpPayload::ServerStatusResult {
                         server: "all".to_string(),
-                        status: format!("{} servers", servers.len()),
+                        status: format!("{count} servers"),
                     }),
                 )])
             }
@@ -305,7 +305,6 @@ impl DomainHandler for McpHandler {
 
 #[cfg(test)]
 mod tests {
-    
 
     use vol_llm_agent_protocol::agent_server_protocol::{
         AgentServerMessage, McpOperation, McpPayload, MessageKind, Operation, Payload,

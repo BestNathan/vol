@@ -383,7 +383,9 @@ impl SessionEntryStore for DatabaseSessionEntryStore {
             .count(&self.db)
             .await
             .map_err(|e| StoreError::Database(format!("failed to count session entries: {e}")))?;
-        Ok(count as usize)
+        #[allow(clippy::cast_possible_truncation)]
+        let count: usize = count as usize;
+        Ok(count)
     }
 }
 
@@ -698,7 +700,6 @@ mod tests {
 
     impl PostgresTestLock {
         fn acquire() -> Self {
-            
             let path = std::env::temp_dir().join("vol-agent-postgres-session-store-test.lock");
             let file = std::fs::OpenOptions::new()
                 .create(true)
@@ -714,7 +715,6 @@ mod tests {
 
     impl Drop for PostgresTestLock {
         fn drop(&mut self) {
-            
             self.0
                 .unlock()
                 .expect("postgres session test lock should release");

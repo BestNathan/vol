@@ -8,6 +8,12 @@ use crate::data_plane::command::accept_control_command;
 
 pub struct DataPlaneControlHandler;
 
+impl Default for DataPlaneControlHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DataPlaneControlHandler {
     pub fn new() -> Self {
         Self

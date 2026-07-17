@@ -28,23 +28,41 @@ impl OptionsTool {
         }
 
         let data = response.data.unwrap_or(json!([]));
-        let rows = data.as_array().map(|a| a.len()).unwrap_or(0);
+        let rows = data.as_array().map(std::vec::Vec::len).unwrap_or(0);
 
         if rows == 0 {
-            return format!("No data found for {}", instrument);
+            return format!("No data found for {instrument}");
         }
 
         // Format: [[timestamp, instrument_name, iv, mark_price, expiry_date, strike_price, type], ...]
-        let first_row = data[0].as_array();
+        let first_row = data.get(0).and_then(|v| v.as_array());
         if let Some(row) = first_row {
             if row.len() >= 7 {
-                let timestamp = row[0].to_string();
-                let name = row[1].as_str().unwrap_or(instrument);
-                let iv = row[2].as_f64().unwrap_or(0.0);
-                let mark_price = row[3].as_f64().unwrap_or(0.0);
-                let expiry = row[4].as_str().unwrap_or("unknown");
-                let strike = row[5].as_f64().unwrap_or(0.0);
-                let opt_type = row[6].as_str().unwrap_or("unknown");
+                let timestamp = row.first().map(ToString::to_string).unwrap_or_default();
+                let name = row
+                    .get(1)
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or(instrument);
+                let iv = row
+                    .get(2)
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                let mark_price = row
+                    .get(3)
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                let expiry = row
+                    .get(4)
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown");
+                let strike = row
+                    .get(5)
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                let opt_type = row
+                    .get(6)
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown");
 
                 return format!(
                     "Instrument: {} | Type: {} | IV: {:.2}% | Mark Price: ${:.4} | Strike: ${:.0} | Expiry: {} | Timestamp: {} | Rows: {}",
@@ -53,7 +71,7 @@ impl OptionsTool {
             }
         }
 
-        format!("Retrieved {} rows for {}", rows, instrument)
+        format!("Retrieved {rows} rows for {instrument}")
     }
 }
 
@@ -90,21 +108,25 @@ impl ExecutableTool for OptionsTool {
         args: &serde_json::Value,
         _context: &ToolContext,
     ) -> Result<ToolResult, ToolError> {
-        let instrument = args["instrument"]
-            .as_str()
+        let instrument = args
+            .get("instrument")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::InvalidArguments("instrument required".to_string()))?;
 
-        let limit = args["limit"].as_u64().unwrap_or(10) as u32;
+        #[allow(clippy::cast_possible_truncation)]
+        let limit = args
+            .get("limit")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(10) as u32;
 
         info!("Querying options data for {} (limit={})", instrument, limit);
 
         let sql = format!(
             "SELECT _ts, instrument_name, iv, mark_price, expiry_date, strike_price, type \
              FROM deribit_options \
-             WHERE instrument_name = '{}' \
+             WHERE instrument_name = '{instrument}' \
              ORDER BY _ts DESC \
-             LIMIT {}",
-            instrument, limit
+             LIMIT {limit}"
         );
 
         match self.client.query_with_db(&sql).await {
@@ -116,7 +138,7 @@ impl ExecutableTool for OptionsTool {
                     Ok(ToolResult::success(result))
                 }
             }
-            Err(e) => Err(ToolError::ExecutionFailed(format!("TDengine error: {}", e))),
+            Err(e) => Err(ToolError::ExecutionFailed(format!("TDengine error: {e}"))),
         }
     }
 }

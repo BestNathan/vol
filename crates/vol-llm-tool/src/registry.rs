@@ -55,7 +55,7 @@ impl ToolRegistry {
     }
 
     pub fn tool_names(&self) -> Vec<&str> {
-        self.tools.keys().map(|s| s.as_str()).collect()
+        self.tools.keys().map(std::string::String::as_str).collect()
     }
 
     pub fn contains(&self, name: &str) -> bool {

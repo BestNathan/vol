@@ -28,13 +28,13 @@ impl PortfolioOutput {
         // Create output directory if needed
         tokio::fs::create_dir_all(&self.output_dir)
             .await
-            .map_err(|e| VolError::Internal(format!("Failed to create output directory: {}", e)))?;
+            .map_err(|e| VolError::Internal(format!("Failed to create output directory: {e}")))?;
 
         let mut current_file = self.current_file_path();
         let mut writer = BufWriter::new(
             tokio::fs::File::create(&current_file)
                 .await
-                .map_err(|e| VolError::Internal(format!("Failed to create output file: {}", e)))?,
+                .map_err(|e| VolError::Internal(format!("Failed to create output file: {e}")))?,
         );
 
         while let Some(data) = rx.recv().await {
@@ -44,25 +44,26 @@ impl PortfolioOutput {
                 writer
                     .flush()
                     .await
-                    .map_err(|e| VolError::Internal(format!("Failed to flush writer: {}", e)))?;
+                    .map_err(|e| VolError::Internal(format!("Failed to flush writer: {e}")))?;
                 current_file = new_file;
                 writer =
                     BufWriter::new(tokio::fs::File::create(&current_file).await.map_err(|e| {
-                        VolError::Internal(format!("Failed to create output file: {}", e))
+                        VolError::Internal(format!("Failed to create output file: {e}"))
                     })?);
             }
 
             // Write as JSONL
             let json = serde_json::to_string(&data).map_err(|e| {
-                VolError::Internal(format!("Failed to serialize portfolio data: {}", e))
+                VolError::Internal(format!("Failed to serialize portfolio data: {e}"))
             })?;
-            writer.write_all(json.as_bytes()).await.map_err(|e| {
-                VolError::Internal(format!("Failed to write portfolio data: {}", e))
-            })?;
+            writer
+                .write_all(json.as_bytes())
+                .await
+                .map_err(|e| VolError::Internal(format!("Failed to write portfolio data: {e}")))?;
             writer
                 .write_all(b"\n")
                 .await
-                .map_err(|e| VolError::Internal(format!("Failed to write newline: {}", e)))?;
+                .map_err(|e| VolError::Internal(format!("Failed to write newline: {e}")))?;
 
             if self.file_format == "jsonl" {
                 info!("Portfolio data written: {}", data.currency);
@@ -72,7 +73,7 @@ impl PortfolioOutput {
         writer
             .flush()
             .await
-            .map_err(|e| VolError::Internal(format!("Failed to flush writer: {}", e)))?;
+            .map_err(|e| VolError::Internal(format!("Failed to flush writer: {e}")))?;
         Ok(())
     }
 

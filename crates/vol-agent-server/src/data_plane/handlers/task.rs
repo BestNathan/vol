@@ -167,9 +167,7 @@ mod tests {
             .handle(msg(
                 "1",
                 Operation::Task(TaskOperation::Get),
-                Payload::Task(TaskPayload::Get {
-                    task_id: 99999,
-                }),
+                Payload::Task(TaskPayload::Get { task_id: 99999 }),
             ))
             .await
             .unwrap();
@@ -200,9 +198,7 @@ mod tests {
             .handle(msg(
                 "1",
                 Operation::Task(TaskOperation::List),
-                Payload::Task(TaskPayload::Get {
-                    task_id: 0,
-                }),
+                Payload::Task(TaskPayload::Get { task_id: 0 }),
             ))
             .await
             .unwrap_err();

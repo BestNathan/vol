@@ -183,8 +183,7 @@ fn handle_session_dialog_key(key: KeyEvent, state: &mut UiState) -> InputAction 
                     state
                         .session_dialog_sessions
                         .remove(state.session_dialog_selected);
-                    state.session_dialog_selected =
-                        0.min(state.session_dialog_sessions.len().saturating_sub(1));
+                    state.session_dialog_selected = 0;
                 }
             }
             InputAction::None
@@ -257,7 +256,7 @@ mod tests {
     #[test]
     fn test_tab_toggles_active_tab() {
         let mut state = make_state();
-        let initial = state.active_tab.clone();
+        let initial = state.active_tab;
         let key = make_key(KeyModifiers::NONE, KeyCode::Tab);
         handle_key(key, &mut state, "");
         assert_ne!(state.active_tab, initial);

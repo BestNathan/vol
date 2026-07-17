@@ -65,20 +65,19 @@ impl ExecutableTool for WriteTool {
         context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         // Parse arguments
-        let params: WriteParams = serde_json::from_value(args.clone()).map_err(|e| {
-            ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
-        })?;
+        let params: WriteParams = serde_json::from_value(args.clone())
+            .map_err(|e| ToolError::InvalidArguments(format!("Failed to parse arguments: {e}")))?;
 
         // Resolve path through sandbox
         let file_path = context
             .resolve_path(&params.file_path)
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to resolve path: {}", e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to resolve path: {e}")))?;
 
         // Create parent directories if they don't exist
         if let Some(parent) = file_path.parent() {
             if !parent.as_os_str().is_empty() {
                 context.sandbox.create_dir_all(parent).await.map_err(|e| {
-                    ToolError::ExecutionFailed(format!("Failed to create directory: {}", e))
+                    ToolError::ExecutionFailed(format!("Failed to create directory: {e}"))
                 })?;
             }
         }
@@ -88,7 +87,7 @@ impl ExecutableTool for WriteTool {
             .sandbox
             .write_file(&file_path, params.content.as_bytes())
             .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write file: {}", e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to write file: {e}")))?;
 
         let output = format!(
             "Successfully wrote {} bytes to {}",

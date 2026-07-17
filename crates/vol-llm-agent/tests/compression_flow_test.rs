@@ -13,7 +13,7 @@ async fn make_session_with_messages(n: usize) -> Arc<Mutex<Session>> {
 
     // Add messages to the store
     for i in 0..n {
-        let msg = SessionMessage::new(session.id.clone(), Message::user(format!("msg-{}", i)));
+        let msg = SessionMessage::new(session.id.clone(), Message::user(format!("msg-{i}")));
         session.add_message(msg).await.unwrap();
     }
 

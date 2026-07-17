@@ -41,18 +41,21 @@ impl AlertHandler for AbsoluteIvHandler {
 
         // Get IV and ATM thresholds for this symbol and tenor
         // Skip if in gap region (no tenor classification)
-        let (iv_threshold, atm_threshold) = match tenor {
+        let (iv_threshold, atm_threshold, tenor) = match tenor {
             Some(Tenor::Short) => (
                 symbol_config.short_threshold,
                 symbol_config.short_atm_threshold,
+                Tenor::Short,
             ),
             Some(Tenor::Medium) => (
                 symbol_config.medium_threshold,
                 symbol_config.medium_atm_threshold,
+                Tenor::Medium,
             ),
             Some(Tenor::Long) => (
                 symbol_config.long_threshold,
                 symbol_config.long_atm_threshold,
+                Tenor::Long,
             ),
             None => return None, // Gap region - no alert
         };
@@ -68,9 +71,8 @@ impl AlertHandler for AbsoluteIvHandler {
             let mark_price = data
                 .extra
                 .get("mark_price_coin")
-                .and_then(|v| v.as_f64())
+                .and_then(serde_json::Value::as_f64)
                 .unwrap_or(0.0);
-            let tenor = tenor.unwrap(); // Safe - we know it's Some at this point
             Some(Alert::new(
                 AlertType::AbsoluteIv { threshold: iv_threshold },
                 tenor,

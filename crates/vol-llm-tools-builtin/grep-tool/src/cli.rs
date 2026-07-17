@@ -72,7 +72,7 @@ impl GrepBackend for RgCliBackend {
         let output = sandbox
             .execute(req)
             .await
-            .map_err(|e| format!("rg execution failed: {}", e))?;
+            .map_err(|e| format!("rg execution failed: {e}"))?;
 
         if output.exit_code != 0 {
             let stderr = String::from_utf8_lossy(&output.stderr);

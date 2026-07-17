@@ -121,7 +121,7 @@ impl Default for HitlConfig {
     }
 }
 
-use super::plugin::*;
+use super::plugin::{AgentPlugin, PluginDecision, PluginId, RunContext};
 use super::AgentStreamEvent;
 
 /// Human-in-the-Loop plugin
@@ -201,19 +201,19 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
                 if self.needs_tool_approval(tool_name) {
                     let request = ApprovalRequest {
                         tool_name: tool_name.clone(),
-                        reason: format!("Execute tool: {} with args: {}", tool_name, arguments),
+                        reason: format!("Execute tool: {tool_name} with args: {arguments}"),
                         metadata: serde_json::json!({ "tool_call_id": tool_call_id, "tool_name": tool_name, "arguments": arguments }),
                     };
 
                     match self.request_approval(request).await {
                         Ok(ApprovalResponse::Approved) => PluginDecision::Continue,
                         Ok(ApprovalResponse::Rejected { reason }) => {
-                            PluginDecision::Abort(format!("Rejected: {}", reason))
+                            PluginDecision::Abort(format!("Rejected: {reason}"))
                         }
                         Err(ApprovalError::Timeout) => {
                             PluginDecision::Abort("Approval timeout".to_string())
                         }
-                        Err(e) => PluginDecision::Abort(format!("Approval error: {}", e)),
+                        Err(e) => PluginDecision::Abort(format!("Approval error: {e}")),
                     }
                 } else {
                     PluginDecision::Continue
@@ -228,19 +228,19 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
                 if self.needs_iteration_pause() && final_answer.is_none() {
                     let request = ApprovalRequest {
                         tool_name: "continue".to_string(),
-                        reason: format!("Iteration {} complete. Continue?", iteration),
+                        reason: format!("Iteration {iteration} complete. Continue?"),
                         metadata: serde_json::json!({ "iteration": iteration }),
                     };
 
                     match self.request_approval(request).await {
                         Ok(ApprovalResponse::Approved) => PluginDecision::Continue,
                         Ok(ApprovalResponse::Rejected { reason }) => PluginDecision::Abort(
-                            format!("Stopped after iteration {}: {}", iteration, reason),
+                            format!("Stopped after iteration {iteration}: {reason}"),
                         ),
                         Err(ApprovalError::Timeout) => {
                             PluginDecision::Abort("Approval timeout".to_string())
                         }
-                        Err(e) => PluginDecision::Abort(format!("Approval error: {}", e)),
+                        Err(e) => PluginDecision::Abort(format!("Approval error: {e}")),
                     }
                 } else {
                     PluginDecision::Continue
@@ -258,24 +258,22 @@ impl<C: ApprovalChannel + 'static> AgentPlugin for HitlPlugin<C> {
                 tool_call_id,
                 tool_name,
                 ..
-            } => {
-                if self.needs_tool_approval(tool_name) {
-                    tracing::info!(
-                        run_id = %ctx.run_id,
-                        tool_call_id = %tool_call_id,
-                        tool_name = %tool_name,
-                        "HITL: Tool execution requires approval"
-                    );
-                }
+            } if self.needs_tool_approval(tool_name) => {
+                tracing::info!(
+                    run_id = %ctx.run_id,
+                    tool_call_id = %tool_call_id,
+                    tool_name = %tool_name,
+                    "HITL: Tool execution requires approval"
+                );
             }
-            AgentStreamEvent::IterationComplete { iteration, .. } => {
-                if self.needs_iteration_pause() {
-                    tracing::info!(
-                        run_id = %ctx.run_id,
-                        iteration = %iteration,
-                        "HITL: Iteration pause requires approval"
-                    );
-                }
+            AgentStreamEvent::IterationComplete { iteration, .. }
+                if self.needs_iteration_pause() =>
+            {
+                tracing::info!(
+                    run_id = %ctx.run_id,
+                    iteration = %iteration,
+                    "HITL: Iteration pause requires approval"
+                );
             }
             _ => {}
         }
@@ -352,39 +350,6 @@ pub fn spawn_custom_approval_handler(
     });
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[allow(dead_code)]
-    struct MockChannel;
-
-    #[async_trait]
-    impl ApprovalChannel for MockChannel {
-        async fn request_approval(
-            &self,
-            _request: ApprovalRequest,
-            _timeout: Option<Duration>,
-        ) -> Result<Option<ApprovalResponse>, ApprovalError> {
-            Ok(Some(ApprovalResponse::Approved))
-        }
-    }
-
-    #[test]
-    fn test_hitl_config_default() {
-        let config = HitlConfig::default();
-        assert_eq!(config.triggers.len(), 0);
-        assert_eq!(config.timeout_secs, 0);
-    }
-
-    #[test]
-    fn test_approval_trigger_variants() {
-        let _tool_trigger = ApprovalTrigger::ToolExecution { tools: None };
-        let _iteration_trigger = ApprovalTrigger::AfterIteration;
-        let _final_trigger = ApprovalTrigger::BeforeFinalAnswer;
-    }
-}
-
 /// CLI approval handler — runs as a background task.
 ///
 /// Receives approval requests from RunContext's approval channel,
@@ -438,4 +403,37 @@ pub fn run_cli_approval_loop(
             let _ = tx.send(response);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[allow(dead_code)]
+    struct MockChannel;
+
+    #[async_trait]
+    impl ApprovalChannel for MockChannel {
+        async fn request_approval(
+            &self,
+            _request: ApprovalRequest,
+            _timeout: Option<Duration>,
+        ) -> Result<Option<ApprovalResponse>, ApprovalError> {
+            Ok(Some(ApprovalResponse::Approved))
+        }
+    }
+
+    #[test]
+    fn test_hitl_config_default() {
+        let config = HitlConfig::default();
+        assert_eq!(config.triggers.len(), 0);
+        assert_eq!(config.timeout_secs, 0);
+    }
+
+    #[test]
+    fn test_approval_trigger_variants() {
+        let _tool_trigger = ApprovalTrigger::ToolExecution { tools: None };
+        let _iteration_trigger = ApprovalTrigger::AfterIteration;
+        let _final_trigger = ApprovalTrigger::BeforeFinalAnswer;
+    }
 }

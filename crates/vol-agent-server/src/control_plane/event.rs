@@ -76,7 +76,7 @@ mod tests {
         // Fill buffer beyond capacity to test lag behavior
         for i in 0..300 {
             bus.publish(ControlPlaneEvent {
-                event_type: format!("event-{}", i),
+                event_type: format!("event-{i}"),
                 node_id: None,
             });
         }
