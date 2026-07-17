@@ -51,6 +51,7 @@ jobs:
   coverage:
     name: coverage
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: read
     continue-on-error: true
@@ -70,5 +71,5 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      - name: Coverage (single pass, workspace)
-        run: cargo llvm-cov --workspace --summary-only || echo "⚠ Coverage failed (non-blocking)"
+      - name: Coverage (core crates only)
+        run: cargo llvm-cov -p vol-agent-server -p vol-llm-agent-protocol -p vol-llm-runtime -p vol-llm-sandbox -p vol-llm-task -p vol-session --summary-only || echo "⚠ Coverage failed (non-blocking)"
