@@ -41,8 +41,13 @@ jobs:
       - name: Check no doc tests
         run: ./scripts/check-no-doc-tests.sh
 
-      - name: Run all tests (unit + integration in one pass)
-        run: cargo test --workspace --no-fail-fast
+      - name: Install cargo-nextest (pre-built binary)
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Run all tests (nextest, parallel)
+        run: cargo nextest run --workspace --no-fail-fast
 
       - name: Check agent boundaries
         run: ./scripts/check-agent-boundaries.sh

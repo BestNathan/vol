@@ -24,14 +24,14 @@ clippy-strict: ## Run clippy with -D warnings (deny + warn = error)
 
 # ── Tests (tiered: compile < unit < integration < e2e) ──────────────
 
-test: ## Run all tests in a single pass (fast path)
-	cargo test --workspace --no-fail-fast
+test: ## Run all tests (nextest if available, fallback to cargo test)
+	cargo nextest run --workspace --no-fail-fast 2>/dev/null || cargo test --workspace --no-fail-fast
 
 test-compile: ## Compile all tests without running (fast gate, ~3s warm)
 	cargo test --workspace --no-run
 
 test-unit: ## Run unit tests only (src/ inline #[cfg(test)])
-	cargo test --workspace --lib --no-fail-fast
+	cargo nextest run --workspace --lib --no-fail-fast 2>/dev/null || cargo test --workspace --lib --no-fail-fast
 
 test-integration: ## Run all tests including integration (single pass)
 	cargo test --workspace --no-fail-fast
