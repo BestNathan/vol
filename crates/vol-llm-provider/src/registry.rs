@@ -47,6 +47,7 @@ impl LLMProviderRegistry {
     pub fn from_loader(loader: &ProviderLoader) -> Result<Self, LLMError> {
         let mut registry = Self::new();
         for id in loader.ids() {
+            #[allow(clippy::expect_used)]
             let file_config = loader
                 .get(id)
                 .expect("provider ID from loader.ids() should exist");
@@ -66,7 +67,10 @@ impl LLMProviderRegistry {
 
     /// Get all registered provider IDs
     pub fn ids(&self) -> Vec<&str> {
-        self.providers.keys().map(|s| s.as_str()).collect()
+        self.providers
+            .keys()
+            .map(std::string::String::as_str)
+            .collect()
     }
 
     /// Check if a provider exists

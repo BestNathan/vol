@@ -76,8 +76,8 @@ impl AgentConnection for RemoteConnection {
         tokio::spawn(async move {
             use jsonrpsee::ws_client::WsClientBuilder;
 
-            let mut retry = 0;
-            let max_retries = 5;
+            let mut retry = 0u32;
+            let max_retries = 5u32;
 
             while retry <= max_retries {
                 let result = async {
@@ -113,15 +113,14 @@ impl AgentConnection for RemoteConnection {
                         connected.store(false, Ordering::SeqCst);
                         retry += 1;
                         if retry <= max_retries {
-                            let delay = std::cmp::min(1000 * 2_u64.pow(retry as u32 - 1), 30000);
+                            let delay = std::cmp::min(1000 * 2_u64.pow(retry - 1), 30000);
                             tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                         } else {
                             let _ = tx
                                 .send(UiEvent::AgentError {
                                     run_id: String::new(),
                                     message: format!(
-                                        "Connection failed after {} retries: {}",
-                                        retry, e
+                                        "Connection failed after {retry} retries: {e}"
                                     ),
                                 })
                                 .await;
@@ -142,7 +141,7 @@ impl AgentConnection for RemoteConnection {
     ) -> anyhow::Result<()> {
         let mut params = ObjectParams::new();
         params.insert("req_id", &req_id)?;
-        params.insert("approved", &approved)?;
+        params.insert("approved", approved)?;
         params.insert("reason", &reason)?;
         let _response: serde_json::Value = self.rpc_call("agent.approve", params).await?;
         Ok(())
@@ -164,10 +163,11 @@ impl AgentConnection for RemoteConnection {
 impl FileOperations for RemoteConnection {
     async fn list_files(&self, path: &str) -> anyhow::Result<Vec<FileEntry>> {
         let mut params = ObjectParams::new();
-        params.insert("path", &path)?;
+        params.insert("path", path)?;
         let response: serde_json::Value = self.rpc_call("file.list", params).await?;
-        let entries = response["entries"]
-            .as_array()
+        let entries = response
+            .get("entries")
+            .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
                     .filter_map(|e| {
@@ -185,16 +185,22 @@ impl FileOperations for RemoteConnection {
 
     async fn read_file(&self, path: &str) -> anyhow::Result<String> {
         let mut params = ObjectParams::new();
-        params.insert("path", &path)?;
+        params.insert("path", path)?;
         let response: serde_json::Value = self.rpc_call("file.read", params).await?;
-        Ok(response["content"].as_str().unwrap_or("").to_string())
+        Ok(response
+            .get("content")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string())
     }
 
     async fn list_logs(&self) -> anyhow::Result<Vec<LogRunInfo>> {
         let params = ObjectParams::new();
         let response: serde_json::Value = self.rpc_call("log.list", params).await?;
-        let logs = response["runs"]
-            .as_array()
+        #[allow(clippy::cast_possible_truncation)]
+        let logs = response
+            .get("runs")
+            .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
                     .filter_map(|e| {
@@ -213,8 +219,10 @@ impl FileOperations for RemoteConnection {
     async fn list_sessions(&self) -> anyhow::Result<Vec<SessionInfo>> {
         let params = ObjectParams::new();
         let response: serde_json::Value = self.rpc_call("session.list", params).await?;
-        let sessions = response["sessions"]
-            .as_array()
+        #[allow(clippy::cast_possible_truncation)]
+        let sessions = response
+            .get("sessions")
+            .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
                     .filter_map(|e| {

@@ -2,7 +2,11 @@
 name = "vol-deribit"
 version.workspace = true
 edition.workspace = true
+
 description = "Deribit-specific data structures and message types for volatility monitoring"
+
+[lints]
+workspace = true
 
 [dependencies]
 serde = { workspace = true }

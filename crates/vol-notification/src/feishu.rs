@@ -54,7 +54,7 @@ impl FeishuNotification {
             .app_secret(&app_secret)
             .build()
             .map_err(|e| {
-                VolError::Notification(format!("Failed to create openlark client: {}", e))
+                VolError::Notification(format!("Failed to create openlark client: {e}"))
             })?;
 
         Ok(Self {
@@ -99,49 +99,49 @@ impl FeishuNotification {
             .replace("{strike}", &alert.message);
 
         // Prepend trace_id prefix
-        format!("{} {}", trace_id_prefix, formatted)
+        format!("{trace_id_prefix} {formatted}")
     }
 
     /// Format alert as an interactive card (rich message)
     fn format_interactive_card(&self, alert: &Alert, trace_id_prefix: &str) -> String {
         let (title, content) = match &alert.alert_type {
-            vol_core::AlertType::AbsoluteIv { .. } => (format!("{} 🚨 IV 阈值告警", trace_id_prefix), format!(
+            vol_core::AlertType::AbsoluteIv { .. } => (format!("{trace_id_prefix} 🚨 IV 阈值告警"), format!(
                 "**合约**: {}\n**期限**: {}\n**类型**: {}\n**IV**: {:.1}%\n**指数价格**: {:.2} USD\n**DTE**: {} 天\n**合约价格**: {:.4} {} ({:.2} USD)\n**实虚值**: {}",
                 alert.symbol, self.tenor_cn(alert.tenor), self.option_type_cn(alert.option_type),
                 alert.iv * 100.0, alert.index_price, alert.dte,
                 alert.mark_price_coin, alert.symbol.split('-').next().unwrap_or("BTC").to_uppercase(),
                 alert.mark_price_usd(), self.moneyness_str(alert.moneyness)
             )),
-            vol_core::AlertType::RateChange { .. } => (format!("{} 📈 IV 快速变化告警", trace_id_prefix), format!(
+            vol_core::AlertType::RateChange { .. } => (format!("{trace_id_prefix} 📈 IV 快速变化告警"), format!(
                 "**合约**: {}\n**期限**: {}\n**类型**: {}\n**IV**: {:.1}%\n**指数价格**: {:.2} USD\n**DTE**: {} 天\n**合约价格**: {:.4} {} ({:.2} USD)\n**实虚值**: {}",
                 alert.symbol, self.tenor_cn(alert.tenor), self.option_type_cn(alert.option_type),
                 alert.iv * 100.0, alert.index_price, alert.dte,
                 alert.mark_price_coin, alert.symbol.split('-').next().unwrap_or("BTC").to_uppercase(),
                 alert.mark_price_usd(), self.moneyness_str(alert.moneyness)
             )),
-            vol_core::AlertType::TermStructure { .. } => (format!("{} 📊 期限结构异常告警", trace_id_prefix), format!(
+            vol_core::AlertType::TermStructure { .. } => (format!("{trace_id_prefix} 📊 期限结构异常告警"), format!(
                 "**策略**: {}\n**期限**: {}\n**类型**: {}\n**IV Spread**: {:.1}%\n**指数价格**: {:.2} USD",
                 alert.symbol, self.tenor_cn(alert.tenor), self.option_type_cn(alert.option_type),
                 alert.iv * 100.0, alert.index_price
             )),
-            vol_core::AlertType::Skew { .. } => (format!("{} ⚖️ Skew 偏离告警", trace_id_prefix), format!(
+            vol_core::AlertType::Skew { .. } => (format!("{trace_id_prefix} ⚖️ Skew 偏离告警"), format!(
                 "**标的**: {}\n**期限**: {}\n**Skew**: {:.1}%\n**指数价格**: {:.2} USD",
                 alert.symbol, self.tenor_cn(alert.tenor), alert.iv * 100.0, alert.index_price
             )),
-            vol_core::AlertType::PortfolioMargin { current, threshold } => (format!("{} 💰 保证金比率告警", trace_id_prefix), format!(
+            vol_core::AlertType::PortfolioMargin { current, threshold } => (format!("{trace_id_prefix} 💰 保证金比率告警"), format!(
                 "**账户**: PORTFOLIO_{}\n**保证金比率**: {:.2}\n**阈值**: {:.2}\n**可用资金**: {:.4}\n**初始保证金**: {:.4}\n**维持保证金**: {:.4}",
                 alert.symbol.replace("PORTFOLIO_", ""), current, threshold,
                 alert.mark_price_coin, alert.index_price, alert.moneyness
             )),
-            vol_core::AlertType::PortfolioBalance { current, threshold } => (format!("{} 💵 余额告警", trace_id_prefix), format!(
+            vol_core::AlertType::PortfolioBalance { current, threshold } => (format!("{trace_id_prefix} 💵 余额告警"), format!(
                 "**账户**: PORTFOLIO_{}\n**可用余额**: {:.4}\n**阈值**: {:.4}\n**总权益**: {:.4}",
                 alert.symbol.replace("PORTFOLIO_", ""), current, threshold, alert.index_price
             )),
-            vol_core::AlertType::PortfolioDelta { current } => (format!("{} 📉 Delta 敞口告警", trace_id_prefix), format!(
+            vol_core::AlertType::PortfolioDelta { current } => (format!("{trace_id_prefix} 📉 Delta 敞口告警"), format!(
                 "**账户**: PORTFOLIO_{}\n**总 Delta**: {:.2}\n**指数价格**: {:.2} USD",
                 alert.symbol.replace("PORTFOLIO_", ""), current, alert.index_price
             )),
-            vol_core::AlertType::PortfolioPnL { current, threshold } => (format!("{} 📊 P&L 告警", trace_id_prefix), format!(
+            vol_core::AlertType::PortfolioPnL { current, threshold } => (format!("{trace_id_prefix} 📊 P&L 告警"), format!(
                 "**账户**: PORTFOLIO_{}\n**Session PnL**: {:.4}\n**阈值**: {:.4}",
                 alert.symbol.replace("PORTFOLIO_", ""), current, threshold
             )),
@@ -152,7 +152,7 @@ impl FeishuNotification {
                     "vega" => "Vega",
                     _ => "Greek",
                 };
-                (format!("{} 📈 Greek 告警", trace_id_prefix), format!(
+                (format!("{trace_id_prefix} 📈 Greek 告警"), format!(
                     "**账户**: PORTFOLIO_{}\n**{}**: {:.6}\n**阈值**: {:.6}",
                     alert.symbol.replace("PORTFOLIO_", ""), greek_name, current, threshold
                 ))
@@ -269,7 +269,10 @@ impl FeishuNotification {
                 }
 
                 // Fallback: check code field (older API format)
-                let code = response.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
+                let code = response
+                    .get("code")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(-1);
                 if code == 0 {
                     info!("Feishu message sent successfully");
                     Ok(())
@@ -280,16 +283,14 @@ impl FeishuNotification {
                         .unwrap_or("Unknown error");
                     warn!("Feishu API error: code={}, msg={}", code, msg);
                     Err(VolError::Notification(format!(
-                        "Feishu API error: {} - {}",
-                        code, msg
+                        "Feishu API error: {code} - {msg}"
                     )))
                 }
             }
             Err(e) => {
                 warn!("Failed to send Feishu message: {:?}", e);
                 Err(VolError::Notification(format!(
-                    "Failed to send message: {}",
-                    e
+                    "Failed to send message: {e}"
                 )))
             }
         }

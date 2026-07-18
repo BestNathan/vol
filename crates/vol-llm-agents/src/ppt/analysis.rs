@@ -37,7 +37,7 @@ impl AnalysisModule {
         let content = response
             .message
             .content
-            .ok_or_else(|| AnalysisError::EmptyResponse)?;
+            .ok_or(AnalysisError::EmptyResponse)?;
 
         let content_str = match &content {
             MessageContent::Text(s) => s.as_str(),
@@ -53,14 +53,24 @@ impl AnalysisModule {
             .map_err(|e| AnalysisError::JsonParseError(e.to_string()))?;
 
         // Extract fields
-        let topic = json["topic"]
-            .as_str()
+        let topic = json
+            .get("topic")
+            .and_then(Value::as_str)
             .ok_or_else(|| AnalysisError::MissingField("topic".to_string()))?
             .to_string();
 
-        let audience = json["audience"].as_str().map(|s| s.to_string());
-        let style = json["style"].as_str().map(|s| s.to_string());
-        let purpose = json["purpose"].as_str().map(|s| s.to_string());
+        let audience = json
+            .get("audience")
+            .and_then(Value::as_str)
+            .map(std::string::ToString::to_string);
+        let style = json
+            .get("style")
+            .and_then(Value::as_str)
+            .map(std::string::ToString::to_string);
+        let purpose = json
+            .get("purpose")
+            .and_then(Value::as_str)
+            .map(std::string::ToString::to_string);
 
         Ok(StructuredRequirement {
             topic,

@@ -92,10 +92,10 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     for (topic, content) in &knowledge {
         // Use embedder to generate real embedding
-        let embedding = embedder.embed(&format!("{}: {}", topic, content)).await?;
-        let doc = Document::new(format!("{}: {}", topic, content))
+        let embedding = embedder.embed(&format!("{topic}: {content}")).await?;
+        let doc = Document::new(format!("{topic}: {content}"))
             .with_metadata("source", "trading_knowledge")
-            .with_metadata("topic", *topic);
+            .with_metadata("topic", topic);
         store.insert(doc, embedding).await?;
     }
     println!("   Added {} knowledge items", knowledge.len());
@@ -115,7 +115,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let questions = vec!["如何进行 Delta 对冲？", "Gamma 风险如何管理？"];
 
     for question in questions {
-        println!("\n   Q: {}", question);
+        println!("\n   Q: {question}");
         let response = agent.ask(question).await?;
         println!("   A: {}", response.answer);
         println!("   Sources: {} documents", response.sources.len());

@@ -35,12 +35,24 @@ impl StreamProtocol for OpenaiStreamParser {
         // Extract usage if present (and not null)
         if let Some(usage_data) = data.get("usage") {
             if !usage_data.is_null() {
+                #[allow(clippy::cast_possible_truncation)]
                 let usage = TokenUsage {
-                    prompt_tokens: usage_data["prompt_tokens"].as_u64().unwrap_or(0) as u32,
-                    completion_tokens: usage_data["completion_tokens"].as_u64().unwrap_or(0) as u32,
-                    total_tokens: (usage_data["prompt_tokens"].as_u64().unwrap_or(0)
-                        + usage_data["completion_tokens"].as_u64().unwrap_or(0))
-                        as u32,
+                    prompt_tokens: usage_data
+                        .get("prompt_tokens")
+                        .and_then(serde_json::Value::as_u64)
+                        .unwrap_or(0) as u32,
+                    completion_tokens: usage_data
+                        .get("completion_tokens")
+                        .and_then(serde_json::Value::as_u64)
+                        .unwrap_or(0) as u32,
+                    total_tokens: (usage_data
+                        .get("prompt_tokens")
+                        .and_then(serde_json::Value::as_u64)
+                        .unwrap_or(0)
+                        + usage_data
+                            .get("completion_tokens")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0)) as u32,
                     cached_tokens: None,
                 };
                 return Some(Ok(ParsedEvent::Usage(usage)));
@@ -48,17 +60,17 @@ impl StreamProtocol for OpenaiStreamParser {
         }
 
         // Extract model if present
-        if let Some(model) = data["model"].as_str() {
+        if let Some(model) = data.get("model").and_then(|v| v.as_str()) {
             return Some(Ok(ParsedEvent::ResponseStart {
                 model: model.to_string(),
             }));
         }
 
         // Extract deltas from choices
-        if let Some(choices) = data["choices"].as_array() {
+        if let Some(choices) = data.get("choices").and_then(|v| v.as_array()) {
             for choice in choices {
                 // Handle finish_reason on last chunk
-                if let Some(reason) = choice["finish_reason"].as_str() {
+                if let Some(reason) = choice.get("finish_reason").and_then(|v| v.as_str()) {
                     if reason != "null" && !reason.is_empty() {
                         let finish_reason = match reason {
                             "stop" => FinishReason::Stop,
@@ -73,19 +85,39 @@ impl StreamProtocol for OpenaiStreamParser {
                 }
 
                 // Handle content delta (skip empty strings)
-                if let Some(content) = choice["delta"]["content"].as_str() {
+                if let Some(content) = choice
+                    .get("delta")
+                    .and_then(|d| d.get("content"))
+                    .and_then(|v| v.as_str())
+                {
                     if !content.is_empty() {
                         return Some(Ok(ParsedEvent::ContentDelta(content.to_string())));
                     }
                 }
 
                 // Handle tool calls delta
-                if let Some(tool_calls) = choice["delta"]["tool_calls"].as_array() {
+                if let Some(tool_calls) = choice
+                    .get("delta")
+                    .and_then(|d| d.get("tool_calls"))
+                    .and_then(|v| v.as_array())
+                {
                     for tc in tool_calls {
-                        let index = tc["index"].as_u64().unwrap_or(0) as usize;
-                        let id = tc["id"].as_str().map(|s| s.to_string());
-                        let name = tc["function"]["name"].as_str().map(|s| s.to_string());
-                        let args = tc["function"]["arguments"].as_str().map(|s| s.to_string());
+                        #[allow(clippy::cast_possible_truncation)]
+                        let index = tc
+                            .get("index")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0) as usize;
+                        let id = tc["id"].as_str().map(std::string::ToString::to_string);
+                        let name = tc
+                            .get("function")
+                            .and_then(|f| f.get("name"))
+                            .and_then(|v| v.as_str())
+                            .map(std::string::ToString::to_string);
+                        let args = tc
+                            .get("function")
+                            .and_then(|f| f.get("arguments"))
+                            .and_then(|v| v.as_str())
+                            .map(std::string::ToString::to_string);
 
                         if id.is_some() || name.is_some() {
                             return Some(Ok(ParsedEvent::ToolCallStart { index, id, name }));

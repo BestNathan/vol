@@ -49,6 +49,7 @@ pub fn render_conversation(frame: &mut Frame, area: Rect, state: &AppState) {
 }
 
 /// Wrap a line into multiple lines at `max_chars` boundary, breaking at word boundaries.
+#[allow(clippy::indexing_slicing)]
 fn wrap_line(text: &str, max_chars: usize) -> Vec<String> {
     let chars: Vec<char> = text.chars().collect();
     if chars.len() <= max_chars || max_chars == 0 {
@@ -116,7 +117,7 @@ fn build_conversation_lines<'a>(state: &'a AppState, max_width: usize) -> Vec<Li
                 for line in content.lines() {
                     for wrapped in wrap_line(line, wrap) {
                         lines.push(Line::from(vec![Span::styled(
-                            format!("  {}", wrapped),
+                            format!("  {wrapped}"),
                             Style::default().fg(Color::DarkGray),
                         )]));
                     }
@@ -145,7 +146,7 @@ fn build_conversation_lines<'a>(state: &'a AppState, max_width: usize) -> Vec<Li
                 arg_preview,
             } => {
                 lines.push(Line::from(vec![Span::styled(
-                    format!("[{}]", tool_name),
+                    format!("[{tool_name}]"),
                     Style::default()
                         .fg(Color::Blue)
                         .add_modifier(Modifier::BOLD),
@@ -153,7 +154,7 @@ fn build_conversation_lines<'a>(state: &'a AppState, max_width: usize) -> Vec<Li
                 if !arg_preview.is_empty() {
                     for wrapped in wrap_line(arg_preview, max_width.saturating_sub(2)) {
                         lines.push(Line::from(vec![Span::styled(
-                            format!("  {}", wrapped),
+                            format!("  {wrapped}"),
                             Style::default().fg(Color::DarkGray),
                         )]));
                     }
@@ -167,14 +168,14 @@ fn build_conversation_lines<'a>(state: &'a AppState, max_width: usize) -> Vec<Li
                 let status = if *success { "OK" } else { "ERR" };
                 let color = if *success { Color::Green } else { Color::Red };
                 lines.push(Line::from(vec![Span::styled(
-                    format!("  {} {} ", status, tool_name),
+                    format!("  {status} {tool_name} "),
                     Style::default().fg(color),
                 )]));
                 let wrap = max_width.saturating_sub(4);
                 for line in preview.lines().take(6) {
                     for wrapped in wrap_line(line, wrap) {
                         lines.push(Line::from(vec![Span::styled(
-                            format!("    {}", wrapped),
+                            format!("    {wrapped}"),
                             Style::default().fg(Color::DarkGray),
                         )]));
                     }
@@ -214,7 +215,7 @@ fn build_conversation_lines<'a>(state: &'a AppState, max_width: usize) -> Vec<Li
             }
             ConversationEntry::Error { message } => {
                 lines.push(Line::from(vec![Span::styled(
-                    format!("Error: {}", message),
+                    format!("Error: {message}"),
                     Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                 )]));
             }

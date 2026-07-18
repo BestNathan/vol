@@ -43,7 +43,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ── Test gate: run tests and clippy before building images ─────────────────
+  # ── Quality gate: fmt + check + test + clippy + boundaries ───────────────
   test:
     name: test (${{ matrix.crate }})
     runs-on: ubuntu-24.04
@@ -59,6 +59,15 @@ jobs:
           - vol-llm-sandbox
           - vol-llm-task
           - vol-session
+          - vol-llm-core
+          - vol-llm-agent
+          - vol-llm-provider
+          - vol-llm-tool
+          - vol-llm-skill
+          - vol-llm-mcp
+          - vol-llm-context
+          - vol-llm-memory
+          - vol-llm-wiki
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,11 +85,17 @@ jobs:
           key: ${{ runner.os }}-cargo-test-${{ matrix.crate }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-test-${{ matrix.crate }}-
 
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
       - name: Run tests
         run: cargo test -p ${{ matrix.crate }} --no-fail-fast
 
       - name: Run clippy
         run: cargo clippy -p ${{ matrix.crate }}
+
+      - name: Check agent boundaries
+        run: ./scripts/check-agent-boundaries.sh
 
   # ── Per-arch builds run on native runners ────────────────────────────────
   build:

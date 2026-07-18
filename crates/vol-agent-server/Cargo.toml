@@ -3,9 +3,13 @@ name = "vol-agent-server"
 version.workspace = true
 edition.workspace = true
 
+
 [[bin]]
 name = "vol-agent-server"
 path = "src/main.rs"
+
+[lints]
+workspace = true
 
 [dependencies]
 base64 = "0.22"

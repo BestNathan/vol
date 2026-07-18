@@ -7,6 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
+#[allow(clippy::cast_possible_truncation)]
 pub fn render_session_dialog(frame: &mut Frame, area: Rect, state: &AppState) {
     if !state.session_dialog.open {
         return;
@@ -59,7 +60,7 @@ fn build_dialog_lines(state: &AppState) -> Vec<Line<'static>> {
             };
             lines.push(Line::from(vec![
                 Span::styled(prefix, style),
-                Span::styled(format!("{:<10}", short_id), style),
+                Span::styled(format!("{short_id:<10}"), style),
                 Span::styled(
                     format!(" {:>4} entries", entry.entry_count),
                     Style::default().fg(Color::DarkGray),

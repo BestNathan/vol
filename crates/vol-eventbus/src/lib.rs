@@ -50,7 +50,7 @@ impl EventBus {
     pub fn publish_data(&self, data: VolatilityData) -> Result<(), VolError> {
         self.data_tx
             .send(Arc::new(data))
-            .map_err(|e| VolError::Internal(format!("Failed to publish data: {}", e)))?;
+            .map_err(|e| VolError::Internal(format!("Failed to publish data: {e}")))?;
         Ok(())
     }
 
@@ -58,7 +58,7 @@ impl EventBus {
     pub fn publish_alert(&self, alert: Alert) -> Result<(), VolError> {
         self.alert_tx
             .send(Arc::new(alert))
-            .map_err(|e| VolError::Internal(format!("Failed to publish alert: {}", e)))?;
+            .map_err(|e| VolError::Internal(format!("Failed to publish alert: {e}")))?;
         Ok(())
     }
 
@@ -66,7 +66,7 @@ impl EventBus {
     pub fn publish_system(&self, event: SystemEvent) -> Result<(), VolError> {
         self.system_tx
             .send(Arc::new(event))
-            .map_err(|e| VolError::Internal(format!("Failed to publish system event: {}", e)))?;
+            .map_err(|e| VolError::Internal(format!("Failed to publish system event: {e}")))?;
         Ok(())
     }
 

@@ -33,15 +33,26 @@ impl CliToolExecutable {
             },
             "required": ["command"]
         });
-        Self { name, description, parameters, inner: tool }
+        Self {
+            name,
+            description,
+            parameters,
+            inner: tool,
+        }
     }
 }
 
 #[async_trait]
 impl ExecutableTool for CliToolExecutable {
-    fn name(&self) -> &'static str { self.name }
-    fn description(&self) -> &'static str { self.description }
-    fn parameters(&self) -> serde_json::Value { self.parameters.clone() }
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn description(&self) -> &'static str {
+        self.description
+    }
+    fn parameters(&self) -> serde_json::Value {
+        self.parameters.clone()
+    }
     fn sensitivity(&self, _args: &serde_json::Value) -> ToolSensitivity {
         ToolSensitivity::Safe // MVP: no approval gates per spec
     }
@@ -54,9 +65,11 @@ impl ExecutableTool for CliToolExecutable {
         let command = args
             .get("command")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| vol_llm_tool::ToolError::InvalidArguments(
-                "missing required parameter: 'command'".into(),
-            ))?;
+            .ok_or_else(|| {
+                vol_llm_tool::ToolError::InvalidArguments(
+                    "missing required parameter: 'command'".into(),
+                )
+            })?;
 
         match self.inner.run(command).await {
             Ok(output) => {

@@ -251,10 +251,9 @@ impl AgentConfigBuilder {
                                 .map(|d| d.join(path))
                                 .unwrap_or_else(|| PathBuf::from(path));
                             let path_str = full_path.to_string_lossy().to_string();
-                            vol_llm_context::builtin::FileSpec::new(
-                                path_str,
-                                AttentionAnchor::Middle(i as u32),
-                            )
+                            #[allow(clippy::cast_possible_truncation)]
+                            let anchor = AttentionAnchor::Middle(i as u32);
+                            vol_llm_context::builtin::FileSpec::new(path_str, anchor)
                         })
                         .collect()
                 })
@@ -407,7 +406,7 @@ mod tests {
         let def = AgentDef::new("test", "prompt");
         let config = AgentConfigBuilder::new()
             .with_llm(Arc::new(MockLlm))
-            .with_def(def.clone())
+            .with_def(def)
             .build()
             .unwrap();
         assert!(config.def.is_some());
@@ -450,8 +449,7 @@ mod tests {
         let tool_names = config.tools.tool_names();
         assert!(
             tool_names.contains(&"skill"),
-            "SkillTool should be auto-registered, got: {:?}",
-            tool_names
+            "SkillTool should be auto-registered, got: {tool_names:?}"
         );
     }
 
@@ -466,8 +464,7 @@ mod tests {
         let names: Vec<&str> = cb.contributor_names();
         assert!(
             names.iter().any(|n| n.contains("skill")),
-            "SkillInjector should be present, got: {:?}",
-            names
+            "SkillInjector should be present, got: {names:?}"
         );
     }
 

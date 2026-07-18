@@ -119,7 +119,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             ChannelError::AgentNotFound(id) => assert_eq!(id, "nonexistent"),
-            other => panic!("Expected AgentNotFound, got {:?}", other),
+            other => panic!("Expected AgentNotFound, got {other:?}"),
         }
     }
 
@@ -163,8 +163,7 @@ mod tests {
     #[tokio::test]
     async fn test_router_swap_session_returns_error_for_missing_agent() {
         let router = AgentRouter::new();
-        let store: Arc<dyn vol_session::SessionEntryStore> =
-            Arc::new(InMemoryEntryStore::new());
+        let store: Arc<dyn vol_session::SessionEntryStore> = Arc::new(InMemoryEntryStore::new());
         let session = Arc::new(Session::new(store));
         let result = router.swap_session("missing-agent", session).await;
         assert!(result.is_err());

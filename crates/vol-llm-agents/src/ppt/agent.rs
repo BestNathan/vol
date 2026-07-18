@@ -44,7 +44,7 @@ impl PptAgent {
         };
 
         let registry = LLMProviderRegistry::from_configs(&[llm_config])
-            .map_err(|e| PptAgentError::ConfigError(format!("Failed to initialize LLM: {}", e)))?;
+            .map_err(|e| PptAgentError::ConfigError(format!("Failed to initialize LLM: {e}")))?;
 
         let llm = registry.get(&config.llm_provider_id).ok_or_else(|| {
             PptAgentError::ConfigError(format!(
@@ -57,7 +57,7 @@ impl PptAgent {
         let mut template_registry = TemplateRegistry::new();
         if let Some(template_dir) = &config.template_dir {
             template_registry.load_from_dir(template_dir).map_err(|e| {
-                PptAgentError::ConfigError(format!("Failed to load templates: {}", e))
+                PptAgentError::ConfigError(format!("Failed to load templates: {e}"))
             })?;
         }
 
@@ -120,6 +120,7 @@ impl PptAgent {
     }
 
     /// 匹配最佳模板
+    #[allow(clippy::expect_used)]
     fn match_template(&self, requirements: &StructuredRequirement) -> Arc<PptTemplate> {
         let mut keywords = vec![requirements.topic.clone()];
         if let Some(style) = &requirements.style {
@@ -149,7 +150,7 @@ impl PptAgent {
             .take(3)
             .collect::<Vec<_>>()
             .join("_");
-        let filename = format!("{}_{}.pptx", timestamp, topic_slug);
+        let filename = format!("{timestamp}_{topic_slug}.pptx");
 
         self.config
             .default_output_dir

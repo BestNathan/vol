@@ -30,7 +30,7 @@ impl MemoryRetriever for KeywordRetriever {
         filter: MemoryFilter,
     ) -> Result<Vec<MemoryItem>> {
         let all = self.store.list(filter).await?;
-        let query_terms: Vec<String> = query.split_whitespace().map(|s| s.to_lowercase()).collect();
+        let query_terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
 
         let mut scored: Vec<(f32, MemoryItem)> = all
             .into_iter()

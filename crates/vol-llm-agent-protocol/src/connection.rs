@@ -25,7 +25,9 @@ mod tests {
     use tokio::sync::mpsc;
 
     use super::*;
-    use crate::agent_server_protocol::{AgentOperation, AgentPayload, MessageKind, Operation, Payload};
+    use crate::agent_server_protocol::{
+        AgentOperation, AgentPayload, MessageKind, Operation, Payload,
+    };
 
     struct TestConnection {
         protocol: &'static str,
@@ -42,7 +44,9 @@ mod tests {
             self.rx.lock().await.recv().await.map(Ok)
         }
         async fn send(&self, msg: AgentServerMessage) -> Result<(), ConnectionError> {
-            self.tx.send(msg).map_err(|e| ConnectionError::ChannelError(e.to_string()))
+            self.tx
+                .send(msg)
+                .map_err(|e| ConnectionError::ChannelError(e.to_string()))
         }
     }
 

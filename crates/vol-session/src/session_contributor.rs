@@ -107,7 +107,7 @@ impl ContextContributor for SessionContributor {
         let summary = compressed
             .iter()
             .filter_map(|m| m.message.content.as_ref())
-            .map(|c| c.as_str())
+            .map(vol_llm_core::MessageContent::as_str)
             .collect::<Vec<_>>()
             .join("\n");
 

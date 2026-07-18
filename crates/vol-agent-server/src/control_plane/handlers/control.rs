@@ -70,9 +70,7 @@ impl DomainHandler for ControlHandler {
                     .nodes
                     .heartbeat(&hb.node_id, hb.load, now_ms())
                     .map_err(ProtocolError::PayloadDecodeFailedOwned)?;
-                let ack = vol_llm_agent_protocol::agent_server_protocol::HeartbeatAck {
-                    node_id,
-                };
+                let ack = vol_llm_agent_protocol::agent_server_protocol::HeartbeatAck { node_id };
                 Ok(vec![make_result(
                     message,
                     ControlOperation::Heartbeat,
@@ -128,6 +126,7 @@ impl DomainHandler for ControlHandler {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn now_ms() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
 

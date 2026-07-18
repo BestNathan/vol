@@ -62,7 +62,7 @@ impl SkillDef {
     pub fn new(name: &str, content: impl Into<String>) -> Self {
         let content_str = content.into();
         Self {
-            id: format!("code:{}", name),
+            id: format!("code:{name}"),
             name: name.to_string(),
             version: "1.0.0".to_string(),
             description: String::new(),

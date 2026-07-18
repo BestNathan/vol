@@ -41,9 +41,9 @@ impl NotificationHandler for StdoutNotification {
         );
 
         // Record additional alert attributes
-        span.record("alert.dte", &alert.dte);
-        span.record("alert.index_price", &alert.index_price);
-        span.record("alert.option_type", &alert.option_type.to_string());
+        span.record("alert.dte", alert.dte);
+        span.record("alert.index_price", alert.index_price);
+        span.record("alert.option_type", alert.option_type.to_string());
 
         let _guard = span.enter();
 

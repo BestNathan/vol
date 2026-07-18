@@ -89,7 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if template_dir.exists() {
                 config = config.with_template_dir(&template_dir);
                 if verbose {
-                    println!("Template directory: {:?}", template_dir);
+                    println!("Template directory: {template_dir:?}");
                 }
             }
 
@@ -107,12 +107,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Build input
             let input = match &context {
                 Some(ctx) => {
-                    println!("Topic: {}", text);
-                    println!("Context: {}", ctx);
+                    println!("Topic: {text}");
+                    println!("Context: {ctx}");
                     PptInput::text_with_context(&text, ctx)
                 }
                 None => {
-                    println!("Topic: {}", text);
+                    println!("Topic: {text}");
                     PptInput::text(&text)
                 }
             };
@@ -128,15 +128,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ) => PptInput::Text {
                     description,
                     context: Some(match context {
-                        Some(ctx) => format!("{}. Use template: {}", ctx, tpl_id),
-                        None => format!("Use template: {}", tpl_id),
+                        Some(ctx) => format!("{ctx}. Use template: {tpl_id}"),
+                        None => format!("Use template: {tpl_id}"),
                     }),
                 },
                 (None, input) => input,
             };
 
             if let Some(template_id) = &template {
-                println!("Using template: {}", template_id);
+                println!("Using template: {template_id}");
             }
 
             println!();
@@ -175,13 +175,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     if template_dir.exists() {
                         if let Err(e) = registry.load_from_dir(&template_dir) {
-                            eprintln!("Failed to load templates: {}", e);
+                            eprintln!("Failed to load templates: {e}");
                         }
                     }
 
                     let templates = registry.list_templates();
                     if templates.is_empty() {
-                        println!("No templates found in {:?}", template_dir);
+                        println!("No templates found in {template_dir:?}");
                     } else {
                         for t in templates {
                             println!("  {} - {}", t.id, t.name);
@@ -195,7 +195,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 TemplatesAction::Preview { template_id } => {
-                    println!("Preview for template: {}", template_id);
+                    println!("Preview for template: {template_id}");
                     // TODO: Implement preview
                     println!("(Preview not yet implemented)");
                 }

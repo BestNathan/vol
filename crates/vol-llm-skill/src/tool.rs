@@ -45,7 +45,7 @@ impl SkillTool {
         if !def.file_listing.is_empty() {
             output.push_str("\nContents:\n");
             for file in &def.file_listing {
-                output.push_str(&format!("  {}\n", file));
+                output.push_str(&format!("  {file}\n"));
             }
             output.push_str("\nUse the `read` tool with absolute paths to access these files.\n");
         }
@@ -60,7 +60,7 @@ impl SkillTool {
     /// Format error with available skills list.
     async fn format_not_found(&self, name: &str) -> String {
         let metadata = self.loader.list_metadata().await;
-        let mut output = format!("Skill '{}' not found.\n\n", name);
+        let mut output = format!("Skill '{name}' not found.\n\n");
         if metadata.is_empty() {
             output.push_str("No skills available.");
         } else {
@@ -110,9 +110,8 @@ impl ExecutableTool for SkillTool {
         args: &serde_json::Value,
         _context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
-        let params: SkillToolParams = serde_json::from_value(args.clone()).map_err(|e| {
-            ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
-        })?;
+        let params: SkillToolParams = serde_json::from_value(args.clone())
+            .map_err(|e| ToolError::InvalidArguments(format!("Failed to parse arguments: {e}")))?;
 
         match self.loader.get(&params.name).await {
             Some(def) => {

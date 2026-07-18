@@ -16,7 +16,10 @@ use vol_llm_agent_protocol::agent_server_protocol::{
 use vol_llm_agent_protocol::transport::jsonrpc::codec::{
     decode_jsonrpc_frame, encode_jsonrpc_message,
 };
-use vol_llm_sandbox::*;
+use vol_llm_sandbox::{
+    CommandOutput, CommandRequest, DirEntry, FileMetadata, FileType, Sandbox, SandboxError,
+    SandboxResult,
+};
 
 /// A `Sandbox` backed by a remote agent server via JSON-RPC/WebSocket.
 ///
@@ -47,8 +50,8 @@ impl RemoteSandbox {
     ///
     /// Fails immediately if the server is unreachable (WebSocket handshake error).
     pub async fn connect(server_url: &str) -> SandboxResult<Self> {
-        use tokio_tungstenite::tungstenite::Message;
         use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message;
 
         let (ws, _) = tokio_tungstenite::connect_async(server_url)
             .await
@@ -71,7 +74,7 @@ impl RemoteSandbox {
                     frame = write_rx.recv() => {
                         match frame {
                             Some(text) => {
-                                let _ = ws_write.send(Message::Text(text.into())).await;
+                                let _ = ws_write.send(Message::Text(text)).await;
                             }
                             None => break,
                         }
@@ -92,7 +95,9 @@ impl RemoteSandbox {
                             Some(Ok(Message::Text(text))) => {
                                 if let Ok(msg) = decode_jsonrpc_frame(&text) {
                                     let mid = msg.message_id.clone();
-                                    if let Some(tx) = pending_map.pending.lock().unwrap().remove(&mid) {
+                                    #[allow(clippy::unwrap_used)]
+                                    let mut guard = pending_map.pending.lock().unwrap();
+                                    if let Some(tx) = guard.remove(&mid) {
                                         let _ = tx.send(msg);
                                     }
                                 }
@@ -122,12 +127,15 @@ impl RemoteSandbox {
     }
 
     /// Send a JSON-RPC request and wait for the matching response.
+    #[allow(clippy::unwrap_used)]
     async fn request(
         &self,
         op: SandboxOperation,
         payload: SandboxPayload,
     ) -> SandboxResult<AgentServerMessage> {
-        let msg_id = self.inner.msg_id_counter
+        let msg_id = self
+            .inner
+            .msg_id_counter
             .fetch_add(1, Ordering::Relaxed)
             .to_string();
 
@@ -142,9 +150,10 @@ impl RemoteSandbox {
         let (tx, rx) = oneshot::channel();
         self.inner.pending.lock().unwrap().insert(msg_id, tx);
 
-        let frame = encode_jsonrpc_message(msg)
-            .map_err(|e| SandboxError::Io(std::io::Error::other(e)))?;
-        self.write_tx.send(frame)
+        let frame =
+            encode_jsonrpc_message(msg).map_err(|e| SandboxError::Io(std::io::Error::other(e)))?;
+        self.write_tx
+            .send(frame)
             .map_err(|e| SandboxError::Io(std::io::Error::other(e)))?;
 
         tokio::time::timeout(Duration::from_secs(30), rx)
@@ -156,11 +165,19 @@ impl RemoteSandbox {
 
 #[async_trait]
 impl Sandbox for RemoteSandbox {
-    fn kind(&self) -> &str { "remote" }
-    fn name(&self) -> &str { "remote" }
+    fn kind(&self) -> &str {
+        "remote"
+    }
+    fn name(&self) -> &str {
+        "remote"
+    }
 
-    async fn start(&self) -> SandboxResult<()> { Ok(()) }
-    async fn cleanup(&self) -> SandboxResult<()> { Ok(()) }
+    async fn start(&self) -> SandboxResult<()> {
+        Ok(())
+    }
+    async fn cleanup(&self) -> SandboxResult<()> {
+        Ok(())
+    }
 
     fn root_path(&self) -> &Path {
         Path::new("")
@@ -173,13 +190,17 @@ impl Sandbox for RemoteSandbox {
     async fn execute(&self, req: CommandRequest) -> SandboxResult<CommandOutput> {
         use vol_llm_agent_protocol::agent_server_protocol::CommandRequestDef;
         let def: CommandRequestDef = req.into();
-        let resp = self.request(
-            SandboxOperation::Exec,
-            SandboxPayload::Exec { command: def },
-        ).await?;
+        let resp = self
+            .request(
+                SandboxOperation::Exec,
+                SandboxPayload::Exec { command: def },
+            )
+            .await?;
         match resp.payload {
             Payload::Sandbox(SandboxPayload::ExecResult { output }) => Ok(output.into()),
-            _ => Err(SandboxError::Io(std::io::Error::other("unexpected response type"))),
+            _ => Err(SandboxError::Io(std::io::Error::other(
+                "unexpected response type",
+            ))),
         }
     }
 
@@ -189,14 +210,16 @@ impl Sandbox for RemoteSandbox {
         offset: Option<u64>,
         limit: Option<u64>,
     ) -> SandboxResult<Vec<u8>> {
-        let resp = self.request(
-            SandboxOperation::ReadFile,
-            SandboxPayload::ReadFile {
-                path: path.to_string_lossy().to_string(),
-                offset,
-                limit,
-            },
-        ).await?;
+        let resp = self
+            .request(
+                SandboxOperation::ReadFile,
+                SandboxPayload::ReadFile {
+                    path: path.to_string_lossy().to_string(),
+                    offset,
+                    limit,
+                },
+            )
+            .await?;
         match resp.payload {
             Payload::Sandbox(SandboxPayload::ReadFileResult { content }) => {
                 use base64::Engine;
@@ -204,69 +227,89 @@ impl Sandbox for RemoteSandbox {
                     .decode(&content)
                     .map_err(|e| SandboxError::Io(std::io::Error::other(e)))
             }
-            _ => Err(SandboxError::Io(std::io::Error::other("unexpected response type"))),
+            _ => Err(SandboxError::Io(std::io::Error::other(
+                "unexpected response type",
+            ))),
         }
     }
 
     async fn write_file(&self, path: &Path, content: &[u8]) -> SandboxResult<()> {
         use base64::Engine;
         let encoded = base64::engine::general_purpose::STANDARD.encode(content);
-        let resp = self.request(
-            SandboxOperation::WriteFile,
-            SandboxPayload::WriteFile {
-                path: path.to_string_lossy().to_string(),
-                content: encoded,
-            },
-        ).await?;
+        let resp = self
+            .request(
+                SandboxOperation::WriteFile,
+                SandboxPayload::WriteFile {
+                    path: path.to_string_lossy().to_string(),
+                    content: encoded,
+                },
+            )
+            .await?;
         match resp.payload {
             Payload::Sandbox(SandboxPayload::WriteFileResult) => Ok(()),
-            _ => Err(SandboxError::Io(std::io::Error::other("unexpected response type"))),
+            _ => Err(SandboxError::Io(std::io::Error::other(
+                "unexpected response type",
+            ))),
         }
     }
 
     async fn create_dir_all(&self, path: &Path) -> SandboxResult<()> {
-        let resp = self.request(
-            SandboxOperation::CreateDir,
-            SandboxPayload::CreateDir {
-                path: path.to_string_lossy().to_string(),
-            },
-        ).await?;
+        let resp = self
+            .request(
+                SandboxOperation::CreateDir,
+                SandboxPayload::CreateDir {
+                    path: path.to_string_lossy().to_string(),
+                },
+            )
+            .await?;
         match resp.payload {
             Payload::Sandbox(SandboxPayload::CreateDirResult) => Ok(()),
-            _ => Err(SandboxError::Io(std::io::Error::other("unexpected response type"))),
+            _ => Err(SandboxError::Io(std::io::Error::other(
+                "unexpected response type",
+            ))),
         }
     }
 
     async fn read_dir(&self, path: &Path) -> SandboxResult<Vec<DirEntry>> {
-        let resp = self.request(
-            SandboxOperation::ReadDir,
-            SandboxPayload::ReadDir {
-                path: path.to_string_lossy().to_string(),
-            },
-        ).await?;
+        let resp = self
+            .request(
+                SandboxOperation::ReadDir,
+                SandboxPayload::ReadDir {
+                    path: path.to_string_lossy().to_string(),
+                },
+            )
+            .await?;
         match resp.payload {
-            Payload::Sandbox(SandboxPayload::ReadDirResult { entries }) => {
-                Ok(entries.into_iter().map(|def| {
+            Payload::Sandbox(SandboxPayload::ReadDirResult { entries }) => Ok(entries
+                .into_iter()
+                .map(|def| {
                     let file_type = match def.file_type.as_str() {
                         "directory" => FileType::Directory,
                         "file" => FileType::File,
                         "symlink" => FileType::Symlink,
                         _ => FileType::Other,
                     };
-                    DirEntry { name: def.name, file_type }
-                }).collect())
-            }
-            _ => Err(SandboxError::Io(std::io::Error::other("unexpected response type"))),
+                    DirEntry {
+                        name: def.name,
+                        file_type,
+                    }
+                })
+                .collect()),
+            _ => Err(SandboxError::Io(std::io::Error::other(
+                "unexpected response type",
+            ))),
         }
     }
 
     async fn metadata(&self, path: &Path) -> SandboxResult<FileMetadata> {
-        let resp = self.request(
-            SandboxOperation::Metadata,
-            SandboxPayload::Metadata {
-                path: path.to_string_lossy().to_string(),
-            },
-        ).await?;
+        let resp = self
+            .request(
+                SandboxOperation::Metadata,
+                SandboxPayload::Metadata {
+                    path: path.to_string_lossy().to_string(),
+                },
+            )
+            .await?;
         match resp.payload {
             Payload::Sandbox(SandboxPayload::MetadataResult { metadata: def }) => {
                 let file_type = match def.file_type.as_str() {
@@ -275,9 +318,15 @@ impl Sandbox for RemoteSandbox {
                     "symlink" => FileType::Symlink,
                     _ => FileType::Other,
                 };
-                Ok(FileMetadata { size: def.size, mtime: def.mtime, file_type })
+                Ok(FileMetadata {
+                    size: def.size,
+                    mtime: def.mtime,
+                    file_type,
+                })
             }
-            _ => Err(SandboxError::Io(std::io::Error::other("unexpected response type"))),
+            _ => Err(SandboxError::Io(std::io::Error::other(
+                "unexpected response type",
+            ))),
         }
     }
 }
@@ -365,7 +414,10 @@ mod tests {
                         if let Message::Text(text) = msg {
                             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
                                 let id = val.get("id");
-                                let method = val.get("method").and_then(|v| v.as_str()).unwrap_or("sandbox.list");
+                                let method = val
+                                    .get("method")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("sandbox.list");
                                 // Respond with a ListResult as a command frame that
                                 // decode_jsonrpc_frame can parse
                                 let payload = if method == "sandbox.list" {
@@ -397,7 +449,7 @@ mod tests {
                                     "method": method,
                                     "params": payload,
                                 });
-                                let _ = write.send(Message::Text(response.to_string().into())).await;
+                                let _ = write.send(Message::Text(response.to_string())).await;
                             }
                         }
                     }
@@ -406,7 +458,7 @@ mod tests {
         });
 
         // Connect RemoteSandbox to our local WS server
-        let url = format!("ws://{}", addr);
+        let url = format!("ws://{addr}");
         let sandbox = RemoteSandbox::connect(&url).await.unwrap();
 
         // Verify kind/name/root_path
@@ -442,7 +494,8 @@ mod tests {
                             if let Message::Text(text) = msg {
                                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
                                     let id = val.get("id");
-                                    let method = val.get("method").and_then(|v| v.as_str()).unwrap_or("");
+                                    let method =
+                                        val.get("method").and_then(|v| v.as_str()).unwrap_or("");
                                     let payload = if method == "sandbox.exec" {
                                         serde_json::json!({
                                             "ExecResult": {
@@ -466,33 +519,38 @@ mod tests {
                                         "method": method,
                                         "params": payload,
                                     });
-                                    let _ = write.send(Message::Text(response.to_string().into())).await;
+                                    let _ = write.send(Message::Text(response.to_string())).await;
                                 }
                             }
                         }
                     }
                 }
             };
-            tokio::time::timeout(Duration::from_secs(5), accept_fut).await.ok();
+            tokio::time::timeout(Duration::from_secs(5), accept_fut)
+                .await
+                .ok();
         });
 
         // Small delay to let the server spin up
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        let url = format!("ws://{}", addr);
+        let url = format!("ws://{addr}");
         let sandbox = RemoteSandbox::connect(&url).await.unwrap();
 
         // Small delay for WS connection setup on both sides
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        let output = sandbox.execute(CommandRequest {
-            program: "echo".into(),
-            args: vec![],
-            env: HashMap::new(),
-            cwd: None,
-            stdin: None,
-            timeout: Duration::from_secs(3),
-        }).await.unwrap();
+        let output = sandbox
+            .execute(CommandRequest {
+                program: "echo".into(),
+                args: vec![],
+                env: HashMap::new(),
+                cwd: None,
+                stdin: None,
+                timeout: Duration::from_secs(3),
+            })
+            .await
+            .unwrap();
 
         assert_eq!(output.exit_code, 0);
         assert_eq!(output.stdout, b"hello from ws");

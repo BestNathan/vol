@@ -121,11 +121,11 @@ impl DomainHandler for ToolHandler {
 mod tests {
     use std::sync::Arc;
 
+    use async_trait::async_trait;
     use vol_llm_agent_protocol::agent_server_protocol::{
         AgentServerMessage, MessageKind, Operation, Payload, ToolOperation, ToolPayload,
     };
     use vol_llm_agent_protocol::DomainHandler;
-    use async_trait::async_trait;
     use vol_llm_tool::ToolResult;
     use vol_llm_tool::ToolResultType;
 

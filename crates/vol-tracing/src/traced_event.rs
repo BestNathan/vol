@@ -28,7 +28,7 @@ impl<T> TracedEvent<T> {
     /// * `trace_id` - The trace identifier for distributed tracing
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use tracing::Span;
     /// use vol_tracing::TracedEvent;
     ///
@@ -66,7 +66,7 @@ impl<T> TracedEvent<T> {
     /// * `trace_id` - The trace identifier to associate with this event
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use tracing::Span;
     /// use vol_tracing::TracedEvent;
     ///
@@ -118,7 +118,7 @@ mod tests {
     fn test_new_creates_traced_event_with_all_fields() {
         let span = Span::current();
         let trace_id = "test-trace-123".to_string();
-        let event = TracedEvent::new(42, span.clone(), trace_id.clone());
+        let event = TracedEvent::new(42, span, trace_id.clone());
 
         assert_eq!(event.trace_id(), &trace_id);
         assert_eq!(*event.value(), 42);
@@ -155,7 +155,7 @@ mod tests {
     fn test_split_returns_all_fields() {
         let span = Span::current();
         let trace_id = "split-test-789".to_string();
-        let event = TracedEvent::new("test-value", span.clone(), trace_id.clone());
+        let event = TracedEvent::new("test-value", span, trace_id.clone());
 
         let (value, parent_span, returned_trace_id) = event.split();
 
@@ -176,7 +176,7 @@ mod tests {
     fn test_clone_preserves_all_fields() {
         let span = Span::current();
         let trace_id = "clone-test-xyz".to_string();
-        let event1 = TracedEvent::new(123, span.clone(), trace_id.clone());
+        let event1 = TracedEvent::new(123, span, trace_id);
         let event2 = event1.clone();
 
         assert_eq!(event1.trace_id(), event2.trace_id());

@@ -1,6 +1,6 @@
 //! Rate limiter plugin for concurrency control.
 
-use crate::react::plugin::*;
+use crate::react::plugin::{AgentPlugin, PluginDecision, PluginId, RunContext};
 use crate::AgentStreamEvent;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -53,7 +53,6 @@ mod tests {
     use super::*;
     use crate::react::{AgentConfig, RunContext};
     use std::sync::Arc;
-    
 
     fn create_test_run_context() -> RunContext {
         let (ctx, _rx) = RunContext::new(

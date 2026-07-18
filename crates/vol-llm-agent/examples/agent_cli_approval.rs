@@ -13,8 +13,8 @@ use async_trait::async_trait;
 use serde_json::json;
 use std::sync::Arc;
 use vol_llm_agent::plugins::CliApprovalChannel;
-use vol_llm_agent::react::hitl::*;
-use vol_llm_agent::react::*;
+use vol_llm_agent::react::hitl::{ApprovalTrigger, HitlConfig, HitlPlugin, TimeoutBehavior};
+use vol_llm_agent::react::{AgentConfig, ReActAgent};
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, LLMProvider, StreamEvent,
     StreamEventData, ToolCall,
@@ -120,7 +120,7 @@ impl ExecutableTool for MockEthVolatilityTool {
         Ok(ToolResult {
             call_id: String::new(),
             success: true,
-            content: format!("ETH IV ({}): {:.1}%", period, iv),
+            content: format!("ETH IV ({period}): {iv:.1}%"),
             error: None,
             data: Some(result),
         })
@@ -293,7 +293,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("═══════════════════════════════════════════════════════════");
     println!("  Running Agent");
     println!("═══════════════════════════════════════════════════════════");
-    println!("Query: {}", query);
+    println!("Query: {query}");
     println!();
 
     // Run agent
@@ -312,7 +312,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Check observability logs for event details.");
         }
         Err(e) => {
-            eprintln!("Agent run failed: {:?}", e);
+            eprintln!("Agent run failed: {e:?}");
         }
     }
 

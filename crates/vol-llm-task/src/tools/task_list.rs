@@ -60,7 +60,7 @@ impl ExecutableTool for TaskList {
         context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         let params: TaskListParams = serde_json::from_value(args.clone()).map_err(|e| {
-            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
+            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {e}"))
         })?;
 
         let status = match params.status.as_deref() {
@@ -71,15 +71,14 @@ impl ExecutableTool for TaskList {
             Some("killed") => Some(TaskStatus::Killed),
             Some(other) => {
                 return Ok(ToolResult::failure(format!(
-                    "Invalid status: {}. Valid values: pending, running, completed, failed, killed",
-                    other
+                    "Invalid status: {other}. Valid values: pending, running, completed, failed, killed"
                 )));
             }
             None => None,
         };
 
         let mut tasks = self.store.list(status).await.map_err(|e| {
-            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to list tasks: {}", e))
+            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to list tasks: {e}"))
         })?;
 
         // Apply assignee filter

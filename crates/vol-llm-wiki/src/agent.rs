@@ -67,7 +67,7 @@ impl WikiAgent {
             },
         };
         let registry = LLMProviderRegistry::from_configs(&[llm_config])
-            .map_err(|e| WikiAgentError::Config(format!("LLM provider error: {}", e)))?;
+            .map_err(|e| WikiAgentError::Config(format!("LLM provider error: {e}")))?;
 
         let llm = registry.get(&config.llm_provider_id).ok_or_else(|| {
             WikiAgentError::Config(format!(
@@ -152,16 +152,15 @@ impl WikiAgent {
                     .message
                     .content
                     .as_ref()
-                    .map(|c| c.as_str())
+                    .map(vol_llm_core::MessageContent::as_str)
                     .unwrap_or("(empty)");
-                format!("[{}] {}", role, content)
+                format!("[{role}] {content}")
             })
             .collect::<Vec<_>>()
             .join("\n\n---\n\n");
 
         let prompt = format!(
-            "以下是需要压缩的对话记录。请分析并更新 wiki 页面。\n\n=== 对话开始 ===\n{}\n=== 对话结束 ===",
-            message_text,
+            "以下是需要压缩的对话记录。请分析并更新 wiki 页面。\n\n=== 对话开始 ===\n{message_text}\n=== 对话结束 ===",
         );
 
         // Create a session for this run
@@ -176,7 +175,7 @@ impl WikiAgent {
             .with_context_builder(self.context_builder.clone())
             .with_plugin_registry(vol_llm_agent::react::PluginRegistry::new())
             .build()
-            .map_err(|e| WikiAgentError::Config(format!("Failed to build agent config: {}", e)))?;
+            .map_err(|e| WikiAgentError::Config(format!("Failed to build agent config: {e}")))?;
 
         let react_agent = ReActAgent::new(agent_config);
 

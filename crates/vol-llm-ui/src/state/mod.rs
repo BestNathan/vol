@@ -289,7 +289,7 @@ impl WorkspaceTreeNode {
                 let child_path = if dir_path == "." || dir_path.is_empty() {
                     name.clone()
                 } else {
-                    format!("{}/{}", dir_path, name)
+                    format!("{dir_path}/{name}")
                 };
                 node.children.push(WorkspaceTreeNode {
                     name,
@@ -401,6 +401,12 @@ pub struct ApprovalState {
     pub reason: Option<String>,
     pub arguments: Option<String>,
     pub response: Option<(bool, Option<String>)>,
+}
+
+impl Default for ApprovalState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ApprovalState {
@@ -1224,6 +1230,7 @@ impl UiState {
     }
 
     /// Apply a UiEvent to mutate state.
+    #[allow(clippy::unwrap_used, clippy::cast_possible_truncation)]
     pub fn apply(&mut self, event: UiEvent) {
         match event {
             UiEvent::AgentStart { input, .. } => {
@@ -1356,8 +1363,7 @@ impl UiState {
             UiEvent::MaxIterationsReached { current, max } => {
                 self.conversation.push(ConversationEntry::Error {
                     message: format!(
-                        "Max iterations reached ({}/{}) — waiting for user decision...",
-                        current, max
+                        "Max iterations reached ({current}/{max}) — waiting for user decision..."
                     ),
                 });
             }
@@ -1365,8 +1371,7 @@ impl UiState {
                 self.iteration = from_iteration;
                 self.conversation.push(ConversationEntry::AgentAnswer {
                     text: format!(
-                        "Continuing from iteration {} (counter reset to 0)",
-                        from_iteration
+                        "Continuing from iteration {from_iteration} (counter reset to 0)"
                     ),
                 });
             }
@@ -1407,6 +1412,7 @@ impl UiState {
         self.tools_scroll = self.tool_calls.len() as u16;
     }
 
+    #[allow(clippy::unwrap_used)]
     fn flush_pending_content(&mut self) {
         if let Some(ConversationEntry::ContentStreaming { content }) = self.conversation.last() {
             let text = content.clone();
@@ -1447,6 +1453,7 @@ impl UiState {
 
 // === Helpers =================================================================
 
+#[allow(clippy::unwrap_used)]
 pub fn format_tool_args(arguments: &str) -> String {
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(arguments) {
         if let Some(obj) = parsed.as_object() {
@@ -1491,7 +1498,7 @@ pub fn truncate_preview(s: &str, max_chars: usize) -> String {
         return s.to_string();
     }
     let truncated: String = s.chars().take(max_chars).collect();
-    format!("{}...", truncated)
+    format!("{truncated}...")
 }
 
 // === DebugState and WsMessage types =========================================
@@ -1526,6 +1533,12 @@ pub enum DebugTab {
     Ws,
 }
 
+impl Default for DebugState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DebugState {
     pub fn new() -> Self {
         Self {
@@ -1543,6 +1556,7 @@ impl DebugState {
         }
     }
 
+    #[allow(clippy::unwrap_used, clippy::cast_possible_truncation)]
     pub fn push_ws(&mut self, direction: WsDirection, method: String, payload: String) {
         if self.start_time.is_none() {
             self.start_time = Some(Instant::now());

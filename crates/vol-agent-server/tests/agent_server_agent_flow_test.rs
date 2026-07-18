@@ -29,7 +29,7 @@ async fn submit_emits_ack_and_result_with_same_message_id() {
             assert_eq!(run_id, "run_supplied_1");
             run_id.clone()
         }
-        other => panic!("expected SubmitAck payload, got {:?}", other),
+        other => panic!("expected SubmitAck payload, got {other:?}"),
     };
 
     match &outputs[1].payload {
@@ -39,7 +39,7 @@ async fn submit_emits_ack_and_result_with_same_message_id() {
         }) => {
             assert_eq!(result_run_id, &run_id);
         }
-        other => panic!("expected SubmitResult payload, got {:?}", other),
+        other => panic!("expected SubmitResult payload, got {other:?}"),
     }
 }
 
@@ -64,6 +64,6 @@ async fn cancel_returns_result_with_cancelled_flag() {
             assert!(!run_id.is_empty());
             assert!(!cancelled);
         }
-        other => panic!("expected CancelResult payload, got {:?}", other),
+        other => panic!("expected CancelResult payload, got {other:?}"),
     }
 }

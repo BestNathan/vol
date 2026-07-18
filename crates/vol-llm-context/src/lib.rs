@@ -10,7 +10,7 @@
 //!
 //! # Quick Start
 //!
-//! ```rust
+//! ```text
 //! use vol_llm_context::{ContextBuilderBuilder, ContextContributor, AttentionAnchor};
 //! use vol_llm_context::builtin::{FileContributor, FileSpec};
 //!

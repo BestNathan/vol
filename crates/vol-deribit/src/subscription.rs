@@ -56,84 +56,84 @@ pub mod index {
 /// Build ticker channel for base currency
 /// e.g., "ticker.BTC"
 pub fn ticker_base(base: &str) -> String {
-    format!("ticker.{}", base)
+    format!("ticker.{base}")
 }
 
 /// Build ticker channel for specific instrument kind
 /// e.g., "ticker.BTC.perpetual"
 pub fn ticker_kind(base: &str, kind: &str) -> String {
-    format!("ticker.{}.{}", base, kind)
+    format!("ticker.{base}.{kind}")
 }
 
 /// Build ticker channel for specific instrument
 /// e.g., "ticker.BTC-PERPETUAL"
 pub fn ticker_instrument(instrument: &str) -> String {
-    format!("ticker.{}", instrument)
+    format!("ticker.{instrument}")
 }
 
 /// Build markprice options channel
 /// e.g., "markprice.options.btc_usd"
 pub fn markprice_options(index: &str) -> String {
-    format!("markprice.options.{}", index)
+    format!("markprice.options.{index}")
 }
 
 /// Build markprice index channel
 /// e.g., "markprice.btc_usd"
 pub fn markprice_index(index: &str) -> String {
-    format!("markprice.{}", index)
+    format!("markprice.{index}")
 }
 
 /// Build order book channel with default depth
 /// e.g., "book.BTC-PERPETUAL"
 pub fn book(instrument: &str) -> String {
-    format!("book.{}", instrument)
+    format!("book.{instrument}")
 }
 
 /// Build order book channel with specific depth
 /// e.g., "book.BTC-PERPETUAL.10"
 pub fn book_depth(instrument: &str, depth: u8) -> String {
-    format!("book.{}.{}", instrument, depth)
+    format!("book.{instrument}.{depth}")
 }
 
 /// Build deribit price index channel
 /// e.g., "deribit_price_index.btc_usd"
 pub fn deribit_price_index(index: &str) -> String {
-    format!("deribit_price_index.{}", index)
+    format!("deribit_price_index.{index}")
 }
 
 /// Build trades channel
 /// e.g., "trades.BTC-PERPETUAL"
 pub fn trades(instrument: &str) -> String {
-    format!("trades.{}", instrument)
+    format!("trades.{instrument}")
 }
 
 /// Build charts channel
 /// e.g., "charts.BTC.1m"
 pub fn charts(base: &str, interval: &str) -> String {
-    format!("charts.{}.{}", base, interval)
+    format!("charts.{base}.{interval}")
 }
 
 /// Build user changes channel (requires auth)
 /// e.g., "user.changes.BTC"
 pub fn user_changes(base: &str) -> String {
-    format!("user.changes.{}", base)
+    format!("user.changes.{base}")
 }
 
 /// Build user portfolio channel (requires auth)
 /// e.g., "user.portfolio.BTC"
 pub fn user_portfolio(base: &str) -> String {
-    format!("user.portfolio.{}", base)
+    format!("user.portfolio.{base}")
 }
 
 /// Build user orders channel (requires auth)
 /// e.g., "user.orders.BTC-PERPETUAL"
 pub fn user_orders(instrument: &str) -> String {
-    format!("user.orders.{}", instrument)
+    format!("user.orders.{instrument}")
 }
 
 /// Common channel presets for volatility monitoring
 pub mod presets {
-    use super::*;
+    use super::{deribit_price_index, index, kind, markprice_options, ticker_base, ticker_kind};
 
     /// Subscribe to options mark prices for BTC and ETH
     /// Returns: ["markprice.options.btc_usd", "markprice.options.eth_usd"]

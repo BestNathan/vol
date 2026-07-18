@@ -37,21 +37,20 @@ impl ToolCallCompressor {
             .message
             .content
             .as_ref()
-            .map(|c| c.as_str())
+            .map(vol_llm_core::MessageContent::as_str)
             .unwrap_or("");
         let result = msg
             .message
             .content
             .as_ref()
-            .map(|c| c.as_str())
+            .map(vol_llm_core::MessageContent::as_str)
             .unwrap_or("");
 
         let args_truncated = truncate(args, TOOL_ARGS_MAX);
         let result_truncated = truncate(result, TOOL_RESULT_MAX);
 
         Some(format!(
-            "[{}] {} → {}",
-            tool_name, args_truncated, result_truncated
+            "[{tool_name}] {args_truncated} → {result_truncated}"
         ))
     }
 }

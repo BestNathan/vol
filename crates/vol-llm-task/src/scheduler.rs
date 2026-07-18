@@ -38,7 +38,7 @@ impl TaskScheduler {
             .store
             .get(task_id)
             .await?
-            .ok_or_else(|| crate::store::StoreError::NotFound(format!("Task {}", task_id)))?;
+            .ok_or_else(|| crate::store::StoreError::NotFound(format!("Task {task_id}")))?;
 
         task.status = TaskStatus::Completed;
         task.result = Some(result);
@@ -54,10 +54,10 @@ impl TaskScheduler {
             .store
             .get(task_id)
             .await?
-            .ok_or_else(|| crate::store::StoreError::NotFound(format!("Task {}", task_id)))?;
+            .ok_or_else(|| crate::store::StoreError::NotFound(format!("Task {task_id}")))?;
 
         task.status = TaskStatus::Failed;
-        task.summary = Some(format!("Failed: {}", error));
+        task.summary = Some(format!("Failed: {error}"));
         task.completed_at = Some(std::time::SystemTime::now());
 
         self.store.update(task).await
@@ -69,7 +69,7 @@ impl TaskScheduler {
             .store
             .get(task_id)
             .await?
-            .ok_or_else(|| crate::store::StoreError::NotFound(format!("Task {}", task_id)))?;
+            .ok_or_else(|| crate::store::StoreError::NotFound(format!("Task {task_id}")))?;
 
         task.status = TaskStatus::Killed;
         task.completed_at = Some(std::time::SystemTime::now());

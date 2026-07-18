@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 5. Demonstrate search only
     println!("\n5. Testing vector search:");
     let query = "Delta 是什么？";
-    println!("   Query: {}", query);
+    println!("   Query: {query}");
 
     // Use dummy embedding for search (in real usage, embedder.embed(query).await)
     let dummy_query_embedding = vec![0.1f32; 1536];

@@ -14,6 +14,7 @@
 
 use vol_agent_server::{app, config::ServerConfig};
 
+#[allow(clippy::expect_used)]
 #[tokio::main]
 async fn main() {
     // --- Parse --config flag ---
@@ -30,7 +31,7 @@ async fn main() {
     // --- Load config ---
     let (config, config_path) = ServerConfig::load_or_default(explicit_config.as_deref())
         .unwrap_or_else(|e| {
-            eprintln!("Config error: {}", e);
+            eprintln!("Config error: {e}");
             std::process::exit(1);
         });
 

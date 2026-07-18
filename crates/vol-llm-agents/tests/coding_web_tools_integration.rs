@@ -98,10 +98,10 @@ async fn test_coding_agent_uses_web_fetch_for_deribit_docs() {
         .iter()
         .filter_map(|e| match e {
             AgentStreamEvent::ToolCallBegin { tool_name, .. } => {
-                Some(format!("Called: {}", tool_name))
+                Some(format!("Called: {tool_name}"))
             }
             AgentStreamEvent::ToolCallComplete { tool_name, .. } => {
-                Some(format!("Completed: {}", tool_name))
+                Some(format!("Completed: {tool_name}"))
             }
             _ => None,
         })
@@ -109,8 +109,7 @@ async fn test_coding_agent_uses_web_fetch_for_deribit_docs() {
 
     assert!(
         web_fetch_called,
-        "Agent should have called web_fetch tool. Tool calls made: {:#?}",
-        tool_calls
+        "Agent should have called web_fetch tool. Tool calls made: {tool_calls:#?}"
     );
 
     // Verify the agent's response mentions Deribit or API concepts

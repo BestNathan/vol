@@ -255,18 +255,18 @@ pub struct StateConfig {
 impl Config {
     /// Load configuration from a TOML file
     pub fn load(path: &str) -> Result<Self, vol_core::VolError> {
-        let content = std::fs::read_to_string(path).map_err(|e| {
-            vol_core::VolError::Config(format!("Failed to read config file: {}", e))
-        })?;
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| vol_core::VolError::Config(format!("Failed to read config file: {e}")))?;
 
         toml::from_str(&content)
-            .map_err(|e| vol_core::VolError::Config(format!("Failed to parse config: {}", e)))
+            .map_err(|e| vol_core::VolError::Config(format!("Failed to parse config: {e}")))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn test_symbol_iv_config_parsing() {
@@ -321,6 +321,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_deribit_auth_config_with_env_override() {
         // Set env vars for testing
         std::env::set_var("DERIBIT_CLIENT_ID", "env_client_id");
@@ -344,6 +345,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_deribit_auth_config_fallback_to_file() {
         // Ensure env vars are not set
         std::env::remove_var("DERIBIT_CLIENT_ID");
@@ -363,6 +365,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_deribit_client_config_env_priority() {
         // Set env vars for testing
         std::env::set_var("DERIBIT_CLIENT_ID", "env_client_id");
@@ -390,6 +393,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_deribit_client_config_fallback_to_config() {
         // Ensure env vars are not set
         std::env::remove_var("DERIBIT_CLIENT_ID");
@@ -413,6 +417,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_deribit_client_config_no_auth_section() {
         // Ensure env vars are not set
         std::env::remove_var("DERIBIT_CLIENT_ID");
@@ -430,6 +435,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_deribit_client_config_env_only() {
         // Set env vars for testing
         std::env::set_var("DERIBIT_CLIENT_ID", "env_client_id");

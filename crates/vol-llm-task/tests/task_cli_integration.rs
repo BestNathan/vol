@@ -44,7 +44,7 @@ async fn test_full_agent_session_with_cli_tool() {
 
     // Turn 3: Agent quick-creates two more tasks
     for name in &["Write tests", "Update docs"] {
-        let r = run(&tool, &ctx, &format!("+task --name '{}'", name))
+        let r = run(&tool, &ctx, &format!("+task --name '{name}'"))
             .await
             .unwrap();
         println!("[T3 +task] {}", r.content);
@@ -229,9 +229,9 @@ async fn test_scheme_all_subcommands() {
     for sub in &[
         "create", "update", "get", "list", "stop", "output", "claim", "+task", "+done", "+claim",
     ] {
-        let r = run(&tool, &ctx, &format!("scheme {}", sub)).await.unwrap();
+        let r = run(&tool, &ctx, &format!("scheme {sub}")).await.unwrap();
         assert!(r.success, "scheme {} failed: {}", sub, r.content);
-        assert!(!r.content.is_empty(), "scheme {} returned empty", sub);
+        assert!(!r.content.is_empty(), "scheme {sub} returned empty");
     }
 
     // scheme without args lists all subcommands

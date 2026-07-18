@@ -39,16 +39,15 @@ pub fn build_user_prompt(
     format!(
         r#"请分析以下预警：
 
-预警类型：{}
-标的：{}
-当前 IV: {:.4}
-阈值：{:.4}
+预警类型：{alert_type}
+标的：{symbol}
+当前 IV: {iv:.4}
+阈值：{threshold:.4}
 
 历史数据：
-{}
+{history_summary}
 
-请根据上述信息提供风险评估和操作建议。"#,
-        alert_type, symbol, iv, threshold, history_summary
+请根据上述信息提供风险评估和操作建议。"#
     )
 }
 

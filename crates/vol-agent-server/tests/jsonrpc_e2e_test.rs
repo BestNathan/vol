@@ -397,16 +397,16 @@ async fn test_e2e_all_methods() {
         let resp = handle(command(id, op, payload)).await;
         assert!(
             resp.is_err(),
-            "mcp {} should fail without MCP manager, got {:?}",
-            id,
-            resp
+            "mcp {id} should fail without MCP manager, got {resp:?}"
         );
     }
 
     // ── 23. system.connected ──
     let resp = handle(command(
         "23",
-        Operation::System(vol_llm_agent_protocol::agent_server_protocol::SystemOperation::Connected),
+        Operation::System(
+            vol_llm_agent_protocol::agent_server_protocol::SystemOperation::Connected,
+        ),
         Payload::System(vol_llm_agent_protocol::agent_server_protocol::SystemPayload::Empty),
     ))
     .await

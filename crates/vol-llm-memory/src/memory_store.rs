@@ -51,12 +51,9 @@ impl MemoryStore for InMemoryStore {
                 entry.insert(item);
                 Ok(())
             }
-            std::collections::hash_map::Entry::Vacant(_) => {
-                Err(MemoryError::NotFound(format!(
-                    "Memory item with id '{}' not found",
-                    id
-                )))
-            }
+            std::collections::hash_map::Entry::Vacant(_) => Err(MemoryError::NotFound(format!(
+                "Memory item with id '{id}' not found"
+            ))),
         }
     }
 

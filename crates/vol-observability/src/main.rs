@@ -7,6 +7,7 @@ use vol_observability::ingest::{build_router, AppState};
 use vol_observability::loki_writer::spawn_loki_writer;
 use vol_observability::tdengine_writer::spawn_tdengine_writer;
 
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -91,7 +92,7 @@ fn parse_tdengine_dsn_to_http(dsn: &str) -> String {
         } else {
             native_port + 11
         };
-        format!("http://{}:{}", host, rest_port)
+        format!("http://{host}:{rest_port}")
     } else {
         // Default: localhost REST port
         "http://localhost:6041".to_string()

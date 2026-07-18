@@ -53,7 +53,7 @@ async fn test_coding_agent_develops_deribit_ws_client() {
     let proxy_info = std::env::var("HTTPS_PROXY")
         .or_else(|_| std::env::var("https_proxy"))
         .unwrap_or_else(|_| "not set".to_string());
-    eprintln!("Using proxy: {}", proxy_info);
+    eprintln!("Using proxy: {proxy_info}");
     eprintln!("Working directory: {}", project_dir.display());
 
     let config = CodingAgentConfig {
@@ -112,15 +112,15 @@ async fn test_coding_agent_develops_deribit_ws_client() {
         .iter()
         .filter_map(|e| match e {
             AgentStreamEvent::ToolCallBegin { tool_name, .. } => {
-                Some(format!("Called: {}", tool_name))
+                Some(format!("Called: {tool_name}"))
             }
             AgentStreamEvent::ToolCallComplete { tool_name, .. } => {
-                Some(format!("Completed: {}", tool_name))
+                Some(format!("Completed: {tool_name}"))
             }
             _ => None,
         })
         .collect();
-    eprintln!("Tool calls made: {:#?}", tool_calls);
+    eprintln!("Tool calls made: {tool_calls:#?}");
 
     // === Main assertions ===
 
@@ -133,15 +133,15 @@ async fn test_coding_agent_develops_deribit_ws_client() {
         matches!(e, AgentStreamEvent::ToolCallComplete { tool_name, result, .. }
             if tool_name == "write_file" && result.contains("main.rs"))
     });
-    eprintln!("Cargo.toml created: {}", cargo_created);
-    eprintln!("src/main.rs created: {}", main_created);
+    eprintln!("Cargo.toml created: {cargo_created}");
+    eprintln!("src/main.rs created: {main_created}");
 
     // Check if research tools were called (nice to have, not required)
     let research_called = events.iter().any(|e| {
         matches!(e, AgentStreamEvent::ToolCallBegin { tool_name, .. }
             if tool_name == "web_fetch" || tool_name == "web_search")
     });
-    eprintln!("Research tools called: {}", research_called);
+    eprintln!("Research tools called: {research_called}");
 
     // 3. Agent should have completed, hit max iterations, or timed out on a tool call
     // (all acceptable for a long task where files were created)
@@ -149,14 +149,13 @@ async fn test_coding_agent_develops_deribit_ws_client() {
     let hit_max_iterations = result
         .as_ref()
         .err()
-        .map(|e| format!("{:?}", e).contains("MaxIterationsReached"))
+        .map(|e| format!("{e:?}").contains("MaxIterationsReached"))
         .unwrap_or(false);
     let tool_timeout = result
         .as_ref()
         .err()
         .map(|e| {
-            format!("{:?}", e).contains("timed out")
-                || format!("{:?}", e).contains("Execution failed")
+            format!("{e:?}").contains("timed out") || format!("{e:?}").contains("Execution failed")
         })
         .unwrap_or(false);
 
@@ -171,10 +170,7 @@ async fn test_coding_agent_develops_deribit_ws_client() {
     } else if tool_timeout {
         eprintln!("Agent hit a tool timeout (acceptable if files were created)");
     } else {
-        panic!(
-            "Agent should complete or hit max iterations/timeout: {:?}",
-            result
-        );
+        panic!("Agent should complete or hit max iterations/timeout: {result:?}");
     }
 
     // Check if the agent created the project structure
@@ -258,11 +254,11 @@ async fn test_coding_agent_develops_deribit_ws_client() {
                 eprintln!("Build succeeded after auto-fix!");
             } else {
                 let stderr2 = String::from_utf8_lossy(&rebuild.stderr);
-                eprintln!("Build still failed after auto-fix:\n{}", stderr2);
+                eprintln!("Build still failed after auto-fix:\n{stderr2}");
                 eprintln!("Note: Build failure does not invalidate the test — the agent successfully created files.");
             }
         } else {
-            eprintln!("No auto-fix applicable for this error.\n{}", stderr);
+            eprintln!("No auto-fix applicable for this error.\n{stderr}");
             eprintln!("Note: Build failure does not invalidate the test — the agent successfully created files.");
         }
     }
@@ -289,7 +285,7 @@ async fn test_coding_agent_develops_deribit_ws_client() {
     while Instant::now() < deadline {
         match child.try_wait() {
             Ok(Some(status)) => {
-                eprintln!("Client exited with status: {}", status);
+                eprintln!("Client exited with status: {status}");
                 break;
             }
             Ok(None) => {
@@ -298,7 +294,7 @@ async fn test_coding_agent_develops_deribit_ws_client() {
                 received_data = true;
             }
             Err(e) => {
-                eprintln!("Error checking child: {}", e);
+                eprintln!("Error checking child: {e}");
                 break;
             }
         }
@@ -312,7 +308,7 @@ async fn test_coding_agent_develops_deribit_ws_client() {
         "Client ran for {:.1} seconds",
         start.elapsed().as_secs_f64()
     );
-    eprintln!("Received data: {}", received_data);
+    eprintln!("Received data: {received_data}");
 }
 
 /// Run the agent-created client and collect output for 15 seconds.
@@ -375,8 +371,8 @@ async fn test_verify_deribit_ws_client_output() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    eprintln!("=== Client stdout ===\n{}", stdout);
-    eprintln!("=== Client stderr ===\n{}", stderr);
+    eprintln!("=== Client stdout ===\n{stdout}");
+    eprintln!("=== Client stderr ===\n{stderr}");
 
     // Verify it received some data (should have subscription confirmation)
     let received_subscription = stdout.contains("markprice")
@@ -433,7 +429,7 @@ pub fn generate_test_report(
             report.push_str(&format!("- 摘要: {}\n\n", r.summary));
         }
         Err(e) => {
-            report.push_str(&format!("- 错误: {}\n\n", e));
+            report.push_str(&format!("- 错误: {e}\n\n"));
         }
     }
 
@@ -454,30 +450,30 @@ pub fn generate_test_report(
     let write_calls: usize = events.iter().filter(|e| {
         matches!(e, AgentStreamEvent::ToolCallBegin { tool_name, .. } if tool_name == "write_file")
     }).count();
-    report.push_str(&format!("- write_file: {} 次\n", write_calls));
+    report.push_str(&format!("- write_file: {write_calls} 次\n"));
 
     let bash_calls: usize = events.iter().filter(|e| {
         matches!(e, AgentStreamEvent::ToolCallBegin { tool_name, .. } if tool_name == "bash")
     }).count();
-    report.push_str(&format!("- bash: {} 次\n\n", bash_calls));
+    report.push_str(&format!("- bash: {bash_calls} 次\n\n"));
 
     // Build results
     if let Some(output) = build_output {
         report.push_str("## 编译结果\n\n");
-        report.push_str(&format!("```\n{}\n```\n\n", output));
+        report.push_str(&format!("```\n{output}\n```\n\n"));
     }
 
     // Client output
     if let Some(output) = client_output {
         report.push_str("## 客户端运行输出\n\n");
-        report.push_str(&format!("```\n{}\n```\n\n", output));
+        report.push_str(&format!("```\n{output}\n```\n\n"));
     }
 
     // Session events (raw)
     report.push_str("## Session 事件日志\n\n");
     report.push_str("```\n");
     for event in events {
-        report.push_str(&format!("{:?}\n", event));
+        report.push_str(&format!("{event:?}\n"));
     }
     report.push_str("```\n");
 

@@ -71,8 +71,7 @@ impl HTMLReporter {
             self.task_description
         ));
         html.push_str(&format!(
-            "<p><strong>Iterations:</strong> {} | <strong>Tool Calls:</strong> {}</p>\n",
-            iteration_count, tool_call_count
+            "<p><strong>Iterations:</strong> {iteration_count} | <strong>Tool Calls:</strong> {tool_call_count}</p>\n"
         ));
         html.push_str("</div>\n");
         html.push_str("<h2>Timeline</h2>\n<ul class=\"timeline\">\n");
@@ -80,47 +79,47 @@ impl HTMLReporter {
         for event in &events {
             let (class, detail) = match event {
                 AgentStreamEvent::AgentStart { input, .. } => {
-                    ("", format!("Agent started: {}", input))
+                    ("", format!("Agent started: {input}"))
                 }
                 AgentStreamEvent::LLMCallStart { iteration, .. } => {
-                    ("", format!("LLM call start (iteration {})", iteration))
+                    ("", format!("LLM call start (iteration {iteration})"))
                 }
                 AgentStreamEvent::LLMCallComplete { model, usage, .. } => (
                     "",
-                    format!("LLM call complete: {} (usage: {:?})", model, usage),
+                    format!("LLM call complete: {model} (usage: {usage:?})"),
                 ),
                 AgentStreamEvent::LLMCallError { error, .. } => {
-                    ("error", format!("LLM call error: {}", error))
+                    ("error", format!("LLM call error: {error}"))
                 }
                 AgentStreamEvent::ThinkingStart { .. } => {
                     ("thinking", "Thinking started".to_string())
                 }
                 AgentStreamEvent::ThinkingDelta { delta, .. } => ("thinking", delta.clone()),
                 AgentStreamEvent::ThinkingComplete { thinking, .. } => {
-                    ("thinking", format!("Thinking:\n{}", thinking))
+                    ("thinking", format!("Thinking:\n{thinking}"))
                 }
                 AgentStreamEvent::ContentStart { .. } => ("", "Content started".to_string()),
                 AgentStreamEvent::ContentDelta { delta, .. } => ("", delta.clone()),
                 AgentStreamEvent::ContentComplete { content, .. } => {
-                    ("", format!("Content complete: {}", content))
+                    ("", format!("Content complete: {content}"))
                 }
                 AgentStreamEvent::ToolCallBegin {
                     tool_name,
                     arguments,
                     ..
-                } => ("tool", format!("→ {}({})\n", tool_name, arguments)),
+                } => ("tool", format!("→ {tool_name}({arguments})\n")),
                 AgentStreamEvent::ToolCallComplete {
                     tool_name, result, ..
-                } => ("tool", format!("← {} result:\n{}", tool_name, result)),
+                } => ("tool", format!("← {tool_name} result:\n{result}")),
                 AgentStreamEvent::ToolCallError {
                     tool_name, error, ..
-                } => ("error", format!("Tool {} error: {}", tool_name, error)),
+                } => ("error", format!("Tool {tool_name} error: {error}")),
                 AgentStreamEvent::ToolCallSkipped {
                     tool_name, reason, ..
-                } => ("", format!("Tool {} skipped: {}", tool_name, reason)),
+                } => ("", format!("Tool {tool_name} skipped: {reason}")),
                 AgentStreamEvent::ToolCallArgumentDelta {
                     tool_name, delta, ..
-                } => ("tool", format!("→ {} argument delta: {}", tool_name, delta)),
+                } => ("tool", format!("→ {tool_name} argument delta: {delta}")),
                 AgentStreamEvent::IterationComplete {
                     iteration,
                     tool_calls,
@@ -137,7 +136,7 @@ impl HTMLReporter {
                             "".to_string()
                         },
                         if let Some(answer) = final_answer {
-                            format!("\nAnswer: {}", answer)
+                            format!("\nAnswer: {answer}")
                         } else {
                             "".to_string()
                         }
@@ -147,7 +146,7 @@ impl HTMLReporter {
                     ("complete", "Agent completed".to_string())
                 }
                 AgentStreamEvent::AgentAborted { reason, .. } => {
-                    ("complete", format!("Agent aborted: {}", reason))
+                    ("complete", format!("Agent aborted: {reason}"))
                 }
                 AgentStreamEvent::MaxIterationsReached {
                     current_iteration,
@@ -156,23 +155,21 @@ impl HTMLReporter {
                 } => (
                     "error",
                     format!(
-                        "Max iterations reached ({}/{}) — waiting for user decision",
-                        current_iteration, max_iterations
+                        "Max iterations reached ({current_iteration}/{max_iterations}) — waiting for user decision"
                     ),
                 ),
                 AgentStreamEvent::IterationContinued { from_iteration, .. } => (
                     "",
                     format!(
-                        "Continuing from iteration {} (counter reset to 0)",
-                        from_iteration
+                        "Continuing from iteration {from_iteration} (counter reset to 0)"
                     ),
                 ),
                 AgentStreamEvent::PluginEvent { name, data, .. } => {
-                    ("", format!("Plugin event: {} = {:?}", name, data))
+                    ("", format!("Plugin event: {name} = {data:?}"))
                 }
             };
 
-            html.push_str(&format!("  <li class=\"timeline-item {}\">\n", class));
+            html.push_str(&format!("  <li class=\"timeline-item {class}\">\n"));
             html.push_str(&format!(
                 "    <span class=\"event-type\">{}</span>\n",
                 Self::event_name(event)
@@ -189,13 +186,13 @@ impl HTMLReporter {
         // Ensure parent directory exists
         if let Some(parent) = self.output_path.parent() {
             tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                ObserverError::ReportFailed(format!("Failed to create directory: {}", e))
+                ObserverError::ReportFailed(format!("Failed to create directory: {e}"))
             })?;
         }
 
         tokio::fs::write(&self.output_path, &html)
             .await
-            .map_err(|e| ObserverError::ReportFailed(format!("Failed to write report: {}", e)))?;
+            .map_err(|e| ObserverError::ReportFailed(format!("Failed to write report: {e}")))?;
 
         Ok(())
     }

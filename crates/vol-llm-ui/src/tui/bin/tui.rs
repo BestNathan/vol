@@ -21,6 +21,7 @@ use vol_llm_ui::AgentConnection;
 use vol_llm_ui::LocalConnection;
 
 #[tokio::main]
+#[allow(clippy::expect_used)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Verify API key
     let _api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").expect("ANTHROPIC_AUTH_TOKEN must be set");
@@ -116,7 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         Err(e) => {
                                             let mut s = state_clone.write().await;
                                             s.is_running = false;
-                                            s.last_error = Some(format!("{}", e));
+                                            s.last_error = Some(format!("{e}"));
                                             drop(s);
                                             let _ = render_tx.try_send(());
                                         }

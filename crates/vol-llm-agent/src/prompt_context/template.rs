@@ -3,6 +3,7 @@
 use once_cell::sync::Lazy;
 
 /// Compiled regex pattern for parsing injection points (static, initialized once).
+#[allow(clippy::unwrap_used)]
 static INJECTION_RE: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"\{(\w+)\}").unwrap());
 
 /// A prompt template - a user-defined template with named injection points.
@@ -26,7 +27,7 @@ impl PromptTemplate {
     /// * `content` - Template content with optional `{name}` placeholders
     ///
     /// # Example
-    /// ```
+    /// ```text
     /// use vol_llm_agent::prompt_context::PromptTemplate;
     ///
     /// let template = PromptTemplate::new(
@@ -180,7 +181,7 @@ mod tests {
     #[test]
     fn test_prompt_template_debug() {
         let template = PromptTemplate::new("test", "content {x}");
-        let debug = format!("{:?}", template);
+        let debug = format!("{template:?}");
 
         assert!(debug.contains("PromptTemplate"));
         assert!(debug.contains("test"));

@@ -2,8 +2,12 @@
 name = "vol-engine"
 version.workspace = true
 edition.workspace = true
+
 authors.workspace = true
 license.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
 tokio = { workspace = true }

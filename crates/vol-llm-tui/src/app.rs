@@ -1,6 +1,7 @@
 //! Shared application state mutated by agent events and read by render loop.
 
 use ratatui_textarea::TextArea;
+use std::cmp::Reverse;
 use std::collections::HashSet;
 use std::time::Instant;
 
@@ -216,8 +217,7 @@ impl LogViewer {
             });
         }
 
-        self.run_logs
-            .sort_by(|a, b| b.event_count.cmp(&a.event_count));
+        self.run_logs.sort_by_key(|a| Reverse(a.event_count));
     }
 
     pub fn load_run(&mut self, run_id: &str) {
@@ -230,7 +230,7 @@ impl LogViewer {
         let base = std::path::PathBuf::from(home)
             .join(".vol-coding")
             .join(project_name.as_ref());
-        let log_path = base.join("logs").join(format!("{}.jsonl", run_id));
+        let log_path = base.join("logs").join(format!("{run_id}.jsonl"));
 
         let content = match std::fs::read_to_string(&log_path) {
             Ok(c) => c,
@@ -360,7 +360,10 @@ fn scan_workspace(root: &str) -> WorkspaceTree {
         let Ok(read_dir) = std::fs::read_dir(dir) else {
             return;
         };
-        let mut paths: Vec<_> = read_dir.filter_map(|e| e.ok()).map(|e| e.path()).collect();
+        let mut paths: Vec<_> = read_dir
+            .filter_map(std::result::Result::ok)
+            .map(|e| e.path())
+            .collect();
         paths.sort();
 
         for path in paths {

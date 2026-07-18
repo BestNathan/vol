@@ -9,6 +9,7 @@ use vol_core::{Alert, AlertAction, AlertHandler, AlertType, Result, VolatilityDa
 pub struct RateChangeHandler {
     config: RateOfChangeConfig,
     // Rolling buffers per symbol: stores (timestamp, iv) pairs
+    #[allow(clippy::type_complexity)]
     buffers: Arc<Mutex<std::collections::HashMap<String, VecDeque<(u64, f64)>>>>,
 }
 
@@ -93,7 +94,7 @@ impl AlertHandler for RateChangeHandler {
                     data.moneyness(),
                     data.extra
                         .get("mark_price_coin")
-                        .and_then(|v| v.as_f64())
+                        .and_then(serde_json::Value::as_f64)
                         .unwrap_or(0.0),
                     String::new(), // trace_id - set by engine layer
                 ));
@@ -126,7 +127,7 @@ impl AlertHandler for RateChangeHandler {
                     data.moneyness(),
                     data.extra
                         .get("mark_price_coin")
-                        .and_then(|v| v.as_f64())
+                        .and_then(serde_json::Value::as_f64)
                         .unwrap_or(0.0),
                     String::new(), // trace_id - set by engine layer
                 ));
@@ -159,7 +160,7 @@ impl AlertHandler for RateChangeHandler {
                     data.moneyness(),
                     data.extra
                         .get("mark_price_coin")
-                        .and_then(|v| v.as_f64())
+                        .and_then(serde_json::Value::as_f64)
                         .unwrap_or(0.0),
                     String::new(), // trace_id - set by engine layer
                 ));

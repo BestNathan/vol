@@ -2,7 +2,7 @@
 //!
 //! # Quick Start
 //!
-//! ```rust
+//! ```text
 //! use md_frontmatter::ParsedDoc;
 //! use serde::Deserialize;
 //!

@@ -82,7 +82,7 @@ impl AgentTool {
     /// Format an error response with available agent types.
     async fn format_type_not_found(&self, r#type: &str) -> String {
         let metadata = self.loader.list_metadata().await;
-        let mut output = format!("Agent type '{}' not found.\n\n", r#type);
+        let mut output = format!("Agent type '{type}' not found.\n\n");
         if metadata.is_empty() {
             output.push_str(
                 "No agents are defined. Create .md files in .agents/agents/ to define custom agents.",
@@ -138,9 +138,8 @@ impl ExecutableTool for AgentTool {
         args: &serde_json::Value,
         _context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
-        let params: AgentToolParams = serde_json::from_value(args.clone()).map_err(|e| {
-            ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
-        })?;
+        let params: AgentToolParams = serde_json::from_value(args.clone())
+            .map_err(|e| ToolError::InvalidArguments(format!("Failed to parse arguments: {e}")))?;
 
         // Depth check
         if self.agent_path.depth() >= self.max_depth as usize {
@@ -157,7 +156,12 @@ impl ExecutableTool for AgentTool {
             return Err(ToolError::ExecutionFailed(error_msg));
         }
 
-        let def = agents[0].clone();
+        let def = agents
+            .first()
+            .ok_or_else(|| {
+                ToolError::ExecutionFailed(format!("No agent found for type '{}'", params.r#type))
+            })?
+            .clone();
 
         // Build system prompt
         let system_prompt = if def.prompt.trim().is_empty() {
@@ -179,7 +183,7 @@ impl ExecutableTool for AgentTool {
             .with_plugin_registry(PluginRegistry::new())
             .build()
             .map_err(|e| {
-                ToolError::ExecutionFailed(format!("Failed to build agent config: {}", e))
+                ToolError::ExecutionFailed(format!("Failed to build agent config: {e}"))
             })?;
 
         let sub_agent = crate::react::ReActAgent::new(agent_config);
@@ -187,7 +191,7 @@ impl ExecutableTool for AgentTool {
         let response = sub_agent
             .run(&params.prompt)
             .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Sub-agent failed: {}", e)))?;
+            .map_err(|e| ToolError::ExecutionFailed(format!("Sub-agent failed: {e}")))?;
 
         Ok(ToolResult::success(response.content))
     }

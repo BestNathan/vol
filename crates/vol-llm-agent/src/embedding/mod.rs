@@ -6,7 +6,7 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
+//! ```text,no_run
 //! use vol_llm_agent::embedding::{Embedder, DashScopeEmbedder};
 //!
 //! #[tokio::main]

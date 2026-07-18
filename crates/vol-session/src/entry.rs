@@ -83,10 +83,14 @@ impl SessionEntry {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             session_id,
-            created_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64,
+            created_at: {
+                #[allow(clippy::unwrap_used)]
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64;
+                ts
+            },
             parent_id: None,
             r#type: SessionEntryType::Checkpoint,
             data: SessionEntryData::Checkpoint { reason, note },
@@ -98,10 +102,14 @@ impl SessionEntry {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             session_id,
-            created_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64,
+            created_at: {
+                #[allow(clippy::unwrap_used)]
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64;
+                ts
+            },
             parent_id: None,
             r#type: SessionEntryType::Summary,
             data: SessionEntryData::Summary { summary },

@@ -73,6 +73,18 @@ impl std::fmt::Debug for ToolContext {
 }
 
 impl ToolContext {
+    /// Create a permissive ToolContext for testing — sandbox rooted at `/`
+    /// so that absolute paths from `tempfile` are accepted.
+    pub fn for_test() -> Self {
+        Self {
+            messages: Vec::new(),
+            sandbox: Arc::new(vol_llm_sandbox::local::LocalSandbox::new(Some(
+                std::path::PathBuf::from("/"),
+            ))),
+            agent_def: None,
+        }
+    }
+
     /// Set the sandbox for this tool context
     pub fn with_sandbox(mut self, sandbox: SandboxRef) -> Self {
         self.sandbox = sandbox;
@@ -195,17 +207,14 @@ impl<T: ?Sized + ExecutableTool + Send + Sync> Tool for T {
             serde_json::from_str(args).map_err(|e| -> Box<dyn Error + Send> {
                 Box::new(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
-                    format!("Invalid JSON: {}", e),
+                    format!("Invalid JSON: {e}"),
                 ))
             })?;
 
         self.execute(&json_args, context)
             .await
             .map_err(|e| -> Box<dyn Error + Send> {
-                Box::new(std::io::Error::other(format!(
-                    "Tool execution failed: {}",
-                    e
-                )))
+                Box::new(std::io::Error::other(format!("Tool execution failed: {e}")))
             })
     }
 }

@@ -61,7 +61,7 @@ impl std::fmt::Display for AlertType {
             AlertType::PortfolioBalance { .. } => write!(f, "portfolio_balance"),
             AlertType::PortfolioDelta { .. } => write!(f, "portfolio_delta"),
             AlertType::PortfolioPnL { .. } => write!(f, "portfolio_pnl"),
-            AlertType::PortfolioGreek { greek, .. } => write!(f, "portfolio_greek_{}", greek),
+            AlertType::PortfolioGreek { greek, .. } => write!(f, "portfolio_greek_{greek}"),
         }
     }
 }

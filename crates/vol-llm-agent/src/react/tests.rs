@@ -501,7 +501,7 @@ async fn test_listener_set_drains_and_exits_cleanly() {
                     content.chars().take(10).collect::<String>()
                 ),
                 AgentStreamEvent::AgentComplete { .. } => "agent_complete".to_string(),
-                _ => format!("{:?}", event),
+                _ => format!("{event:?}"),
             };
             self.events.lock().unwrap().push(desc);
         }
@@ -568,14 +568,12 @@ async fn test_listener_set_drains_and_exits_cleanly() {
     assert_eq!(
         e1.len(),
         4,
-        "Listener 1 should have processed all 4 events, got: {:?}",
-        e1
+        "Listener 1 should have processed all 4 events, got: {e1:?}"
     );
     assert_eq!(
         e2.len(),
         4,
-        "Listener 2 should have processed all 4 events, got: {:?}",
-        e2
+        "Listener 2 should have processed all 4 events, got: {e2:?}"
     );
 
     // Verify event order

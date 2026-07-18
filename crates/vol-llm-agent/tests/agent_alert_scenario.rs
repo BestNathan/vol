@@ -37,7 +37,7 @@ fn write_json_to_file(path: &str, data: &Value, section: &str) {
     )
     .expect("Failed to write to log file");
 
-    writeln!(file, "{}", formatted).expect("Failed to write to log file");
+    writeln!(file, "{formatted}").expect("Failed to write to log file");
 }
 
 /// Write text to file
@@ -58,7 +58,7 @@ fn write_text_to_file(path: &str, content: &str, section: &str) {
     )
     .expect("Failed to write to log file");
 
-    writeln!(file, "{}", content).expect("Failed to write to log file");
+    writeln!(file, "{content}").expect("Failed to write to log file");
 }
 
 /// Alert scenario data structure
@@ -178,7 +178,7 @@ impl LLMClient for AlertScenarioMock {
             "messages": request.messages.iter().map(|m| {
                 json!({
                     "role": format!("{:?}", m.role),
-                    "content": m.content.as_ref().map(|c| c.as_str()),
+                    "content": m.content.as_ref().map(vol_llm_core::MessageContent::as_str),
                     "tool_calls": m.tool_calls.as_ref().map(|calls| {
                         calls.iter().map(|c| json!({
                             "id": c.id,
@@ -258,7 +258,7 @@ impl LLMClient for AlertScenarioMock {
                 "messages": request.messages.iter().map(|m| {
                     json!({
                         "role": format!("{:?}", m.role),
-                        "content": m.content.as_ref().map(|c| c.as_str()),
+                        "content": m.content.as_ref().map(vol_llm_core::MessageContent::as_str),
                         "tool_calls": m.tool_calls.as_ref().map(|calls| {
                             calls.iter().map(|c| json!({
                                 "id": c.id,
@@ -301,7 +301,7 @@ impl LLMClient for AlertScenarioMock {
                             "total_tokens": resp.usage.total_tokens
                         },
                         "message": {
-                            "content": resp.message.content.as_ref().map(|c| c.as_str()),
+                            "content": resp.message.content.as_ref().map(vol_llm_core::MessageContent::as_str),
                             "tool_calls": resp.message.tool_calls.as_ref().map(|calls| {
                                 calls.iter().map(|c| json!({
                                     "id": c.id,
@@ -391,7 +391,7 @@ impl LLMClient for AlertScenarioMock {
                         "total_tokens": resp.usage.total_tokens
                     },
                     "message": {
-                        "content": resp.message.content.as_ref().map(|c| c.as_str()),
+                        "content": resp.message.content.as_ref().map(vol_llm_core::MessageContent::as_str),
                         "tool_calls": resp.message.tool_calls.as_ref().map(|calls| {
                             calls.iter().map(|c| json!({
                                 "id": c.id,
@@ -536,7 +536,7 @@ async fn test_agent_alert_scenario() {
             // The mock LLM is designed to return content on first call, so we expect 1 iteration
             let iterations = 1u32; // Mock returns content directly
 
-            output_log.push_str(&format!("Iterations: {}\n", iterations));
+            output_log.push_str(&format!("Iterations: {iterations}\n"));
             output_log.push_str("Tool calls: 1\n");
 
             output_log.push_str("\n=== Verification ===\n");
@@ -553,8 +553,8 @@ async fn test_agent_alert_scenario() {
             write_json_to_file(scenario_log_path, &final_output_json, "FINAL AGENT OUTPUT");
         }
         Err(e) => {
-            output_log.push_str(&format!("Status: Failed\nError: {:?}\n", e));
-            eprintln!("✗ Agent error: {:?}", e);
+            output_log.push_str(&format!("Status: Failed\nError: {e:?}\n"));
+            eprintln!("✗ Agent error: {e:?}");
 
             let error_json = json!({
                 "status": "Failed",
@@ -562,7 +562,7 @@ async fn test_agent_alert_scenario() {
             });
             write_json_to_file(scenario_log_path, &error_json, "AGENT ERROR");
 
-            panic!("Agent failed: {:?}", e);
+            panic!("Agent failed: {e:?}");
         }
     }
 
@@ -571,9 +571,9 @@ async fn test_agent_alert_scenario() {
     std::fs::write(summary_path, &output_log).expect("Failed to write summary file");
 
     println!("\nOutput Files:");
-    println!("   Scenario Log (JSON): {}", scenario_log_path);
-    println!("   Execution Log: {}", agent_log_path);
-    println!("   Summary: {}", summary_path);
+    println!("   Scenario Log (JSON): {scenario_log_path}");
+    println!("   Execution Log: {agent_log_path}");
+    println!("   Summary: {summary_path}");
     println!("\n{}", "=".repeat(80));
     println!("  INTEGRATION TEST PASSED");
     println!("{}", "=".repeat(80));

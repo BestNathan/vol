@@ -7,9 +7,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use vol_llm_agent::{AgentConfig, ReActAgent};
-use vol_llm_core::{
-    ConversationRequest, ConversationResponse, LLMClient, LLMProvider, ToolCall,
-};
+use vol_llm_core::{ConversationRequest, ConversationResponse, LLMClient, LLMProvider, ToolCall};
 use vol_llm_tdengine::IndexPriceTool;
 
 /// Simple mock LLM that returns a tool call then final answer

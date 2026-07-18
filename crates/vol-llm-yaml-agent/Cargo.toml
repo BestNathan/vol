@@ -3,6 +3,10 @@ name = "vol-llm-yaml-agent"
 version.workspace = true
 edition.workspace = true
 
+
+[lints]
+workspace = true
+
 [dependencies]
 vol-llm-agent = { workspace = true }
 vol-llm-context = { workspace = true }

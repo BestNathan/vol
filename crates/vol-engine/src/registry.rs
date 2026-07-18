@@ -53,7 +53,10 @@ impl RuleRegistry {
     /// Get all rules
     pub async fn get_all_rules(&self) -> Vec<Box<dyn RuleProcessor>> {
         let rules = self.rules.read().await;
-        rules.values().map(|r| r.clone_box_rule()).collect()
+        rules
+            .values()
+            .map(vol_core::RuleProcessor::clone_box_rule)
+            .collect()
     }
 
     /// Hot reload: replace all rules

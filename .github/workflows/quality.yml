@@ -1,0 +1,80 @@
+# Quality gate — runs on pull requests and manual dispatch.
+# Fast feedback loop: fmt → check → clippy → test → boundaries.
+# Uses rust-toolchain.toml (pinned toolchain with rustfmt + clippy components).
+
+name: quality
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  RUSTFLAGS: ""
+
+concurrency:
+  group: quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (from rust-toolchain.toml)
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-workspaces: "."
+          cache-all-crates: "true"
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (workspace, covers check)
+        run: cargo clippy --workspace
+
+      - name: Check no doc tests
+        run: ./scripts/check-no-doc-tests.sh
+
+      - name: Install cargo-nextest (pre-built binary)
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Run all tests (nextest, parallel)
+        run: cargo nextest run --workspace --no-fail-fast
+
+      - name: Check agent boundaries
+        run: ./scripts/check-agent-boundaries.sh
+
+  # ── Coverage (informational, non-blocking) ──────────────────────────
+  coverage:
+    name: coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (from rust-toolchain.toml)
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-workspaces: "."
+          cache-all-crates: "true"
+          components: "llvm-tools-preview"
+
+      - name: Install cargo-llvm-cov (pre-built binary)
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Coverage (core crates only)
+        run: cargo llvm-cov -p vol-agent-server -p vol-llm-agent-protocol -p vol-llm-runtime -p vol-llm-sandbox -p vol-llm-task -p vol-session --summary-only || echo "⚠ Coverage failed (non-blocking)"

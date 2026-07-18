@@ -31,10 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let otel_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:4317".to_string());
     init_otel_logs(&otel_endpoint, "k8s-ops-agent").map_err(|e| {
-        Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            e.to_string(),
-        )) as Box<dyn std::error::Error>
+        Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
     })?;
 
     println!("═══════════════════════════════════════════════════════════");
@@ -51,7 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Configuration:");
     println!("  ✓ ANTHROPIC_AUTH_TOKEN is set");
-    println!("  ✓ OTel endpoint: {}", otel_endpoint);
+    println!("  ✓ OTel endpoint: {otel_endpoint}");
     println!();
 
     // Create LLM config for DashScope Anthropic endpoint
@@ -64,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create Anthropic provider
     let llm = AnthropicProvider::new(&llm_config)
-        .map_err(|e| format!("Failed to create Anthropic provider: {}", e))?;
+        .map_err(|e| format!("Failed to create Anthropic provider: {e}"))?;
 
     println!("  ✓ Anthropic provider initialized (qwen3.6-plus via DashScope)");
     println!();
@@ -132,7 +129,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("═══════════════════════════════════════════════════════════");
     println!("  Running Agent");
     println!("═══════════════════════════════════════════════════════════");
-    println!("Query: {}", query);
+    println!("Query: {query}");
     println!();
 
     let result = agent.run(query).await;
@@ -150,7 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Final answer: {}", response.content);
         }
         Err(e) => {
-            eprintln!("Agent run failed: {:?}", e);
+            eprintln!("Agent run failed: {e:?}");
         }
     }
 

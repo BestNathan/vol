@@ -76,7 +76,7 @@ impl ExecutableTool for TaskOutput {
         _context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         let _params: TaskOutputParams = serde_json::from_value(args.clone()).map_err(|e| {
-            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {}", e))
+            vol_llm_tool::ToolError::InvalidArguments(format!("Failed to parse arguments: {e}"))
         })?;
 
         let task_id_str = args
@@ -89,11 +89,11 @@ impl ExecutableTool for TaskOutput {
             })?;
 
         let task_id: TaskId = task_id_str.parse::<u64>().map(TaskId).map_err(|e| {
-            vol_llm_tool::ToolError::InvalidArguments(format!("Invalid task ID: {}", e))
+            vol_llm_tool::ToolError::InvalidArguments(format!("Invalid task ID: {e}"))
         })?;
 
         let task = self.store.get(&task_id).await.map_err(|e| {
-            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to get task: {}", e))
+            vol_llm_tool::ToolError::ExecutionFailed(format!("Failed to get task: {e}"))
         })?;
 
         let task = match task {
@@ -120,8 +120,7 @@ impl ExecutableTool for TaskOutput {
             Ok(c) => c,
             Err(e) => {
                 return Ok(ToolResult::failure(format!(
-                    "Failed to read output file: {}",
-                    e
+                    "Failed to read output file: {e}"
                 )));
             }
         };
@@ -141,9 +140,9 @@ impl ExecutableTool for TaskOutput {
         Ok(ToolResult {
             success: true,
             content: if truncated {
-                format!("Showing last 2000 of {} lines", total_lines)
+                format!("Showing last 2000 of {total_lines} lines")
             } else {
-                format!("{} lines", total_lines)
+                format!("{total_lines} lines")
             },
             error: None,
             data: Some(serde_json::json!({

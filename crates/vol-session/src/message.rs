@@ -26,10 +26,14 @@ impl SessionMessage {
             session_id,
             message,
             parent_id: None,
-            created_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64,
+            created_at: {
+                #[allow(clippy::unwrap_used)]
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64;
+                ts
+            },
             metadata: HashMap::new(),
         }
     }

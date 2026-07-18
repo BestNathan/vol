@@ -109,6 +109,7 @@ impl RunContext {
     ///
     /// The receiver should be passed to `run_interceptor_loop()` to handle
     /// plugin interception requests.
+    #[allow(clippy::unwrap_used)]
     pub fn new(
         run_id: String,
         user_input: String,
@@ -118,7 +119,11 @@ impl RunContext {
         let event_tx = Arc::new(event_tx);
         let (plugin_event_tx, plugin_event_rx) = mpsc::channel(100);
 
-        let session = config.session.read().unwrap().clone();
+        let session = config
+            .session
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
 
         let ctx = Self {
             run_id,
@@ -186,7 +191,10 @@ impl RunContext {
     /// Automatically sets parent_id to the previous message's ID.
     pub async fn add_message(&self, message: Message) -> Result<(), crate::AgentError> {
         let session_msg = {
-            let mut last_id = self.last_message_id.lock().unwrap();
+            let mut last_id = self
+                .last_message_id
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut msg = SessionMessage::new(self.session.id.clone(), message)
                 .with_metadata(vol_session::RUN_ID_KEY, &self.run_id);
             if let Some(id) = last_id.as_ref() {
@@ -197,9 +205,10 @@ impl RunContext {
             msg
         };
 
-        self.session.add_message(session_msg).await.map_err(|e| {
-            crate::AgentError::SessionError(format!("Failed to save message: {}", e))
-        })?;
+        self.session
+            .add_message(session_msg)
+            .await
+            .map_err(|e| crate::AgentError::SessionError(format!("Failed to save message: {e}")))?;
 
         Ok(())
     }
@@ -209,11 +218,16 @@ impl RunContext {
     /// SessionContributor is a permanent contributor on config.context_builder,
     /// so we clone the builder and build directly.
     pub async fn get_context(&self) -> Result<Vec<Message>, crate::AgentError> {
-        let cb = self.config.context_builder.read().unwrap().clone();
+        let cb = self
+            .config
+            .context_builder
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         let output = cb
             .build()
             .await
-            .map_err(|e| crate::AgentError::Context(format!("Failed to build context: {}", e)))?;
+            .map_err(|e| crate::AgentError::Context(format!("Failed to build context: {e}")))?;
         Ok(output.messages)
     }
 
@@ -269,6 +283,7 @@ impl RunContext {
     /// Used by plugins to emit custom events.
     pub async fn emit(&self, event: AgentStreamEvent) {
         let traced_event = TracedEvent::without_span(event);
+        #[allow(clippy::unwrap_used)]
         let _ = self.event_tx.as_ref().unwrap().send(traced_event);
     }
 
@@ -305,11 +320,11 @@ impl RunContext {
             let allowed: Option<Vec<&str>> = def
                 .tools
                 .as_ref()
-                .map(|t| t.iter().map(|s| s.as_str()).collect());
+                .map(|t| t.iter().map(std::string::String::as_str).collect());
             let disallowed: Option<Vec<&str>> = def
                 .disallowed_tools
                 .as_ref()
-                .map(|t| t.iter().map(|s| s.as_str()).collect());
+                .map(|t| t.iter().map(std::string::String::as_str).collect());
             ToolRegistry::filter(&self.tools, allowed.as_deref(), disallowed.as_deref())
         } else {
             self.tools.clone()
@@ -318,6 +333,7 @@ impl RunContext {
 
     /// Emit a traced event to the event bus (non-blocking, fire-and-forget).
     pub async fn emit_traced(&self, event: TracedEvent<AgentStreamEvent>) {
+        #[allow(clippy::unwrap_used)]
         let _ = self.event_tx.as_ref().unwrap().send(event);
     }
 
@@ -363,10 +379,10 @@ impl RunContext {
                 tx,
             })
             .await
-            .map_err(|e| crate::AgentError::Context(format!("Plugin channel error: {}", e)))?;
+            .map_err(|e| crate::AgentError::Context(format!("Plugin channel error: {e}")))?;
 
         rx.await
-            .map_err(|e| crate::AgentError::Context(format!("Plugin response error: {}", e)))
+            .map_err(|e| crate::AgentError::Context(format!("Plugin response error: {e}")))
     }
 
     /// Record a reasoning step
@@ -573,7 +589,7 @@ mod tests {
         let messages = ctx.get_context().await.unwrap();
 
         // First message should be system message
-        assert!(messages.len() >= 1);
+        assert!(!messages.is_empty());
         assert_eq!(messages[0].role, MessageRole::System);
         assert!(messages[0]
             .content

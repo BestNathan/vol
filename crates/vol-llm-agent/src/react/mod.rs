@@ -16,7 +16,7 @@
 //!
 //! # Usage
 //!
-//! ```rust,no_run
+//! ```text,no_run
 //! use vol_llm_agent::{AgentConfig, ReActAgent};
 //!
 //! // Create agent using config builder

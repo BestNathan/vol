@@ -48,7 +48,10 @@ impl ProviderLoader {
 
     /// Get all provider IDs
     pub fn ids(&self) -> Vec<&str> {
-        self.providers.keys().map(|s| s.as_str()).collect()
+        self.providers
+            .keys()
+            .map(std::string::String::as_str)
+            .collect()
     }
 
     /// Programmatically insert a provider (useful for testing).
@@ -100,7 +103,7 @@ fn load_dir(dir: Option<&Path>) -> HashMap<String, ProviderFileConfig> {
                 let id = path
                     .file_stem()
                     .and_then(|s| s.to_str())
-                    .map(|s| s.to_string());
+                    .map(std::string::ToString::to_string);
                 let Some(id) = id else { continue };
 
                 match std::fs::read_to_string(&path) {

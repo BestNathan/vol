@@ -14,19 +14,24 @@ use tokio::sync::mpsc;
 /// guaranteeing all buffered events are processed before exit.
 ///
 /// Returns a `JoinSet` that tracks all listener tasks for await.
+#[allow(clippy::expect_used)]
 pub fn spawn_listener_tasks(
     plugins: Vec<Arc<dyn AgentPlugin>>,
     ctx: RunContext,
 ) -> tokio::task::JoinSet<()> {
     let mut join_set = tokio::task::JoinSet::new();
     for plugin in plugins {
-        let mut event_rx = ctx.event_tx.as_ref().unwrap().subscribe();
+        let mut event_rx = ctx
+            .event_tx
+            .as_ref()
+            .expect("event_tx should be set")
+            .subscribe();
         let plugin = plugin.clone();
         let ctx = ctx.without_event_senders();
         join_set.spawn(async move {
             while let Ok(traced_event) = event_rx.recv().await {
                 let event = traced_event.value();
-                let _ = std::panic::AssertUnwindSafe(plugin.listen(&event, &ctx))
+                let _ = std::panic::AssertUnwindSafe(plugin.listen(event, &ctx))
                     .catch_unwind()
                     .await;
             }

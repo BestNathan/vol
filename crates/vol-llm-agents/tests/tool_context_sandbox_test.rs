@@ -6,16 +6,18 @@ use vol_llm_tool::ToolContext;
 
 #[test]
 fn test_resolve_path_without_sandbox() {
-    let ctx = ToolContext::default();
+    let ctx = ToolContext::for_test();
     let path = ctx.resolve_path("Cargo.toml").unwrap();
-    assert_eq!(path, std::path::PathBuf::from("Cargo.toml"));
+    // Sandbox always resolves to an absolute path; for_test() roots at "/"
+    assert!(path.is_absolute());
+    assert!(path.ends_with("Cargo.toml"));
 }
 
 #[test]
 fn test_resolve_path_with_sandbox() {
     let dir = tempdir().unwrap();
     let sandbox: SandboxRef = Arc::new(LocalSandbox::new(Some(dir.path().to_path_buf())));
-    let ctx = ToolContext::default().with_sandbox(sandbox);
+    let ctx = ToolContext::for_test().with_sandbox(sandbox);
 
     let path = ctx.resolve_path("src/main.rs").unwrap();
     assert_eq!(path, dir.path().join("src/main.rs"));
@@ -25,7 +27,7 @@ fn test_resolve_path_with_sandbox() {
 fn test_resolve_path_traversal_blocked() {
     let dir = tempdir().unwrap();
     let sandbox: SandboxRef = Arc::new(LocalSandbox::new(Some(dir.path().to_path_buf())));
-    let ctx = ToolContext::default().with_sandbox(sandbox);
+    let ctx = ToolContext::for_test().with_sandbox(sandbox);
 
     let result = ctx.resolve_path("../escape.txt");
     assert!(result.is_err());

@@ -26,6 +26,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 /// Render the full UI to the frame.
+#[allow(clippy::indexing_slicing)]
 pub fn render_ui(frame: &mut Frame, state: &AppState) {
     let area = frame.area();
 
@@ -57,6 +58,7 @@ pub fn render_ui(frame: &mut Frame, state: &AppState) {
     render_session_dialog(frame, area, state);
 }
 
+#[allow(clippy::indexing_slicing)]
 fn render_right_panel(frame: &mut Frame, area: Rect, state: &AppState) {
     // Split into: tab bar (1) + content (flexible) + input area (5 rows)
     let chunks = Layout::default()

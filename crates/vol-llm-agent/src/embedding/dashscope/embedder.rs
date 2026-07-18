@@ -9,7 +9,7 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
+//! ```text,no_run
 //! use vol_llm_agent::embedding::{DashScopeEmbedder, Embedder};
 //!
 //! #[tokio::main]
@@ -35,6 +35,7 @@ pub struct DashScopeEmbedder {
 
 impl DashScopeEmbedder {
     /// Create a new DashScopeEmbedder with API key
+    #[allow(clippy::expect_used)]
     pub fn new(api_key: &str) -> Self {
         Self {
             client: Client::builder()
@@ -46,6 +47,7 @@ impl DashScopeEmbedder {
     }
 
     /// Create with custom configuration
+    #[allow(clippy::expect_used)]
     pub fn with_config(config: DashScopeConfig) -> Self {
         Self {
             client: Client::builder()
@@ -105,32 +107,33 @@ impl Embedder for DashScopeEmbedder {
     async fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>> {
         let request = EmbeddingRequest {
             model: self.config.model.as_str().to_string(),
-            input: texts.iter().map(|s| s.to_string()).collect(),
+            input: texts.iter().map(std::string::ToString::to_string).collect(),
             parameters: None,
         };
 
         let response = self
             .client
-            .post(&format!("{}/embeddings", self.config.base_url))
+            .post(format!("{}/embeddings", self.config.base_url))
             .header("Authorization", &format!("Bearer {}", self.config.api_key))
             .header("Content-Type", "application/json")
             .json(&request)
             .send()
             .await
-            .map_err(|e| vol_llm_core::LLMError::Network(e))?;
+            .map_err(vol_llm_core::LLMError::Network)?;
 
         let status = response.status();
         if !status.is_success() {
             let body: String = response.text().await.unwrap_or_default();
             return Err(vol_llm_core::LLMError::Api {
                 status: status.as_u16(),
-                message: format!("DashScope API error: {} - {}", status, body),
+                message: format!("DashScope API error: {status} - {body}"),
             });
         }
 
-        let result: EmbeddingResponse = response.json().await.map_err(|e| {
-            vol_llm_core::LLMError::Parse(format!("Failed to parse response: {}", e))
-        })?;
+        let result: EmbeddingResponse = response
+            .json()
+            .await
+            .map_err(|e| vol_llm_core::LLMError::Parse(format!("Failed to parse response: {e}")))?;
 
         Ok(result.output.embeddings)
     }

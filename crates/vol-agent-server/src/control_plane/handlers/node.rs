@@ -79,11 +79,7 @@ mod tests {
     use crate::control_plane::state::ControlPlaneState;
     use vol_llm_agent_protocol::agent_server_protocol::NodeRegistration;
 
-    fn make_msg(
-        id: &str,
-        op: Operation,
-        payload: Payload,
-    ) -> AgentServerMessage {
+    fn make_msg(id: &str, op: Operation, payload: Payload) -> AgentServerMessage {
         AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: id.to_string(),

@@ -8,7 +8,11 @@ use serde_json::json;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing::info;
-use vol_llm_core::*;
+use vol_llm_core::{
+    ContentPart, ConversationRequest, ConversationResponse, FinishReason, ImageUrl, LLMClient,
+    LLMError, LLMProvider, Message, MessageContent, MessageRole, Result, StreamReceiver,
+    StreamingSession, SupportedParam, TokenUsage, ToolCall, ToolDefinition,
+};
 
 /// Anthropic Provider
 pub struct AnthropicProvider {
@@ -49,8 +53,8 @@ impl AnthropicProvider {
         if let Some(url) = &proxy_url {
             // Build NO_PROXY exclusion list from environment + known direct-access hosts.
             let mut no_proxy_parts = vec!["dashscope.aliyuncs.com".to_string()];
-            if let Ok(no_proxy_env) = std::env::var("NO_PROXY")
-                .or_else(|_| std::env::var("no_proxy"))
+            if let Ok(no_proxy_env) =
+                std::env::var("NO_PROXY").or_else(|_| std::env::var("no_proxy"))
             {
                 for part in no_proxy_env.split(',') {
                     let part = part.trim();
@@ -193,7 +197,7 @@ impl AnthropicProvider {
                             "type": "tool_result",
                             "tool_use_id": msg.tool_call_id.as_deref().unwrap_or(""),
                             "content": msg.content.as_ref()
-                                .map(|c| c.as_str())
+                                .map(vol_llm_core::MessageContent::as_str)
                                 .unwrap_or(""),
                         }],
                     }));
@@ -241,6 +245,7 @@ impl LLMClient for AnthropicProvider {
         ]
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     async fn converse(&self, request: ConversationRequest) -> Result<ConversationResponse> {
         // max_tokens is required for Anthropic
         let max_tokens = request
@@ -249,7 +254,7 @@ impl LLMClient for AnthropicProvider {
             .or_else(|| {
                 self.body_defaults
                     .get("max_tokens")
-                    .and_then(|v| v.as_u64())
+                    .and_then(serde_json::Value::as_u64)
                     .map(|v| v as u32)
             })
             .unwrap_or(8192);
@@ -266,18 +271,26 @@ impl LLMClient for AnthropicProvider {
 
         // System message separately
         if let Some(system) = request.system {
-            body["system"] = json!(system);
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("system".to_string(), json!(system));
+            }
         }
 
         // Optional parameters
         if let Some(temp) = request.model_config.temperature {
-            body["temperature"] = json!(temp);
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("temperature".to_string(), json!(temp));
+            }
         }
         if let Some(top_p) = request.model_config.top_p {
-            body["top_p"] = json!(top_p);
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("top_p".to_string(), json!(top_p));
+            }
         }
         if let Some(tools) = request.tools {
-            body["tools"] = self.convert_tools(&tools);
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("tools".to_string(), self.convert_tools(&tools));
+            }
         }
 
         // Apply body defaults (skip max_tokens which is already handled)
@@ -294,7 +307,9 @@ impl LLMClient for AnthropicProvider {
                 _ => false,
             };
             if !overridden {
-                body[key] = value.clone();
+                if let Some(obj) = body.as_object_mut() {
+                    obj.insert(key.clone(), value.clone());
+                }
             }
         }
 
@@ -325,8 +340,10 @@ impl LLMClient for AnthropicProvider {
             let error_text = response.text().await.unwrap_or_default();
 
             if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
-                let message = error_json["error"]["message"]
-                    .as_str()
+                let message = error_json
+                    .get("error")
+                    .and_then(|v| v.get("message"))
+                    .and_then(|v| v.as_str())
                     .unwrap_or(&error_text)
                     .to_string();
                 return Err(LLMError::Api { status, message });
@@ -342,14 +359,17 @@ impl LLMClient for AnthropicProvider {
         let result: serde_json::Value = response.json().await?;
 
         // Extract content - collect all text blocks from content array
-        let content = result["content"]
-            .as_array()
+        let content = result
+            .get("content")
+            .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
                     .filter_map(|item| {
                         // Handle both simple text and thinking blocks
-                        if item["type"].as_str() == Some("text") {
-                            item["text"].as_str().map(|s| s.to_string())
+                        if item.get("type").and_then(|v| v.as_str()) == Some("text") {
+                            item.get("text")
+                                .and_then(|v| v.as_str())
+                                .map(std::string::ToString::to_string)
                         } else {
                             None
                         }
@@ -360,15 +380,27 @@ impl LLMClient for AnthropicProvider {
             .unwrap_or_default();
 
         // Extract tool calls
-        let tool_calls = result["content"]
-            .as_array()
+        let tool_calls = result
+            .get("content")
+            .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
-                    .filter(|item| item["type"].as_str() == Some("tool_use"))
+                    .filter(|item| item.get("type").and_then(|v| v.as_str()) == Some("tool_use"))
                     .map(|item| ToolCall {
-                        id: item["id"].as_str().unwrap_or("").to_string(),
-                        name: item["name"].as_str().unwrap_or("").to_string(),
-                        arguments: item["input"].to_string(),
+                        id: item
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        name: item
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        arguments: item
+                            .get("input")
+                            .map(ToString::to_string)
+                            .unwrap_or_default(),
                         r#type: "function".to_string(),
                     })
                     .collect::<Vec<_>>()
@@ -377,16 +409,31 @@ impl LLMClient for AnthropicProvider {
 
         // Extract usage
         let usage = TokenUsage {
-            prompt_tokens: result["usage"]["input_tokens"].as_u64().unwrap_or(0) as u32,
-            completion_tokens: result["usage"]["output_tokens"].as_u64().unwrap_or(0) as u32,
-            total_tokens: (result["usage"]["input_tokens"].as_u64().unwrap_or(0)
-                + result["usage"]["output_tokens"].as_u64().unwrap_or(0))
-                as u32,
+            prompt_tokens: result
+                .get("usage")
+                .and_then(|v| v.get("input_tokens"))
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0) as u32,
+            completion_tokens: result
+                .get("usage")
+                .and_then(|v| v.get("output_tokens"))
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0) as u32,
+            total_tokens: (result
+                .get("usage")
+                .and_then(|v| v.get("input_tokens"))
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0)
+                + result
+                    .get("usage")
+                    .and_then(|v| v.get("output_tokens"))
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0)) as u32,
             cached_tokens: None,
         };
 
         // Extract finish reason
-        let finish_reason = match result["stop_reason"].as_str() {
+        let finish_reason = match result.get("stop_reason").and_then(|v| v.as_str()) {
             Some("end_turn") | Some("stop_sequence") => FinishReason::Stop,
             Some("max_tokens") => FinishReason::Length,
             Some("tool_use") => FinishReason::ToolCalls,
@@ -409,13 +456,18 @@ impl LLMClient for AnthropicProvider {
 
         Ok(ConversationResponse {
             message,
-            model: result["model"].as_str().unwrap_or(&self.model).to_string(),
+            model: result
+                .get("model")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&self.model)
+                .to_string(),
             usage,
             finish_reason,
             raw: Some(result),
         })
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     async fn converse_stream(&self, request: ConversationRequest) -> Result<StreamReceiver> {
         // max_tokens is required for Anthropic
         let max_tokens = request
@@ -424,7 +476,7 @@ impl LLMClient for AnthropicProvider {
             .or_else(|| {
                 self.body_defaults
                     .get("max_tokens")
-                    .and_then(|v| v.as_u64())
+                    .and_then(serde_json::Value::as_u64)
                     .map(|v| v as u32)
             })
             .unwrap_or(8192);
@@ -442,18 +494,26 @@ impl LLMClient for AnthropicProvider {
 
         // System message separately
         if let Some(system) = request.system {
-            body["system"] = json!(system);
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("system".to_string(), json!(system));
+            }
         }
 
         // Optional parameters
         if let Some(temp) = request.model_config.temperature {
-            body["temperature"] = json!(temp);
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("temperature".to_string(), json!(temp));
+            }
         }
         if let Some(top_p) = request.model_config.top_p {
-            body["top_p"] = json!(top_p);
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("top_p".to_string(), json!(top_p));
+            }
         }
         if let Some(tools) = request.tools {
-            body["tools"] = self.convert_tools(&tools);
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("tools".to_string(), self.convert_tools(&tools));
+            }
         }
 
         // Apply body defaults (skip max_tokens which is already handled)
@@ -470,7 +530,9 @@ impl LLMClient for AnthropicProvider {
                 _ => false,
             };
             if !overridden {
-                body[key] = value.clone();
+                if let Some(obj) = body.as_object_mut() {
+                    obj.insert(key.clone(), value.clone());
+                }
             }
         }
 
@@ -501,8 +563,10 @@ impl LLMClient for AnthropicProvider {
             let error_text = response.text().await.unwrap_or_default();
 
             if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
-                let message = error_json["error"]["message"]
-                    .as_str()
+                let message = error_json
+                    .get("error")
+                    .and_then(|v| v.get("message"))
+                    .and_then(|v| v.as_str())
                     .unwrap_or(&error_text)
                     .to_string();
                 return Err(LLMError::Api { status, message });
@@ -600,6 +664,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::indexing_slicing)]
     fn converts_user_multipart_url_image() {
         let provider = provider();
         let messages = vec![Message::user(MessageContent::MultiPart(vec![
@@ -631,6 +696,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::indexing_slicing)]
     fn converts_user_multipart_data_url_image() {
         let provider = provider();
         let messages = vec![Message::user(MessageContent::MultiPart(vec![

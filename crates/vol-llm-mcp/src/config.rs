@@ -177,7 +177,7 @@ fn read_config(path: &Path) -> Result<Option<RawMcpConfig>, McpError> {
 
 fn load_project_config(working_dir: Option<&Path>) -> Result<Option<RawMcpConfig>, McpError> {
     let dir = working_dir
-        .map(|p| p.to_path_buf())
+        .map(std::path::Path::to_path_buf)
         .or_else(|| std::env::current_dir().ok());
     let Some(dir) = dir else { return Ok(None) };
     read_config(&dir.join(".mcp.json"))
@@ -344,11 +344,10 @@ mod tests {
 
     #[test]
     fn test_parse_streamable_http_type() {
-        let value: serde_json::Value =
-            serde_json::from_str(
-                r#"{"type":"streamable-http","url":"https://mcp-gw.dingtalk.com/server/test"}"#,
-            )
-            .unwrap();
+        let value: serde_json::Value = serde_json::from_str(
+            r#"{"type":"streamable-http","url":"https://mcp-gw.dingtalk.com/server/test"}"#,
+        )
+        .unwrap();
         let parsed = try_parse_server("dingtalk", &value).unwrap();
         assert!(matches!(parsed.transport, McpTransport::Http { .. }));
         assert_eq!(parsed.name, "dingtalk");

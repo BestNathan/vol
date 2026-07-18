@@ -31,7 +31,7 @@ impl ChannelType {
             ChannelType::Ticker(base) => crate::subscription::ticker_base(base),
             ChannelType::Trade(instrument) => crate::subscription::trades(instrument),
             ChannelType::UserPortfolio(currency) => {
-                format!("user.portfolio.{}", currency)
+                format!("user.portfolio.{currency}")
             }
         }
     }
@@ -144,6 +144,7 @@ pub struct SubscriptionParams<T = Value> {
 /// Trade comes before Ticker because DeribitTicker has all optional fields.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 pub enum DeribitNotification {
     Markprice(SubscriptionNotification<Vec<OptionMarkPrice>>),
     PriceIndex(SubscriptionNotification<PriceIndex>),

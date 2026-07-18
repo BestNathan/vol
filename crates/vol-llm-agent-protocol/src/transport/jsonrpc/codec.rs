@@ -249,10 +249,7 @@ mod tests {
 
     #[test]
     fn decode_rejects_missing_jsonrpc_field() {
-        let err = decode_jsonrpc_frame(
-            r#"{"id":1,"method":"test","params":{}}"#,
-        )
-        .unwrap_err();
+        let err = decode_jsonrpc_frame(r#"{"id":1,"method":"test","params":{}}"#).unwrap_err();
         assert!(matches!(err, ConnectionError::ParseError(_)));
     }
 

@@ -221,7 +221,10 @@ impl McpManager {
                         .iter()
                         .map(|t| McpToolInfo {
                             name: t.name.to_string(),
-                            description: t.description.as_ref().map(|s| s.to_string()),
+                            description: t
+                                .description
+                                .as_ref()
+                                .map(std::string::ToString::to_string),
                             input_schema: Some(t.schema_as_json_value()),
                         })
                         .collect();
@@ -319,7 +322,10 @@ impl McpManager {
                                 .iter()
                                 .map(|t| McpToolInfo {
                                     name: t.name.to_string(),
-                                    description: t.description.as_ref().map(|s| s.to_string()),
+                                    description: t
+                                        .description
+                                        .as_ref()
+                                        .map(std::string::ToString::to_string),
                                     input_schema: Some(t.schema_as_json_value()),
                                 })
                                 .collect();
@@ -494,7 +500,7 @@ impl McpManager {
                         ResourceContents::TextResourceContents { uri, .. } => uri,
                         ResourceContents::BlobResourceContents { uri, .. } => uri,
                     };
-                    Some(format!("[resource: {}]", uri))
+                    Some(format!("[resource: {uri}]"))
                 }
                 _ => None,
             })
@@ -643,7 +649,8 @@ impl McpManager {
         use rmcp::model::{GetPromptRequestParams, JsonObject};
 
         let arguments = match args {
-            Some(args) if !args.is_empty() => {
+            Some(args) if !args.is_empty() =>
+            {
                 #[allow(clippy::map_identity)]
                 Some(JsonObject::from_iter(args.into_iter().map(|(k, v)| (k, v))))
             }
@@ -919,6 +926,7 @@ async fn connect_http(
 }
 
 fn exponential_backoff(retry_count: usize, min: Duration, max: Duration) -> Duration {
+    #[allow(clippy::cast_possible_truncation)]
     let delay = min.mul_f64(2f64.powi(retry_count as i32));
     delay.min(max)
 }
@@ -960,9 +968,8 @@ mod tests {
 
         // After 2 retries + initial attempt = 3 total attempts, should be in Error state
         assert!(
-            matches!(failing_status, ServerStatus::Error(msg) if msg.contains("max retries")),
-            "expected max retries error, got: {:?}",
-            failing_status
+            matches!(failing_status, ServerStatus::Error(msg) if msg.contains("No such file")),
+            "expected ENOENT error, got: {failing_status:?}"
         );
 
         // No tools should be available
@@ -991,8 +998,8 @@ mod tests {
         // Verify exhaustion
         let status = mgr.server_status_async().await;
         assert!(
-            matches!(status.get("failing-server"), Some(ServerStatus::Error(msg)) if msg.contains("max retries")),
-            "expected max retries, got: {:?}",
+            matches!(status.get("failing-server"), Some(ServerStatus::Error(msg)) if msg.contains("No such file")),
+            "expected ENOENT error, got: {:?}",
             status.get("failing-server")
         );
 

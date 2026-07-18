@@ -1,8 +1,63 @@
 .PHONY: help web-css web-dev web-backend web-check web-build web-clippy web-serve \
-        coverage coverage-html coverage-threshold
+        coverage coverage-html coverage-threshold \
+        fmt fmt-check check clippy clippy-strict test test-unit test-integration test-e2e audit quality quality-strict quality-full no-doc-tests
 
 help: ## Show available commands
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
+
+# ── Rust Quality Gates ──────────────────────────────────────────────────
+
+fmt: ## Run cargo fmt on all crates
+	cargo fmt --all
+
+fmt-check: ## Check formatting (CI gate)
+	cargo fmt --all -- --check
+
+check: ## Run cargo check on entire workspace
+	cargo check --workspace
+
+clippy: ## Run clippy on entire workspace
+	cargo clippy --workspace
+
+clippy-strict: ## Run clippy with -D warnings (deny + warn = error)
+	cargo clippy --workspace -- -D warnings
+
+# ── Tests (tiered: compile < unit < integration < e2e) ──────────────
+
+test: ## Run all tests (nextest if available, fallback to cargo test)
+	cargo nextest run --workspace --no-fail-fast 2>/dev/null || cargo test --workspace --no-fail-fast
+
+test-compile: ## Compile all tests without running (fast gate, ~3s warm)
+	cargo test --workspace --no-run
+
+test-unit: ## Run unit tests only (src/ inline #[cfg(test)])
+	cargo nextest run --workspace --lib --no-fail-fast 2>/dev/null || cargo test --workspace --lib --no-fail-fast
+
+test-integration: ## Run all tests including integration (single pass)
+	cargo test --workspace --no-fail-fast
+
+test-e2e: ## Run e2e tests (require external services, mostly #[ignore]d)
+	cargo test --workspace --no-fail-fast -- --ignored
+
+test-all: test-unit test-e2e ## Run ALL tests including e2e
+
+audit: ## Run cargo-audit vulnerability scan (requires cargo-audit)
+	cargo audit
+
+# ── Quality gates (fast for local, full for CI) ──────────────────────
+
+quality: fmt-check clippy test-compile no-doc-tests ## Fast quality gate (~5s warm)
+	@echo "All quality gates passed"
+
+quality-strict: fmt-check clippy-strict test-compile no-doc-tests ## Fast strict gate
+	@echo "All strict quality gates passed"
+
+quality-full: fmt-check clippy-strict test-unit no-doc-tests ## Full CI gate
+	@./scripts/check-agent-boundaries.sh
+	@echo "All full quality gates passed"
+
+no-doc-tests: ## Check no active doc tests
+	@./scripts/check-no-doc-tests.sh
 
 web-css: ## Build Tailwind CSS in watch mode
 	npx --prefix crates/vol-llm-ui @tailwindcss/cli -i crates/vol-llm-ui/assets/input.css -o crates/vol-llm-ui/assets/tailwind.css --watch=always
