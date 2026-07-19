@@ -43,7 +43,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ── Quality gate: fmt + check + test + clippy + boundaries ───────────────
+  # ── Test gate: quick check on core crates before Docker build ─────────
+  # Quality workflow already runs full workspace tests on PRs.
   test:
     name: test (${{ matrix.crate }})
     runs-on: ubuntu-24.04
@@ -59,15 +60,9 @@ jobs:
           - vol-llm-sandbox
           - vol-llm-task
           - vol-session
-          - vol-llm-core
-          - vol-llm-agent
-          - vol-llm-provider
-          - vol-llm-tool
-          - vol-llm-skill
-          - vol-llm-mcp
-          - vol-llm-context
-          - vol-llm-memory
-          - vol-llm-wiki
+    env:
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -78,14 +73,20 @@ jobs:
           cache-workspaces: "."
           cache-all-crates: "true"
 
+      - name: Install sccache
+        run: |
+          SCCACHE_VER="v0.9.1"
+          ARCH=$(uname -m | sed 's/x86_64/x86_64-unknown-linux-musl/; s/aarch64/aarch64-unknown-linux-musl/')
+          curl -fsSL "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VER}/sccache-${SCCACHE_VER}-${ARCH}.tar.gz" | tar -xz -C /usr/local/bin --strip-components=1
+          sccache --version
+
       - name: Remove rsproxy mirror
         run: rm -f .cargo/config.toml
 
-      - name: Run tests
-        run: cargo test -p ${{ matrix.crate }} --no-fail-fast
-
-      - name: Run clippy
-        run: cargo clippy -p ${{ matrix.crate }}
+      - name: Test + clippy
+        run: |
+          cargo test -p ${{ matrix.crate }} --no-fail-fast
+          cargo clippy -p ${{ matrix.crate }}
 
   # ── Per-arch builds run on native runners ────────────────────────────────
   build:
