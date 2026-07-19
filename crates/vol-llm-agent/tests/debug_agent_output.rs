@@ -91,6 +91,7 @@ impl LLMClient for SimpleMock {
 }
 
 #[tokio::test]
+#[ignore = "slow: uses real tools with TDengine connections"]
 async fn test_agent_produces_output() {
     // Initialize tracing
     let _ = tracing_subscriber::fmt()

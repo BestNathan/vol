@@ -308,6 +308,7 @@ async fn test_code_agent_market_data_query() {
 }
 
 #[tokio::test]
+#[ignore = "slow: uses real tools with TDengine connections"]
 async fn test_code_agent_volatility_query() {
     println!("\n=== Test: Volatility Query ===\n");
 
@@ -332,6 +333,7 @@ async fn test_code_agent_volatility_query() {
 }
 
 #[tokio::test]
+#[ignore = "slow: uses real tools with TDengine connections"]
 async fn test_code_agent_multi_turn_conversation() {
     println!("\n=== Test: Multi-turn Conversation ===\n");
 

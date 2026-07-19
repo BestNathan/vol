@@ -122,6 +122,7 @@ impl LLMClient for TrackingMock {
 }
 
 #[tokio::test]
+#[ignore = "slow: uses real tools with TDengine connections"]
 async fn test_tool_results_passed_to_next_iteration() {
     println!("\n=== Test: Tool Results in Message History ===\n");
 
@@ -224,6 +225,7 @@ async fn test_tool_results_passed_to_next_iteration() {
 }
 
 #[tokio::test]
+#[ignore = "slow: uses real tools with TDengine connections"]
 async fn test_message_history_grows_correctly() {
     println!("\n=== Test: Message History Growth ===\n");
 

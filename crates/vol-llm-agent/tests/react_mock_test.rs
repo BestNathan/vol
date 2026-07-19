@@ -98,6 +98,7 @@ impl LLMClient for SimpleMock {
 }
 
 #[tokio::test]
+#[ignore = "slow: uses real tools with TDengine connections"]
 async fn test_agent_executes_full_react_cycle() {
     // Track tool calls via a counting plugin
     use vol_llm_agent::ReActAgent;
