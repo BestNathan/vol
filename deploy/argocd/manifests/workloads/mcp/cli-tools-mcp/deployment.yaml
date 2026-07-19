@@ -32,7 +32,7 @@ spec:
       # NOTE: runs as root — required for SSH key access (mode 0600, root-owned secret)
       containers:
         - name: cli-tools-mcp
-          image: ghcr.io/bestnathan/cli-tools-mcp:f806133
+          image: ghcr.io/bestnathan/cli-tools-mcp:f012230
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
