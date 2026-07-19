@@ -22,6 +22,7 @@ dirs = "5"
 
 [dev-dependencies]
 tempfile = "3"
+serial_test = "3"
 
 [[example]]
 name = "provider_toml_chat"

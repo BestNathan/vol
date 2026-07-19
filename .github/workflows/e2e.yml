@@ -1,0 +1,41 @@
+# E2E tests — manual trigger only. Requires real external services.
+# These tests connect to: Anthropic API, TDengine, Postgres, Docker SSH, model service.
+# Run with: gh workflow run e2e.yml
+
+name: e2e
+
+on:
+  workflow_dispatch:
+    inputs:
+      anthropic_auth_token:
+        description: "Anthropic API key (ANTHROPIC_AUTH_TOKEN)"
+        required: false
+      postgres_url:
+        description: "Postgres connection string (VOL_AGENT_POSTGRES_TEST_URL)"
+        required: false
+
+env:
+  RUSTFLAGS: ""
+  CARGO_INCREMENTAL: "1"
+  ANTHROPIC_AUTH_TOKEN: ${{ github.event.inputs.anthropic_auth_token }}
+  VOL_AGENT_POSTGRES_TEST_URL: ${{ github.event.inputs.postgres_url }}
+
+jobs:
+  e2e:
+    name: e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (from rust-toolchain.toml)
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-workspaces: "."
+          cache-all-crates: "true"
+
+      - name: Run e2e tests (requires external services)
+        run: cargo test --workspace --features e2e --no-fail-fast -- --ignored

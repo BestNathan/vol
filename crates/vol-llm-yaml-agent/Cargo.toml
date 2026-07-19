@@ -7,6 +7,9 @@ edition.workspace = true
 [lints]
 workspace = true
 
+[features]
+e2e = []
+
 [dependencies]
 vol-llm-agent = { workspace = true }
 vol-llm-context = { workspace = true }

@@ -202,6 +202,9 @@ cast_possible_truncation = "deny"
 cast_sign_loss = "deny"
 indexing_slicing = "deny"
 
+[workspace.features]
+e2e = []
+
 [profile]
 
 [profile.wasm-dev]

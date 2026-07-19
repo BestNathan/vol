@@ -7,6 +7,9 @@ edition.workspace = true
 [lints]
 workspace = true
 
+[features]
+e2e = []
+
 [dependencies]
 tokio = { workspace = true }
 serde = { workspace = true }

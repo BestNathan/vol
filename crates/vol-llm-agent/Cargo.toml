@@ -40,6 +40,7 @@ axum = { version = "0.7", optional = true }
 [features]
 default = []
 http = ["axum"]
+e2e = []
 
 [dev-dependencies]
 tracing-subscriber = "0.3"

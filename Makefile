@@ -22,9 +22,12 @@ clippy: ## Run clippy on entire workspace
 clippy-strict: ## Run clippy with -D warnings (deny + warn = error)
 	cargo clippy --workspace -- -D warnings
 
-# ── Tests (tiered: compile < unit < integration < e2e) ──────────────
+# ── Tests (3 tiers: unit / integration / e2e) ─────────────────────
+# Unit:     src/ inline #[cfg(test)], no external deps
+# Integration: tests/ directory, self-contained (mock WS, in-memory DB)
+# E2E:      require real services (LLM, TDengine, Postgres), #[ignore]d by default
 
-test: ## Run all tests (nextest if available, fallback to cargo test)
+test: ## Run unit + integration tests (no e2e, fast)
 	cargo nextest run --workspace --no-fail-fast 2>/dev/null || cargo test --workspace --no-fail-fast
 
 test-compile: ## Compile all tests without running (fast gate, ~3s warm)
@@ -36,10 +39,10 @@ test-unit: ## Run unit tests only (src/ inline #[cfg(test)])
 test-integration: ## Run all tests including integration (single pass)
 	cargo test --workspace --no-fail-fast
 
-test-e2e: ## Run e2e tests (require external services, mostly #[ignore]d)
-	cargo test --workspace --no-fail-fast -- --ignored
+test-e2e: ## Run e2e tests (needs ANTHROPIC_AUTH_TOKEN, Postgres, TDengine)
+	cargo test --workspace --features e2e --no-fail-fast -- --ignored
 
-test-all: test-unit test-e2e ## Run ALL tests including e2e
+test-all: test-unit test-integration test-e2e ## Run ALL tests including e2e
 
 audit: ## Run cargo-audit vulnerability scan (requires cargo-audit)
 	cargo audit
