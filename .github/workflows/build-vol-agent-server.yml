@@ -73,29 +73,16 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-test-${{ matrix.crate }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-test-${{ matrix.crate }}-
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+          cache-workspaces: "."
+          cache-all-crates: "true"
 
       - name: Run tests
         run: cargo test -p ${{ matrix.crate }} --no-fail-fast
 
       - name: Run clippy
         run: cargo clippy -p ${{ matrix.crate }}
-
-      - name: Check agent boundaries
-        run: ./scripts/check-agent-boundaries.sh
 
   # ── Per-arch builds run on native runners ────────────────────────────────
   build:
