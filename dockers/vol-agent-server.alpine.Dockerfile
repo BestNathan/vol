@@ -87,6 +87,9 @@ RUN cargo chef cook --release --recipe-path recipe.json -p vol-agent-server
 
 COPY crates/ ./crates/
 COPY .cargo/ .cargo/
+# Re-copy root Cargo.toml: cargo-chef strips [workspace.lints], but crate
+# manifests inherit lints via [lints] workspace = true.
+COPY Cargo.toml Cargo.lock ./
 
 # Build and strip the agent-server binary (musl = static binary)
 RUN cargo build --release -p vol-agent-server && \
