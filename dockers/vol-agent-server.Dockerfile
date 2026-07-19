@@ -135,6 +135,8 @@ RUN --mount=type=cache,target=/root/.cache/sccache \
 # Copy real source and build workspace crates
 COPY crates/ ./crates/
 COPY .cargo/ .cargo/
+# Re-copy root Cargo.toml: cargo-chef strips [workspace.lints]
+COPY Cargo.toml Cargo.lock ./
 
 # Build with mold linker + sccache. The sccache cache is non-blocking —
 # if the mount is empty (no prior cache), it just starts fresh.

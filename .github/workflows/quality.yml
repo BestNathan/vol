@@ -11,6 +11,7 @@ on:
 
 env:
   RUSTFLAGS: ""
+  CARGO_INCREMENTAL: "1"
 
 concurrency:
   group: quality-${{ github.event.pull_request.number || github.ref }}
@@ -32,6 +33,9 @@ jobs:
           cache-workspaces: "."
           cache-all-crates: "true"
 
+      - name: Remove rsproxy mirror (CI can't access rsproxy.cn)
+        run: rm -f .cargo/config.toml
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -46,8 +50,8 @@ jobs:
         with:
           tool: cargo-nextest
 
-      - name: Run all tests (nextest, parallel)
-        run: cargo nextest run --workspace --no-fail-fast
+      - name: Run all tests (nextest, fallback to cargo test)
+        run: cargo nextest run --workspace --no-fail-fast 2>/dev/null || cargo test --workspace --no-fail-fast
 
       - name: Check agent boundaries
         run: ./scripts/check-agent-boundaries.sh
