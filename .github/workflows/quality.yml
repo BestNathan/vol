@@ -91,4 +91,19 @@ jobs:
           tool: cargo-llvm-cov
 
       - name: Coverage (core LLM crates, threshold ≥ 80%)
-        run: cargo llvm-cov -p vol-agent-server -p vol-llm-agent-protocol -p vol-llm-runtime -p vol-llm-sandbox -p vol-llm-task -p vol-session -p vol-llm-agent -p vol-llm-provider -p vol-llm-tool -p vol-llm-skill -p vol-llm-mcp --fail-under-lines 80
+        run: |
+          PKG="vol-agent-server vol-llm-agent-protocol vol-llm-runtime vol-llm-sandbox vol-llm-task vol-session vol-llm-agent vol-llm-provider vol-llm-tool vol-llm-skill vol-llm-mcp"
+          cargo llvm-cov $(for p in $PKG; do echo "--package $p"; done) --summary-only 2>&1 | tee /tmp/cov-output.txt
+          LINE_COV=$(grep '^TOTAL' /tmp/cov-output.txt | awk '{print $4}' | tr -d '%')
+          if [ -z "${LINE_COV}" ]; then
+            echo "FAIL: could not determine coverage (missing TOTAL line)"
+            exit 1
+          fi
+          echo ""
+          echo "--- Threshold check ---"
+          echo "Line coverage: ${LINE_COV}% (required ≥ 80%)"
+          if [ "$(echo "${LINE_COV} < 80" | bc 2>/dev/null)" = "1" ]; then
+            echo "FAIL: line coverage ${LINE_COV}% is below 80%"
+            exit 1
+          fi
+          echo "PASS: line coverage ${LINE_COV}% ≥ 80%"
