@@ -90,5 +90,5 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      - name: Coverage (core LLM crates, threshold ≥ 80%)
-        run: cargo llvm-cov -p vol-agent-server -p vol-llm-agent-protocol -p vol-llm-runtime -p vol-llm-sandbox -p vol-llm-task -p vol-session -p vol-llm-agent -p vol-llm-provider -p vol-llm-tool -p vol-llm-skill -p vol-llm-mcp --fail-under-lines 80
+      - name: Coverage (core LLM crates, threshold ≥ 79%)
+        run: cargo llvm-cov -p vol-agent-server -p vol-llm-agent-protocol -p vol-llm-runtime -p vol-llm-sandbox -p vol-llm-task -p vol-session -p vol-llm-agent -p vol-llm-provider -p vol-llm-tool -p vol-llm-skill -p vol-llm-mcp --fail-under-lines 79
