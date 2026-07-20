@@ -218,3 +218,246 @@ impl<T: ?Sized + ExecutableTool + Send + Sync> Tool for T {
             })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── ToolResult tests ──────────────────────────────────────────────
+
+    #[test]
+    fn test_tool_result_success() {
+        let result = ToolResult::success("done");
+        assert!(result.success);
+        assert_eq!(result.content, "done");
+        assert!(result.error.is_none());
+        assert!(result.data.is_none());
+    }
+
+    #[test]
+    fn test_tool_result_failure() {
+        let result = ToolResult::failure("boom");
+        assert!(!result.success);
+        assert_eq!(result.content, "boom");
+        assert_eq!(result.error, Some("boom".to_string()));
+    }
+
+    #[test]
+    fn test_tool_result_success_string() {
+        let result = ToolResult::success(String::from("owned"));
+        assert!(result.success);
+        assert_eq!(result.content, "owned");
+    }
+
+    // ── ToolContext tests ─────────────────────────────────────────────
+
+    #[test]
+    fn test_tool_context_default() {
+        let ctx = ToolContext::default();
+        assert!(ctx.messages.is_empty());
+        assert!(ctx.agent_def.is_none());
+        assert_eq!(ctx.sandbox.kind(), "local");
+    }
+
+    #[test]
+    fn test_tool_context_for_test() {
+        let ctx = ToolContext::for_test();
+        assert!(ctx.messages.is_empty());
+        assert_eq!(ctx.sandbox.kind(), "local");
+    }
+
+    #[test]
+    fn test_tool_context_with_sandbox() {
+        let ctx = ToolContext::default();
+        let local = Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None));
+        let ctx = ctx.with_sandbox(local);
+        assert_eq!(ctx.sandbox.kind(), "local");
+    }
+
+    #[test]
+    fn test_tool_context_with_agent_def() {
+        let ctx = ToolContext::default();
+        let def = vol_llm_core::AgentDef {
+            id: "repo:test-agent".into(),
+            name: "test-agent".into(),
+            r#type: "test-agent".into(),
+            description: "test agent".into(),
+            scope: vol_llm_core::AgentScope::Repo,
+            tools: None,
+            disallowed_tools: None,
+            model: Some("gpt-4".into()),
+            max_iterations: None,
+            max_history_messages: None,
+            prompt: "You are a test agent.".into(),
+            working_dir: None,
+            context_files: vec![],
+            sandbox: None,
+            tool_config: None,
+            mcps: None,
+        };
+        let ctx = ctx.with_agent_def(def);
+        assert!(ctx.agent_def.is_some());
+        assert_eq!(ctx.agent_def.unwrap().name, "test-agent");
+    }
+
+    #[test]
+    fn test_tool_context_resolve_path() {
+        let ctx = ToolContext::for_test();
+        let path = ctx.resolve_path("/tmp/test").unwrap();
+        assert!(path.is_absolute() || path.starts_with("/"));
+    }
+
+    #[test]
+    fn test_tool_context_debug_format() {
+        let ctx = ToolContext::for_test();
+        let debug_str = format!("{ctx:?}");
+        assert!(debug_str.contains("ToolContext"));
+        assert!(debug_str.contains("sandbox"));
+    }
+
+    // ── ToolError tests ───────────────────────────────────────────────
+
+    #[test]
+    fn test_tool_error_display_invalid_arguments() {
+        let err = ToolError::InvalidArguments("missing field".into());
+        assert!(err.to_string().contains("missing field"));
+    }
+
+    #[test]
+    fn test_tool_error_display_execution_failed() {
+        let err = ToolError::ExecutionFailed("timeout".into());
+        assert!(err.to_string().contains("timeout"));
+    }
+
+    #[test]
+    fn test_tool_error_display_not_found() {
+        let err = ToolError::NotFound("tool_x".into());
+        assert!(err.to_string().contains("tool_x"));
+    }
+
+    // ── ToolSensitivity tests ─────────────────────────────────────────
+
+    #[test]
+    fn test_tool_sensitivity_safe() {
+        let sensitivity = ToolSensitivity::Safe;
+        // Verify it's a valid variant
+        match sensitivity {
+            ToolSensitivity::Safe => {}
+            _ => panic!("expected Safe"),
+        }
+    }
+
+    #[test]
+    fn test_tool_sensitivity_requires_approval() {
+        let sensitivity = ToolSensitivity::RequiresApproval {
+            reason: "delete files".into(),
+        };
+        match &sensitivity {
+            ToolSensitivity::RequiresApproval { reason } => {
+                assert_eq!(reason, "delete files");
+            }
+            _ => panic!("expected RequiresApproval"),
+        }
+    }
+
+    // ── Tool blanket impl tests ───────────────────────────────────────
+
+    struct StubTool {
+        name: &'static str,
+        desc: &'static str,
+        params: serde_json::Value,
+    }
+
+    #[async_trait]
+    impl ExecutableTool for StubTool {
+        fn name(&self) -> &'static str {
+            self.name
+        }
+        fn description(&self) -> &'static str {
+            self.desc
+        }
+        fn parameters(&self) -> serde_json::Value {
+            self.params.clone()
+        }
+        async fn execute(
+            &self,
+            _args: &serde_json::Value,
+            _context: &ToolContext,
+        ) -> ToolResultType<ToolResult> {
+            Ok(ToolResult::success("stub ok"))
+        }
+    }
+
+    #[test]
+    fn test_tool_blanket_name() {
+        let stub = StubTool {
+            name: "stub",
+            desc: "a stub tool",
+            params: serde_json::json!({"type": "object"}),
+        };
+        let tool: &dyn Tool = &stub;
+        assert_eq!(tool.name(), "stub");
+    }
+
+    #[test]
+    fn test_tool_blanket_description() {
+        let stub = StubTool {
+            name: "stub",
+            desc: "a stub tool",
+            params: serde_json::json!({"type": "object"}),
+        };
+        let tool: &dyn Tool = &stub;
+        assert_eq!(tool.description(), "a stub tool");
+    }
+
+    #[test]
+    fn test_tool_blanket_parameters() {
+        let stub = StubTool {
+            name: "stub",
+            desc: "desc",
+            params: serde_json::json!({"type": "object"}),
+        };
+        let tool: &dyn Tool = &stub;
+        assert!(tool.parameters().is_some());
+    }
+
+    #[test]
+    fn test_tool_blanket_to_definition() {
+        let stub = StubTool {
+            name: "stub",
+            desc: "desc",
+            params: serde_json::json!({"type": "object"}),
+        };
+        let tool: &dyn Tool = &stub;
+        let def = tool.to_definition();
+        assert_eq!(def.name, "stub");
+        assert_eq!(def.description, Some("desc".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_tool_blanket_execute_valid_json() {
+        let stub = StubTool {
+            name: "stub",
+            desc: "desc",
+            params: serde_json::json!({"type": "object"}),
+        };
+        let tool: &dyn Tool = &stub;
+        let ctx = ToolContext::for_test();
+        let result = tool.execute(r#"{"key": "value"}"#, &ctx).await.unwrap();
+        assert!(result.success);
+        assert_eq!(result.content, "stub ok");
+    }
+
+    #[tokio::test]
+    async fn test_tool_blanket_execute_invalid_json() {
+        let stub = StubTool {
+            name: "stub",
+            desc: "desc",
+            params: serde_json::json!({"type": "object"}),
+        };
+        let tool: &dyn Tool = &stub;
+        let ctx = ToolContext::for_test();
+        let result = tool.execute("not json", &ctx).await;
+        assert!(result.is_err());
+    }
+}

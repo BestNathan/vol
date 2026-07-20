@@ -209,4 +209,142 @@ mod tests {
         let messages = resumed.get_messages().await.unwrap();
         assert_eq!(messages.len(), 1);
     }
+
+    #[tokio::test]
+    async fn test_session_checkpoint_and_get_messages() {
+        let entry_store = Arc::new(InMemoryEntryStore::new());
+        let session = Session::new(entry_store.clone());
+
+        // Add a message before checkpoint
+        let msg1 = SessionMessage::new(session.id.clone(), Message::user("before cp"));
+        session.add_message(msg1).await.unwrap();
+
+        // Write a checkpoint
+        session
+            .checkpoint(CheckpointReason::Manual, None)
+            .await
+            .unwrap();
+
+        // Ensure timestamp increments (second-precision timestamps)
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        // Add a message after checkpoint
+        let msg2 = SessionMessage::new(session.id.clone(), Message::user("after cp"));
+        session.add_message(msg2).await.unwrap();
+
+        // get_messages should only return messages after the checkpoint
+        let messages = session.get_messages().await.unwrap();
+        assert_eq!(
+            messages.len(),
+            1,
+            "should only get post-checkpoint messages"
+        );
+        assert_eq!(
+            messages[0].message.content.as_ref().unwrap().as_str(),
+            "after cp"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_session_add_summary() {
+        let entry_store = Arc::new(InMemoryEntryStore::new());
+        let session = Session::new(entry_store.clone());
+
+        session
+            .add_summary("summarized content".to_string())
+            .await
+            .unwrap();
+
+        let messages = session.get_messages().await.unwrap();
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].message.role == vol_llm_core::MessageRole::System);
+        assert_eq!(
+            messages[0].message.content.as_ref().unwrap().as_str(),
+            "summarized content"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_session_checkpoint_with_note() {
+        let entry_store = Arc::new(InMemoryEntryStore::new());
+        let session = Session::new(entry_store.clone());
+
+        session
+            .checkpoint(CheckpointReason::Manual, Some("compact note".into()))
+            .await
+            .unwrap();
+
+        // Ensure timestamp increments (second-precision timestamps)
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        // After checkpoint, no messages before it
+        let msg = SessionMessage::new(session.id.clone(), Message::user("post cp"));
+        session.add_message(msg).await.unwrap();
+
+        let messages = session.get_messages().await.unwrap();
+        assert_eq!(messages.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_session_resume_messages() {
+        let entry_store = Arc::new(InMemoryEntryStore::new());
+        let session = Session::new(entry_store.clone());
+
+        let msg = SessionMessage::new(session.id.clone(), Message::user("hello"));
+        session.add_message(msg).await.unwrap();
+
+        let messages = session.resume_messages().await.unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].content.as_ref().unwrap().as_str(), "hello");
+    }
+
+    #[tokio::test]
+    async fn test_session_resume_messages_after_checkpoint() {
+        let entry_store = Arc::new(InMemoryEntryStore::new());
+        let session = Session::new(entry_store.clone());
+
+        // Pre-checkpoint message
+        let msg1 = SessionMessage::new(session.id.clone(), Message::user("before"));
+        session.add_message(msg1).await.unwrap();
+
+        session
+            .checkpoint(CheckpointReason::Manual, None)
+            .await
+            .unwrap();
+
+        // Ensure timestamp increments (second-precision timestamps)
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        // Post-checkpoint message
+        let msg2 = SessionMessage::new(session.id.clone(), Message::user("after"));
+        session.add_message(msg2).await.unwrap();
+
+        let messages = session.resume_messages().await.unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].content.as_ref().unwrap().as_str(), "after");
+    }
+
+    #[test]
+    fn test_session_clone_shares_entry_store() {
+        let entry_store = Arc::new(InMemoryEntryStore::new());
+        let session = Session::new(entry_store);
+        let cloned = session.clone();
+
+        assert_eq!(cloned.id, session.id);
+        assert_eq!(cloned.created_at, session.created_at);
+    }
+
+    #[tokio::test]
+    async fn test_session_get_messages_no_checkpoint_returns_all() {
+        let entry_store = Arc::new(InMemoryEntryStore::new());
+        let session = Session::new(entry_store.clone());
+
+        let msg1 = SessionMessage::new(session.id.clone(), Message::user("first"));
+        let msg2 = SessionMessage::new(session.id.clone(), Message::assistant("second"));
+        session.add_message(msg1).await.unwrap();
+        session.add_message(msg2).await.unwrap();
+
+        let messages = session.get_messages().await.unwrap();
+        assert_eq!(messages.len(), 2);
+    }
 }

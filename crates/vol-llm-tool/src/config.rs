@@ -87,3 +87,156 @@ impl ToolConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::Deserialize;
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+    struct TestToolConfig {
+        api_key: String,
+        #[serde(default)]
+        timeout: u64,
+    }
+
+    #[test]
+    fn test_tool_config_new_is_empty() {
+        let config = ToolConfig::new();
+        let result: Option<TestToolConfig> = config.get("any_tool");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_tool_config_set_and_get_roundtrip() {
+        let mut config = ToolConfig::new();
+        let tc = TestToolConfig {
+            api_key: "sk-test".into(),
+            timeout: 30,
+        };
+        config.set("my_tool", &tc);
+
+        let retrieved: TestToolConfig = config.get("my_tool").expect("should retrieve config");
+        assert_eq!(retrieved.api_key, "sk-test");
+        assert_eq!(retrieved.timeout, 30);
+    }
+
+    #[test]
+    fn test_tool_config_get_nonexistent() {
+        let config = ToolConfig::new();
+        let result: Option<TestToolConfig> = config.get("nonexistent");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_tool_config_get_wrong_type_returns_none() {
+        let mut config = ToolConfig::new();
+        #[derive(serde::Deserialize)]
+        struct OtherConfig {
+            field: String,
+        }
+        config.set(
+            "my_tool",
+            &TestToolConfig {
+                api_key: "sk".into(),
+                timeout: 5,
+            },
+        );
+
+        // Try to deserialize with wrong shape
+        let result: Option<OtherConfig> = config.get("my_tool");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_get_sandbox_returns_sandbox_name() {
+        let mut config = ToolConfig::new();
+        let mut map = HashMap::new();
+        map.insert(
+            "browser".to_string(),
+            serde_json::json!({"sandbox": "docker-sandbox"}),
+        );
+        config.populate_from_agent_def(&map);
+
+        let sandbox = config.get_sandbox("browser");
+        assert_eq!(sandbox, Some("docker-sandbox".to_string()));
+    }
+
+    #[test]
+    fn test_get_sandbox_returns_none_when_not_configured() {
+        let config = ToolConfig::new();
+        assert_eq!(config.get_sandbox("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_get_sandbox_returns_none_when_no_sandbox_key() {
+        let mut config = ToolConfig::new();
+        let mut map = HashMap::new();
+        map.insert(
+            "simple_tool".to_string(),
+            serde_json::json!({"timeout": 30}),
+        );
+        config.populate_from_agent_def(&map);
+
+        assert_eq!(config.get_sandbox("simple_tool"), None);
+    }
+
+    #[test]
+    fn test_populate_from_agent_def_multiple_tools() {
+        let mut config = ToolConfig::new();
+        let mut map = HashMap::new();
+        map.insert(
+            "tool_a".to_string(),
+            serde_json::json!({"api_key": "key-a"}),
+        );
+        map.insert(
+            "tool_b".to_string(),
+            serde_json::json!({"api_key": "key-b", "timeout": 60}),
+        );
+        config.populate_from_agent_def(&map);
+
+        let a: TestToolConfig = config.get("tool_a").expect("tool_a should exist");
+        assert_eq!(a.api_key, "key-a");
+        assert_eq!(a.timeout, 0); // default
+
+        let b: TestToolConfig = config.get("tool_b").expect("tool_b should exist");
+        assert_eq!(b.api_key, "key-b");
+        assert_eq!(b.timeout, 60);
+    }
+
+    #[test]
+    fn test_populate_from_agent_def_overwrites_existing() {
+        let mut config = ToolConfig::new();
+        let old = TestToolConfig {
+            api_key: "old".into(),
+            timeout: 1,
+        };
+        config.set("tool_x", &old);
+
+        let mut map = HashMap::new();
+        map.insert(
+            "tool_x".to_string(),
+            serde_json::json!({"api_key": "new", "timeout": 99}),
+        );
+        config.populate_from_agent_def(&map);
+
+        let val: TestToolConfig = config.get("tool_x").unwrap();
+        assert_eq!(val.api_key, "new");
+        assert_eq!(val.timeout, 99);
+    }
+
+    #[test]
+    fn test_common_tool_config_deserialization() {
+        let toml_str = r#"
+sandbox = "my-sandbox"
+"#;
+        let cfg: CommonToolConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(cfg.sandbox, Some("my-sandbox".to_string()));
+    }
+
+    #[test]
+    fn test_common_tool_config_no_sandbox() {
+        let cfg: CommonToolConfig = toml::from_str("").unwrap();
+        assert_eq!(cfg.sandbox, None);
+    }
+}
