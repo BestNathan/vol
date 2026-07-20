@@ -24,6 +24,9 @@ on:
       - "configs/vol-agent-server.*.toml"
       - "dockers/vol-agent-server.Dockerfile"
       - ".cargo/config.toml"
+      - "rust-toolchain.toml"
+      - "clippy.toml"
+      - "Makefile"
       - ".github/workflows/build-vol-agent-server.yml"
   workflow_dispatch:
     inputs:

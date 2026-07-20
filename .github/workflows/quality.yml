@@ -7,6 +7,17 @@ name: quality
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - "rust-toolchain.toml"
+      - "clippy.toml"
+      - ".cargo/config.toml"
+      - "Makefile"
+      - ".github/workflows/quality.yml"
   workflow_dispatch:
 
 env:
@@ -39,8 +50,8 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-      - name: Clippy (workspace, covers check)
-        run: cargo clippy --workspace
+      - name: Clippy (workspace, covers check, deny warnings)
+        run: cargo clippy --workspace -- -D warnings
 
       - name: Check no doc tests
         run: ./scripts/check-no-doc-tests.sh
@@ -56,14 +67,13 @@ jobs:
       - name: Check agent boundaries
         run: ./scripts/check-agent-boundaries.sh
 
-  # ── Coverage (informational, non-blocking) ──────────────────────────
+  # ── Coverage (blocking quality gate) ─────────────────────────────────
   coverage:
     name: coverage
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -80,5 +90,5 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      - name: Coverage (core crates only)
-        run: cargo llvm-cov -p vol-agent-server -p vol-llm-agent-protocol -p vol-llm-runtime -p vol-llm-sandbox -p vol-llm-task -p vol-session --summary-only || echo "⚠ Coverage failed (non-blocking)"
+      - name: Coverage (core LLM crates, threshold ≥ 80%)
+        run: cargo llvm-cov -p vol-agent-server -p vol-llm-agent-protocol -p vol-llm-runtime -p vol-llm-sandbox -p vol-llm-task -p vol-session -p vol-llm-agent -p vol-llm-provider -p vol-llm-tool -p vol-llm-skill -p vol-llm-mcp --fail-under-lines 80

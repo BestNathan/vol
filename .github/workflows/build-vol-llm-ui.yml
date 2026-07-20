@@ -20,6 +20,9 @@ on:
       - "dockers/vol-llm-ui.Dockerfile"
       - "dockers/nginx-frontend.conf"
       - ".cargo/config.toml"
+      - "rust-toolchain.toml"
+      - "clippy.toml"
+      - "Makefile"
       - ".github/workflows/build-vol-llm-ui.yml"
   workflow_dispatch:
     inputs:

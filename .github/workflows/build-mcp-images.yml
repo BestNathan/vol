@@ -19,6 +19,9 @@ on:
       - "crates/vol-mcp-servers/**"
       - "dockers/vol-mcp-servers.Dockerfile"
       - ".cargo/config.toml"
+      - "rust-toolchain.toml"
+      - "clippy.toml"
+      - "Makefile"
       - ".github/workflows/build-mcp-images.yml"
   workflow_dispatch:
     inputs:
