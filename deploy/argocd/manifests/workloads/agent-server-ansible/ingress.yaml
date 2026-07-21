@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agent-server-ansible
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-server-ansible
+    app.kubernetes.io/part-of: vol-agent
+  annotations:
+    higress.io/domain: ansible.vol.bestnathan.top
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
+spec:
+  ingressClassName: higress
+  rules:
+    - host: ansible.vol.bestnathan.top
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: agent-server-ansible
+                port:
+                  number: 3003
