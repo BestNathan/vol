@@ -52,6 +52,8 @@ pub struct ControlPlaneSection {
     pub lease_timeout_secs: u64,
     #[serde(default = "default_lease_scan_secs")]
     pub lease_scan_secs: u64,
+    #[serde(default)]
+    pub node_ingress: std::collections::HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -215,6 +217,7 @@ impl Default for ControlPlaneSection {
             node_ws_path: default_node_ws_path(),
             lease_timeout_secs: default_lease_timeout_secs(),
             lease_scan_secs: default_lease_scan_secs(),
+            node_ingress: std::collections::HashMap::new(),
         }
     }
 }
@@ -709,5 +712,28 @@ sample_rate = 1.5
         let config: ServerConfig = toml::from_str(toml_str).unwrap();
         let err = config.validate().unwrap_err();
         assert!(err.contains("opentelemetry.sample_rate must be between 0.0 and 1.0"));
+    }
+
+    #[test]
+    fn test_parse_node_ingress_config() {
+        let toml_str = r#"
+[server.roles]
+control_plane = true
+data_plane = false
+
+[control_plane.node_ingress]
+"dp-1" = "wss://dp.vol.bestnathan.top/ws"
+"dingtalk" = "wss://dingtalk.vol.bestnathan.top/ws"
+"#;
+        let config: ServerConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.control_plane.node_ingress.len(), 2);
+        assert_eq!(
+            config.control_plane.node_ingress.get("dp-1").unwrap(),
+            "wss://dp.vol.bestnathan.top/ws"
+        );
+        assert_eq!(
+            config.control_plane.node_ingress.get("dingtalk").unwrap(),
+            "wss://dingtalk.vol.bestnathan.top/ws"
+        );
     }
 }
