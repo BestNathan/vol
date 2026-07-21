@@ -20,6 +20,8 @@ pub struct ControlPlaneState {
     pub node_connections: Arc<RwLock<HashMap<String, Arc<dyn Connection>>>>,
     /// Pending agent submissions: run_id → client connection for event relay.
     pub pending_submits: Arc<RwLock<HashMap<String, Arc<dyn Connection>>>>,
+    /// Mapping from node_id to its public WebSocket URL for client connections.
+    pub node_ingress: HashMap<String, String>,
 }
 
 impl ControlPlaneState {
@@ -32,6 +34,21 @@ impl ControlPlaneState {
             runs: Arc::new(RunStore::new()),
             node_connections: Arc::new(RwLock::new(HashMap::new())),
             pending_submits: Arc::new(RwLock::new(HashMap::new())),
+            node_ingress: HashMap::new(),
+        }
+    }
+
+    /// Create state with a pre-populated node_ingress mapping.
+    pub fn new_with_ingress(node_ingress: HashMap<String, String>) -> Self {
+        Self {
+            nodes: Arc::new(NodeRegistry::new()),
+            capabilities: Arc::new(CapabilityIndex::new()),
+            events: EventBus::new(),
+            commands: Arc::new(CommandStore::new()),
+            runs: Arc::new(RunStore::new()),
+            node_connections: Arc::new(RwLock::new(HashMap::new())),
+            pending_submits: Arc::new(RwLock::new(HashMap::new())),
+            node_ingress,
         }
     }
 }
