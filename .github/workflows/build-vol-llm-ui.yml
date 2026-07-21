@@ -100,41 +100,51 @@ jobs:
       - name: Update GitOps manifest image
         if: steps.push.outputs.value == 'true'
         env:
-          MANIFEST: deploy/argocd/manifests/workloads/vol-llm-ui/deployment.yaml
           IMAGE: ${{ steps.image.outputs.image }}
         run: |
           python3 - <<'PY'
           import os
           from pathlib import Path
 
-          manifest = Path(os.environ["MANIFEST"])
+          manifests = [
+              "deploy/argocd/manifests/workloads/vol-llm-ui/deployment.yaml",
+              "deploy/argocd/manifests/workloads/vol-llm-ui-cp/deployment.yaml",
+          ]
           image = os.environ["IMAGE"]
-          lines = manifest.read_text().splitlines()
-          updated = []
-          replaced = False
-          for line in lines:
-              stripped = line.strip()
-              if stripped.startswith("image: ") and "vol-llm-ui" in stripped:
-                  indent = line[: len(line) - len(line.lstrip())]
-                  updated.append(f"{indent}image: {image}")
-                  replaced = True
-              else:
-                  updated.append(line)
-          if not replaced:
-              raise SystemExit(f"no vol-llm-ui image field found in {manifest}")
-          manifest.write_text("\n".join(updated) + "\n")
+
+          for manifest_path in manifests:
+              manifest = Path(manifest_path)
+              lines = manifest.read_text().splitlines()
+              updated = []
+              replaced = False
+              for line in lines:
+                  stripped = line.strip()
+                  if stripped.startswith("image: ") and "vol-llm-ui" in stripped:
+                      indent = line[: len(line) - len(line.lstrip())]
+                      updated.append(f"{indent}image: {image}")
+                      replaced = True
+                  else:
+                      updated.append(line)
+              if not replaced:
+                  raise SystemExit(f"no vol-llm-ui image field found in {manifest}")
+              manifest.write_text("\n".join(updated) + "\n")
+              print(f"Updated {manifest_path} → {image}")
           PY
 
       - name: Commit GitOps manifest update
         if: steps.push.outputs.value == 'true'
         run: |
-          if git diff --quiet -- "deploy/argocd/manifests/workloads/vol-llm-ui/deployment.yaml"; then
+          if git diff --quiet -- \
+              "deploy/argocd/manifests/workloads/vol-llm-ui/deployment.yaml" \
+              "deploy/argocd/manifests/workloads/vol-llm-ui-cp/deployment.yaml"; then
             echo "No GitOps manifest change to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "deploy/argocd/manifests/workloads/vol-llm-ui/deployment.yaml"
+          git add \
+            "deploy/argocd/manifests/workloads/vol-llm-ui/deployment.yaml" \
+            "deploy/argocd/manifests/workloads/vol-llm-ui-cp/deployment.yaml"
           git commit -m "ci(gitops): update vol-llm-ui image to ${{ steps.image.outputs.short }} [skip ci]"
           git pull --rebase origin main
           git push

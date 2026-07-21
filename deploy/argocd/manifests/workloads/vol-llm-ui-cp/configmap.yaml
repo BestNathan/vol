@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vol-llm-ui-cp-nginx
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: vol-llm-ui-cp
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: frontend
+data:
+  default.conf: |
+    # vol-llm-ui-cp nginx configuration — control-plane backend
+    # =============================================================================
+    # Same WASM static serving as vol-llm-ui, but proxies /ws to the control-plane
+    # agent-server instead of a data-plane variant.
+
+    server {
+        listen 80;
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # Security headers for WASM (SharedArrayBuffer requires COOP/COEP)
+        add_header Cross-Origin-Opener-Policy "same-origin" always;
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+
+        # SPA fallback — all routes serve index.html
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # WebSocket proxy to control-plane agent-server
+        location /ws {
+            proxy_pass http://agent-server.vol-agent-system.svc.cluster.local:3001;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 86400s;
+            proxy_send_timeout 86400s;
+        }
+
+        # Cache content-hashed assets (wasm, js, css with hash in filename)
+        location ~* "[-_][0-9a-f]{8,}\\.(wasm|js|css)$" {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+
+        # No cache for index.html (SPA entry point)
+        location = /index.html {
+            expires off;
+            add_header Cache-Control "no-cache, no-store, must-revalidate";
+        }
+
+        # Health check endpoint
+        location /health {
+            access_log off;
+            return 200 "ok\n";
+            add_header Content-Type text/plain;
+        }
+    }
