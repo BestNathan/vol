@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use vol_llm_agent_protocol::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, MessageKind, Operation, Payload,
-    ProtocolError,
+    ProtocolError, TaskOperation, TaskPayload,
 };
 use vol_llm_agent_protocol::DomainHandler;
 
@@ -31,6 +31,8 @@ impl DomainHandler for ClientHandler {
             Operation::Agent(AgentOperation::List),
             Operation::Agent(AgentOperation::Status),
             Operation::Agent(AgentOperation::Submit),
+            Operation::Task(TaskOperation::List),
+            Operation::Task(TaskOperation::Get),
         ]
     }
 
@@ -147,6 +149,22 @@ impl DomainHandler for ClientHandler {
                 reply.receiver = message.sender;
                 Ok(vec![reply])
             }
+            Operation::Task(TaskOperation::List) => {
+                let payload = Payload::Task(TaskPayload::ListResult { tasks: vec![] });
+                let mut reply = AgentServerMessage::new_result(
+                    message.message_id,
+                    Operation::Task(TaskOperation::List),
+                    payload,
+                );
+                reply.sender = "control".to_string();
+                reply.receiver = message.sender;
+                Ok(vec![reply])
+            }
+            Operation::Task(TaskOperation::Get) => {
+                return Err(ProtocolError::PayloadDecodeFailedOwned(
+                    "task.get: cross-node routing not yet implemented".to_string(),
+                ));
+            }
             _ => Err(ProtocolError::PayloadDecodeFailedOwned(
                 "unsupported client operation".to_string(),
             )),
@@ -160,6 +178,7 @@ mod tests {
 
     use vol_llm_agent_protocol::agent_server_protocol::{
         AgentOperation, AgentPayload, AgentServerMessage, MessageKind, Operation, Payload,
+        TaskOperation, TaskPayload,
     };
     use vol_llm_agent_protocol::DomainHandler;
 
@@ -331,5 +350,34 @@ mod tests {
         assert_eq!(agents[0]["id"], "coding");
         assert_eq!(agents[0]["node_id"], "node-a");
         assert_eq!(agents[0]["ws_url"], "wss://node-a.vol.bestnathan.top/ws");
+    }
+
+    #[tokio::test]
+    async fn task_list_returns_empty_list() {
+        let state = Arc::new(ControlPlaneState::new());
+        let handler = ClientHandler::new(state);
+        let msg = AgentServerMessage {
+            protocol: "agent-server/1".to_string(),
+            message_id: "1".to_string(),
+            sender: "client".to_string(),
+            receiver: "control".to_string(),
+            kind: MessageKind::Command,
+            operation: Operation::Task(TaskOperation::List),
+            payload: Payload::Task(TaskPayload::List {
+                status: None,
+                assignee: None,
+            }),
+            meta: Default::default(),
+        };
+
+        let replies = handler.handle(msg).await.unwrap();
+        assert_eq!(replies.len(), 1);
+        let json = replies[0].payload.data_json();
+        assert!(json.get("tasks").is_some());
+        assert_eq!(
+            json["tasks"].as_array().unwrap().len(),
+            0,
+            "expected empty tasks array"
+        );
     }
 }
