@@ -101,6 +101,10 @@ impl Operation {
             Operation::Control(ControlOperation::NodeGet) => "control.node_get",
             Operation::Control(ControlOperation::CapabilityList) => "control.capability_list",
             Operation::Control(ControlOperation::RunStatus) => "control.run_status",
+            Operation::Control(ControlOperation::TaskList) => "control.task_list",
+            Operation::Control(ControlOperation::TaskListResult) => "control.task_list_result",
+            Operation::Control(ControlOperation::TaskGet) => "control.task_get",
+            Operation::Control(ControlOperation::TaskGetResult) => "control.task_get_result",
             Self::Sandbox(op) => op.method_name(),
         }
     }
@@ -224,6 +228,10 @@ pub enum ControlOperation {
     NodeGet,
     CapabilityList,
     RunStatus,
+    TaskList,
+    TaskListResult,
+    TaskGet,
+    TaskGetResult,
 }
 
 /// Wire-compatible command request. All fields directly serializable.
@@ -850,6 +858,22 @@ impl Payload {
                 .map(ControlPayload::RunStatus)
                 .map(Payload::Control)
                 .map_err(|_| ProtocolError::PayloadDecodeFailed("control.run_status")),
+            Operation::Control(ControlOperation::TaskList) => serde_json::from_value(value)
+                .map(ControlPayload::TaskList)
+                .map(Payload::Control)
+                .map_err(|_| ProtocolError::PayloadDecodeFailed("control.task_list")),
+            Operation::Control(ControlOperation::TaskListResult) => serde_json::from_value(value)
+                .map(ControlPayload::TaskListResult)
+                .map(Payload::Control)
+                .map_err(|_| ProtocolError::PayloadDecodeFailed("control.task_list_result")),
+            Operation::Control(ControlOperation::TaskGet) => serde_json::from_value(value)
+                .map(ControlPayload::TaskGet)
+                .map(Payload::Control)
+                .map_err(|_| ProtocolError::PayloadDecodeFailed("control.task_get")),
+            Operation::Control(ControlOperation::TaskGetResult) => serde_json::from_value(value)
+                .map(ControlPayload::TaskGetResult)
+                .map(Payload::Control)
+                .map_err(|_| ProtocolError::PayloadDecodeFailed("control.task_get_result")),
             Operation::Sandbox(_) => serde_json::from_value::<SandboxPayload>(value)
                 .map(Payload::Sandbox)
                 .map_err(|e| ProtocolError::PayloadDecodeFailedOwned(format!("sandbox: {e}"))),
@@ -1156,6 +1180,10 @@ pub enum ControlPayload {
     CapabilityListResult(CapabilityListResult),
     RunStatus(RunStatusRequest),
     RunStatusResult(RunStatusResult),
+    TaskList(TaskListRequest),
+    TaskListResult(TaskListResult),
+    TaskGet(TaskGetRequest),
+    TaskGetResult(TaskGetResult),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1354,6 +1382,29 @@ pub struct CapabilityListRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CapabilityListResult {
     pub snapshots: Vec<CapabilitySnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TaskListRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignee: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TaskListResult {
+    pub tasks: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TaskGetRequest {
+    pub task_id: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TaskGetResult {
+    pub task: serde_json::Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1736,6 +1787,22 @@ mod tests {
         assert_eq!(
             Operation::Control(ControlOperation::RunStatus).method_name(),
             "control.run_status"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::TaskList).method_name(),
+            "control.task_list"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::TaskListResult).method_name(),
+            "control.task_list_result"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::TaskGet).method_name(),
+            "control.task_get"
+        );
+        assert_eq!(
+            Operation::Control(ControlOperation::TaskGetResult).method_name(),
+            "control.task_get_result"
         );
     }
 
@@ -2293,6 +2360,15 @@ mod tests {
                 run_id: "run-1".into(),
                 status: "running".into(),
                 node_id: None,
+            }),
+            ControlPayload::TaskList(TaskListRequest {
+                status: None,
+                assignee: None,
+            }),
+            ControlPayload::TaskListResult(TaskListResult { tasks: vec![] }),
+            ControlPayload::TaskGet(TaskGetRequest { task_id: 42 }),
+            ControlPayload::TaskGetResult(TaskGetResult {
+                task: serde_json::json!({"id": 42}),
             }),
         ];
         for v in variants {
