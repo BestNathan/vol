@@ -17,12 +17,16 @@ pub fn InputArea() -> Element {
 
     let mut input_text = use_signal(|| String::new());
     let mut last_esc = use_signal(|| None::<Instant>);
-    let client = app_state.rpc_client.clone();
+    let cp_client = app_state.cp_client.clone();
+    let dp_pool = app_state.dp_pool.clone();
+    let active_node_id = app_state.active_node_id.clone();
 
     let mut submit = {
-        let client = client.clone();
         let mut input_text = input_text.clone();
         let agents = agents.clone();
+        let cp_client = cp_client.clone();
+        let dp_pool = dp_pool.clone();
+        let active_node_id = active_node_id.clone();
         move || {
             let text = input_text.peek().clone();
             let text = text.trim().to_string();
@@ -30,7 +34,21 @@ pub fn InputArea() -> Element {
                 return;
             }
             let target = agents.read().selected.clone();
-            match client.submit(&text, target.as_deref()) {
+
+            // Prefer DP connection when an active node is selected
+            let submit_client = {
+                let nid = active_node_id.read();
+                if let Some(ref node_id) = *nid {
+                    let pool = dp_pool.read();
+                    pool.get(node_id)
+                        .map(|c| c.client.clone())
+                        .unwrap_or_else(|| cp_client.clone())
+                } else {
+                    cp_client.clone()
+                }
+            };
+
+            match submit_client.submit(&text, target.as_deref()) {
                 Ok(run_id) => log::info!("Submitted via JSON-RPC: {}", run_id),
                 Err(e) => log::error!("Failed to submit via JSON-RPC: {}", e),
             }
