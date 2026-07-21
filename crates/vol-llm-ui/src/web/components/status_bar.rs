@@ -3,6 +3,7 @@
 use dioxus::prelude::*;
 
 use crate::state::{DebugState, GlobalState};
+use crate::web::components::app::AppState;
 
 const BUILD_TIME: &str = env!("BUILD_TIME");
 
@@ -15,6 +16,7 @@ fn format_elapsed(d: std::time::Duration) -> String {
 pub fn StatusBar() -> Element {
     let g: Signal<GlobalState> = use_context();
     let debug = use_context::<Signal<DebugState>>();
+    let app_state: AppState = use_context();
     let gs = g.read();
 
     let elapsed = if gs.is_running() {
@@ -55,6 +57,21 @@ pub fn StatusBar() -> Element {
         div { class: status_cls,
             div { class: "flex items-center gap-1.5 overflow-hidden flex-nowrap sm:gap-1",
                 ConnectionIndicator { connected: ws_connected, error: ws_error.clone(), reconnecting, reconnect_delay, reconnect_maxed }
+                span { class: "flex items-center gap-1 mr-1",
+                    span { class: "w-2 h-2 rounded-full inline-block flex-shrink-0", style: "background-color: #40c040; box-shadow: 0 0 4px #40c040;" }
+                    span { class: "text-[10px] text-[#888]", "CP" }
+                }
+                if let Some(ref node_id) = *app_state.active_node_id.read() {
+                    span { class: "flex items-center gap-1 mr-1",
+                        span { class: "w-2 h-2 rounded-full inline-block flex-shrink-0", style: "background-color: #40c040; box-shadow: 0 0 4px #40c040;" }
+                        span { class: "text-[10px] text-[#80a0ff]", "DP: {node_id}" }
+                    }
+                } else {
+                    span { class: "flex items-center gap-1 mr-1",
+                        span { class: "w-2 h-2 rounded-full inline-block flex-shrink-0", style: "background-color: #666;" }
+                        span { class: "text-[10px] text-[#888]", "DP: —" }
+                    }
+                }
                 span { class: "whitespace-nowrap", "Session: {session_id}" }
                 span { class: "hidden sm:inline text-[#555] select-none" }
                 span { class: "hidden sm:inline whitespace-nowrap", "Run: {run_count}" }
