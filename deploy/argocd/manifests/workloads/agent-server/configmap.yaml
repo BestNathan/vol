@@ -22,6 +22,11 @@ data:
     lease_timeout_secs = 90
     lease_scan_secs = 15
 
+    [control_plane.node_ingress]
+    "dp-1" = "wss://dp.vol.bestnathan.top/ws"
+    "dingtalk" = "wss://dingtalk.vol.bestnathan.top/ws"
+    "ansible" = "wss://ansible.vol.bestnathan.top/ws"
+
     [runtime]
     working_dir = "/app"
     store_dir = "/app/data"
