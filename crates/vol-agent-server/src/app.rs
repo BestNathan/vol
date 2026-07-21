@@ -313,7 +313,10 @@ pub async fn run(mut config: ServerConfig) -> Result<(), String> {
     let control_core = if control_plane_enabled {
         tracing::info!("Building ControlPlaneServerCore");
         Some(Arc::new(
-            ControlPlaneServerCore::new(Arc::new(ControlPlaneState::new())).await?,
+            ControlPlaneServerCore::new(Arc::new(ControlPlaneState::new_with_ingress(
+                config.control_plane.node_ingress.clone(),
+            )))
+            .await?,
         ))
     } else {
         None
