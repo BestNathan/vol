@@ -45,6 +45,7 @@ impl DomainHandler for ClientHandler {
                     .into_iter()
                     .flat_map(|snapshot| {
                         let node_id = snapshot.node_id;
+                        let ws_url = self.state.node_ingress.get(&node_id).cloned();
                         snapshot.agents.into_iter().map(move |agent| {
                             serde_json::json!({
                                 "id": agent.agent_id,
@@ -52,6 +53,7 @@ impl DomainHandler for ClientHandler {
                                 "description": agent.description,
                                 "status": agent.status,
                                 "node_id": node_id,
+                                "ws_url": ws_url,
                             })
                         })
                     })
@@ -278,5 +280,56 @@ mod tests {
         assert_eq!(agents[0]["description"], "A coding agent");
         assert_eq!(agents[0]["status"], "idle");
         assert_eq!(agents[0]["node_id"], "node-a");
+        assert!(agents[0]["ws_url"].is_null());
+    }
+
+    #[tokio::test]
+    async fn agent_list_includes_ws_url_from_node_ingress() {
+        use std::collections::HashMap;
+        use vol_llm_agent_protocol::agent_server_protocol::{AgentCapability, CapabilitySnapshot};
+
+        let mut ingress = HashMap::new();
+        ingress.insert(
+            "node-a".to_string(),
+            "wss://node-a.vol.bestnathan.top/ws".to_string(),
+        );
+        let state = Arc::new(ControlPlaneState::new_with_ingress(ingress));
+        state
+            .capabilities
+            .apply_snapshot(CapabilitySnapshot {
+                node_id: "node-a".to_string(),
+                revision: 1,
+                generated_at_ms: Some(1000),
+                agents: vec![AgentCapability {
+                    agent_id: "coding".to_string(),
+                    name: "Coding Agent".to_string(),
+                    description: Some("A coding agent".to_string()),
+                    status: Some("idle".to_string()),
+                }],
+                tools: vec![],
+                mcp_servers: vec![],
+                skills: vec![],
+            })
+            .unwrap();
+
+        let handler = ClientHandler::new(state);
+        let msg = AgentServerMessage {
+            protocol: "agent-server/1".to_string(),
+            message_id: "1".to_string(),
+            sender: "client".to_string(),
+            receiver: "control".to_string(),
+            kind: MessageKind::Command,
+            operation: Operation::Agent(AgentOperation::List),
+            payload: Payload::Agent(AgentPayload::ListResult { agents: vec![] }),
+            meta: Default::default(),
+        };
+
+        let replies = handler.handle(msg).await.unwrap();
+        let json = replies[0].payload.data_json();
+        let agents = json["agents"].as_array().unwrap();
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0]["id"], "coding");
+        assert_eq!(agents[0]["node_id"], "node-a");
+        assert_eq!(agents[0]["ws_url"], "wss://node-a.vol.bestnathan.top/ws");
     }
 }
