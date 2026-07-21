@@ -17,6 +17,7 @@ data:
     data_plane = true
 
     [data_plane]
+    node_id = "dp-1"
     name = "data-plane-1"
     control_url = "ws://agent-server.vol-agent-system.svc.cluster.local:3001/control/v1/ws"
     heartbeat_secs = 15

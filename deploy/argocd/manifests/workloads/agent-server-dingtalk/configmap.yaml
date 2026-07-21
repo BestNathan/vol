@@ -20,7 +20,7 @@ data:
 
     [data_plane]
     # Standalone — no control-plane registration
-    node_id = "dingtalk-agent"
+    node_id = "dingtalk"
 
     [runtime]
     working_dir = "/app"

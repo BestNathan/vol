@@ -167,7 +167,18 @@ impl PartialEq for JsonRpcClient {
 
 impl JsonRpcClient {
     /// Create a new client and connect to the server.
+    /// Auto-subscribes to agent events on connect (behaviour for data-plane connections).
     pub fn new(url: &str) -> Self {
+        Self::new_inner(url, true)
+    }
+
+    /// Create a new client without auto-subscribing to agent events on connect.
+    /// Use for control-plane connections that don't support `agent.subscribe`.
+    pub fn new_without_auto_subscribe(url: &str) -> Self {
+        Self::new_inner(url, false)
+    }
+
+    fn new_inner(url: &str, auto_subscribe: bool) -> Self {
         let ws = web_sys::WebSocket::new(url).expect("failed to create WebSocket");
         let (event_tx, event_rx) = mpsc::unbounded();
 
@@ -223,7 +234,7 @@ impl JsonRpcClient {
             .set_onclose(Some(on_close.as_ref().unchecked_ref()));
         on_close.forget();
 
-        // Set up open handler — auto-subscribe to agent events
+        // Set up open handler — auto-subscribe to agent events (only for DP connections)
         let inner_open = inner.clone();
         let client_for_open = client.clone();
         let on_open = Closure::wrap(Box::new(move |_e: web_sys::Event| {
@@ -237,8 +248,10 @@ impl JsonRpcClient {
                 cb(ConnectionState::Connected);
                 inner_open.on_state_change.set(Some(cb));
             }
-            // Auto-subscribe to agent events on connect
-            let _ = client_for_open.subscribe();
+            // Auto-subscribe to agent events on connect (skip for control-plane)
+            if auto_subscribe {
+                let _ = client_for_open.subscribe();
+            }
         }) as Box<dyn FnMut(_)>);
         inner
             .ws

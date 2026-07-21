@@ -271,7 +271,8 @@ pub fn App() -> Element {
     });
 
     let client = use_hook(|| {
-        let c = JsonRpcClient::new(&ws_url);
+        // CP connection: don't auto-subscribe (control-plane doesn't support agent.subscribe).
+        let c = JsonRpcClient::new_without_auto_subscribe(&ws_url);
         let bus = event_bus.with(|eb| eb.clone());
         let global = global_signal.clone();
         let bus_conn = bus.clone();
