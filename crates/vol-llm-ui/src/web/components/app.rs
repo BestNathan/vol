@@ -28,6 +28,7 @@ pub fn current_event_agent_id() -> Option<String> {
     CURRENT_EVENT_AGENT.with(|c| c.borrow().clone())
 }
 use crate::web::client::{AgentEvent, JsonRpcClient};
+use crate::web::dp_connection::DpConnectionPool;
 
 use super::agents_panel::AgentsPanel;
 use super::approval_dialog::ApprovalDialog;
@@ -81,6 +82,9 @@ pub struct AppState {
     pub event_bus: EventBus,
     pub rpc_client: JsonRpcClient,
     pub active_tab: Signal<ActiveTab>,
+    pub cp_client: JsonRpcClient,
+    pub dp_pool: Signal<DpConnectionPool>,
+    pub active_node_id: Signal<Option<String>>,
 }
 
 impl PartialEq for AppState {
@@ -248,6 +252,8 @@ pub fn App() -> Element {
     let mcp_dialog_signal = use_signal(|| McpDialogState::default());
     let skill_dialog_signal = use_signal(|| SkillDialogState::new());
     let debug_signal = use_signal(|| DebugState::new());
+    let dp_pool = use_signal(|| DpConnectionPool::new());
+    let active_node_id = use_signal(|| Option::<String>::None);
 
     // Prevent browser zoom on input focus and disable pinch-to-zoom
     use_hook(|| {
@@ -690,6 +696,9 @@ pub fn App() -> Element {
         event_bus: event_bus.with(|eb| eb.clone()),
         rpc_client: client.clone(),
         active_tab,
+        cp_client: client.clone(),
+        dp_pool,
+        active_node_id,
     });
     use_context_provider(|| global_signal);
     use_context_provider(|| approval_signal);
