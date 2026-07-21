@@ -59,6 +59,7 @@ fn render_right_panel(frame: &mut Frame, area: Rect, state: &UiState) {
         ActiveTab::Agents => render_agents_panel(frame, chunks[1], state),
         ActiveTab::Sessions => render_sessions_panel(frame, chunks[1], state),
         ActiveTab::Mcp => render_mcp(frame, chunks[1], state),
+        ActiveTab::Nodes => render_tasks_placeholder(frame, chunks[1]),
         ActiveTab::Tasks => render_tasks_placeholder(frame, chunks[1]),
     }
 

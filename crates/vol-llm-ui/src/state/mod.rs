@@ -338,6 +338,7 @@ pub struct OpenFileTab {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ActiveTab {
+    Nodes,
     Conversation,
     Sessions,
     Tasks,
@@ -352,6 +353,7 @@ pub enum ActiveTab {
 impl ActiveTab {
     pub fn next(self) -> Self {
         match self {
+            ActiveTab::Nodes => ActiveTab::Conversation,
             ActiveTab::Conversation => ActiveTab::Sessions,
             ActiveTab::Sessions => ActiveTab::Tasks,
             ActiveTab::Tasks => ActiveTab::Agents,
@@ -360,7 +362,7 @@ impl ActiveTab {
             ActiveTab::Workspace => ActiveTab::Skills,
             ActiveTab::Skills => ActiveTab::Mcp,
             ActiveTab::Mcp => ActiveTab::Logs,
-            ActiveTab::Logs => ActiveTab::Conversation,
+            ActiveTab::Logs => ActiveTab::Nodes,
         }
     }
 
@@ -1719,6 +1721,7 @@ mod tests {
     #[test]
     fn test_active_tab_next() {
         use ActiveTab::*;
+        assert_eq!(Nodes.next(), Conversation);
         assert_eq!(Conversation.next(), Sessions);
         assert_eq!(Sessions.next(), Tasks);
         assert_eq!(Tasks.next(), Agents);
@@ -1727,7 +1730,7 @@ mod tests {
         assert_eq!(Workspace.next(), Skills);
         assert_eq!(Skills.next(), Mcp);
         assert_eq!(Mcp.next(), Logs);
-        assert_eq!(Logs.next(), Conversation);
+        assert_eq!(Logs.next(), Nodes);
     }
 
     #[test]

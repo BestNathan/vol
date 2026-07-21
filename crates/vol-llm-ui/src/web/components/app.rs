@@ -41,6 +41,7 @@ use super::mcp_panel::McpPanel;
 use super::mcp_prompt_viewer::PromptViewer;
 use super::mcp_resource_viewer::ResourceViewer;
 use super::mcp_tool_dialog::ToolCallDialog;
+use super::nodes_panel::NodesPanel;
 use super::sessions_panel::SessionsPanel;
 use super::skill_detail_dialog::SkillDetailDialog;
 use super::skills::SkillsPanel;
@@ -757,6 +758,7 @@ fn TabBar() -> Element {
 
     rsx! {
         div { class: "flex flex-nowrap bg-[#252540] border-b border-[#333355] flex-shrink-0 overflow-x-auto",
+            TabButton { state: state.clone(), tab: ActiveTab::Nodes, label: "Nodes" }
             TabButton { state: state.clone(), tab: ActiveTab::Tasks, label: "Tasks" }
             TabButton { state: state.clone(), tab: ActiveTab::Agents, label: "Agents" }
             TabButton { state: state.clone(), tab: ActiveTab::Tools, label: "Tools" }
@@ -794,6 +796,7 @@ fn TabContent(skill_dialog_signal: Signal<SkillDialogState>) -> Element {
     let active = *state.active_tab.read();
 
     match active {
+        ActiveTab::Nodes => rsx! { NodesPanel {} },
         ActiveTab::Tasks => rsx! { TasksPanel { assignee_filter: None } },
         ActiveTab::Conversation => rsx! { ConversationView {} },
         ActiveTab::Sessions => rsx! { SessionsPanel {} },

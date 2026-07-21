@@ -39,6 +39,26 @@ pub struct FileEntry {
     pub size: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NodeListEntry {
+    pub node_id: String,
+    pub name: String,
+    pub version: String,
+    pub status: String,
+    #[serde(default)]
+    pub agent_count: Option<usize>,
+    #[serde(default)]
+    pub load: Option<NodeLoadInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NodeLoadInfo {
+    #[serde(default)]
+    pub cpu: Option<f64>,
+    #[serde(default)]
+    pub memory_mb: Option<u64>,
+}
+
 /// Agent metadata entry returned by agent.list.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AgentListEntry {
@@ -530,6 +550,42 @@ impl JsonRpcClient {
                         cb(Ok(parsed));
                     }
                     None => cb(Err("no agents in response".to_string())),
+                },
+            );
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// List all registered data-plane nodes. Returns entries via callback.
+    pub fn node_list(&self, cb: impl FnOnce(Result<Vec<NodeListEntry>, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "control.node_list",
+            "params": {},
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("nodes").and_then(|v| v.as_array()) {
+                    Some(nodes) => {
+                        let parsed: Vec<NodeListEntry> = nodes
+                            .iter()
+                            .filter_map(|n| serde_json::from_value(n.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no nodes in response".to_string())),
                 },
             );
         self.inner.pending.borrow_mut().insert(id, cb);
