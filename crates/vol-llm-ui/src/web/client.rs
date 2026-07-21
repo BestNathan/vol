@@ -48,6 +48,10 @@ pub struct AgentListEntry {
     pub type_: String,
     pub description: String,
     pub scope: String,
+    #[serde(default)]
+    pub node_id: Option<String>,
+    #[serde(default)]
+    pub ws_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
