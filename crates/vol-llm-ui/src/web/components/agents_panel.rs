@@ -1,6 +1,7 @@
 //! Agents panel — card grid, sub-tabs, embedded conversation/sessions.
 
 use dioxus::prelude::*;
+use std::collections::BTreeMap;
 
 use crate::state::{
     AgentSubTab, AgentsState, ConversationEntry, ConversationState, GlobalState, UiEventKind,
@@ -254,57 +255,83 @@ pub fn AgentsPanel() -> Element {
 
     let selected_agent = agents.iter().find(|a| selected.as_ref() == Some(&a.id));
 
+    // Group agents by node_id
+    let mut groups: BTreeMap<String, Vec<crate::web::client::AgentListEntry>> = BTreeMap::new();
+    for agent in &agents {
+        let key = agent
+            .node_id
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string());
+        groups.entry(key).or_default().push(agent.clone());
+    }
+
     rsx! {
         div { class: "flex flex-col flex-1 min-h-0 overflow-hidden",
             // Card grid — responsive: stack on mobile, wrap on desktop
             div { class: "flex flex-col sm:flex-row sm:flex-wrap gap-2 p-2 border-b border-[#333355] overflow-y-auto max-h-[200px] min-h-[60px] flex-shrink-0",
-                for agent in &agents {
-                    AgentCard {
-                        key: "{agent.id}",
-                        agent: agent.clone(),
-                        is_selected: selected.as_ref() == Some(&agent.id),
-                        on_click: {
-                            let mut sig = agents_signal;
-                            let mut conv_sig = conv_signal;
-                            let agent_id = agent.id.clone();
-                            let is_selected = selected.as_ref() == Some(&agent.id);
-                            let client = app.rpc_client.clone();
-                            let global_check = global;
-                            move |_: ()| {
-                                let was_selected = is_selected;
-                                sig.with_mut(|s| {
-                                    if was_selected { s.selected = None; }
-                                    else {
-                                        s.selected = Some(agent_id.clone());
-                                        s.sub_tab = AgentSubTab::Conversation;
-                                    }
-                                });
-                                conv_sig.with_mut(|cs| {
-                                    cs.set_active(if was_selected { None } else { Some(agent_id.clone()) });
-                                });
-
-                                if !was_selected {
-                                    let c = client.clone();
-                                    let a = agent_id.clone();
-                                    let conv = conv_sig;
-                                    let g = global_check;
-                                    wasm_bindgen_futures::spawn_local(async move {
-                                        let (tx, rx) = futures_channel::oneshot::channel();
-                                        c.agent_status(&a, move |result| {
-                                            let _ = tx.send(result);
-                                        });
-                                        let status_result = rx.await;
-                                        if let Ok(Ok((status, Some(run_id)))) = status_result {
-                                            if status == "running" {
-                                                log::info!("Agent {} is running (run_id: {}) — loading session", a, run_id);
-                                                load_running_session(&c, &a, conv, &run_id);
-                                                g.write_unchecked().set_agent_running(a.clone(), run_id.clone());
-                                            }
+                for (node_id, node_agents) in &groups {
+                    div { class: "w-full text-[#80a0ff] text-xs font-bold px-2 py-1 mt-2",
+                        "📡 {node_id}"
+                    }
+                    for agent in node_agents {
+                        AgentCard {
+                            key: "{agent.id}",
+                            agent: agent.clone(),
+                            is_selected: selected.as_ref() == Some(&agent.id),
+                            on_click: {
+                                let mut sig = agents_signal;
+                                let mut conv_sig = conv_signal;
+                                let agent_id = agent.id.clone();
+                                let is_selected = selected.as_ref() == Some(&agent.id);
+                                let client = app.rpc_client.clone();
+                                let global_check = global;
+                                let mut dp_pool = app.dp_pool;
+                                let mut active_node_id = app.active_node_id;
+                                let agent_node_id = agent.node_id.clone();
+                                let agent_ws_url = agent.ws_url.clone();
+                                move |_: ()| {
+                                    let was_selected = is_selected;
+                                    sig.with_mut(|s| {
+                                        if was_selected { s.selected = None; }
+                                        else {
+                                            s.selected = Some(agent_id.clone());
+                                            s.sub_tab = AgentSubTab::Conversation;
                                         }
                                     });
+                                    conv_sig.with_mut(|cs| {
+                                        cs.set_active(if was_selected { None } else { Some(agent_id.clone()) });
+                                    });
+
+                                    if !was_selected {
+                                        // Activate DP connection for this agent's node
+                                        if let (Some(ref nid), Some(ref ws)) = (&agent_node_id, &agent_ws_url) {
+                                            let mut pool = dp_pool.write();
+                                            pool.get_or_create(nid, ws, vec![agent_id.clone()]);
+                                            active_node_id.set(Some(nid.clone()));
+                                        }
+
+                                        let c = client.clone();
+                                        let a = agent_id.clone();
+                                        let conv = conv_sig;
+                                        let g = global_check;
+                                        wasm_bindgen_futures::spawn_local(async move {
+                                            let (tx, rx) = futures_channel::oneshot::channel();
+                                            c.agent_status(&a, move |result| {
+                                                let _ = tx.send(result);
+                                            });
+                                            let status_result = rx.await;
+                                            if let Ok(Ok((status, Some(run_id)))) = status_result {
+                                                if status == "running" {
+                                                    log::info!("Agent {} is running (run_id: {}) — loading session", a, run_id);
+                                                    load_running_session(&c, &a, conv, &run_id);
+                                                    g.write_unchecked().set_agent_running(a.clone(), run_id.clone());
+                                                }
+                                            }
+                                        });
+                                    }
                                 }
-                            }
-                        },
+                            },
+                        }
                     }
                 }
             }
