@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agent-server-dp
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-server-dp
+    app.kubernetes.io/part-of: vol-agent
+  annotations:
+    higress.io/domain: dp.vol.bestnathan.top
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
+spec:
+  ingressClassName: higress
+  rules:
+    - host: dp.vol.bestnathan.top
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: agent-server-dp
+                port:
+                  number: 3002
