@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::state::McpDialogState;
+use crate::state::NodeDataCache;
 use crate::state::SkillDialogState;
 use crate::state::{
     ActiveTab, AgentsState, ApprovalUiState, ConversationState, DebugState, EventBus, GlobalState,
@@ -86,6 +87,7 @@ pub struct AppState {
     pub cp_client: JsonRpcClient,
     pub dp_pool: Signal<DpConnectionPool>,
     pub active_node_id: Signal<Option<String>>,
+    pub node_data_cache: Signal<NodeDataCache>,
 }
 
 impl PartialEq for AppState {
@@ -255,6 +257,7 @@ pub fn App() -> Element {
     let debug_signal = use_signal(|| DebugState::new());
     let dp_pool = use_signal(|| DpConnectionPool::new());
     let active_node_id = use_signal(|| Option::<String>::None);
+    let node_data_cache = use_signal(|| NodeDataCache::new());
 
     // Prevent browser zoom on input focus and disable pinch-to-zoom
     use_hook(|| {
@@ -701,6 +704,7 @@ pub fn App() -> Element {
         cp_client: client.clone(),
         dp_pool,
         active_node_id,
+        node_data_cache,
     });
     use_context_provider(|| global_signal);
     use_context_provider(|| approval_signal);
