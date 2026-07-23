@@ -59,6 +59,31 @@ pub struct NodeLoadInfo {
     pub memory_mb: Option<u64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NodeRecord {
+    pub node_id: String,
+    pub name: String,
+    pub version: String,
+    pub status: String,
+    #[serde(default)]
+    pub last_seen_at_ms: Option<u64>,
+    #[serde(default)]
+    pub capability_revision: u64,
+    #[serde(default)]
+    pub load: Option<NodeLoadInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CapabilitySnapshot {
+    pub node_id: String,
+    #[serde(default)]
+    pub tools: Vec<String>,
+    #[serde(default)]
+    pub skills: Vec<String>,
+    #[serde(default)]
+    pub mcp_servers: Vec<String>,
+}
+
 /// Agent metadata entry returned by agent.list.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AgentListEntry {
@@ -601,6 +626,78 @@ impl JsonRpcClient {
                     None => cb(Err("no nodes in response".to_string())),
                 },
             );
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// Get a single node by ID. Returns `None` if the node is not found.
+    pub fn node_get(
+        &self,
+        node_id: &str,
+        cb: impl FnOnce(Result<Option<NodeRecord>, String>) + 'static,
+    ) {
+        let id = self.alloc_id();
+        let params = serde_json::json!({ "node_id": node_id });
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "control.node_get",
+            "params": params,
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            if result.is_null() {
+                cb(Ok(None));
+                return;
+            }
+            match serde_json::from_value::<NodeRecord>(result) {
+                Ok(r) => cb(Ok(Some(r))),
+                Err(e) => cb(Err(e.to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// List capabilities for a node (or all nodes if `node_id` is `None`).
+    pub fn capability_list(
+        &self,
+        node_id: Option<&str>,
+        cb: impl FnOnce(Result<Vec<CapabilitySnapshot>, String>) + 'static,
+    ) {
+        let id = self.alloc_id();
+        let params = serde_json::json!({ "node_id": node_id });
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "control.capability_list",
+            "params": params,
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            match serde_json::from_value::<Vec<CapabilitySnapshot>>(result) {
+                Ok(v) => cb(Ok(v)),
+                Err(e) => cb(Err(e.to_string())),
+            }
+        });
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
