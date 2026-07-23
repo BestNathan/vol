@@ -88,6 +88,8 @@ pub struct AppState {
     pub dp_pool: Signal<DpConnectionPool>,
     pub active_node_id: Signal<Option<String>>,
     pub node_data_cache: Signal<NodeDataCache>,
+    /// When `Some(node_id)`, the UI shows the Node Detail view for that node.
+    pub viewing_node_detail: Signal<Option<String>>,
 }
 
 impl PartialEq for AppState {
@@ -258,6 +260,7 @@ pub fn App() -> Element {
     let dp_pool = use_signal(|| DpConnectionPool::new());
     let active_node_id = use_signal(|| Option::<String>::None);
     let node_data_cache = use_signal(|| NodeDataCache::new());
+    let viewing_node_detail = use_signal(|| Option::<String>::None);
 
     // Prevent browser zoom on input focus and disable pinch-to-zoom
     use_hook(|| {
@@ -705,6 +708,7 @@ pub fn App() -> Element {
         dp_pool,
         active_node_id,
         node_data_cache,
+        viewing_node_detail,
     });
     use_context_provider(|| global_signal);
     use_context_provider(|| approval_signal);
