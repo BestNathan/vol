@@ -700,6 +700,60 @@ pub fn App() -> Element {
         }
     });
 
+    // Auto-select first online node after CP connects.
+    // Uses agent_list (which includes ws_url from node_ingress) to find the
+    // first agent with a reachable data-plane endpoint, then activates that
+    // node and opens a DP connection via the pool.
+    let auto_select_client = client.clone();
+    let auto_select_active_node = active_node_id;
+    let auto_select_dp_pool = dp_pool;
+    let auto_select_global = global_signal.clone();
+    wasm_bindgen_futures::spawn_local(async move {
+        loop {
+            // Wait for CP to connect
+            loop {
+                if auto_select_global.read().ws_connected {
+                    break;
+                }
+                TimeoutFuture::new(200).await;
+            }
+
+            // Fetch agent list — agents carry ws_url from node_ingress
+            let (tx, rx) = futures_channel::oneshot::channel();
+            auto_select_client.agent_list(move |result| {
+                let _ = tx.send(result);
+            });
+
+            if let Ok(Ok(agents)) = rx.await {
+                // Find first agent that has both a node_id and a DP ws_url
+                if let Some(agent) = agents
+                    .iter()
+                    .find(|a| a.node_id.is_some() && a.ws_url.is_some())
+                {
+                    let node_id = agent.node_id.clone().unwrap();
+                    let ws_url = agent.ws_url.clone().unwrap();
+
+                    // Set as active node
+                    auto_select_active_node.set(Some(node_id.clone()));
+
+                    // Create DP connection in the pool
+                    auto_select_dp_pool
+                        .write()
+                        .get_or_create(&node_id, &ws_url, vec![]);
+                    log::info!("Auto-selected node {node_id} (ws_url={ws_url})");
+                }
+            }
+
+            // Wait for disconnect before re-running
+            loop {
+                if !auto_select_global.read().ws_connected {
+                    break;
+                }
+                TimeoutFuture::new(200).await;
+            }
+        }
+    });
+
     use_context_provider(|| AppState {
         event_bus: event_bus.with(|eb| eb.clone()),
         rpc_client: client.clone(),
