@@ -3,10 +3,7 @@
 use dioxus::prelude::*;
 use std::collections::HashSet;
 
-use crate::state::{
-    ActiveTab, GlobalState, OpenFileTab, SubscriptionSet, UiEventKind, WorkspaceState,
-    WorkspaceTreeNode,
-};
+use crate::state::{ActiveTab, OpenFileTab, WorkspaceState, WorkspaceTreeNode};
 
 /// Get the icon for a file extension or directory.
 pub(crate) fn file_icon(is_dir: bool, name: &str) -> &'static str {
@@ -65,21 +62,37 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
         let dir_ws = ws;
         let dir_node = node.clone();
         let dir_path = node.path.clone();
-        let rpc = use_context::<crate::web::components::app::AppState>()
-            .rpc_client
-            .clone();
+        let dir_app = use_context::<crate::web::components::app::AppState>();
+        let dir_node_id = dir_app.active_node_id.read().clone();
         let dir_onclick = move |_: Event<MouseData>| {
             let p = dir_path.clone();
-            let rpc_clone = rpc.clone();
             let mut sig = dir_ws.clone();
             let click_node = dir_node.clone();
+            let app_clone = dir_app.clone();
+            let nid = dir_node_id.clone();
 
             let should_load =
                 sig.with_mut(|s| toggle_directory_for_click(&click_node, &mut s.collapsed_dirs));
 
             if should_load {
+                // Prefer DP client for the active node, fall back to CP rpc_client
+                let client = {
+                    if let Some(ref node_id) = nid {
+                        app_clone
+                            .dp_pool
+                            .read()
+                            .get(node_id)
+                            .map(|c| c.client.clone())
+                            .unwrap_or_else(|| app_clone.rpc_client.clone())
+                    } else {
+                        app_clone.rpc_client.clone()
+                    }
+                };
+
                 let p_str = p.clone();
-                rpc_clone.file_list(&p_str, move |result| {
+                let mut cache = app_clone.node_data_cache;
+                let cache_nid = nid.clone();
+                client.file_list(&p_str, move |result| {
                     let mut sig2 = sig.clone();
                     match result {
                         Ok(entries) => {
@@ -89,6 +102,19 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
                                 s2.workspace.replace_dir_children(&p, flat_entries);
                                 s2.collapsed_dirs.remove(&p);
                             });
+                            // Write back to cache for instant switching
+                            if let Some(ref node_id) = cache_nid {
+                                let ws_read = sig2.read();
+                                let tree_value =
+                                    serde_json::to_value(&ws_read.workspace).unwrap_or_default();
+                                drop(ws_read);
+                                let mut c = cache.write();
+                                if let Some(node_data) = c.get_mut(node_id) {
+                                    node_data
+                                        .data
+                                        .insert("workspace_tree".to_string(), tree_value);
+                                }
+                            }
                         }
                         Err(_) => {
                             sig2.with_mut(|s2| {
@@ -106,15 +132,14 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
 
         let refresh_ws = ws;
         let refresh_path = node.path.clone();
-        let refresh_rpc = use_context::<crate::web::components::app::AppState>()
-            .rpc_client
-            .clone();
+        let refresh_app = use_context::<crate::web::components::app::AppState>();
         let refresh_onclick = move |e: Event<MouseData>| {
             e.stop_propagation();
             let p = refresh_path.clone();
-            let rpc_clone = refresh_rpc.clone();
             let mut sig = refresh_ws.clone();
+            let app_clone = refresh_app.clone();
 
+            // Clear current children to indicate refresh
             sig.with_mut(|s| {
                 if let Some(nd) = s.workspace.find_child_mut(&p) {
                     nd.children.clear();
@@ -123,8 +148,25 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
                 }
             });
 
+            // Prefer DP client for the active node, fall back to CP rpc_client
+            let client = {
+                let nid = app_clone.active_node_id.read().clone();
+                if let Some(ref node_id) = nid {
+                    app_clone
+                        .dp_pool
+                        .read()
+                        .get(node_id)
+                        .map(|c| c.client.clone())
+                        .unwrap_or_else(|| app_clone.rpc_client.clone())
+                } else {
+                    app_clone.rpc_client.clone()
+                }
+            };
+
             let p_str = p.clone();
-            rpc_clone.file_list(&p_str, move |result| {
+            let mut cache = app_clone.node_data_cache;
+            let cache_node_id = app_clone.active_node_id.read().clone();
+            client.file_list(&p_str, move |result| {
                 let mut sig2 = sig.clone();
                 match result {
                     Ok(entries) => {
@@ -133,6 +175,19 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
                         sig2.with_mut(|s2| {
                             s2.workspace.replace_dir_children(&p, flat_entries);
                         });
+                        // Write back to cache for instant switching
+                        if let Some(ref nid) = cache_node_id {
+                            let ws_read = sig2.read();
+                            let tree_value =
+                                serde_json::to_value(&ws_read.workspace).unwrap_or_default();
+                            drop(ws_read);
+                            let mut c = cache.write();
+                            if let Some(node_data) = c.get_mut(nid) {
+                                node_data
+                                    .data
+                                    .insert("workspace_tree".to_string(), tree_value);
+                            }
+                        }
                     }
                     Err(_) => {
                         sig2.with_mut(|s2| {
@@ -180,12 +235,13 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
 
         let ws_sig = ws;
         let mut tab = app.active_tab;
-        let rpc = app.rpc_client.clone();
+        let file_node_id = app.active_node_id.read().clone();
         let file_path = node.path.clone();
         let file_onclick = move |_: Event<MouseData>| {
             let p = file_path.clone();
-            let rpc_clone = rpc.clone();
             let mut sig = ws_sig.clone();
+            let app_clone = app.clone();
+            let nid = file_node_id.clone();
 
             let is_new_file = sig.with_mut(|s| {
                 let existing = s.open_files.iter().position(|f| f.path == p);
@@ -208,8 +264,21 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
             });
 
             if is_new_file {
+                // Prefer DP client for the active node, fall back to CP rpc_client
+                let client = {
+                    if let Some(ref node_id) = nid {
+                        app_clone
+                            .dp_pool
+                            .read()
+                            .get(node_id)
+                            .map(|c| c.client.clone())
+                            .unwrap_or_else(|| app_clone.rpc_client.clone())
+                    } else {
+                        app_clone.rpc_client.clone()
+                    }
+                };
                 let p2 = p.clone();
-                rpc_clone.file_read(&p, move |result| {
+                client.file_read(&p, move |result| {
                     sig.with_mut(|st| {
                         if let Some(idx) = st.open_files.iter().position(|f| f.path == p2) {
                             match result {
@@ -396,66 +465,114 @@ pub fn FileTree() -> Element {
     let ws: Signal<WorkspaceState> = use_context();
 
     let app = use_context::<crate::web::components::app::AppState>();
-    let global: Signal<GlobalState> = use_context();
     let drawer_open = ws.read().file_tree_drawer_open;
 
-    // Load root directory on mount — but wait for WebSocket connection first.
-    use_hook(move || {
-        let rpc = app.rpc_client.clone();
-        let sig = ws;
-        let is_connected = global.read().ws_connected;
+    // Load root directory from cache (instant) or trigger load via DP.
+    // Re-run when the active node changes.
+    let loaded_ws_node = use_signal(|| Option::<String>::None);
+    use_effect(move || {
+        let active_node = app.active_node_id.read().clone();
+        let mut cache = app.node_data_cache.clone();
+        let dp_pool = app.dp_pool.clone();
+        let ws_write = ws;
+        let mut loaded_sig = loaded_ws_node;
 
-        // If already connected, load immediately.
-        if is_connected {
-            let rpc_clone = rpc.clone();
-            let sig2 = sig.clone();
-            rpc_clone.file_list(".", move |result| {
-                let mut sig3 = sig2.clone();
-                match result {
-                    Ok(entries) => {
+        // If node changed, clear workspace to trigger proper rebuild
+        if active_node != *loaded_sig.read() {
+            ws_write.write_unchecked().workspace =
+                crate::state::WorkspaceTreeNode::root(".".to_string(), ".".into());
+        }
+
+        let ws_loaded = ws_write.read().workspace.loaded;
+        let loaded_node = loaded_sig.read().clone();
+
+        // Only act if workspace needs loading or node changed
+        if !ws_loaded || loaded_node != active_node {
+            if let Some(ref node_id) = active_node {
+                // Try cache first for instant rendering
+                let cached_files = cache
+                    .read()
+                    .get(node_id)
+                    .and_then(|d| d.data.get("files").cloned());
+
+                if let Some(entries_json) = cached_files {
+                    // Cache hit: rebuild workspace from cached entries
+                    if let Ok(entries) =
+                        serde_json::from_value::<Vec<crate::web::client::FileEntry>>(entries_json)
+                    {
                         let flat_entries: Vec<(String, bool)> =
                             entries.into_iter().map(|e| (e.name, e.is_dir)).collect();
-                        sig3.with_mut(|s2| {
-                            s2.workspace.replace_dir_children(".", flat_entries);
+                        ws_write
+                            .write_unchecked()
+                            .workspace
+                            .replace_dir_children(".", flat_entries);
+                    }
+                    loaded_sig.set(Some(node_id.clone()));
+
+                    // Also restore full workspace tree if cached
+                    let cached_tree = cache
+                        .read()
+                        .get(node_id)
+                        .and_then(|d| d.data.get("workspace_tree").cloned());
+                    if let Some(tree_json) = cached_tree {
+                        if let Ok(tree) =
+                            serde_json::from_value::<crate::state::WorkspaceTreeNode>(tree_json)
+                        {
+                            ws_write.write_unchecked().workspace = tree;
+                        }
+                    }
+                } else {
+                    // Cache miss: trigger load from DP
+                    let dp_client = dp_pool.read().get(node_id).map(|c| c.client.clone());
+                    if let Some(client) = dp_client {
+                        let nid_clone = node_id.clone();
+                        client.file_list(".", move |result| {
+                            let mut sig = ws_write.clone();
+                            let mut c = cache.write();
+                            let node_data = c.get_or_insert(&nid_clone);
+                            match result {
+                                Ok(entries) => {
+                                    let flat_entries: Vec<(String, bool)> = entries
+                                        .iter()
+                                        .map(|e| (e.name.clone(), e.is_dir))
+                                        .collect();
+                                    sig.with_mut(|s| {
+                                        s.workspace.replace_dir_children(".", flat_entries);
+                                    });
+                                    // Store root entries for quick rebuild
+                                    let entries_value =
+                                        serde_json::to_value(&entries).unwrap_or_default();
+                                    node_data.data.insert("files".to_string(), entries_value);
+                                    // Also store full workspace tree
+                                    let ws_read = sig.read();
+                                    let tree_value = serde_json::to_value(&ws_read.workspace)
+                                        .unwrap_or_default();
+                                    drop(ws_read);
+                                    node_data
+                                        .data
+                                        .insert("workspace_tree".to_string(), tree_value);
+                                }
+                                Err(e) => {
+                                    log::warn!(
+                                        "Failed to load files for node {}: {}",
+                                        nid_clone,
+                                        e
+                                    );
+                                    sig.with_mut(|s| {
+                                        s.workspace.loaded = true;
+                                        s.workspace.load_error = true;
+                                    });
+                                }
+                            }
                         });
                     }
-                    Err(_) => {
-                        sig3.with_mut(|s2| {
-                            s2.workspace.loaded = true;
-                            s2.workspace.load_error = true;
-                        });
-                    }
+                    // Mark this node as being loaded (prevents duplicate loads)
+                    loaded_sig.set(Some(node_id.clone()));
                 }
-            });
-        } else {
-            // Subscribe to WsConnected event, then load.
-            let bus = app.event_bus.clone();
-            let mut set = SubscriptionSet::new(bus.clone());
-            set.subscribe(&bus, UiEventKind::WsConnected, move |_e| {
-                let rpc_clone = rpc.clone();
-                let sig2 = sig.clone();
-                rpc_clone.file_list(".", move |result| {
-                    let mut sig3 = sig2.clone();
-                    match result {
-                        Ok(entries) => {
-                            let flat_entries: Vec<(String, bool)> =
-                                entries.into_iter().map(|e| (e.name, e.is_dir)).collect();
-                            sig3.with_mut(|s2| {
-                                s2.workspace.replace_dir_children(".", flat_entries);
-                            });
-                        }
-                        Err(_) => {
-                            sig3.with_mut(|s2| {
-                                s2.workspace.loaded = true;
-                                s2.workspace.load_error = true;
-                            });
-                        }
-                    }
-                });
-            });
-            // Keep subscription alive via a static-leaked Arc (Dioxus drops use_hook on unmount).
-            // In practice the page never unmounts, so this is fine.
-            std::mem::forget(Box::new(set));
+            } else {
+                // No active node
+                loaded_sig.set(None);
+            }
         }
     });
 
@@ -498,7 +615,13 @@ pub fn FileTree() -> Element {
                             }
                         }
                         div { class: "min-h-0 flex-1 overflow-y-auto py-1",
-                            div { class: "flex items-center justify-center h-full text-[#666] p-5 text-center text-[12px]", "Loading files..." }
+                            div { class: "flex items-center justify-center h-full text-[#666] p-5 text-center text-[12px]",
+                                if app.active_node_id.read().is_none() {
+                                    "No node selected"
+                                } else {
+                                    "Loading files..."
+                                }
+                            }
                         }
                     }
                 }

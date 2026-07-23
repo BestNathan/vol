@@ -250,7 +250,7 @@ pub enum ConversationEntry {
 }
 
 /// A node in the workspace directory tree.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkspaceTreeNode {
     pub name: String,
     pub path: String,
