@@ -34,6 +34,12 @@ pub fn NodesDropdown(
                 span { "▾ Nodes({node_count})" }
             }
             if *is_open.read() {
+                // Transparent overlay — clicking outside the dropdown closes it.
+                // Follows the same pattern as SkillDetailDialog.
+                div {
+                    class: "fixed inset-0 z-40",
+                    onclick: move |_| is_open.set(false),
+                }
                 div {
                     class: "absolute right-0 mt-1 min-w-[280px] bg-[#1e1e36] border border-[#333355] rounded shadow-lg z-50 max-h-[400px] overflow-y-auto",
                     onclick: move |e| {
@@ -45,6 +51,7 @@ pub fn NodesDropdown(
                     } else {
                         for node in nodes.iter() {
                             NodeRow {
+                                key: "{node.node_id}",
                                 node: node.clone(),
                                 is_selected: selected_id.as_deref() == Some(&node.node_id),
                                 on_select: {
@@ -57,7 +64,7 @@ pub fn NodesDropdown(
                                 },
                                 on_view_detail: {
                                     let node_id = node.node_id.clone();
-                                    let app_state = app_state.clone();
+                                    let mut app_state = app_state.clone();
                                     move |_| {
                                         app_state.viewing_node_detail.set(Some(node_id.clone()));
                                         is_open.set(false);
