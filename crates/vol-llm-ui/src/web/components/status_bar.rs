@@ -95,7 +95,7 @@ pub fn StatusBar() -> Element {
                     nodes: nodes.read().clone(),
                     selected_node_id: app_state.active_node_id,
                     on_select: {
-                        let app_state = app_state.clone();
+                        let mut app_state = app_state.clone();
                         move |node_id: String| {
                             app_state.active_node_id.set(Some(node_id));
                         }

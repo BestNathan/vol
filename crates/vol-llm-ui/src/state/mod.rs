@@ -383,8 +383,9 @@ pub enum AgentSubTab {
 }
 
 /// Sub-tabs within the MCP panel.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub enum McpSubtab {
+    #[default]
     Servers,
     Tools,
     Resources,

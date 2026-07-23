@@ -29,8 +29,8 @@ pub struct NodeDetailState {
 /// - **Capabilities** — tools / skills / MCP counts from `capability_list`
 #[component]
 pub fn NodeDetailPanel(node_id: String) -> Element {
-    let app = use_context::<AppState>();
-    let mut state = use_signal(NodeDetailState::default);
+    let mut app = use_context::<AppState>();
+    let state = use_signal(NodeDetailState::default);
 
     // TODO(spec 7.5): spec mockup shows ws_url but NodeRecord doesn't carry it
     // in the current protocol.  A protocol extension is needed to populate this
