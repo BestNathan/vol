@@ -1,5 +1,7 @@
+mod node_data_cache;
 mod workspace;
 
+pub use node_data_cache::{NodeData, NodeDataCache};
 pub use workspace::scan_workspace;
 
 #[cfg(feature = "tui")]
