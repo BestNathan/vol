@@ -14,9 +14,10 @@ pub fn McpPanel() -> Element {
     let dialog_signal: Signal<McpDialogState> = use_context();
 
     // Subtab selection persists across cache loads, kept in local signal.
-    let mut active_subtab = use_signal(|| McpSubtab::Servers);
+    let active_subtab = use_signal(|| McpSubtab::Servers);
 
     // Load from cache or trigger DP fetch whenever active_node changes.
+    let app_state_for_effect = app_state.clone();
     use_effect(move || {
         let node_id = active_node.read().clone();
         if let Some(ref nid) = node_id {
@@ -31,12 +32,12 @@ pub fn McpPanel() -> Element {
             }
 
             // Prefer DP client, fall back to CP rpc_client.
-            let client = app_state
+            let client = app_state_for_effect
                 .dp_pool
                 .read()
                 .get(nid)
                 .map(|c| c.client.clone())
-                .unwrap_or_else(|| app_state.rpc_client.clone());
+                .unwrap_or_else(|| app_state_for_effect.rpc_client.clone());
 
             let mut cache_mut = cache;
             let target_nid = nid.clone();
@@ -81,10 +82,10 @@ pub fn McpPanel() -> Element {
                 let cache_nid = cache_nid.clone();
                 let mut cache_ref = cache_mut.clone();
                 let target = target_nid.clone();
-                let done = finish_one.clone();
+                let mut done = finish_one.clone();
                 client.mcp_list_servers(move |result| {
                     let current = active_node.read().clone();
-                    if current != target {
+                    if current != Some(target) {
                         log::warn!("Node switched, discarding stale mcp_list_servers response");
                         return;
                     }
@@ -116,10 +117,10 @@ pub fn McpPanel() -> Element {
                 let cache_nid = cache_nid.clone();
                 let mut cache_ref = cache_mut.clone();
                 let target = target_nid.clone();
-                let done = finish_one.clone();
+                let mut done = finish_one.clone();
                 client.mcp_list_tools(None, move |result| {
                     let current = active_node.read().clone();
-                    if current != target {
+                    if current != Some(target) {
                         log::warn!("Node switched, discarding stale mcp_list_tools response");
                         return;
                     }
@@ -146,10 +147,10 @@ pub fn McpPanel() -> Element {
                 let cache_nid = cache_nid.clone();
                 let mut cache_ref = cache_mut.clone();
                 let target = target_nid.clone();
-                let done = finish_one.clone();
+                let mut done = finish_one.clone();
                 client.mcp_list_resources(None, move |result| {
                     let current = active_node.read().clone();
-                    if current != target {
+                    if current != Some(target) {
                         log::warn!("Node switched, discarding stale mcp_list_resources response");
                         return;
                     }
@@ -176,10 +177,10 @@ pub fn McpPanel() -> Element {
                 let cache_nid = cache_nid.clone();
                 let mut cache_ref = cache_mut.clone();
                 let target = target_nid.clone();
-                let done = finish_one.clone();
+                let mut done = finish_one.clone();
                 client.mcp_list_resource_templates(None, move |result| {
                     let current = active_node.read().clone();
-                    if current != target {
+                    if current != Some(target) {
                         log::warn!(
                             "Node switched, discarding stale mcp_list_resource_templates response"
                         );
@@ -207,10 +208,10 @@ pub fn McpPanel() -> Element {
                 let cache_nid = cache_nid.clone();
                 let mut cache_ref = cache_mut;
                 let target = target_nid;
-                let done = finish_one;
+                let mut done = finish_one;
                 client.mcp_list_prompts(None, move |result| {
                     let current = active_node.read().clone();
-                    if current != target {
+                    if current != Some(target) {
                         log::warn!("Node switched, discarding stale mcp_list_prompts response");
                         return;
                     }
@@ -290,7 +291,7 @@ pub fn McpPanel() -> Element {
 /// Deserializable subset of McpState — used to read cached JSON.
 /// We do NOT deserialize `active_subtab` / `loading` / `error` into McpState;
 /// those are handled separately.
-#[derive(serde::Deserialize, Clone, Debug)]
+#[derive(serde::Deserialize, Clone, Debug, PartialEq)]
 struct McpStateJson {
     #[serde(default)]
     servers: Vec<crate::state::McpServerInfo>,
@@ -391,7 +392,7 @@ fn ServerList(
                                     onclick: move |_| {
                                         let name = srv_name.clone();
                                         let app = app.clone();
-                                        do_mcp_reconnect(&app, &name);
+                                        do_mcp_reconnect(app, &name);
                                     },
                                     "Reconnect"
                                 }
@@ -416,8 +417,11 @@ fn ServerList(
 
 /// Trigger a reconnect via the DP client (falling back to CP), then re-fetch
 /// servers + tools and write the results back into NodeDataCache.
-fn do_mcp_reconnect(app: &AppState, server_name: &str) {
+fn do_mcp_reconnect(app: AppState, server_name: &str) {
     let nid = app.active_node_id.read().clone();
+    let Some(ref nid_str) = nid else {
+        return;
+    };
     let client = nid
         .as_ref()
         .and_then(|id| app.dp_pool.read().get(id).map(|c| c.client.clone()))
@@ -425,8 +429,8 @@ fn do_mcp_reconnect(app: &AppState, server_name: &str) {
 
     let name = server_name.to_string();
     let target_nid = nid.clone();
-    let mut cache_mut = app.node_data_cache;
-    let cache_nid = nid.clone();
+    let cache_mut = app.node_data_cache;
+    let cache_nid = nid_str.clone();
 
     client.mcp_reconnect(&name, move |result| {
         if let Ok(true) = result {
@@ -523,7 +527,7 @@ fn ServerRow(app_state: AppState, server: crate::state::McpServerInfo) -> Elemen
                     onclick: move |_| {
                         let srv = server.name.clone();
                         let app = app_state.clone();
-                        do_mcp_reconnect(&app, &srv);
+                        do_mcp_reconnect(app, &srv);
                     },
                     "Reconnect"
                 }

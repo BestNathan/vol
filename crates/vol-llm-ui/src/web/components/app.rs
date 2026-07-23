@@ -705,8 +705,8 @@ pub fn App() -> Element {
     // first agent with a reachable data-plane endpoint, then activates that
     // node and opens a DP connection via the pool.
     let auto_select_client = client.clone();
-    let auto_select_active_node = active_node_id;
-    let auto_select_dp_pool = dp_pool;
+    let mut auto_select_active_node = active_node_id;
+    let mut auto_select_dp_pool = dp_pool;
     let auto_select_global = global_signal.clone();
     wasm_bindgen_futures::spawn_local(async move {
         loop {
@@ -726,7 +726,7 @@ pub fn App() -> Element {
 
             if let Ok(Ok(agents)) = rx.await {
                 // Only auto-select if no node is currently selected — don't overwrite manual choice
-                if auto_select_active_node.get().is_none() {
+                if auto_select_active_node.read().clone().is_none() {
                     // Find first agent that has both a node_id and a DP ws_url
                     if let Some(agent) = agents
                         .iter()

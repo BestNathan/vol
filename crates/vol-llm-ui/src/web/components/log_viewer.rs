@@ -17,6 +17,7 @@ pub fn LogViewer() -> Element {
     let cache = app.node_data_cache;
 
     // Load logs from cache or trigger DP fetch when active_node changes.
+    let app_for_effect = app.clone();
     use_effect(move || {
         let node_id = active_node.read().clone();
         if let Some(ref nid) = node_id {
@@ -30,12 +31,12 @@ pub fn LogViewer() -> Element {
             }
 
             // Prefer DP client, fall back to CP rpc_client.
-            let client = app
+            let client = app_for_effect
                 .dp_pool
                 .read()
                 .get(nid)
                 .map(|c| c.client.clone())
-                .unwrap_or_else(|| app.rpc_client.clone());
+                .unwrap_or_else(|| app_for_effect.rpc_client.clone());
 
             let mut cache_mut = cache;
             let target_nid = nid.clone();
@@ -52,7 +53,7 @@ pub fn LogViewer() -> Element {
 
             client.log_list(move |result| {
                 let current_nid = active_node.read().clone();
-                if current_nid != target_nid {
+                if current_nid != Some(target_nid) {
                     log::warn!("Node switched, discarding stale log_list response");
                     return;
                 }
@@ -206,7 +207,7 @@ fn LogRunItem(
     };
 
     let run_id_click = run.run_id.clone();
-    let cache_click = cache.clone();
+    let mut cache_click = cache.clone();
     let active_node_click = active_node.clone();
     let app_click = app.clone();
 
@@ -239,7 +240,7 @@ fn LogRunItem(
                         .unwrap_or_else(|| app_click.rpc_client.clone());
 
                     let target_nid = node_id.clone();
-                    let cache_mut = cache_click;
+                    let mut cache_mut = cache_click;
 
                     client.log_read(&run_id_click, move |result| {
                         let current_nid = active_node_click.read().clone();
@@ -283,7 +284,7 @@ fn render_log_entries(
     loading: bool,
 ) -> Element {
     let run_id = run_id.to_string();
-    let cache_back = cache.clone();
+    let mut cache_back = cache.clone();
     let active_node_back = active_node.clone();
     let count = entries.len();
 
