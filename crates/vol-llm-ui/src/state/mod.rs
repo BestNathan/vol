@@ -383,7 +383,7 @@ pub enum AgentSubTab {
 }
 
 /// Sub-tabs within the MCP panel.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum McpSubtab {
     Servers,
     Tools,
@@ -1019,7 +1019,7 @@ pub struct McpServerRowState {
 
 /// Local state for McpPanel.
 #[cfg(all(feature = "web", not(feature = "tui")))]
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct McpState {
     pub servers: Vec<McpServerInfo>,
     pub tools: Vec<McpToolInfo>,
