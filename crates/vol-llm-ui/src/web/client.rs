@@ -46,17 +46,89 @@ pub struct NodeListEntry {
     pub version: String,
     pub status: String,
     #[serde(default)]
-    pub agent_count: Option<usize>,
+    pub last_seen_at_ms: Option<u64>,
     #[serde(default)]
-    pub load: Option<NodeLoadInfo>,
+    pub capability_revision: u64,
+    #[serde(default)]
+    pub load: NodeLoad,
+    /// UI-only: not populated by the server; present for future use.
+    #[serde(default)]
+    pub agent_count: Option<usize>,
+}
+
+/// Load metrics mirroring `vol_llm_agent_protocol::agent_server_protocol::NodeLoad`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct NodeLoad {
+    pub running: u64,
+    pub queued: u64,
+}
+
+/// Node record mirroring `vol_llm_agent_protocol::agent_server_protocol::NodeRecord`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NodeRecord {
+    pub node_id: String,
+    pub name: String,
+    pub version: String,
+    pub status: String,
+    #[serde(default)]
+    pub last_seen_at_ms: Option<u64>,
+    #[serde(default)]
+    pub capability_revision: u64,
+    #[serde(default)]
+    pub load: NodeLoad,
+}
+
+/// Capability snapshot mirroring
+/// `vol_llm_agent_protocol::agent_server_protocol::CapabilitySnapshot`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CapabilitySnapshot {
+    pub node_id: String,
+    pub revision: u64,
+    #[serde(default)]
+    pub generated_at_ms: Option<u64>,
+    #[serde(default)]
+    pub agents: Vec<AgentCapability>,
+    #[serde(default)]
+    pub tools: Vec<ToolCapability>,
+    #[serde(default)]
+    pub mcp_servers: Vec<McpServerCapability>,
+    #[serde(default)]
+    pub skills: Vec<SkillCapability>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NodeLoadInfo {
+pub struct AgentCapability {
+    pub agent_id: String,
+    pub name: String,
     #[serde(default)]
-    pub cpu: Option<f64>,
+    pub description: Option<String>,
     #[serde(default)]
-    pub memory_mb: Option<u64>,
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ToolCapability {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub sensitivity: Option<String>,
+    #[serde(default)]
+    pub requires_approval: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct McpServerCapability {
+    pub name: String,
+    #[serde(default)]
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SkillCapability {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 /// Agent metadata entry returned by agent.list.
@@ -89,6 +161,23 @@ pub struct TaskEntry {
     pub created_at: u64,
     pub started_at: Option<u64>,
     pub completed_at: Option<u64>,
+}
+
+/// Log run summary returned by log.list.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LogRunSummary {
+    pub run_id: String,
+    pub event_count: usize,
+    pub last_event: String,
+    pub last_event_time: String,
+}
+
+/// Log entry returned by log.read.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LogLine {
+    pub timestamp: String,
+    pub event_type: String,
+    pub summary: String,
 }
 
 /// Session entry matching the vol-session wire format.
@@ -601,6 +690,89 @@ impl JsonRpcClient {
                     None => cb(Err("no nodes in response".to_string())),
                 },
             );
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// Get a single node by ID. Returns `None` if the node is not found.
+    pub fn node_get(
+        &self,
+        node_id: &str,
+        cb: impl FnOnce(Result<Option<NodeRecord>, String>) + 'static,
+    ) {
+        let id = self.alloc_id();
+        let params = serde_json::json!({ "node_id": node_id });
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "control.node_get",
+            "params": params,
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            // Server returns NodeGetResult { node: Option<NodeRecord> };
+            // data_json() strips the variant wrapper, leaving {"node": ...}.
+            let node_value = result.get("node").unwrap_or(&result);
+            if node_value.is_null() {
+                cb(Ok(None));
+                return;
+            }
+            match serde_json::from_value::<NodeRecord>(node_value.clone()) {
+                Ok(r) => cb(Ok(Some(r))),
+                Err(e) => cb(Err(e.to_string())),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// List capabilities for a node (or all nodes if `node_id` is `None`).
+    pub fn capability_list(
+        &self,
+        node_id: Option<&str>,
+        cb: impl FnOnce(Result<Vec<CapabilitySnapshot>, String>) + 'static,
+    ) {
+        let id = self.alloc_id();
+        let params = serde_json::json!({ "node_id": node_id });
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "control.capability_list",
+            "params": params,
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            // Server returns CapabilityListResult { snapshots: Vec<CapabilitySnapshot> };
+            // data_json() strips the variant wrapper, leaving {"snapshots": [...]}.
+            match result.get("snapshots").and_then(|v| v.as_array()) {
+                Some(arr) => {
+                    let parsed: Vec<CapabilitySnapshot> = arr
+                        .iter()
+                        .filter_map(|s| serde_json::from_value(s.clone()).ok())
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no snapshots in response".to_string())),
+            }
+        });
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
@@ -1489,6 +1661,76 @@ impl JsonRpcClient {
                 },
                 None => cb(Err("no task in response".to_string())),
             });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    pub fn log_list(&self, cb: impl FnOnce(Result<Vec<LogRunSummary>, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "log.list",
+            "params": {},
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("runs").and_then(|v| v.as_array()) {
+                    Some(runs) => {
+                        let parsed: Vec<LogRunSummary> = runs
+                            .iter()
+                            .filter_map(|r| serde_json::from_value(r.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no runs in response".to_string())),
+                },
+            );
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    pub fn log_read(&self, run_id: &str, cb: impl FnOnce(Result<Vec<LogLine>, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "log.read",
+            "params": { "run_id": run_id },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("entries").and_then(|v| v.as_array()) {
+                    Some(entries) => {
+                        let parsed: Vec<LogLine> = entries
+                            .iter()
+                            .filter_map(|e| serde_json::from_value(e.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no entries in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 

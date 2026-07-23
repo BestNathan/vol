@@ -3,86 +3,283 @@ use dioxus::prelude::*;
 use crate::state::{McpDialogState, McpState, McpSubtab};
 use crate::web::components::app::AppState;
 
+/// Key used to store the serialized McpState in NodeDataCache.
+const CACHE_KEY: &str = "mcp_state";
+
 #[component]
 pub fn McpPanel() -> Element {
     let app_state: AppState = use_context();
-    let rpc_client = app_state.rpc_client.clone();
-    let signal = use_signal(|| McpState::new());
+    let active_node = app_state.active_node_id;
+    let cache = app_state.node_data_cache;
     let dialog_signal: Signal<McpDialogState> = use_context();
 
-    // Load data on mount
-    use_hook(move || {
-        let mut sig = signal;
+    // Subtab selection persists across cache loads, kept in local signal.
+    let mut active_subtab = use_signal(|| McpSubtab::Servers);
 
-        rpc_client.mcp_list_servers(move |result| {
-            sig.with_mut(|s| match result {
-                Ok(servers) => {
-                    s.servers = servers;
+    // Load from cache or trigger DP fetch whenever active_node changes.
+    use_effect(move || {
+        let node_id = active_node.read().clone();
+        if let Some(ref nid) = node_id {
+            let cached = {
+                let c = cache.read();
+                c.get(nid).and_then(|d| d.data.get(CACHE_KEY).cloned())
+            };
+
+            if cached.is_some() {
+                // Already cached — nothing to fetch.
+                return;
+            }
+
+            // Prefer DP client, fall back to CP rpc_client.
+            let client = app_state
+                .dp_pool
+                .read()
+                .get(nid)
+                .map(|c| c.client.clone())
+                .unwrap_or_else(|| app_state.rpc_client.clone());
+
+            let mut cache_mut = cache;
+            let target_nid = nid.clone();
+            let cache_nid = nid.clone();
+
+            // Mark as loading in cache immediately so render shows spinner.
+            {
+                let loading_state = McpState::new();
+                let v = serde_json::to_value(&loading_state).unwrap_or_default();
+                let mut c = cache_mut.write();
+                let node_data = c.get_or_insert(&cache_nid);
+                node_data.data.insert(CACHE_KEY.to_string(), v);
+            }
+
+            // Fire all five MCP list calls in parallel.  Each writes its slice
+            // into the shared McpState inside the cache; the last one to
+            // finish clears the loading flag.
+            let remaining = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(5));
+
+            let finish_one = {
+                let remaining = remaining.clone();
+                let cache_nid = cache_nid.clone();
+                let mut cache_ref = cache_mut;
+                move || {
+                    if remaining.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1 {
+                        // Last callback — clear loading flag.
+                        let mut c = cache_ref.write();
+                        if let Some(d) = c.get_mut(&cache_nid) {
+                            if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                                if let Some(obj) = v.as_object_mut() {
+                                    obj.insert("loading".to_string(), serde_json::json!(false));
+                                }
+                            }
+                        }
+                    }
                 }
-                Err(e) => {
-                    s.error = Some(e);
-                }
-            });
-            sig.with_mut(|s| s.loading = false);
-        });
+            };
 
-        let rpc_client2 = rpc_client.clone();
-        let sig2 = signal;
-        rpc_client2.mcp_list_tools(None, move |result| {
-            if let Ok(tools) = result {
-                sig2.write_unchecked().tools = tools;
+            // --- servers ---
+            {
+                let client = client.clone();
+                let cache_nid = cache_nid.clone();
+                let mut cache_ref = cache_mut.clone();
+                let target = target_nid.clone();
+                let done = finish_one.clone();
+                client.mcp_list_servers(move |result| {
+                    let current = active_node.read().clone();
+                    if current != target {
+                        log::warn!("Node switched, discarding stale mcp_list_servers response");
+                        return;
+                    }
+                    let mut c = cache_ref.write();
+                    if let Some(d) = c.get_mut(&cache_nid) {
+                        if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                            if let Some(obj) = v.as_object_mut() {
+                                match result {
+                                    Ok(servers) => {
+                                        obj.insert(
+                                            "servers".to_string(),
+                                            serde_json::to_value(servers).unwrap_or_default(),
+                                        );
+                                    }
+                                    Err(e) => {
+                                        obj.insert("error".to_string(), serde_json::json!(e));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    done();
+                });
             }
-        });
 
-        let rpc_client3 = rpc_client.clone();
-        let mut sig3 = sig;
-        rpc_client3.mcp_list_resources(None, move |result| {
-            if let Ok(resources) = result {
-                sig3.with_mut(|s| s.resources = resources);
+            // --- tools ---
+            {
+                let client = client.clone();
+                let cache_nid = cache_nid.clone();
+                let mut cache_ref = cache_mut.clone();
+                let target = target_nid.clone();
+                let done = finish_one.clone();
+                client.mcp_list_tools(None, move |result| {
+                    let current = active_node.read().clone();
+                    if current != target {
+                        log::warn!("Node switched, discarding stale mcp_list_tools response");
+                        return;
+                    }
+                    if let Ok(tools) = result {
+                        let mut c = cache_ref.write();
+                        if let Some(d) = c.get_mut(&cache_nid) {
+                            if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                                if let Some(obj) = v.as_object_mut() {
+                                    obj.insert(
+                                        "tools".to_string(),
+                                        serde_json::to_value(tools).unwrap_or_default(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    done();
+                });
             }
-        });
 
-        let rpc_client4 = rpc_client.clone();
-        let mut sig4 = sig;
-        rpc_client4.mcp_list_resource_templates(None, move |result| {
-            if let Ok(templates) = result {
-                sig4.with_mut(|s| s.resource_templates = templates);
+            // --- resources ---
+            {
+                let client = client.clone();
+                let cache_nid = cache_nid.clone();
+                let mut cache_ref = cache_mut.clone();
+                let target = target_nid.clone();
+                let done = finish_one.clone();
+                client.mcp_list_resources(None, move |result| {
+                    let current = active_node.read().clone();
+                    if current != target {
+                        log::warn!("Node switched, discarding stale mcp_list_resources response");
+                        return;
+                    }
+                    if let Ok(resources) = result {
+                        let mut c = cache_ref.write();
+                        if let Some(d) = c.get_mut(&cache_nid) {
+                            if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                                if let Some(obj) = v.as_object_mut() {
+                                    obj.insert(
+                                        "resources".to_string(),
+                                        serde_json::to_value(resources).unwrap_or_default(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    done();
+                });
             }
-        });
 
-        let rpc_client5 = rpc_client;
-        let mut sig5 = sig;
-        rpc_client5.mcp_list_prompts(None, move |result| {
-            if let Ok(prompts) = result {
-                sig5.with_mut(|s| s.prompts = prompts);
+            // --- resource_templates ---
+            {
+                let client = client.clone();
+                let cache_nid = cache_nid.clone();
+                let mut cache_ref = cache_mut.clone();
+                let target = target_nid.clone();
+                let done = finish_one.clone();
+                client.mcp_list_resource_templates(None, move |result| {
+                    let current = active_node.read().clone();
+                    if current != target {
+                        log::warn!(
+                            "Node switched, discarding stale mcp_list_resource_templates response"
+                        );
+                        return;
+                    }
+                    if let Ok(templates) = result {
+                        let mut c = cache_ref.write();
+                        if let Some(d) = c.get_mut(&cache_nid) {
+                            if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                                if let Some(obj) = v.as_object_mut() {
+                                    obj.insert(
+                                        "resource_templates".to_string(),
+                                        serde_json::to_value(templates).unwrap_or_default(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    done();
+                });
             }
-        });
+
+            // --- prompts ---
+            {
+                let cache_nid = cache_nid.clone();
+                let mut cache_ref = cache_mut;
+                let target = target_nid;
+                let done = finish_one;
+                client.mcp_list_prompts(None, move |result| {
+                    let current = active_node.read().clone();
+                    if current != target {
+                        log::warn!("Node switched, discarding stale mcp_list_prompts response");
+                        return;
+                    }
+                    if let Ok(prompts) = result {
+                        let mut c = cache_ref.write();
+                        if let Some(d) = c.get_mut(&cache_nid) {
+                            if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                                if let Some(obj) = v.as_object_mut() {
+                                    obj.insert(
+                                        "prompts".to_string(),
+                                        serde_json::to_value(prompts).unwrap_or_default(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    done();
+                });
+            }
+        }
     });
 
-    let (active, loading) = {
-        let s = signal.read();
-        (s.active_subtab, s.loading)
+    // Read McpState from cache for the active node.
+    let mcp_data: Option<McpStateJson> = {
+        let node_id = active_node.read().clone();
+        node_id.and_then(|nid| {
+            let c = cache.read();
+            c.get(&nid)
+                .and_then(|d| d.data.get(CACHE_KEY).cloned())
+                .and_then(|v| serde_json::from_value::<McpStateJson>(v).ok())
+        })
+    };
+
+    let (loading, error, active) = match &mcp_data {
+        Some(d) => (d.loading, d.error.clone(), d.active_subtab),
+        None => (false, None, active_subtab.read().clone()),
+    };
+
+    // Sync subtab from local signal when there's no cached state yet.
+    let display_active = if mcp_data.is_some() {
+        active
+    } else {
+        active_subtab.read().clone()
     };
 
     rsx! {
         div { class: "flex-1 overflow-y-auto p-2",
-            if loading {
+            if active_node.read().is_none() {
+                div { class: "text-[#666] text-center p-4 text-[13px]", "No node selected" }
+            } else if mcp_data.is_none() {
+                // Brief flash before first effect runs.
+                div { class: "text-[#666] text-center p-4 text-[13px]", "Loading MCP data..." }
+            } else if loading {
                 div { class: "text-[#666] text-center p-4 text-[13px]", "Loading MCP data..." }
             } else {
                 div {
                     // Sub-tab buttons
                     div { class: "flex gap-1 mb-2",
-                        McpSubtabButton { signal, subtab: McpSubtab::Servers, label: "Servers" }
-                        McpSubtabButton { signal, subtab: McpSubtab::Tools, label: "Tools" }
-                        McpSubtabButton { signal, subtab: McpSubtab::Resources, label: "Resources" }
-                        McpSubtabButton { signal, subtab: McpSubtab::Prompts, label: "Prompts" }
+                        McpSubtabButton { active_subtab, subtab: McpSubtab::Servers, label: "Servers" }
+                        McpSubtabButton { active_subtab, subtab: McpSubtab::Tools, label: "Tools" }
+                        McpSubtabButton { active_subtab, subtab: McpSubtab::Resources, label: "Resources" }
+                        McpSubtabButton { active_subtab, subtab: McpSubtab::Prompts, label: "Prompts" }
                     }
                     // Sub-tab content
-                    match active {
-                        McpSubtab::Servers => rsx! { ServerList { signal, app_state: app_state.clone() } },
-                        McpSubtab::Tools => rsx! { ToolList { signal, dialog_signal } },
-                        McpSubtab::Resources => rsx! { ResourceList { signal, dialog_signal } },
-                        McpSubtab::Prompts => rsx! { PromptList { signal, dialog_signal } },
+                    match display_active {
+                        McpSubtab::Servers => rsx! { ServerList { app_state: app_state.clone(), cache, active_node, error } },
+                        McpSubtab::Tools => rsx! { ToolList { mcp_data: mcp_data.clone(), dialog_signal } },
+                        McpSubtab::Resources => rsx! { ResourceList { mcp_data: mcp_data.clone(), dialog_signal } },
+                        McpSubtab::Prompts => rsx! { PromptList { mcp_data: mcp_data.clone(), dialog_signal } },
                     }
                 }
             }
@@ -90,9 +287,36 @@ pub fn McpPanel() -> Element {
     }
 }
 
+/// Deserializable subset of McpState — used to read cached JSON.
+/// We do NOT deserialize `active_subtab` / `loading` / `error` into McpState;
+/// those are handled separately.
+#[derive(serde::Deserialize, Clone, Debug)]
+struct McpStateJson {
+    #[serde(default)]
+    servers: Vec<crate::state::McpServerInfo>,
+    #[serde(default)]
+    tools: Vec<crate::state::McpToolInfo>,
+    #[serde(default)]
+    resources: Vec<crate::state::McpResourceInfo>,
+    #[serde(default)]
+    resource_templates: Vec<crate::state::McpResourceTemplateInfo>,
+    #[serde(default)]
+    prompts: Vec<crate::state::McpPromptInfo>,
+    #[serde(default)]
+    loading: bool,
+    #[serde(default)]
+    error: Option<String>,
+    #[serde(default)]
+    active_subtab: McpSubtab,
+}
+
 #[component]
-fn McpSubtabButton(mut signal: Signal<McpState>, subtab: McpSubtab, label: String) -> Element {
-    let active = signal.read().active_subtab == subtab;
+fn McpSubtabButton(
+    mut active_subtab: Signal<McpSubtab>,
+    subtab: McpSubtab,
+    label: String,
+) -> Element {
+    let active = active_subtab.read().clone() == subtab;
     let class = if active {
         "px-3 py-1 bg-[#1a1a2e] text-[#e0e0e0] rounded text-[12px] cursor-pointer border border-[#80a0ff]"
     } else {
@@ -101,17 +325,32 @@ fn McpSubtabButton(mut signal: Signal<McpState>, subtab: McpSubtab, label: Strin
     rsx! {
         button {
             class,
-            onclick: move |_| { signal.write_unchecked().active_subtab = subtab; },
+            onclick: move |_| { *active_subtab.write_unchecked() = subtab; },
             "{label}"
         }
     }
 }
 
 #[component]
-fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
-    let (servers, error) = {
-        let s = signal.read();
-        (s.servers.clone(), s.error.clone())
+fn ServerList(
+    app_state: AppState,
+    cache: Signal<crate::state::NodeDataCache>,
+    active_node: Signal<Option<String>>,
+    error: Option<String>,
+) -> Element {
+    let servers: Vec<crate::state::McpServerInfo> = {
+        let node_id = active_node.read().clone();
+        node_id
+            .and_then(|nid| {
+                let c = cache.read();
+                c.get(&nid).and_then(|d| {
+                    d.data.get(CACHE_KEY).and_then(|v| {
+                        v.get("servers")
+                            .and_then(|sv| serde_json::from_value(sv.clone()).ok())
+                    })
+                })
+            })
+            .unwrap_or_default()
     };
 
     if servers.is_empty() && error.is_none() {
@@ -120,7 +359,6 @@ fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
         };
     }
 
-    let rpc_for_reconnect = app_state.rpc_client.clone();
     let desktop_servers = servers;
 
     rsx! {
@@ -135,10 +373,9 @@ fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
                         _ => "#c04040",
                     };
                     let show_reconnect = s.status != "connected" && s.status != "connecting";
-                    let sig = signal.clone();
                     let srv_name = s.name.clone();
                     let srv_status = s.status.clone();
-                    let client = rpc_for_reconnect.clone();
+                    let app = app_state.clone();
                     rsx! {
                         div { class: "rounded-lg border border-[#333355] bg-[#20203a] p-3",
                             div { class: "flex items-center justify-between",
@@ -153,22 +390,8 @@ fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
                                     class: "mt-2 w-full px-2 py-1 bg-[#2a2a44] text-[#aaa] rounded text-[11px] hover:text-[#e0e0e0]",
                                     onclick: move |_| {
                                         let name = srv_name.clone();
-                                        let cl1 = client.clone();
-                                        let cl2 = client.clone();
-                                        let s = sig.clone();
-                                        cl1.mcp_reconnect(&name, move |result| {
-                                            if let Ok(true) = result {
-                                                let mut s2 = s.clone();
-                                                cl2.mcp_list_servers(move |r| {
-                                                    if let Ok(srvs) = r {
-                                                        s2.with_mut(|st| {
-                                                            st.servers = srvs;
-                                                            st.error = None;
-                                                        });
-                                                    }
-                                                });
-                                            }
-                                        });
+                                        let app = app.clone();
+                                        do_mcp_reconnect(&app, &name);
                                     },
                                     "Reconnect"
                                 }
@@ -180,9 +403,8 @@ fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
             // Desktop: server rows
             div { class: "hidden sm:block font-mono text-[13px]",
                 {desktop_servers.into_iter().map(|s| {
-                    let sig = signal.clone();
                     let app = app_state.clone();
-                    rsx! { ServerRow { signal: sig, server: s, app_state: app } }
+                    rsx! { ServerRow { app_state: app, server: s } }
                 }).collect::<Vec<Element>>().into_iter()}
                 if let Some(ref e) = error {
                     div { class: "text-[#c04040] p-2 text-[12px]", "{e}" }
@@ -192,12 +414,94 @@ fn ServerList(signal: Signal<McpState>, app_state: AppState) -> Element {
     }
 }
 
+/// Trigger a reconnect via the DP client (falling back to CP), then re-fetch
+/// servers + tools and write the results back into NodeDataCache.
+fn do_mcp_reconnect(app: &AppState, server_name: &str) {
+    let nid = app.active_node_id.read().clone();
+    let client = nid
+        .as_ref()
+        .and_then(|id| app.dp_pool.read().get(id).map(|c| c.client.clone()))
+        .unwrap_or_else(|| app.rpc_client.clone());
+
+    let name = server_name.to_string();
+    let target_nid = nid.clone();
+    let mut cache_mut = app.node_data_cache;
+    let cache_nid = nid.clone();
+
+    client.mcp_reconnect(&name, move |result| {
+        if let Ok(true) = result {
+            let current_nid = app.active_node_id.read().clone();
+            if current_nid != target_nid {
+                log::warn!("Node switched, discarding stale mcp_reconnect response");
+                return;
+            }
+
+            // Re-fetch servers
+            let client2 = app
+                .active_node_id
+                .read()
+                .clone()
+                .and_then(|id| app.dp_pool.read().get(&id).map(|c| c.client.clone()))
+                .unwrap_or_else(|| app.rpc_client.clone());
+            let cache_nid_s = cache_nid.clone();
+            let mut cache_ref = cache_mut.clone();
+            let target = target_nid.clone();
+            client2.mcp_list_servers(move |r| {
+                let current = app.active_node_id.read().clone();
+                if current != target {
+                    return;
+                }
+                if let Ok(servers) = r {
+                    let mut c = cache_ref.write();
+                    if let Some(d) = c.get_mut(&cache_nid_s) {
+                        if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                            if let Some(obj) = v.as_object_mut() {
+                                obj.insert(
+                                    "servers".to_string(),
+                                    serde_json::to_value(servers).unwrap_or_default(),
+                                );
+                                obj.insert("error".to_string(), serde_json::Value::Null);
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Re-fetch tools
+            let client3 = app
+                .active_node_id
+                .read()
+                .clone()
+                .and_then(|id| app.dp_pool.read().get(&id).map(|c| c.client.clone()))
+                .unwrap_or_else(|| app.rpc_client.clone());
+            let cache_nid_t = cache_nid;
+            let mut cache_ref2 = cache_mut;
+            let target2 = target_nid;
+            client3.mcp_list_tools(None, move |r| {
+                let current = app.active_node_id.read().clone();
+                if current != target2 {
+                    return;
+                }
+                if let Ok(tools) = r {
+                    let mut c = cache_ref2.write();
+                    if let Some(d) = c.get_mut(&cache_nid_t) {
+                        if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                            if let Some(obj) = v.as_object_mut() {
+                                obj.insert(
+                                    "tools".to_string(),
+                                    serde_json::to_value(tools).unwrap_or_default(),
+                                );
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    });
+}
+
 #[component]
-fn ServerRow(
-    signal: Signal<McpState>,
-    app_state: AppState,
-    server: crate::state::McpServerInfo,
-) -> Element {
+fn ServerRow(app_state: AppState, server: crate::state::McpServerInfo) -> Element {
     let status_color = match server.status.as_str() {
         "connected" => "#40c040",
         "connecting" => "#f0c040",
@@ -218,30 +522,8 @@ fn ServerRow(
                     class: "px-2 py-0.5 bg-[#2a2a44] text-[#aaa] rounded text-[11px] cursor-pointer hover:text-[#e0e0e0]",
                     onclick: move |_| {
                         let srv = server.name.clone();
-                        let client = app_state.rpc_client.clone();
-                        let sig = signal.clone();
-                        let reconnect_client = client.clone();
-                        reconnect_client.mcp_reconnect(&srv, move |result| {
-                            if let Ok(true) = result {
-                                let client2 = client.clone();
-                                let mut sig2 = sig.clone();
-                                client2.mcp_list_servers(move |r| {
-                                    if let Ok(servers) = r {
-                                        sig2.with_mut(|s| {
-                                            s.servers = servers;
-                                            s.error = None;
-                                        });
-                                    }
-                                });
-                                let client3 = client.clone();
-                                let mut sig3 = sig;
-                                client3.mcp_list_tools(None, move |r| {
-                                    if let Ok(tools) = r {
-                                        sig3.with_mut(|s| s.tools = tools);
-                                    }
-                                });
-                            }
-                        });
+                        let app = app_state.clone();
+                        do_mcp_reconnect(&app, &srv);
                     },
                     "Reconnect"
                 }
@@ -251,8 +533,8 @@ fn ServerRow(
 }
 
 #[component]
-fn ToolList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>) -> Element {
-    let tools = signal.read().tools.clone();
+fn ToolList(mcp_data: Option<McpStateJson>, dialog_signal: Signal<McpDialogState>) -> Element {
+    let tools = mcp_data.map(|d| d.tools).unwrap_or_default();
     log::info!("ToolList rendering: {} tools", tools.len());
     if tools.is_empty() {
         return rsx! {
@@ -354,12 +636,15 @@ fn ToolCard(mut signal: Signal<McpDialogState>, tool: crate::state::McpToolInfo)
 }
 
 #[component]
-fn ResourceList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>) -> Element {
-    let resources = signal.read().resources.clone();
-    let templates = {
-        let s = signal.read();
-        s.resource_templates.clone()
-    };
+fn ResourceList(mcp_data: Option<McpStateJson>, dialog_signal: Signal<McpDialogState>) -> Element {
+    let resources = mcp_data
+        .as_ref()
+        .map(|d| d.resources.clone())
+        .unwrap_or_default();
+    let templates = mcp_data
+        .as_ref()
+        .map(|d| d.resource_templates.clone())
+        .unwrap_or_default();
     if resources.is_empty() && templates.is_empty() {
         return rsx! {
             div { class: "text-[#666] text-center p-4 text-[13px]", "No resources available" }
@@ -502,8 +787,8 @@ fn TemplateRow(template: crate::state::McpResourceTemplateInfo) -> Element {
 }
 
 #[component]
-fn PromptList(signal: Signal<McpState>, dialog_signal: Signal<McpDialogState>) -> Element {
-    let prompts = signal.read().prompts.clone();
+fn PromptList(mcp_data: Option<McpStateJson>, dialog_signal: Signal<McpDialogState>) -> Element {
+    let prompts = mcp_data.map(|d| d.prompts).unwrap_or_default();
     if prompts.is_empty() {
         return rsx! {
             div { class: "text-[#666] text-center p-4 text-[13px]", "No prompts available" }

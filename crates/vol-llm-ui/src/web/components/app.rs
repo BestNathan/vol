@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::state::McpDialogState;
+use crate::state::NodeDataCache;
 use crate::state::SkillDialogState;
 use crate::state::{
     ActiveTab, AgentsState, ApprovalUiState, ConversationState, DebugState, EventBus, GlobalState,
@@ -86,6 +87,9 @@ pub struct AppState {
     pub cp_client: JsonRpcClient,
     pub dp_pool: Signal<DpConnectionPool>,
     pub active_node_id: Signal<Option<String>>,
+    pub node_data_cache: Signal<NodeDataCache>,
+    /// When `Some(node_id)`, the UI shows the Node Detail view for that node.
+    pub viewing_node_detail: Signal<Option<String>>,
 }
 
 impl PartialEq for AppState {
@@ -255,6 +259,8 @@ pub fn App() -> Element {
     let debug_signal = use_signal(|| DebugState::new());
     let dp_pool = use_signal(|| DpConnectionPool::new());
     let active_node_id = use_signal(|| Option::<String>::None);
+    let node_data_cache = use_signal(|| NodeDataCache::new());
+    let viewing_node_detail = use_signal(|| Option::<String>::None);
 
     // Prevent browser zoom on input focus and disable pinch-to-zoom
     use_hook(|| {
@@ -694,6 +700,65 @@ pub fn App() -> Element {
         }
     });
 
+    // Auto-select first online node after CP connects.
+    // Uses agent_list (which includes ws_url from node_ingress) to find the
+    // first agent with a reachable data-plane endpoint, then activates that
+    // node and opens a DP connection via the pool.
+    let auto_select_client = client.clone();
+    let auto_select_active_node = active_node_id;
+    let auto_select_dp_pool = dp_pool;
+    let auto_select_global = global_signal.clone();
+    wasm_bindgen_futures::spawn_local(async move {
+        loop {
+            // Wait for CP to connect
+            loop {
+                if auto_select_global.read().ws_connected {
+                    break;
+                }
+                TimeoutFuture::new(200).await;
+            }
+
+            // Fetch agent list — agents carry ws_url from node_ingress
+            let (tx, rx) = futures_channel::oneshot::channel();
+            auto_select_client.agent_list(move |result| {
+                let _ = tx.send(result);
+            });
+
+            if let Ok(Ok(agents)) = rx.await {
+                // Only auto-select if no node is currently selected — don't overwrite manual choice
+                if auto_select_active_node.get().is_none() {
+                    // Find first agent that has both a node_id and a DP ws_url
+                    if let Some(agent) = agents
+                        .iter()
+                        .find(|a| a.node_id.is_some() && a.ws_url.is_some())
+                    {
+                        let node_id = agent.node_id.clone().unwrap();
+                        let ws_url = agent.ws_url.clone().unwrap();
+
+                        // Set as active node
+                        auto_select_active_node.set(Some(node_id.clone()));
+
+                        // Create DP connection in the pool
+                        auto_select_dp_pool
+                            .write()
+                            .get_or_create(&node_id, &ws_url, vec![]);
+                        log::info!("Auto-selected node {node_id} (ws_url={ws_url})");
+                    }
+                }
+            } else {
+                log::warn!("Auto-select: failed to fetch agent list");
+            }
+
+            // Wait for disconnect before re-running
+            loop {
+                if !auto_select_global.read().ws_connected {
+                    break;
+                }
+                TimeoutFuture::new(200).await;
+            }
+        }
+    });
+
     use_context_provider(|| AppState {
         event_bus: event_bus.with(|eb| eb.clone()),
         rpc_client: client.clone(),
@@ -701,6 +766,8 @@ pub fn App() -> Element {
         cp_client: client.clone(),
         dp_pool,
         active_node_id,
+        node_data_cache,
+        viewing_node_detail,
     });
     use_context_provider(|| global_signal);
     use_context_provider(|| approval_signal);

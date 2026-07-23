@@ -1,5 +1,6 @@
 //! Nodes panel — shows registered data-plane nodes and their status.
 
+use super::NodeDetailPanel;
 use crate::web::client::NodeListEntry;
 use crate::web::components::app::AppState;
 use dioxus::prelude::*;
@@ -24,6 +25,13 @@ pub fn NodesPanel() -> Element {
             }
         });
     });
+
+    // When a node is selected for detail view, render the detail panel instead of the list.
+    if let Some(ref node_id) = *app.viewing_node_detail.read() {
+        return rsx! {
+            NodeDetailPanel { node_id: node_id.clone() }
+        };
+    }
 
     rsx! {
         div { class: "flex flex-col h-full p-3 overflow-auto",

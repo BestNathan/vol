@@ -2,7 +2,9 @@
 
 use dioxus::prelude::*;
 
+use super::nodes_dropdown::NodesDropdown;
 use crate::state::{DebugState, GlobalState};
+use crate::web::client::NodeListEntry;
 use crate::web::components::app::AppState;
 
 const BUILD_TIME: &str = env!("BUILD_TIME");
@@ -17,6 +19,23 @@ pub fn StatusBar() -> Element {
     let g: Signal<GlobalState> = use_context();
     let debug = use_context::<Signal<DebugState>>();
     let app_state: AppState = use_context();
+
+    // Fetch nodes for the dropdown
+    let mut nodes = use_signal(Vec::<NodeListEntry>::new);
+    let app = app_state.clone();
+    use_effect(move || {
+        let cp = app.cp_client.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let (tx, rx) = futures_channel::oneshot::channel();
+            cp.node_list(move |result| {
+                let _ = tx.send(result);
+            });
+            if let Ok(Ok(n)) = rx.await {
+                nodes.set(n);
+            }
+        });
+    });
+
     let gs = g.read();
 
     let elapsed = if gs.is_running() {
@@ -71,6 +90,17 @@ pub fn StatusBar() -> Element {
                         span { class: "w-2 h-2 rounded-full inline-block flex-shrink-0", style: "background-color: #666;" }
                         span { class: "text-[10px] text-[#888]", "DP: —" }
                     }
+                }
+                NodesDropdown {
+                    nodes: nodes.read().clone(),
+                    selected_node_id: app_state.active_node_id,
+                    on_select: {
+                        let app_state = app_state.clone();
+                        move |node_id: String| {
+                            app_state.active_node_id.set(Some(node_id));
+                        }
+                    },
+                    app_state: app_state.clone(),
                 }
                 span { class: "whitespace-nowrap", "Session: {session_id}" }
                 span { class: "hidden sm:inline text-[#555] select-none" }

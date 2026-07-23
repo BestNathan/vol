@@ -1,5 +1,7 @@
+mod node_data_cache;
 mod workspace;
 
+pub use node_data_cache::{NodeData, NodeDataCache};
 pub use workspace::scan_workspace;
 
 #[cfg(feature = "tui")]
@@ -248,7 +250,7 @@ pub enum ConversationEntry {
 }
 
 /// A node in the workspace directory tree.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkspaceTreeNode {
     pub name: String,
     pub path: String,
@@ -381,7 +383,7 @@ pub enum AgentSubTab {
 }
 
 /// Sub-tabs within the MCP panel.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum McpSubtab {
     Servers,
     Tools,
@@ -1017,7 +1019,7 @@ pub struct McpServerRowState {
 
 /// Local state for McpPanel.
 #[cfg(all(feature = "web", not(feature = "tui")))]
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct McpState {
     pub servers: Vec<McpServerInfo>,
     pub tools: Vec<McpToolInfo>,
