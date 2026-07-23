@@ -725,23 +725,28 @@ pub fn App() -> Element {
             });
 
             if let Ok(Ok(agents)) = rx.await {
-                // Find first agent that has both a node_id and a DP ws_url
-                if let Some(agent) = agents
-                    .iter()
-                    .find(|a| a.node_id.is_some() && a.ws_url.is_some())
-                {
-                    let node_id = agent.node_id.clone().unwrap();
-                    let ws_url = agent.ws_url.clone().unwrap();
+                // Only auto-select if no node is currently selected — don't overwrite manual choice
+                if auto_select_active_node.get().is_none() {
+                    // Find first agent that has both a node_id and a DP ws_url
+                    if let Some(agent) = agents
+                        .iter()
+                        .find(|a| a.node_id.is_some() && a.ws_url.is_some())
+                    {
+                        let node_id = agent.node_id.clone().unwrap();
+                        let ws_url = agent.ws_url.clone().unwrap();
 
-                    // Set as active node
-                    auto_select_active_node.set(Some(node_id.clone()));
+                        // Set as active node
+                        auto_select_active_node.set(Some(node_id.clone()));
 
-                    // Create DP connection in the pool
-                    auto_select_dp_pool
-                        .write()
-                        .get_or_create(&node_id, &ws_url, vec![]);
-                    log::info!("Auto-selected node {node_id} (ws_url={ws_url})");
+                        // Create DP connection in the pool
+                        auto_select_dp_pool
+                            .write()
+                            .get_or_create(&node_id, &ws_url, vec![]);
+                        log::info!("Auto-selected node {node_id} (ws_url={ws_url})");
+                    }
                 }
+            } else {
+                log::warn!("Auto-select: failed to fetch agent list");
             }
 
             // Wait for disconnect before re-running
