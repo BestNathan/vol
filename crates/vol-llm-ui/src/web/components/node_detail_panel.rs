@@ -1,7 +1,11 @@
 //! Node detail panel — CP-scoped view for a single node's metadata, load,
 //! agents, and capabilities.
 
+use std::rc::Rc;
+use std::time::Duration;
+
 use dioxus::prelude::*;
+use gloo_timers::future::sleep;
 
 use crate::web::client::{AgentListEntry, CapabilitySnapshot, NodeRecord};
 use crate::web::components::app::AppState;
@@ -28,6 +32,22 @@ pub fn NodeDetailPanel(node_id: String) -> Element {
     let app = use_context::<AppState>();
     let mut state = use_signal(NodeDetailState::default);
 
+    // TODO(spec 7.5): spec mockup shows ws_url but NodeRecord doesn't carry it
+    // in the current protocol.  A protocol extension is needed to populate this
+    // field — out of scope for the auto-refresh work.
+
+    // Cancellation token: a Weak<()> that becomes dangling when the component
+    // unmounts (use_hook drops the strong Rc).  The polling loop checks this on
+    // every iteration and exits gracefully.
+    let (_alive_strong, alive_weak) = use_hook(|| {
+        let strong = Rc::new(());
+        let weak = Rc::downgrade(&strong);
+        // Return the strong ref so use_hook keeps it alive for the component's
+        // lifetime.  When the component unmounts, use_hook drops it, making
+        // weak.upgrade() return None.
+        (strong, weak)
+    });
+
     use_effect(move || {
         let mut s = state;
         s.with_mut(|s| {
@@ -40,6 +60,7 @@ pub fn NodeDetailPanel(node_id: String) -> Element {
 
         let cp = app.cp_client.clone();
         let nid = node_id.clone();
+        let alive_check = alive_weak.clone();
         wasm_bindgen_futures::spawn_local(async move {
             // 1. Fetch node detail
             let (tx, rx) = futures_channel::oneshot::channel();
@@ -103,6 +124,52 @@ pub fn NodeDetailPanel(node_id: String) -> Element {
                 s.with_mut(|s| {
                     s.capabilities = caps.into_iter().next();
                 });
+            }
+
+            // 4. Auto-refresh polling loop (spec §7.5 item 4):
+            //    Re-fetch node_get every 5 s to keep resource-usage counts fresh.
+            //    Exits when the component unmounts (alive_check.upgrade() → None).
+            loop {
+                sleep(Duration::from_secs(5)).await;
+
+                // Stop polling if the component has been unmounted.
+                if alive_check.upgrade().is_none() {
+                    break;
+                }
+
+                let (tx_poll, rx_poll) = futures_channel::oneshot::channel();
+                cp.node_get(&nid, move |result| {
+                    let _ = tx_poll.send(result);
+                });
+
+                match rx_poll.await {
+                    Ok(Ok(Some(node))) => {
+                        s.with_mut(|s| {
+                            s.node = Some(node);
+                        });
+                    }
+                    Ok(Ok(None)) => {
+                        // Node disappeared — surface an error and stop polling.
+                        s.with_mut(|s| {
+                            s.error = Some("Node not found".into());
+                        });
+                        break;
+                    }
+                    Ok(Err(_e)) => {
+                        // Transient error — keep polling; the UI retains the
+                        // last-known-good data.
+                    }
+                    Err(_) => {
+                        // Channel closed — stop polling.
+                        break;
+                    }
+                }
+
+                // Re-check after the RPC round-trip in case we were dropped
+                // while awaiting.
+                if alive_check.upgrade().is_none() {
+                    break;
+                }
             }
         });
     });
