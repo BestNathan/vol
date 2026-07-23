@@ -63,13 +63,13 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
         let dir_node = node.clone();
         let dir_path = node.path.clone();
         let dir_app = use_context::<crate::web::components::app::AppState>();
-        let dir_node_id = dir_app.active_node_id.read().clone();
         let dir_onclick = move |_: Event<MouseData>| {
             let p = dir_path.clone();
             let mut sig = dir_ws.clone();
             let click_node = dir_node.clone();
             let app_clone = dir_app.clone();
-            let nid = dir_node_id.clone();
+            // Read node_id inside closure (at click time, not render time)
+            let nid = app_clone.active_node_id.read().clone();
 
             let should_load =
                 sig.with_mut(|s| toggle_directory_for_click(&click_node, &mut s.collapsed_dirs));
@@ -92,7 +92,14 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
                 let p_str = p.clone();
                 let mut cache = app_clone.node_data_cache;
                 let cache_nid = nid.clone();
+                let target_nid = nid.clone();
                 client.file_list(&p_str, move |result| {
+                    // Guard: discard response if user switched nodes
+                    let current_nid = app_clone.active_node_id.read().clone();
+                    if current_nid != target_nid {
+                        log::warn!("Node switched, discarding stale file_list response");
+                        return;
+                    }
                     let mut sig2 = sig.clone();
                     match result {
                         Ok(entries) => {
@@ -109,11 +116,10 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
                                     serde_json::to_value(&ws_read.workspace).unwrap_or_default();
                                 drop(ws_read);
                                 let mut c = cache.write();
-                                if let Some(node_data) = c.get_mut(node_id) {
-                                    node_data
-                                        .data
-                                        .insert("workspace_tree".to_string(), tree_value);
-                                }
+                                let node_data = c.get_or_insert(node_id);
+                                node_data
+                                    .data
+                                    .insert("workspace_tree".to_string(), tree_value);
                             }
                         }
                         Err(_) => {
@@ -166,7 +172,14 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
             let p_str = p.clone();
             let mut cache = app_clone.node_data_cache;
             let cache_node_id = app_clone.active_node_id.read().clone();
+            let target_nid = cache_node_id.clone();
             client.file_list(&p_str, move |result| {
+                // Guard: discard response if user switched nodes
+                let current_nid = app_clone.active_node_id.read().clone();
+                if current_nid != target_nid {
+                    log::warn!("Node switched, discarding stale file_list response");
+                    return;
+                }
                 let mut sig2 = sig.clone();
                 match result {
                     Ok(entries) => {
@@ -182,11 +195,10 @@ fn TreeNode(node: WorkspaceTreeNode, depth: usize) -> Element {
                                 serde_json::to_value(&ws_read.workspace).unwrap_or_default();
                             drop(ws_read);
                             let mut c = cache.write();
-                            if let Some(node_data) = c.get_mut(nid) {
-                                node_data
-                                    .data
-                                    .insert("workspace_tree".to_string(), tree_value);
-                            }
+                            let node_data = c.get_or_insert(nid);
+                            node_data
+                                .data
+                                .insert("workspace_tree".to_string(), tree_value);
                         }
                     }
                     Err(_) => {
