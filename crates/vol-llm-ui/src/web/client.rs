@@ -46,19 +46,24 @@ pub struct NodeListEntry {
     pub version: String,
     pub status: String,
     #[serde(default)]
+    pub last_seen_at_ms: Option<u64>,
+    #[serde(default)]
+    pub capability_revision: u64,
+    #[serde(default)]
+    pub load: NodeLoad,
+    /// UI-only: not populated by the server; present for future use.
+    #[serde(default)]
     pub agent_count: Option<usize>,
-    #[serde(default)]
-    pub load: Option<NodeLoadInfo>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NodeLoadInfo {
-    #[serde(default)]
-    pub cpu: Option<f64>,
-    #[serde(default)]
-    pub memory_mb: Option<u64>,
+/// Load metrics mirroring `vol_llm_agent_protocol::agent_server_protocol::NodeLoad`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct NodeLoad {
+    pub running: u64,
+    pub queued: u64,
 }
 
+/// Node record mirroring `vol_llm_agent_protocol::agent_server_protocol::NodeRecord`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NodeRecord {
     pub node_id: String,
@@ -70,18 +75,60 @@ pub struct NodeRecord {
     #[serde(default)]
     pub capability_revision: u64,
     #[serde(default)]
-    pub load: Option<NodeLoadInfo>,
+    pub load: NodeLoad,
 }
 
+/// Capability snapshot mirroring
+/// `vol_llm_agent_protocol::agent_server_protocol::CapabilitySnapshot`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CapabilitySnapshot {
     pub node_id: String,
+    pub revision: u64,
     #[serde(default)]
-    pub tools: Vec<String>,
+    pub generated_at_ms: Option<u64>,
     #[serde(default)]
-    pub skills: Vec<String>,
+    pub agents: Vec<AgentCapability>,
     #[serde(default)]
-    pub mcp_servers: Vec<String>,
+    pub tools: Vec<ToolCapability>,
+    #[serde(default)]
+    pub mcp_servers: Vec<McpServerCapability>,
+    #[serde(default)]
+    pub skills: Vec<SkillCapability>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AgentCapability {
+    pub agent_id: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ToolCapability {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub sensitivity: Option<String>,
+    #[serde(default)]
+    pub requires_approval: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct McpServerCapability {
+    pub name: String,
+    #[serde(default)]
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SkillCapability {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 /// Agent metadata entry returned by agent.list.
@@ -655,11 +702,14 @@ impl JsonRpcClient {
             return;
         }
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            if result.is_null() {
+            // Server returns NodeGetResult { node: Option<NodeRecord> };
+            // data_json() strips the variant wrapper, leaving {"node": ...}.
+            let node_value = result.get("node").unwrap_or(&result);
+            if node_value.is_null() {
                 cb(Ok(None));
                 return;
             }
-            match serde_json::from_value::<NodeRecord>(result) {
+            match serde_json::from_value::<NodeRecord>(node_value.clone()) {
                 Ok(r) => cb(Ok(Some(r))),
                 Err(e) => cb(Err(e.to_string())),
             }
@@ -693,9 +743,17 @@ impl JsonRpcClient {
             return;
         }
         let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
-            match serde_json::from_value::<Vec<CapabilitySnapshot>>(result) {
-                Ok(v) => cb(Ok(v)),
-                Err(e) => cb(Err(e.to_string())),
+            // Server returns CapabilityListResult { snapshots: Vec<CapabilitySnapshot> };
+            // data_json() strips the variant wrapper, leaving {"snapshots": [...]}.
+            match result.get("snapshots").and_then(|v| v.as_array()) {
+                Some(arr) => {
+                    let parsed: Vec<CapabilitySnapshot> = arr
+                        .iter()
+                        .filter_map(|s| serde_json::from_value(s.clone()).ok())
+                        .collect();
+                    cb(Ok(parsed));
+                }
+                None => cb(Err("no snapshots in response".to_string())),
             }
         });
         self.inner.pending.borrow_mut().insert(id, cb);
