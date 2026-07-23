@@ -163,6 +163,23 @@ pub struct TaskEntry {
     pub completed_at: Option<u64>,
 }
 
+/// Log run summary returned by log.list.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LogRunSummary {
+    pub run_id: String,
+    pub event_count: usize,
+    pub last_event: String,
+    pub last_event_time: String,
+}
+
+/// Log entry returned by log.read.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LogLine {
+    pub timestamp: String,
+    pub event_type: String,
+    pub summary: String,
+}
+
 /// Session entry matching the vol-session wire format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionEntry {
@@ -1644,6 +1661,76 @@ impl JsonRpcClient {
                 },
                 None => cb(Err("no task in response".to_string())),
             });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    pub fn log_list(&self, cb: impl FnOnce(Result<Vec<LogRunSummary>, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "log.list",
+            "params": {},
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("runs").and_then(|v| v.as_array()) {
+                    Some(runs) => {
+                        let parsed: Vec<LogRunSummary> = runs
+                            .iter()
+                            .filter_map(|r| serde_json::from_value(r.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no runs in response".to_string())),
+                },
+            );
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    pub fn log_read(&self, run_id: &str, cb: impl FnOnce(Result<Vec<LogLine>, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "log.read",
+            "params": { "run_id": run_id },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> =
+            Box::new(
+                move |result| match result.get("entries").and_then(|v| v.as_array()) {
+                    Some(entries) => {
+                        let parsed: Vec<LogLine> = entries
+                            .iter()
+                            .filter_map(|e| serde_json::from_value(e.clone()).ok())
+                            .collect();
+                        cb(Ok(parsed));
+                    }
+                    None => cb(Err("no entries in response".to_string())),
+                },
+            );
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 

@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 
 use super::task_dep_graph::TaskDepGraph;
 use crate::state::TaskState;
+use crate::web::client::TaskEntry;
 
 pub(crate) fn status_color(status: &str) -> &'static str {
     match status {
@@ -14,79 +15,195 @@ pub(crate) fn status_color(status: &str) -> &'static str {
     }
 }
 
+/// Serializable state cached per-node for instant switching.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct TasksCacheState {
+    tasks: Vec<TaskEntry>,
+    loading: bool,
+    error: Option<String>,
+}
+
+impl Default for TasksCacheState {
+    fn default() -> Self {
+        Self {
+            tasks: Vec::new(),
+            loading: true,
+            error: None,
+        }
+    }
+}
+
+/// Key used to store the tasks list in NodeDataCache.
+const CACHE_KEY: &str = "tasks";
+
 #[component]
 pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
     let app: crate::web::components::app::AppState = use_context();
+    // Local UI state (not cached) — filter/selection persist only within session.
     let task_state = use_signal(|| TaskState::new());
     let graph_target = use_signal(|| None::<u64>);
 
-    let rpc = app.rpc_client.clone();
-    let sig = task_state;
+    let active_node = app.active_node_id;
+    let cache = app.node_data_cache;
     let initial_assignee = assignee_filter.clone();
 
-    // Initial load
-    use_hook(move || {
-        let mut s = sig;
-        s.with_mut(|t| {
-            t.loading = true;
-            t.error = None;
-        });
-        let s2 = sig;
-        rpc.task_list(None, initial_assignee.as_deref(), move |result| {
-            let mut s2 = s2;
-            s2.with_mut(|t| {
-                t.loading = false;
-                match result {
-                    Ok(tasks) => {
-                        t.tasks = tasks;
-                        t.error = None;
-                    }
-                    Err(e) => {
-                        t.error = Some(e);
+    // Load tasks from cache or trigger DP fetch when active_node changes.
+    use_effect(move || {
+        let node_id = active_node.read().clone();
+        if let Some(ref nid) = node_id {
+            let cached = {
+                let c = cache.read();
+                c.get(nid).and_then(|d| d.data.get(CACHE_KEY).cloned())
+            };
+
+            if cached.is_some() {
+                return;
+            }
+
+            // Prefer DP client, fall back to CP rpc_client.
+            let client = app
+                .dp_pool
+                .read()
+                .get(nid)
+                .map(|c| c.client.clone())
+                .unwrap_or_else(|| app.rpc_client.clone());
+
+            let mut cache_mut = cache;
+            let target_nid = nid.clone();
+            let cache_nid = nid.clone();
+            let assignee = initial_assignee.clone();
+
+            // Mark as loading in cache immediately.
+            {
+                let loading_state = TasksCacheState::default();
+                let v = serde_json::to_value(&loading_state).unwrap_or_default();
+                let mut c = cache_mut.write();
+                let node_data = c.get_or_insert(&cache_nid);
+                node_data.data.insert(CACHE_KEY.to_string(), v);
+            }
+
+            client.task_list(None, assignee.as_deref(), move |result| {
+                let current_nid = active_node.read().clone();
+                if current_nid != target_nid {
+                    log::warn!("Node switched, discarding stale task_list response");
+                    return;
+                }
+                let mut c = cache_mut.write();
+                if let Some(d) = c.get_mut(&cache_nid) {
+                    if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                        if let Some(obj) = v.as_object_mut() {
+                            match result {
+                                Ok(tasks) => {
+                                    obj.insert(
+                                        "tasks".to_string(),
+                                        serde_json::to_value(tasks).unwrap_or_default(),
+                                    );
+                                    obj.insert("loading".to_string(), serde_json::json!(false));
+                                }
+                                Err(e) => {
+                                    obj.insert("error".to_string(), serde_json::json!(e));
+                                    obj.insert("loading".to_string(), serde_json::json!(false));
+                                }
+                            }
+                        }
                     }
                 }
             });
+        }
+    });
+
+    // Re-fetch on reconnect
+    let event_bus = app.event_bus.clone();
+    let assignee_for_reconnect = assignee_filter.clone();
+    use_hook(move || {
+        let _sub = event_bus.subscribe(crate::state::UiEventKind::WsConnected, move |_| {
+            let node_id = active_node.read().clone();
+            if let Some(ref nid) = node_id {
+                // Invalidate cache so use_effect re-fetches.
+                let mut c = cache.write();
+                c.invalidate(nid);
+
+                let client = app
+                    .dp_pool
+                    .read()
+                    .get(nid)
+                    .map(|c| c.client.clone())
+                    .unwrap_or_else(|| app.rpc_client.clone());
+
+                let mut cache_mut = cache;
+                let target_nid = nid.clone();
+                let cache_nid = nid.clone();
+                let assignee = assignee_for_reconnect.clone();
+
+                // Mark loading.
+                {
+                    let loading_state = TasksCacheState::default();
+                    let v = serde_json::to_value(&loading_state).unwrap_or_default();
+                    let mut c = cache_mut.write();
+                    let node_data = c.get_or_insert(&cache_nid);
+                    node_data.data.insert(CACHE_KEY.to_string(), v);
+                }
+
+                client.task_list(None, assignee.as_deref(), move |result| {
+                    let current_nid = active_node.read().clone();
+                    if current_nid != target_nid {
+                        log::warn!("Node switched, discarding stale task_list response");
+                        return;
+                    }
+                    let mut c = cache_mut.write();
+                    if let Some(d) = c.get_mut(&cache_nid) {
+                        if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                            if let Some(obj) = v.as_object_mut() {
+                                match result {
+                                    Ok(tasks) => {
+                                        obj.insert(
+                                            "tasks".to_string(),
+                                            serde_json::to_value(tasks).unwrap_or_default(),
+                                        );
+                                        obj.insert("loading".to_string(), serde_json::json!(false));
+                                    }
+                                    Err(e) => {
+                                        obj.insert("error".to_string(), serde_json::json!(e));
+                                        obj.insert("loading".to_string(), serde_json::json!(false));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
         });
     });
 
-    // Retry on WS reconnect
-    let rpc_retry = app.rpc_client.clone();
-    let sig_retry = task_state;
-    let assignee = assignee_filter.clone();
-    use_hook(move || {
-        let _sub = app
-            .event_bus
-            .subscribe(crate::state::UiEventKind::WsConnected, move |_| {
-                let mut s = sig_retry;
-                s.with_mut(|t| {
-                    t.loading = true;
-                    t.error = None;
-                });
-                let s2 = sig_retry;
-                let a = assignee.clone();
-                rpc_retry.task_list(None, a.as_deref(), move |result| {
-                    let mut s2 = s2;
-                    s2.with_mut(|t| {
-                        t.loading = false;
-                        match result {
-                            Ok(tasks) => {
-                                t.tasks = tasks;
-                                t.error = None;
-                            }
-                            Err(e) => {
-                                t.error = Some(e);
-                            }
-                        }
-                    });
-                });
-            });
-    });
-
-    let tasks = task_state.read().tasks.clone();
-    let loading = task_state.read().loading;
-    let error = task_state.read().error.clone();
+    // Read state from cache.
+    let has_active_node = active_node.read().is_some();
+    let (tasks, loading, error) = {
+        let node_id = active_node.read().clone();
+        node_id
+            .and_then(|nid| {
+                let c = cache.read();
+                c.get(&nid).and_then(|d| {
+                    d.data
+                        .get(CACHE_KEY)
+                        .and_then(|v| serde_json::from_value::<TasksCacheState>(v.clone()).ok())
+                })
+            })
+            .map(|s| (s.tasks, s.loading, s.error))
+            .unwrap_or_default()
+    };
     let selected_task_id = task_state.read().selected_task;
     let status_filter = task_state.read().status_filter.clone();
+
+    // Early return if no node selected.
+    if !has_active_node {
+        return rsx! {
+            div { class: "flex-1 overflow-y-auto p-3",
+                div { class: "flex items-center justify-center h-full text-[#666] text-[12px]",
+                    "No node selected"
+                }
+            }
+        };
+    }
 
     // Filter tasks by selected status
     let filtered: Vec<_> = if let Some(ref sf) = status_filter {
@@ -102,8 +219,7 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
     // Empty + error
     if tasks.is_empty() && error.is_some() {
         let err = error.as_deref().unwrap_or("unknown");
-        let rpc_btn = app.rpc_client.clone();
-        let sig_btn = task_state;
+        let app_retry = app.clone();
         let a = assignee_filter.clone();
         return rsx! { div { class: "flex-1 overflow-y-auto p-3",
             div { class: "flex flex-col items-center justify-center h-full gap-3 text-center",
@@ -112,20 +228,54 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
                 button {
                     class: "px-4 py-1.5 bg-[#3a3a55] text-[#ccc] rounded text-[13px] hover:bg-[#4a4a65]",
                     onclick: move |_| {
-                        let mut s = sig_btn;
-                        s.with_mut(|t| { t.loading = true; t.error = None; });
-                        let s2 = sig_btn;
-                        let a2 = a.clone();
-                        rpc_btn.task_list(None, a2.as_deref(), move |result| {
-                            let mut s2 = s2;
-                            s2.with_mut(|t| {
-                                t.loading = false;
-                                match result {
-                                    Ok(tasks) => { t.tasks = tasks; t.error = None; }
-                                    Err(e) => { t.error = Some(e); }
+                        let node_id = app_retry.active_node_id.read().clone();
+                        if let Some(ref nid) = node_id {
+                            let client = app_retry
+                                .dp_pool
+                                .read()
+                                .get(nid)
+                                .map(|c| c.client.clone())
+                                .unwrap_or_else(|| app_retry.rpc_client.clone());
+
+                            let mut cache_mut = app_retry.node_data_cache;
+                            let target_nid = nid.clone();
+                            let cache_nid = nid.clone();
+                            let a2 = a.clone();
+
+                            // Mark loading.
+                            {
+                                let loading_state = TasksCacheState::default();
+                                let v = serde_json::to_value(&loading_state).unwrap_or_default();
+                                let mut c = cache_mut.write();
+                                let node_data = c.get_or_insert(&cache_nid);
+                                node_data.data.insert(CACHE_KEY.to_string(), v);
+                            }
+
+                            client.task_list(None, a2.as_deref(), move |result| {
+                                let current_nid = app_retry.active_node_id.read().clone();
+                                if current_nid != target_nid {
+                                    log::warn!("Node switched, discarding stale task_list response");
+                                    return;
+                                }
+                                let mut c = cache_mut.write();
+                                if let Some(d) = c.get_mut(&cache_nid) {
+                                    if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                                        if let Some(obj) = v.as_object_mut() {
+                                            match result {
+                                                Ok(tasks) => {
+                                                    obj.insert("tasks".to_string(), serde_json::to_value(tasks).unwrap_or_default());
+                                                    obj.insert("loading".to_string(), serde_json::json!(false));
+                                                }
+                                                Err(e) => {
+                                                    obj.insert("error".to_string(), serde_json::json!(e));
+                                                    obj.insert("loading".to_string(), serde_json::json!(false));
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             });
-                        });
+                        }
                     },
                     "Retry"
                 }

@@ -2,24 +2,10 @@
 
 use super::tool_dialog::{SystemToolDialog, SystemToolDialogState};
 use crate::state::{ToolCallEntry, ToolCallStatus, ToolState, UiEvent, UiEventKind};
-use crate::web::client::JsonRpcClient;
 use crate::web::components::app::AppState;
 use dioxus::prelude::*;
 
-/// Safely write to a Signal in an async callback.
-///
-/// When a component unmounts (e.g. tab switch), its signals are dropped.
-/// Async callbacks (WebSocket reconnect, RPC responses) may still fire
-/// after unmount and panic on `with_mut()`. This function catches that
-/// panic and silently returns false instead of crashing the WASM module.
-fn safe_write<T>(mut sig: Signal<T>, f: impl FnOnce(&mut T)) -> bool {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        sig.with_mut(f);
-    }))
-    .is_ok()
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 struct ToolDef {
     name: String,
     description: Option<String>,
@@ -27,10 +13,28 @@ struct ToolDef {
     parameters: Option<serde_json::Value>,
 }
 
-struct ToolsPanelState {
+/// Key used to store the tools list in NodeDataCache.
+const CACHE_KEY: &str = "tools";
+
+/// Serializable state cached per-node for instant switching.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct ToolsCacheState {
     tools: Vec<ToolDef>,
     loading: bool,
     error: Option<String>,
+}
+
+impl Default for ToolsCacheState {
+    fn default() -> Self {
+        Self {
+            tools: Vec::new(),
+            loading: true,
+            error: None,
+        }
+    }
+}
+
+struct ToolsPanelState {
     call_result: Option<String>,
 }
 
@@ -124,79 +128,181 @@ pub fn reduce_tool_state(s: &mut ToolState, event: &UiEvent) {
 pub fn ToolsTabContent() -> Element {
     let app_state: AppState = use_context();
     let call_signal: Signal<ToolState> = use_context();
-    let tool_state = use_signal(|| ToolsPanelState {
-        tools: vec![],
-        loading: false,
-        error: None,
-        call_result: None,
-    });
+    let tool_state = use_signal(|| ToolsPanelState { call_result: None });
     let dialog_state = use_signal(|| SystemToolDialogState::new());
-    let client: JsonRpcClient = app_state.rpc_client.clone();
 
-    // Load tools on mount
-    let client_for_load = client.clone();
-    use_hook(move || {
-        let mut sig = tool_state;
-        sig.with_mut(|s| {
-            s.loading = true;
-            s.error = None;
-        });
-        client_for_load.tool_list(move |result| {
-            safe_write(sig, |s| {
-                s.loading = false;
-                match result {
-                    Ok(tools) => {
-                        s.tools = tools
-                            .iter()
-                            .filter_map(|t| serde_json::from_value::<ToolDef>(t.clone()).ok())
-                            .collect();
-                    }
-                    Err(e) => {
-                        s.error = Some(e);
+    let active_node = app_state.active_node_id;
+    let cache = app_state.node_data_cache;
+
+    // Load tools from cache or trigger DP fetch when active_node changes.
+    use_effect(move || {
+        let node_id = active_node.read().clone();
+        if let Some(ref nid) = node_id {
+            let cached = {
+                let c = cache.read();
+                c.get(nid).and_then(|d| d.data.get(CACHE_KEY).cloned())
+            };
+
+            if cached.is_some() {
+                return;
+            }
+
+            // Prefer DP client, fall back to CP rpc_client.
+            let client = app_state
+                .dp_pool
+                .read()
+                .get(nid)
+                .map(|c| c.client.clone())
+                .unwrap_or_else(|| app_state.rpc_client.clone());
+
+            let mut cache_mut = cache;
+            let target_nid = nid.clone();
+            let cache_nid = nid.clone();
+
+            // Mark as loading in cache immediately.
+            {
+                let loading_state = ToolsCacheState::default();
+                let v = serde_json::to_value(&loading_state).unwrap_or_default();
+                let mut c = cache_mut.write();
+                let node_data = c.get_or_insert(&cache_nid);
+                node_data.data.insert(CACHE_KEY.to_string(), v);
+            }
+
+            client.tool_list(move |result| {
+                let current_nid = active_node.read().clone();
+                if current_nid != target_nid {
+                    log::warn!("Node switched, discarding stale tool_list response");
+                    return;
+                }
+                let mut c = cache_mut.write();
+                if let Some(d) = c.get_mut(&cache_nid) {
+                    if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                        if let Some(obj) = v.as_object_mut() {
+                            match result {
+                                Ok(tools) => {
+                                    let parsed: Vec<ToolDef> = tools
+                                        .iter()
+                                        .filter_map(|t| {
+                                            serde_json::from_value::<ToolDef>(t.clone()).ok()
+                                        })
+                                        .collect();
+                                    obj.insert(
+                                        "tools".to_string(),
+                                        serde_json::to_value(parsed).unwrap_or_default(),
+                                    );
+                                    obj.insert("loading".to_string(), serde_json::json!(false));
+                                }
+                                Err(e) => {
+                                    obj.insert("error".to_string(), serde_json::json!(e));
+                                    obj.insert("loading".to_string(), serde_json::json!(false));
+                                }
+                            }
+                        }
                     }
                 }
             });
-        });
+        }
     });
 
     // Re-fetch on reconnect
     let event_bus = app_state.event_bus.clone();
-    let client_for_reconnect = client.clone();
-    let ts_for_reconnect = tool_state;
     use_hook(move || {
         let _sub = event_bus.subscribe(UiEventKind::WsConnected, move |_| {
-            let cl = client_for_reconnect.clone();
-            let sig = ts_for_reconnect;
-            cl.tool_list(move |result| {
-                safe_write(sig, |s| {
-                    s.loading = false;
-                    match result {
-                        Ok(tools) => {
-                            s.tools = tools
-                                .iter()
-                                .filter_map(|t| serde_json::from_value::<ToolDef>(t.clone()).ok())
-                                .collect();
-                        }
-                        Err(e) => {
-                            s.error = Some(e);
+            let node_id = active_node.read().clone();
+            if let Some(ref nid) = node_id {
+                // Invalidate cache so use_effect re-fetches.
+                let mut c = cache.write();
+                c.invalidate(nid);
+            }
+            // Trigger re-render; use_effect will re-run due to cache invalidation.
+            // Since use_effect only runs on signal change, we manually trigger load here.
+            if let Some(ref nid) = node_id {
+                let client = app_state
+                    .dp_pool
+                    .read()
+                    .get(nid)
+                    .map(|c| c.client.clone())
+                    .unwrap_or_else(|| app_state.rpc_client.clone());
+
+                let mut cache_mut = cache;
+                let target_nid = nid.clone();
+                let cache_nid = nid.clone();
+
+                // Mark loading.
+                {
+                    let loading_state = ToolsCacheState::default();
+                    let v = serde_json::to_value(&loading_state).unwrap_or_default();
+                    let mut c = cache_mut.write();
+                    let node_data = c.get_or_insert(&cache_nid);
+                    node_data.data.insert(CACHE_KEY.to_string(), v);
+                }
+
+                client.tool_list(move |result| {
+                    let current_nid = active_node.read().clone();
+                    if current_nid != target_nid {
+                        log::warn!("Node switched, discarding stale tool_list response");
+                        return;
+                    }
+                    let mut c = cache_mut.write();
+                    if let Some(d) = c.get_mut(&cache_nid) {
+                        if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                            if let Some(obj) = v.as_object_mut() {
+                                match result {
+                                    Ok(tools) => {
+                                        let parsed: Vec<ToolDef> = tools
+                                            .iter()
+                                            .filter_map(|t| {
+                                                serde_json::from_value::<ToolDef>(t.clone()).ok()
+                                            })
+                                            .collect();
+                                        obj.insert(
+                                            "tools".to_string(),
+                                            serde_json::to_value(parsed).unwrap_or_default(),
+                                        );
+                                        obj.insert("loading".to_string(), serde_json::json!(false));
+                                    }
+                                    Err(e) => {
+                                        obj.insert("error".to_string(), serde_json::json!(e));
+                                        obj.insert("loading".to_string(), serde_json::json!(false));
+                                    }
+                                }
+                            }
                         }
                     }
                 });
-            });
+            }
         });
     });
 
-    // Read state
-    let (tools, loading, error, call_result) = {
-        let s = tool_state.read();
-        (
-            s.tools.clone(),
-            s.loading,
-            s.error.clone(),
-            s.call_result.clone(),
-        )
+    // Read state from cache.
+    let has_active_node = active_node.read().is_some();
+    let (tools, loading, error) = {
+        let node_id = active_node.read().clone();
+        node_id
+            .and_then(|nid| {
+                let c = cache.read();
+                c.get(&nid).and_then(|d| {
+                    d.data
+                        .get(CACHE_KEY)
+                        .and_then(|v| serde_json::from_value::<ToolsCacheState>(v.clone()).ok())
+                })
+            })
+            .map(|s| (s.tools, s.loading, s.error))
+            .unwrap_or_default()
     };
+    let call_result = tool_state.read().call_result.clone();
     let call_count = call_signal.read().calls.len();
+
+    // Early return if no node selected.
+    if !has_active_node {
+        return rsx! {
+            div { class: "flex-1 overflow-y-auto p-3",
+                div { class: "flex items-center justify-center h-full text-[#666] text-[12px]",
+                    "No node selected"
+                }
+            }
+        };
+    }
 
     // Pre-build call history items
     let call_items: Vec<Element> = (0..call_count)
@@ -218,25 +324,59 @@ pub fn ToolsTabContent() -> Element {
                         button {
                             class: "px-2 py-0.5 text-[12px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#4a4a65]",
                             onclick: {
-                                let client = client.clone();
-                                let ts = tool_state;
+                                let app = app_state.clone();
                                 move |_| {
-                                    let ts = ts;
-                                    safe_write(ts, |s| { s.loading = true; s.error = None; });
-                                    let ts2 = ts;
-                                    client.tool_list(move |result| {
-                                        safe_write(ts2, |s| {
-                                            s.loading = false;
-                                            match result {
-                                                Ok(tools) => {
-                                                    s.tools = tools.iter()
-                                                        .filter_map(|t| serde_json::from_value::<ToolDef>(t.clone()).ok())
-                                                        .collect();
+                                    let node_id = app.active_node_id.read().clone();
+                                    if let Some(ref nid) = node_id {
+                                        let client = app
+                                            .dp_pool
+                                            .read()
+                                            .get(nid)
+                                            .map(|c| c.client.clone())
+                                            .unwrap_or_else(|| app.rpc_client.clone());
+
+                                        let mut cache_mut = app.node_data_cache;
+                                        let target_nid = nid.clone();
+                                        let cache_nid = nid.clone();
+
+                                        // Mark loading.
+                                        {
+                                            let loading_state = ToolsCacheState::default();
+                                            let v = serde_json::to_value(&loading_state).unwrap_or_default();
+                                            let mut c = cache_mut.write();
+                                            let node_data = c.get_or_insert(&cache_nid);
+                                            node_data.data.insert(CACHE_KEY.to_string(), v);
+                                        }
+
+                                        client.tool_list(move |result| {
+                                            let current_nid = app.active_node_id.read().clone();
+                                            if current_nid != target_nid {
+                                                log::warn!("Node switched, discarding stale tool_list response");
+                                                return;
+                                            }
+                                            let mut c = cache_mut.write();
+                                            if let Some(d) = c.get_mut(&cache_nid) {
+                                                if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                                                    if let Some(obj) = v.as_object_mut() {
+                                                        match result {
+                                                            Ok(tools) => {
+                                                                let parsed: Vec<ToolDef> = tools
+                                                                    .iter()
+                                                                    .filter_map(|t| serde_json::from_value::<ToolDef>(t.clone()).ok())
+                                                                    .collect();
+                                                                obj.insert("tools".to_string(), serde_json::to_value(parsed).unwrap_or_default());
+                                                                obj.insert("loading".to_string(), serde_json::json!(false));
+                                                            }
+                                                            Err(e) => {
+                                                                obj.insert("error".to_string(), serde_json::json!(e));
+                                                                obj.insert("loading".to_string(), serde_json::json!(false));
+                                                            }
+                                                        }
+                                                    }
                                                 }
-                                                Err(e) => { s.error = Some(e); }
                                             }
                                         });
-                                    });
+                                    }
                                 }
                             },
                             "Refresh"

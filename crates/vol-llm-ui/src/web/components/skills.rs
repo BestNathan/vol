@@ -1,103 +1,219 @@
 //! Skills panel showing available skills.
 
-use crate::state::{SkillDialogState, SkillsState, UiEventKind};
+use crate::state::{SkillDialogState, UiEventKind};
 use crate::web::components::app::AppState;
 use dioxus::prelude::*;
 
-/// Safely write to a Signal in an async callback.
-/// When a component unmounts, its signals are dropped.
-/// Async callbacks may still fire after unmount and panic on `with_mut()`.
-fn safe_write<T>(mut sig: Signal<T>, f: impl FnOnce(&mut T)) -> bool {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        sig.with_mut(f);
-    }))
-    .is_ok()
+/// Key used to store the serialized skills list in NodeDataCache.
+const CACHE_KEY: &str = "skills";
+
+/// Serializable state cached per-node for instant switching.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct SkillsCacheState {
+    skills: Vec<SkillsCacheEntry>,
+    loading: bool,
+    error: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct SkillsCacheEntry {
+    name: String,
+    version: String,
+    scope: String,
+    description: String,
+}
+
+impl Default for SkillsCacheState {
+    fn default() -> Self {
+        Self {
+            skills: Vec::new(),
+            loading: true,
+            error: None,
+        }
+    }
 }
 
 #[component]
 pub fn SkillsPanel(mut dialog_signal: Signal<SkillDialogState>) -> Element {
     let app_state: AppState = use_context();
-    let rpc_client = app_state.rpc_client.clone();
+    let active_node = app_state.active_node_id;
+    let cache = app_state.node_data_cache;
 
-    let signal = use_signal(|| SkillsState::new());
-
-    // Fetch skills on mount
-    let rpc_client_for_effect = rpc_client.clone();
+    // Load skills from cache or trigger DP fetch when active_node changes.
     use_effect(move || {
-        let client = rpc_client_for_effect.clone();
-        let mut sig = signal;
-        sig.with_mut(|s| {
-            s.loading = true;
-            s.error = None;
-        });
-        client.skill_list(move |result| {
-            safe_write(sig, |s| {
-                s.loading = false;
-                match result {
-                    Ok(entries) => {
-                        s.skills = entries
-                            .iter()
-                            .map(|e| crate::state::SkillDisplayEntry {
-                                name: e.name.clone(),
-                                version: e.version.clone(),
-                                scope: e.scope.clone(),
-                                description: e.description.clone(),
-                            })
-                            .collect();
-                        s.error = None;
-                    }
-                    Err(e) => {
-                        s.error = Some(e);
+        let node_id = active_node.read().clone();
+        if let Some(ref nid) = node_id {
+            let cached = {
+                let c = cache.read();
+                c.get(nid).and_then(|d| d.data.get(CACHE_KEY).cloned())
+            };
+
+            if cached.is_some() {
+                return;
+            }
+
+            // Prefer DP client, fall back to CP rpc_client.
+            let client = app_state
+                .dp_pool
+                .read()
+                .get(nid)
+                .map(|c| c.client.clone())
+                .unwrap_or_else(|| app_state.rpc_client.clone());
+
+            let mut cache_mut = cache;
+            let target_nid = nid.clone();
+            let cache_nid = nid.clone();
+
+            // Mark as loading in cache immediately.
+            {
+                let loading_state = SkillsCacheState::default();
+                let v = serde_json::to_value(&loading_state).unwrap_or_default();
+                let mut c = cache_mut.write();
+                let node_data = c.get_or_insert(&cache_nid);
+                node_data.data.insert(CACHE_KEY.to_string(), v);
+            }
+
+            client.skill_list(move |result| {
+                let current_nid = active_node.read().clone();
+                if current_nid != target_nid {
+                    log::warn!("Node switched, discarding stale skill_list response");
+                    return;
+                }
+                let mut c = cache_mut.write();
+                if let Some(d) = c.get_mut(&cache_nid) {
+                    if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                        if let Some(obj) = v.as_object_mut() {
+                            match result {
+                                Ok(entries) => {
+                                    let parsed: Vec<SkillsCacheEntry> = entries
+                                        .iter()
+                                        .map(|e| SkillsCacheEntry {
+                                            name: e.name.clone(),
+                                            version: e.version.clone(),
+                                            scope: e.scope.clone(),
+                                            description: e.description.clone(),
+                                        })
+                                        .collect();
+                                    obj.insert(
+                                        "skills".to_string(),
+                                        serde_json::to_value(parsed).unwrap_or_default(),
+                                    );
+                                    obj.insert("loading".to_string(), serde_json::json!(false));
+                                }
+                                Err(e) => {
+                                    obj.insert("error".to_string(), serde_json::json!(e));
+                                    obj.insert("loading".to_string(), serde_json::json!(false));
+                                }
+                            }
+                        }
                     }
                 }
             });
-        });
+        }
     });
 
     // Re-fetch on reconnect
     let event_bus = app_state.event_bus.clone();
-    let client_for_reconnect = rpc_client.clone();
-    let sig_for_reconnect = signal;
     use_hook(move || {
         let _sub = event_bus.subscribe(UiEventKind::WsConnected, move |_| {
-            let cl = client_for_reconnect.clone();
-            let sig = sig_for_reconnect;
-            safe_write(sig, |s| {
-                s.loading = true;
-                s.error = None;
-            });
-            cl.skill_list(move |result| {
-                safe_write(sig, |s| {
-                    s.loading = false;
-                    match result {
-                        Ok(entries) => {
-                            s.skills = entries
-                                .iter()
-                                .map(|e| crate::state::SkillDisplayEntry {
-                                    name: e.name.clone(),
-                                    version: e.version.clone(),
-                                    scope: e.scope.clone(),
-                                    description: e.description.clone(),
-                                })
-                                .collect();
-                            s.error = None;
-                        }
-                        Err(e) => {
-                            s.error = Some(e);
+            let node_id = active_node.read().clone();
+            if let Some(ref nid) = node_id {
+                // Invalidate cache.
+                let mut c = cache.write();
+                c.invalidate(nid);
+
+                let client = app_state
+                    .dp_pool
+                    .read()
+                    .get(nid)
+                    .map(|c| c.client.clone())
+                    .unwrap_or_else(|| app_state.rpc_client.clone());
+
+                let mut cache_mut = cache;
+                let target_nid = nid.clone();
+                let cache_nid = nid.clone();
+
+                // Mark loading.
+                {
+                    let loading_state = SkillsCacheState::default();
+                    let v = serde_json::to_value(&loading_state).unwrap_or_default();
+                    let mut c = cache_mut.write();
+                    let node_data = c.get_or_insert(&cache_nid);
+                    node_data.data.insert(CACHE_KEY.to_string(), v);
+                }
+
+                client.skill_list(move |result| {
+                    let current_nid = active_node.read().clone();
+                    if current_nid != target_nid {
+                        log::warn!("Node switched, discarding stale skill_list response");
+                        return;
+                    }
+                    let mut c = cache_mut.write();
+                    if let Some(d) = c.get_mut(&cache_nid) {
+                        if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                            if let Some(obj) = v.as_object_mut() {
+                                match result {
+                                    Ok(entries) => {
+                                        let parsed: Vec<SkillsCacheEntry> = entries
+                                            .iter()
+                                            .map(|e| SkillsCacheEntry {
+                                                name: e.name.clone(),
+                                                version: e.version.clone(),
+                                                scope: e.scope.clone(),
+                                                description: e.description.clone(),
+                                            })
+                                            .collect();
+                                        obj.insert(
+                                            "skills".to_string(),
+                                            serde_json::to_value(parsed).unwrap_or_default(),
+                                        );
+                                        obj.insert("loading".to_string(), serde_json::json!(false));
+                                    }
+                                    Err(e) => {
+                                        obj.insert("error".to_string(), serde_json::json!(e));
+                                        obj.insert("loading".to_string(), serde_json::json!(false));
+                                    }
+                                }
+                            }
                         }
                     }
                 });
-            });
+            }
         });
     });
 
-    let count = signal.read().skills.len();
-    let error = signal.read().error.clone();
-    let loading = signal.read().loading;
+    // Read state from cache.
+    let has_active_node = active_node.read().is_some();
+    let (skills, loading, error) = {
+        let node_id = active_node.read().clone();
+        node_id
+            .and_then(|nid| {
+                let c = cache.read();
+                c.get(&nid).and_then(|d| {
+                    d.data
+                        .get(CACHE_KEY)
+                        .and_then(|v| serde_json::from_value::<SkillsCacheState>(v.clone()).ok())
+                })
+            })
+            .map(|s| (s.skills, s.loading, s.error))
+            .unwrap_or_default()
+    };
+
+    let count = skills.len();
+
+    // Early return if no node selected.
+    if !has_active_node {
+        return rsx! {
+            div { class: "flex-1 overflow-y-auto p-3",
+                div { class: "flex items-center justify-center h-full text-[#666] text-[12px]",
+                    "No node selected"
+                }
+            }
+        };
+    }
 
     if let Some(_err) = error {
-        let retry_client = rpc_client.clone();
-        let retry_sig = signal;
+        let app_retry = app_state.clone();
         return rsx! {
             div { class: "flex-1 overflow-y-auto p-2.5",
                 div { class: "flex flex-col items-center justify-center h-full text-[#c04040]",
@@ -105,28 +221,62 @@ pub fn SkillsPanel(mut dialog_signal: Signal<SkillDialogState>) -> Element {
                     button {
                         class: "mt-2 px-3 py-1 bg-[#4080ff] text-white rounded text-[12px] cursor-pointer hover:bg-[#5090ff]",
                         onclick: move |_| {
-                            let client = retry_client.clone();
-                            let sig = retry_sig;
-                            safe_write(sig, |s| { s.loading = true; s.error = None; });
-                            client.skill_list(move |result| {
-                                safe_write(sig, |s| {
-                                    s.loading = false;
-                                    match result {
-                                        Ok(entries) => {
-                                            s.skills = entries.iter().map(|e| {
-                                                crate::state::SkillDisplayEntry {
-                                                    name: e.name.clone(),
-                                                    version: e.version.clone(),
-                                                    scope: e.scope.clone(),
-                                                    description: e.description.clone(),
+                            let node_id = app_retry.active_node_id.read().clone();
+                            if let Some(ref nid) = node_id {
+                                let client = app_retry
+                                    .dp_pool
+                                    .read()
+                                    .get(nid)
+                                    .map(|c| c.client.clone())
+                                    .unwrap_or_else(|| app_retry.rpc_client.clone());
+
+                                let mut cache_mut = app_retry.node_data_cache;
+                                let target_nid = nid.clone();
+                                let cache_nid = nid.clone();
+
+                                // Mark loading.
+                                {
+                                    let loading_state = SkillsCacheState::default();
+                                    let v = serde_json::to_value(&loading_state).unwrap_or_default();
+                                    let mut c = cache_mut.write();
+                                    let node_data = c.get_or_insert(&cache_nid);
+                                    node_data.data.insert(CACHE_KEY.to_string(), v);
+                                }
+
+                                client.skill_list(move |result| {
+                                    let current_nid = app_retry.active_node_id.read().clone();
+                                    if current_nid != target_nid {
+                                        log::warn!("Node switched, discarding stale skill_list response");
+                                        return;
+                                    }
+                                    let mut c = cache_mut.write();
+                                    if let Some(d) = c.get_mut(&cache_nid) {
+                                        if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                                            if let Some(obj) = v.as_object_mut() {
+                                                match result {
+                                                    Ok(entries) => {
+                                                        let parsed: Vec<SkillsCacheEntry> = entries
+                                                            .iter()
+                                                            .map(|e| SkillsCacheEntry {
+                                                                name: e.name.clone(),
+                                                                version: e.version.clone(),
+                                                                scope: e.scope.clone(),
+                                                                description: e.description.clone(),
+                                                            })
+                                                            .collect();
+                                                        obj.insert("skills".to_string(), serde_json::to_value(parsed).unwrap_or_default());
+                                                        obj.insert("loading".to_string(), serde_json::json!(false));
+                                                    }
+                                                    Err(e) => {
+                                                        obj.insert("error".to_string(), serde_json::json!(e));
+                                                        obj.insert("loading".to_string(), serde_json::json!(false));
+                                                    }
                                                 }
-                                            }).collect();
-                                            s.error = None;
+                                            }
                                         }
-                                        Err(e) => { s.error = Some(e); }
                                     }
                                 });
-                            });
+                            }
                         },
                         "Retry"
                     }
@@ -146,40 +296,92 @@ pub fn SkillsPanel(mut dialog_signal: Signal<SkillDialogState>) -> Element {
                 button {
                     class: "px-2 py-0.5 text-[12px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#4a4a65]",
                     onclick: move |_| {
-                        let client = rpc_client.clone();
-                        let sig = signal;
-                        safe_write(sig, |s| { s.loading = true; s.error = None; });
-                        let client2 = client.clone();
-                        client2.skill_refresh(move |result| {
-                            match result {
-                                Ok(_) => {
-                                    let client3 = client.clone();
-                                    let sig3 = sig;
-                                    client3.skill_list(move |list_result| {
-                                        safe_write(sig3, |s| {
-                                            s.loading = false;
-                                            match list_result {
-                                                Ok(entries) => {
-                                                    s.skills = entries.iter().map(|e| {
-                                                        crate::state::SkillDisplayEntry {
-                                                            name: e.name.clone(),
-                                                            version: e.version.clone(),
-                                                            scope: e.scope.clone(),
-                                                            description: e.description.clone(),
+                        let node_id = app_state.active_node_id.read().clone();
+                        if let Some(ref nid) = node_id {
+                            let client = app_state
+                                .dp_pool
+                                .read()
+                                .get(nid)
+                                .map(|c| c.client.clone())
+                                .unwrap_or_else(|| app_state.rpc_client.clone());
+
+                            let mut cache_mut = app_state.node_data_cache;
+                            let target_nid = nid.clone();
+                            let cache_nid = nid.clone();
+
+                            // Mark loading.
+                            {
+                                let loading_state = SkillsCacheState::default();
+                                let v = serde_json::to_value(&loading_state).unwrap_or_default();
+                                let mut c = cache_mut.write();
+                                let node_data = c.get_or_insert(&cache_nid);
+                                node_data.data.insert(CACHE_KEY.to_string(), v);
+                            }
+
+                            client.skill_refresh(move |result| {
+                                match result {
+                                    Ok(_) => {
+                                        let current_nid = active_node.read().clone();
+                                        if current_nid != target_nid {
+                                            log::warn!("Node switched, discarding stale skill_list response");
+                                            return;
+                                        }
+                                        // After refresh, re-fetch the list.
+                                        let client2 = app_state
+                                            .dp_pool
+                                            .read()
+                                            .get(&target_nid)
+                                            .map(|c| c.client.clone())
+                                            .unwrap_or_else(|| app_state.rpc_client.clone());
+                                        let cache_nid2 = cache_nid.clone();
+                                        let mut cache_ref = cache_mut.clone();
+                                        client2.skill_list(move |list_result| {
+                                            let current_nid = active_node.read().clone();
+                                            if current_nid != target_nid {
+                                                return;
+                                            }
+                                            let mut c = cache_ref.write();
+                                            if let Some(d) = c.get_mut(&cache_nid2) {
+                                                if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                                                    if let Some(obj) = v.as_object_mut() {
+                                                        match list_result {
+                                                            Ok(entries) => {
+                                                                let parsed: Vec<SkillsCacheEntry> = entries
+                                                                    .iter()
+                                                                    .map(|e| SkillsCacheEntry {
+                                                                        name: e.name.clone(),
+                                                                        version: e.version.clone(),
+                                                                        scope: e.scope.clone(),
+                                                                        description: e.description.clone(),
+                                                                    })
+                                                                    .collect();
+                                                                obj.insert("skills".to_string(), serde_json::to_value(parsed).unwrap_or_default());
+                                                                obj.insert("loading".to_string(), serde_json::json!(false));
+                                                            }
+                                                            Err(e) => {
+                                                                obj.insert("error".to_string(), serde_json::json!(e));
+                                                                obj.insert("loading".to_string(), serde_json::json!(false));
+                                                            }
                                                         }
-                                                    }).collect();
-                                                    s.error = None;
+                                                    }
                                                 }
-                                                Err(e) => { s.error = Some(e); }
                                             }
                                         });
-                                    });
+                                    }
+                                    Err(e) => {
+                                        let mut c = cache_mut.write();
+                                        if let Some(d) = c.get_mut(&cache_nid) {
+                                            if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                                                if let Some(obj) = v.as_object_mut() {
+                                                    obj.insert("error".to_string(), serde_json::json!(e));
+                                                    obj.insert("loading".to_string(), serde_json::json!(false));
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                                Err(e) => {
-                                    safe_write(sig, |s| { s.loading = false; s.error = Some(e); });
-                                }
-                            }
-                        });
+                            });
+                        }
                     },
                     "Refresh"
                 }
@@ -189,10 +391,10 @@ pub fn SkillsPanel(mut dialog_signal: Signal<SkillDialogState>) -> Element {
             }
             div { class: "sm:hidden flex flex-col gap-2",
                 {(0..count).map(|i| {
-                    let s = signal;
                     let d = dialog_signal;
-                    let c = rpc_client.clone();
-                    rsx! { SkillCard { signal: s, dialog_signal: d, rpc_client: c, index: i } }
+                    let app_clone = app_state.clone();
+                    let skill = skills[i].clone();
+                    rsx! { SkillCard { skill: skill, dialog_signal: d, app_state: app_clone } }
                 }).collect::<Vec<Element>>().into_iter()}
             }
             table { class: "hidden sm:table w-full border-collapse",
@@ -203,7 +405,7 @@ pub fn SkillsPanel(mut dialog_signal: Signal<SkillDialogState>) -> Element {
                     th { class: "text-left px-2 py-1 border-b border-[#333355] text-[12px] text-[#888]", "Description" }
                 } }
                 tbody {
-                    {(0..count).map(|i| { let s = signal; let d = dialog_signal; let c = rpc_client.clone(); rsx! { SkillRow { signal: s, dialog_signal: d, rpc_client: c, index: i } } }).collect::<Vec<Element>>().into_iter()}
+                    {(0..count).map(|i| { let d = dialog_signal; let app_clone = app_state.clone(); let skill = skills[i].clone(); rsx! { SkillRow { skill: skill, dialog_signal: d, app_state: app_clone } } }).collect::<Vec<Element>>().into_iter()}
                 }
             }
         }
@@ -212,16 +414,10 @@ pub fn SkillsPanel(mut dialog_signal: Signal<SkillDialogState>) -> Element {
 
 #[component]
 fn SkillCard(
-    signal: Signal<SkillsState>,
+    skill: SkillsCacheEntry,
     mut dialog_signal: Signal<SkillDialogState>,
-    rpc_client: crate::web::client::JsonRpcClient,
-    index: usize,
+    app_state: AppState,
 ) -> Element {
-    let skill = signal.read().skills.get(index).cloned();
-    let Some(skill) = skill else {
-        return rsx! {};
-    };
-
     let color = match skill.scope.as_str() {
         "User" => "#40c040",
         "Repo" => "#4080ff",
@@ -232,7 +428,11 @@ fn SkillCard(
         div {
             class: "cursor-pointer rounded-md border border-[#333355] bg-[#20203a] p-3 active:bg-[#2a2a44]",
             onclick: move |_| {
-                let client = rpc_client.clone();
+                let node_id = app_state.active_node_id.read().clone();
+                let client = node_id
+                    .as_ref()
+                    .and_then(|nid| app_state.dp_pool.read().get(nid).map(|c| c.client.clone()))
+                    .unwrap_or_else(|| app_state.rpc_client.clone());
                 let name = skill.name.clone();
                 let mut d = dialog_signal.write_unchecked();
                 d.open = true;
@@ -270,16 +470,10 @@ fn SkillCard(
 
 #[component]
 fn SkillRow(
-    signal: Signal<SkillsState>,
+    skill: SkillsCacheEntry,
     mut dialog_signal: Signal<SkillDialogState>,
-    rpc_client: crate::web::client::JsonRpcClient,
-    index: usize,
+    app_state: AppState,
 ) -> Element {
-    let skill = signal.read().skills.get(index).cloned();
-    let Some(skill) = skill else {
-        return rsx! {};
-    };
-
     let color = match skill.scope.as_str() {
         "User" => "#40c040",
         "Repo" => "#4080ff",
@@ -290,7 +484,11 @@ fn SkillRow(
         tr {
             class: "cursor-pointer hover:bg-[#2a2a44]",
             onclick: move |_| {
-                let client = rpc_client.clone();
+                let node_id = app_state.active_node_id.read().clone();
+                let client = node_id
+                    .as_ref()
+                    .and_then(|nid| app_state.dp_pool.read().get(nid).map(|c| c.client.clone()))
+                    .unwrap_or_else(|| app_state.rpc_client.clone());
                 let name = skill.name.clone();
                 let mut d = dialog_signal.write_unchecked();
                 d.open = true;
