@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 use super::nodes_dropdown::NodesDropdown;
-use crate::state::{DebugState, GlobalState};
+use crate::state::{AgentsState, DebugState, GlobalState};
 use crate::web::client::NodeListEntry;
 use crate::web::components::app::AppState;
 
@@ -19,6 +19,7 @@ pub fn StatusBar() -> Element {
     let g: Signal<GlobalState> = use_context();
     let debug = use_context::<Signal<DebugState>>();
     let app_state: AppState = use_context();
+    let agents_signal: Signal<AgentsState> = use_context();
 
     // Fetch nodes for the dropdown
     let mut nodes = use_signal(Vec::<NodeListEntry>::new);
@@ -96,7 +97,25 @@ pub fn StatusBar() -> Element {
                     selected_node_id: app_state.active_node_id,
                     on_select: {
                         let mut app_state = app_state.clone();
+                        let agents_signal = agents_signal.clone();
                         move |node_id: String| {
+                            // Get agents from context to find ws_url for this node
+                            let agents = agents_signal.read();
+
+                            // Find first agent on this node with a ws_url
+                            let ws_url = agents.agents.iter()
+                                .find(|a| a.node_id.as_deref() == Some(&node_id) && a.ws_url.is_some())
+                                .and_then(|a| a.ws_url.clone());
+
+                            if let Some(url) = ws_url {
+                                // Create DP connection in the pool
+                                app_state.dp_pool.write().get_or_create(&node_id, &url, vec![]);
+                                log::info!("Manually selected node {node_id} (ws_url={url})");
+                            } else {
+                                log::warn!("No ws_url found for node {node_id}");
+                            }
+
+                            // Set as active node
                             app_state.active_node_id.set(Some(node_id));
                         }
                     },
