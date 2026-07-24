@@ -826,7 +826,6 @@ fn TabBar() -> Element {
 
     rsx! {
         div { class: "flex flex-nowrap bg-[#252540] border-b border-[#333355] flex-shrink-0 overflow-x-auto",
-            TabButton { state: state.clone(), tab: ActiveTab::Nodes, label: "Nodes" }
             TabButton { state: state.clone(), tab: ActiveTab::Tasks, label: "Tasks" }
             TabButton { state: state.clone(), tab: ActiveTab::Agents, label: "Agents" }
             TabButton { state: state.clone(), tab: ActiveTab::Tools, label: "Tools" }

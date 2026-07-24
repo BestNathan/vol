@@ -35,13 +35,13 @@ pub fn NodesDropdown(
             }
             if *is_open.read() {
                 // Transparent overlay — clicking outside the dropdown closes it.
-                // Follows the same pattern as SkillDetailDialog.
+                // Uses fixed positioning to escape parent overflow-hidden.
                 div {
                     class: "fixed inset-0 z-40",
                     onclick: move |_| is_open.set(false),
                 }
                 div {
-                    class: "absolute right-0 mt-1 min-w-[280px] bg-[#1e1e36] border border-[#333355] rounded shadow-lg z-50 max-h-[400px] overflow-y-auto",
+                    class: "fixed right-4 top-12 min-w-[280px] bg-[#1e1e36] border border-[#333355] rounded shadow-lg z-50 max-h-[400px] overflow-y-auto",
                     onclick: move |e| {
                         // Prevent clicks inside dropdown from closing it
                         e.stop_propagation();
