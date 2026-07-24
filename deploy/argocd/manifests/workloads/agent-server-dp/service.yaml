@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-server-dp
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-server-dp
+    app.kubernetes.io/part-of: vol-agent
+spec:
+  selector:
+    app.kubernetes.io/name: agent-server-dp
+  ports:
+    - name: ws
+      port: 3002
+      targetPort: 3002
+      protocol: TCP
+  type: ClusterIP
