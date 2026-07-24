@@ -258,30 +258,27 @@ pub fn AgentsPanel() -> Element {
 
     let selected_agent = agents.iter().find(|a| selected.as_ref() == Some(&a.id));
 
-    // Group agents by node_id
-    let mut groups: BTreeMap<String, Vec<crate::web::client::AgentListEntry>> = BTreeMap::new();
-    for agent in &agents {
-        let key = agent
-            .node_id
-            .clone()
-            .unwrap_or_else(|| "unknown".to_string());
-        groups.entry(key).or_default().push(agent.clone());
-    }
+    // Filter agents by active_node_id - only show agents from the selected node
+    let active_node = app.active_node_id.read().clone();
+    let filtered_agents: Vec<_> = agents
+        .iter()
+        .filter(|a| match (&active_node, &a.node_id) {
+            (Some(selected_node), Some(agent_node)) => selected_node == agent_node,
+            _ => false,
+        })
+        .cloned()
+        .collect();
 
     rsx! {
         div { class: "flex flex-col flex-1 min-h-0 overflow-hidden",
             // Card grid — responsive: stack on mobile, wrap on desktop
             div { class: "flex flex-col sm:flex-row sm:flex-wrap gap-2 p-2 border-b border-[#333355] overflow-y-auto max-h-[200px] min-h-[60px] flex-shrink-0",
-                for (node_id, node_agents) in &groups {
-                    div { class: "w-full text-[#80a0ff] text-xs font-bold px-2 py-1 mt-2",
-                        "📡 {node_id}"
-                    }
-                    for agent in node_agents {
-                        AgentCard {
-                            key: "{agent.id}",
-                            agent: agent.clone(),
-                            is_selected: selected.as_ref() == Some(&agent.id),
-                            on_click: {
+                for agent in &filtered_agents {
+                    AgentCard {
+                        key: "{agent.id}",
+                        agent: agent.clone(),
+                        is_selected: selected.as_ref() == Some(&agent.id),
+                        on_click: {
                                 let mut sig = agents_signal;
                                 let mut conv_sig = conv_signal;
                                 let agent_id = agent.id.clone();
@@ -336,7 +333,6 @@ pub fn AgentsPanel() -> Element {
                             },
                         }
                     }
-                }
             }
 
             // Info bar
