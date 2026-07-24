@@ -107,30 +107,39 @@ pub fn StatusBar() -> Element {
 
                             wasm_bindgen_futures::spawn_local(async move {
                                 web_sys::console::log_1(&format!("[DEBUG] Fetching agent list for node {}", target_node_id).into());
+                                web_sys::console::log_1(&format!("[DEBUG] CP client connected: {}", cp.is_connected()).into());
                                 let (tx, rx) = futures_channel::oneshot::channel();
                                 cp.agent_list(move |result| {
+                                    web_sys::console::log_1(&format!("[DEBUG] agent_list callback: {:?}", result.is_ok()).into());
                                     let _ = tx.send(result);
                                 });
 
-                                if let Ok(Ok(agents)) = rx.await {
-                                    web_sys::console::log_1(&format!("[DEBUG] Got {} agents", agents.len()).into());
-                                    // Find first agent on this node with a ws_url
-                                    let ws_url = agents.iter()
-                                        .find(|a| a.node_id.as_deref() == Some(&target_node_id) && a.ws_url.is_some())
-                                        .and_then(|a| a.ws_url.clone());
+                                match rx.await {
+                                    Ok(Ok(agents)) => {
+                                        web_sys::console::log_1(&format!("[DEBUG] Got {} agents", agents.len()).into());
+                                        // Find first agent on this node with a ws_url
+                                        let ws_url = agents.iter()
+                                            .find(|a| a.node_id.as_deref() == Some(&target_node_id) && a.ws_url.is_some())
+                                            .and_then(|a| a.ws_url.clone());
 
-                                    if let Some(url) = ws_url {
-                                        web_sys::console::log_1(&format!("[DEBUG] Found ws_url: {}", url).into());
-                                        // Create DP connection in the pool
-                                        dp_pool.write().get_or_create(&target_node_id, &url, vec![]);
-                                        log::info!("Manually selected node {target_node_id} (ws_url={url})");
-                                    } else {
-                                        web_sys::console::log_1(&format!("[DEBUG] No ws_url found for node {}", target_node_id).into());
-                                        log::warn!("No ws_url found for node {target_node_id}");
+                                        if let Some(url) = ws_url {
+                                            web_sys::console::log_1(&format!("[DEBUG] Found ws_url: {}", url).into());
+                                            // Create DP connection in the pool
+                                            dp_pool.write().get_or_create(&target_node_id, &url, vec![]);
+                                            log::info!("Manually selected node {target_node_id} (ws_url={url})");
+                                        } else {
+                                            web_sys::console::log_1(&format!("[DEBUG] No ws_url found for node {}", target_node_id).into());
+                                            log::warn!("No ws_url found for node {target_node_id}");
+                                        }
                                     }
-                                } else {
-                                    web_sys::console::log_1(&"[DEBUG] Failed to fetch agent list".into());
-                                    log::warn!("Failed to fetch agent list for node {target_node_id}");
+                                    Ok(Err(e)) => {
+                                        web_sys::console::log_1(&format!("[DEBUG] agent_list error: {}", e).into());
+                                        log::warn!("Failed to fetch agent list for node {target_node_id}: {e}");
+                                    }
+                                    Err(e) => {
+                                        web_sys::console::log_1(&format!("[DEBUG] channel error: {:?}", e).into());
+                                        log::warn!("Channel error for node {target_node_id}: {e:?}");
+                                    }
                                 }
 
                                 // Set as active node
