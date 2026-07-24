@@ -52,16 +52,19 @@ RUN set -eux; \
     rustup target add wasm32-unknown-unknown; \
     cargo --version
 
+WORKDIR /app
+
+# ─ Tools: Install cargo-chef and Dioxus CLI (cached separately) ─────────────
+FROM base AS tools
+
 # Install cargo-chef for dependency caching
 RUN cargo install cargo-chef --locked
 
 # Install Dioxus CLI (pinned version matching the project)
 RUN cargo install dioxus-cli --version 0.6.3 --locked
 
-WORKDIR /app
-
 # ── Planner: generate cargo-chef recipe ──────────────────────────────────────
-FROM base AS planner
+FROM tools AS planner
 
 # Copy workspace Cargo.toml + all crate Cargo.tomls for recipe generation
 COPY Cargo.toml Cargo.lock ./
@@ -71,7 +74,7 @@ COPY .cargo/ .cargo/
 RUN cargo chef prepare --recipe-path recipe.json
 
 # ── Builder: cook deps + build WASM ──────────────────────────────────────────
-FROM base AS builder
+FROM tools AS builder
 
 # Cook dependencies (cached layer)
 COPY --from=planner /app/recipe.json recipe.json
