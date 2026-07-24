@@ -112,7 +112,10 @@ fn NodeRow(
     rsx! {
         div {
             class: "flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-[#333355] last:border-b-0 {row_bg}",
-            onclick: move |_| on_select.call(()),
+            onclick: move |_| {
+                web_sys::console::log_1(&format!("[DEBUG] NodeRow clicked: {}", node.node_id).into());
+                on_select.call(())
+            },
             // Status indicator
             div {
                 class: "w-2 h-2 rounded-full {status_color} flex-shrink-0",
