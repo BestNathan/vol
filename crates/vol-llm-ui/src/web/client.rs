@@ -641,19 +641,25 @@ impl JsonRpcClient {
             return;
         }
 
-        let cb: Box<dyn FnOnce(serde_json::Value)> =
-            Box::new(
-                move |result| match result.get("agents").and_then(|v| v.as_array()) {
-                    Some(agents) => {
-                        let parsed: Vec<AgentListEntry> = agents
-                            .iter()
-                            .filter_map(|e| serde_json::from_value(e.clone()).ok())
-                            .collect();
-                        cb(Ok(parsed));
-                    }
-                    None => cb(Err("no agents in response".to_string())),
-                },
-            );
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            web_sys::console::log_1(&format!("[DEBUG] agent.list response: {}", result).into());
+            match result.get("agents").and_then(|v| v.as_array()) {
+                Some(agents) => {
+                    let parsed: Vec<AgentListEntry> = agents
+                        .iter()
+                        .filter_map(|e| serde_json::from_value(e.clone()).ok())
+                        .collect();
+                    web_sys::console::log_1(
+                        &format!("[DEBUG] Parsed {} agents", parsed.len()).into(),
+                    );
+                    cb(Ok(parsed));
+                }
+                None => {
+                    web_sys::console::log_1(&"[DEBUG] No agents field in response".into());
+                    cb(Err("no agents in response".to_string()))
+                }
+            }
+        });
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
