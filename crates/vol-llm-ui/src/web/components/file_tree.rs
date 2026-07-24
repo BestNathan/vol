@@ -489,14 +489,17 @@ pub fn FileTree() -> Element {
         let ws_write = ws;
         let mut loaded_sig = loaded_ws_node;
 
+        // Use peek() to avoid subscribing to loaded_sig (prevents infinite loop)
+        let loaded_node = loaded_sig.peek().clone();
+
         // If node changed, clear workspace to trigger proper rebuild
-        if active_node != *loaded_sig.read() {
+        if active_node != loaded_node {
             ws_write.write_unchecked().workspace =
                 crate::state::WorkspaceTreeNode::root(".".to_string(), ".".into());
         }
 
-        let ws_loaded = ws_write.read().workspace.loaded;
-        let loaded_node = loaded_sig.read().clone();
+        // Use peek() to avoid subscribing to ws signal
+        let ws_loaded = ws_write.peek().workspace.loaded;
 
         // Only act if workspace needs loading or node changed
         if !ws_loaded || loaded_node != active_node {
