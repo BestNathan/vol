@@ -1,0 +1,49 @@
+- generic [ref=f2e4]:
+  - generic [ref=f2e5]:
+    - generic [ref=f2e6]:
+      - generic "Connected" [ref=f2e7]
+      - generic [ref=f2e10]: CP
+      - generic [ref=f2e13]: "DP: —"
+      - generic [ref=f2e16]:
+        - button "▾ Nodes(2)" [active] [ref=f2e17] [cursor=pointer]
+        - generic [ref=f2e56]:
+          - generic [ref=f2e57] [cursor=pointer]:
+            - generic [ref=f2e59]:
+              - generic "Click to view node detail" [ref=f2e61]: ansible-agent
+              - generic [ref=f2e62]: ansible · v0.1.0
+            - generic [ref=f2e63]: R:0 Q:0
+          - generic [ref=f2e65] [cursor=pointer]:
+            - generic [ref=f2e67]:
+              - generic "Click to view node detail" [ref=f2e69]: data-plane-1
+              - generic [ref=f2e70]: dp-1 · v0.1.0
+            - generic [ref=f2e71]: R:0 Q:0
+      - generic [ref=f2e19]: "Session: web-session"
+      - generic [ref=f2e20]: "Run: 0"
+      - generic [ref=f2e21]: "Iter: 0"
+      - generic [ref=f2e22]: "Tools: 0"
+      - generic [ref=f2e23]: "Time: 00:00"
+      - generic [ref=f2e24]: Idle
+    - generic [ref=f2e25]:
+      - generic [ref=f2e26]:
+        - generic [ref=f2e27]: UI
+        - generic [ref=f2e28]: 0.1.0
+        - generic [ref=f2e29]: "|"
+        - generic [ref=f2e30]: 2026-07-24 06:28 UTC
+      - button "🐛" [ref=f2e32] [cursor=pointer]
+  - generic [ref=f2e33]:
+    - generic [ref=f2e36]:
+      - generic [ref=f2e37]: Explorer
+      - generic [ref=f2e39]: No node selected
+    - generic [ref=f2e41]:
+      - generic [ref=f2e42]:
+        - button "Tasks" [ref=f2e43] [cursor=pointer]
+        - button "Agents" [ref=f2e44] [cursor=pointer]
+        - button "Tools" [ref=f2e45] [cursor=pointer]
+        - button "Workspace" [ref=f2e46] [cursor=pointer]
+        - button "Skills" [ref=f2e47] [cursor=pointer]
+        - button "MCP" [ref=f2e48] [cursor=pointer]
+        - button "Logs" [ref=f2e49] [cursor=pointer]
+      - generic [ref=f2e51]:
+        - generic [ref=f2e52]: No agents discovered
+        - generic [ref=f2e53]: Place agent .md files in .agents/agents/ and restart the backend.
+        - button "Refresh" [ref=f2e54]

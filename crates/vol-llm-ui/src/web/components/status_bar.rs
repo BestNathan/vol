@@ -98,6 +98,7 @@ pub fn StatusBar() -> Element {
                         let app_state = app_state.clone();
                         let cp_client = app_state.cp_client.clone();
                         move |node_id: String| {
+                            web_sys::console::log_1(&format!("[DEBUG] Node selected: {}", node_id).into());
                             // Fetch agent list to get ws_url for this node
                             let cp = cp_client.clone();
                             let mut dp_pool = app_state.dp_pool;
@@ -105,29 +106,35 @@ pub fn StatusBar() -> Element {
                             let target_node_id = node_id.clone();
 
                             wasm_bindgen_futures::spawn_local(async move {
+                                web_sys::console::log_1(&format!("[DEBUG] Fetching agent list for node {}", target_node_id).into());
                                 let (tx, rx) = futures_channel::oneshot::channel();
                                 cp.agent_list(move |result| {
                                     let _ = tx.send(result);
                                 });
 
                                 if let Ok(Ok(agents)) = rx.await {
+                                    web_sys::console::log_1(&format!("[DEBUG] Got {} agents", agents.len()).into());
                                     // Find first agent on this node with a ws_url
                                     let ws_url = agents.iter()
                                         .find(|a| a.node_id.as_deref() == Some(&target_node_id) && a.ws_url.is_some())
                                         .and_then(|a| a.ws_url.clone());
 
                                     if let Some(url) = ws_url {
+                                        web_sys::console::log_1(&format!("[DEBUG] Found ws_url: {}", url).into());
                                         // Create DP connection in the pool
                                         dp_pool.write().get_or_create(&target_node_id, &url, vec![]);
                                         log::info!("Manually selected node {target_node_id} (ws_url={url})");
                                     } else {
+                                        web_sys::console::log_1(&format!("[DEBUG] No ws_url found for node {}", target_node_id).into());
                                         log::warn!("No ws_url found for node {target_node_id}");
                                     }
                                 } else {
+                                    web_sys::console::log_1(&"[DEBUG] Failed to fetch agent list".into());
                                     log::warn!("Failed to fetch agent list for node {target_node_id}");
                                 }
 
                                 // Set as active node
+                                web_sys::console::log_1(&format!("[DEBUG] Setting active node to {}", target_node_id).into());
                                 active_node.set(Some(target_node_id));
                             });
                         }
