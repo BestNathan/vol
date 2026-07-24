@@ -3,31 +3,27 @@ name = "vol-observability"
 version.workspace = true
 edition.workspace = true
 
-
-[[bin]]
-name = "vol-observability"
-path = "src/main.rs"
-
 [lints]
 workspace = true
 
 [dependencies]
-axum = { workspace = true }
-tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-reqwest = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 chrono = { workspace = true }
-vol-llm-core = { workspace = true }
-vol-tdengine = { workspace = true }
-vol-config = { workspace = true }
-
-toml = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-otlp = { workspace = true, features = ["tokio", "grpc-tonic", "logs"] }
+opentelemetry-appender-tracing = { workspace = true }
+opentelemetry-prometheus = "0.29"
+prometheus = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+vol-llm-core = { path = "../vol-llm-core" }
+vol-llm-agent = { path = "../vol-llm-agent" }
 
 [dev-dependencies]
 tempfile = "3"
-tokio-test = "0.4"
-http-body-util = "0.1"
-tower = { version = "0.4", features = ["util"] }

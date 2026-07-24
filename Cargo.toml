@@ -127,7 +127,6 @@ vol-engine = { path = "crates/vol-engine" }
 vol-rules = { path = "crates/vol-rules" }
 vol-tracing = { path = "crates/vol-tracing" }
 vol-session = { path = "crates/vol-session" }
-vol-llm-observability = { path = "crates/vol-llm-observability" }
 vol-llm-memory = { path = "crates/vol-llm-memory" }
 vol-llm-skill = { path = "crates/vol-llm-skill" }
 vol-llm-context = { path = "crates/vol-llm-context" }
@@ -141,6 +140,7 @@ vol-mcp-servers = { path = "crates/vol-mcp-servers" }
 vol-llm-mcp = { path = "crates/vol-llm-mcp" }
 dirs = "5.0"
 fd-lock = "4"
+vol-llm-observability = { path = "crates/vol-llm-observability" }
 vol-observability = { path = "crates/vol-observability" }
 vol-llm-sandbox = { path = "crates/vol-llm-sandbox" }
 vol-llm-cli-tool = { path = "crates/vol-llm-cli-tool" }

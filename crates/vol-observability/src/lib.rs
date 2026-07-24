@@ -1,10 +1,13 @@
-//! vol-observability: Independent observability service for ReAct Agent events.
+//! vol-observability: Agent observability plugins and OTel initialization.
 //!
-//! Receives agent events via HTTP, routes to Loki (structured logs)
-//! and TDengine (time-series metrics).
+//! - `LoggingPlugin` — emits structured JSON agent events to stdout via tracing
+//! - `MetricsPlugin` — records OTel metrics
+//! - `otel_init` — full OTel initialization (traces + logs via OTLP push, metrics via Prometheus pull)
 
-pub mod config;
-pub mod event;
-pub mod ingest;
-pub mod loki_writer;
-pub mod tdengine_writer;
+pub mod logging_plugin;
+pub mod metrics_plugin;
+pub mod otel_init;
+
+pub use logging_plugin::LoggingPlugin;
+pub use metrics_plugin::MetricsPlugin;
+pub use otel_init::{init, OtelConfig, OtelGuards};

@@ -1,4 +1,4 @@
-//! Full OTel initialization: traces + metrics + logs.
+//! Full OTel initialization: traces + logs (OTLP push) + metrics (Prometheus pull).
 
 use std::sync::OnceLock;
 
@@ -49,7 +49,7 @@ impl OtelGuards {
     }
 }
 
-/// Initialize the full OTel stack: traces + metrics + logs.
+/// Initialize the full OTel stack: traces + logs (OTLP push) + metrics (Prometheus pull).
 pub fn init(
     config: &OtelConfig,
     log_level: &str,
@@ -118,6 +118,20 @@ pub fn init(
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
+    // Metrics: always via Prometheus pull.
+    // NOTE: opentelemetry-prometheus 0.29 depends on prometheus 0.14, which is a
+    // different version than this workspace's `prometheus` (0.13). Passing a 0.13
+    // registry to `.with_registry()` fails to type-check, so we let the exporter
+    // register on prometheus 0.14's default registry.
+    let prometheus_exporter = opentelemetry_prometheus::exporter().build()?;
+
+    let meter_provider = SdkMeterProvider::builder()
+        .with_resource(resource.clone())
+        .with_reader(prometheus_exporter)
+        .build();
+
+    global::set_meter_provider(meter_provider.clone());
+
     if config.enabled && resolved_sample_rate > 0.0 {
         let span_exporter = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
@@ -160,19 +174,6 @@ pub fn init(
             &logger_provider,
         );
 
-        let metrics_exporter = opentelemetry_otlp::MetricExporter::builder()
-            .with_tonic()
-            .with_endpoint(&resolved_endpoint)
-            .with_timeout(timeout)
-            .build()?;
-
-        let meter_provider = SdkMeterProvider::builder()
-            .with_resource(resource)
-            .with_periodic_exporter(metrics_exporter)
-            .build();
-
-        global::set_meter_provider(meter_provider.clone());
-
         Registry::default()
             .with(env_filter)
             .with(console_layer)
@@ -185,7 +186,7 @@ pub fn init(
             endpoint = %resolved_endpoint,
             service = %resolved_service_name,
             sample_rate = resolved_sample_rate,
-            "OpenTelemetry enabled: traces + metrics + logs"
+            "OpenTelemetry enabled: traces + logs (OTLP push), metrics (Prometheus pull)"
         );
 
         INITIALIZED.get_or_init(|| ());
@@ -208,14 +209,16 @@ pub fn init(
             .with(Option::<OtelLogLayer>::None)
             .init();
 
-        tracing::info!("OpenTelemetry disabled: console + file logging only");
+        tracing::info!(
+            "OpenTelemetry disabled: console + file logging (metrics via Prometheus pull)"
+        );
 
         INITIALIZED.get_or_init(|| ());
 
         Ok(OtelGuards {
             tracer_provider: None,
             logger_provider: None,
-            meter_provider: None,
+            meter_provider: Some(meter_provider),
         })
     }
 }
