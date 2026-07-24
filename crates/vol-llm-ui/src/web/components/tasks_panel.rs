@@ -178,13 +178,14 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
     });
 
     // Read state from cache.
-    let has_active_node = active_node.read().is_some();
+    let has_active_node = app.active_node_id.read().is_some();
     let (tasks, loading, error) = {
-        let node_id = active_node.read().clone();
+        let node_id = app.active_node_id.read().clone();
         node_id
+            .as_ref()
             .and_then(|nid| {
                 let c = cache.read();
-                c.get(&nid).and_then(|d| {
+                c.get(nid).and_then(|d| {
                     d.data
                         .get(CACHE_KEY)
                         .and_then(|v| serde_json::from_value::<TasksCacheState>(v.clone()).ok())
