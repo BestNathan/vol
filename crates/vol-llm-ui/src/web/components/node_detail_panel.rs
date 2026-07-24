@@ -300,11 +300,14 @@ fn AgentsSection(agents: Vec<AgentListEntry>) -> Element {
 /// Single agent row in the agents section.
 #[component]
 fn AgentRow(agent: AgentListEntry) -> Element {
-    let scope_color = match agent.scope.as_str() {
+    let scope_str = agent.scope.as_deref().unwrap_or("unknown");
+    let scope_color = match scope_str {
         "repo" => "#4080ff",
         "user" => "#40c040",
         _ => "#888",
     };
+
+    let description_str = agent.description.as_deref().unwrap_or("");
 
     rsx! {
         div { class: "flex items-center gap-2 px-2 py-1.5 rounded border-b border-[#333355] hover:bg-[#2a2a44]",
@@ -315,10 +318,10 @@ fn AgentRow(agent: AgentListEntry) -> Element {
                     span {
                         class: "text-[9px] px-1 py-0.5 rounded-[2px] font-bold whitespace-nowrap flex-shrink-0",
                         style: "background: {scope_color}; color: #1a1a2e;",
-                        "{agent.scope}"
+                        "{scope_str}"
                     }
                 }
-                div { class: "text-[#666] text-xs truncate", "{agent.description}" }
+                div { class: "text-[#666] text-xs truncate", "{description_str}" }
             }
         }
     }

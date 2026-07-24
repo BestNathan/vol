@@ -20,7 +20,8 @@ fn AgentCard(
     is_selected: bool,
     on_click: EventHandler<()>,
 ) -> Element {
-    let scope_color = match agent.scope.as_str() {
+    let scope_str = agent.scope.as_deref().unwrap_or("unknown");
+    let scope_color = match scope_str {
         "repo" => "#4080ff",
         "user" => "#40c040",
         _ => "#888",
@@ -32,6 +33,8 @@ fn AgentCard(
         "flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer border border-[#2a2a44] bg-[#1e1e36] hover:bg-[#222240] w-full sm:w-auto"
     };
 
+    let description_str = agent.description.as_deref().unwrap_or("");
+
     rsx! {
         div { class: "{card_class}", onclick: move |_| on_click.call(()),
             div { class: "w-2 h-2 rounded-full bg-[#40c040] flex-shrink-0" }
@@ -41,10 +44,10 @@ fn AgentCard(
                     span {
                         class: "text-[9px] px-1 py-0.5 rounded-[2px] font-bold whitespace-nowrap flex-shrink-0",
                         style: "background: {scope_color}; color: #1a1a2e;",
-                        "{agent.scope}"
+                        "{scope_str}"
                     }
                 }
-                span { class: "text-[11px] text-[#666] truncate", "{agent.description}" }
+                span { class: "text-[11px] text-[#666] truncate", "{description_str}" }
             }
         }
     }
@@ -340,7 +343,9 @@ pub fn AgentsPanel() -> Element {
             if let Some(agent) = selected_agent {
                 div { class: "flex items-center gap-2 px-3 py-1.5 bg-[#1a2a44] border-b border-[#333355]",
                     span { class: "font-bold text-[13px] text-[#e0e0e0] truncate", "{agent.name}" }
-                    span { class: "text-[12px] text-[#888] truncate hidden sm:inline", "{agent.description}" }
+                    span { class: "text-[12px] text-[#888] truncate hidden sm:inline",
+                        {agent.description.as_deref().unwrap_or("")}
+                    }
                 }
             }
 

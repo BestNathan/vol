@@ -141,6 +141,8 @@ pub struct AgentListEntry {
     #[serde(default)]
     pub status: Option<String>,
     #[serde(default)]
+    pub scope: Option<String>,
+    #[serde(default)]
     pub node_id: Option<String>,
     #[serde(default)]
     pub ws_url: Option<String>,
