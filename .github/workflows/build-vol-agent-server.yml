@@ -93,7 +93,7 @@ jobs:
 
   # ── Per-arch builds run on native runners ────────────────────────────────
   build:
-    name: build (${{ matrix.variant }}, ${{ matrix.role }}, ${{ matrix.arch }})
+    name: build (${{ matrix.role }}, ${{ matrix.arch }})
     needs: test
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -102,7 +102,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [debian, alpine]
         role: [control-plane, data-plane]
         arch: [amd64, arm64]
         include:
@@ -142,7 +141,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: dockers/vol-agent-server${{ matrix.variant == 'alpine' && '.alpine' || '' }}.Dockerfile
+          file: dockers/vol-agent-server.Dockerfile
           platforms: ${{ matrix.platform }}
           build-args: |
             ROLE=${{ matrix.role }}
@@ -150,8 +149,8 @@ jobs:
           # Push by digest only — tags are attached later in the manifest job.
           outputs: type=image,name=${{ env.GHCR_REPO }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ steps.push.outputs.value == 'true' }}
           provenance: false
-          cache-from: type=gha,scope=vol-agent-server-${{ matrix.variant }}-${{ matrix.role }}-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=vol-agent-server-${{ matrix.variant }}-${{ matrix.role }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=vol-agent-server-${{ matrix.role }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=vol-agent-server-${{ matrix.role }}-${{ matrix.arch }}
 
       - name: Export digest
         if: steps.push.outputs.value == 'true'
@@ -164,14 +163,14 @@ jobs:
         if: steps.push.outputs.value == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: digest-${{ matrix.variant }}-${{ matrix.role }}-${{ matrix.arch }}
+          name: digest-${{ matrix.role }}-${{ matrix.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
 
-  # ── Merge per-arch images into one multi-arch tag, per variant + role ────
+  # ── Merge per-arch images into one multi-arch tag, per role ────
   manifest:
-    name: manifest (${{ matrix.variant }}, ${{ matrix.role }})
+    name: manifest (${{ matrix.role }})
     runs-on: ubuntu-24.04
     needs: build
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.push_image == 'true'
@@ -182,18 +181,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant: debian
-            role: control-plane
+          - role: control-plane
             tag_prefix: cp
-          - variant: debian
-            role: data-plane
+          - role: data-plane
             tag_prefix: dp
-          - variant: alpine
-            role: control-plane
-            tag_prefix: cp-alpine
-          - variant: alpine
-            role: data-plane
-            tag_prefix: dp-alpine
 
     steps:
       - name: Compute short SHA
@@ -204,7 +195,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
-          pattern: digest-${{ matrix.variant }}-${{ matrix.role }}-*
+          pattern: digest-${{ matrix.role }}-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
@@ -256,7 +247,7 @@ jobs:
       - name: Summary
         run: |
           {
-            echo "### vol-agent-server (${{ matrix.variant }}, ${{ matrix.role }})"
+            echo "### vol-agent-server (${{ matrix.role }})"
             echo
             echo "- short SHA: \`${{ steps.sha.outputs.short }}\`"
             echo "- platforms: linux/amd64, linux/arm64"
@@ -269,11 +260,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Checkout
-        if: matrix.variant == 'debian'
         uses: actions/checkout@v4
 
       - name: Update GitOps manifests
-        if: matrix.variant == 'debian'
         env:
           TAG_PREFIX: ${{ matrix.tag_prefix }}
           SHORT_SHA: ${{ steps.sha.outputs.short }}
@@ -315,7 +304,6 @@ jobs:
           PY
 
       - name: Commit GitOps manifest update
-        if: matrix.variant == 'debian'
         run: |
           if git diff --quiet -- deploy/argocd/manifests/workloads/agent-server*/deployment.yaml; then
             echo "No GitOps manifest change to commit."
@@ -337,7 +325,7 @@ jobs:
   # Uses the gh CLI (pre-installed on GitHub runners) to talk to the GHCR
   # Packages API.
   prune:
-    name: prune (${{ matrix.variant }}, ${{ matrix.role }})
+    name: prune (${{ matrix.role }})
     runs-on: ubuntu-24.04
     needs: manifest
     if: github.ref == 'refs/heads/main'
@@ -348,18 +336,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant: debian
-            role: control-plane
+          - role: control-plane
             tag_prefix: cp
-          - variant: debian
-            role: data-plane
+          - role: data-plane
             tag_prefix: dp
-          - variant: alpine
-            role: control-plane
-            tag_prefix: cp-alpine
-          - variant: alpine
-            role: data-plane
-            tag_prefix: dp-alpine
     env:
       KEEP_LAST: "5"
 
@@ -452,7 +432,7 @@ jobs:
             --jq '.[] | [.id, (.metadata.container.tags | join(","))] | @tsv')
 
           {
-            echo "### prune (${{ matrix.variant }}, $PREFIX)"
+            echo "### prune ($PREFIX)"
             echo
             echo "- examined: $examined"
             echo "- deleted:  $deleted"
