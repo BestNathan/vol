@@ -107,7 +107,6 @@ pub fn StatusBar() -> Element {
 
                             wasm_bindgen_futures::spawn_local(async move {
                                 web_sys::console::log_1(&format!("[DEBUG] Fetching agent list for node {}", target_node_id).into());
-                                web_sys::console::log_1(&format!("[DEBUG] CP client connected: {}", cp.is_connected()).into());
                                 let (tx, rx) = futures_channel::oneshot::channel();
                                 cp.agent_list(move |result| {
                                     web_sys::console::log_1(&format!("[DEBUG] agent_list callback: {:?}", result.is_ok()).into());
