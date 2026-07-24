@@ -136,10 +136,10 @@ pub struct SkillCapability {
 pub struct AgentListEntry {
     pub id: String,
     pub name: String,
-    #[serde(rename = "type")]
-    pub type_: String,
-    pub description: String,
-    pub scope: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
     #[serde(default)]
     pub node_id: Option<String>,
     #[serde(default)]
