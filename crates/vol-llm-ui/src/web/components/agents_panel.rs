@@ -120,47 +120,32 @@ pub fn AgentsPanel() -> Element {
     let conv_signal: Signal<ConversationState> = use_context();
     let global: Signal<GlobalState> = use_context();
 
-    // Load agents helper
-    let rpc_load = app.rpc_client.clone();
-    let sig_load = agents_signal;
-
-    // Initial load on mount
-    use_hook(move || {
-        let mut sig = sig_load;
-        sig.with_mut(|s| {
-            s.loading = true;
-            s.error = None;
-        });
-        let sig2 = sig_load;
-        rpc_load.agent_list(move |result| {
-            let mut sig2 = sig2;
-            sig2.with_mut(|s| {
-                s.loading = false;
-                match result {
-                    Ok(agents) => {
-                        s.agents = agents;
-                        s.error = None;
-                    }
-                    Err(e) => {
-                        s.error = Some(e);
-                    }
-                }
-            });
-        });
+    // Get active node and DP client
+    let active_node = app.active_node_id.read().clone();
+    let dp_client = active_node.as_ref().and_then(|node_id| {
+        app.dp_pool
+            .read()
+            .get(node_id)
+            .map(|conn| conn.client.clone())
     });
 
-    // Retry on WS reconnect
-    let rpc_retry = app.rpc_client.clone();
-    let sig_retry = agents_signal;
-    use_hook(move || {
-        let _sub = app.event_bus.subscribe(UiEventKind::WsConnected, move |_| {
-            let mut sig = sig_retry;
+    // Load agents from DP when node changes
+    let sig_load = agents_signal;
+    let node_for_effect = active_node.clone();
+    use_effect(move || {
+        let node_id = node_for_effect.clone();
+        let client = node_id
+            .as_ref()
+            .and_then(|nid| app.dp_pool.read().get(nid).map(|conn| conn.client.clone()));
+
+        if let Some(c) = client {
+            let mut sig = sig_load;
             sig.with_mut(|s| {
                 s.loading = true;
                 s.error = None;
             });
-            let sig2 = sig_retry;
-            rpc_retry.agent_list(move |result| {
+            let sig2 = sig_load;
+            c.agent_list(move |result| {
                 let mut sig2 = sig2;
                 sig2.with_mut(|s| {
                     s.loading = false;
@@ -175,7 +160,7 @@ pub fn AgentsPanel() -> Element {
                     }
                 });
             });
-        });
+        }
     });
 
     let agents = agents_signal.read().agents.clone();
@@ -184,33 +169,60 @@ pub fn AgentsPanel() -> Element {
     let selected = agents_signal.read().selected.clone();
     let sub_tab = agents_signal.read().sub_tab;
 
+    // No node selected
+    if active_node.is_none() {
+        return rsx! { div { class: "flex-1 overflow-y-auto p-3",
+            div { class: "flex flex-col items-center justify-center h-full gap-3 text-center",
+                div { class: "text-[#888] text-[14px]", "No node selected" }
+                div { class: "text-[#666] text-[12px] max-w-[300px]",
+                    "Select a node from the dropdown above to view its agents."
+                }
+            }
+        }};
+    }
+
+    // No DP connection
+    if dp_client.is_none() {
+        return rsx! { div { class: "flex-1 overflow-y-auto p-3",
+            div { class: "flex flex-col items-center justify-center h-full gap-3 text-center",
+                div { class: "text-[#ff6060] text-[14px]", "DP connection not available" }
+                div { class: "text-[#888] text-[12px] max-w-[300px]",
+                    "Failed to establish connection to the selected node's data plane."
+                }
+            }
+        }};
+    }
+
     // Empty + error = backend not available
     if agents.is_empty() && error.is_some() {
         let err = error.as_deref().unwrap_or("unknown");
-        let rpc_btn = app.rpc_client.clone();
+        let dp_btn = dp_client.clone();
         let sig_btn = agents_signal;
         return rsx! { div { class: "flex-1 overflow-y-auto p-3",
             div { class: "flex flex-col items-center justify-center h-full gap-3 text-center",
                 div { class: "text-[#ff6060] text-[14px]", "Failed to load agents" }
                 div { class: "text-[#888] text-[12px] max-w-[300px] break-words", "{err}" }
-                button {
-                    class: "px-4 py-1.5 bg-[#3a3a55] text-[#ccc] rounded text-[13px] hover:bg-[#4a4a65]",
-                    onclick: move |_| {
-                        let mut sig = sig_btn;
-                        sig.with_mut(|s| { s.loading = true; s.error = None; });
-                        let sig2 = sig_btn;
-                        rpc_btn.agent_list(move |result| {
-                            let mut sig2 = sig2;
-                            sig2.with_mut(|s| {
-                                s.loading = false;
-                                match result {
-                                    Ok(agents) => { s.agents = agents; s.error = None; }
-                                    Err(e) => { s.error = Some(e); }
-                                }
+                if let Some(c) = dp_btn {
+                    button {
+                        class: "px-4 py-1.5 bg-[#3a3a55] text-[#ccc] rounded text-[13px] hover:bg-[#4a4a65]",
+                        onclick: move |_| {
+                            let mut sig = sig_btn;
+                            sig.with_mut(|s| { s.loading = true; s.error = None; });
+                            let sig2 = sig_btn;
+                            let c_clone = c.clone();
+                            c_clone.agent_list(move |result| {
+                                let mut sig2 = sig2;
+                                sig2.with_mut(|s| {
+                                    s.loading = false;
+                                    match result {
+                                        Ok(agents) => { s.agents = agents; s.error = None; }
+                                        Err(e) => { s.error = Some(e); }
+                                    }
+                                });
                             });
-                        });
-                    },
-                    "Retry"
+                        },
+                        "Retry"
+                    }
                 }
             }
         }};
@@ -225,7 +237,7 @@ pub fn AgentsPanel() -> Element {
 
     // Empty (loaded successfully but no agents registered)
     if agents.is_empty() {
-        let rpc_btn = app.rpc_client.clone();
+        let dp_btn = dp_client.clone();
         let sig_btn = agents_signal;
         return rsx! { div { class: "flex-1 overflow-y-auto p-3",
             div { class: "flex flex-col items-center justify-center h-full gap-3 text-center",
@@ -233,24 +245,27 @@ pub fn AgentsPanel() -> Element {
                 div { class: "text-[#666] text-[12px] max-w-[300px]",
                     "Place agent .md files in .agents/agents/ and restart the backend."
                 }
-                button {
-                    class: "px-4 py-1.5 bg-[#3a3a55] text-[#ccc] rounded text-[13px] hover:bg-[#4a4a65]",
-                    onclick: move |_| {
-                        let mut sig = sig_btn;
-                        sig.with_mut(|s| { s.loading = true; s.error = None; });
-                        let sig2 = sig_btn;
-                        rpc_btn.agent_list(move |result| {
-                            let mut sig2 = sig2;
-                            sig2.with_mut(|s| {
-                                s.loading = false;
-                                match result {
-                                    Ok(agents) => { s.agents = agents; s.error = None; }
-                                    Err(e) => { s.error = Some(e); }
-                                }
+                if let Some(c) = dp_btn {
+                    button {
+                        class: "px-4 py-1.5 bg-[#3a3a55] text-[#ccc] rounded text-[13px] hover:bg-[#4a4a65]",
+                        onclick: move |_| {
+                            let mut sig = sig_btn;
+                            sig.with_mut(|s| { s.loading = true; s.error = None; });
+                            let sig2 = sig_btn;
+                            let c_clone = c.clone();
+                            c_clone.agent_list(move |result| {
+                                let mut sig2 = sig2;
+                                sig2.with_mut(|s| {
+                                    s.loading = false;
+                                    match result {
+                                        Ok(agents) => { s.agents = agents; s.error = None; }
+                                        Err(e) => { s.error = Some(e); }
+                                    }
+                                });
                             });
-                        });
-                    },
-                    "Refresh"
+                        },
+                        "Refresh"
+                    }
                 }
             }
         }};
@@ -258,22 +273,14 @@ pub fn AgentsPanel() -> Element {
 
     let selected_agent = agents.iter().find(|a| selected.as_ref() == Some(&a.id));
 
-    // Filter agents by active_node_id - only show agents from the selected node
-    let active_node = app.active_node_id.read().clone();
-    let filtered_agents: Vec<_> = agents
-        .iter()
-        .filter(|a| match (&active_node, &a.node_id) {
-            (Some(selected_node), Some(agent_node)) => selected_node == agent_node,
-            _ => false,
-        })
-        .cloned()
-        .collect();
+    // No need to filter - DP only returns agents for the selected node
+    let display_agents = agents.clone();
 
     rsx! {
         div { class: "flex flex-col flex-1 min-h-0 overflow-hidden",
             // Card grid — responsive: stack on mobile, wrap on desktop
             div { class: "flex flex-col sm:flex-row sm:flex-wrap gap-2 p-2 border-b border-[#333355] overflow-y-auto max-h-[200px] min-h-[60px] flex-shrink-0",
-                for agent in &filtered_agents {
+                for agent in &display_agents {
                     AgentCard {
                         key: "{agent.id}",
                         agent: agent.clone(),
@@ -283,7 +290,6 @@ pub fn AgentsPanel() -> Element {
                                 let mut conv_sig = conv_signal;
                                 let agent_id = agent.id.clone();
                                 let is_selected = selected.as_ref() == Some(&agent.id);
-                                let client = app.rpc_client.clone();
                                 let global_check = global;
                                 let mut dp_pool = app.dp_pool;
                                 let mut active_node_id = app.active_node_id;
@@ -303,31 +309,35 @@ pub fn AgentsPanel() -> Element {
                                     });
 
                                     if !was_selected {
-                                        // Activate DP connection for this agent's node
-                                        if let (Some(ref nid), Some(ref ws)) = (&agent_node_id, &agent_ws_url) {
+                                        // Get or create DP connection for this agent's node
+                                        let client = if let (Some(ref nid), Some(ref ws)) = (&agent_node_id, &agent_ws_url) {
                                             let mut pool = dp_pool.write();
-                                            pool.get_or_create(nid, ws, vec![agent_id.clone()]);
+                                            let conn = pool.get_or_create(nid, ws, vec![agent_id.clone()]);
                                             active_node_id.set(Some(nid.clone()));
-                                        }
+                                            Some(conn.client.clone())
+                                        } else {
+                                            None
+                                        };
 
-                                        let c = client.clone();
-                                        let a = agent_id.clone();
-                                        let conv = conv_sig;
-                                        let g = global_check;
-                                        wasm_bindgen_futures::spawn_local(async move {
-                                            let (tx, rx) = futures_channel::oneshot::channel();
-                                            c.agent_status(&a, move |result| {
-                                                let _ = tx.send(result);
-                                            });
-                                            let status_result = rx.await;
-                                            if let Ok(Ok((status, Some(run_id)))) = status_result {
-                                                if status == "running" {
-                                                    log::info!("Agent {} is running (run_id: {}) — loading session", a, run_id);
-                                                    load_running_session(&c, &a, conv, &run_id);
-                                                    g.write_unchecked().set_agent_running(a.clone(), run_id.clone());
+                                        if let Some(c) = client {
+                                            let a = agent_id.clone();
+                                            let conv = conv_sig;
+                                            let g = global_check;
+                                            wasm_bindgen_futures::spawn_local(async move {
+                                                let (tx, rx) = futures_channel::oneshot::channel();
+                                                c.agent_status(&a, move |result| {
+                                                    let _ = tx.send(result);
+                                                });
+                                                let status_result = rx.await;
+                                                if let Ok(Ok((status, Some(run_id)))) = status_result {
+                                                    if status == "running" {
+                                                        log::info!("Agent {} is running (run_id: {}) — loading session", a, run_id);
+                                                        load_running_session(&c, &a, conv, &run_id);
+                                                        g.write_unchecked().set_agent_running(a.clone(), run_id.clone());
+                                                    }
                                                 }
-                                            }
-                                        });
+                                            });
+                                        }
                                     }
                                 }
                             },
