@@ -23,9 +23,9 @@ data:
     lease_scan_secs = 15
 
     [control_plane.node_ingress]
-    "dp-1" = "wss://dp.vol.bestnathan.top/ws"
-    "dingtalk" = "wss://dingtalk.vol.bestnathan.top/ws"
-    "ansible" = "wss://ansible.vol.bestnathan.top/ws"
+    "dp-1" = "ws://dp.vol.bestnathan.top/ws"
+    "dingtalk" = "ws://dingtalk.vol.bestnathan.top/ws"
+    "ansible" = "ws://ansible.vol.bestnathan.top/ws"
 
     [runtime]
     working_dir = "/app"
