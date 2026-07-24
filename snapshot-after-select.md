@@ -1,0 +1,37 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - generic "Connected" [ref=e7]
+      - generic [ref=e10]: CP
+      - generic [ref=e13]: "DP: —"
+      - button "▾ Nodes(2)" [ref=e17] [cursor=pointer]
+      - generic [ref=e19]: "Session: web-session"
+      - generic [ref=e20]: "Run: 0"
+      - generic [ref=e21]: "Iter: 0"
+      - generic [ref=e22]: "Tools: 0"
+      - generic [ref=e23]: "Time: 00:00"
+      - generic [ref=e24]: Idle
+    - generic [ref=e25]:
+      - generic [ref=e26]:
+        - generic [ref=e27]: UI
+        - generic [ref=e28]: 0.1.0
+        - generic [ref=e29]: "|"
+        - generic [ref=e30]: 2026-07-24 05:55 UTC
+      - button "🐛" [ref=e32] [cursor=pointer]
+  - generic [ref=e33]:
+    - generic [ref=e36]:
+      - generic [ref=e37]: Explorer
+      - generic [ref=e39]: No node selected
+    - generic [ref=e41]:
+      - generic [ref=e42]:
+        - button "Tasks" [ref=e43] [cursor=pointer]
+        - button "Agents" [ref=e44] [cursor=pointer]
+        - button "Tools" [ref=e45] [cursor=pointer]
+        - button "Workspace" [ref=e46] [cursor=pointer]
+        - button "Skills" [ref=e47] [cursor=pointer]
+        - button "MCP" [ref=e48] [cursor=pointer]
+        - button "Logs" [ref=e49] [cursor=pointer]
+      - generic [ref=e51]:
+        - generic [ref=e52]: No agents discovered
+        - generic [ref=e53]: Place agent .md files in .agents/agents/ and restart the backend.
+        - button "Refresh" [ref=e54]

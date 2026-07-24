@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 use super::nodes_dropdown::NodesDropdown;
-use crate::state::{AgentsState, DebugState, GlobalState};
+use crate::state::{DebugState, GlobalState};
 use crate::web::client::NodeListEntry;
 use crate::web::components::app::AppState;
 
@@ -19,7 +19,6 @@ pub fn StatusBar() -> Element {
     let g: Signal<GlobalState> = use_context();
     let debug = use_context::<Signal<DebugState>>();
     let app_state: AppState = use_context();
-    let agents_signal: Signal<AgentsState> = use_context();
 
     // Fetch nodes for the dropdown
     let mut nodes = use_signal(Vec::<NodeListEntry>::new);
@@ -96,27 +95,41 @@ pub fn StatusBar() -> Element {
                     nodes: nodes.read().clone(),
                     selected_node_id: app_state.active_node_id,
                     on_select: {
-                        let mut app_state = app_state.clone();
-                        let agents_signal = agents_signal.clone();
+                        let app_state = app_state.clone();
+                        let cp_client = app_state.cp_client.clone();
                         move |node_id: String| {
-                            // Get agents from context to find ws_url for this node
-                            let agents = agents_signal.read();
+                            // Fetch agent list to get ws_url for this node
+                            let cp = cp_client.clone();
+                            let mut dp_pool = app_state.dp_pool;
+                            let mut active_node = app_state.active_node_id;
+                            let target_node_id = node_id.clone();
 
-                            // Find first agent on this node with a ws_url
-                            let ws_url = agents.agents.iter()
-                                .find(|a| a.node_id.as_deref() == Some(&node_id) && a.ws_url.is_some())
-                                .and_then(|a| a.ws_url.clone());
+                            wasm_bindgen_futures::spawn_local(async move {
+                                let (tx, rx) = futures_channel::oneshot::channel();
+                                cp.agent_list(move |result| {
+                                    let _ = tx.send(result);
+                                });
 
-                            if let Some(url) = ws_url {
-                                // Create DP connection in the pool
-                                app_state.dp_pool.write().get_or_create(&node_id, &url, vec![]);
-                                log::info!("Manually selected node {node_id} (ws_url={url})");
-                            } else {
-                                log::warn!("No ws_url found for node {node_id}");
-                            }
+                                if let Ok(Ok(agents)) = rx.await {
+                                    // Find first agent on this node with a ws_url
+                                    let ws_url = agents.iter()
+                                        .find(|a| a.node_id.as_deref() == Some(&target_node_id) && a.ws_url.is_some())
+                                        .and_then(|a| a.ws_url.clone());
 
-                            // Set as active node
-                            app_state.active_node_id.set(Some(node_id));
+                                    if let Some(url) = ws_url {
+                                        // Create DP connection in the pool
+                                        dp_pool.write().get_or_create(&target_node_id, &url, vec![]);
+                                        log::info!("Manually selected node {target_node_id} (ws_url={url})");
+                                    } else {
+                                        log::warn!("No ws_url found for node {target_node_id}");
+                                    }
+                                } else {
+                                    log::warn!("Failed to fetch agent list for node {target_node_id}");
+                                }
+
+                                // Set as active node
+                                active_node.set(Some(target_node_id));
+                            });
                         }
                     },
                     app_state: app_state.clone(),
