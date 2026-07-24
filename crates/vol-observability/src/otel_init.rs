@@ -166,7 +166,7 @@ pub fn init(
             .build()?;
 
         let logger_provider = SdkLoggerProvider::builder()
-            .with_resource(resource.clone())
+            .with_resource(resource)
             .with_batch_exporter(log_exporter)
             .build();
 
