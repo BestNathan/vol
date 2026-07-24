@@ -131,9 +131,9 @@ pub fn AgentsPanel() -> Element {
 
     // Load agents from DP when node changes
     let sig_load = agents_signal;
-    let node_for_effect = active_node.clone();
     use_effect(move || {
-        let node_id = node_for_effect.clone();
+        // Read signal inside effect to subscribe to changes
+        let node_id = app.active_node_id.read().clone();
         let client = node_id
             .as_ref()
             .and_then(|nid| app.dp_pool.read().get(nid).map(|conn| conn.client.clone()));

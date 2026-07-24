@@ -43,14 +43,14 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
     let task_state = use_signal(|| TaskState::new());
     let graph_target = use_signal(|| None::<u64>);
 
-    let active_node = app.active_node_id;
     let cache = app.node_data_cache;
     let initial_assignee = assignee_filter.clone();
 
     // Load tasks from cache or trigger DP fetch when active_node changes.
     let app_for_effect = app.clone();
     use_effect(move || {
-        let node_id = active_node.read().clone();
+        // Read signal inside effect to subscribe to changes
+        let node_id = app_for_effect.active_node_id.read().clone();
         if let Some(ref nid) = node_id {
             let cached = {
                 let c = cache.read();
@@ -84,7 +84,7 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
             }
 
             client.task_list(None, assignee.as_deref(), move |result| {
-                let current_nid = active_node.read().clone();
+                let current_nid = app_for_effect.active_node_id.read().clone();
                 if current_nid != Some(target_nid) {
                     log::warn!("Node switched, discarding stale task_list response");
                     return;
@@ -119,7 +119,7 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
     let app_for_hook = app.clone();
     use_hook(move || {
         let _sub = event_bus.subscribe(crate::state::UiEventKind::WsConnected, move |_| {
-            let node_id = active_node.read().clone();
+            let node_id = app_for_hook.active_node_id.read().clone();
             if let Some(ref nid) = node_id {
                 // Invalidate cache so use_effect re-fetches.
                 let mut c = cache.write_unchecked();
@@ -147,7 +147,7 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
                 }
 
                 client.task_list(None, assignee.as_deref(), move |result| {
-                    let current_nid = active_node.read().clone();
+                    let current_nid = app_for_hook.active_node_id.read().clone();
                     if current_nid != Some(target_nid) {
                         log::warn!("Node switched, discarding stale task_list response");
                         return;
