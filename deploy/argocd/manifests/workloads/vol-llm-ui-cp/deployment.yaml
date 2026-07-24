@@ -31,7 +31,7 @@ spec:
         - name: ghcr-bestnathan
       containers:
         - name: vol-llm-ui
-          image: ghcr.io/bestnathan/vol-llm-ui:7c7f03e
+          image: ghcr.io/bestnathan/vol-llm-ui:dd93da7
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
