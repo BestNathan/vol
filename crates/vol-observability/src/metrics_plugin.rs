@@ -18,12 +18,14 @@ use vol_llm_core::AgentStreamEvent;
 
 /// Internal state for tracking timing correlations.
 struct MetricsState {
-    /// (run_id, iteration) → Instant for TTFT calculation
-    llm_call_starts: Vec<(String, u32, Instant)>,
+    /// (agent_id, run_id, iteration) → Instant for TTFT calculation
+    llm_call_starts: Vec<(String, String, u32, Instant)>,
     /// tool_call_id → Instant for duration calculation
     tool_call_starts: Vec<(String, Instant)>,
-    /// Track which (run_id, iteration) already had TTFT measured
-    ttft_measured: HashSet<(String, u32)>,
+    /// Track which (agent_id, run_id, iteration) already had TTFT measured
+    ttft_measured: HashSet<(String, String, u32)>,
+    /// (agent_id, run_id) → Instant for run duration tracking
+    run_starts: Vec<(String, String, Instant)>,
 }
 
 impl MetricsState {
@@ -32,6 +34,7 @@ impl MetricsState {
             llm_call_starts: Vec::new(),
             tool_call_starts: Vec::new(),
             ttft_measured: HashSet::new(),
+            run_starts: Vec::new(),
         }
     }
 
@@ -39,6 +42,7 @@ impl MetricsState {
         self.llm_call_starts.clear();
         self.tool_call_starts.clear();
         self.ttft_measured.clear();
+        self.run_starts.clear();
     }
 }
 
@@ -49,6 +53,8 @@ struct Instruments {
     ttft_seconds: opentelemetry::metrics::Histogram<f64>,
     tokens_used_total: opentelemetry::metrics::Counter<u64>,
     llm_call_errors_total: opentelemetry::metrics::Counter<u64>,
+    runs_total: opentelemetry::metrics::Counter<u64>,
+    run_duration: opentelemetry::metrics::Histogram<f64>,
 }
 
 impl Instruments {
@@ -73,6 +79,14 @@ impl Instruments {
             llm_call_errors_total: meter
                 .u64_counter("agent_llm_call_errors_total")
                 .with_description("LLM call errors")
+                .build(),
+            runs_total: meter
+                .u64_counter("agent_runs_total")
+                .with_description("Total agent runs by status")
+                .build(),
+            run_duration: meter
+                .f64_histogram("agent_run_duration_seconds")
+                .with_description("Agent run duration in seconds")
                 .build(),
         }
     }
@@ -119,19 +133,31 @@ impl MetricsPlugin {
 
     fn handle_llm_call_start(&self, event: &AgentStreamEvent, ctx: &RunContext) {
         if let AgentStreamEvent::LLMCallStart { iteration, .. } = event {
+            let agent_id = ctx
+                .config
+                .def
+                .as_ref()
+                .map(|d| d.name.clone())
+                .unwrap_or_else(|| "unknown".to_string());
             let mut state = self
                 .state
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             state
                 .llm_call_starts
-                .push((ctx.run_id.clone(), *iteration, Instant::now()));
+                .push((agent_id, ctx.run_id.clone(), *iteration, Instant::now()));
         }
     }
 
     fn handle_first_token(&self, _event: &AgentStreamEvent, ctx: &RunContext) {
+        let agent_id = ctx
+            .config
+            .def
+            .as_ref()
+            .map(|d| d.name.clone())
+            .unwrap_or_else(|| "unknown".to_string());
         let iteration = ctx.current_iteration();
-        let key = (ctx.run_id.clone(), iteration);
+        let key = (agent_id.clone(), ctx.run_id.clone(), iteration);
 
         let mut state = self
             .state
@@ -144,48 +170,98 @@ impl MetricsPlugin {
         if let Some(pos) = state
             .llm_call_starts
             .iter()
-            .rposition(|(run_id, iter, _)| run_id == &ctx.run_id && *iter == iteration)
+            .rposition(|(aid, rid, iter, _)| {
+                aid == &agent_id && rid == &ctx.run_id && *iter == iteration
+            })
         {
-            if let Some((_, _, start_time)) = state.llm_call_starts.get(pos) {
-                let ttft = start_time.elapsed().as_secs_f64();
-                state.ttft_measured.insert(key);
+            let (_, _, _, start_time) = state.llm_call_starts.remove(pos);
+            let ttft = start_time.elapsed().as_secs_f64();
+            state.ttft_measured.insert(key);
 
-                let model = &ctx.model;
-                self.instruments.ttft_seconds.record(
-                    ttft,
-                    &[
-                        KeyValue::new("model", model.clone()),
-                        KeyValue::new(
-                            "agent_id",
-                            ctx.config
-                                .def
-                                .as_ref()
-                                .map(|d| d.name.clone())
-                                .unwrap_or_else(|| "unknown".to_string()),
-                        ),
-                    ],
-                );
-            }
+            let model = &ctx.model;
+            self.instruments.ttft_seconds.record(
+                ttft,
+                &[
+                    KeyValue::new("model", model.clone()),
+                    KeyValue::new("agent_id", agent_id),
+                ],
+            );
         }
     }
 
-    fn handle_llm_call_complete_cleanup(&self) {
+    fn handle_llm_call_complete_cleanup(&self, ctx: &RunContext) {
+        let agent_id = ctx
+            .config
+            .def
+            .as_ref()
+            .map(|d| d.name.clone())
+            .unwrap_or_else(|| "unknown".to_string());
         let mut state = self
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !state.llm_call_starts.is_empty() {
-            state.llm_call_starts.pop();
-        }
+        state.llm_call_starts.retain(|(aid, rid, iter, _)| {
+            !(aid == &agent_id && rid == &ctx.run_id && *iter == ctx.current_iteration())
+        });
     }
 
-    fn handle_llm_call_error(&self) {
+    fn handle_llm_call_error(&self, ctx: &RunContext) {
+        let agent_id = ctx
+            .config
+            .def
+            .as_ref()
+            .map(|d| d.name.clone())
+            .unwrap_or_else(|| "unknown".to_string());
         let mut state = self
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !state.llm_call_starts.is_empty() {
-            state.llm_call_starts.pop();
+        state.llm_call_starts.retain(|(aid, rid, iter, _)| {
+            !(aid == &agent_id && rid == &ctx.run_id && *iter == ctx.current_iteration())
+        });
+    }
+
+    fn record_run_metric(&self, ctx: &RunContext, status: &str) {
+        let agent_id = ctx
+            .config
+            .def
+            .as_ref()
+            .map(|d| d.name.clone())
+            .unwrap_or_else(|| "unknown".to_string());
+        let agent_type = ctx
+            .config
+            .def
+            .as_ref()
+            .map(|d| d.r#type.clone())
+            .unwrap_or_else(|| "unknown".to_string());
+
+        self.instruments.runs_total.add(
+            1,
+            &[
+                KeyValue::new("agent_id", agent_id.clone()),
+                KeyValue::new("agent_type", agent_type.clone()),
+                KeyValue::new("status", status.to_string()),
+            ],
+        );
+
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(pos) = state
+            .run_starts
+            .iter()
+            .rposition(|(aid, rid, _)| aid == &agent_id && rid == &ctx.run_id)
+        {
+            let (_, _, start_time) = state.run_starts.remove(pos);
+            let duration = start_time.elapsed().as_secs_f64();
+            self.instruments.run_duration.record(
+                duration,
+                &[
+                    KeyValue::new("agent_id", agent_id),
+                    KeyValue::new("agent_type", agent_type),
+                ],
+            );
         }
     }
 
@@ -280,6 +356,21 @@ impl AgentPlugin for MetricsPlugin {
 
     async fn listen(&self, event: &AgentStreamEvent, ctx: &RunContext) {
         match event {
+            AgentStreamEvent::AgentStart { .. } => {
+                let agent_id = ctx
+                    .config
+                    .def
+                    .as_ref()
+                    .map(|d| d.name.clone())
+                    .unwrap_or_else(|| "unknown".to_string());
+                let mut state = self
+                    .state
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                state
+                    .run_starts
+                    .push((agent_id, ctx.run_id.clone(), Instant::now()));
+            }
             AgentStreamEvent::LLMCallStart { .. } => {
                 self.handle_llm_call_start(event, ctx);
             }
@@ -287,7 +378,7 @@ impl AgentPlugin for MetricsPlugin {
                 self.handle_first_token(event, ctx);
             }
             AgentStreamEvent::LLMCallComplete { model, usage, .. } => {
-                self.handle_llm_call_complete_cleanup();
+                self.handle_llm_call_complete_cleanup(ctx);
                 if let Some(usage) = usage {
                     let agent_id = ctx
                         .config
@@ -322,7 +413,7 @@ impl AgentPlugin for MetricsPlugin {
                 }
             }
             AgentStreamEvent::LLMCallError { .. } => {
-                self.handle_llm_call_error();
+                self.handle_llm_call_error(ctx);
                 let model = &ctx.model;
                 let agent_id = ctx
                     .config
@@ -350,7 +441,15 @@ impl AgentPlugin for MetricsPlugin {
             AgentStreamEvent::ToolCallSkipped { .. } => {
                 self.handle_tool_call_complete(event, ctx, "skipped");
             }
-            AgentStreamEvent::AgentComplete { .. } | AgentStreamEvent::AgentAborted { .. } => {
+            AgentStreamEvent::AgentComplete { .. } => {
+                self.record_run_metric(ctx, "completed");
+                self.state
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .cleanup();
+            }
+            AgentStreamEvent::AgentAborted { .. } => {
+                self.record_run_metric(ctx, "aborted");
                 self.state
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -406,13 +505,21 @@ mod tests {
 
         {
             let mut state = plugin.state.lock().unwrap();
-            state
-                .llm_call_starts
-                .push(("run-1".to_string(), 1, Instant::now()));
+            state.llm_call_starts.push((
+                "agent-1".to_string(),
+                "run-1".to_string(),
+                1,
+                Instant::now(),
+            ));
             state
                 .tool_call_starts
                 .push(("tc-1".to_string(), Instant::now()));
-            state.ttft_measured.insert(("run-1".to_string(), 1));
+            state
+                .ttft_measured
+                .insert(("agent-1".to_string(), "run-1".to_string(), 1));
+            state
+                .run_starts
+                .push(("agent-1".to_string(), "run-1".to_string(), Instant::now()));
             assert!(!state.llm_call_starts.is_empty());
         }
 
@@ -422,6 +529,7 @@ mod tests {
             assert!(state.llm_call_starts.is_empty());
             assert!(state.tool_call_starts.is_empty());
             assert!(state.ttft_measured.is_empty());
+            assert!(state.run_starts.is_empty());
         }
     }
 }
