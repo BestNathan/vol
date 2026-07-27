@@ -4,6 +4,7 @@
 //! Domain behavior is delegated through the shared JSON-RPC message service.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use axum::extract::ws::{Message as WsMessage, WebSocket};
@@ -13,6 +14,11 @@ use futures::stream::StreamExt;
 use crate::agent_server_protocol::AgentServerMessage;
 use crate::connection::Connection;
 use crate::error::ConnectionError;
+
+/// Interval at which the server sends WebSocket Ping frames to keep the
+/// connection alive through proxies / load balancers (e.g. Higress with a
+/// 60-second idle timeout).
+const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(25);
 
 /// JSON-RPC connection over WebSocket.
 pub struct JsonRpcConnection {
@@ -29,11 +35,28 @@ impl JsonRpcConnection {
         let (tx, rx) =
             tokio::sync::mpsc::channel::<Result<AgentServerMessage, ConnectionError>>(64);
 
+        let ws_tx = Arc::new(tokio::sync::Mutex::new(ws_tx));
+
         // Spawn background reader task.
         tokio::spawn(Self::reader(tx, ws_rx));
 
+        // Spawn keep-alive ping task — prevents proxies/load balancers from
+        // dropping the connection due to idle timeout.  Browsers auto-respond
+        // to Ping with Pong per RFC 6455 § 5.5.2.
+        let ping_tx = ws_tx.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(KEEPALIVE_INTERVAL).await;
+                let mut tx = ping_tx.lock().await;
+                if tx.send(WsMessage::Ping(vec![])).await.is_err() {
+                    // Connection closed — exit the keep-alive loop.
+                    break;
+                }
+            }
+        });
+
         Self {
-            ws_tx: Arc::new(tokio::sync::Mutex::new(ws_tx)),
+            ws_tx,
             msg_rx: tokio::sync::Mutex::new(rx),
         }
     }
