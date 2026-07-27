@@ -128,28 +128,8 @@ pub fn ToolsPanel() -> Element {
         error: None,
         call_result: None,
     });
-    // Resolve the right RPC client: CP mode → DP pool for active node,
-    // DP mode → rpc_client directly (it IS the DP connection).
-    let client: JsonRpcClient = {
-        let node_id = app_state.active_node_id.read().clone();
-        let is_cp = matches!(
-            *app_state.server_mode.read(),
-            crate::web::client::ServerType::ControlPlane
-        );
-        if is_cp {
-            node_id
-                .and_then(|nid| {
-                    app_state
-                        .dp_pool
-                        .read()
-                        .get(&nid)
-                        .map(|conn| conn.client.clone())
-                })
-                .unwrap_or_else(|| app_state.rpc_client.clone())
-        } else {
-            app_state.rpc_client.clone()
-        }
-    };
+    // Use agent_client() which routes to DP pool in CP mode.
+    let client: JsonRpcClient = app_state.agent_client();
 
     // Load tools on mount (follow sessions panel pattern: use_hook, not use_effect)
     let client_for_load = client.clone();

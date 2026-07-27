@@ -25,7 +25,7 @@ pub fn SkillDetailDialog(mut signal: Signal<SkillDialogState>) -> Element {
     }
 
     let app_state: AppState = use_context();
-    let rpc_client = app_state.rpc_client.clone();
+    let rpc_client = app_state.agent_client();
 
     rsx! {
         div { class: "fixed inset-0 bg-black/50 flex items-center justify-center z-50",

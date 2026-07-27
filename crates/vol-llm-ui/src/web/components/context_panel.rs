@@ -87,23 +87,7 @@ pub fn ContextPanel() -> Element {
 
     let mut ctx_state = use_signal(ContextState::new);
 
-    // Resolve the right RPC client for agent-level operations:
-    //   CP mode → use DP pool connection for the active node
-    //   DP mode → use rpc_client directly
-    let rpc_client = {
-        let node_id = app.active_node_id.read().clone();
-        let is_cp = matches!(
-            *app.server_mode.read(),
-            crate::web::client::ServerType::ControlPlane
-        );
-        if is_cp {
-            node_id
-                .and_then(|nid| app.dp_pool.read().get(&nid).map(|conn| conn.client.clone()))
-                .unwrap_or_else(|| app.rpc_client.clone())
-        } else {
-            app.rpc_client.clone()
-        }
-    };
+    let rpc_client = app.agent_client();
     let rpc_client_effect = rpc_client.clone();
 
     // Load contributors when selected agent changes

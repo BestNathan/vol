@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 #[component]
 pub fn ResourceViewer(mut signal: Signal<McpDialogState>) -> Element {
     let app_state: AppState = use_context();
-    let rpc_client = app_state.rpc_client.clone();
+    let rpc_client = app_state.agent_client();
 
     let (uri, content, error, loading) = {
         let s = signal.read();

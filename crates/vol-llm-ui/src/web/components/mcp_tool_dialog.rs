@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 #[component]
 pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
     let app_state: AppState = use_context();
-    let rpc_client = app_state.rpc_client.clone();
+    let rpc_client = app_state.agent_client();
 
     let mut form_value: Signal<serde_json::Value> =
         use_signal(|| serde_json::Value::Object(serde_json::Map::new()));

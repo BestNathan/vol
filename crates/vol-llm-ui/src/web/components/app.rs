@@ -94,6 +94,31 @@ pub struct AppState {
     pub server_mode: Signal<crate::web::client::ServerType>,
 }
 
+impl AppState {
+    /// Return the right RPC client for agent-level operations
+    /// (session.*, agent.*, tool.*, skill.*, mcp.*, etc.).
+    ///
+    /// In ControlPlane mode → uses the DP pool connection for the active
+    /// node (CP doesn't host agent sessions / tools / skills).
+    /// In DataPlane mode  → uses `rpc_client` directly (it IS the DP
+    /// connection).
+    pub fn agent_client(&self) -> JsonRpcClient {
+        let is_cp = matches!(
+            *self.server_mode.read(),
+            crate::web::client::ServerType::ControlPlane
+        );
+        if is_cp {
+            self.active_node_id
+                .read()
+                .as_ref()
+                .and_then(|nid| self.dp_pool.read().get(nid).map(|conn| conn.client.clone()))
+                .unwrap_or_else(|| self.rpc_client.clone())
+        } else {
+            self.rpc_client.clone()
+        }
+    }
+}
+
 impl PartialEq for AppState {
     fn eq(&self, _other: &Self) -> bool {
         true

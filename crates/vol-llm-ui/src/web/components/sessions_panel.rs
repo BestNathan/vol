@@ -546,24 +546,9 @@ pub fn SessionsPanel() -> Element {
     let conversation_signal: Signal<ConversationState> = use_context();
     let agents_signal: Signal<AgentsState> = use_context();
 
-    // Resolve the right RPC client:
-    //   CP mode → use DP pool connection for the active node (CP doesn't
-    //     support session.list / session.resume / session.entries).
-    //   DP mode → use rpc_client directly (it IS the DP connection).
-    let rpc_for_load = {
-        let node_id = app.active_node_id.read().clone();
-        let is_cp = matches!(
-            app.server_mode.read(),
-            crate::web::client::ServerType::ControlPlane
-        );
-        if is_cp {
-            node_id
-                .and_then(|nid| app.dp_pool.read().get(&nid).map(|conn| conn.client.clone()))
-                .unwrap_or_else(|| app.rpc_client.clone())
-        } else {
-            app.rpc_client.clone()
-        }
-    };
+    // Use agent_client() which routes to DP pool in CP mode, or rpc_client
+    // in DP mode (where rpc_client IS the DP connection).
+    let rpc_for_load = app.agent_client();
     let rpc_for_items = rpc_for_load.clone();
 
     // Load sessions on mount
