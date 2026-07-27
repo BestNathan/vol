@@ -13,7 +13,7 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let otel_config = vol_llm_observability::OtelConfig {
+    let otel_config = vol_observability::OtelConfig {
         enabled: std::env::var("OTEL_ENABLED")
             .map(|v| v == "true")
             .unwrap_or(false),
@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
         batch_max_export_timeout_millis: 5000,
     };
     let _otel_guards =
-        vol_llm_observability::init(&otel_config, "info").expect("Failed to initialize tracing");
+        vol_observability::init(&otel_config, "info").expect("Failed to initialize tracing");
     let cli = Cli::parse();
     let ct = CancellationToken::new();
     let server = DocsRsServer::new();

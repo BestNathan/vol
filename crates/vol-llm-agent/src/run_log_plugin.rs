@@ -1,26 +1,25 @@
-//! LoggerPlugin - Writes agent events to JSONL files.
+//! RunLogPlugin — Writes agent events to JSONL files.
+//!
+//! File layout:
+//!   {base_dir}/logs/{run_id}.jsonl          (regular events)
+//!   {base_dir}/logs/{plugin_name}/{run_id}.jsonl  (PluginEvent)
 
 use std::path::PathBuf;
 
 use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::{json, Value};
-use vol_llm_agent::react::{AgentPlugin, PluginDecision, RunContext};
 use vol_llm_core::stream::AgentStreamEvent;
 
-use crate::run_log::append_log;
-use crate::run_log::logger::LogEntry;
+use crate::react::{AgentPlugin, PluginDecision, RunContext};
+use crate::run_log::{append_log, LogEntry};
 
 /// Writes all agent events to JSONL files.
-///
-/// File layout:
-///   {base_dir}/logs/{run_id}.jsonl          (regular events)
-///   {base_dir}/logs/{plugin_name}/{run_id}.jsonl  (PluginEvent)
-pub struct LoggerPlugin {
+pub struct RunLogPlugin {
     base_dir: PathBuf,
 }
 
-impl LoggerPlugin {
+impl RunLogPlugin {
     pub fn new(base_dir: PathBuf) -> Self {
         let logs_dir = base_dir.join("logs");
         if let Err(e) = std::fs::create_dir_all(&logs_dir) {
@@ -33,7 +32,7 @@ impl LoggerPlugin {
         &self.base_dir
     }
 
-    pub fn log_path(&self, event: &AgentStreamEvent, run_id: &str) -> PathBuf {
+    fn log_path(&self, event: &AgentStreamEvent, run_id: &str) -> PathBuf {
         match event {
             AgentStreamEvent::PluginEvent { name, .. } => self
                 .base_dir
@@ -44,8 +43,7 @@ impl LoggerPlugin {
         }
     }
 
-    /// Whether an event should be logged to the JSONL file.
-    /// Skips high-frequency streaming delta events.
+    /// Whether an event should be logged — skips high-frequency delta events.
     pub fn should_log(event: &AgentStreamEvent) -> bool {
         !matches!(
             event,
@@ -55,17 +53,11 @@ impl LoggerPlugin {
         )
     }
 
-    pub fn create_log_entry(event: &AgentStreamEvent, run_id: &str) -> LogEntry {
+    fn create_log_entry(event: &AgentStreamEvent, run_id: &str, session_id: &str) -> LogEntry {
         let data = match event {
-            AgentStreamEvent::AgentStart { input, .. } => {
-                json!({ "input": input })
-            }
-            AgentStreamEvent::AgentComplete { response, .. } => {
-                json!({ "response": response })
-            }
-            AgentStreamEvent::AgentAborted { reason, .. } => {
-                json!({ "reason": reason })
-            }
+            AgentStreamEvent::AgentStart { input, .. } => json!({ "input": input }),
+            AgentStreamEvent::AgentComplete { response, .. } => json!({ "response": response }),
+            AgentStreamEvent::AgentAborted { reason, .. } => json!({ "reason": reason }),
             AgentStreamEvent::LLMCallStart {
                 iteration,
                 messages,
@@ -96,21 +88,11 @@ impl LoggerPlugin {
             AgentStreamEvent::LLMCallComplete { model, usage, .. } => {
                 json!({ "model": model, "usage": usage })
             }
-            AgentStreamEvent::LLMCallError { error, .. } => {
-                json!({ "error": error })
-            }
-            AgentStreamEvent::ThinkingStart { .. } => {
-                json!({})
-            }
-            AgentStreamEvent::ThinkingComplete { thinking, .. } => {
-                json!({ "thinking": thinking })
-            }
-            AgentStreamEvent::ContentStart { .. } => {
-                json!({})
-            }
-            AgentStreamEvent::ContentComplete { content, .. } => {
-                json!({ "content": content })
-            }
+            AgentStreamEvent::LLMCallError { error, .. } => json!({ "error": error }),
+            AgentStreamEvent::ThinkingStart { .. } => json!({}),
+            AgentStreamEvent::ThinkingComplete { thinking, .. } => json!({ "thinking": thinking }),
+            AgentStreamEvent::ContentStart { .. } => json!({}),
+            AgentStreamEvent::ContentComplete { content, .. } => json!({ "content": content }),
             AgentStreamEvent::ToolCallBegin {
                 tool_call_id,
                 tool_name,
@@ -191,49 +173,20 @@ impl LoggerPlugin {
             }
         };
 
-        let event_name = event_name(event);
         LogEntry {
             timestamp: Utc::now(),
             run_id: run_id.to_string(),
-            event: event_name,
+            session_id: session_id.to_string(),
+            event: event.event_name().to_string(),
             data,
         }
     }
 }
 
-fn event_name(event: &AgentStreamEvent) -> String {
-    match event {
-        AgentStreamEvent::AgentStart { .. } => "AgentStart".to_string(),
-        AgentStreamEvent::AgentComplete { .. } => "AgentComplete".to_string(),
-        AgentStreamEvent::AgentAborted { .. } => "AgentAborted".to_string(),
-        AgentStreamEvent::LLMCallStart { .. } => "LLMCallStart".to_string(),
-        AgentStreamEvent::LLMCallComplete { .. } => "LLMCallComplete".to_string(),
-        AgentStreamEvent::LLMCallError { .. } => "LLMCallError".to_string(),
-        AgentStreamEvent::ThinkingStart { .. } => "ThinkingStart".to_string(),
-        AgentStreamEvent::ThinkingComplete { .. } => "ThinkingComplete".to_string(),
-        AgentStreamEvent::ContentStart { .. } => "ContentStart".to_string(),
-        AgentStreamEvent::ContentComplete { .. } => "ContentComplete".to_string(),
-        AgentStreamEvent::ToolCallBegin { .. } => "ToolCallBegin".to_string(),
-        AgentStreamEvent::ToolCallComplete { .. } => "ToolCallComplete".to_string(),
-        AgentStreamEvent::ToolCallError { .. } => "ToolCallError".to_string(),
-        AgentStreamEvent::ToolCallSkipped { .. } => "ToolCallSkipped".to_string(),
-        AgentStreamEvent::IterationComplete { .. } => "IterationComplete".to_string(),
-        AgentStreamEvent::PluginEvent { .. } => "PluginEvent".to_string(),
-        AgentStreamEvent::MaxIterationsReached { .. } => "MaxIterationsReached".to_string(),
-        AgentStreamEvent::IterationContinued { .. } => "IterationContinued".to_string(),
-        // Delta events are filtered out by should_log() but required for exhaustive matching
-        AgentStreamEvent::ThinkingDelta { .. }
-        | AgentStreamEvent::ContentDelta { .. }
-        | AgentStreamEvent::ToolCallArgumentDelta { .. } => {
-            unreachable!("delta events should be filtered by should_log()")
-        }
-    }
-}
-
 #[async_trait]
-impl AgentPlugin for LoggerPlugin {
+impl AgentPlugin for RunLogPlugin {
     fn id(&self) -> String {
-        "logger".to_string()
+        "run_log".to_string()
     }
 
     fn priority(&self) -> u32 {
@@ -248,7 +201,7 @@ impl AgentPlugin for LoggerPlugin {
         if !Self::should_log(event) {
             return;
         }
-        let entry = Self::create_log_entry(event, &ctx.run_id);
+        let entry = Self::create_log_entry(event, &ctx.run_id, &ctx.session_id);
         let path = self.log_path(event, &ctx.run_id);
         let line = entry.to_json_line();
         if let Err(e) = append_log(&path, &line).await {
@@ -262,27 +215,16 @@ mod tests {
     use super::*;
     use serde_json::Map;
     use tempfile::TempDir;
-    use vol_llm_agent::react::AgentConfig;
 
-    fn create_test_plugin(temp_dir: &TempDir) -> LoggerPlugin {
-        LoggerPlugin::new(temp_dir.path().to_path_buf())
-    }
-
-    #[allow(dead_code)]
-    fn create_test_context() -> RunContext {
-        let (ctx, _rx) = RunContext::new(
-            "test-run".to_string(),
-            "test input".to_string(),
-            AgentConfig::default().into(),
-        );
-        ctx
+    fn create_test_plugin(temp_dir: &TempDir) -> RunLogPlugin {
+        RunLogPlugin::new(temp_dir.path().to_path_buf())
     }
 
     #[test]
     fn test_plugin_id() {
         let temp_dir = TempDir::new().unwrap();
         let plugin = create_test_plugin(&temp_dir);
-        assert_eq!(plugin.id(), "logger");
+        assert_eq!(plugin.id(), "run_log");
     }
 
     #[test]
@@ -294,32 +236,32 @@ mod tests {
 
     #[test]
     fn test_should_log_skips_delta_events() {
-        assert!(LoggerPlugin::should_log(&AgentStreamEvent::ThinkingStart {
+        assert!(RunLogPlugin::should_log(&AgentStreamEvent::ThinkingStart {
             timestamp: Utc::now(),
         }));
-        assert!(!LoggerPlugin::should_log(
+        assert!(!RunLogPlugin::should_log(
             &AgentStreamEvent::ThinkingDelta {
                 timestamp: Utc::now(),
                 delta: "chunk".to_string(),
             }
         ));
-        assert!(LoggerPlugin::should_log(
+        assert!(RunLogPlugin::should_log(
             &AgentStreamEvent::ThinkingComplete {
                 timestamp: Utc::now(),
                 thinking: "done".to_string(),
             }
         ));
-        assert!(!LoggerPlugin::should_log(&AgentStreamEvent::ContentDelta {
+        assert!(!RunLogPlugin::should_log(&AgentStreamEvent::ContentDelta {
             timestamp: Utc::now(),
             delta: "partial".to_string(),
         }));
-        assert!(LoggerPlugin::should_log(
+        assert!(RunLogPlugin::should_log(
             &AgentStreamEvent::ContentComplete {
                 timestamp: Utc::now(),
                 content: "full".to_string(),
             }
         ));
-        assert!(!LoggerPlugin::should_log(
+        assert!(!RunLogPlugin::should_log(
             &AgentStreamEvent::ToolCallArgumentDelta {
                 timestamp: Utc::now(),
                 tool_call_id: "c1".to_string(),
@@ -327,7 +269,7 @@ mod tests {
                 delta: "arg".to_string(),
             }
         ));
-        assert!(LoggerPlugin::should_log(&AgentStreamEvent::ToolCallBegin {
+        assert!(RunLogPlugin::should_log(&AgentStreamEvent::ToolCallBegin {
             timestamp: Utc::now(),
             tool_call_id: "c1".to_string(),
             tool_name: "bash".to_string(),
@@ -458,10 +400,10 @@ mod tests {
         ];
 
         for event in events {
-            if !LoggerPlugin::should_log(&event) {
+            if !RunLogPlugin::should_log(&event) {
                 continue;
             }
-            let entry = LoggerPlugin::create_log_entry(&event, "run-1");
+            let entry = RunLogPlugin::create_log_entry(&event, "run-1", "session-1");
             let line = entry.to_json_line();
             let path = plugin.log_path(&event, "run-1");
             // Verify log_path is deterministic
@@ -469,6 +411,7 @@ mod tests {
             assert_eq!(path, path2);
             // Verify JSON serialization works
             assert!(line.contains("run-1"));
+            assert!(line.contains("session-1"));
         }
     }
 }

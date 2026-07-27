@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 pub struct LogEntry {
     pub timestamp: DateTime<Utc>,
     pub run_id: String,
+    pub session_id: String,
     pub event: String,
     pub data: Value,
 }
@@ -18,6 +19,7 @@ impl LogEntry {
         map.insert("timestamp".to_string(), json!(self.timestamp.to_rfc3339()));
         map.insert("event".to_string(), json!(self.event));
         map.insert("run_id".to_string(), json!(self.run_id));
+        map.insert("session_id".to_string(), json!(self.session_id));
         if let Some(data_map) = self.data.as_object() {
             for (k, v) in data_map {
                 map.insert(k.clone(), v.clone());
@@ -108,12 +110,14 @@ mod tests {
         let entry = LogEntry {
             timestamp: Utc::now(),
             run_id: "r1".to_string(),
+            session_id: "s1".to_string(),
             event: "AgentStart".to_string(),
             data: json!({"input": "hello"}),
         };
         let line = entry.to_json_line();
         assert!(line.contains("AgentStart"));
         assert!(line.contains("r1"));
+        assert!(line.contains("s1"));
         assert!(line.contains("hello"));
     }
 
@@ -122,6 +126,7 @@ mod tests {
         let entry = LogEntry {
             timestamp: Utc::now(),
             run_id: "r1".to_string(),
+            session_id: "s1".to_string(),
             event: "ToolCallBegin".to_string(),
             data: json!({"tool_name": "bash"}),
         };

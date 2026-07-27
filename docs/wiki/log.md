@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-07-24] ingest | Observability Pull-Metrics Refactor
+- Created sources: [[observability-pull-metrics-refactor]]
+- Created entities: [[vol-observability-crate]] (consolidated observability library)
+- Created concepts: [[pull-based-metrics]] (Prometheus pull via shared registry + /metrics endpoint)
+- Updated concepts: [[agent-observability]] (consolidated crate, Prometheus pull, LLMCall events, run-level metrics), [[built-in-plugins]] (LokiPlugin→LoggingPlugin, LoggerPlugin→RunLogPlugin), [[otel-log-routing]]
+- Updated index: new entity, new concept, new source, updated summaries
+- Cross-references added: 8+
+- Changes: merged `vol-llm-observability` into `vol-observability` (binary→lib); removed ingest/TDengine/Loki-writer pipeline; created `LoggingPlugin` (merged LokiPlugin + LoggerPlugin formatting); moved `RunLogPlugin` + `run_log` to `vol-llm-agent` with `session_id` added to `LogEntry`; emitted LLMCallStart/Complete/Error in agent loop; added `opentelemetry-prometheus` pull exporter + shared `OnceLock<Registry>` + `GET /metrics` on agent-server port 3001; fixed MetricsPlugin concurrency keying by `(agent_id, run_id, iteration)`; added `agent_runs_total` + `agent_run_duration_seconds`; added prometheus scrape annotations to k8s deployment; 87.6% coverage on vol-observability
+
 ## [2026-06-17] ingest | Data-Plane Registration and Sandbox Fault Tolerance
 - Created sources: [[data-plane-registration-sandbox-tolerance]]
 - Created entities: [[vol-llm-sandbox-crate]] (sandbox abstraction with fault-tolerant registry loading)

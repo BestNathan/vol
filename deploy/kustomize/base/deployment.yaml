@@ -22,6 +22,10 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/part-of: vol-agent
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "3001"
     spec:
       restartPolicy: Always
       nodeSelector:
@@ -54,6 +58,10 @@ spec:
             limits:
               cpu: 1000m
               memory: 512Mi
+          ports:
+            - containerPort: 3001
+              name: http
+              protocol: TCP
           volumeMounts:
             - name: config
               mountPath: /etc/agent-server

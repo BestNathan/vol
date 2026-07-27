@@ -13,8 +13,8 @@ use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
 use vol_llm_core::{
     LLMClient, LLMProvider, StreamEvent, StreamEventData, StreamReceiver, SupportedParam,
 };
-use vol_llm_observability::LokiPlugin;
 use vol_llm_tool::ToolRegistry;
+use vol_observability::LoggingPlugin;
 use vol_session::{InMemoryEntryStore, Session};
 
 /// Mock LLM that immediately returns ContentComplete.
@@ -99,14 +99,17 @@ async fn test_agent_file_loaded_with_loki_plugin() {
     let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
     let tools = Arc::new(ToolRegistry::new());
 
-    let loki_plugin = LokiPlugin::new();
+    let loki_plugin = LoggingPlugin::new();
 
     let mut plugin_registry = PluginRegistry::new();
     plugin_registry.register(loki_plugin);
 
-    // 4. Verify LokiPlugin was registered
-    let loki_registered = plugin_registry.plugins().iter().any(|p| p.id() == "loki");
-    assert!(loki_registered, "LokiPlugin should be registered");
+    // 4. Verify LoggingPlugin was registered
+    let loki_registered = plugin_registry
+        .plugins()
+        .iter()
+        .any(|p| p.id() == "logging");
+    assert!(loki_registered, "LoggingPlugin should be registered");
 
     let agent_config = AgentConfig::builder()
         .with_def((*def).clone())

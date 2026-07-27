@@ -423,6 +423,14 @@ impl ReActAgent {
                 // Get messages from ctx (not local variable)
                 let messages = run_ctx.get_context().await?;
 
+                // Emit LLMCallStart before calling the LLM
+                run_ctx
+                    .emit(AgentStreamEvent::llm_call_start(
+                        iteration,
+                        messages.clone(),
+                    ))
+                    .await;
+
                 let request = ConversationRequest::with_history(None, messages)
                     .with_tools(tools_defs)
                     .with_tool_choice(ToolChoice::Auto);
@@ -430,6 +438,9 @@ impl ReActAgent {
                 let llm_stream = match llm.converse_stream(request).await {
                     Ok(stream) => stream,
                     Err(e) => {
+                        run_ctx
+                            .emit(AgentStreamEvent::llm_call_error(e.to_string()))
+                            .await;
                         run_ctx
                             .emit(AgentStreamEvent::agent_aborted(format!(
                                 "LLM request failed: {e}"
@@ -440,10 +451,13 @@ impl ReActAgent {
                 };
 
                 // Consume LLM stream — emits Thinking/Content streaming events internally
-                let (thinking, tool_calls, content, _model, _usage) =
+                let (thinking, tool_calls, content, model, usage) =
                     match consume_llm_stream(llm_stream, &run_ctx).await {
                         Ok(data) => data,
                         Err(e) => {
+                            run_ctx
+                                .emit(AgentStreamEvent::llm_call_error(e.to_string()))
+                                .await;
                             run_ctx
                                 .emit(AgentStreamEvent::agent_aborted(format!(
                                     "LLM stream failed: {e}"
@@ -452,6 +466,11 @@ impl ReActAgent {
                             return Err(e);
                         }
                     };
+
+                // Emit LLMCallComplete with the model and token usage
+                run_ctx
+                    .emit(AgentStreamEvent::llm_call_complete(model, usage))
+                    .await;
 
                 // Record reasoning step
                 if !thinking.is_empty() {

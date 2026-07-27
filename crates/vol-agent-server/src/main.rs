@@ -36,7 +36,7 @@ async fn main() {
         });
 
     // --- Init tracing + OTel ---
-    let otel_config = vol_llm_observability::OtelConfig {
+    let otel_config = vol_observability::OtelConfig {
         enabled: config.opentelemetry.enabled,
         endpoint: config.opentelemetry.endpoint.clone(),
         service_name: config.opentelemetry.service_name.clone(),
@@ -45,7 +45,7 @@ async fn main() {
         sample_rate: config.opentelemetry.sample_rate,
         batch_max_export_timeout_millis: config.opentelemetry.batch_max_export_timeout_millis,
     };
-    let otel_guards = vol_llm_observability::init(&otel_config, &config.tracing.level)
+    let otel_guards = vol_observability::init(&otel_config, &config.tracing.level)
         .expect("Failed to initialize tracing");
 
     if let Some(ref path) = config_path {

@@ -8,6 +8,8 @@ pub mod plugins;
 pub mod prompt_context;
 pub mod rag;
 pub mod react;
+pub mod run_log;
+pub mod run_log_plugin;
 
 // Re-export vol-session types
 pub use agent_def::{AgentDef, AgentDefError, AgentPath, AgentScope};

@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-06-17 (data-plane registration and sandbox fault tolerance)
+Last updated: 2026-07-24 (observability pull-metrics refactor)
 
 ## Entities
 
@@ -22,6 +22,7 @@ Last updated: 2026-06-17 (data-plane registration and sandbox fault tolerance)
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 | [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support; `docs-rs-mcp` is GitOps-managed and built by the MCP image workflow | active | 2026-06-16 |
 | [[vol-repository]] | Rust workspace with crates, docs, legacy `k8s/` manifests, and self-contained `deploy/argocd/` GitOps deployment tree | active | 2026-06-16 |
+| [[vol-observability-crate]] | Consolidated observability library (LoggingPlugin, MetricsPlugin, /metrics endpoint, OTel init) | active | 2026-07-24 |
 | [[vol-llm-mcp-crate]] | MCP Client protocol layer for ReAct Agent — config parsing, McpManager lifecycle, tool/resource/prompt discovery | active | 2026-05-13 |
 
 ## Concepts
@@ -57,6 +58,7 @@ Last updated: 2026-06-17 (data-plane registration and sandbox fault tolerance)
 | [[human-in-the-loop]] | Human approval workflow for tool execution | stable | 2026-05-04 |
 | [[retry-with-backoff]] | Automatic retry with exponential backoff on errors | stable | 2026-05-04 |
 | [[rate-limiting]] | Concurrency control using semaphore-based rate limiting | stable | 2026-05-04 |
+| [[pull-based-metrics]] | Prometheus pull metrics via shared registry + /metrics endpoint | active | 2026-07-24 |
 | [[http-transport]] | Historical HTTP transport with blocking and SSE streaming modes; deleted from active channel API after Task 4 | stale | 2026-06-10 |
 | [[connection-trait]] | Connection trait abstracting transport protocols | active | 2026-05-05 |
 | [[connection-holder]] | ConnectionHolder plugin for forwarding agent events | active | 2026-05-05 |
@@ -90,6 +92,7 @@ Last updated: 2026-06-17 (data-plane registration and sandbox fault tolerance)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[observability-pull-metrics-refactor]] | Consolidated observability crate, Prometheus pull /metrics, LLMCall event emission, run-level metrics, MetricsPlugin concurrency fix | active | 2026-07-24 |
 | [[argocd-gitops-deployment]] | Self-contained ArgoCD GitOps implementation: App-of-Apps split into runtime-config/workloads, shared .agents ConfigMaps mounted at /app/.agents, agent-provider-secrets, vol-agent-system manifests, MCP Dockerfile, and MCP image workflow | active | 2026-06-16 |
 | [[control-plane-behavior-completion-plan]] | Follow-up plan to complete JSON-RPC notifications, endpoint roles, client handlers, control.command, run status, and combined-mode registration | draft | 2026-06-10 |
 | [[agent-server-boundary-mode-verification]] | Task 10 boundary and role-mode verification: cargo-tree dependency guard plus `/ws` ownership and disabled-role config tests | active | 2026-06-10 |

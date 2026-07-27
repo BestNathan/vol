@@ -230,10 +230,10 @@ impl DataPlaneServerCore {
         // Register observability plugins
         config
             .plugin_registry
-            .register(vol_llm_observability::MetricsPlugin::new());
+            .register(vol_observability::MetricsPlugin::new());
         config
             .plugin_registry
-            .register(vol_llm_observability::LokiPlugin::new());
+            .register(vol_observability::LoggingPlugin::new());
 
         let agent = vol_llm_agent::ReActAgent::new(config);
         let dispatcher = Arc::new(AgentDispatcher::new(agent));

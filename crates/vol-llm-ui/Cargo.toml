@@ -37,7 +37,6 @@ vol-llm-provider = { path = "../vol-llm-provider", optional = true }
 vol-llm-tool = { path = "../vol-llm-tool", optional = true }
 vol-llm-agents = { path = "../vol-llm-agents", optional = true }
 vol-llm-skill = { path = "../vol-llm-skill", optional = true }
-vol-llm-observability = { path = "../vol-llm-observability", optional = true }
 vol-session = { path = "../vol-session", optional = true }
 uuid = { workspace = true, optional = true }
 
@@ -78,7 +77,7 @@ tui = [
     "dep:tokio", "dep:async-trait",
     "dep:vol-llm-agent", "dep:vol-llm-agent-protocol",
     "dep:vol-llm-core", "dep:vol-llm-provider", "dep:vol-llm-tool",
-    "dep:vol-llm-agents", "dep:vol-llm-skill", "dep:vol-llm-observability",
+    "dep:vol-llm-agents", "dep:vol-llm-skill",
     "dep:vol-session", "dep:jsonrpsee", "dep:dioxus-primitives",
 ]
 web = ["dep:dioxus", "dep:dioxus-signals", "dep:log", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:futures-channel", "dep:futures-core", "dep:futures-util", "dep:js-sys", "dep:web-time", "dep:gloo-timers", "dioxus?/asset"]
