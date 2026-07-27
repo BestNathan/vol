@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use vol_llm_agent_protocol::agent_server_protocol::{
     AgentOperation, ControlOperation, McpOperation, Operation, SessionOperation, SkillOperation,
-    TaskOperation, ToolOperation,
+    SystemOperation, TaskOperation, ToolOperation,
 };
 use vol_llm_agent_protocol::{Connection, JsonRpcMessageService};
 
@@ -19,7 +19,8 @@ impl ControlConnectionRole {
         match self {
             ControlConnectionRole::Client => matches!(
                 operation,
-                Operation::Agent(AgentOperation::List)
+                Operation::System(SystemOperation::Connected)
+                    | Operation::Agent(AgentOperation::List)
                     | Operation::Agent(AgentOperation::Status)
                     | Operation::Agent(AgentOperation::Submit)
                     | Operation::Agent(AgentOperation::Cancel)
@@ -74,7 +75,7 @@ impl JsonRpcMessageService for ControlPlaneEndpoint {
 mod tests {
     use super::*;
     use vol_llm_agent_protocol::agent_server_protocol::{
-        AgentOperation, ControlOperation, Operation,
+        AgentOperation, ControlOperation, Operation, SystemOperation,
     };
 
     #[test]
@@ -117,5 +118,18 @@ mod tests {
     fn node_denies_node_list() {
         assert!(!ControlConnectionRole::DataPlaneNode
             .allows(&Operation::Control(ControlOperation::NodeList)));
+    }
+
+    #[test]
+    fn client_allows_system_connected() {
+        assert!(
+            ControlConnectionRole::Client.allows(&Operation::System(SystemOperation::Connected))
+        );
+    }
+
+    #[test]
+    fn node_denies_system_connected() {
+        assert!(!ControlConnectionRole::DataPlaneNode
+            .allows(&Operation::System(SystemOperation::Connected)));
     }
 }
