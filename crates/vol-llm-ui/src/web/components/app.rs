@@ -287,6 +287,7 @@ pub fn App() -> Element {
         let bus_conn = bus.clone();
         let global_conn = global.clone();
         let server_mode_signal = server_mode.clone();
+        let c_for_callback = c.clone();
         c.on_state_change(move |cs| {
             let event = match cs {
                 crate::web::client::ConnectionState::Connected => UiEvent::WsConnected,
@@ -308,16 +309,17 @@ pub fn App() -> Element {
                     g.reconnect_maxed = false;
 
                     // Identify server type
-                    let c = c.clone();
-                    let mode = server_mode_signal.clone();
+                    let c = c_for_callback.clone();
+                    let mut mode = server_mode_signal.clone();
                     wasm_bindgen_futures::spawn_local(async move {
                         let (tx, rx) = futures_channel::oneshot::channel();
                         c.identify(move |result| {
                             let _ = tx.send(result);
                         });
                         if let Ok(Ok(info)) = rx.await {
+                            let server_type = info.server_type.clone();
                             mode.set(info.server_type);
-                            log::info!("Server identified as {:?}", info.server_type);
+                            log::info!("Server identified as {:?}", server_type);
                         }
                     });
                 }
