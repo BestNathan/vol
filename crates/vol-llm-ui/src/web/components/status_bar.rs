@@ -98,7 +98,7 @@ pub fn StatusBar() -> Element {
                         let app_state = app_state.clone();
                         let cp_client = app_state.cp_client.clone();
                         move |node_id: String| {
-                            // Fetch agent list to get ws_url for this node
+                            // Fetch node info to get ws_url for this node
                             let cp = cp_client.clone();
                             let mut dp_pool = app_state.dp_pool;
                             let mut active_node = app_state.active_node_id;
@@ -106,18 +106,13 @@ pub fn StatusBar() -> Element {
 
                             wasm_bindgen_futures::spawn_local(async move {
                                 let (tx, rx) = futures_channel::oneshot::channel();
-                                cp.agent_list(move |result| {
+                                cp.node_get(&target_node_id, move |result| {
                                     let _ = tx.send(result);
                                 });
 
                                 match rx.await {
-                                    Ok(Ok(agents)) => {
-                                        // Find first agent on this node with a ws_url
-                                        let ws_url = agents.iter()
-                                            .find(|a| a.node_id.as_deref() == Some(&target_node_id) && a.ws_url.is_some())
-                                            .and_then(|a| a.ws_url.clone());
-
-                                        if let Some(url) = ws_url {
+                                    Ok(Ok(Some(node))) => {
+                                        if let Some(url) = node.ws_url {
                                             // Create DP connection in the pool
                                             dp_pool.write().get_or_create(&target_node_id, &url, vec![]);
                                             log::info!("Manually selected node {target_node_id} (ws_url={url})");
@@ -125,8 +120,11 @@ pub fn StatusBar() -> Element {
                                             log::warn!("No ws_url found for node {target_node_id}");
                                         }
                                     }
+                                    Ok(Ok(None)) => {
+                                        log::warn!("Node {target_node_id} not found");
+                                    }
                                     Ok(Err(e)) => {
-                                        log::warn!("Failed to fetch agent list for node {target_node_id}: {e}");
+                                        log::warn!("Failed to fetch node {target_node_id}: {e}");
                                     }
                                     Err(e) => {
                                         log::warn!("Channel error for node {target_node_id}: {e:?}");

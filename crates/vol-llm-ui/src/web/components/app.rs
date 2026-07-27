@@ -90,6 +90,8 @@ pub struct AppState {
     pub node_data_cache: Signal<NodeDataCache>,
     /// When `Some(node_id)`, the UI shows the Node Detail view for that node.
     pub viewing_node_detail: Signal<Option<String>>,
+    /// Server type (CP or DP) for mode switching
+    pub server_mode: Signal<crate::web::client::ServerType>,
 }
 
 impl PartialEq for AppState {
@@ -261,6 +263,7 @@ pub fn App() -> Element {
     let active_node_id = use_signal(|| Option::<String>::None);
     let node_data_cache = use_signal(|| NodeDataCache::new());
     let viewing_node_detail = use_signal(|| Option::<String>::None);
+    let server_mode = use_signal(|| crate::web::client::ServerType::Unknown);
 
     // Prevent browser zoom on input focus and disable pinch-to-zoom
     use_hook(|| {
@@ -283,6 +286,7 @@ pub fn App() -> Element {
         let global = global_signal.clone();
         let bus_conn = bus.clone();
         let global_conn = global.clone();
+        let server_mode_signal = server_mode.clone();
         c.on_state_change(move |cs| {
             let event = match cs {
                 crate::web::client::ConnectionState::Connected => UiEvent::WsConnected,
@@ -302,6 +306,20 @@ pub fn App() -> Element {
                     g.reconnecting = false;
                     g.reconnect_attempts = 0;
                     g.reconnect_maxed = false;
+
+                    // Identify server type
+                    let c = c.clone();
+                    let mode = server_mode_signal.clone();
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let (tx, rx) = futures_channel::oneshot::channel();
+                        c.identify(move |result| {
+                            let _ = tx.send(result);
+                        });
+                        if let Ok(Ok(info)) = rx.await {
+                            mode.set(info.server_type);
+                            log::info!("Server identified as {:?}", info.server_type);
+                        }
+                    });
                 }
                 crate::web::client::ConnectionState::Connecting => {
                     global_conn.write_unchecked().ws_connected = false;
@@ -701,9 +719,8 @@ pub fn App() -> Element {
     });
 
     // Auto-select first online node after CP connects.
-    // Uses agent_list (which includes ws_url from node_ingress) to find the
-    // first agent with a reachable data-plane endpoint, then activates that
-    // node and opens a DP connection via the pool.
+    // Uses node_list to get nodes with ws_url, then activates the first online node
+    // and opens a DP connection via the pool.
     let auto_select_client = client.clone();
     let mut auto_select_active_node = active_node_id;
     let mut auto_select_dp_pool = dp_pool;
@@ -718,22 +735,22 @@ pub fn App() -> Element {
                 TimeoutFuture::new(200).await;
             }
 
-            // Fetch agent list — agents carry ws_url from node_ingress
+            // Fetch node list — nodes now carry ws_url from node_ingress
             let (tx, rx) = futures_channel::oneshot::channel();
-            auto_select_client.agent_list(move |result| {
+            auto_select_client.node_list(move |result| {
                 let _ = tx.send(result);
             });
 
-            if let Ok(Ok(agents)) = rx.await {
+            if let Ok(Ok(nodes)) = rx.await {
                 // Only auto-select if no node is currently selected — don't overwrite manual choice
                 if auto_select_active_node.read().clone().is_none() {
-                    // Find first agent that has both a node_id and a DP ws_url
-                    if let Some(agent) = agents
+                    // Find first online node with a ws_url
+                    if let Some(node) = nodes
                         .iter()
-                        .find(|a| a.node_id.is_some() && a.ws_url.is_some())
+                        .find(|n| n.status == "online" && n.ws_url.is_some())
                     {
-                        let node_id = agent.node_id.clone().unwrap();
-                        let ws_url = agent.ws_url.clone().unwrap();
+                        let node_id = node.node_id.clone();
+                        let ws_url = node.ws_url.clone().unwrap();
 
                         // Set as active node
                         auto_select_active_node.set(Some(node_id.clone()));
@@ -746,7 +763,7 @@ pub fn App() -> Element {
                     }
                 }
             } else {
-                log::warn!("Auto-select: failed to fetch agent list");
+                log::warn!("Auto-select: failed to fetch node list");
             }
 
             // Wait for disconnect before re-running
@@ -768,6 +785,7 @@ pub fn App() -> Element {
         active_node_id,
         node_data_cache,
         viewing_node_detail,
+        server_mode,
     });
     use_context_provider(|| global_signal);
     use_context_provider(|| approval_signal);

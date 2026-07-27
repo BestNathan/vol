@@ -41,23 +41,39 @@ impl DomainHandler for NodeHandler {
             (
                 Operation::Control(ControlOperation::NodeList),
                 Payload::Control(ControlPayload::NodeList(_)),
-            ) => Ok(vec![make_result(
-                message,
-                ControlOperation::NodeList,
-                ControlPayload::NodeListResult(NodeListResult {
-                    nodes: self.state.nodes.list(),
-                }),
-            )]),
+            ) => {
+                let nodes: Vec<_> = self
+                    .state
+                    .nodes
+                    .list()
+                    .into_iter()
+                    .map(|mut node| {
+                        // Populate ws_url from node_ingress mapping
+                        node.ws_url = self.state.node_ingress.get(&node.node_id).cloned();
+                        node
+                    })
+                    .collect();
+                Ok(vec![make_result(
+                    message,
+                    ControlOperation::NodeList,
+                    ControlPayload::NodeListResult(NodeListResult { nodes }),
+                )])
+            }
             (
                 Operation::Control(ControlOperation::NodeGet),
                 Payload::Control(ControlPayload::NodeGet(req)),
-            ) => Ok(vec![make_result(
-                message,
-                ControlOperation::NodeGet,
-                ControlPayload::NodeGetResult(NodeGetResult {
-                    node: self.state.nodes.get(&req.node_id),
-                }),
-            )]),
+            ) => {
+                let node = self.state.nodes.get(&req.node_id).map(|mut node| {
+                    // Populate ws_url from node_ingress mapping
+                    node.ws_url = self.state.node_ingress.get(&node.node_id).cloned();
+                    node
+                });
+                Ok(vec![make_result(
+                    message,
+                    ControlOperation::NodeGet,
+                    ControlPayload::NodeGetResult(NodeGetResult { node }),
+                )])
+            }
             _ => Err(ProtocolError::PayloadDecodeFailedOwned(
                 "unsupported node operation".to_string(),
             )),
@@ -188,6 +204,45 @@ mod tests {
             .unwrap();
         let json = replies[0].payload.data_json();
         assert!(json["node"].is_null());
+    }
+
+    #[tokio::test]
+    async fn node_list_populates_ws_url_from_node_ingress() {
+        use std::collections::HashMap;
+        let mut node_ingress = HashMap::new();
+        node_ingress.insert(
+            "node-a".to_string(),
+            "wss://node-a.vol.bestnathan.top/ws".to_string(),
+        );
+        let state = Arc::new(ControlPlaneState::new_with_ingress(node_ingress));
+        state
+            .nodes
+            .register(
+                NodeRegistration {
+                    node_id: "node-a".to_string(),
+                    name: "Node A".to_string(),
+                    version: "0.1.0".to_string(),
+                },
+                "auth".to_string(),
+                1000,
+            )
+            .unwrap();
+        let handler = NodeHandler::new(state);
+        let replies = handler
+            .handle(make_msg(
+                "1",
+                Operation::Control(ControlOperation::NodeList),
+                Payload::Control(ControlPayload::NodeList(NodeListRequest {})),
+            ))
+            .await
+            .unwrap();
+        let nodes = replies[0].payload.data_json()["nodes"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0]["node_id"], "node-a");
+        assert_eq!(nodes[0]["ws_url"], "wss://node-a.vol.bestnathan.top/ws");
     }
 
     #[tokio::test]
