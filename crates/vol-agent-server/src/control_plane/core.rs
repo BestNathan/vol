@@ -11,6 +11,7 @@ use crate::control_plane::handlers::client::ClientHandler;
 use crate::control_plane::handlers::control::ControlHandler;
 use crate::control_plane::handlers::node::NodeHandler;
 use crate::control_plane::handlers::run::RunHandler;
+use crate::control_plane::handlers::system::SystemHandler;
 use crate::control_plane::state::ControlPlaneState;
 use crate::data_plane::handlers::sandbox::SandboxHandler;
 
@@ -37,6 +38,7 @@ pub struct ControlPlaneServerCore {
 impl ControlPlaneServerCore {
     pub async fn new(state: Arc<ControlPlaneState>) -> Result<Self, String> {
         let mut handler_registry = HandlerRegistry::new();
+        handler_registry.register(Arc::new(SystemHandler::new()))?;
         handler_registry.register(Arc::new(ControlHandler::new(state.clone())))?;
         handler_registry.register(Arc::new(NodeHandler::new(state.clone())))?;
         handler_registry.register(Arc::new(CapabilityHandler::new(state.clone())))?;
