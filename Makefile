@@ -72,8 +72,8 @@ web-serve: ## Build release WASM + serve w/ cache headers (phone testing, port 8
 web-backend: ## Start backend JSON-RPC agent service (port 3001)
 	ANTHROPIC_AUTH_TOKEN=sk cargo watch -x "run -p vol-agent-server"
 
-web-check: ## cargo check (web only)
-	cargo check -p vol-llm-ui --no-default-features --features web
+web-check: ## dx check (WASM target, web features)
+	dx check --package vol-llm-ui --bin vol-llm-ui-web --no-default-features --features web
 
 web-build: ## Build WASM binary
 	cargo build -p vol-llm-ui --no-default-features --features web --target wasm32-unknown-unknown
