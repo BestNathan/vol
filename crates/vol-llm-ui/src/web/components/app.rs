@@ -622,11 +622,13 @@ pub fn App() -> Element {
         }
     });
 
-    // Session restoration on reconnect success
+    // Session restoration on reconnect success.
+    // Only meaningful in DataPlane mode — CP doesn't host sessions.
     let restore_client = client.clone();
     let restore_global = global_signal.clone();
     let restore_conv = conversation_signal.clone();
     let restore_agents = agents_signal.clone();
+    let restore_server_mode = server_mode.clone();
     wasm_bindgen_futures::spawn_local(async move {
         loop {
             // Wait for reconnection to succeed
@@ -639,6 +641,26 @@ pub fn App() -> Element {
                     }
                 }
                 TimeoutFuture::new(200).await;
+            }
+
+            // Skip session restoration in ControlPlane mode — sessions are
+            // hosted on DP nodes, not on the CP.  When the user selects a
+            // DP node later the agent panel will load sessions via the DP
+            // connection.
+            if matches!(
+                *restore_server_mode.read(),
+                crate::web::client::ServerType::ControlPlane
+            ) {
+                log::info!("Skipping session restoration — connected to ControlPlane");
+                restore_global.write_unchecked().reconnect_attempts = 0;
+                // Wait for next disconnect
+                loop {
+                    if !restore_global.read().ws_connected {
+                        break;
+                    }
+                    TimeoutFuture::new(200).await;
+                }
+                continue;
             }
 
             log::info!("Reconnected — restoring most recent session");
