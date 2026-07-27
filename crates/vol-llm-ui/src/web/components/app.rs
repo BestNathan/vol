@@ -551,6 +551,56 @@ pub fn App() -> Element {
         }
     });
 
+    // DP event forwarding — spawn event readers for DP pool connections.
+    // The main WS event loop above only reads from the CP client.  DP
+    // connections auto-subscribe to agent events, but without a reader on
+    // their event_rx those events are silently dropped and never reach the
+    // conversation view.
+    let dp_forward_bus = event_bus.with(|eb| eb.clone());
+    let dp_forward_global = global_signal.clone();
+    let dp_forward_pool = dp_pool;
+    wasm_bindgen_futures::spawn_local(async move {
+        let mut forwarded: std::collections::HashSet<String> = std::collections::HashSet::new();
+        loop {
+            // Check for new DP connections every second
+            TimeoutFuture::new(1000).await;
+            let node_ids: Vec<String> = {
+                let pool = dp_forward_pool.read();
+                pool.connections().map(|c| c.node_id.clone()).collect()
+            };
+            for nid in node_ids {
+                if forwarded.contains(&nid) {
+                    continue;
+                }
+                forwarded.insert(nid.clone());
+                let client = {
+                    let pool = dp_forward_pool.read();
+                    pool.get(&nid).map(|c| c.client.clone())
+                };
+                if let Some(c) = client {
+                    let bus = dp_forward_bus.clone();
+                    let global = dp_forward_global.clone();
+                    wasm_bindgen_futures::spawn_local(async move {
+                        loop {
+                            match c.next_event().await {
+                                Some(event) => {
+                                    let agent_id = {
+                                        global.read_unchecked().run_map.get(&event.run_id).cloned()
+                                    };
+                                    set_current_event_agent(agent_id);
+                                    if let Some(ui_event) = agent_event_to_ui(&event) {
+                                        bus.publish(&ui_event);
+                                    }
+                                }
+                                None => break,
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    });
+
     // Reconnect loop: drives client.reconnect() with exponential backoff
     let reconn_client = client.clone();
     let reconn_global = global_signal.clone();
