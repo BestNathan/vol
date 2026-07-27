@@ -497,6 +497,44 @@ async fn test_agent_run_event_emission() {
     );
 }
 
+#[tokio::test]
+async fn test_agent_run_emits_llm_call_events() {
+    let mock = MockLlmClient::new();
+    mock.set_stream_events(vec![content_complete_event("LLM call event test.")])
+        .await;
+
+    let events = Arc::new(tokio::sync::Mutex::new(Vec::new()));
+    let plugin = EventCollectorPlugin {
+        events: events.clone(),
+    };
+
+    let config = AgentConfig::builder()
+        .with_llm(Arc::new(mock))
+        .with_plugin(plugin)
+        .with_system_prompt("You are a test assistant.".to_string())
+        .build()
+        .unwrap();
+    let agent = ReActAgent::new(config);
+
+    let result = agent.run("LLM call events?").await.unwrap();
+    assert!(result.error.is_none());
+
+    // Allow async plugin events to drain
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+    let recorded = events.lock().await.clone();
+    assert!(
+        recorded.iter().any(|e| e == "LLMCallStart"),
+        "Expected LLMCallStart event, got: {:?}",
+        recorded
+    );
+    assert!(
+        recorded.iter().any(|e| e == "LLMCallComplete"),
+        "Expected LLMCallComplete event, got: {:?}",
+        recorded
+    );
+}
+
 // ========================
 // Test 6: Max iterations reached
 // ========================
