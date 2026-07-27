@@ -56,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Configuration:");
     println!("  ✓ ANTHROPIC_AUTH_TOKEN is set");
-    println!("  ✓ OTel endpoint: {otel_endpoint}");
+    println!("  ✓ OTel endpoint: {}", otel_config.endpoint);
     println!();
 
     // Create LLM config for DashScope Anthropic endpoint
