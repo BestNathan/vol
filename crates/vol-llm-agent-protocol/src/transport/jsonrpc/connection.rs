@@ -16,9 +16,9 @@ use crate::connection::Connection;
 use crate::error::ConnectionError;
 
 /// Interval at which the server sends WebSocket Ping frames to keep the
-/// connection alive through proxies / load balancers (e.g. Higress with a
-/// 60-second idle timeout).
-const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(25);
+/// connection alive through proxies / load balancers (e.g. Higress upstream
+/// idle timeout of 10s, plus any other network-layer timeouts).
+const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(8);
 
 /// JSON-RPC connection over WebSocket.
 pub struct JsonRpcConnection {
