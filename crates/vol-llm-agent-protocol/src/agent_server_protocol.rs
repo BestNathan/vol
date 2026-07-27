@@ -1135,9 +1135,26 @@ pub enum LogPayload {
     ReadResult { entries: Vec<serde_json::Value> },
 }
 
+/// Server type identification for client mode switching
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ServerType {
+    ControlPlane,
+    DataPlane,
+}
+
+/// Connection handshake information sent by server after system.connected
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConnectedInfo {
+    pub server_type: ServerType,
+    pub version: String,
+    #[serde(default)]
+    pub capabilities: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SystemPayload {
     Empty,
+    Connected(ConnectedInfo),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1371,6 +1388,9 @@ pub struct NodeRecord {
     pub capability_revision: u64,
     #[serde(default)]
     pub load: NodeLoad,
+    /// WebSocket URL for establishing direct DP connection to this node
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ws_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

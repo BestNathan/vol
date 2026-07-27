@@ -1,12 +1,11 @@
 use async_trait::async_trait;
-
 use vol_llm_agent_protocol::agent_server_protocol::{
     AgentServerMessage, ConnectedInfo, Operation, Payload, ProtocolError, ServerType,
     SystemOperation, SystemPayload,
 };
 use vol_llm_agent_protocol::DomainHandler;
 
-/// Handler for system-domain operations on the data plane.
+/// Handler for system-domain operations on the control plane.
 pub struct SystemHandler;
 
 impl SystemHandler {
@@ -43,13 +42,12 @@ impl DomainHandler for SystemHandler {
         match op {
             SystemOperation::Connected => {
                 let info = ConnectedInfo {
-                    server_type: ServerType::DataPlane,
+                    server_type: ServerType::ControlPlane,
                     version: env!("CARGO_PKG_VERSION").to_string(),
                     capabilities: vec![
-                        "agent.list".to_string(),
-                        "agent.submit".to_string(),
-                        "agent.cancel".to_string(),
-                        "agent.status".to_string(),
+                        "control.node_list".to_string(),
+                        "control.node_get".to_string(),
+                        "control.capability_list".to_string(),
                     ],
                 };
                 Ok(vec![AgentServerMessage::new_result(
@@ -76,7 +74,7 @@ mod tests {
             protocol: "agent-server/1".to_string(),
             message_id: id.to_string(),
             sender: "client".to_string(),
-            receiver: "data-plane".to_string(),
+            receiver: "control-plane".to_string(),
             kind: MessageKind::Command,
             operation: op,
             payload,
@@ -85,7 +83,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn system_connected_returns_data_plane_info() {
+    async fn system_connected_returns_control_plane_info() {
         let handler = SystemHandler::new();
         let replies = handler
             .handle(msg(
@@ -102,10 +100,10 @@ mod tests {
             serde_json::from_value(json).unwrap();
         assert_eq!(
             info.server_type,
-            vol_llm_agent_protocol::agent_server_protocol::ServerType::DataPlane
+            vol_llm_agent_protocol::agent_server_protocol::ServerType::ControlPlane
         );
         assert!(!info.version.is_empty());
-        assert!(info.capabilities.contains(&"agent.list".to_string()));
+        assert!(info.capabilities.contains(&"control.node_list".to_string()));
     }
 
     #[tokio::test]

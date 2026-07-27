@@ -64,6 +64,7 @@ impl NodeRegistry {
                 last_seen_at_ms: Some(now_ms),
                 capability_revision: 0,
                 load: NodeLoad::default(),
+                ws_url: None, // Will be populated from node_ingress when queried
             },
         );
 

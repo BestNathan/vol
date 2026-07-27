@@ -54,6 +54,9 @@ pub struct NodeListEntry {
     /// UI-only: not populated by the server; present for future use.
     #[serde(default)]
     pub agent_count: Option<usize>,
+    /// WebSocket URL for establishing direct DP connection to this node
+    #[serde(default)]
+    pub ws_url: Option<String>,
 }
 
 /// Load metrics mirroring `vol_llm_agent_protocol::agent_server_protocol::NodeLoad`.
@@ -76,6 +79,32 @@ pub struct NodeRecord {
     pub capability_revision: u64,
     #[serde(default)]
     pub load: NodeLoad,
+    /// WebSocket URL for establishing direct DP connection to this node
+    #[serde(default)]
+    pub ws_url: Option<String>,
+}
+
+/// Server type identification for client mode switching
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ServerType {
+    ControlPlane,
+    DataPlane,
+    Unknown,
+}
+
+impl Default for ServerType {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+/// Connection handshake information sent by server after system.connected
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConnectedInfo {
+    pub server_type: ServerType,
+    pub version: String,
+    #[serde(default)]
+    pub capabilities: Vec<String>,
 }
 
 /// Capability snapshot mirroring
@@ -656,6 +685,37 @@ impl JsonRpcClient {
                     None => cb(Err("no agents in response".to_string())),
                 },
             );
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// Identify the server type by calling system.connected.
+    /// Returns ConnectedInfo with server_type, version, and capabilities.
+    pub fn identify(&self, cb: impl FnOnce(Result<ConnectedInfo, String>) + 'static) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "system.connected",
+            "params": {},
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            // The result should be ConnectedInfo directly (data_json strips the variant wrapper)
+            match serde_json::from_value::<ConnectedInfo>(result) {
+                Ok(info) => cb(Ok(info)),
+                Err(e) => cb(Err(format!("failed to parse ConnectedInfo: {e}"))),
+            }
+        });
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
