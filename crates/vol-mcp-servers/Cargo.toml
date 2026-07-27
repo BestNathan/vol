@@ -28,7 +28,7 @@ clap = { version = "4", features = ["derive"] }
 anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-vol-llm-observability = { path = "../vol-llm-observability" }
+vol-observability = { path = "../vol-observability" }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.5", features = ["cors"] }
 axum = { version = "0.7", features = ["query"] }

@@ -205,7 +205,9 @@ impl LogViewer {
 
             let (last_event, last_event_time) = lines
                 .last()
-                .and_then(|line| serde_json::from_str::<vol_llm_observability::LogEntry>(line).ok())
+                .and_then(|line| {
+                    serde_json::from_str::<vol_llm_agent::run_log::LogEntry>(line).ok()
+                })
                 .map(|e| (e.event.clone(), e.timestamp.format("%H:%M:%S").to_string()))
                 .unwrap_or_else(|| ("unknown".to_string(), "—".to_string()));
 
@@ -239,7 +241,7 @@ impl LogViewer {
 
         self.entries = content
             .lines()
-            .filter_map(|line| serde_json::from_str::<vol_llm_observability::LogEntry>(line).ok())
+            .filter_map(|line| serde_json::from_str::<vol_llm_agent::run_log::LogEntry>(line).ok())
             .map(|entry| LogLine {
                 event_type: entry.event.clone(),
                 summary: entry.format_event_summary(),

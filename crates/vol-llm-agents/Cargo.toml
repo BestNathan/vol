@@ -31,7 +31,7 @@ vol-llm-tools-builtin = { path = "../vol-llm-tools-builtin" }
 vol-session = { path = "../vol-session" }
 vol-llm-context = { path = "../vol-llm-context" }
 vol-llm-skill = { path = "../vol-llm-skill" }
-vol-llm-observability = { path = "../vol-llm-observability" }
+vol-observability = { path = "../vol-observability" }
 vol-llm-wiki = { path = "../vol-llm-wiki" }
 vol-llm-sandbox = { path = "../vol-llm-sandbox" }
 chrono = "0.4"

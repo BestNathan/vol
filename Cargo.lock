@@ -7869,13 +7869,13 @@ dependencies = [
  "vol-llm-agent-protocol",
  "vol-llm-core",
  "vol-llm-mcp",
- "vol-llm-observability",
  "vol-llm-provider",
  "vol-llm-runtime",
  "vol-llm-sandbox",
  "vol-llm-skill",
  "vol-llm-task",
  "vol-llm-tool",
+ "vol-observability",
  "vol-session",
 ]
 
@@ -8064,7 +8064,6 @@ dependencies = [
  "vol-llm-agent",
  "vol-llm-context",
  "vol-llm-core",
- "vol-llm-observability",
  "vol-llm-provider",
  "vol-llm-sandbox",
  "vol-llm-skill",
@@ -8073,6 +8072,7 @@ dependencies = [
  "vol-llm-tools-builtin",
  "vol-llm-wiki",
  "vol-notification",
+ "vol-observability",
  "vol-session",
  "vol-tdengine",
  "vol-tracing",
@@ -8154,10 +8154,6 @@ dependencies = [
  "uuid",
  "vol-llm-core",
 ]
-
-[[package]]
-name = "vol-llm-observability"
-version = "0.1.0"
 
 [[package]]
 name = "vol-llm-provider"
@@ -8466,7 +8462,6 @@ dependencies = [
  "vol-llm-agent",
  "vol-llm-agents",
  "vol-llm-core",
- "vol-llm-observability",
  "vol-llm-provider",
  "vol-llm-skill",
  "vol-llm-tool",
@@ -8504,7 +8499,6 @@ dependencies = [
  "vol-llm-agent-protocol",
  "vol-llm-agents",
  "vol-llm-core",
- "vol-llm-observability",
  "vol-llm-provider",
  "vol-llm-skill",
  "vol-llm-tool",
@@ -8556,10 +8550,10 @@ dependencies = [
  "vol-llm-agent",
  "vol-llm-context",
  "vol-llm-core",
- "vol-llm-observability",
  "vol-llm-provider",
  "vol-llm-tool",
  "vol-llm-tools-builtin",
+ "vol-observability",
  "vol-session",
 ]
 
@@ -8584,8 +8578,8 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "vol-llm-cli-tool",
- "vol-llm-observability",
  "vol-llm-sandbox",
+ "vol-observability",
 ]
 
 [[package]]

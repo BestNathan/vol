@@ -4,7 +4,7 @@
 //! - Loading an agent definition from a .md file via AgentLoader
 //! - Registering built-in tools (Bash, Read, Write, Edit, Glob, Grep)
 //! - Building a ReActAgent with the loaded AgentDef and tools
-//! - Registering LokiPlugin for OTel log shipping via tracing
+//! - Registering LoggingPlugin for OTel log shipping via tracing
 //! - Running a real task against the Anthropic/DashScope API
 //!
 //! Run with:
@@ -21,16 +21,24 @@ use std::sync::Arc;
 use vol_llm_agent::agent_def::AgentScope;
 use vol_llm_agent::agent_loader::AgentLoader;
 use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
-use vol_llm_observability::{init_otel_logs, LokiPlugin};
 use vol_llm_provider::{anthropic::AnthropicProvider, LLMConfig};
 use vol_llm_tools_builtin::register_all;
+use vol_observability::{init, LoggingPlugin, OtelConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing with OTel log export
-    let otel_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
-        .unwrap_or_else(|_| "http://localhost:4317".to_string());
-    init_otel_logs(&otel_endpoint, "k8s-ops-agent").map_err(|e| {
+    // Initialize tracing with OTel
+    let otel_config = OtelConfig {
+        enabled: true,
+        endpoint: std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
+            .unwrap_or_else(|_| "http://localhost:4317".to_string()),
+        service_name: "k8s-ops-agent".to_string(),
+        service_namespace: "vol-agent".to_string(),
+        deployment_environment: "development".to_string(),
+        sample_rate: 1.0,
+        batch_max_export_timeout_millis: 5000,
+    };
+    let _guards = init(&otel_config, "info").map_err(|e| {
         Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
     })?;
 
@@ -100,13 +108,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!();
 
-    // Step 4: Build LokiPlugin
-    let loki_plugin = LokiPlugin::new();
+    // Step 4: Build LoggingPlugin
+    let loki_plugin = LoggingPlugin::new();
 
     let mut plugin_registry = PluginRegistry::new();
     plugin_registry.register(loki_plugin);
 
-    println!("  ✓ LokiPlugin registered (OTel logs via tracing)");
+    println!("  ✓ LoggingPlugin registered (structured logs via tracing)");
     println!();
 
     // Step 5: Build ReActAgent with AgentDef + tools
@@ -120,7 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let agent = ReActAgent::new(agent_config);
 
-    println!("  ✓ ReActAgent built with AgentDef + tools + LokiPlugin");
+    println!("  ✓ ReActAgent built with AgentDef + tools + LoggingPlugin");
     println!();
 
     // Step 6: Run the agent with a k8s cluster status query
@@ -172,7 +180,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ✓ Agent definition loaded from examples/k8s_ops_agent.md via AgentLoader");
     println!("  ✓ Built-in tools (Bash, Read, Write, Edit, Glob, Grep) registered");
     println!("  ✓ Real Anthropic API calls via DashScope");
-    println!("  ✓ LokiPlugin registered for OTel log shipping via tracing");
+    println!("  ✓ LoggingPlugin registered for OTel log shipping via tracing");
     println!("  ✓ Log attributes derived automatically from AgentDef");
     println!();
 

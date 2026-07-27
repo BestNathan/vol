@@ -36,7 +36,7 @@ vol-llm-skill = { path = "../vol-llm-skill" }
 vol-llm-task = { path = "../vol-llm-task" }
 vol-llm-tool = { path = "../vol-llm-tool" }
 vol-session = { path = "../vol-session" }
-vol-llm-observability = { path = "../vol-llm-observability" }
+vol-observability = { path = "../vol-observability" }
 tower-http = { workspace = true }
 
 [dev-dependencies]
