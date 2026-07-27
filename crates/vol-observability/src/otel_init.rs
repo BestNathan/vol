@@ -119,11 +119,12 @@ pub fn init(
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
     // Metrics: always via Prometheus pull.
-    // NOTE: opentelemetry-prometheus 0.29 depends on prometheus 0.14, which is a
-    // different version than this workspace's `prometheus` (0.13). Passing a 0.13
-    // registry to `.with_registry()` fails to type-check, so we let the exporter
-    // register on prometheus 0.14's default registry.
-    let prometheus_exporter = opentelemetry_prometheus::exporter().build()?;
+    // Use the shared process-wide registry so the /metrics HTTP handler
+    // (reader) gathers from the SAME registry the exporter (writer) registers
+    // on. Both use prometheus 0.14, matching opentelemetry-prometheus 0.29.
+    let prometheus_exporter = opentelemetry_prometheus::exporter()
+        .with_registry(crate::metrics_router::registry().clone())
+        .build()?;
 
     let meter_provider = SdkMeterProvider::builder()
         .with_resource(resource.clone())

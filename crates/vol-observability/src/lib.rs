@@ -6,8 +6,10 @@
 
 pub mod logging_plugin;
 pub mod metrics_plugin;
+pub mod metrics_router;
 pub mod otel_init;
 
 pub use logging_plugin::LoggingPlugin;
 pub use metrics_plugin::MetricsPlugin;
+pub use metrics_router::build_metrics_router;
 pub use otel_init::{init, OtelConfig, OtelGuards};

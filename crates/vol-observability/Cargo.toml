@@ -10,6 +10,7 @@ workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
+axum = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-appender = { workspace = true }
@@ -20,7 +21,7 @@ opentelemetry_sdk = { workspace = true }
 opentelemetry-otlp = { workspace = true, features = ["tokio", "grpc-tonic", "logs"] }
 opentelemetry-appender-tracing = { workspace = true }
 opentelemetry-prometheus = "0.29"
-prometheus = { workspace = true }
+prometheus = "0.14"
 tracing-opentelemetry = { workspace = true }
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-agent = { path = "../vol-llm-agent" }
