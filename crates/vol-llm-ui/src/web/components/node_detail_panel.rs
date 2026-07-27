@@ -100,30 +100,29 @@ pub fn NodeDetailPanel(node_id: String) -> Element {
 
             // 2. Fetch agents on this node via DP connection
             // First, get the node's ws_url and create a DP connection
-            if let Some(ref node) = s.read().node {
-                if let Some(ref ws_url) = node.ws_url {
-                    // Get or create DP connection for this node
-                    let mut dp_pool = app.dp_pool;
-                    let dp_conn = dp_pool
-                        .write()
-                        .get_or_create(&nid, ws_url, vec![])
-                        .client
-                        .clone();
+            let ws_url_opt = s.read().node.as_ref().and_then(|n| n.ws_url.clone());
+            if let Some(ws_url) = ws_url_opt {
+                // Get or create DP connection for this node
+                let mut dp_pool = app.dp_pool;
+                let dp_conn = dp_pool
+                    .write()
+                    .get_or_create(&nid, &ws_url, vec![])
+                    .client
+                    .clone();
 
-                    // Fetch agents from DP
-                    let (tx2, rx2) = futures_channel::oneshot::channel();
-                    dp_conn.agent_list(move |result| {
-                        let _ = tx2.send(result);
+                // Fetch agents from DP
+                let (tx2, rx2) = futures_channel::oneshot::channel();
+                dp_conn.agent_list(move |result| {
+                    let _ = tx2.send(result);
+                });
+
+                if let Ok(Ok(agents)) = rx2.await {
+                    s.with_mut(|s| {
+                        s.agents = agents;
                     });
-
-                    if let Ok(Ok(agents)) = rx2.await {
-                        s.with_mut(|s| {
-                            s.agents = agents;
-                        });
-                    }
-                } else {
-                    log::warn!("Node {} has no ws_url, cannot fetch agents", nid);
                 }
+            } else {
+                log::warn!("Node {} has no ws_url, cannot fetch agents", nid);
             }
 
             // 3. Fetch capabilities for this node
