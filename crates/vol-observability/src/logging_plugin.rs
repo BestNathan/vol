@@ -248,4 +248,302 @@ mod tests {
         assert_eq!(plugin.id(), "logging");
         assert_eq!(plugin.priority(), 20);
     }
+
+    fn make_ctx() -> RunContext {
+        let (ctx, _rx) = RunContext::new(
+            "test-run".to_string(),
+            "test input".to_string(),
+            AgentConfig::default().into(),
+        );
+        ctx
+    }
+
+    fn parse(event: &AgentStreamEvent, ctx: &RunContext) -> serde_json::Value {
+        let json_str = LoggingPlugin::create_event_json(event, ctx);
+        serde_json::from_str(&json_str).unwrap()
+    }
+
+    #[test]
+    fn test_create_event_json_agent_complete() {
+        let ctx = make_ctx();
+        let value = parse(
+            &AgentStreamEvent::agent_complete_with_response(json!({"answer": 42})),
+            &ctx,
+        );
+        assert_eq!(value["event"], "AgentComplete");
+        assert_eq!(value["response"]["answer"], 42);
+    }
+
+    #[test]
+    fn test_create_event_json_agent_aborted() {
+        let ctx = make_ctx();
+        let value = parse(
+            &AgentStreamEvent::agent_aborted("cancelled".to_string()),
+            &ctx,
+        );
+        assert_eq!(value["event"], "AgentAborted");
+        assert_eq!(value["reason"], "cancelled");
+    }
+
+    #[test]
+    fn test_create_event_json_llm_call_start() {
+        let ctx = make_ctx();
+        let value = parse(&AgentStreamEvent::llm_call_start(3, vec![]), &ctx);
+        assert_eq!(value["event"], "LLMCallStart");
+        assert_eq!(value["iteration"], 3);
+    }
+
+    #[test]
+    fn test_create_event_json_llm_call_complete_with_usage() {
+        let ctx = make_ctx();
+        let usage = vol_llm_core::TokenUsage {
+            prompt_tokens: 10,
+            completion_tokens: 20,
+            total_tokens: 30,
+            cached_tokens: Some(5),
+        };
+        let value = parse(
+            &AgentStreamEvent::llm_call_complete("gpt-x".to_string(), Some(usage)),
+            &ctx,
+        );
+        assert_eq!(value["event"], "LLMCallComplete");
+        assert_eq!(value["model"], "gpt-x");
+        assert_eq!(value["prompt_tokens"], 10);
+        assert_eq!(value["completion_tokens"], 20);
+        assert_eq!(value["total_tokens"], 30);
+        assert_eq!(value["cached_tokens"], 5);
+    }
+
+    #[test]
+    fn test_create_event_json_llm_call_complete_without_usage() {
+        let ctx = make_ctx();
+        let value = parse(
+            &AgentStreamEvent::llm_call_complete("gpt-x".to_string(), None),
+            &ctx,
+        );
+        assert_eq!(value["event"], "LLMCallComplete");
+        assert_eq!(value["model"], "gpt-x");
+        assert!(value.get("prompt_tokens").is_none());
+    }
+
+    #[test]
+    fn test_create_event_json_llm_call_error() {
+        let ctx = make_ctx();
+        let value = parse(&AgentStreamEvent::llm_call_error("boom".to_string()), &ctx);
+        assert_eq!(value["event"], "LLMCallError");
+        assert_eq!(value["error"], "boom");
+    }
+
+    #[test]
+    fn test_create_event_json_thinking_and_content() {
+        let ctx = make_ctx();
+
+        let value = parse(&AgentStreamEvent::thinking_start(), &ctx);
+        assert_eq!(value["event"], "ThinkingStart");
+
+        let value = parse(
+            &AgentStreamEvent::thinking_complete("thoughts".to_string()),
+            &ctx,
+        );
+        assert_eq!(value["event"], "ThinkingComplete");
+        assert_eq!(value["thinking"], "thoughts");
+
+        let value = parse(&AgentStreamEvent::content_start(), &ctx);
+        assert_eq!(value["event"], "ContentStart");
+
+        let value = parse(
+            &AgentStreamEvent::content_complete("body".to_string()),
+            &ctx,
+        );
+        assert_eq!(value["event"], "ContentComplete");
+        assert_eq!(value["content"], "body");
+    }
+
+    #[test]
+    fn test_create_event_json_tool_call_begin() {
+        let ctx = make_ctx();
+        let value = parse(
+            &AgentStreamEvent::tool_call_begin(
+                "id-1".to_string(),
+                "search".to_string(),
+                "{\"q\":1}".to_string(),
+            ),
+            &ctx,
+        );
+        assert_eq!(value["event"], "ToolCallBegin");
+        assert_eq!(value["tool_call_id"], "id-1");
+        assert_eq!(value["tool_name"], "search");
+        assert_eq!(value["arguments"], "{\"q\":1}");
+    }
+
+    #[test]
+    fn test_create_event_json_tool_call_complete_with_duration() {
+        let ctx = make_ctx();
+        let value = parse(
+            &AgentStreamEvent::tool_call_complete(
+                "id-1".to_string(),
+                "search".to_string(),
+                "result-text".to_string(),
+                Some(150),
+            ),
+            &ctx,
+        );
+        assert_eq!(value["event"], "ToolCallComplete");
+        assert_eq!(value["result"], "result-text");
+        assert_eq!(value["duration_ms"], 150);
+    }
+
+    #[test]
+    fn test_create_event_json_tool_call_complete_no_duration() {
+        let ctx = make_ctx();
+        let value = parse(
+            &AgentStreamEvent::tool_call_complete(
+                "id-1".to_string(),
+                "search".to_string(),
+                "r".to_string(),
+                None,
+            ),
+            &ctx,
+        );
+        assert_eq!(value["event"], "ToolCallComplete");
+        assert!(value.get("duration_ms").is_none());
+    }
+
+    #[test]
+    fn test_create_event_json_tool_call_error() {
+        let ctx = make_ctx();
+        let value = parse(
+            &AgentStreamEvent::tool_call_error(
+                "id-1".to_string(),
+                "search".to_string(),
+                "failed".to_string(),
+                Some(50),
+            ),
+            &ctx,
+        );
+        assert_eq!(value["event"], "ToolCallError");
+        assert_eq!(value["error"], "failed");
+        assert_eq!(value["duration_ms"], 50);
+    }
+
+    #[test]
+    fn test_create_event_json_tool_call_skipped() {
+        let ctx = make_ctx();
+        let value = parse(
+            &AgentStreamEvent::tool_call_skipped(
+                "id-1".to_string(),
+                "search".to_string(),
+                "not-needed".to_string(),
+                None,
+            ),
+            &ctx,
+        );
+        assert_eq!(value["event"], "ToolCallSkipped");
+        assert_eq!(value["reason"], "not-needed");
+        assert!(value.get("duration_ms").is_none());
+    }
+
+    #[test]
+    fn test_create_event_json_iteration_complete() {
+        let ctx = make_ctx();
+        let value = parse(
+            &AgentStreamEvent::iteration_complete(2, vec![], Some("final".to_string())),
+            &ctx,
+        );
+        assert_eq!(value["event"], "IterationComplete");
+        assert_eq!(value["iteration"], 2);
+        assert_eq!(value["final_answer"], "final");
+        assert!(value.get("tool_calls").is_some());
+    }
+
+    #[test]
+    fn test_create_event_json_iteration_complete_no_final() {
+        let ctx = make_ctx();
+        let value = parse(&AgentStreamEvent::iteration_complete(1, vec![], None), &ctx);
+        assert_eq!(value["event"], "IterationComplete");
+        assert!(value.get("final_answer").is_none());
+    }
+
+    #[test]
+    fn test_create_event_json_plugin_event() {
+        let ctx = make_ctx();
+        let mut data = serde_json::Map::new();
+        data.insert("custom_key".to_string(), json!("custom_val"));
+        let value = parse(
+            &AgentStreamEvent::plugin_event("my-plugin".to_string(), data),
+            &ctx,
+        );
+        assert_eq!(value["event"], "PluginEvent");
+        assert_eq!(value["plugin_name"], "my-plugin");
+        assert_eq!(value["custom_key"], "custom_val");
+    }
+
+    #[test]
+    fn test_create_event_json_max_iterations_reached() {
+        let ctx = make_ctx();
+        let value = parse(&AgentStreamEvent::max_iterations_reached(5, 5), &ctx);
+        assert_eq!(value["event"], "MaxIterationsReached");
+        assert_eq!(value["current_iteration"], 5);
+        assert_eq!(value["max_iterations"], 5);
+    }
+
+    #[test]
+    fn test_create_event_json_iteration_continued() {
+        let ctx = make_ctx();
+        let value = parse(&AgentStreamEvent::iteration_continued(4), &ctx);
+        assert_eq!(value["event"], "IterationContinued");
+        assert_eq!(value["from_iteration"], 4);
+    }
+
+    #[test]
+    fn test_create_event_json_delta_variants_only_metadata() {
+        let ctx = make_ctx();
+        for event in [
+            AgentStreamEvent::thinking_delta("x".to_string()),
+            AgentStreamEvent::content_delta("y".to_string()),
+            AgentStreamEvent::tool_call_argument_delta(
+                "id".to_string(),
+                "tool".to_string(),
+                "d".to_string(),
+            ),
+        ] {
+            let value = parse(&event, &ctx);
+            assert!(value.get("event").is_some());
+            assert!(value.get("run_id").is_some());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_listen_normal_event() {
+        let plugin = LoggingPlugin::new();
+        let ctx = make_ctx();
+        // Should not panic; exercises async listen path.
+        plugin
+            .listen(&AgentStreamEvent::agent_start("hi".to_string()), &ctx)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn test_listen_delta_event_is_noop() {
+        let plugin = LoggingPlugin::new();
+        let ctx = make_ctx();
+        plugin
+            .listen(&AgentStreamEvent::thinking_delta("x".to_string()), &ctx)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn test_intercept_continues() {
+        let plugin = LoggingPlugin::new();
+        let ctx = make_ctx();
+        let decision = plugin
+            .intercept(&AgentStreamEvent::agent_start("hi".to_string()), &ctx)
+            .await;
+        assert!(matches!(decision, PluginDecision::Continue));
+    }
+
+    #[test]
+    fn test_default_impl() {
+        let _plugin = LoggingPlugin::default();
+    }
 }

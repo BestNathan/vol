@@ -54,4 +54,20 @@ mod tests {
     fn test_build_metrics_router_constructs() {
         let _router = build_metrics_router();
     }
+
+    #[tokio::test]
+    async fn test_metrics_handler_returns_ok() {
+        let result = metrics_handler().await;
+        assert!(result.is_ok());
+        let body = result.unwrap();
+        // Should contain at least some prometheus output (headers or empty)
+        assert!(body.contains("#") || body.is_empty());
+    }
+
+    #[test]
+    fn test_registry_is_singleton() {
+        let r1 = registry();
+        let r2 = registry();
+        assert!(std::ptr::eq(r1, r2));
+    }
 }

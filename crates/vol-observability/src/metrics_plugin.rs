@@ -469,6 +469,7 @@ impl Default for MetricsPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vol_llm_agent::react::AgentConfig;
 
     #[test]
     fn test_plugin_id() {
@@ -484,8 +485,6 @@ mod tests {
 
     #[test]
     fn test_intercept_always_continues() {
-        use vol_llm_agent::react::AgentConfig;
-
         let plugin = MetricsPlugin::new();
         let (ctx, _rx) = RunContext::new(
             "test-run".to_string(),
@@ -531,5 +530,551 @@ mod tests {
             assert!(state.ttft_measured.is_empty());
             assert!(state.run_starts.is_empty());
         }
+    }
+
+    fn make_ctx() -> RunContext {
+        let (ctx, _rx) = RunContext::new(
+            "test-run".to_string(),
+            "test input".to_string(),
+            AgentConfig::default().into(),
+        );
+        ctx
+    }
+
+    #[tokio::test]
+    async fn test_listen_agent_start_adds_run_starts() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        plugin
+            .listen(&AgentStreamEvent::agent_start("hello".to_string()), &ctx)
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert_eq!(state.run_starts.len(), 1);
+        let (aid, rid, _) = &state.run_starts[0];
+        assert_eq!(aid, "unknown");
+        assert_eq!(rid, "test-run");
+    }
+
+    #[tokio::test]
+    async fn test_listen_llm_call_start_adds_entry() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        plugin
+            .listen(&AgentStreamEvent::llm_call_start(0, vec![]), &ctx)
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert_eq!(state.llm_call_starts.len(), 1);
+        let (aid, rid, iter, _) = &state.llm_call_starts[0];
+        assert_eq!(aid, "unknown");
+        assert_eq!(rid, "test-run");
+        assert_eq!(*iter, 0);
+    }
+
+    #[tokio::test]
+    async fn test_listen_thinking_start_records_ttft() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        // First seed a llm_call_starts entry
+        plugin
+            .listen(&AgentStreamEvent::llm_call_start(0, vec![]), &ctx)
+            .await;
+        {
+            let state = plugin.state.lock().unwrap();
+            assert_eq!(state.llm_call_starts.len(), 1);
+        }
+
+        // ThinkingStart should trigger handle_first_token
+        plugin
+            .listen(&AgentStreamEvent::thinking_start(), &ctx)
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        // llm_call_starts entry should be removed
+        assert!(state.llm_call_starts.is_empty());
+        // ttft_measured should have the key
+        assert!(state
+            .ttft_measured
+            .contains(&("unknown".to_string(), "test-run".to_string(), 0)));
+    }
+
+    #[tokio::test]
+    async fn test_listen_thinking_start_does_not_double_measure() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        // Seed and consume once
+        plugin
+            .listen(&AgentStreamEvent::llm_call_start(0, vec![]), &ctx)
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::thinking_start(), &ctx)
+            .await;
+
+        // Second thinking_start should be a no-op (ttft already measured)
+        plugin
+            .listen(&AgentStreamEvent::thinking_start(), &ctx)
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert!(state.llm_call_starts.is_empty());
+        assert!(state
+            .ttft_measured
+            .contains(&("unknown".to_string(), "test-run".to_string(), 0)));
+    }
+
+    #[tokio::test]
+    async fn test_listen_content_start_records_ttft() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        plugin
+            .listen(&AgentStreamEvent::llm_call_start(0, vec![]), &ctx)
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::content_start(), &ctx)
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert!(state.llm_call_starts.is_empty());
+        assert!(state
+            .ttft_measured
+            .contains(&("unknown".to_string(), "test-run".to_string(), 0)));
+    }
+
+    #[tokio::test]
+    async fn test_listen_llm_call_complete_cleanup() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        plugin
+            .listen(&AgentStreamEvent::llm_call_start(0, vec![]), &ctx)
+            .await;
+        {
+            let state = plugin.state.lock().unwrap();
+            assert_eq!(state.llm_call_starts.len(), 1);
+        }
+
+        // Complete without usage cleanup
+        plugin
+            .listen(
+                &AgentStreamEvent::llm_call_complete("model".to_string(), None),
+                &ctx,
+            )
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert!(state.llm_call_starts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_listen_llm_call_complete_with_usage() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+        let usage = vol_llm_core::TokenUsage {
+            prompt_tokens: 10,
+            completion_tokens: 20,
+            total_tokens: 30,
+            cached_tokens: None,
+        };
+
+        // Should not panic even without a prior llm_call_start
+        plugin
+            .listen(
+                &AgentStreamEvent::llm_call_complete("model".to_string(), Some(usage)),
+                &ctx,
+            )
+            .await;
+
+        // State should be clean (no matching entry to remove)
+        let state = plugin.state.lock().unwrap();
+        assert!(state.llm_call_starts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_listen_llm_call_error() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        plugin
+            .listen(&AgentStreamEvent::llm_call_start(0, vec![]), &ctx)
+            .await;
+        plugin
+            .listen(
+                &AgentStreamEvent::llm_call_error("timeout".to_string()),
+                &ctx,
+            )
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert!(state.llm_call_starts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_listen_tool_call_begin_adds_starts() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        plugin
+            .listen(
+                &AgentStreamEvent::tool_call_begin(
+                    "tc-1".to_string(),
+                    "search".to_string(),
+                    "{}".to_string(),
+                ),
+                &ctx,
+            )
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert_eq!(state.tool_call_starts.len(), 1);
+        assert_eq!(state.tool_call_starts[0].0, "tc-1");
+    }
+
+    #[tokio::test]
+    async fn test_listen_tool_call_complete_removes_starts() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        plugin
+            .listen(
+                &AgentStreamEvent::tool_call_begin(
+                    "tc-1".to_string(),
+                    "search".to_string(),
+                    "{}".to_string(),
+                ),
+                &ctx,
+            )
+            .await;
+        {
+            let state = plugin.state.lock().unwrap();
+            assert_eq!(state.tool_call_starts.len(), 1);
+        }
+
+        plugin
+            .listen(
+                &AgentStreamEvent::tool_call_complete(
+                    "tc-1".to_string(),
+                    "search".to_string(),
+                    "ok".to_string(),
+                    Some(100),
+                ),
+                &ctx,
+            )
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert!(state.tool_call_starts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_listen_tool_call_error_removes_starts() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        plugin
+            .listen(
+                &AgentStreamEvent::tool_call_begin(
+                    "tc-1".to_string(),
+                    "search".to_string(),
+                    "{}".to_string(),
+                ),
+                &ctx,
+            )
+            .await;
+        plugin
+            .listen(
+                &AgentStreamEvent::tool_call_error(
+                    "tc-1".to_string(),
+                    "search".to_string(),
+                    "err".to_string(),
+                    None,
+                ),
+                &ctx,
+            )
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert!(state.tool_call_starts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_listen_tool_call_skipped_removes_starts() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        plugin
+            .listen(
+                &AgentStreamEvent::tool_call_begin(
+                    "tc-1".to_string(),
+                    "search".to_string(),
+                    "{}".to_string(),
+                ),
+                &ctx,
+            )
+            .await;
+        plugin
+            .listen(
+                &AgentStreamEvent::tool_call_skipped(
+                    "tc-1".to_string(),
+                    "search".to_string(),
+                    "skip".to_string(),
+                    None,
+                ),
+                &ctx,
+            )
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert!(state.tool_call_starts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_listen_agent_complete_cleans_all_state() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        // Seed some state
+        plugin
+            .listen(&AgentStreamEvent::llm_call_start(0, vec![]), &ctx)
+            .await;
+        plugin
+            .listen(
+                &AgentStreamEvent::tool_call_begin(
+                    "tc-1".to_string(),
+                    "search".to_string(),
+                    "{}".to_string(),
+                ),
+                &ctx,
+            )
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::agent_start("hi".to_string()), &ctx)
+            .await;
+
+        plugin
+            .listen(&AgentStreamEvent::agent_complete(), &ctx)
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert!(state.llm_call_starts.is_empty());
+        assert!(state.tool_call_starts.is_empty());
+        assert!(state.ttft_measured.is_empty());
+        assert!(state.run_starts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_listen_agent_aborted_cleans_all_state() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        plugin
+            .listen(&AgentStreamEvent::agent_start("hi".to_string()), &ctx)
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::agent_aborted("err".to_string()), &ctx)
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert!(state.run_starts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_full_sequence_state_clean() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        plugin
+            .listen(&AgentStreamEvent::agent_start("hi".to_string()), &ctx)
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::llm_call_start(0, vec![]), &ctx)
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::thinking_start(), &ctx)
+            .await;
+        plugin
+            .listen(
+                &AgentStreamEvent::llm_call_complete("model".to_string(), None),
+                &ctx,
+            )
+            .await;
+        plugin
+            .listen(
+                &AgentStreamEvent::tool_call_begin(
+                    "tc-1".to_string(),
+                    "search".to_string(),
+                    "{}".to_string(),
+                ),
+                &ctx,
+            )
+            .await;
+        plugin
+            .listen(
+                &AgentStreamEvent::tool_call_complete(
+                    "tc-1".to_string(),
+                    "search".to_string(),
+                    "ok".to_string(),
+                    Some(50),
+                ),
+                &ctx,
+            )
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::agent_complete(), &ctx)
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert!(state.llm_call_starts.is_empty());
+        assert!(state.tool_call_starts.is_empty());
+        assert!(state.ttft_measured.is_empty());
+        assert!(state.run_starts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_listen_delta_events_are_noop() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        // delta events hit the `_ => {}` arm
+        plugin
+            .listen(&AgentStreamEvent::thinking_delta("x".to_string()), &ctx)
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::content_delta("y".to_string()), &ctx)
+            .await;
+        plugin
+            .listen(
+                &AgentStreamEvent::tool_call_argument_delta(
+                    "id".to_string(),
+                    "tool".to_string(),
+                    "d".to_string(),
+                ),
+                &ctx,
+            )
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::iteration_complete(0, vec![], None), &ctx)
+            .await;
+        plugin
+            .listen(
+                &AgentStreamEvent::plugin_event("p".to_string(), serde_json::Map::new()),
+                &ctx,
+            )
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::max_iterations_reached(5, 5), &ctx)
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::iteration_continued(3), &ctx)
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::thinking_complete("x".to_string()), &ctx)
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::content_complete("x".to_string()), &ctx)
+            .await;
+
+        // no panic = pass
+    }
+
+    #[tokio::test]
+    async fn test_listen_multiple_llm_call_starts() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        // Simulate 2 iterations
+        plugin
+            .listen(&AgentStreamEvent::llm_call_start(0, vec![]), &ctx)
+            .await;
+        plugin
+            .listen(&AgentStreamEvent::llm_call_start(1, vec![]), &ctx)
+            .await;
+
+        let state = plugin.state.lock().unwrap();
+        assert_eq!(state.llm_call_starts.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_listen_llm_call_error_without_prior_start() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+
+        // No prior start, should not panic
+        plugin
+            .listen(&AgentStreamEvent::llm_call_error("fail".to_string()), &ctx)
+            .await;
+    }
+
+    #[test]
+    fn test_labels_default() {
+        let plugin = MetricsPlugin::new();
+        let ctx = make_ctx();
+        let labels = plugin.labels(&ctx, &[]);
+        assert!(labels.iter().any(|kv| kv.value.as_str() == "unknown"));
+    }
+
+    #[test]
+    fn test_extract_tool_call_info_none() {
+        let event = AgentStreamEvent::agent_start("x".to_string());
+        let result = MetricsPlugin::extract_tool_call_info(&event);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_extract_tool_call_info_complete() {
+        let event = AgentStreamEvent::tool_call_complete(
+            "id-1".to_string(),
+            "search".to_string(),
+            "ok".to_string(),
+            Some(100),
+        );
+        let result = MetricsPlugin::extract_tool_call_info(&event);
+        assert!(result.is_some());
+        let (id, name, dur) = result.unwrap();
+        assert_eq!(id, "id-1");
+        assert_eq!(name, "search");
+        assert_eq!(*dur, Some(100));
+    }
+
+    #[test]
+    fn test_extract_tool_call_info_error() {
+        let event = AgentStreamEvent::tool_call_error(
+            "id-2".to_string(),
+            "calc".to_string(),
+            "err".to_string(),
+            None,
+        );
+        let result = MetricsPlugin::extract_tool_call_info(&event);
+        assert!(result.is_some());
+        let (id, name, dur) = result.unwrap();
+        assert_eq!(id, "id-2");
+        assert_eq!(name, "calc");
+        assert!(dur.is_none());
+    }
+
+    #[test]
+    fn test_extract_tool_call_info_skipped() {
+        let event = AgentStreamEvent::tool_call_skipped(
+            "id-3".to_string(),
+            "db".to_string(),
+            "skip".to_string(),
+            Some(5),
+        );
+        let result = MetricsPlugin::extract_tool_call_info(&event);
+        assert!(result.is_some());
+        let (id, name, dur) = result.unwrap();
+        assert_eq!(id, "id-3");
+        assert_eq!(name, "db");
+        assert_eq!(*dur, Some(5));
+    }
+
+    #[test]
+    fn test_default_impl() {
+        let _plugin = MetricsPlugin::default();
     }
 }
