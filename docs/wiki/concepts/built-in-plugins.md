@@ -37,7 +37,8 @@ The plugins shipped with the ReAct Agent system, each handling a specific cross-
 Plugins stack via priority ordering. A typical configuration might include:
 - Rate limiter (gate access)
 - Observability (log everything)
-- LokiPlugin (OTel structured logs)
+- LoggingPlugin (structured stdout logs via tracing → Alloy, replaces LokiPlugin)
+- RunLogPlugin (JSONL file writer, in vol-llm-agent::run_log_plugin, replaces LoggerPlugin)
 - Caching (skip LLM for repeated queries)
 - HITL (require approval for sensitive tools)
 
@@ -47,4 +48,5 @@ The retry plugin runs last to catch errors from any upstream plugin or the agent
 - [[agent-plugin-system]]: The architecture these plugins implement
 - [[plugin-actions]]: The return types each plugin uses
 - [[react-pattern]]: The execution flow they intercept
-- [[otel-log-routing]]: LokiPlugin structured logging approach
+- [[otel-log-routing]]: LoggingPlugin structured logging approach
+- [[pull-based-metrics]]: MetricsPlugin Prometheus pull architecture

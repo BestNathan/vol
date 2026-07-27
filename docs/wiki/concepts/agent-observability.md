@@ -1,61 +1,72 @@
 ---
 type: concept
 category: framework
-tags: [observability, logging, jsonl, tracing, otel]
+tags: [observability, logging, jsonl, tracing, otel, prometheus, metrics]
 created: 2026-05-04
-updated: 2026-05-06
-source_count: 2
+updated: 2026-07-24
+source_count: 3
 ---
 
 # Agent Observability
 
 **Category:** Observability framework
-**Related:** [[agent-plugin-system]], [[agent-event-stream]], [[built-in-plugins]], [[otel-log-routing]]
+**Related:** [[agent-plugin-system]], [[agent-event-stream]], [[built-in-plugins]], [[otel-log-routing]], [[pull-based-metrics]], [[vol-observability-crate]]
 
 ## Definition
 
-The observability layer provides comprehensive logging of agent execution events through two complementary mechanisms:
+The observability layer provides comprehensive logging and instrumentation of agent execution
+events through two complementary mechanisms:
 
-1. **Local JSONL logging**: The observability plugin writes events to JSONL files and stdout for local debugging.
-2. **OTel log routing**: LokiPlugin sends events to the OTel Collector via `tracing::info!` macros with structured fields [[loki-plugin-otel-migration-tasks-3-4]].
+1. **Stdout structured logging**: `LoggingPlugin` (id `"logging"`, priority 20) emits one
+   structured JSON line per non-delta event via `tracing::info!`. Alloy discovers these from
+   the process stdout and forwards them to Loki. High-frequency delta events
+   (`ThinkingDelta`, `ContentDelta`, `ToolCallArgumentDelta`) are filtered out.
+2. **Pull-based Prometheus metrics**: `MetricsPlugin` records OTel instruments backed by an
+   `opentelemetry-prometheus` exporter. Agent-server exposes `GET /metrics` on port 3001
+   for Prometheus/Alloy to scrape.
+3. **Local JSONL run logging**: `RunLogPlugin` (in `vol-llm-agent::run_log_plugin`, id
+   `"run_log"`, priority 10) appends events to `{base_dir}/logs/{run_id}.jsonl` for
+   debugging. This is agent business logic, not observability infrastructure.
 
 ## Key Points
-- Dual output: JSONL files (complete) + human-readable stdout [[react-agent-docs]]
-- Agent-centric directory structure: `logs/agents/{agent_id}/{sessions,runs}/` [[react-agent-docs]]
-- Retention policy: session logs 7 days, run logs last 10 [[react-agent-docs]]
-- Non-blocking: logging failures never crash the agent [[react-agent-docs]]
-- OTel integration: structured logs forwarded to OTel Collector via gRPC [[otel-log-routing]]
-- Stateless LokiPlugin: no HTTP, no endpoint, just `tracing::info!` calls [[loki-plugin-otel-migration-tasks-3-4]]
+- Single `vol-observability` crate (was two: `vol-llm-observability` + `vol-observability`).
+- Metrics are pull-based (Prometheus scrape), not push-based (OTLP).
+- Traces and logs still push OTLP to the OTel Collector (unchanged).
+- LLMCallStart/Complete/Error events are now emitted in the agent loop, activating
+  previously-dormant metrics (TTFT, token usage, LLM errors).
+- JSONL run logging moved to `vol-llm-agent` with `session_id` added to `LogEntry`.
+- IDEMPOTENT: logging failures never crash the agent.
+- Coverage: 87.6% on `vol-observability` (otel_init excluded as init infrastructure).
 
 ## How It Works
 
-### Local Logging
+### LoggingPlugin
+Replaces the former `LokiPlugin` + `LoggerPlugin` formatting. Stateless, listen-only
+(always returns `PluginDecision::Continue`). Each event is flattened into a JSON object
+with `run_id`, `session_id`, `agent_id`, `agent_type`, `model`, `event`, and
+event-specific fields, then emitted via `tracing::info!`. The tracing-subscriber layer
+routes to stdout (Alloy discovery) and optionally to the OTel Collector.
 
-The observability plugin runs at priority 10 (early in the chain). It uses a `RunLogLogger` that writes to two locations:
+### MetricsPlugin
+Records OTel Metrics using the `global::meter("vol-llm-agent")`. Instruments:
+`agent_tool_calls_total`, `agent_tool_call_duration_seconds`, `agent_ttft_seconds`,
+`agent_tokens_used_total`, `agent_llm_call_errors_total`, `agent_runs_total`,
+`agent_run_duration_seconds`. Labels are low-cardinality only
+(`agent_id`, `agent_type`, `tool_name`, `model`, `status`, `token_type`).
 
-**Run logs** (`run_{run_id}.jsonl`): All events for a single agent run, useful for debugging a specific execution.
+The exporter is registered against a shared `OnceLock<prometheus::Registry>` so the
+`/metrics` handler reads the same registry. `opentelemetry-prometheus` 0.29 uses
+`prometheus` 0.14; `vol-observability` pins this directly (not the workspace 0.13).
 
-**Session logs** (`session_{session_id}_{YYYYMMDD}.jsonl`): All events grouped by session and date, useful for cross-run analysis.
-
-Cleanup happens at agent startup in a background task:
-- Session logs older than 7 days are deleted
-- Only the 10 most recent run logs are kept
-
-Log format:
-```json
-{"timestamp":"2026-04-10T12:34:56.789Z","run_id":"run_abc123","agent_id":"vol_advice","event":"ToolCallBegin","data":{"tool_name":"market_data"}}
-```
-
-### OTel Log Routing
-
-LokiPlugin (priority 20) emits structured `tracing::info!` calls with fields: `namespace`, `session_id`, `agent_id`, `agent_type`, `run_id`, `model`, `event`. The tracing-subscriber stack routes these through the OTel SDK's `BatchLogProcessor` to the OTel Collector [[otel-log-routing]].
-
-High-frequency streaming delta events (`ThinkingDelta`, `ContentDelta`, `ToolCallArgumentDelta`) are filtered out to reduce noise.
+### RunLogPlugin
+Moved from `vol-llm-observability` to `vol-llm-agent::run_log_plugin` as agent business.
+Writes JSONL files to `{base_dir}/logs/{run_id}.jsonl`. `LogEntry` now includes `session_id`.
 
 ## Related Concepts
-- [[agent-plugin-system]]: The plugin architecture it implements
-- [[agent-event-stream]]: The events it records
-- [[built-in-plugins]]: Its place in the built-in plugin set
-- [[otel-log-routing]]: OTel Collector integration via tracing macros
-- [[loki-plugin-otel-migration-tasks-3-4]]: LokiPlugin rewrite implementation
-- [[otel-029-log-init]]: OTel 0.29 API migration and log layer initialization
+- [[agent-plugin-system]]: The plugin architecture these plugins implement
+- [[agent-event-stream]]: The events they record
+- [[built-in-plugins]]: Their place in the built-in plugin set
+- [[otel-log-routing]]: OTel Collector integration (traces + logs)
+- [[pull-based-metrics]]: Prometheus pull architecture via shared registry
+- [[vol-observability-crate]]: The consolidated crate
+- [[observability-pull-metrics-refactor]]: The source document for this refactor
