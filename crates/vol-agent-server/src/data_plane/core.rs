@@ -234,11 +234,12 @@ impl DataPlaneServerCore {
         config
             .plugin_registry
             .register(vol_observability::LoggingPlugin::new());
-        // Run log plugin — writes agent events to {working_dir}/logs/{run_id}.jsonl
+        // Run log plugin — writes agent events to {store_dir}/logs/{run_id}.jsonl.
+        // Uses store_dir (writable emptyDir) instead of working_dir (read-only).
         config
             .plugin_registry
             .register(vol_llm_agent::run_log_plugin::RunLogPlugin::new(
-                self.working_dir.clone(),
+                self.store_dir.clone(),
             ));
 
         let agent = vol_llm_agent::ReActAgent::new(config);
@@ -475,7 +476,7 @@ impl DataPlaneServerCoreBuilder {
             .register(Arc::new(ToolHandler::new(tool_registry.clone())))
             .map_err(|e| format!("failed to register ToolHandler: {e}"))?;
         handler_registry
-            .register(Arc::new(LogHandler::new(self.working_dir.join("logs"))))
+            .register(Arc::new(LogHandler::new(self.store_dir.join("logs"))))
             .map_err(|e| format!("failed to register LogHandler: {e}"))?;
         handler_registry
             .register(Arc::new(SystemHandler))
