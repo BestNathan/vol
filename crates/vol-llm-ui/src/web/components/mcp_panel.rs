@@ -333,16 +333,22 @@ fn ServerList(
     active_node: Signal<Option<String>>,
     error: Option<String>,
 ) -> Element {
-    let servers: Vec<crate::state::McpServerInfo> = {
+    let (servers, reconnecting): (Vec<crate::state::McpServerInfo>, Vec<String>) = {
         let node_id = active_node.read().clone();
         node_id
             .and_then(|nid| {
                 let c = cache.read();
                 c.get(&nid).and_then(|d| {
-                    d.data.get(CACHE_KEY).and_then(|v| {
-                        v.get("servers")
-                            .and_then(|sv| serde_json::from_value(sv.clone()).ok())
-                    })
+                    let v = d.data.get(CACHE_KEY)?;
+                    let servers: Vec<crate::state::McpServerInfo> = v
+                        .get("servers")
+                        .and_then(|sv| serde_json::from_value(sv.clone()).ok())
+                        .unwrap_or_default();
+                    let reconnecting: Vec<String> = v
+                        .get("reconnecting")
+                        .and_then(|rv| serde_json::from_value(rv.clone()).ok())
+                        .unwrap_or_default();
+                    Some((servers, reconnecting))
                 })
             })
             .unwrap_or_default()
@@ -355,6 +361,21 @@ fn ServerList(
     }
 
     let desktop_servers = servers;
+    let reconnect_list = reconnecting;
+    let cache_error: Option<String> = {
+        let node_id = active_node.read().clone();
+        node_id
+            .and_then(|nid| {
+                let c = cache.read();
+                c.get(&nid).and_then(|d| {
+                    let v = d.data.get(CACHE_KEY)?;
+                    v.get("error")
+                        .and_then(|ev| ev.as_str())
+                        .map(|s| s.to_string())
+                })
+            })
+            .or(error)
+    };
 
     rsx! {
         div {
@@ -368,8 +389,9 @@ fn ServerList(
                         _ => "#c04040",
                     };
                     let show_reconnect = s.status != "connected" && s.status != "connecting";
+                    let is_reconnecting = reconnect_list.contains(&s.name);
                     let srv_name = s.name.clone();
-                    let srv_status = s.status.clone();
+                    let srv_status = if is_reconnecting { "Reconnecting...".to_string() } else { s.status.clone() };
                     let app = app_state.clone();
                     rsx! {
                         div { class: "rounded-lg border border-[#333355] bg-[#20203a] p-3",
@@ -378,9 +400,13 @@ fn ServerList(
                                     span { class: "w-2 h-2 rounded-full flex-shrink-0", style: "background-color: {status_color};" }
                                     span { class: "text-[13px] text-[#e0e0e0] truncate", "{srv_name}" }
                                 }
-                                span { class: "text-[11px] text-[#666] flex-shrink-0 ml-2", "{srv_status}" }
+                                if is_reconnecting {
+                                    span { class: "text-[11px] text-[#f0c040] animate-pulse flex-shrink-0 ml-2", "{srv_status}" }
+                                } else {
+                                    span { class: "text-[11px] text-[#666] flex-shrink-0 ml-2", "{srv_status}" }
+                                }
                             }
-                            if show_reconnect {
+                            if show_reconnect && !is_reconnecting {
                                 button {
                                     class: "mt-2 w-full px-2 py-1 bg-[#2a2a44] text-[#aaa] rounded text-[11px] hover:text-[#e0e0e0]",
                                     onclick: move |_| {
@@ -390,6 +416,8 @@ fn ServerList(
                                     },
                                     "Reconnect"
                                 }
+                            } else if is_reconnecting {
+                                span { class: "mt-2 block text-center text-[11px] text-[#888] animate-pulse", "..." }
                             }
                         }
                     }
@@ -398,11 +426,12 @@ fn ServerList(
             // Desktop: server rows
             div { class: "hidden sm:block font-mono text-[13px]",
                 {desktop_servers.into_iter().map(|s| {
+                    let is_reconnecting = reconnect_list.contains(&s.name);
                     let app = app_state.clone();
-                    rsx! { ServerRow { app_state: app, server: s } }
+                    rsx! { ServerRow { app_state: app, server: s, reconnecting: is_reconnecting } }
                 }).collect::<Vec<Element>>().into_iter()}
-                if let Some(ref e) = error {
-                    div { class: "text-[#c04040] p-2 text-[12px]", "{e}" }
+                if let Some(ref e) = cache_error {
+                    div { class: "text-[#c04040] p-2 text-[12px] bg-[#2a1a1a] border border-[#c04040] rounded mt-2", "Error: {e}" }
                 }
             }
         }
@@ -410,7 +439,8 @@ fn ServerList(
 }
 
 /// Trigger a reconnect via the DP client (falling back to CP), then re-fetch
-/// servers + tools and write the results back into NodeDataCache.
+/// servers + tools + resources + templates + prompts and write the results
+/// back into NodeDataCache.
 fn do_mcp_reconnect(app: AppState, server_name: &str) {
     let nid = app.active_node_id.read().clone();
     let Some(ref nid_str) = nid else {
@@ -426,27 +456,124 @@ fn do_mcp_reconnect(app: AppState, server_name: &str) {
     let cache_mut = app.node_data_cache;
     let cache_nid = nid_str.clone();
 
+    // Set reconnecting state so the button shows loading.
+    {
+        let mut c = cache_mut.write();
+        if let Some(d) = c.get_mut(&cache_nid) {
+            if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                if let Some(obj) = v.as_object_mut() {
+                    let reconnecting: Vec<String> = obj
+                        .get("reconnecting")
+                        .and_then(|v| serde_json::from_value(v.clone()).ok())
+                        .unwrap_or_default();
+                    let mut new_list = reconnecting;
+                    if !new_list.contains(&name) {
+                        new_list.push(name.clone());
+                    }
+                    obj.insert(
+                        "reconnecting".to_string(),
+                        serde_json::to_value(new_list).unwrap_or_default(),
+                    );
+                }
+            }
+        }
+    }
+
     client.mcp_reconnect(&name, move |result| {
-        if let Ok(true) = result {
-            let current_nid = app.active_node_id.read().clone();
-            if current_nid != target_nid {
-                log::warn!("Node switched, discarding stale mcp_reconnect response");
+        // Clear reconnecting state regardless of outcome.
+        {
+            let mut c = cache_mut.write();
+            if let Some(d) = c.get_mut(&cache_nid) {
+                if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                    if let Some(obj) = v.as_object_mut() {
+                        let reconnecting: Vec<String> = obj
+                            .get("reconnecting")
+                            .and_then(|v| serde_json::from_value(v.clone()).ok())
+                            .unwrap_or_default();
+                        let new_list: Vec<String> =
+                            reconnecting.into_iter().filter(|n| n != &name).collect();
+                        obj.insert(
+                            "reconnecting".to_string(),
+                            serde_json::to_value(new_list).unwrap_or_default(),
+                        );
+                    }
+                }
+            }
+        }
+
+        match result {
+            Ok(true) => {
+                log::info!("MCP server '{}' reconnected successfully", name);
+            }
+            Ok(false) => {
+                log::warn!("MCP server '{}' reconnect returned false", name);
+                // Write error into cache so the UI can show it.
+                let mut c = cache_mut.write();
+                if let Some(d) = c.get_mut(&cache_nid) {
+                    if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                        if let Some(obj) = v.as_object_mut() {
+                            obj.insert(
+                                "error".to_string(),
+                                serde_json::json!(format!("Reconnect failed for '{}'", name)),
+                            );
+                        }
+                    }
+                }
                 return;
             }
+            Err(e) => {
+                log::error!("MCP server '{}' reconnect error: {}", name, e);
+                let mut c = cache_mut.write();
+                if let Some(d) = c.get_mut(&cache_nid) {
+                    if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                        if let Some(obj) = v.as_object_mut() {
+                            obj.insert(
+                                "error".to_string(),
+                                serde_json::json!(format!("Reconnect error for '{}': {}", name, e)),
+                            );
+                        }
+                    }
+                }
+                return;
+            }
+        }
 
-            // Re-fetch servers
-            let client2 = app
-                .active_node_id
-                .read()
-                .clone()
-                .and_then(|id| app.dp_pool.read().get(&id).map(|c| c.client.clone()))
-                .unwrap_or_else(|| app.rpc_client.clone());
+        let current_nid = app.active_node_id.read().clone();
+        if current_nid != target_nid {
+            log::warn!("Node switched, discarding stale mcp_reconnect result");
+            return;
+        }
+
+        // ── Re-fetch all MCP data ──────────────────────────────────
+        let remaining = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(5));
+        let finish_one = {
+            let cache_nid = cache_nid.clone();
+            let mut cache_ref = cache_mut.clone();
+            let target = target_nid.clone();
+            let remaining = remaining.clone();
+            move || {
+                if remaining.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1 {
+                    let mut c = cache_ref.write();
+                    if let Some(d) = c.get_mut(&cache_nid) {
+                        if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                            if let Some(obj) = v.as_object_mut() {
+                                obj.insert("error".to_string(), serde_json::Value::Null);
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        // servers
+        {
+            let client = client.clone();
             let cache_nid_s = cache_nid.clone();
             let mut cache_ref = cache_mut.clone();
             let target = target_nid.clone();
-            client2.mcp_list_servers(move |r| {
-                let current = app.active_node_id.read().clone();
-                if current != target {
+            let done = finish_one.clone();
+            client.mcp_list_servers(move |r| {
+                if app.active_node_id.read().clone() != target {
                     return;
                 }
                 if let Ok(servers) = r {
@@ -458,30 +585,27 @@ fn do_mcp_reconnect(app: AppState, server_name: &str) {
                                     "servers".to_string(),
                                     serde_json::to_value(servers).unwrap_or_default(),
                                 );
-                                obj.insert("error".to_string(), serde_json::Value::Null);
                             }
                         }
                     }
                 }
+                done();
             });
+        }
 
-            // Re-fetch tools
-            let client3 = app
-                .active_node_id
-                .read()
-                .clone()
-                .and_then(|id| app.dp_pool.read().get(&id).map(|c| c.client.clone()))
-                .unwrap_or_else(|| app.rpc_client.clone());
-            let cache_nid_t = cache_nid;
-            let mut cache_ref2 = cache_mut;
-            let target2 = target_nid;
-            client3.mcp_list_tools(None, move |r| {
-                let current = app.active_node_id.read().clone();
-                if current != target2 {
+        // tools
+        {
+            let client = client.clone();
+            let cache_nid_t = cache_nid.clone();
+            let mut cache_ref = cache_mut.clone();
+            let target = target_nid.clone();
+            let done = finish_one.clone();
+            client.mcp_list_tools(None, move |r| {
+                if app.active_node_id.read().clone() != target {
                     return;
                 }
                 if let Ok(tools) = r {
-                    let mut c = cache_ref2.write();
+                    let mut c = cache_ref.write();
                     if let Some(d) = c.get_mut(&cache_nid_t) {
                         if let Some(v) = d.data.get_mut(CACHE_KEY) {
                             if let Some(obj) = v.as_object_mut() {
@@ -493,13 +617,101 @@ fn do_mcp_reconnect(app: AppState, server_name: &str) {
                         }
                     }
                 }
+                done();
+            });
+        }
+
+        // resources
+        {
+            let client = client.clone();
+            let cache_nid_r = cache_nid.clone();
+            let mut cache_ref = cache_mut.clone();
+            let target = target_nid.clone();
+            let done = finish_one.clone();
+            client.mcp_list_resources(None, move |r| {
+                if app.active_node_id.read().clone() != target {
+                    return;
+                }
+                if let Ok(resources) = r {
+                    let mut c = cache_ref.write();
+                    if let Some(d) = c.get_mut(&cache_nid_r) {
+                        if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                            if let Some(obj) = v.as_object_mut() {
+                                obj.insert(
+                                    "resources".to_string(),
+                                    serde_json::to_value(resources).unwrap_or_default(),
+                                );
+                            }
+                        }
+                    }
+                }
+                done();
+            });
+        }
+
+        // resource_templates
+        {
+            let client = client.clone();
+            let cache_nid_rt = cache_nid.clone();
+            let mut cache_ref = cache_mut.clone();
+            let target = target_nid.clone();
+            let done = finish_one.clone();
+            client.mcp_list_resource_templates(None, move |r| {
+                if app.active_node_id.read().clone() != target {
+                    return;
+                }
+                if let Ok(templates) = r {
+                    let mut c = cache_ref.write();
+                    if let Some(d) = c.get_mut(&cache_nid_rt) {
+                        if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                            if let Some(obj) = v.as_object_mut() {
+                                obj.insert(
+                                    "resource_templates".to_string(),
+                                    serde_json::to_value(templates).unwrap_or_default(),
+                                );
+                            }
+                        }
+                    }
+                }
+                done();
+            });
+        }
+
+        // prompts
+        {
+            let cache_nid_p = cache_nid;
+            let mut cache_ref = cache_mut;
+            let target = target_nid;
+            let done = finish_one;
+            client.mcp_list_prompts(None, move |r| {
+                if app.active_node_id.read().clone() != target {
+                    return;
+                }
+                if let Ok(prompts) = r {
+                    let mut c = cache_ref.write();
+                    if let Some(d) = c.get_mut(&cache_nid_p) {
+                        if let Some(v) = d.data.get_mut(CACHE_KEY) {
+                            if let Some(obj) = v.as_object_mut() {
+                                obj.insert(
+                                    "prompts".to_string(),
+                                    serde_json::to_value(prompts).unwrap_or_default(),
+                                );
+                            }
+                        }
+                    }
+                }
+                done();
             });
         }
     });
 }
 
 #[component]
-fn ServerRow(app_state: AppState, server: crate::state::McpServerInfo) -> Element {
+fn ServerRow(
+    app_state: AppState,
+    server: crate::state::McpServerInfo,
+    reconnecting: bool,
+) -> Element {
     let status_color = match server.status.as_str() {
         "connected" => "#40c040",
         "connecting" => "#f0c040",
@@ -510,12 +722,16 @@ fn ServerRow(app_state: AppState, server: crate::state::McpServerInfo) -> Elemen
 
     rsx! {
         div { class: "flex items-center justify-between py-1.5 border-b border-[#2a2a44]",
-            div { class: "flex items-center gap-2",
+            div { class: "flex items-center gap-2 min-w-0",
                 span { class: "w-2 h-2 rounded-full inline-block flex-shrink-0", style: "background-color: {status_color};" }
-                span { class: "text-[13px] text-[#e0e0e0]", "{server.name}" }
-                span { class: "text-[11px] text-[#666]", "{server.status}" }
+                span { class: "text-[13px] text-[#e0e0e0] truncate", "{server.name}" }
+                if reconnecting {
+                    span { class: "text-[11px] text-[#f0c040] animate-pulse flex-shrink-0", "Reconnecting..." }
+                } else {
+                    span { class: "text-[11px] text-[#666] flex-shrink-0", "{server.status}" }
+                }
             }
-            if show_reconnect {
+            if show_reconnect && !reconnecting {
                 button {
                     class: "px-2 py-0.5 bg-[#2a2a44] text-[#aaa] rounded text-[11px] cursor-pointer hover:text-[#e0e0e0]",
                     onclick: move |_| {
@@ -525,6 +741,8 @@ fn ServerRow(app_state: AppState, server: crate::state::McpServerInfo) -> Elemen
                     },
                     "Reconnect"
                 }
+            } else if reconnecting {
+                span { class: "text-[11px] text-[#888] animate-pulse flex-shrink-0", "..." }
             }
         }
     }
