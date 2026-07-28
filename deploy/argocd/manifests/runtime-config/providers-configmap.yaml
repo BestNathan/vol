@@ -28,6 +28,11 @@ data:
 
     "anthropic-version" = "2023-06-01"
 
+
+    [body.thinking]
+
+    type = "disabled"
+
     '
   openai-example.toml: 'provider = "openai"
 

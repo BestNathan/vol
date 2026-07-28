@@ -124,6 +124,9 @@ data:
     max_tokens = 8192
     temperature = 0.7
 
+    [body.thinking]
+    type = "disabled"
+
     [headers]
     "anthropic-version" = "2023-06-01"
   openai-glm.toml: |
