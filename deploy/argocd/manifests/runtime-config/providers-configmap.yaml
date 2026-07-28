@@ -31,7 +31,7 @@ data:
     '
   openai-example.toml: 'provider = "openai"
 
-    model = "glm5.1"
+    model = "qwen3.6-plus"
 
     api_key = "${OPENAI_API_KEY}"
 
