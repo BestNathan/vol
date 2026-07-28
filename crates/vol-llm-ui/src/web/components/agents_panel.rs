@@ -135,6 +135,9 @@ pub fn AgentsPanel() -> Element {
     let sig_load = agents_signal;
     let prev_node: Signal<Option<String>> = use_signal(|| None);
     use_effect(move || {
+        // Mutable re-binds required by Dioxus Signal in WASM.
+        let mut prev_node = prev_node;
+
         // Read signal inside effect to subscribe to changes
         let node_id = app.active_node_id.read().clone();
         let client = node_id
