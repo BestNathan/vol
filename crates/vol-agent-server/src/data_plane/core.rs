@@ -234,6 +234,12 @@ impl DataPlaneServerCore {
         config
             .plugin_registry
             .register(vol_observability::LoggingPlugin::new());
+        // Run log plugin — writes agent events to {working_dir}/logs/{run_id}.jsonl
+        config
+            .plugin_registry
+            .register(vol_llm_agent::run_log_plugin::RunLogPlugin::new(
+                self.working_dir.clone(),
+            ));
 
         let agent = vol_llm_agent::ReActAgent::new(config);
         let dispatcher = Arc::new(AgentDispatcher::new(agent));
@@ -469,7 +475,7 @@ impl DataPlaneServerCoreBuilder {
             .register(Arc::new(ToolHandler::new(tool_registry.clone())))
             .map_err(|e| format!("failed to register ToolHandler: {e}"))?;
         handler_registry
-            .register(Arc::new(LogHandler))
+            .register(Arc::new(LogHandler::new(self.working_dir.join("logs"))))
             .map_err(|e| format!("failed to register LogHandler: {e}"))?;
         handler_registry
             .register(Arc::new(SystemHandler))
@@ -638,7 +644,9 @@ impl DataPlaneServerCore {
         handler_registry
             .register(Arc::new(ToolHandler::new(Arc::new(ToolRegistry::new()))))
             .ok();
-        handler_registry.register(Arc::new(LogHandler)).ok();
+        handler_registry
+            .register(Arc::new(LogHandler::new(PathBuf::from("."))))
+            .ok();
         handler_registry.register(Arc::new(SystemHandler)).ok();
         handler_registry
             .register(Arc::new(TaskHandler::new(Arc::new(
