@@ -552,6 +552,7 @@ fn do_mcp_reconnect(app: AppState, server_name: &str) {
             let target = target_nid.clone();
             let remaining = remaining.clone();
             move || {
+                let mut cache_ref = cache_ref;
                 if remaining.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1 {
                     let mut c = cache_ref.write();
                     if let Some(d) = c.get_mut(&cache_nid) {
@@ -573,6 +574,8 @@ fn do_mcp_reconnect(app: AppState, server_name: &str) {
             let target = target_nid.clone();
             let done = finish_one.clone();
             client.mcp_list_servers(move |r| {
+                let mut done = done;
+                let mut cache_ref = cache_ref;
                 if app.active_node_id.read().clone() != target {
                     return;
                 }
