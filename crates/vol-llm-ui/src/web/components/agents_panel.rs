@@ -129,14 +129,39 @@ pub fn AgentsPanel() -> Element {
             .map(|conn| conn.client.clone())
     });
 
-    // Load agents from DP when node changes
+    // Load agents from DP when node changes.
+    // Also clear per-agent conversation state on node switch so stale data
+    // from the previous DP node doesn't leak into the current view.
     let sig_load = agents_signal;
+    let prev_node: Signal<Option<String>> = use_signal(|| None);
     use_effect(move || {
         // Read signal inside effect to subscribe to changes
         let node_id = app.active_node_id.read().clone();
         let client = node_id
             .as_ref()
             .and_then(|nid| app.dp_pool.read().get(nid).map(|conn| conn.client.clone()));
+
+        // Clear conversation state and selection when node actually changes.
+        {
+            let mut pn = prev_node.write();
+            if *pn != node_id {
+                if pn.is_some() {
+                    // Node switched — clear stale per-agent data.
+                    conv_signal.with_mut(|cs| {
+                        cs.agents.clear();
+                        cs.active_agent = None;
+                    });
+                    global.with_mut(|gs| {
+                        gs.run_map.clear();
+                        gs.running_agents.clear();
+                    });
+                    sig_load.with_mut(|s| {
+                        s.selected = None;
+                    });
+                }
+                *pn = node_id.clone();
+            }
+        }
 
         if let Some(c) = client {
             let mut sig = sig_load;
@@ -161,6 +186,16 @@ pub fn AgentsPanel() -> Element {
                 });
             });
         }
+    });
+
+    // Sync ConversationState.active_agent whenever selected agent changes
+    // or when the panel remounts (e.g. user switched tabs and came back).
+    let sync_conv = conv_signal.clone();
+    use_effect(move || {
+        let sel = agents_signal.read().selected.clone();
+        sync_conv.with_mut(|cs| {
+            cs.set_active(sel);
+        });
     });
 
     let agents = agents_signal.read().agents.clone();

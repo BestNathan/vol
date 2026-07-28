@@ -245,17 +245,13 @@ pub fn McpPanel() -> Element {
         })
     };
 
-    let (loading, error, active) = match &mcp_data {
-        Some(d) => (d.loading, d.error.clone(), d.active_subtab),
-        None => (false, None, active_subtab.read().clone()),
+    let (loading, error) = match &mcp_data {
+        Some(d) => (d.loading, d.error.clone()),
+        None => (false, None),
     };
 
-    // Sync subtab from local signal when there's no cached state yet.
-    let display_active = if mcp_data.is_some() {
-        active
-    } else {
-        active_subtab.read().clone()
-    };
+    // Always use the local signal for subtab — the cache can lag.
+    let display_active = active_subtab.read().clone();
 
     rsx! {
         div { class: "flex-1 overflow-y-auto p-2",
@@ -307,8 +303,6 @@ struct McpStateJson {
     loading: bool,
     #[serde(default)]
     error: Option<String>,
-    #[serde(default)]
-    active_subtab: McpSubtab,
 }
 
 #[component]
