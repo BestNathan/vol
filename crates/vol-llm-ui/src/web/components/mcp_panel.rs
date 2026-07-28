@@ -480,14 +480,23 @@ fn do_mcp_reconnect(app: AppState, server_name: &str) {
         }
     }
 
-    // Clone for the move closure so `client` and `name` remain usable after.
-    let reconnect_client = client.clone();
+    // Build all clones for the move callback BEFORE calling mcp_reconnect.
+    let cb_client = client.clone();
+    let cb_name = name.clone();
+    let cb_cache_mut = cache_mut;
+    let cb_app = app.clone();
+    let cb_cache_nid = cache_nid.clone();
+    let cb_target_nid = target_nid.clone();
+
     let reconnect_name = name.clone();
-    reconnect_client.mcp_reconnect(&reconnect_name, move |result| {
-        let client = reconnect_client; // shadow with owned clone
-        let name = reconnect_name; // shadow with owned clone
-        let mut cache_mut = cache_mut; // WASM: rebind for &mut self
-                                       // Clear reconnecting state regardless of outcome.
+    client.mcp_reconnect(&reconnect_name, move |result| {
+        let mut cache_mut = cb_cache_mut;
+        let name = cb_name;
+        let client = cb_client;
+        let app = cb_app;
+        let cache_nid = cb_cache_nid;
+        let target_nid = cb_target_nid;
+        // Clear reconnecting state regardless of outcome.
         {
             let mut c = cache_mut.write();
             if let Some(d) = c.get_mut(&cache_nid) {
