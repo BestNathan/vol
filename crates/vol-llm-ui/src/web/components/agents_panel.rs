@@ -118,7 +118,7 @@ pub fn AgentsPanel() -> Element {
     let app: crate::web::components::app::AppState = use_context();
     let agents_signal: Signal<AgentsState> = use_context();
     let conv_signal: Signal<ConversationState> = use_context();
-    let global: Signal<GlobalState> = use_context();
+    let mut global: Signal<GlobalState> = use_context();
 
     // Get active node and DP client
     let active_node = app.active_node_id.read().clone();
@@ -147,17 +147,11 @@ pub fn AgentsPanel() -> Element {
             if *pn != node_id {
                 if pn.is_some() {
                     // Node switched — clear stale per-agent data.
-                    conv_signal.with_mut(|cs| {
-                        cs.agents.clear();
-                        cs.active_agent = None;
-                    });
-                    global.with_mut(|gs| {
-                        gs.run_map.clear();
-                        gs.running_agents.clear();
-                    });
-                    sig_load.with_mut(|s| {
-                        s.selected = None;
-                    });
+                    conv_signal.write_unchecked().agents.clear();
+                    conv_signal.write_unchecked().active_agent = None;
+                    global.write_unchecked().run_map.clear();
+                    global.write_unchecked().running_agents.clear();
+                    sig_load.write_unchecked().selected = None;
                 }
                 *pn = node_id.clone();
             }
@@ -190,12 +184,10 @@ pub fn AgentsPanel() -> Element {
 
     // Sync ConversationState.active_agent whenever selected agent changes
     // or when the panel remounts (e.g. user switched tabs and came back).
-    let sync_conv = conv_signal.clone();
+    let sync_conv = conv_signal;
     use_effect(move || {
         let sel = agents_signal.read().selected.clone();
-        sync_conv.with_mut(|cs| {
-            cs.set_active(sel);
-        });
+        sync_conv.write_unchecked().set_active(sel);
     });
 
     let agents = agents_signal.read().agents.clone();
