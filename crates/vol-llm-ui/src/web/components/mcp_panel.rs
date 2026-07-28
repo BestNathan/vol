@@ -454,6 +454,7 @@ fn do_mcp_reconnect(app: AppState, server_name: &str) {
     let name = server_name.to_string();
     let target_nid = nid.clone();
     let cache_mut = app.node_data_cache;
+    let mut cache_mut = cache_mut; // WASM: Signal::write needs &mut self
     let cache_nid = nid_str.clone();
 
     // Set reconnecting state so the button shows loading.
@@ -479,8 +480,14 @@ fn do_mcp_reconnect(app: AppState, server_name: &str) {
         }
     }
 
-    client.mcp_reconnect(&name, move |result| {
-        // Clear reconnecting state regardless of outcome.
+    // Clone for the move closure so `client` and `name` remain usable after.
+    let reconnect_client = client.clone();
+    let reconnect_name = name.clone();
+    reconnect_client.mcp_reconnect(&reconnect_name, move |result| {
+        let client = reconnect_client; // shadow with owned clone
+        let name = reconnect_name; // shadow with owned clone
+        let mut cache_mut = cache_mut; // WASM: rebind for &mut self
+                                       // Clear reconnecting state regardless of outcome.
         {
             let mut c = cache_mut.write();
             if let Some(d) = c.get_mut(&cache_nid) {
