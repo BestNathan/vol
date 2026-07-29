@@ -1,11 +1,13 @@
 //! Left panel showing system tools and tool call history.
 
 use crate::state::{
-    SubscriptionSet, ToolCallEntry, ToolCallStatus, ToolState, UiEvent, UiEventKind,
+    AgentsState, CapabilityOverlayState, GlobalState, SubscriptionSet, ToolCallEntry,
+    ToolCallStatus, ToolState, UiEvent, UiEventKind,
 };
 use crate::web::client::JsonRpcClient;
 use crate::web::components::app::AppState;
 use dioxus::prelude::*;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct ToolDef {
@@ -131,6 +133,55 @@ pub fn ToolsPanel() -> Element {
     // Use agent_client() which routes to DP pool in CP mode.
     let client: JsonRpcClient = app_state.agent_client();
 
+    // Capability overlay state
+    let cap_signal: Signal<CapabilityOverlayState> = use_signal(CapabilityOverlayState::new);
+    let selected_tools_signal: Signal<HashSet<String>> = use_signal(HashSet::new);
+    let cap_dirty: Signal<bool> = use_signal(|| false);
+    let global: Signal<GlobalState> = use_context();
+    let agents: Signal<AgentsState> = use_context();
+
+    // Load capabilities on mount
+    let client_for_cap = client.clone();
+    let global_for_cap = global.clone();
+    let agents_for_cap = agents.clone();
+    use_hook(move || {
+        let mut cap_signal = cap_signal;
+        let agent_id = agents_for_cap.read().selected.clone().unwrap_or_default();
+        let session_id = global_for_cap.read().session_id.clone();
+        if agent_id.is_empty() {
+            cap_signal.with_mut(|s| s.loading = false);
+            return;
+        }
+        let sig = cap_signal.clone();
+        let mut sel = selected_tools_signal.clone();
+        let mut dirty = cap_dirty.clone();
+        client_for_cap.agent_get_capabilities(&agent_id, &session_id, move |result| {
+            let mut sig = sig;
+            sig.with_mut(|s| match result {
+                Ok(cap) => {
+                    s.effective_tools.clone_from(&cap.effective_tools);
+                    s.available_tools.clone_from(&cap.available_tools);
+                    s.base_tools.clone_from(&cap.base_tools);
+                    s.effective_skills = cap.effective_skills;
+                    s.available_skills = cap.available_skills;
+                    s.base_skills = cap.base_skills;
+                    s.effective_mcp_servers = cap.effective_mcp_servers;
+                    s.available_mcp_servers = cap.available_mcp_servers;
+                    s.base_mcp_servers = cap.base_mcp_servers;
+                    s.loading = false;
+                    s.dirty = false;
+                    let hs: HashSet<String> = cap.effective_tools.into_iter().collect();
+                    sel.set(hs);
+                    dirty.set(false);
+                }
+                Err(e) => {
+                    s.loading = false;
+                    log::error!("Failed to load tool capabilities: {e}");
+                }
+            });
+        });
+    });
+
     // Load tools on mount (follow sessions panel pattern: use_hook, not use_effect)
     let client_for_load = client.clone();
     use_hook(move || {
@@ -219,6 +270,15 @@ pub fn ToolsPanel() -> Element {
         )
     };
     let call_count = call_signal.read().calls.len();
+
+    // Read capability state BEFORE rsx! (no let bindings inside element children)
+    let cap_state = cap_signal.read();
+    let cap_loading = cap_state.loading;
+    let cap_eff = cap_state.effective_tools.clone();
+    let cap_base = cap_state.base_tools.clone();
+    let cap_avail = cap_state.available_tools.clone();
+    let cap_dirt = *cap_dirty.read();
+    let cap_has = !cap_avail.is_empty() || !cap_base.is_empty();
 
     rsx! {
         div { class: "flex-1 overflow-y-auto p-2",
@@ -319,6 +379,93 @@ pub fn ToolsPanel() -> Element {
                         div { class: "p-2.5 text-[#666] text-center", "No tool calls yet" }
                     } else {
                         {(0..call_count).map(|idx| { let s = call_signal.clone(); rsx! { ToolItem { signal: s, index: idx } } }).collect::<Vec<Element>>().into_iter()}
+                    }
+                }
+            }
+
+            // Capability Overlay section
+            div { class: "border-t border-[#333] my-2" }
+            div {
+                div { class: "px-2.5 pt-1 pb-2 text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]",
+                    "Capability Overlay"
+                }
+                if cap_loading {
+                    div { class: "text-[12px] text-[#888] px-2", "Loading..." }
+                } else if cap_has {
+                    div { class: "flex gap-2 mb-2",
+                        button {
+                            class: "px-2 py-0.5 text-[12px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#4a4a65] disabled:opacity-40 disabled:cursor-not-allowed",
+                            disabled: !cap_dirt,
+                            onclick: {
+                                let cl = client.clone();
+                                let sel = selected_tools_signal.clone();
+                                let dirty = cap_dirty.clone();
+                                let cs = cap_signal.clone();
+                                let ag = agents.clone();
+                                let gl = global.clone();
+                                move |_| {
+                                    let mut sel = sel;
+                                    let mut dirty = dirty;
+                                    let mut cs = cs;
+                                    let agent_id = ag.read().selected.clone().unwrap_or_default();
+                                    let session_id = gl.read().session_id.clone();
+                                    if agent_id.is_empty() { return; }
+                                    let tools: Vec<String> = sel.read().iter().cloned().collect();
+                                    cl.agent_update_capabilities(&agent_id, &session_id, tools, vec![], vec![], move |result| {
+                                        cs.with_mut(|s| {
+                                            match result {
+                                                Ok(upd) => { s.effective_tools = upd.effective_tools; s.dirty = false; dirty.set(false); }
+                                                Err(e) => { log::error!("Failed to update capabilities: {e}"); }
+                                            }
+                                        });
+                                    });
+                                }
+                            },
+                            "Apply"
+                        }
+                        button {
+                            class: "px-2 py-0.5 text-[12px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#4a4a65]",
+                            onclick: {
+                                let sel = selected_tools_signal.clone();
+                                let cs = cap_signal.clone();
+                                let dirty = cap_dirty.clone();
+                                move |_| {
+                                    let mut sel = sel;
+                                    let mut dirty = dirty;
+                                    let base = cs.read().base_tools.clone();
+                                    sel.set(base.into_iter().collect());
+                                    dirty.set(true);
+                                }
+                            },
+                            "Reset to default"
+                        }
+                    }
+                    for tool_name in &cap_eff {
+                        {
+                            let tn = tool_name.clone();
+                            let chk = selected_tools_signal.read().contains(&tn);
+                            rsx! {
+                                div { class: "flex items-center gap-2 py-0.5 px-2",
+                                    input {
+                                        r#type: "checkbox",
+                                        checked: chk,
+                                        oninput: {
+                                            let sel = selected_tools_signal.clone();
+                                            let dirty = cap_dirty.clone();
+                                            let name = tn.clone();
+                                            move |_| {
+                                                let mut sel = sel;
+                                                let mut dirty = dirty;
+                                                let mut hs = sel.write();
+                                                if hs.contains(&name) { hs.remove(&name); } else { hs.insert(name.clone()); }
+                                                dirty.set(true);
+                                            }
+                                        },
+                                    }
+                                    span { class: "text-[13px] text-[#e0e0e0]", "{tn}" }
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -285,6 +285,40 @@ impl PartialEq for JsonRpcClient {
     }
 }
 
+/// Response from agent.get_capabilities RPC.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct GetCapabilitiesResult {
+    #[serde(default)]
+    pub effective_tools: Vec<String>,
+    #[serde(default)]
+    pub effective_skills: Vec<String>,
+    #[serde(default)]
+    pub effective_mcp_servers: Vec<String>,
+    #[serde(default)]
+    pub available_tools: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub available_skills: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub available_mcp_servers: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub base_tools: Vec<String>,
+    #[serde(default)]
+    pub base_skills: Vec<String>,
+    #[serde(default)]
+    pub base_mcp_servers: Vec<String>,
+}
+
+/// Response from agent.update_capabilities RPC.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct UpdateCapabilitiesResult {
+    #[serde(default)]
+    pub effective_tools: Vec<String>,
+    #[serde(default)]
+    pub effective_skills: Vec<String>,
+    #[serde(default)]
+    pub effective_mcp_servers: Vec<String>,
+}
+
 impl JsonRpcClient {
     /// Create a new client and connect to the server.
     /// Auto-subscribes to agent events on connect (behaviour for data-plane connections).
@@ -1758,6 +1792,99 @@ impl JsonRpcClient {
                     None => cb(Err("no runs in response".to_string())),
                 },
             );
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// Fetch capability overlay state for an agent session.
+    pub fn agent_get_capabilities(
+        &self,
+        agent_id: &str,
+        session_id: &str,
+        cb: impl FnOnce(Result<GetCapabilitiesResult, String>) + 'static,
+    ) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "agent.get_capabilities",
+            "params": { "agent_id": agent_id, "session_id": session_id },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            if let Some(error) = result.get("error") {
+                let msg = error
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("unknown RPC error");
+                cb(Err(msg.to_string()));
+                return;
+            }
+            match serde_json::from_value::<GetCapabilitiesResult>(result) {
+                Ok(r) => cb(Ok(r)),
+                Err(e) => cb(Err(format!("failed to parse capabilities: {e}"))),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
+    }
+
+    /// Update capability overlay for an agent session.
+    pub fn agent_update_capabilities(
+        &self,
+        agent_id: &str,
+        session_id: &str,
+        effective_tools: Vec<String>,
+        effective_skills: Vec<String>,
+        effective_mcp_servers: Vec<String>,
+        cb: impl FnOnce(Result<UpdateCapabilitiesResult, String>) + 'static,
+    ) {
+        let id = self.alloc_id();
+        let msg = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "agent.update_capabilities",
+            "params": {
+                "agent_id": agent_id,
+                "session_id": session_id,
+                "effective_tools": effective_tools,
+                "effective_skills": effective_skills,
+                "effective_mcp_servers": effective_mcp_servers,
+            },
+            "id": id,
+        });
+        let json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                cb(Err(e.to_string()));
+                return;
+            }
+        };
+        if let Err(e) = self.send_raw(&json) {
+            cb(Err(format!("send failed: {e:?}")));
+            return;
+        }
+        let cb: Box<dyn FnOnce(serde_json::Value)> = Box::new(move |result| {
+            if let Some(error) = result.get("error") {
+                let msg = error
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("unknown RPC error");
+                cb(Err(msg.to_string()));
+                return;
+            }
+            match serde_json::from_value::<UpdateCapabilitiesResult>(result) {
+                Ok(r) => cb(Ok(r)),
+                Err(e) => cb(Err(format!("failed to parse update result: {e}"))),
+            }
+        });
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
