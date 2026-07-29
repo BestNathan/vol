@@ -91,7 +91,8 @@ RUN --mount=type=cache,target=/app/target \
     --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     dx build --release --package vol-llm-ui --bin vol-llm-ui-web \
-    --no-default-features --features web
+    --no-default-features --features web && \
+    cp -r /app/target/dx/vol-llm-ui-web/release/web/public /app/public
 
 # ── Runtime: nginx + static files ────────────────────────────────────────────
 FROM nginx:1.27-alpine
@@ -100,7 +101,7 @@ FROM nginx:1.27-alpine
 COPY dockers/nginx-frontend.conf /etc/nginx/conf.d/default.conf
 
 # Copy Dioxus build output
-COPY --from=builder /app/target/dx/vol-llm-ui-web/release/web/public/ /usr/share/nginx/html/
+COPY --from=builder /app/public/ /usr/share/nginx/html/
 
 EXPOSE 80
 
