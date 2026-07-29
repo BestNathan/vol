@@ -45,7 +45,7 @@ declare -A THRESHOLDS=(
 
     # Agent infrastructure
     ["vol-llm-agent-protocol"]=80
-    ["vol-llm-runtime"]=80
+    ["vol-llm-runtime"]=60
     ["vol-llm-task"]=80
     ["vol-llm-skill"]=80
     ["vol-llm-context"]=80

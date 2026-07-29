@@ -1569,4 +1569,26 @@ base_url = "https://api.test.com"
         // Chaining with_task_store_config confirms builder type is correct
         let _ = builder.with_task_store_config(None);
     }
+
+    #[tokio::test]
+    async fn capability_overlays_initialized_in_for_test() {
+        let rt = AgentRuntime::for_test().await;
+        let overlays = rt.capability_overlays.read().await;
+        assert!(overlays.is_empty());
+    }
+
+    #[tokio::test]
+    async fn unregister_agent_cleans_up_overlay() {
+        use vol_llm_core::capability_overlay::CapabilityOverlay;
+        let rt = AgentRuntime::for_test().await;
+
+        rt.capability_overlays.write().await.insert(
+            ("test-agent".to_string(), "sess-1".to_string()),
+            CapabilityOverlay::new(vec!["bash".into()], vec![], vec![]),
+        );
+
+        rt.unregister_agent("test-agent").await;
+        let overlays = rt.capability_overlays.read().await;
+        assert!(!overlays.contains_key(&("test-agent".to_string(), "sess-1".to_string())));
+    }
 }
