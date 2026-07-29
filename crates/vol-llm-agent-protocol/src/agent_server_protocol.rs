@@ -62,6 +62,8 @@ impl Operation {
             Operation::Agent(AgentOperation::Status) => "agent.status",
             Operation::Agent(AgentOperation::ContextConfig) => "agent.context_config",
             Operation::Agent(AgentOperation::ContextSnapshot) => "agent.context_snapshot",
+            Operation::Agent(AgentOperation::GetCapabilities) => "agent.get_capabilities",
+            Operation::Agent(AgentOperation::UpdateCapabilities) => "agent.update_capabilities",
             Operation::Task(TaskOperation::List) => "task.list",
             Operation::Task(TaskOperation::Get) => "task.get",
             Operation::File(FileOperation::List) => "file.list",
@@ -122,6 +124,8 @@ pub enum AgentOperation {
     Status,
     ContextConfig,
     ContextSnapshot,
+    GetCapabilities,
+    UpdateCapabilities,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -577,6 +581,38 @@ impl Payload {
                     event: p.event,
                 }))
             }
+            Operation::Agent(AgentOperation::GetCapabilities) => {
+                #[derive(Deserialize)]
+                struct P {
+                    agent_id: String,
+                    session_id: String,
+                }
+                let p: P = serde_json::from_value(value)
+                    .map_err(|_| ProtocolError::PayloadDecodeFailed("agent.get_capabilities"))?;
+                Ok(Payload::Agent(AgentPayload::GetCapabilities {
+                    agent_id: p.agent_id,
+                    session_id: p.session_id,
+                }))
+            }
+            Operation::Agent(AgentOperation::UpdateCapabilities) => {
+                #[derive(Deserialize)]
+                struct P {
+                    agent_id: String,
+                    session_id: String,
+                    effective_tools: Vec<String>,
+                    effective_skills: Vec<String>,
+                    effective_mcp_servers: Vec<String>,
+                }
+                let p: P = serde_json::from_value(value)
+                    .map_err(|_| ProtocolError::PayloadDecodeFailed("agent.update_capabilities"))?;
+                Ok(Payload::Agent(AgentPayload::UpdateCapabilities {
+                    agent_id: p.agent_id,
+                    session_id: p.session_id,
+                    effective_tools: p.effective_tools,
+                    effective_skills: p.effective_skills,
+                    effective_mcp_servers: p.effective_mcp_servers,
+                }))
+            }
             // ── File ──
             Operation::File(FileOperation::List) => {
                 #[derive(Deserialize)]
@@ -882,6 +918,20 @@ impl Payload {
 
     /// Encode the payload as flat JSON (no domain/data or variant wrappers).
     pub fn data_json(&self) -> serde_json::Value {
+        // Handle agent capabilities payloads explicitly — these use flat struct
+        // fields that serialize correctly through the generic path below, but we
+        // list them here for consistency and to avoid falling through to the
+        // untagged wrapper in edge cases.
+        if let Payload::Agent(
+            p @ (AgentPayload::GetCapabilities { .. }
+            | AgentPayload::GetCapabilitiesResult { .. }
+            | AgentPayload::UpdateCapabilities { .. }
+            | AgentPayload::UpdateCapabilitiesResult { .. }),
+        ) = self
+        {
+            return serde_json::to_value(p).unwrap_or_default();
+        }
+
         let val = serde_json::to_value(self).unwrap_or(serde_json::Value::Null);
         // With untagged Payload, the value is the variant's data directly, e.g.
         // {"SubmitResult":{"run_id":"x"}}. Strip the variant name wrapper.
@@ -969,6 +1019,33 @@ pub enum AgentPayload {
     },
     ContextSnapshotResult {
         messages: Vec<serde_json::Value>,
+    },
+    GetCapabilities {
+        agent_id: String,
+        session_id: String,
+    },
+    GetCapabilitiesResult {
+        effective_tools: Vec<String>,
+        effective_skills: Vec<String>,
+        effective_mcp_servers: Vec<String>,
+        available_tools: Vec<serde_json::Value>,
+        available_skills: Vec<serde_json::Value>,
+        available_mcp_servers: Vec<serde_json::Value>,
+        base_tools: Vec<String>,
+        base_skills: Vec<String>,
+        base_mcp_servers: Vec<String>,
+    },
+    UpdateCapabilities {
+        agent_id: String,
+        session_id: String,
+        effective_tools: Vec<String>,
+        effective_skills: Vec<String>,
+        effective_mcp_servers: Vec<String>,
+    },
+    UpdateCapabilitiesResult {
+        effective_tools: Vec<String>,
+        effective_skills: Vec<String>,
+        effective_mcp_servers: Vec<String>,
     },
 }
 
