@@ -28,16 +28,22 @@ pub fn CapabilityBar() -> Element {
             return;
         }
         let node_id = app_for_cap.active_node_id.read().clone();
-        let client = node_id
-            .as_ref()
-            .and_then(|nid| {
-                app_for_cap
-                    .dp_pool
-                    .read()
-                    .get(nid)
-                    .map(|c| c.client.clone())
-            })
-            .unwrap_or_else(|| app_for_cap.rpc_client.clone());
+        // Only use direct DP connection — CP cannot route these operations.
+        // The effect re-runs when dp_pool changes, so capabilities load
+        // as soon as the DP connection is established.
+        let client = match node_id.as_ref().and_then(|nid| {
+            app_for_cap
+                .dp_pool
+                .read()
+                .get(nid)
+                .map(|c| c.client.clone())
+        }) {
+            Some(c) => c,
+            None => {
+                cap_signal.with_mut(|s| s.loading = false);
+                return;
+            }
+        };
         let sig = cap_signal.clone();
         client.agent_get_capabilities(&agent_id, &session_id, move |result| {
             let mut sig = sig;
