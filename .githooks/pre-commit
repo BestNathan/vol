@@ -39,29 +39,34 @@ fi
 
 
 # ── Coverage gate ──────────────────────────────────────────────────
-if [ "${SKIP_COVERAGE:-0}" = "1" ]; then
-  echo -e "${YELLOW}ℹ coverage skipped (SKIP_COVERAGE=1)${NC}"
-else
-  # Extract changed crate names from staged Rust files.
-  # Cargo.toml change → check all crates (no args = full workspace).
-  if echo "$STAGED_ALL" | grep -q '^Cargo.toml$'; then
-    CHANGED_CRATES=""
-    echo -e "${YELLOW}→ Cargo.toml staged — checking coverage for all crates${NC}"
+if [ -n "$STAGED_RUST" ]; then
+  # Check cargo-llvm-cov is installed
+  if ! command -v cargo-llvm-cov &>/dev/null; then
+    echo -e "${RED}✗ cargo-llvm-cov not installed${NC}"
+    echo -e "${RED}  Install: cargo install cargo-llvm-cov && rustup component add llvm-tools-preview${NC}"
+    HAS_ERROR=1
   else
-    CHANGED_CRATES=$(echo "$STAGED_RUST" \
-      | sed -n 's|^crates/\([^/]*\)/.*|\1|p' \
-      | sort -u \
-      | tr '\n' ' ' \
-      || true)
-  fi
-
-  if [ -n "$CHANGED_CRATES" ] || echo "$STAGED_ALL" | grep -q '^Cargo.toml$'; then
-    echo -e "${YELLOW}→ coverage check for changed crates${NC}"
-    if ./scripts/check-coverage.sh $CHANGED_CRATES; then
-      echo -e "${GREEN}✓ coverage${NC}"
+    # Extract changed crate names from staged Rust files.
+    # Cargo.toml change → check all crates (no args = full workspace).
+    if echo "$STAGED_ALL" | grep -q '^Cargo.toml$'; then
+      CHANGED_CRATES=""
+      echo -e "${YELLOW}→ Cargo.toml staged — checking coverage for all crates${NC}"
     else
-      echo -e "${RED}✗ coverage failed — add tests and retry, or SKIP_COVERAGE=1 to bypass${NC}"
-      HAS_ERROR=1
+      CHANGED_CRATES=$(echo "$STAGED_RUST" \
+        | sed -n 's|^crates/\([^/]*\)/.*|\1|p' \
+        | sort -u \
+        | tr '\n' ' ' \
+        || true)
+    fi
+
+    if [ -n "$CHANGED_CRATES" ] || echo "$STAGED_ALL" | grep -q '^Cargo.toml$'; then
+      echo -e "${YELLOW}→ coverage check for changed crates${NC}"
+      if ./scripts/check-coverage.sh $CHANGED_CRATES; then
+        echo -e "${GREEN}✓ coverage${NC}"
+      else
+        echo -e "${RED}✗ coverage below threshold — add tests and commit again${NC}"
+        HAS_ERROR=1
+      fi
     fi
   fi
 fi
