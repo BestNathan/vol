@@ -20,6 +20,9 @@ use vol_llm_task::{DatabaseTaskStore, FileTaskStore};
 use vol_llm_tool::ToolRegistry;
 use vol_session::{DatabaseSessionManager, FileSessionManager, Session, SessionManager};
 
+mod capability_overlay;
+pub use capability_overlay::CapabilityOverlay;
+
 /// Runtime status of a registered agent.
 #[derive(Debug, Clone, Default)]
 pub struct AgentStatus {
@@ -71,6 +74,7 @@ pub struct AgentRuntime {
     pub skill_loader: Arc<SkillLoader>,
     pub agent_defs: Arc<std::sync::RwLock<HashMap<String, AgentDef>>>,
     pub agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>>,
+    pub capability_overlays: Arc<tokio::sync::RwLock<HashMap<(String, String), CapabilityOverlay>>>,
 }
 
 impl AgentRuntime {
@@ -282,6 +286,7 @@ impl AgentRuntime {
             skill_loader,
             agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),
             agent_status: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            capability_overlays: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }
     }
 }
@@ -513,6 +518,8 @@ impl AgentRuntimeBuilder {
         }
         let tool_registry = Arc::new(tool_registry);
 
+        let capability_overlays = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+
         Ok(AgentRuntime {
             working_dir: self.working_dir,
             store_dir,
@@ -525,6 +532,7 @@ impl AgentRuntimeBuilder {
             skill_loader,
             agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),
             agent_status: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            capability_overlays,
         })
     }
 }
@@ -1118,6 +1126,7 @@ base_url = "https://api.test.com"
             skill_loader: Arc::new(SkillLoader::new_empty()),
             agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),
             agent_status: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            capability_overlays: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         };
         let def = AgentDef::new("test-agent", "You are a test agent.");
         match runtime.resolve_llm_for_agent(&def) {
@@ -1150,6 +1159,7 @@ base_url = "https://api.test.com"
             skill_loader: Arc::new(SkillLoader::new_empty()),
             agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),
             agent_status: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            capability_overlays: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         };
         let mut def = AgentDef::new("test-agent", "You are a test agent.");
         def.model = Some("non-existent-model".into());

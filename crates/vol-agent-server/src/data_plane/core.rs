@@ -20,7 +20,7 @@ use vol_llm_agent::react::AgentConfig;
 use vol_llm_core::LLMClient;
 use vol_llm_mcp::McpManager;
 use vol_llm_provider::{create_provider, ProviderLoader};
-use vol_llm_runtime::{AgentRuntime, SessionStoreConfig, TaskStoreConfig};
+use vol_llm_runtime::{AgentRuntime, CapabilityOverlay, SessionStoreConfig, TaskStoreConfig};
 use vol_llm_skill::SkillLoader;
 use vol_llm_tool::ToolRegistry;
 
@@ -99,6 +99,9 @@ pub struct DataPlaneServerCore {
     // === Agent status (from runtime) ===
     agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>>,
 
+    // === Capability overlays (from runtime) ===
+    capability_overlays: Arc<tokio::sync::RwLock<HashMap<(String, String), CapabilityOverlay>>>,
+
     // === Domain handlers ===
     handler_registry: HandlerRegistry,
 }
@@ -167,6 +170,12 @@ impl DataPlaneServerCore {
 
     pub fn agent_status(&self) -> &Arc<std::sync::RwLock<HashMap<String, AgentStatus>>> {
         &self.agent_status
+    }
+
+    pub fn capability_overlays(
+        &self,
+    ) -> &Arc<tokio::sync::RwLock<HashMap<(String, String), CapabilityOverlay>>> {
+        &self.capability_overlays
     }
 
     /// Register a new agent with the given id and definition.
@@ -435,6 +444,7 @@ impl DataPlaneServerCoreBuilder {
         let agent_status = runtime.agent_status.clone();
         let session_manager = runtime.session_manager.clone();
         let sandbox_registry = runtime.sandbox_registry.clone();
+        let capability_overlays = runtime.capability_overlays.clone();
 
         // Tool registry already includes SkillTool from AgentRuntime
         let tool_registry = runtime.tool_registry.clone();
@@ -511,6 +521,7 @@ impl DataPlaneServerCoreBuilder {
             holders,
             agent_defs,
             agent_status,
+            capability_overlays,
             handler_registry,
         })
     }
@@ -659,6 +670,7 @@ impl DataPlaneServerCore {
             .ok();
 
         let sandbox_registry = runtime.sandbox_registry.clone();
+        let capability_overlays = runtime.capability_overlays.clone();
 
         DataPlaneServerCore {
             runtime,
@@ -673,6 +685,7 @@ impl DataPlaneServerCore {
             holders,
             agent_defs,
             agent_status,
+            capability_overlays,
             handler_registry,
         }
     }
