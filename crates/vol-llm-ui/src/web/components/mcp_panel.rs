@@ -1,11 +1,7 @@
 use dioxus::prelude::*;
 
-use crate::state::{
-    AgentsState, CapabilityOverlayState, GlobalState, McpDialogState, McpState, McpSubtab,
-};
-use crate::web::client::JsonRpcClient;
+use crate::state::{McpDialogState, McpState, McpSubtab};
 use crate::web::components::app::AppState;
-use std::collections::HashSet;
 
 /// Key used to store the serialized McpState in NodeDataCache.
 const CACHE_KEY: &str = "mcp_state";
@@ -19,67 +15,6 @@ pub fn McpPanel() -> Element {
 
     // Subtab selection persists across cache loads, kept in local signal.
     let active_subtab = use_signal(|| McpSubtab::Servers);
-
-    // Capability overlay state
-    let cap_signal: Signal<CapabilityOverlayState> = use_signal(CapabilityOverlayState::new);
-    let selected_mcp_signal: Signal<HashSet<String>> = use_signal(HashSet::new);
-    let cap_dirty: Signal<bool> = use_signal(|| false);
-    let global: Signal<GlobalState> = use_context();
-    let agents: Signal<AgentsState> = use_context();
-
-    // Load capabilities when selected agent changes
-    let global_for_cap = global.clone();
-    let agents_for_cap = agents.clone();
-    let app_state_for_cap = app_state.clone();
-    use_effect(move || {
-        let mut cap_signal = cap_signal;
-        let agent_id = agents_for_cap.read().selected.clone().unwrap_or_default();
-        let session_id = global_for_cap.read().session_id.clone();
-        if agent_id.is_empty() {
-            cap_signal.with_mut(|s| s.loading = false);
-            return;
-        }
-        let node_id = active_node.read().clone();
-        let client = node_id
-            .as_ref()
-            .and_then(|nid| {
-                app_state_for_cap
-                    .dp_pool
-                    .read()
-                    .get(nid)
-                    .map(|c| c.client.clone())
-            })
-            .unwrap_or_else(|| app_state_for_cap.rpc_client.clone());
-        let sig = cap_signal.clone();
-        let mut sel = selected_mcp_signal.clone();
-        let mut dirty = cap_dirty.clone();
-        client.agent_get_capabilities(&agent_id, &session_id, move |result| {
-            let mut sig = sig;
-            sig.with_mut(|s| match result {
-                Ok(cap) => {
-                    s.effective_mcp_servers
-                        .clone_from(&cap.effective_mcp_servers);
-                    s.available_mcp_servers = cap.available_mcp_servers;
-                    s.base_mcp_servers = cap.base_mcp_servers;
-                    s.effective_tools = cap.effective_tools;
-                    s.available_tools = cap.available_tools;
-                    s.base_tools = cap.base_tools;
-                    s.effective_skills = cap.effective_skills;
-                    s.available_skills = cap.available_skills;
-                    s.base_skills = cap.base_skills;
-                    s.loading = false;
-                    s.dirty = false;
-                    let hs: HashSet<String> = cap.effective_mcp_servers.into_iter().collect();
-                    sel.set(hs);
-                    dirty.set(false);
-                }
-                Err(e) => {
-                    s.loading = false;
-                    log::error!("Failed to load MCP capabilities: {e}");
-                }
-            });
-        });
-    });
 
     // Load from cache or trigger DP fetch whenever active_node changes.
     let app_state_for_effect = app_state.clone();
@@ -318,14 +253,6 @@ pub fn McpPanel() -> Element {
     // Always use the local signal for subtab — the cache can lag.
     let display_active = active_subtab.read().clone();
 
-    // Read capability state BEFORE rsx!
-    let cap_state = cap_signal.read();
-    let cap_loading = cap_state.loading;
-    let cap_eff = cap_state.effective_mcp_servers.clone();
-    let cap_base = cap_state.base_mcp_servers.clone();
-    let cap_dirt = *cap_dirty.read();
-    let cap_has = !cap_state.available_mcp_servers.is_empty() || !cap_base.is_empty();
-
     rsx! {
         div { class: "flex-1 overflow-y-auto p-2",
             if active_node.read().is_none() {
@@ -354,98 +281,6 @@ pub fn McpPanel() -> Element {
                 }
             }
 
-            // Capability Overlay section
-            div { class: "border-t border-[#333] my-2" }
-            div {
-                div { class: "text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px] mb-1",
-                    "Capability Overlay"
-                }
-                if cap_loading {
-                    div { class: "text-[12px] text-[#888] mb-2", "Loading..." }
-                } else if !cap_has {
-                    div { class: "text-[12px] text-[#666] px-2", "No capability data for this agent" }
-                } else {
-                    div { class: "flex gap-2 mb-2",
-                        button {
-                            class: "px-2 py-0.5 text-[12px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#4a4a65] disabled:opacity-40 disabled:cursor-not-allowed",
-                            disabled: !cap_dirt,
-                            onclick: {
-                                let sel = selected_mcp_signal.clone();
-                                let dirty = cap_dirty.clone();
-                                let cs = cap_signal.clone();
-                                let ag = agents.clone();
-                                let gl = global.clone();
-                                let app = app_state.clone();
-                                move |_| {
-                                    let mut sel = sel;
-                                    let mut dirty = dirty;
-                                    let mut cs = cs;
-                                    let agent_id = ag.read().selected.clone().unwrap_or_default();
-                                    let session_id = gl.read().session_id.clone();
-                                    if agent_id.is_empty() { return; }
-                                    let node_id = active_node.read().clone();
-                                    let client = node_id.as_ref()
-                                        .and_then(|nid| app.dp_pool.read().get(nid).map(|c| c.client.clone()))
-                                        .unwrap_or_else(|| app.rpc_client.clone());
-                                    let mcps: Vec<String> = sel.read().iter().cloned().collect();
-                                    client.agent_update_capabilities(&agent_id, &session_id, vec![], vec![], mcps, move |result| {
-                                        cs.with_mut(|s| {
-                                            match result {
-                                                Ok(upd) => { s.effective_mcp_servers = upd.effective_mcp_servers; s.dirty = false; dirty.set(false); }
-                                                Err(e) => { log::error!("Failed to update capabilities: {e}"); }
-                                            }
-                                        });
-                                    });
-                                }
-                            },
-                            "Apply"
-                        }
-                        button {
-                            class: "px-2 py-0.5 text-[12px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#4a4a65]",
-                            onclick: {
-                                let sel = selected_mcp_signal.clone();
-                                let cs = cap_signal.clone();
-                                let dirty = cap_dirty.clone();
-                                move |_| {
-                                    let mut sel = sel;
-                                    let mut dirty = dirty;
-                                    let base = cs.read().base_mcp_servers.clone();
-                                    sel.set(base.into_iter().collect());
-                                    dirty.set(true);
-                                }
-                            },
-                            "Reset to default"
-                        }
-                    }
-                    for server_name in &cap_eff {
-                        {
-                            let sn = server_name.clone();
-                            let chk = selected_mcp_signal.read().contains(&sn);
-                            rsx! {
-                                div { class: "flex items-center gap-2 py-0.5 px-2",
-                                    input {
-                                        r#type: "checkbox",
-                                        checked: chk,
-                                        oninput: {
-                                            let sel = selected_mcp_signal.clone();
-                                            let dirty = cap_dirty.clone();
-                                            let name = sn.clone();
-                                            move |_| {
-                                                let mut sel = sel;
-                                                let mut dirty = dirty;
-                                                let mut hs = sel.write();
-                                                if hs.contains(&name) { hs.remove(&name); } else { hs.insert(name.clone()); }
-                                                dirty.set(true);
-                                            }
-                                        },
-                                    }
-                                    span { class: "text-[13px] text-[#e0e0e0]", "{sn}" }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 }
