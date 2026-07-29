@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use tokio::sync::RwLock;
 use vol_llm_context::{AttentionAnchor, ContextBlock, ContextContributor, ContextError};
 use vol_llm_core::Message;
 
@@ -11,14 +12,24 @@ pub struct SkillInjector {
     loader: Arc<SkillLoader>,
     anchor: AttentionAnchor,
     cached_size: tokio::sync::Mutex<usize>,
+    /// Shared filter: only include skills whose names are in this set.
+    /// None or empty = include all discovered skills.
+    /// Wrapped in Arc<RwLock> so it can be updated externally by the
+    /// capability overlay system without replacing the contributor.
+    pub skill_filter: Arc<RwLock<Option<Vec<String>>>>,
 }
 
 impl SkillInjector {
-    pub fn new(loader: Arc<SkillLoader>, anchor: AttentionAnchor) -> Self {
+    pub fn new(
+        loader: Arc<SkillLoader>,
+        anchor: AttentionAnchor,
+        skill_filter: Option<Vec<String>>,
+    ) -> Self {
         Self {
             loader,
             anchor,
             cached_size: tokio::sync::Mutex::new(0),
+            skill_filter: Arc::new(RwLock::new(skill_filter)),
         }
     }
 
@@ -29,7 +40,7 @@ impl SkillInjector {
         let loader = Arc::new(crate::loader::SkillLoader::new(Some(
             working_dir.to_path_buf(),
         )));
-        Self::new(loader, anchor)
+        Self::new(loader, anchor, None)
     }
 
     /// Discover skills from the configured roots.
@@ -49,8 +60,30 @@ impl SkillInjector {
             return String::new();
         }
 
+        // Apply skill name filter if set (reads from shared filter)
+        let filter_guard = self.skill_filter.read().await;
+        let filtered: Vec<_> = if let Some(ref filter) = *filter_guard {
+            if filter.is_empty() {
+                metadata
+            } else {
+                let filter_set: std::collections::HashSet<&str> =
+                    filter.iter().map(String::as_str).collect();
+                metadata
+                    .into_iter()
+                    .filter(|m| filter_set.contains(m.name.as_str()))
+                    .collect()
+            }
+        } else {
+            metadata
+        };
+        drop(filter_guard);
+
+        if filtered.is_empty() {
+            return String::new();
+        }
+
         let mut output = String::from("Available skills:\n");
-        for m in &metadata {
+        for m in &filtered {
             output.push_str(&format!("- {}: {}\n", m.name, m.description));
         }
         output.push_str("\nUse the `skill` tool to load any skill's full instructions.");
@@ -93,6 +126,7 @@ impl ContextContributor for SkillInjector {
             loader: self.loader.clone(),
             anchor: self.anchor.clone(),
             cached_size: tokio::sync::Mutex::new(0), // fresh cache for clone
+            skill_filter: self.skill_filter.clone(), // share the same filter
         })
     }
 }
@@ -106,7 +140,7 @@ mod tests {
     #[tokio::test]
     async fn test_format_metadata_empty() {
         let loader = SkillLoader::new_empty();
-        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0), None);
         let output = injector.format_metadata().await;
         assert!(output.is_empty());
     }
@@ -120,7 +154,7 @@ mod tests {
         skill.id = "user:rust-conventions".to_string();
         loader.register(skill).await;
 
-        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0), None);
         let output = injector.format_metadata().await;
 
         assert!(output.contains("Available skills:"));
@@ -132,7 +166,7 @@ mod tests {
     #[tokio::test]
     async fn test_skill_injector_contribute_empty() {
         let loader = SkillLoader::new_empty();
-        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0), None);
         let blocks = injector.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
         assert!(blocks[0].messages.is_empty());
@@ -147,7 +181,7 @@ mod tests {
         skill.id = "user:rust-conventions".to_string();
         loader.register(skill).await;
 
-        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0), None);
         let blocks = injector.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
         assert!(blocks[0].messages[0]
@@ -167,7 +201,7 @@ mod tests {
     #[tokio::test]
     async fn test_skill_injector_compress_noop() {
         let loader = SkillLoader::new(None);
-        let mut injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
+        let mut injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0), None);
         injector.compress().await;
         // No panic, no state change — compress is a no-op
     }
@@ -175,7 +209,7 @@ mod tests {
     #[tokio::test]
     async fn test_skill_injector_clone_box() {
         let loader = SkillLoader::new(None);
-        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0), None);
         let cloned = injector.clone_box();
         assert_eq!(cloned.name(), "skills");
     }
@@ -189,7 +223,7 @@ mod tests {
         skill.id = "user:test-skill".to_string();
         loader.register(skill).await;
 
-        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0));
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0), None);
         let original = injector.contribute().await.unwrap();
         let cloned = injector.clone_box();
         let cloned_result = cloned.contribute().await.unwrap();

@@ -272,6 +272,7 @@ impl AgentConfigBuilder {
             b = b.add_contributor(Box::new(SkillInjector::new(
                 skill_loader,
                 AttentionAnchor::Head(1),
+                None,
             )));
 
             // 3. Custom Files — Middle(0..n) from AgentDef.context_files

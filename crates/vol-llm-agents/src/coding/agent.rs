@@ -100,7 +100,7 @@ impl CodingAgent {
         tool_registry.register(SkillTool::new(loader.clone()));
 
         // Build context with skill injector
-        let injector = SkillInjector::new(loader, AttentionAnchor::Head(0));
+        let injector = SkillInjector::new(loader, AttentionAnchor::Head(0), None);
         let context_builder = vol_llm_context::ContextBuilderBuilder::new(128_000)
             .add_contributor(Box::new(vol_llm_context::builtin::SimpleContributor::system(
                 "You are an expert coding assistant. Help users understand, modify, and improve their codebase.".to_string(),
