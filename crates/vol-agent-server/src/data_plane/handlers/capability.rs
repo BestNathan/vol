@@ -147,6 +147,8 @@ impl DomainHandler for CapabilityHandler {
             _ => return Err(ProtocolError::PayloadDecodeFailed("capability")),
         };
 
+        tracing::info!(operation = ?op, "CapabilityHandler received request");
+
         match (op, message.payload) {
             (
                 AgentOperation::GetCapabilities,
@@ -176,6 +178,14 @@ impl DomainHandler for CapabilityHandler {
 
                 let available = self.gather_available().await;
                 drop(overlays);
+
+                tracing::info!(
+                    agent = %agent_id,
+                    tools = effective_tools.len(),
+                    skills = effective_skills.len(),
+                    mcps = effective_mcp_servers.len(),
+                    "CapabilityHandler: get_capabilities ok"
+                );
 
                 Ok(vec![AgentServerMessage::new_result(
                     message.message_id,
