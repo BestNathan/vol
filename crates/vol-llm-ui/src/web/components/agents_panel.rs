@@ -7,6 +7,7 @@ use crate::state::{
     AgentSubTab, AgentsState, ConversationEntry, ConversationState, GlobalState, UiEventKind,
 };
 
+use super::capability_bar::CapabilityBar;
 use super::context_panel::ContextPanel;
 use super::conversation::ConversationView;
 use super::input_area::InputArea;
@@ -425,6 +426,7 @@ pub fn AgentsPanel() -> Element {
                     match sub_tab {
                         AgentSubTab::Conversation => rsx! {
                             ConversationView {}
+                            CapabilityBar {}
                             InputArea {}
                         },
                         AgentSubTab::Sessions => rsx! {
