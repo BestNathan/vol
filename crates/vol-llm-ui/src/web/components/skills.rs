@@ -493,7 +493,9 @@ pub fn SkillsPanel(mut dialog_signal: Signal<SkillDialogState>) -> Element {
                 }
                 if cap_loading {
                     div { class: "text-[12px] text-[#888] mb-2", "Loading..." }
-                } else if cap_has {
+                } else if !cap_has {
+                    div { class: "text-[12px] text-[#666] px-2", "No capability data for this agent" }
+                } else {
                     div { class: "flex gap-2 mb-2",
                         button {
                             class: "px-2 py-0.5 text-[12px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#4a4a65] disabled:opacity-40 disabled:cursor-not-allowed",
