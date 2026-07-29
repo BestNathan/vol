@@ -3,6 +3,7 @@
 pub mod agents_panel;
 pub mod app;
 pub mod approval_dialog;
+pub mod capability_bar;
 pub mod context_panel;
 pub mod conversation;
 pub mod debug_panel;
@@ -33,6 +34,7 @@ pub mod workspace;
 pub use agents_panel::AgentsPanel;
 pub use app::App;
 pub use approval_dialog::ApprovalDialog;
+pub use capability_bar::CapabilityBar;
 pub use context_panel::ContextPanel;
 pub use conversation::ConversationView;
 pub use debug_panel::DebugPanel;
