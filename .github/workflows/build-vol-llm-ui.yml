@@ -94,8 +94,12 @@ jobs:
           tags: ${{ steps.image.outputs.image }}
           push: ${{ steps.push.outputs.value == 'true' }}
           provenance: false
-          cache-from: type=gha,scope=vol-llm-ui-amd64
-          cache-to: type=gha,mode=max,scope=vol-llm-ui-amd64
+          cache-from: |
+            type=gha,scope=vol-llm-ui-amd64
+            type=gha,scope=vol-llm-ui-cargo-amd64
+          cache-to: |
+            type=gha,mode=max,scope=vol-llm-ui-amd64
+            type=gha,mode=max,scope=vol-llm-ui-cargo-amd64
 
       - name: Update GitOps manifest image
         if: steps.push.outputs.value == 'true'

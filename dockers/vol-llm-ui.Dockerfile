@@ -78,14 +78,19 @@ FROM tools AS builder
 
 # Cook dependencies (cached layer)
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --target wasm32-unknown-unknown \
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo chef cook --release --target wasm32-unknown-unknown \
     --package vol-llm-ui --bin vol-llm-ui-web \
     --no-default-features --features web \
     --recipe-path recipe.json
 
-# Copy source and build
+# Copy source and build with incremental compilation cache
 COPY . .
-RUN dx build --release --package vol-llm-ui --bin vol-llm-ui-web \
+RUN --mount=type=cache,target=/app/target \
+    --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    dx build --release --package vol-llm-ui --bin vol-llm-ui-web \
     --no-default-features --features web
 
 # ── Runtime: nginx + static files ────────────────────────────────────────────
