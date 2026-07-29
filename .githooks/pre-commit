@@ -37,6 +37,34 @@ if [ -n "$STAGED_RUST" ]; then
   fi
 fi
 
+
+# ── Coverage gate ──────────────────────────────────────────────────
+if [ "${SKIP_COVERAGE:-0}" = "1" ]; then
+  echo -e "${YELLOW}ℹ coverage skipped (SKIP_COVERAGE=1)${NC}"
+else
+  # Extract changed crate names from staged Rust files.
+  # Cargo.toml change → check all crates (no args = full workspace).
+  if echo "$STAGED_ALL" | grep -q '^Cargo.toml$'; then
+    CHANGED_CRATES=""
+    echo -e "${YELLOW}→ Cargo.toml staged — checking coverage for all crates${NC}"
+  else
+    CHANGED_CRATES=$(echo "$STAGED_RUST" \
+      | sed -n 's|^crates/\([^/]*\)/.*|\1|p' \
+      | sort -u \
+      | tr '\n' ' ' \
+      || true)
+  fi
+
+  if [ -n "$CHANGED_CRATES" ] || echo "$STAGED_ALL" | grep -q '^Cargo.toml$'; then
+    echo -e "${YELLOW}→ coverage check for changed crates${NC}"
+    if ./scripts/check-coverage.sh $CHANGED_CRATES; then
+      echo -e "${GREEN}✓ coverage${NC}"
+    else
+      echo -e "${RED}✗ coverage failed — add tests and retry, or SKIP_COVERAGE=1 to bypass${NC}"
+      HAS_ERROR=1
+    fi
+  fi
+fi
 # ── Result ───────────────────────────────────────────────────────────────
 if [ $HAS_ERROR -eq 1 ]; then
   echo -e "\n${RED}Commit blocked — fix the issues above and try again${NC}"
