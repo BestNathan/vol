@@ -918,20 +918,6 @@ impl Payload {
 
     /// Encode the payload as flat JSON (no domain/data or variant wrappers).
     pub fn data_json(&self) -> serde_json::Value {
-        // Handle agent capabilities payloads explicitly — these use flat struct
-        // fields that serialize correctly through the generic path below, but we
-        // list them here for consistency and to avoid falling through to the
-        // untagged wrapper in edge cases.
-        if let Payload::Agent(
-            p @ (AgentPayload::GetCapabilities { .. }
-            | AgentPayload::GetCapabilitiesResult { .. }
-            | AgentPayload::UpdateCapabilities { .. }
-            | AgentPayload::UpdateCapabilitiesResult { .. }),
-        ) = self
-        {
-            return serde_json::to_value(p).unwrap_or_default();
-        }
-
         let val = serde_json::to_value(self).unwrap_or(serde_json::Value::Null);
         // With untagged Payload, the value is the variant's data directly, e.g.
         // {"SubmitResult":{"run_id":"x"}}. Strip the variant name wrapper.
@@ -2378,6 +2364,33 @@ mod tests {
                 contributor_name: "skills".into(),
             },
             AgentPayload::ContextSnapshotResult { messages: vec![] },
+            AgentPayload::GetCapabilities {
+                agent_id: "test-agent".into(),
+                session_id: "sess-1".into(),
+            },
+            AgentPayload::GetCapabilitiesResult {
+                effective_tools: vec!["bash".into()],
+                effective_skills: vec!["code-review".into()],
+                effective_mcp_servers: vec!["k8s".into()],
+                available_tools: vec![serde_json::json!({"name": "bash"})],
+                available_skills: vec![serde_json::json!({"name": "code-review"})],
+                available_mcp_servers: vec![serde_json::json!({"name": "k8s"})],
+                base_tools: vec!["bash".into(), "read".into()],
+                base_skills: vec![],
+                base_mcp_servers: vec![],
+            },
+            AgentPayload::UpdateCapabilities {
+                agent_id: "test-agent".into(),
+                session_id: "sess-1".into(),
+                effective_tools: vec!["bash".into()],
+                effective_skills: vec![],
+                effective_mcp_servers: vec![],
+            },
+            AgentPayload::UpdateCapabilitiesResult {
+                effective_tools: vec!["bash".into()],
+                effective_skills: vec![],
+                effective_mcp_servers: vec![],
+            },
         ];
         for v in variants {
             let json = serde_json::to_value(&v).unwrap();

@@ -333,9 +333,12 @@ impl DomainHandler for AgentHandler {
             }
             // Handlers for GetCapabilities and UpdateCapabilities will be
             // implemented in a follow-up task.
-            (AgentOperation::GetCapabilities, _) | (AgentOperation::UpdateCapabilities, _) => {
+            (AgentOperation::GetCapabilities, _) => {
                 Err(ProtocolError::PayloadDecodeFailed("agent.get_capabilities"))
             }
+            (AgentOperation::UpdateCapabilities, _) => Err(ProtocolError::PayloadDecodeFailed(
+                "agent.update_capabilities",
+            )),
         }
     }
 }
