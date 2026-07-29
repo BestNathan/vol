@@ -1,8 +1,12 @@
 //! Skills panel showing available skills.
 
-use crate::state::{SkillDialogState, UiEventKind};
+use crate::state::{
+    AgentsState, CapabilityOverlayState, GlobalState, SkillDialogState, UiEventKind,
+};
+use crate::web::client::JsonRpcClient;
 use crate::web::components::app::AppState;
 use dioxus::prelude::*;
+use std::collections::HashSet;
 
 /// Key used to store the serialized skills list in NodeDataCache.
 const CACHE_KEY: &str = "skills";
@@ -38,6 +42,64 @@ pub fn SkillsPanel(mut dialog_signal: Signal<SkillDialogState>) -> Element {
     let app_state: AppState = use_context();
     let active_node = app_state.active_node_id;
     let cache = app_state.node_data_cache;
+
+    // Capability overlay state
+    let cap_signal: Signal<CapabilityOverlayState> = use_signal(CapabilityOverlayState::new);
+    let selected_skills_signal: Signal<HashSet<String>> = use_signal(HashSet::new);
+    let cap_dirty: Signal<bool> = use_signal(|| false);
+    let global: Signal<GlobalState> = use_context();
+    let agents: Signal<AgentsState> = use_context();
+    let global_for_cap = global.clone();
+    let agents_for_cap = agents.clone();
+    let app_state_for_cap = app_state.clone();
+    use_hook(move || {
+        let agent_id = agents_for_cap.read().selected.clone().unwrap_or_default();
+        let session_id = global_for_cap.read().session_id.clone();
+        if agent_id.is_empty() {
+            cap_signal.with_mut(|s| s.loading = false);
+            return;
+        }
+        // Get client from DP pool or CP fallback.
+        let node_id = active_node.read().clone();
+        let client = node_id
+            .as_ref()
+            .and_then(|nid| {
+                app_state_for_cap
+                    .dp_pool
+                    .read()
+                    .get(nid)
+                    .map(|c| c.client.clone())
+            })
+            .unwrap_or_else(|| app_state_for_cap.rpc_client.clone());
+        let sig = cap_signal.clone();
+        let sel = selected_skills_signal.clone();
+        let dirty = cap_dirty.clone();
+        client.agent_get_capabilities(&agent_id, &session_id, move |result| {
+            let mut sig = sig;
+            sig.with_mut(|s| match result {
+                Ok(cap) => {
+                    s.effective_skills = cap.effective_skills.clone();
+                    s.available_skills = cap.available_skills;
+                    s.base_skills = cap.base_skills;
+                    s.effective_tools = cap.effective_tools;
+                    s.available_tools = cap.available_tools;
+                    s.base_tools = cap.base_tools;
+                    s.effective_mcp_servers = cap.effective_mcp_servers;
+                    s.available_mcp_servers = cap.available_mcp_servers;
+                    s.base_mcp_servers = cap.base_mcp_servers;
+                    s.loading = false;
+                    s.dirty = false;
+                    let hs: HashSet<String> = cap.effective_skills.into_iter().collect();
+                    sel.set(hs);
+                    dirty.set(false);
+                }
+                Err(e) => {
+                    s.loading = false;
+                    log::error!("Failed to load skill capabilities: {e}");
+                }
+            });
+        });
+    });
 
     // Load skills from cache or trigger DP fetch when active_node changes.
     let app_state_for_effect = app_state.clone();
@@ -409,6 +471,106 @@ pub fn SkillsPanel(mut dialog_signal: Signal<SkillDialogState>) -> Element {
                 } }
                 tbody {
                     {(0..count).map(|i| { let d = dialog_signal; let app_clone = app_state.clone(); let skill = skills[i].clone(); rsx! { SkillRow { skill: skill, dialog_signal: d, app_state: app_clone } } }).collect::<Vec<Element>>().into_iter()}
+                }
+            }
+
+            // Capability Overlay section
+            div {
+                div { class: "flex items-center justify-between mb-2",
+                    div { class: "text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]",
+                        "Capability Overlay"
+                    }
+                }
+                let cap_loading = cap_signal.read().loading;
+                if cap_loading {
+                    div { class: "text-[12px] text-[#888] mb-2", "Loading..." }
+                } else {
+                    let effective_skills = cap_signal.read().effective_skills.clone();
+                    let base_skills = cap_signal.read().base_skills.clone();
+                    let is_dirty = cap_dirty.read().clone();
+                    let has_data = !base_skills.is_empty() || !effective_skills.is_empty();
+                    if has_data {
+                        div { class: "flex gap-2 mb-2",
+                            button {
+                                class: "px-2 py-0.5 text-[12px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#4a4a65] disabled:opacity-40 disabled:cursor-not-allowed",
+                                disabled: !is_dirty,
+                                onclick: {
+                                    let sel = selected_skills_signal.clone();
+                                    let dirty = cap_dirty.clone();
+                                    let cap_sig = cap_signal.clone();
+                                    let agents = agents.clone();
+                                    let global = global.clone();
+                                    move |_| {
+                                        let agent_id = agents.read().selected.clone().unwrap_or_default();
+                                        let session_id = global.read().session_id.clone();
+                                        if agent_id.is_empty() { return; }
+                                        let node_id = active_node.read().clone();
+                                        let client = node_id
+                                            .as_ref()
+                                            .and_then(|nid| app_state.dp_pool.read().get(nid).map(|c| c.client.clone()))
+                                            .unwrap_or_else(|| app_state.rpc_client.clone());
+                                        let skills_list: Vec<String> = sel.read().iter().cloned().collect();
+                                        let tools: Vec<String> = Vec::new();
+                                        let mcps: Vec<String> = Vec::new();
+                                        client.agent_update_capabilities(&agent_id, &session_id, tools, skills_list, mcps, move |result| {
+                                            cap_sig.with_mut(|s| {
+                                                match result {
+                                                    Ok(upd) => {
+                                                        s.effective_skills = upd.effective_skills;
+                                                        s.dirty = false;
+                                                        dirty.set(false);
+                                                    }
+                                                    Err(e) => {
+                                                        log::error!("Failed to update capabilities: {e}");
+                                                    }
+                                                }
+                                            });
+                                        });
+                                    }
+                                },
+                                "Apply"
+                            }
+                            button {
+                                class: "px-2 py-0.5 text-[12px] bg-[#3a3a55] text-[#ccc] rounded hover:bg-[#4a4a65]",
+                                onclick: {
+                                    let sel = selected_skills_signal.clone();
+                                    let cap_sig = cap_signal.clone();
+                                    let dirty = cap_dirty.clone();
+                                    move |_| {
+                                        let base = cap_sig.read().base_skills.clone();
+                                        let hs: HashSet<String> = base.into_iter().collect();
+                                        sel.set(hs);
+                                        dirty.set(true);
+                                    }
+                                },
+                                "Reset to default"
+                            }
+                        }
+                        for skill_name in &effective_skills {
+                            let is_checked = selected_skills_signal.read().contains(skill_name);
+                            div { class: "flex items-center gap-2 py-0.5 px-2",
+                                input {
+                                    input_type: "checkbox",
+                                    checked: is_checked,
+                                    oninput: {
+                                        let sel = selected_skills_signal.clone();
+                                        let dirty = cap_dirty.clone();
+                                        let name = skill_name.clone();
+                                        move |_| {
+                                            let mut hs = sel.write();
+                                            if hs.contains(&name) {
+                                                hs.remove(&name);
+                                            } else {
+                                                hs.insert(name.clone());
+                                            }
+                                            dirty.set(true);
+                                        }
+                                    },
+                                }
+                                span { class: "text-[13px] text-[#e0e0e0]", "{skill_name}" }
+                            }
+                        }
+                    }
                 }
             }
         }
