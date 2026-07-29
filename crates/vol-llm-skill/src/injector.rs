@@ -238,4 +238,37 @@ mod tests {
                 .as_str()
         );
     }
+
+    #[tokio::test]
+    async fn test_skill_injector_filter_excludes_skills() {
+        let loader = SkillLoader::new_empty();
+        let mut skill_a = SkillDef::new("skill-a", "# A").with_description("Skill A");
+        skill_a.id = "user:skill-a".into();
+        let mut skill_b = SkillDef::new("skill-b", "# B").with_description("Skill B");
+        skill_b.id = "user:skill-b".into();
+        loader.register(skill_a).await;
+        loader.register(skill_b).await;
+
+        // Filter to only skill-b
+        let injector = SkillInjector::new(
+            Arc::new(loader),
+            AttentionAnchor::Head(0),
+            Some(vec!["skill-b".into()]),
+        );
+        let output = injector.format_metadata().await;
+        assert!(output.contains("skill-b"));
+        assert!(!output.contains("skill-a"));
+    }
+
+    #[tokio::test]
+    async fn test_skill_injector_filter_none_shows_all() {
+        let loader = SkillLoader::new_empty();
+        let mut skill = SkillDef::new("test-skill", "# T").with_description("A test skill");
+        skill.id = "user:test-skill".into();
+        loader.register(skill).await;
+
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0), None);
+        let output = injector.format_metadata().await;
+        assert!(output.contains("test-skill"));
+    }
 }

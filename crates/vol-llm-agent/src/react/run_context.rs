@@ -946,4 +946,23 @@ mod tests {
         ctx.reset_iteration();
         assert_eq!(ctx.current_iteration(), 0);
     }
+
+    #[tokio::test]
+    async fn test_capability_overlays_default_to_none() {
+        let ctx = create_test_context();
+        assert!(ctx.capability_overlays.is_none());
+        assert!(ctx.agent_id.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_with_capability_overlays_sets_fields() {
+        use std::collections::HashMap;
+        use tokio::sync::RwLock;
+        use vol_llm_core::capability_overlay::CapabilityOverlay;
+        let ctx = create_test_context();
+        let map = Arc::new(RwLock::new(HashMap::new()));
+        let ctx = ctx.with_capability_overlays(map.clone(), "test-agent".into());
+        assert!(ctx.capability_overlays.is_some());
+        assert_eq!(ctx.agent_id, "test-agent");
+    }
 }
