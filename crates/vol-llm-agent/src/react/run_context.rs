@@ -7,7 +7,7 @@ use super::state::{ReasoningStep, ToolCallRecord};
 use super::stream::AgentStreamEvent;
 use super::AgentConfig;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicU32, AtomicU64};
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use vol_llm_core::Message;
@@ -33,6 +33,7 @@ pub enum PluginRequest {
 /// - Mutable state (tool calls, iteration count)
 /// - Resource references (session, tools, config)
 /// - Thread-safe access via Arc/RwLock for async operations
+#[allow(clippy::type_complexity)]
 pub struct RunContext {
     // Immutable fields
     pub run_id: String,
@@ -93,6 +94,23 @@ pub struct RunContext {
     /// avoid keeping shutdown channels alive.
     pub plugin_event_tx: Option<Arc<mpsc::Sender<PluginRequest>>>,
 
+    // === Capability overlay support ===
+    /// Reference to capability overlay map for runtime tool/skill/MCP adjustment.
+    pub capability_overlays: Option<
+        Arc<
+            tokio::sync::RwLock<
+                std::collections::HashMap<
+                    (String, String),
+                    vol_llm_core::capability_overlay::CapabilityOverlay,
+                >,
+            >,
+        >,
+    >,
+    /// Agent ID for overlay lookup.
+    pub agent_id: String,
+    /// Last seen overlay version — when this changes we rebuild the filtered registry.
+    pub(crate) current_overlay_version: Arc<AtomicU64>,
+
     // Internal state collection
     pub(crate) reasoning_chain: Arc<RwLock<Vec<ReasoningStep>>>,
     pub(crate) tool_call_records: Arc<RwLock<Vec<ToolCallRecord>>>,
@@ -143,6 +161,9 @@ impl RunContext {
             config,
             event_tx: Some(event_tx),
             plugin_event_tx: Some(Arc::new(plugin_event_tx)),
+            capability_overlays: None,
+            agent_id: String::new(),
+            current_overlay_version: Arc::new(AtomicU64::new(0)),
             reasoning_chain: Arc::new(RwLock::new(Vec::new())),
             tool_call_records: Arc::new(RwLock::new(Vec::new())),
             final_content: Arc::new(RwLock::new(None)),
@@ -151,6 +172,24 @@ impl RunContext {
         };
 
         (ctx, plugin_event_rx)
+    }
+
+    /// Wire capability overlays for runtime adjustment.
+    pub fn with_capability_overlays(
+        mut self,
+        overlays: Arc<
+            tokio::sync::RwLock<
+                std::collections::HashMap<
+                    (String, String),
+                    vol_llm_core::capability_overlay::CapabilityOverlay,
+                >,
+            >,
+        >,
+        agent_id: String,
+    ) -> Self {
+        self.capability_overlays = Some(overlays);
+        self.agent_id = agent_id;
+        self
     }
 
     /// Get the current iteration number
@@ -311,11 +350,77 @@ impl RunContext {
             .map_err(vol_llm_tool::ToolError::ExecutionFailed)
     }
 
-    /// Build a filtered ToolRegistry based on AgentDef configuration.
+    /// Build a filtered ToolRegistry based on AgentDef configuration or capability overlay.
     ///
-    /// Returns a registry containing only the allowed tools, minus any
-    /// disallowed tools. If no def is present, returns the full registry.
+    /// If a capability overlay is present and its version has changed since last check,
+    /// rebuilds the filtered registry from the overlay's effective tool/skill/MCP settings.
+    /// Otherwise falls back to AgentDef-based filtering.
     fn effective_registry(&self) -> Arc<ToolRegistry> {
+        // Check for runtime overlay first — if version changed, rebuild
+        if let Some(ref overlays) = self.capability_overlays {
+            if let Ok(guard) = overlays.try_read() {
+                let key = (self.agent_id.clone(), self.session_id.clone());
+                if let Some(overlay) = guard.get(&key) {
+                    let version = overlay.version;
+                    let last = self
+                        .current_overlay_version
+                        .load(std::sync::atomic::Ordering::Acquire);
+                    if version != last {
+                        // Build filtered registry from overlay
+                        let allowed: Option<Vec<&str>> = if overlay.effective_tools.is_empty() {
+                            None // empty = allow all
+                        } else {
+                            Some(overlay.effective_tools.iter().map(String::as_str).collect())
+                        };
+                        let disallowed: Option<Vec<&str>> = self
+                            .config
+                            .def
+                            .as_ref()
+                            .and_then(|d| d.disallowed_tools.as_ref())
+                            .map(|v| v.iter().map(String::as_str).collect());
+                        let mut filtered = ToolRegistry::filter(
+                            &self.tools,
+                            allowed.as_deref(),
+                            disallowed.as_deref(),
+                        );
+
+                        // Apply MCP server filter
+                        if !overlay.effective_mcp_servers.is_empty() {
+                            filtered = Arc::new(
+                                (*filtered)
+                                    .clone()
+                                    .filter_mcp_servers(&overlay.effective_mcp_servers),
+                            );
+                        }
+
+                        // Update the skill injector's shared filter
+                        if let Some(ref filter_lock) = self.config.skill_injector_filter {
+                            let new_filter = if overlay.effective_skills.is_empty() {
+                                None // empty = include all
+                            } else {
+                                Some(overlay.effective_skills.clone())
+                            };
+                            // Use try_write to avoid blocking the agent loop
+                            if let Ok(mut f) = filter_lock.try_write() {
+                                *f = new_filter;
+                            }
+                        }
+
+                        self.current_overlay_version
+                            .store(version, std::sync::atomic::Ordering::Release);
+                        tracing::debug!(
+                            version = version,
+                            tools = overlay.effective_tools.len(),
+                            skills = overlay.effective_skills.len(),
+                            "Capability overlay applied"
+                        );
+                        return filtered;
+                    }
+                }
+            }
+        }
+
+        // Fall back to AgentDef-based filtering (original logic)
         if let Some(def) = &self.config.def {
             let allowed: Option<Vec<&str>> = def
                 .tools
@@ -467,6 +572,9 @@ impl Clone for RunContext {
             config: self.config.clone(),
             event_tx: self.event_tx.clone(),
             plugin_event_tx: self.plugin_event_tx.clone(),
+            capability_overlays: self.capability_overlays.clone(),
+            agent_id: self.agent_id.clone(),
+            current_overlay_version: self.current_overlay_version.clone(),
             reasoning_chain: self.reasoning_chain.clone(),
             tool_call_records: self.tool_call_records.clone(),
             final_content: self.final_content.clone(),

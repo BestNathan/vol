@@ -229,6 +229,7 @@ impl DataPlaneServerCore {
             .expect("AgentConfig build failed — LLM, tools, and session are all provided");
 
         config.mcp_manager = Some(mcp);
+        config.capability_overlays = Some(self.capability_overlays.clone());
 
         let holder = ConnectionHolder::new(
             agent_id.clone(),

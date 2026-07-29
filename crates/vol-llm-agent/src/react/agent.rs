@@ -4,6 +4,7 @@ use super::{
     AgentInput, AgentResponse, AgentStreamEvent, PluginDecision, PluginRegistry, RunContext,
 };
 use crate::react::state::ToolCallRecord;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use vol_llm_context::{
@@ -24,6 +25,7 @@ use vol_session::{InMemoryEntryStore, Session, SessionContributor};
 ///
 /// Clone is intentionally NOT derived. After construction, config is shared
 /// via Arc and external code only gets &AgentConfig references.
+#[allow(clippy::type_complexity)]
 pub struct AgentConfig {
     // === Declarative definition (optional) ===
     pub def: Option<crate::agent_def::AgentDef>,
@@ -43,6 +45,18 @@ pub struct AgentConfig {
     // === Context and plugins ===
     pub(crate) context_builder: RwLock<ContextBuilder>,
     pub plugin_registry: PluginRegistry,
+
+    // === Capability overlays ===
+    /// Capability overlay map reference for runtime tool/skill/MCP adjustment.
+    pub capability_overlays: Option<
+        Arc<
+            tokio::sync::RwLock<
+                HashMap<(String, String), vol_llm_core::capability_overlay::CapabilityOverlay>,
+            >,
+        >,
+    >,
+    /// Shared skill filter from SkillInjector, for runtime updates via capability overlay.
+    pub skill_injector_filter: Option<Arc<tokio::sync::RwLock<Option<Vec<String>>>>>,
 
     // === MCP ===
     pub mcp_manager: Option<Arc<McpManager>>,
@@ -98,6 +112,8 @@ impl Default for AgentConfig {
             tool_config: ToolConfig::new(),
             context_builder: RwLock::new(ContextBuilderBuilder::new(128_000).build()),
             plugin_registry: PluginRegistry::new(),
+            capability_overlays: None,
+            skill_injector_filter: None,
             mcp_manager: None,
             agent_id: generate_agent_id(),
             working_dir: PathBuf::from("."),
@@ -334,8 +350,14 @@ impl ReActAgent {
             run_state: &self.run_state,
         };
 
-        let (run_ctx, plugin_rx) =
+        let (mut run_ctx, plugin_rx) =
             RunContext::new(run_id.clone(), user_input.clone(), self.config.clone());
+
+        // Wire capability overlays for runtime adjustment
+        if let Some(ref overlays) = self.config.capability_overlays {
+            run_ctx =
+                run_ctx.with_capability_overlays(overlays.clone(), self.config.agent_id.clone());
+        }
 
         for (key, value) in input.metadata {
             run_ctx.data.write().await.insert(key, value);

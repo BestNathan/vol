@@ -181,6 +181,30 @@ impl AgentRuntime {
         Ok(agent)
     }
 
+    /// Unregister an agent — cleans up capability overlay entries and other per-agent state.
+    #[allow(clippy::unwrap_used)]
+    pub async fn unregister_agent(&self, agent_name: &str) {
+        // Cleanup capability overlays for this agent
+        {
+            let mut overlays = self.capability_overlays.write().await;
+            overlays.retain(|(agent_id, _), _| agent_id != agent_name);
+        }
+
+        // Cleanup agent status
+        self.agent_status
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(agent_name);
+
+        // Cleanup agent defs
+        self.agent_defs
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(agent_name);
+
+        tracing::info!(name = %agent_name, "Agent unregistered from runtime");
+    }
+
     /// Discover and register all agents from .agents/agents/ directories.
     pub async fn discover_agents(&self) -> Result<Vec<(String, ReActAgent)>, String> {
         let loader = AgentLoader::new(Some(self.working_dir.clone()));

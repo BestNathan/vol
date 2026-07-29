@@ -1,6 +1,7 @@
 //! vol-llm-core: Core protocol types for LLM interaction.
 
 pub mod agent_def;
+pub mod capability_overlay;
 pub mod client;
 pub mod conversation;
 pub mod error;
