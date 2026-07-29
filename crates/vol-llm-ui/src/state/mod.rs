@@ -570,40 +570,6 @@ pub trait HasReducer<T> {
 
 // === Per-Component Local State (web only) =====================================
 
-/// Capability overlay state received from the server.
-#[cfg(all(feature = "web", not(feature = "tui")))]
-#[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize)]
-pub struct CapabilityOverlayState {
-    pub effective_tools: Vec<String>,
-    pub effective_skills: Vec<String>,
-    pub effective_mcp_servers: Vec<String>,
-    pub available_tools: Vec<serde_json::Value>,
-    pub available_skills: Vec<serde_json::Value>,
-    pub available_mcp_servers: Vec<serde_json::Value>,
-    pub base_tools: Vec<String>,
-    pub base_skills: Vec<String>,
-    pub base_mcp_servers: Vec<String>,
-    #[serde(default)]
-    pub loading: bool,
-    #[serde(default)]
-    pub dirty: bool,
-}
-
-#[cfg(all(feature = "web", not(feature = "tui")))]
-impl CapabilityOverlayState {
-    pub fn new() -> Self {
-        Self {
-            loading: true,
-            dirty: false,
-            ..Default::default()
-        }
-    }
-
-    pub fn is_modified(&self) -> bool {
-        self.dirty
-    }
-}
-
 /// Local state for StatusBar — global run/session/connection info.
 #[cfg(all(feature = "web", not(feature = "tui")))]
 #[derive(Debug)]
@@ -629,7 +595,6 @@ pub struct GlobalState {
     pub reconnect_maxed: bool,
     pub unsafe_mode: bool,
     pub active_tab: ActiveTab,
-    pub capabilities: CapabilityOverlayState,
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
@@ -655,7 +620,6 @@ impl GlobalState {
             reconnect_maxed: false,
             unsafe_mode: false,
             active_tab: ActiveTab::Agents,
-            capabilities: CapabilityOverlayState::new(),
         }
     }
 
