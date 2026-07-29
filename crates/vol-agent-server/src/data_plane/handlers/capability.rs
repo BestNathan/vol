@@ -84,21 +84,31 @@ impl CapabilityHandler {
             })
             .collect();
 
-        let skills: Vec<serde_json::Value> = self
-            .skill_loader
-            .list_metadata()
-            .await
-            .iter()
-            .map(|m| {
-                serde_json::json!({
-                    "id": m.id,
-                    "name": m.name,
-                    "version": m.version,
-                    "scope": m.scope.to_string(),
-                    "description": m.description,
+        let skills: Vec<serde_json::Value> = match tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            self.skill_loader.list_metadata(),
+        )
+        .await
+        {
+            Ok(metadata) => metadata
+                .iter()
+                .map(|m| {
+                    serde_json::json!({
+                        "id": m.id,
+                        "name": m.name,
+                        "version": m.version,
+                        "scope": m.scope.to_string(),
+                        "description": m.description,
+                    })
                 })
-            })
-            .collect();
+                .collect(),
+            Err(_) => {
+                tracing::warn!(
+                    "skill_loader.list_metadata() timed out after 2s — returning empty skills list"
+                );
+                vec![]
+            }
+        };
 
         let mcp_servers: Vec<serde_json::Value> = self
             .mcp_manager
