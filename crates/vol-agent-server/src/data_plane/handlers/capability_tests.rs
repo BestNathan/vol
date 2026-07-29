@@ -223,3 +223,79 @@ async fn update_capabilities_empty_lists_remove_overlay() {
     let json = replies[0].payload.data_json();
     assert_eq!(json["effective_tools"].as_array().unwrap().len(), 2);
 }
+
+#[tokio::test]
+async fn update_capabilities_rejects_unknown_tool() {
+    let handler = test_handler();
+    let replies = handler
+        .handle(msg(
+            "1",
+            Operation::Agent(AgentOperation::UpdateCapabilities),
+            Payload::Agent(AgentPayload::UpdateCapabilities {
+                agent_id: "test-agent".into(),
+                session_id: "sess-1".into(),
+                effective_tools: vec!["nonexistent_tool".into()],
+                effective_skills: vec![],
+                effective_mcp_servers: vec![],
+            }),
+        ))
+        .await
+        .unwrap();
+    let json = replies[0].payload.data_json();
+    assert_eq!(json["code"], "unknown_tool");
+}
+
+#[tokio::test]
+async fn get_capabilities_returns_empty_for_unknown_agent() {
+    let handler = test_handler();
+    let replies = handler
+        .handle(msg(
+            "1",
+            Operation::Agent(AgentOperation::GetCapabilities),
+            Payload::Agent(AgentPayload::GetCapabilities {
+                agent_id: "no-such-agent".into(),
+                session_id: "sess-1".into(),
+            }),
+        ))
+        .await
+        .unwrap();
+    let json = replies[0].payload.data_json();
+    assert_eq!(json["effective_tools"].as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn update_capabilities_wrong_payload_returns_error() {
+    let handler = test_handler();
+    let err = handler
+        .handle(msg(
+            "1",
+            Operation::Agent(AgentOperation::UpdateCapabilities),
+            Payload::Agent(AgentPayload::GetCapabilities {
+                agent_id: "x".into(),
+                session_id: "y".into(),
+            }),
+        ))
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("agent.update_capabilities"));
+}
+
+#[tokio::test]
+async fn get_capabilities_wrong_payload_returns_error() {
+    let handler = test_handler();
+    let err = handler
+        .handle(msg(
+            "1",
+            Operation::Agent(AgentOperation::GetCapabilities),
+            Payload::Agent(AgentPayload::UpdateCapabilities {
+                agent_id: "x".into(),
+                session_id: "y".into(),
+                effective_tools: vec![],
+                effective_skills: vec![],
+                effective_mcp_servers: vec![],
+            }),
+        ))
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("agent.get_capabilities"));
+}
