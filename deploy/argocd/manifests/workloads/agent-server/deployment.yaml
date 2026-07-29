@@ -34,7 +34,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: agent-server
-          image: ghcr.io/bestnathan/vol-agent-server:cp-ae14f11
+          image: ghcr.io/bestnathan/vol-agent-server:cp-d680bb6
           imagePullPolicy: IfNotPresent
           workingDir: /app
           args:
