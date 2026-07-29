@@ -1,0 +1,225 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+use async_trait::async_trait;
+use vol_llm_agent_protocol::agent_server_protocol::{
+    AgentOperation, AgentPayload, AgentServerMessage, MessageKind, Operation, Payload,
+};
+use vol_llm_agent_protocol::DomainHandler;
+use vol_llm_core::agent_def::AgentDef;
+use vol_llm_mcp::McpManager;
+use vol_llm_skill::SkillLoader;
+use vol_llm_tool::ToolRegistry;
+use vol_llm_tool::ToolResult;
+use vol_llm_tool::ToolResultType;
+
+use super::CapabilityHandler;
+
+/// A simple dummy tool for testing.
+struct TestTool(&'static str);
+
+#[async_trait]
+impl vol_llm_tool::ExecutableTool for TestTool {
+    fn name(&self) -> &'static str {
+        self.0
+    }
+    fn description(&self) -> &'static str {
+        "test tool"
+    }
+    fn parameters(&self) -> serde_json::Value {
+        serde_json::json!({})
+    }
+    fn sensitivity(&self, _args: &serde_json::Value) -> vol_llm_tool::ToolSensitivity {
+        vol_llm_tool::ToolSensitivity::Safe
+    }
+    async fn execute(
+        &self,
+        _args: &serde_json::Value,
+        _context: &vol_llm_tool::ToolContext,
+    ) -> ToolResultType<ToolResult> {
+        Ok(ToolResult {
+            call_id: "test".into(),
+            success: true,
+            content: "ok".into(),
+            error: None,
+            data: None,
+        })
+    }
+}
+
+fn test_agent_def() -> AgentDef {
+    let mut def = AgentDef::default();
+    def.tools = Some(vec!["bash".into(), "read".into()]);
+    def.disallowed_tools = Some(vec!["dangerous".into()]);
+    def.mcps = None; // None = allow all MCP servers
+    def
+}
+
+fn test_handler() -> CapabilityHandler {
+    let overlays = Arc::new(RwLock::new(HashMap::new()));
+    let mut tool_registry = ToolRegistry::new();
+    tool_registry.register(TestTool("bash"));
+    tool_registry.register(TestTool("read"));
+    let tool_registry = Arc::new(tool_registry);
+    let skill_loader = Arc::new(SkillLoader::new_empty());
+    let mcp_manager = Arc::new(McpManager::new(vec![]));
+    let agent_defs = {
+        let mut map: HashMap<String, AgentDef> = HashMap::new();
+        map.insert("test-agent".into(), test_agent_def());
+        Arc::new(std::sync::RwLock::new(map))
+    };
+    CapabilityHandler::new(
+        overlays,
+        tool_registry,
+        skill_loader,
+        mcp_manager,
+        agent_defs,
+    )
+}
+
+fn msg(id: &str, op: Operation, payload: Payload) -> AgentServerMessage {
+    AgentServerMessage {
+        protocol: "agent-server/1".into(),
+        message_id: id.into(),
+        sender: "client".into(),
+        receiver: "data-plane".into(),
+        kind: MessageKind::Command,
+        operation: op,
+        payload,
+        meta: Default::default(),
+    }
+}
+
+#[tokio::test]
+async fn get_capabilities_returns_defaults_when_no_overlay() {
+    let handler = test_handler();
+    let replies = handler
+        .handle(msg(
+            "1",
+            Operation::Agent(AgentOperation::GetCapabilities),
+            Payload::Agent(AgentPayload::GetCapabilities {
+                agent_id: "test-agent".into(),
+                session_id: "sess-1".into(),
+            }),
+        ))
+        .await
+        .unwrap();
+
+    let json = replies[0].payload.data_json();
+    let tools = json["effective_tools"].as_array().unwrap();
+    assert_eq!(tools.len(), 2);
+    // base_tools should match effective_tools when no overlay
+    let base = json["base_tools"].as_array().unwrap();
+    assert_eq!(base.len(), 2);
+}
+
+#[tokio::test]
+async fn update_capabilities_rejects_disallowed_tool() {
+    let handler = test_handler();
+    let replies = handler
+        .handle(msg(
+            "1",
+            Operation::Agent(AgentOperation::UpdateCapabilities),
+            Payload::Agent(AgentPayload::UpdateCapabilities {
+                agent_id: "test-agent".into(),
+                session_id: "sess-1".into(),
+                effective_tools: vec!["dangerous".into()],
+                effective_skills: vec![],
+                effective_mcp_servers: vec![],
+            }),
+        ))
+        .await
+        .unwrap();
+
+    let json = replies[0].payload.data_json();
+    assert_eq!(json["code"], "tool_disallowed");
+}
+
+#[tokio::test]
+async fn update_capabilities_creates_overlay_and_returns_result() {
+    let handler = test_handler();
+    let replies = handler
+        .handle(msg(
+            "1",
+            Operation::Agent(AgentOperation::UpdateCapabilities),
+            Payload::Agent(AgentPayload::UpdateCapabilities {
+                agent_id: "test-agent".into(),
+                session_id: "sess-1".into(),
+                effective_tools: vec!["bash".into()],
+                effective_skills: vec![],
+                effective_mcp_servers: vec![],
+            }),
+        ))
+        .await
+        .unwrap();
+
+    let json = replies[0].payload.data_json();
+    assert_eq!(json["effective_tools"].as_array().unwrap().len(), 1);
+
+    // Subsequent get should return overlay values (1 tool, not 2 from base)
+    let replies2 = handler
+        .handle(msg(
+            "2",
+            Operation::Agent(AgentOperation::GetCapabilities),
+            Payload::Agent(AgentPayload::GetCapabilities {
+                agent_id: "test-agent".into(),
+                session_id: "sess-1".into(),
+            }),
+        ))
+        .await
+        .unwrap();
+    let json2 = replies2[0].payload.data_json();
+    assert_eq!(json2["effective_tools"].as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn update_capabilities_empty_lists_remove_overlay() {
+    let handler = test_handler();
+    // First create an overlay
+    handler
+        .handle(msg(
+            "1",
+            Operation::Agent(AgentOperation::UpdateCapabilities),
+            Payload::Agent(AgentPayload::UpdateCapabilities {
+                agent_id: "test-agent".into(),
+                session_id: "sess-1".into(),
+                effective_tools: vec!["bash".into()],
+                effective_skills: vec![],
+                effective_mcp_servers: vec![],
+            }),
+        ))
+        .await
+        .unwrap();
+
+    // Now reset with empty lists
+    handler
+        .handle(msg(
+            "2",
+            Operation::Agent(AgentOperation::UpdateCapabilities),
+            Payload::Agent(AgentPayload::UpdateCapabilities {
+                agent_id: "test-agent".into(),
+                session_id: "sess-1".into(),
+                effective_tools: vec![],
+                effective_skills: vec![],
+                effective_mcp_servers: vec![],
+            }),
+        ))
+        .await
+        .unwrap();
+
+    // Should be back to defaults (2 tools)
+    let replies = handler
+        .handle(msg(
+            "3",
+            Operation::Agent(AgentOperation::GetCapabilities),
+            Payload::Agent(AgentPayload::GetCapabilities {
+                agent_id: "test-agent".into(),
+                session_id: "sess-1".into(),
+            }),
+        ))
+        .await
+        .unwrap();
+    let json = replies[0].payload.data_json();
+    assert_eq!(json["effective_tools"].as_array().unwrap().len(), 2);
+}

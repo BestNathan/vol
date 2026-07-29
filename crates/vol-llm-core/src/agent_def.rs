@@ -78,6 +78,29 @@ pub struct AgentDef {
     pub mcps: Option<Vec<String>>,
 }
 
+impl Default for AgentDef {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            r#type: String::new(),
+            description: String::new(),
+            scope: AgentScope::Repo,
+            tools: None,
+            disallowed_tools: None,
+            model: None,
+            max_iterations: None,
+            max_history_messages: None,
+            prompt: String::new(),
+            working_dir: None,
+            context_files: vec![],
+            sandbox: None,
+            tool_config: None,
+            mcps: None,
+        }
+    }
+}
+
 impl AgentDef {
     /// Create a new AgentDef with minimal fields.
     pub fn new(name: &str, content: impl Into<String>) -> Self {

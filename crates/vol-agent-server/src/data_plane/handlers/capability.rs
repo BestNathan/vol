@@ -358,3 +358,7 @@ impl DomainHandler for CapabilityHandler {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "capability_tests.rs"]
+mod tests;
