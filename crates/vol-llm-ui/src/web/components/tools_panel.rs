@@ -140,11 +140,11 @@ pub fn ToolsPanel() -> Element {
     let global: Signal<GlobalState> = use_context();
     let agents: Signal<AgentsState> = use_context();
 
-    // Load capabilities on mount
+    // Load capabilities when selected agent changes
     let client_for_cap = client.clone();
     let global_for_cap = global.clone();
     let agents_for_cap = agents.clone();
-    use_hook(move || {
+    use_effect(move || {
         let mut cap_signal = cap_signal;
         let agent_id = agents_for_cap.read().selected.clone().unwrap_or_default();
         let session_id = global_for_cap.read().session_id.clone();
