@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod capability;
 pub mod control;
 pub mod file;
 pub mod log;

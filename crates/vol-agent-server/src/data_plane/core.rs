@@ -27,9 +27,10 @@ use vol_llm_tool::ToolRegistry;
 use crate::data_plane::connection_holder::ConnectionHolder;
 use crate::data_plane::dispatcher::AgentDispatcher;
 use crate::data_plane::handlers::{
-    agent::AgentHandler, control::DataPlaneControlHandler, file::FileHandler, log::LogHandler,
-    mcp::McpHandler, sandbox::SandboxHandler, session::SessionHandler, skill::SkillHandler,
-    system::SystemHandler, task::TaskHandler, tool::ToolHandler,
+    agent::AgentHandler, capability::CapabilityHandler, control::DataPlaneControlHandler,
+    file::FileHandler, log::LogHandler, mcp::McpHandler, sandbox::SandboxHandler,
+    session::SessionHandler, skill::SkillHandler, system::SystemHandler, task::TaskHandler,
+    tool::ToolHandler,
 };
 use crate::data_plane::router::AgentRouter;
 use vol_llm_agent_protocol::Connection;
@@ -501,6 +502,15 @@ impl DataPlaneServerCoreBuilder {
         handler_registry
             .register(Arc::new(SandboxHandler::new(sandbox_registry.default())))
             .map_err(|e| format!("failed to register SandboxHandler: {e}"))?;
+        handler_registry
+            .register(Arc::new(CapabilityHandler::new(
+                capability_overlays.clone(),
+                tool_registry.clone(),
+                skill_loader.clone(),
+                mcp_manager.clone(),
+                agent_defs.clone(),
+            )))
+            .map_err(|e| format!("failed to register CapabilityHandler: {e}"))?;
 
         for extra in self.extra_handlers {
             handler_registry
@@ -671,6 +681,16 @@ impl DataPlaneServerCore {
 
         let sandbox_registry = runtime.sandbox_registry.clone();
         let capability_overlays = runtime.capability_overlays.clone();
+
+        handler_registry
+            .register(Arc::new(CapabilityHandler::new(
+                capability_overlays.clone(),
+                Arc::new(ToolRegistry::new()),
+                Arc::new(SkillLoader::new_empty()),
+                Arc::new(McpManager::new(vec![])),
+                agent_defs.clone(),
+            )))
+            .ok();
 
         DataPlaneServerCore {
             runtime,

@@ -331,8 +331,7 @@ impl DomainHandler for AgentHandler {
             (AgentOperation::ContextSnapshot, _) => {
                 Err(ProtocolError::PayloadDecodeFailed("agent.context_snapshot"))
             }
-            // Handlers for GetCapabilities and UpdateCapabilities will be
-            // implemented in a follow-up task.
+            // Delegate to CapabilityHandler — shouldn't reach here via dispatch
             (AgentOperation::GetCapabilities, _) => {
                 Err(ProtocolError::PayloadDecodeFailed("agent.get_capabilities"))
             }
