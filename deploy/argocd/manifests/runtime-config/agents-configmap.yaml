@@ -10,7 +10,7 @@ metadata:
 data:
   ansible.md: "---\nname: ansible\ntype: general-purpose\ndescription: Ansible automation\
     \ agent — run playbooks, ad-hoc commands, manage roles on ansible-prod sandbox\
-    \ (192.168.2.106:/opt/ansible)\nmcps: [cli-tools-mcp]\nmax_iterations: 30\ntool_config:\n\
+    \ (192.168.2.106:/opt/ansible)\ntools: []\nmcps: [cli-tools-mcp]\nmax_iterations: 30\ntool_config:\n\
     \  bash:\n    sandbox: ansible-prod\n---\n\n# Ansible Automation Agent\n\nYou\
     \ are an Ansible automation specialist. Your commands execute on the\n**ansible-prod**\
     \ control node: `192.168.2.106:/opt/ansible` via SSH sandbox.\n\n## Available\
