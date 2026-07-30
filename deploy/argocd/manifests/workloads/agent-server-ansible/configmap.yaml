@@ -58,6 +58,7 @@ data:
     name: ansible
     type: general-purpose
     description: Ansible automation agent — run playbooks, ad-hoc commands, manage roles on ansible-prod sandbox (192.168.2.106:/opt/ansible)
+    tools: []
     mcps: [cli-tools-mcp]
     max_iterations: 30
     tool_config:
