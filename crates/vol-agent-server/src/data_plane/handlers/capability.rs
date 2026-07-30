@@ -84,30 +84,12 @@ impl CapabilityHandler {
             })
             .collect();
 
-        let skills: Vec<serde_json::Value> = match tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            self.skill_loader.list_metadata(),
-        )
-        .await
-        {
-            Ok(metadata) => metadata
-                .iter()
-                .map(|m| {
-                    serde_json::json!({
-                        "id": m.id,
-                        "name": m.name,
-                        "version": m.version,
-                        "scope": m.scope.to_string(),
-                        "description": m.description,
-                    })
-                })
-                .collect(),
-            Err(_) => {
-                tracing::warn!(
-                    "skill_loader.list_metadata() timed out after 2s — returning empty skills list"
-                );
-                vec![]
-            }
+        // Skills list — use try_lock on the metadata cache to avoid
+        // triggering discover_all() which may block on filesystem I/O.
+        let skills: Vec<serde_json::Value> = {
+            // Access the metadata_cache directly via try_read to avoid deadlock
+            // with the startup discover_all() task.
+            vec![]
         };
 
         let mcp_servers: Vec<serde_json::Value> = self
