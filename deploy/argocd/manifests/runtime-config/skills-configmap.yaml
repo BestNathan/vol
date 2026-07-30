@@ -186,3 +186,55 @@ data:
     \ we design it? (explores approaches)\n- **writing-plans**: What are the implementation\
     \ steps? (creates task list)\n- **executing-plans**: Build it step by step (implementation)\n\
     \nEach skill has a distinct purpose. Don't skip steps.\n"
+  vol-protocol.SKILL.md: "---\nname: vol-protocol\ndescription: Use when adding new\
+    \ operations, methods, or payloads to the vol-agent JSON-RPC protocol. Covers\
+    \ all files that MUST be updated — missing any causes silent failures at runtime.\n\
+    ---\n\n# Extending the vol-agent Protocol\n\nAdding a new operation (e.g., `agent.get_capabilities`)\
+    \ touches multiple files. Missing one causes silent failures (no compile error,\
+    \ no test failure, runtime hang).\n\n## Checklist: 6 files, in order\n\n### 1.\
+    \ Protocol wire types — `agent_server_protocol.rs`\n\nPath: `crates/vol-llm-agent-protocol/src/agent_server_protocol.rs`\n\
+    \n- [ ] **Add variant to operation enum** (e.g., `AgentOperation::GetCapabilities`)\n\
+    - [ ] **Add variant to payload enum** (e.g., `AgentPayload::GetCapabilities {\
+    \ ... }`)\n- [ ] **Add method_name mapping** in `Operation::method_name()`\n-\
+    \ [ ] **Add decode arm** in `Payload::from_operation()` for params deserialization\n\
+    - [ ] **Run tests**: `cargo test -p vol-llm-agent-protocol`\n\n### 2. JSON-RPC\
+    \ codec — `operation_codec.rs`\n\nPath: `crates/vol-llm-agent-protocol/src/operation_codec.rs`\n\
+    \n**This is the one that was missed. There is no compile error if you skip it.**\n\
+    \n- [ ] **Add method string mapping** in `method_to_operation()`:\n  ```rust\n\
+    \  \"agent.new_operation\" => Ok(Operation::Agent(AgentOperation::NewOp)),\n \
+    \ ```\n\nWithout this, the JSON-RPC decoder returns `UnknownMethod` for any incoming\
+    \ request, the WebSocket connection closes immediately, and the handler is never\
+    \ invoked. Unit tests pass because they test the handler directly, not through\
+    \ the codec.\n\n### 3. Data plane handler — `capability.rs` (or new handler file)\n\
+    \nPath: `crates/vol-agent-server/src/data_plane/handlers/`\n\n- [ ] **Create or\
+    \ update handler** implementing `DomainHandler`\n- [ ] Add `operations()` returning\
+    \ the new `Operation` variants\n- [ ] Implement `handle()` with match arms for\
+    \ each operation\n- [ ] **Add `pub mod` declaration** in `handlers/mod.rs`\n\n\
+    ### 4. Handler registration — `data_plane/core.rs`\n\nPath: `crates/vol-agent-server/src/data_plane/core.rs`\n\
+    \n- [ ] **Import the handler** in the handler imports block\n- [ ] **Register\
+    \ handler** in `DataPlaneServerCoreBuilder::build()`:\n  ```rust\n  handler_registry.register(Arc::new(NewHandler::new(...)))\n\
+    \      .map_err(|e| format!(\"failed to register NewHandler: {e}\"))?;\n  ```\n\
+    - [ ] **Also register in `for_test()`** for tests\n\n### 5. AgentHandler catch-all\
+    \ arms — `data_plane/handlers/agent.rs`\n\nPath: `crates/vol-agent-server/src/data_plane/handlers/agent.rs`\n\
+    \n- [ ] **Add dead-arm fallthrough** for new operations (prevents match panics\
+    \ if dispatcher misroutes):\n  ```rust\n  (AgentOperation::NewOp, _) => Err(ProtocolError::PayloadDecodeFailed(\"\
+    agent.new_op\")),\n  ```\n  This is NOT in the `operations()` list — it's a safety\
+    \ net in the `handle()` method.\n\n### 6. Control plane routing (optional, only\
+    \ if CP must forward to DP)\n\nPath: `crates/vol-agent-server/src/control_plane/handlers/client.rs`\n\
+    \n- [ ] **Add to `operations()`** if CP should accept the operation from clients\n\
+    - [ ] **Add routing logic** in `handle()` to forward to the correct DP node via\
+    \ `ControlRouter`\n\n## Verification\n\nAfter all 6 files:\n\n```bash\n# Compile\
+    \ check\ncargo check -p vol-llm-agent-protocol -p vol-agent-server\n\n# Run protocol\
+    \ tests\ncargo test -p vol-llm-agent-protocol\n\n# Run handler tests  \ncargo\
+    \ test -p vol-agent-server -- <test_name>\n\n# Test end-to-end with port-forward\n\
+    kubectl port-forward -n vol-agent-system <dp-pod> 3002:3002\necho '{\"jsonrpc\"\
+    :\"2.0\",\"method\":\"agent.<new_op>\",\"params\":{...},\"id\":1}' | websocat\
+    \ -n1 ws://localhost:3002/ws\n```\n\n## Files Summary\n\n| # | File | What | Miss\
+    \ detection |\n|---|------|------|---------------|\n| 1 | `agent_server_protocol.rs`\
+    \ | Wire types, enums, method_name | Compile error if enum variant missing |\n\
+    | 2 | **`operation_codec.rs`** | method_to_operation mapping | **SILENT** — runtime\
+    \ UnknownMethod, WS closes |\n| 3 | `data_plane/handlers/*.rs` | DomainHandler\
+    \ impl | Compile error via handler registration |\n| 4 | `data_plane/core.rs`\
+    \ | Handler registration | `?` causes startup error |\n| 5 | `data_plane/handlers/agent.rs`\
+    \ | Dead-arm safety net | Match exhaustiveness warning |\n| 6 | `control_plane/handlers/client.rs`\
+    \ | CP routing (optional) | \"unsupported client operation\" error |\n"
