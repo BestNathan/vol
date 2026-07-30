@@ -149,9 +149,17 @@ impl DomainHandler for CapabilityHandler {
                     session_id,
                 }),
             ) => {
+                eprintln!("[CAP] get_capabilities start agent={agent_id} session={session_id}");
                 let overlays = self.overlays.read().await;
+                eprintln!("[CAP] after overlays.read()");
                 let (effective_tools, effective_skills, effective_mcp_servers) =
                     self.resolve_effective(&agent_id, &session_id, &overlays);
+                eprintln!(
+                    "[CAP] after resolve_effective: tools={} skills={} mcps={}",
+                    effective_tools.len(),
+                    effective_skills.len(),
+                    effective_mcp_servers.len()
+                );
 
                 let def = self
                     .agent_defs
@@ -168,7 +176,14 @@ impl DomainHandler for CapabilityHandler {
                     None => (vec![], vec![], vec![]),
                 };
 
+                eprintln!("[CAP] before gather_available()");
                 let available = self.gather_available().await;
+                eprintln!(
+                    "[CAP] after gather_available(): tools={} skills={} mcps={}",
+                    available.tools.len(),
+                    available.skills.len(),
+                    available.mcp_servers.len()
+                );
                 drop(overlays);
 
                 tracing::info!(
