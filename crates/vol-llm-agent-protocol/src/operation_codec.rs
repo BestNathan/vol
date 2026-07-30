@@ -16,6 +16,8 @@ pub fn method_to_operation(method: &str) -> Result<Operation, ProtocolError> {
         "agent.status" => Ok(Operation::Agent(AgentOperation::Status)),
         "agent.context_config" => Ok(Operation::Agent(AgentOperation::ContextConfig)),
         "agent.context_snapshot" => Ok(Operation::Agent(AgentOperation::ContextSnapshot)),
+        "agent.get_capabilities" => Ok(Operation::Agent(AgentOperation::GetCapabilities)),
+        "agent.update_capabilities" => Ok(Operation::Agent(AgentOperation::UpdateCapabilities)),
         "task.list" => Ok(Operation::Task(TaskOperation::List)),
         "task.get" => Ok(Operation::Task(TaskOperation::Get)),
         "file.list" => Ok(Operation::File(FileOperation::List)),
