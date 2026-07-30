@@ -135,7 +135,7 @@ fn CapabilityDropdown(
 
     rsx! {
         div {
-            class: "absolute bottom-full left-0 right-0 mx-3 mb-1 bg-[#1e1e2e] border border-[#3a3a55] rounded-lg shadow-xl max-h-[60vh] overflow-y-auto z-50",
+            class: "absolute bottom-full right-0 w-80 mb-1 bg-[#1e1e2e] border border-[#3a3a55] rounded-lg shadow-xl max-h-[60vh] overflow-y-auto z-50",
             div { class: "p-3",
                 // Header
                 div { class: "flex items-center justify-between mb-3",
