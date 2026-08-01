@@ -604,6 +604,55 @@ impl CapabilityOverlayState {
     }
 }
 
+// === CapabilityDrawer State ==================================================
+
+/// Per-toggle saving feedback state for instant-apply toggles.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ToggleSavingState {
+    Saving,
+    Saved,
+    Error(String),
+}
+
+/// A single provider entry for the Provider dropdown.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ProviderOption {
+    pub name: String,
+    #[serde(default)]
+    pub models: Vec<String>,
+}
+
+/// UI state for the CapabilityDrawer right-side panel.
+#[derive(Debug, Clone)]
+pub struct CapabilityDrawerState {
+    pub open: bool,
+    pub search: String,
+    pub collapsed_sections: std::collections::HashSet<String>,
+    pub providers: Vec<ProviderOption>,
+    pub selected_provider: String,
+    pub selected_model: String,
+    pub saving_states: std::collections::HashMap<String, ToggleSavingState>,
+    /// Capabilities have been fetched at least once since opening.
+    pub loaded: bool,
+    pub load_error: Option<String>,
+}
+
+impl Default for CapabilityDrawerState {
+    fn default() -> Self {
+        Self {
+            open: false,
+            search: String::new(),
+            collapsed_sections: std::collections::HashSet::new(),
+            providers: Vec::new(),
+            selected_provider: String::new(),
+            selected_model: String::new(),
+            saving_states: std::collections::HashMap::new(),
+            loaded: false,
+            load_error: None,
+        }
+    }
+}
+
 /// Local state for StatusBar — global run/session/connection info.
 #[cfg(all(feature = "web", not(feature = "tui")))]
 #[derive(Debug)]
@@ -629,7 +678,6 @@ pub struct GlobalState {
     pub reconnect_maxed: bool,
     pub unsafe_mode: bool,
     pub active_tab: ActiveTab,
-    pub capabilities: CapabilityOverlayState,
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]
@@ -655,7 +703,6 @@ impl GlobalState {
             reconnect_maxed: false,
             unsafe_mode: false,
             active_tab: ActiveTab::Agents,
-            capabilities: CapabilityOverlayState::new(),
         }
     }
 
@@ -1879,5 +1926,46 @@ mod tests {
 
         let src = root.find_child_mut("src").unwrap();
         assert!(!src.children[0].loaded);
+    }
+
+    #[test]
+    fn test_capability_drawer_state_defaults() {
+        let state = CapabilityDrawerState::default();
+        assert!(!state.open);
+        assert!(state.search.is_empty());
+        assert!(state.collapsed_sections.is_empty());
+        assert!(state.providers.is_empty());
+        assert!(state.selected_provider.is_empty());
+        assert!(state.selected_model.is_empty());
+        assert!(state.saving_states.is_empty());
+        assert!(!state.loaded);
+        assert!(state.load_error.is_none());
+    }
+
+    #[test]
+    fn test_provider_option_serde_roundtrip() {
+        let p = ProviderOption {
+            name: "openai".into(),
+            models: vec!["gpt-4".into()],
+        };
+        let json = serde_json::to_string(&p).unwrap();
+        let back: ProviderOption = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.name, "openai");
+        assert_eq!(back.models, vec!["gpt-4"]);
+
+        // models defaults to empty when missing from payload
+        let from_missing: ProviderOption = serde_json::from_str(r#"{"name":"anthropic"}"#).unwrap();
+        assert!(from_missing.models.is_empty());
+    }
+
+    #[test]
+    fn test_toggle_saving_state_partial_eq() {
+        assert_eq!(ToggleSavingState::Saving, ToggleSavingState::Saving);
+        assert_eq!(ToggleSavingState::Saved, ToggleSavingState::Saved);
+        assert_eq!(
+            ToggleSavingState::Error("boom".into()),
+            ToggleSavingState::Error("boom".into())
+        );
+        assert_ne!(ToggleSavingState::Saving, ToggleSavingState::Saved);
     }
 }
