@@ -34,7 +34,11 @@ pub fn CapabilityBar() -> Element {
             .read()
             .as_ref()
             .and_then(|nid| {
-                app_for_cap.dp_pool.read().get(nid).map(|c| c.client.clone())
+                app_for_cap
+                    .dp_pool
+                    .read()
+                    .get(nid)
+                    .map(|c| c.client.clone())
             })
             .unwrap_or_else(|| app_for_cap.rpc_client.clone());
 
@@ -47,7 +51,8 @@ pub fn CapabilityBar() -> Element {
                 Ok(cap) => {
                     s.effective_tools.clone_from(&cap.effective_tools);
                     s.effective_skills.clone_from(&cap.effective_skills);
-                    s.effective_mcp_servers.clone_from(&cap.effective_mcp_servers);
+                    s.effective_mcp_servers
+                        .clone_from(&cap.effective_mcp_servers);
                     s.loading = false;
                 }
                 Err(e) => {

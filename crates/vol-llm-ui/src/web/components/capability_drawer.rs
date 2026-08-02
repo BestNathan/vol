@@ -37,7 +37,11 @@ pub fn CapabilityDrawer() -> Element {
         if !drawer_state.read().open || drawer_state.read().loaded {
             return;
         }
-        let agent_id = agents_for_effect.read().selected.clone().unwrap_or_default();
+        let agent_id = agents_for_effect
+            .read()
+            .selected
+            .clone()
+            .unwrap_or_default();
         if agent_id.is_empty() {
             return;
         }
@@ -63,35 +67,33 @@ pub fn CapabilityDrawer() -> Element {
         let mut ss = sel_skills.clone();
         let mut sm = sel_mcps.clone();
 
-        client.agent_get_capabilities(&agent_id, &session_id, move |result| {
-            match result {
-                Ok(r) => {
-                    cap.with_mut(|c| {
-                        c.effective_tools.clone_from(&r.effective_tools);
-                        c.available_tools.clone_from(&r.available_tools);
-                        c.base_tools.clone_from(&r.base_tools);
-                        c.effective_skills.clone_from(&r.effective_skills);
-                        c.available_skills.clone_from(&r.available_skills);
-                        c.base_skills.clone_from(&r.base_skills);
-                        c.effective_mcp_servers.clone_from(&r.effective_mcp_servers);
-                        c.available_mcp_servers.clone_from(&r.available_mcp_servers);
-                        c.base_mcp_servers.clone_from(&r.base_mcp_servers);
-                        c.loading = false;
-                    });
-                    st.set(r.effective_tools.iter().cloned().collect());
-                    ss.set(r.effective_skills.iter().cloned().collect());
-                    sm.set(r.effective_mcp_servers.iter().cloned().collect());
-                    drawer.with_mut(|d| {
-                        d.loaded = true;
-                        d.load_error = None;
-                    });
-                }
-                Err(e) => {
-                    drawer.with_mut(|d| {
-                        d.loaded = true;
-                        d.load_error = Some(e);
-                    });
-                }
+        client.agent_get_capabilities(&agent_id, &session_id, move |result| match result {
+            Ok(r) => {
+                cap.with_mut(|c| {
+                    c.effective_tools.clone_from(&r.effective_tools);
+                    c.available_tools.clone_from(&r.available_tools);
+                    c.base_tools.clone_from(&r.base_tools);
+                    c.effective_skills.clone_from(&r.effective_skills);
+                    c.available_skills.clone_from(&r.available_skills);
+                    c.base_skills.clone_from(&r.base_skills);
+                    c.effective_mcp_servers.clone_from(&r.effective_mcp_servers);
+                    c.available_mcp_servers.clone_from(&r.available_mcp_servers);
+                    c.base_mcp_servers.clone_from(&r.base_mcp_servers);
+                    c.loading = false;
+                });
+                st.set(r.effective_tools.iter().cloned().collect());
+                ss.set(r.effective_skills.iter().cloned().collect());
+                sm.set(r.effective_mcp_servers.iter().cloned().collect());
+                drawer.with_mut(|d| {
+                    d.loaded = true;
+                    d.load_error = None;
+                });
+            }
+            Err(e) => {
+                drawer.with_mut(|d| {
+                    d.loaded = true;
+                    d.load_error = Some(e);
+                });
             }
         });
     });
@@ -552,20 +554,39 @@ fn handle_toggle(
     // Update local selection
     match group.as_str() {
         "tools" => {
-            sel_tools.with_mut(|s| if enabled { s.insert(name.clone()); } else { s.remove(&name); });
+            sel_tools.with_mut(|s| {
+                if enabled {
+                    s.insert(name.clone());
+                } else {
+                    s.remove(&name);
+                }
+            });
         }
         "skills" => {
-            sel_skills.with_mut(|s| if enabled { s.insert(name.clone()); } else { s.remove(&name); });
+            sel_skills.with_mut(|s| {
+                if enabled {
+                    s.insert(name.clone());
+                } else {
+                    s.remove(&name);
+                }
+            });
         }
         "mcps" => {
-            sel_mcps.with_mut(|s| if enabled { s.insert(name.clone()); } else { s.remove(&name); });
+            sel_mcps.with_mut(|s| {
+                if enabled {
+                    s.insert(name.clone());
+                } else {
+                    s.remove(&name);
+                }
+            });
         }
         _ => return,
     }
 
     // Mark saving
     drawer_state.with_mut(|d| {
-        d.saving_states.insert(state_key.clone(), ToggleSavingState::Saving);
+        d.saving_states
+            .insert(state_key.clone(), ToggleSavingState::Saving);
     });
 
     // Build current selection sets
@@ -606,11 +627,13 @@ fn handle_toggle(
                 cap_signal.with_mut(|c| {
                     c.effective_tools.clone_from(&upd.effective_tools);
                     c.effective_skills.clone_from(&upd.effective_skills);
-                    c.effective_mcp_servers.clone_from(&upd.effective_mcp_servers);
+                    c.effective_mcp_servers
+                        .clone_from(&upd.effective_mcp_servers);
                 });
                 // Mark saved, then clear after 1.5s so the checkmark ages out
                 drawer_state.with_mut(|d| {
-                    d.saving_states.insert(state_key.clone(), ToggleSavingState::Saved);
+                    d.saving_states
+                        .insert(state_key.clone(), ToggleSavingState::Saved);
                 });
                 let mut ds_for_clear = drawer_state.clone();
                 let clear_key = state_key;
@@ -627,18 +650,37 @@ fn handle_toggle(
                 // Rollback local selection
                 match group.as_str() {
                     "tools" => {
-                        sel_tools.with_mut(|s| if enabled { s.remove(&name); } else { s.insert(name.clone()); });
+                        sel_tools.with_mut(|s| {
+                            if enabled {
+                                s.remove(&name);
+                            } else {
+                                s.insert(name.clone());
+                            }
+                        });
                     }
                     "skills" => {
-                        sel_skills.with_mut(|s| if enabled { s.remove(&name); } else { s.insert(name.clone()); });
+                        sel_skills.with_mut(|s| {
+                            if enabled {
+                                s.remove(&name);
+                            } else {
+                                s.insert(name.clone());
+                            }
+                        });
                     }
                     "mcps" => {
-                        sel_mcps.with_mut(|s| if enabled { s.remove(&name); } else { s.insert(name.clone()); });
+                        sel_mcps.with_mut(|s| {
+                            if enabled {
+                                s.remove(&name);
+                            } else {
+                                s.insert(name.clone());
+                            }
+                        });
                     }
                     _ => {}
                 }
                 drawer_state.with_mut(|d| {
-                    d.saving_states.insert(state_key, ToggleSavingState::Error(e));
+                    d.saving_states
+                        .insert(state_key, ToggleSavingState::Error(e));
                 });
             }
         }
