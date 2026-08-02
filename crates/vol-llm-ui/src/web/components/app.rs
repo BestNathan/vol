@@ -5,6 +5,8 @@ use gloo_timers::future::TimeoutFuture;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::state::CapabilityDrawerState;
+use crate::state::CapabilityOverlayState;
 use crate::state::McpDialogState;
 use crate::state::NodeDataCache;
 use crate::state::SkillDialogState;
@@ -33,6 +35,7 @@ use crate::web::dp_connection::DpConnectionPool;
 
 use super::agents_panel::AgentsPanel;
 use super::approval_dialog::ApprovalDialog;
+use super::capability_drawer::CapabilityDrawer;
 use super::conversation::ConversationView;
 use super::debug_panel::DebugPanel;
 use super::file_content::FileContentView;
@@ -284,6 +287,10 @@ pub fn App() -> Element {
     let mcp_dialog_signal = use_signal(|| McpDialogState::default());
     let skill_dialog_signal = use_signal(|| SkillDialogState::new());
     let debug_signal = use_signal(|| DebugState::new());
+    let drawer_state = use_signal(|| CapabilityDrawerState::default());
+    // Shared with CapabilityBar and CapabilityDrawer via context so that
+    // instant-apply toggles in the drawer also update the bar's summary counts.
+    let cap_signal = use_signal(CapabilityOverlayState::new);
     let dp_pool = use_signal(|| DpConnectionPool::new());
     let active_node_id = use_signal(|| Option::<String>::None);
     let node_data_cache = use_signal(|| NodeDataCache::new());
@@ -896,6 +903,8 @@ pub fn App() -> Element {
     use_context_provider(|| mcp_dialog_signal);
     use_context_provider(|| skill_dialog_signal);
     use_context_provider(|| debug_signal);
+    use_context_provider(|| drawer_state);
+    use_context_provider(|| cap_signal);
 
     // Bootstrap markdown.js — run once on mount.
     // CDN scripts (marked, DOMPurify, hljs) are loaded synchronously in
@@ -932,6 +941,7 @@ pub fn App() -> Element {
             PromptViewer { signal: mcp_dialog_signal }
             SkillDetailDialog { signal: skill_dialog_signal }
             DebugPanel {}
+            CapabilityDrawer {}
         }
     }
 }

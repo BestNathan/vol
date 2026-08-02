@@ -4,6 +4,7 @@ pub mod agents_panel;
 pub mod app;
 pub mod approval_dialog;
 pub mod capability_bar;
+pub mod capability_drawer;
 pub mod context_panel;
 pub mod conversation;
 pub mod debug_panel;
