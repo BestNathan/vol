@@ -17,35 +17,32 @@ pub fn CapabilityBar() -> Element {
     let mut cap_signal: Signal<CapabilityOverlayState> = use_context();
 
     // Load capabilities when selected agent changes (for summary counts)
-    let agents_for_cap = agents.clone();
-    let global_for_cap = global.clone();
-    let app_for_cap = app_state.clone();
     use_effect(move || {
-        let agent_id = agents_for_cap.read().selected.clone().unwrap_or_default();
-        let session_id = global_for_cap.read().session_id.clone();
+        let agent_id = agents.read().selected.clone().unwrap_or_default();
+        let session_id = global.read().session_id.clone();
         if agent_id.is_empty() {
             // No agent selected — clear the loading flag so the bar does not
             // stay stuck on "Loading capabilities...".
             cap_signal.with_mut(|s| s.loading = false);
             return;
         }
-        let client = app_for_cap
+        let client = app_state
             .active_node_id
             .read()
             .as_ref()
             .and_then(|nid| {
-                app_for_cap
+                app_state
                     .dp_pool
                     .read()
                     .get(nid)
                     .map(|c| c.client.clone())
             })
-            .unwrap_or_else(|| app_for_cap.rpc_client.clone());
+            .unwrap_or_else(|| app_state.rpc_client.clone());
 
         // Mark loading so stale counts from the previous agent are not shown
         // while this fetch is in flight.
         cap_signal.with_mut(|s| s.loading = true);
-        let mut sig = cap_signal.clone();
+        let mut sig = cap_signal;
         client.agent_get_capabilities(&agent_id, &session_id, move |result| {
             sig.with_mut(|s| match result {
                 Ok(cap) => {

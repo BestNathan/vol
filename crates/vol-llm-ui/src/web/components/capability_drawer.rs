@@ -31,8 +31,8 @@ pub fn CapabilityDrawer() -> Element {
     // only fetch once per open session. The close handlers below reset `loaded`,
     // so the next open always fetches fresh data.
     let app_for_effect = app_state.clone();
-    let agents_for_effect = agents.clone();
-    let global_for_effect = global.clone();
+    let agents_for_effect = agents;
+    let global_for_effect = global;
     use_effect(move || {
         if !drawer_state.read().open || drawer_state.read().loaded {
             return;
@@ -61,11 +61,11 @@ pub fn CapabilityDrawer() -> Element {
             })
             .unwrap_or_else(|| app_for_effect.rpc_client.clone());
 
-        let mut cap = cap_signal.clone();
-        let mut drawer = drawer_state.clone();
-        let mut st = sel_tools.clone();
-        let mut ss = sel_skills.clone();
-        let mut sm = sel_mcps.clone();
+        let mut cap = cap_signal;
+        let mut drawer = drawer_state;
+        let mut st = sel_tools;
+        let mut ss = sel_skills;
+        let mut sm = sel_mcps;
 
         client.agent_get_capabilities(&agent_id, &session_id, move |result| match result {
             Ok(r) => {
@@ -153,7 +153,7 @@ pub fn CapabilityDrawer() -> Element {
                 } else {
                     // Provider section (read-only Phase 1)
                     ProviderSection {
-                        drawer_state: drawer_state.clone(),
+                        drawer_state,
                     }
 
                     div { class: "border-t border-[#2a2a44] my-1" }
@@ -172,32 +172,32 @@ pub fn CapabilityDrawer() -> Element {
                     SectionGroup {
                         title: "Tools".to_string(),
                         group_key: "tools".to_string(),
-                        items: avail_tools.clone(),
+                        items: avail_tools,
                         selected: sel_tools.read().clone(),
-                        base_set: base_tools.clone(),
+                        base_set: base_tools,
                         saving_states: saving_states.clone(),
                         collapsed: collapsed.clone(),
                         search: search.clone(),
                         on_toggle: {
-                            let st = sel_tools.clone();
-                            let ss = sel_skills.clone();
-                            let sm = sel_mcps.clone();
-                            let cs = cap_signal.clone();
-                            let ag = agents.clone();
-                            let gl = global.clone();
+                            let st = sel_tools;
+                            let ss = sel_skills;
+                            let sm = sel_mcps;
+                            let cs = cap_signal;
+                            let ag = agents;
+                            let gl = global;
                             let ap = app_state.clone();
-                            let ds = drawer_state.clone();
+                            let ds = drawer_state;
                             move |(name, enabled): (String, bool)| {
                                 handle_toggle(
                                     "tools", &name, enabled,
-                                    st.clone(), ss.clone(), sm.clone(),
-                                    cs.clone(), ag.clone(), gl.clone(),
-                                    ap.clone(), ds.clone(),
+                                    st, ss, sm,
+                                    cs, ag, gl,
+                                    ap.clone(), ds,
                                 );
                             }
                         },
                         on_collapse: {
-                            let mut ds = drawer_state.clone();
+                            let mut ds = drawer_state;
                             move |_| {
                                 ds.with_mut(|d| {
                                     if d.collapsed_sections.contains("Tools") {
@@ -216,32 +216,32 @@ pub fn CapabilityDrawer() -> Element {
                     SectionGroup {
                         title: "Skills".to_string(),
                         group_key: "skills".to_string(),
-                        items: avail_skills.clone(),
+                        items: avail_skills,
                         selected: sel_skills.read().clone(),
-                        base_set: base_skills.clone(),
+                        base_set: base_skills,
                         saving_states: saving_states.clone(),
                         collapsed: collapsed.clone(),
                         search: search.clone(),
                         on_toggle: {
-                            let st = sel_tools.clone();
-                            let ss = sel_skills.clone();
-                            let sm = sel_mcps.clone();
-                            let cs = cap_signal.clone();
-                            let ag = agents.clone();
-                            let gl = global.clone();
+                            let st = sel_tools;
+                            let ss = sel_skills;
+                            let sm = sel_mcps;
+                            let cs = cap_signal;
+                            let ag = agents;
+                            let gl = global;
                             let ap = app_state.clone();
-                            let ds = drawer_state.clone();
+                            let ds = drawer_state;
                             move |(name, enabled): (String, bool)| {
                                 handle_toggle(
                                     "skills", &name, enabled,
-                                    st.clone(), ss.clone(), sm.clone(),
-                                    cs.clone(), ag.clone(), gl.clone(),
-                                    ap.clone(), ds.clone(),
+                                    st, ss, sm,
+                                    cs, ag, gl,
+                                    ap.clone(), ds,
                                 );
                             }
                         },
                         on_collapse: {
-                            let mut ds = drawer_state.clone();
+                            let mut ds = drawer_state;
                             move |_| {
                                 ds.with_mut(|d| {
                                     if d.collapsed_sections.contains("Skills") {
@@ -260,32 +260,32 @@ pub fn CapabilityDrawer() -> Element {
                     SectionGroup {
                         title: "MCP Servers".to_string(),
                         group_key: "mcps".to_string(),
-                        items: avail_mcps.clone(),
+                        items: avail_mcps,
                         selected: sel_mcps.read().clone(),
-                        base_set: base_mcps.clone(),
-                        saving_states: saving_states.clone(),
-                        collapsed: collapsed.clone(),
-                        search: search.clone(),
+                        base_set: base_mcps,
+                        saving_states,
+                        collapsed,
+                        search,
                         on_toggle: {
-                            let st = sel_tools.clone();
-                            let ss = sel_skills.clone();
-                            let sm = sel_mcps.clone();
-                            let cs = cap_signal.clone();
-                            let ag = agents.clone();
-                            let gl = global.clone();
-                            let ap = app_state.clone();
-                            let ds = drawer_state.clone();
+                            let st = sel_tools;
+                            let ss = sel_skills;
+                            let sm = sel_mcps;
+                            let cs = cap_signal;
+                            let ag = agents;
+                            let gl = global;
+                            let ap = app_state;
+                            let ds = drawer_state;
                             move |(name, enabled): (String, bool)| {
                                 handle_toggle(
                                     "mcps", &name, enabled,
-                                    st.clone(), ss.clone(), sm.clone(),
-                                    cs.clone(), ag.clone(), gl.clone(),
-                                    ap.clone(), ds.clone(),
+                                    st, ss, sm,
+                                    cs, ag, gl,
+                                    ap.clone(), ds,
                                 );
                             }
                         },
                         on_collapse: {
-                            let mut ds = drawer_state.clone();
+                            let mut ds = drawer_state;
                             move |_| {
                                 ds.with_mut(|d| {
                                     if d.collapsed_sections.contains("MCP Servers") {
@@ -452,10 +452,10 @@ fn SectionGroup(
                             is_base: *is_base,
                             checked: selected.contains(name),
                             saving_state: saving_states
-                                .get(&format!("{}:{}", group_key, name))
+                                .get(&format!("{group_key}:{name}"))
                                 .cloned(),
                             on_toggle: {
-                                let ot = on_toggle.clone();
+                                let ot = on_toggle;
                                 let n = name.clone();
                                 let checked = selected.contains(name);
                                 move |_| {
@@ -533,6 +533,7 @@ fn CapabilityToggle(
 }
 
 /// Handle a toggle flip — update local state, call backend, show feedback.
+#[allow(clippy::too_many_arguments)]
 fn handle_toggle(
     group: &str,
     name: &str,
@@ -549,7 +550,7 @@ fn handle_toggle(
     // The RPC callback below is `'static`, so group/name must be owned.
     let group = group.to_string();
     let name = name.to_string();
-    let state_key = format!("{}:{}", group, name);
+    let state_key = format!("{group}:{name}");
 
     // Update local selection
     match group.as_str() {
@@ -635,7 +636,7 @@ fn handle_toggle(
                     d.saving_states
                         .insert(state_key.clone(), ToggleSavingState::Saved);
                 });
-                let mut ds_for_clear = drawer_state.clone();
+                let mut ds_for_clear = drawer_state;
                 let clear_key = state_key;
                 wasm_bindgen_futures::spawn_local(async move {
                     gloo_timers::future::TimeoutFuture::new(1500).await;
