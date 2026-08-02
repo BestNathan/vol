@@ -28,7 +28,9 @@
       "mcp__playwright__browser_evaluate",
       "mcp__playwright__browser_close",
       "mcp__playwright__browser_run_code_unsafe",
-      "mcp__playwright__browser_type"
+      "mcp__playwright__browser_type",
+      "Bash(rm -f .cargo/config.toml)",
+      "Bash(cargo clippy *)"
     ]
   },
   "enableAllProjectMcpServers": true,

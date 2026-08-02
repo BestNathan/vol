@@ -623,7 +623,7 @@ pub struct ProviderOption {
 }
 
 /// UI state for the CapabilityDrawer right-side panel.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CapabilityDrawerState {
     pub open: bool,
     pub search: String,
@@ -635,22 +635,6 @@ pub struct CapabilityDrawerState {
     /// Capabilities have been fetched at least once since opening.
     pub loaded: bool,
     pub load_error: Option<String>,
-}
-
-impl Default for CapabilityDrawerState {
-    fn default() -> Self {
-        Self {
-            open: false,
-            search: String::new(),
-            collapsed_sections: std::collections::HashSet::new(),
-            providers: Vec::new(),
-            selected_provider: String::new(),
-            selected_model: String::new(),
-            saving_states: std::collections::HashMap::new(),
-            loaded: false,
-            load_error: None,
-        }
-    }
 }
 
 /// Local state for StatusBar — global run/session/connection info.
