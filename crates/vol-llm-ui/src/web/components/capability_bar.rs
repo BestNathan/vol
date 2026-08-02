@@ -30,13 +30,7 @@ pub fn CapabilityBar() -> Element {
             .active_node_id
             .read()
             .as_ref()
-            .and_then(|nid| {
-                app_state
-                    .dp_pool
-                    .read()
-                    .get(nid)
-                    .map(|c| c.client.clone())
-            })
+            .and_then(|nid| app_state.dp_pool.read().get(nid).map(|c| c.client.clone()))
             .unwrap_or_else(|| app_state.rpc_client.clone());
 
         // Mark loading so stale counts from the previous agent are not shown
