@@ -587,6 +587,19 @@ fn handle_toggle(
         .unwrap_or_else(|| app_state.rpc_client.clone());
 
     client.agent_update_capabilities(&agent_id, &session_id, tools, skills, mcps, move |result| {
+        // Rapid-toggle race guard: if the user toggled this item again while
+        // this request was in flight, the current selection no longer matches
+        // this request's intent — discard the stale response (success or error)
+        // so an older response cannot clobber the newer state.
+        let current_enabled = match group.as_str() {
+            "tools" => sel_tools.read().contains(&name),
+            "skills" => sel_skills.read().contains(&name),
+            "mcps" => sel_mcps.read().contains(&name),
+            _ => return,
+        };
+        if current_enabled != enabled {
+            return;
+        }
         match result {
             Ok(upd) => {
                 // Update effective from server response
