@@ -34,7 +34,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: agent-server-dingtalk
-          image: ghcr.io/bestnathan/vol-agent-server:dp-6529c8b
+          image: ghcr.io/bestnathan/vol-agent-server:dp-1158291
           imagePullPolicy: IfNotPresent
           workingDir: /app
           args:
