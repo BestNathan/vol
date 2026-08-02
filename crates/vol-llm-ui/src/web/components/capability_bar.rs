@@ -12,7 +12,9 @@ pub fn CapabilityBar() -> Element {
     let agents: Signal<AgentsState> = use_context();
     let mut drawer_state: Signal<CapabilityDrawerState> = use_context();
 
-    let mut cap_signal: Signal<CapabilityOverlayState> = use_signal(CapabilityOverlayState::new);
+    // Shared with the drawer (provided in App) — the drawer writes effective_*
+    // on instant-apply toggle success, so the bar's summary counts stay fresh.
+    let mut cap_signal: Signal<CapabilityOverlayState> = use_context();
 
     // Load capabilities when selected agent changes (for summary counts)
     let agents_for_cap = agents.clone();
@@ -36,6 +38,9 @@ pub fn CapabilityBar() -> Element {
             })
             .unwrap_or_else(|| app_for_cap.rpc_client.clone());
 
+        // Mark loading so stale counts from the previous agent are not shown
+        // while this fetch is in flight.
+        cap_signal.with_mut(|s| s.loading = true);
         let mut sig = cap_signal.clone();
         client.agent_get_capabilities(&agent_id, &session_id, move |result| {
             sig.with_mut(|s| match result {

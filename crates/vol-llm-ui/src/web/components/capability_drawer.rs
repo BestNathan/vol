@@ -20,8 +20,10 @@ pub fn CapabilityDrawer() -> Element {
     let sel_skills: Signal<HashSet<String>> = use_signal(HashSet::new);
     let sel_mcps: Signal<HashSet<String>> = use_signal(HashSet::new);
 
-    // Capability data loaded from backend
-    let cap_signal: Signal<CapabilityOverlayState> = use_signal(CapabilityOverlayState::new);
+    // Capability data loaded from backend. Shared with the CapabilityBar via
+    // context (provided in App), so `handle_toggle`'s effective_* updates also
+    // refresh the bar's summary counts.
+    let cap_signal: Signal<CapabilityOverlayState> = use_context();
 
     // Load capabilities when the drawer opens.
     // The effect reads `drawer_state`, so it re-runs on any drawer state change
