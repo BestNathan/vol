@@ -12,7 +12,7 @@ pub fn CapabilityBar() -> Element {
     let agents: Signal<AgentsState> = use_context();
     let mut drawer_state: Signal<CapabilityDrawerState> = use_context();
 
-    let cap_signal: Signal<CapabilityOverlayState> = use_signal(CapabilityOverlayState::new);
+    let mut cap_signal: Signal<CapabilityOverlayState> = use_signal(CapabilityOverlayState::new);
 
     // Load capabilities when selected agent changes (for summary counts)
     let agents_for_cap = agents.clone();
@@ -22,6 +22,9 @@ pub fn CapabilityBar() -> Element {
         let agent_id = agents_for_cap.read().selected.clone().unwrap_or_default();
         let session_id = global_for_cap.read().session_id.clone();
         if agent_id.is_empty() {
+            // No agent selected — clear the loading flag so the bar does not
+            // stay stuck on "Loading capabilities...".
+            cap_signal.with_mut(|s| s.loading = false);
             return;
         }
         let client = app_for_cap
