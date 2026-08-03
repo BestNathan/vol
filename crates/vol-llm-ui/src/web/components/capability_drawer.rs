@@ -309,7 +309,7 @@ fn DrawerHeader(on_close: EventHandler<()>) -> Element {
         div { class: "flex items-center justify-between px-3 py-3 border-b border-[#3a3a55] flex-shrink-0",
             span { class: "text-[14px] font-semibold text-[#e0e0e0] pl-1", "Capabilities" }
             button {
-                class: "text-[18px] text-[#888] hover:text-[#ccc] leading-none",
+                class: "text-[18px] text-[#888] hover:text-[#ccc] leading-none pr-1",
                 onclick: move |_| on_close.call(()),
                 "\u{2715}"
             }
@@ -373,7 +373,7 @@ fn SearchInput(search: String, on_input: EventHandler<String>) -> Element {
     rsx! {
         div { class: "px-3 py-2",
             div { class: "relative px-1",
-                span { class: "absolute left-2 top-1/2 -translate-y-1/2 text-[#666] text-[12px] pointer-events-none",
+                span { class: "absolute inset-y-0 left-2 flex items-center text-[#666] text-[12px] pointer-events-none",
                     "\u{1F50D}"
                 }
                 input {
@@ -444,7 +444,7 @@ fn SectionGroup(
             // Items
             if !is_collapsed {
                 if filtered.is_empty() {
-                    div { class: "text-[11px] text-[#666] px-1 py-1", "No matching capabilities" }
+                    div { class: "text-[11px] text-[#666] px-1 py-1 w-full", "No matching capabilities" }
                 } else {
                     for (name, is_base) in &filtered {
                         CapabilityToggle {
@@ -497,13 +497,13 @@ fn CapabilityToggle(
     };
 
     rsx! {
-        div { class: "flex items-center gap-2 py-1 px-1 hover:bg-[#222240] rounded",
+        div { class: "flex items-center gap-2 py-1 px-1 hover:bg-[#222240] rounded w-full",
             // Toggle switch
             button {
                 class: if checked {
-                    "w-8 h-4 rounded-full relative transition-colors bg-[#4080ff] flex-shrink-0"
+                    "w-8 h-4 rounded-full relative transition-colors bg-[#4080ff] flex-shrink-0 border-0 p-0 cursor-pointer"
                 } else {
-                    "w-8 h-4 rounded-full relative transition-colors bg-[#3a3a55] flex-shrink-0"
+                    "w-8 h-4 rounded-full relative transition-colors bg-[#3a3a55] flex-shrink-0 border-0 p-0 cursor-pointer"
                 },
                 onclick: move |_| on_toggle.call(()),
                 div {
