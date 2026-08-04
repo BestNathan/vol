@@ -30,7 +30,9 @@
       "mcp__playwright__browser_run_code_unsafe",
       "mcp__playwright__browser_type",
       "Bash(rm -f .cargo/config.toml)",
-      "Bash(cargo clippy *)"
+      "Bash(cargo clippy *)",
+      "Bash(rm -f /root/vol/.git/index.lock)",
+      "Bash(git -C /root/vol status --short)"
     ]
   },
   "enableAllProjectMcpServers": true,

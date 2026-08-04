@@ -372,12 +372,12 @@ fn ProviderSection(drawer_state: Signal<CapabilityDrawerState>) -> Element {
 fn SearchInput(search: String, on_input: EventHandler<String>) -> Element {
     rsx! {
         div { class: "px-3 py-2",
-            div { class: "relative px-1",
-                span { class: "absolute inset-y-0 left-2 flex items-center text-[#666] text-[12px] pointer-events-none",
+            div { class: "relative",
+                span { class: "absolute inset-y-0 left-3 flex items-center text-[#666] text-[12px] pointer-events-none",
                     "\u{1F50D}"
                 }
                 input {
-                    class: "w-full pl-7 pr-2 py-1.5 bg-[#12121e] border border-[#2a2a44] rounded text-[12px] text-[#ccc] placeholder-[#555] focus:outline-none focus:border-[#80a0ff]",
+                    class: "w-full pl-8 pr-2 py-1.5 bg-[#12121e] border border-[#2a2a44] rounded text-[12px] text-[#ccc] placeholder-[#555] focus:outline-none focus:border-[#80a0ff]",
                     r#type: "text",
                     placeholder: "Search capabilities...",
                     value: "{search}",
@@ -498,19 +498,20 @@ fn CapabilityToggle(
 
     rsx! {
         div { class: "flex items-center gap-2 py-1 px-1 hover:bg-[#222240] rounded w-full",
-            // Toggle switch
+            // Toggle switch — using inline-flex ensures the button establishes
+            // a proper formatting context for the absolutely-positioned knob.
             button {
                 class: if checked {
-                    "w-8 h-4 rounded-full relative transition-colors bg-[#4080ff] flex-shrink-0 border-0 p-0 cursor-pointer"
+                    "inline-flex w-8 h-4 rounded-full relative transition-colors bg-[#4080ff] flex-shrink-0 border-0 p-0 cursor-pointer"
                 } else {
-                    "w-8 h-4 rounded-full relative transition-colors bg-[#3a3a55] flex-shrink-0 border-0 p-0 cursor-pointer"
+                    "inline-flex w-8 h-4 rounded-full relative transition-colors bg-[#3a3a55] flex-shrink-0 border-0 p-0 cursor-pointer"
                 },
                 onclick: move |_| on_toggle.call(()),
                 div {
                     class: if checked {
-                        "absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-white transition-all"
+                        "absolute top-[2px] right-[2px] w-3 h-3 rounded-full bg-white transition-all"
                     } else {
-                        "absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-[#888] transition-all"
+                        "absolute top-[2px] left-[2px] w-3 h-3 rounded-full bg-[#888] transition-all"
                     },
                 }
             }
