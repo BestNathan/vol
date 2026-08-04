@@ -1,7 +1,8 @@
 import type {
-  AgentListEntry, ConnectedInfo, FileEntry, LogRunSummary, LogLine,
-  McpPromptInfo, McpResourceInfo, McpResourceTemplateInfo, McpServerInfo, McpToolInfo,
-  NodeListEntry, SessionListEntry, SkillDetail, SkillListEntry, TaskEntry
+  AgentListEntry, ConnectedInfo, ContextMessageEntry, ContributorInfoEntry,
+  FileEntry, LogRunSummary, LogLine, McpPromptInfo, McpResourceInfo,
+  McpResourceTemplateInfo, McpServerInfo, McpToolInfo, NodeListEntry,
+  SessionListEntry, SkillDetail, SkillListEntry, TaskEntry
 } from '@/types'
 
 // UiEvent — discriminated union keyed by "type" field (matches Rust #[serde(tag = "type")])
@@ -91,8 +92,9 @@ export interface GetCapabilitiesResult {
 export interface UpdateCapabilitiesResult {
   effective_tools: string[]; effective_skills: string[]; effective_mcp_servers: string[]
 }
-export interface ContributorInfo { name: string; anchor_zone: string; position: number; estimated_tokens: number; message_count: number }
-export interface ContextMessage { role: string; content: string }
+// Wire aliases of the canonical @/types entry shapes.
+export type ContributorInfo = ContributorInfoEntry
+export type ContextMessage = ContextMessageEntry
 export interface SessionEntry { id: string; session_id: string; created_at: number; parent_id?: string; type: string; data: unknown }
 export interface ToolDef { name: string; description: string; parameters?: unknown }
 // control.capability_list → {"snapshots": [CapabilitySnapshot, ...]}

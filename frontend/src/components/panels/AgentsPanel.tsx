@@ -6,6 +6,7 @@ import { sessionEntriesToConversation } from '@/lib/session-conversion'
 import { cn } from '@/lib/utils'
 import { ConversationView } from '@/components/panels/ConversationView'
 import { SessionsPanel } from '@/components/panels/SessionsPanel'
+import { ContextPanel } from '@/components/panels/ContextPanel'
 import { InputArea } from '@/components/inputs/InputArea'
 import { CapabilityBar } from '@/components/inputs/CapabilityBar'
 import { CapabilityDrawer } from '@/components/inputs/CapabilityDrawer'
@@ -253,8 +254,8 @@ export function AgentsPanel() {
           <TabsContent value="sessions" className="flex-1 min-h-0 mt-0 flex flex-col overflow-hidden">
             <SessionsPanel />
           </TabsContent>
-          <TabsContent value="context" className="flex-1 min-h-0 mt-0">
-            <div className="flex items-center justify-center h-full text-[#666] text-sm">Context — coming soon</div>
+          <TabsContent value="context" className="flex-1 min-h-0 mt-0 flex flex-col overflow-hidden">
+            <ContextPanel />
           </TabsContent>
           <TabsContent value="tasks" className="flex-1 min-h-0 mt-0">
             <div className="flex items-center justify-center h-full text-[#666] text-sm">Tasks — coming soon</div>

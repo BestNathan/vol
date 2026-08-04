@@ -50,6 +50,21 @@ export interface AgentListEntry {
   current_input?: string | null
 }
 
+// Context contributors — mirrors data_plane/handlers/agent.rs context_config
+// entries (and crates/vol-llm-ui/src/state/mod.rs ContributorInfoEntry).
+export interface ContributorInfoEntry {
+  name: string
+  anchor_zone: string
+  position: number
+  estimated_tokens: number
+  message_count: number
+}
+// Context snapshot message — mirrors ContextMessageEntry in the Dioxus UI state.
+export interface ContextMessageEntry {
+  role: string
+  content: string
+}
+
 // Node types
 export interface NodeLoad { running: number; queued: number }
 export interface NodeListEntry {
