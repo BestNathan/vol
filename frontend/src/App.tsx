@@ -1,6 +1,6 @@
 // frontend/src/App.tsx
 import { useEffect, useRef } from 'react'
-import { useSetAtom } from 'jotai'
+import { useSetAtom, getDefaultStore } from 'jotai'
 import { Provider } from 'jotai'
 import { StatusBar } from '@/components/layout/StatusBar'
 import { TabBar } from '@/components/layout/TabBar'
@@ -73,7 +73,7 @@ function AppInner() {
 
 export function App() {
   return (
-    <Provider>
+    <Provider store={getDefaultStore()}>
       <AppInner />
     </Provider>
   )
