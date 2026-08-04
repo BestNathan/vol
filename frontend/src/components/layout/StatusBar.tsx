@@ -1,6 +1,7 @@
 // frontend/src/components/layout/StatusBar.tsx
 import { useAtomValue, useSetAtom } from 'jotai'
 import { ConnectionIndicator } from '@/components/shared/ConnectionIndicator'
+import { NodesDropdown } from '@/components/shared/NodesDropdown'
 import {
   sessionIdAtom, runCountAtom, iterationAtom, toolCallCountAtom,
   isRunningAtom, exitingAtom, unsafeModeAtom, runElapsedAtom,
@@ -32,6 +33,7 @@ export function StatusBar() {
     <div className={statusCls}>
       <div className="flex items-center gap-1.5 overflow-hidden flex-nowrap sm:gap-1">
         <ConnectionIndicator />
+        <NodesDropdown />
         <span className="text-[#888] text-[11px] hidden sm:inline">Session: {sessionId.slice(0, 8)}</span>
         <span className="text-[#888] text-[11px]">Run: {runCount}</span>
         <span className="text-[#888] text-[11px]">Iter: {iteration}</span>

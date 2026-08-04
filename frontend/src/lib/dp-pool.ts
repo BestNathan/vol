@@ -31,3 +31,8 @@ export class DpConnectionPool {
     return Array.from(this.entries.values())
   }
 }
+
+// Shared module-level pool (mirrors getPanelClient in panel-client.ts): keeps
+// one direct DP WebSocket per node across all components — NodesDropdown node
+// selection, NodeDetailPanel agent fetch, etc.
+export const dpPool = new DpConnectionPool()
