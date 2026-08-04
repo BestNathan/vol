@@ -4,8 +4,12 @@
 # Build artifacts
 target/
 
-# Frontend (node_modules, etc.)
-frontend/
+# Frontend — allow source but exclude heavy artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/test-results/
+frontend/playwright-report/
 
 # Temp and logs
 temp/
