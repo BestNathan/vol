@@ -18,10 +18,17 @@ function agentForRun(runId: string): string | undefined {
   return store.get(runMapAtom).get(runId)
 }
 
-// Helper: get or create conversation for agent
+// Helper: get or create conversation for agent. The conversation object and
+// its entries array are COPIED on every update — mutating in place would leave
+// conversationByAgentAtom returning the same object reference, which jotai's
+// Object.is comparison treats as unchanged, so streamed updates (e.g.
+// content_delta appends) would never re-render the view.
 function updateConversation(agentId: string, fn: (conv: AgentConversation) => void) {
   const map = new Map(store.get(conversationMapAtom))
-  const conv = map.get(agentId) ?? { entries: [], autoScroll: true }
+  const prev = map.get(agentId)
+  const conv = prev
+    ? { entries: [...prev.entries], autoScroll: prev.autoScroll }
+    : { entries: [], autoScroll: true }
   fn(conv)
   map.set(agentId, conv)
   store.set(conversationMapAtom, map)
