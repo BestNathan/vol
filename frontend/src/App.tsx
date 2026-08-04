@@ -8,6 +8,7 @@ import { TabContent } from '@/components/layout/TabContent'
 import { FileTree } from '@/components/panels/FileTree'
 import { JsonRpcClient } from '@/lib/jsonrpc-client'
 import { deriveWsUrl } from '@/lib/ws-url'
+import { agentEventToUiEvent, handleUiEvent } from '@/lib/event-handlers'
 import { connectionStateAtom, serverModeAtom, wsUrlAtom } from '@/stores/connection'
 
 function AppInner() {
@@ -22,6 +23,26 @@ function AppInner() {
     const client = new JsonRpcClient(url)
     clientRef.current = client
 
+    // After "clientRef.current = client"
+    const clientForEvents = client
+
+    // Spawn event stream consumer
+    let running = true
+    ;(async () => {
+      clientForEvents.onEvent((agentEvent) => {
+        if (!running) return
+        const rawEvent = agentEvent.event
+        // Server sends externally-tagged: {"VariantName": {fields}}
+        const entries = Object.entries(rawEvent)
+        if (entries.length === 0) return
+        const [variant, data] = entries[0]
+        const uiEvent = agentEventToUiEvent(variant, data as Record<string, unknown>, agentEvent.run_id)
+        if (uiEvent) {
+          handleUiEvent(uiEvent, agentEvent.run_id)
+        }
+      })
+    })()
+
     client.onStateChange((state) => {
       setConnectionState(state)
       if (state === 'connected') {
@@ -31,7 +52,7 @@ function AppInner() {
       }
     })
 
-    return () => { /* cleanup handled by browser */ }
+    return () => { running = false }
   }, [])
 
   return (
