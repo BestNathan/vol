@@ -83,10 +83,10 @@ function TimelineEntry({
           <Markdown content={entry.content} />
         )}
         {entry.type === 'ToolCall' && (
-          <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setDetailOpen(true)}>
-            <span className="text-[#f0c040] text-xs">[tool]</span>
-            <span className="text-[#e0e0e0] text-sm">{entry.toolName}</span>
-            <span className="text-[#888] text-xs truncate">{entry.argPreview}</span>
+          <div className="flex items-center gap-2 min-w-0 cursor-pointer group" onClick={() => setDetailOpen(true)}>
+            <span className="text-[#f0c040] text-xs flex-shrink-0">[tool]</span>
+            <span className="text-[#e0e0e0] text-sm flex-shrink-0">{entry.toolName}</span>
+            <span className="text-[#888] text-xs truncate min-w-0">{entry.argPreview}</span>
             <span className="hidden group-hover:inline text-[#888] text-xs">more »</span>
           </div>
         )}

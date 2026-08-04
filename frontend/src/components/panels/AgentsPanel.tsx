@@ -234,7 +234,7 @@ export function AgentsPanel() {
           onValueChange={(v) => setSubTab(v as AgentSubTab)}
           className="flex-1 min-h-0 flex flex-col overflow-hidden"
         >
-          <TabsList className="h-9 justify-start w-full gap-0 p-0 rounded-none bg-[#252540] border-b border-[#333355] flex-shrink-0">
+          <TabsList className="h-9 justify-start w-full gap-0 p-0 rounded-none bg-[#252540] border-b border-[#333355] flex-shrink-0 overflow-x-auto">
             {SUB_TABS.map((t) => (
               <TabsTrigger
                 key={t.id}

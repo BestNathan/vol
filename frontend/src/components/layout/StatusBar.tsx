@@ -36,16 +36,16 @@ export function StatusBar() {
         <NodesDropdown />
         <span className="text-[#888] text-[11px] hidden sm:inline">Session: {sessionId.slice(0, 8)}</span>
         <span className="text-[#888] text-[11px]">Run: {runCount}</span>
-        <span className="text-[#888] text-[11px]">Iter: {iteration}</span>
+        <span className="text-[#888] text-[11px] hidden sm:inline">Iter: {iteration}</span>
         <span className="text-[#888] text-[11px]">Tools: {toolCallCount}</span>
-        <span className="text-[#888] text-[11px]">Time: {formatElapsed(elapsed)}</span>
+        <span className="text-[#888] text-[11px] hidden sm:inline">Time: {formatElapsed(elapsed)}</span>
         {isRunning && <span className="px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#3a3a20] text-[#f0c040]">{statusLabel}</span>}
         {!isRunning && <span className="px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#203a20] text-[#80c080]">{statusLabel}</span>}
         {unsafeMode && <span className="px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#3a2020] text-[#ff4040]">!! UNSAFE</span>}
         {exiting && <span className="px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#3a2020] text-[#ff4040]">QUITTING</span>}
       </div>
       <div className="flex items-center gap-1 text-[11px] text-[#888]">
-        <span>UI: {__BUILD_TIME__}</span>
+        <span className="hidden sm:inline">UI: {__BUILD_TIME__}</span>
         <button
           type="button"
           aria-label="Toggle debug panel"

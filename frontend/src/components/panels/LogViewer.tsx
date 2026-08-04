@@ -324,17 +324,40 @@ export function LogViewer() {
           No log files found.
         </div>
       ) : (
-        runs.map((run) => (
-          <div
-            key={run.run_id}
-            className="py-0.5 text-[#ccc] cursor-pointer hover:bg-[#333]"
-            onClick={() => void openRun(run.run_id)}
-          >
-            <span className="text-[#c0c0c0]">{shortRunId(run.run_id)}</span>
-            <span className="text-[#888]"> {run.event_count} events</span>
-            <span className="text-[#888]">  {run.last_event} ({run.last_event_time})</span>
+        <>
+          {/* Mobile: run cards */}
+          <div className="sm:hidden flex flex-col gap-2">
+            {runs.map((run) => (
+              <div
+                key={run.run_id}
+                className="rounded-lg border border-[#333355] bg-[#20203a] p-3 cursor-pointer active:bg-[#2a2a44]"
+                onClick={() => void openRun(run.run_id)}
+              >
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-[#c0c0c0] truncate">{shortRunId(run.run_id)}</span>
+                  <span className="text-[#888] text-[11px] flex-shrink-0">{run.event_count} events</span>
+                </div>
+                <div className="mt-1 text-[11px] text-[#888] truncate">
+                  {run.last_event} ({run.last_event_time})
+                </div>
+              </div>
+            ))}
           </div>
-        ))
+          {/* Desktop: run rows */}
+          <div className="hidden sm:block">
+            {runs.map((run) => (
+              <div
+                key={run.run_id}
+                className="py-0.5 text-[#ccc] cursor-pointer hover:bg-[#333] flex items-baseline gap-2 min-w-0"
+                onClick={() => void openRun(run.run_id)}
+              >
+                <span className="text-[#c0c0c0] flex-shrink-0">{shortRunId(run.run_id)}</span>
+                <span className="text-[#888] flex-shrink-0">{run.event_count} events</span>
+                <span className="text-[#888] truncate">{run.last_event} ({run.last_event_time})</span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

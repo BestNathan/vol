@@ -142,7 +142,7 @@ export function PromptViewer() {
           <div className="flex flex-col gap-1">
             <span className="text-[12px] text-[#888]">Arguments (JSON)</span>
             <textarea
-              className="w-full h-24 bg-[#252540] border border-[#3a3a55] rounded p-2 text-[12px] text-[#e0e0e0] font-mono resize-none"
+              className="w-full h-24 bg-[#252540] border border-[#3a3a55] rounded p-2 text-[16px] sm:text-[12px] text-[#e0e0e0] font-mono resize-none"
               value={d?.argsJson ?? '{}'}
               spellCheck={false}
               onChange={(e) =>

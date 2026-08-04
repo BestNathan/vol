@@ -208,8 +208,8 @@ export function CapabilityDrawer() {
       {/* Backdrop overlay */}
       <div className="fixed inset-0 bg-black/50 z-40" onClick={closeDrawer} />
 
-      {/* Drawer panel */}
-      <div className="fixed right-0 top-0 h-full w-80 bg-[#1a1a2e] border-l border-[#3a3a55] z-50 flex flex-col shadow-2xl">
+      {/* Drawer panel — full width on mobile, fixed 320px right panel on desktop */}
+      <div className="fixed right-0 top-0 h-full w-full sm:w-80 bg-[#1a1a2e] border-l border-[#3a3a55] z-50 flex flex-col shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-3 border-b border-[#3a3a55] flex-shrink-0">
           <span className="text-[14px] font-semibold text-[#e0e0e0] pl-1">Capabilities</span>
@@ -243,7 +243,7 @@ export function CapabilityDrawer() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search capabilities..."
-                    className="w-full pl-8 pr-2 py-1.5 bg-[#12121e] border border-[#2a2a44] rounded text-[12px] text-[#ccc] placeholder:text-[#555] focus:outline-none focus:border-[#80a0ff]"
+                    className="w-full pl-8 pr-2 py-1.5 bg-[#12121e] border border-[#2a2a44] rounded text-[16px] sm:text-[12px] text-[#ccc] placeholder:text-[#555] focus:outline-none focus:border-[#80a0ff]"
                   />
                 </div>
               </div>
