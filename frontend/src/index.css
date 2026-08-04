@@ -1,0 +1,6 @@
+/* Temporary stub: dark blank page until Tailwind v4 lands in Task 1.2.
+   Colors mirror the body classes in index.html (#1a1a2e / #e0e0e0). */
+body {
+  background-color: #1a1a2e;
+  color: #e0e0e0;
+}

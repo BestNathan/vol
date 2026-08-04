@@ -29,6 +29,7 @@ temp/.worktrees
 # Frontend
 frontend/node_modules/
 frontend/dist/
+frontend/*.tsbuildinfo
 
 # Environment files (sensitive)
 .env
