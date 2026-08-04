@@ -1,6 +1,6 @@
 # Build and push vol-llm-ui frontend image to GHCR, then update GitOps manifest.
 #
-# Builds Dioxus WASM + nginx runtime image for the web frontend.
+# Builds React SPA (Vite) + nginx runtime image for the web frontend.
 #
 # Uses the built-in GITHUB_TOKEN for GHCR auth — no extra secrets needed.
 # Requires packages: write and contents: write permissions.
@@ -14,14 +14,9 @@ on:
   push:
     branches: [main]
     paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/vol-llm-ui/**"
+      - "frontend/**"
       - "dockers/vol-llm-ui.Dockerfile"
       - "dockers/nginx-frontend.conf"
-      - ".cargo/config.toml"
-      - "rust-toolchain.toml"
-      - "clippy.toml"
       - "Makefile"
       - ".github/workflows/build-vol-llm-ui.yml"
   workflow_dispatch:
@@ -89,17 +84,13 @@ jobs:
           context: .
           file: dockers/vol-llm-ui.Dockerfile
           platforms: linux/amd64
-          build-args: |
-            REGION=global
           tags: ${{ steps.image.outputs.image }}
           push: ${{ steps.push.outputs.value == 'true' }}
           provenance: false
           cache-from: |
             type=gha,scope=vol-llm-ui-amd64
-            type=gha,scope=vol-llm-ui-cargo-amd64
           cache-to: |
             type=gha,mode=max,scope=vol-llm-ui-amd64
-            type=gha,mode=max,scope=vol-llm-ui-cargo-amd64
 
       - name: Update GitOps manifest image
         if: steps.push.outputs.value == 'true'

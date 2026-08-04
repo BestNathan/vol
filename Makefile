@@ -1,4 +1,4 @@
-.PHONY: help web-css web-dev web-backend web-check web-build web-clippy web-serve \
+.PHONY: help web-dev web-backend web-check web-build web-serve \
         coverage coverage-html coverage-threshold \
         fmt fmt-check check clippy clippy-strict test test-unit test-integration test-e2e audit quality quality-strict quality-full no-doc-tests
 
@@ -59,27 +59,24 @@ quality-full: fmt-check clippy-strict test-unit no-doc-tests ## Full CI gate
 no-doc-tests: ## Check no active doc tests
 	@./scripts/check-no-doc-tests.sh
 
-web-css: ## Build Tailwind CSS in watch mode
-	npx --prefix crates/vol-llm-ui @tailwindcss/cli -i crates/vol-llm-ui/assets/input.css -o crates/vol-llm-ui/assets/tailwind.css --watch=always
+web-dev: ## Start Vite React dev server (port 5173, WS proxy to :3001)
+	npm --prefix frontend run dev
 
-web-dev: ## Start Dioxus dev server w/ size-optimized WASM (port 8080)
-	dx serve --package vol-llm-ui --bin vol-llm-ui-web --no-default-features --features web --addr 0.0.0.0 --port 8080
-
-web-serve: ## Build release WASM + serve w/ cache headers (phone testing, port 8080)
-	dx build --release --package vol-llm-ui --bin vol-llm-ui-web --no-default-features --features web
-	@python3 scripts/serve-web.py target/dx/vol-llm-ui-web/release/web/public --port 8080
+web-serve: ## Build React SPA + serve w/ cache headers (phone testing, port 8080)
+	npm --prefix frontend run build
+	@python3 scripts/serve-web.py frontend/dist --port 8080
 
 web-backend: ## Start backend JSON-RPC agent service (port 3001)
 	ANTHROPIC_AUTH_TOKEN=sk cargo watch -x "run -p vol-agent-server"
 
-web-check: ## dx check (WASM target, web features)
-	dx check --package vol-llm-ui --bin vol-llm-ui-web --no-default-features --features web
+web-check: ## TypeScript check + Vite build
+	npm --prefix frontend run build
 
-web-build: ## Build WASM binary
-	cargo build -p vol-llm-ui --no-default-features --features web --target wasm32-unknown-unknown
+web-build: ## Production build
+	npm --prefix frontend run build
 
-web-clippy: ## cargo clippy (web only)
-	cargo clippy -p vol-llm-ui --no-default-features --features web -- -D warnings
+web-clippy: ## TypeScript type-check only
+	cd frontend && npx tsc -b --noEmit
 
 # ── Coverage ──
 #

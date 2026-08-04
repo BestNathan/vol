@@ -11,7 +11,7 @@ data:
   default.conf: |
     # vol-llm-ui-cp nginx configuration — control-plane backend
     # =============================================================================
-    # Same WASM static serving as vol-llm-ui, but proxies /ws to the control-plane
+    # Same React SPA serving as vol-llm-ui, but proxies /ws to the control-plane
     # agent-server instead of a data-plane variant.
 
     server {
@@ -19,10 +19,6 @@ data:
         server_name _;
         root /usr/share/nginx/html;
         index index.html;
-
-        # Security headers for WASM (SharedArrayBuffer requires COOP/COEP)
-        add_header Cross-Origin-Opener-Policy "same-origin" always;
-        add_header Cross-Origin-Embedder-Policy "require-corp" always;
 
         # SPA fallback — all routes serve index.html
         location / {
@@ -43,8 +39,8 @@ data:
             proxy_send_timeout 86400s;
         }
 
-        # Cache content-hashed assets (wasm, js, css with hash in filename)
-        location ~* "[-_][0-9a-f]{8,}\\.(wasm|js|css)$" {
+        # Cache content-hashed assets (Vite uses base62 hashes like index-C9k0dYtX.js)
+        location ~* "[-_][0-9a-zA-Z]{8,}\.(js|css|svg|png|jpg|jpeg|gif|ico|woff2?|ttf|eot)$" {
             expires 1y;
             add_header Cache-Control "public, immutable";
         }
