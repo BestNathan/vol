@@ -34,16 +34,20 @@ export interface AgentConversation {
   autoScroll: boolean
 }
 
-// Agent list
+// Agent list — union of the two wire shapes:
+//   data-plane (data_plane/handlers/agent.rs): id, name, type, description, scope, status, current_input
+//   control-plane (control_plane/handlers/client.rs): id, name, description?, status?, node_id?, ws_url?
+// All fields except id/name are optional because neither shape is guaranteed across modes.
 export interface AgentListEntry {
   id: string
   name: string
-  type: string
-  description: string
-  scope: string
-  status?: string
+  type?: string
+  description?: string | null
+  scope?: string | null
+  status?: string | null
   node_id?: string
   ws_url?: string
+  current_input?: string | null
 }
 
 // Node types
@@ -75,11 +79,14 @@ export interface McpResourceInfo { server: string; name: string; uri: string; mi
 export interface McpResourceTemplateInfo { server: string; name: string; uri_template: string; description?: string }
 export interface McpPromptInfo { server: string; name: string; description?: string; arguments?: McpPromptArgInfo[] }
 export interface McpPromptArgInfo { name: string; description?: string; required: boolean }
+// TaskEntry — mirrors data_plane/handlers/task.rs JSON: created_at/started_at/completed_at are
+// epoch seconds (numbers); publisher/assignee/active_form serialize as null when unset.
 export interface TaskEntry {
-  id: number; status: string; kind: string; publisher: string; assignee: string
-  subject: string; description: string; active_form: string
+  id: number; status: string; kind: string
+  publisher?: string | null; assignee?: string | null
+  subject: string; description: string; active_form?: string | null
   dependencies: number[]; blocks: number[]
-  created_at: string; started_at?: string; completed_at?: string
+  created_at: number; started_at?: number | null; completed_at?: number | null
 }
 export interface SessionListEntry { id: string; entry_count: number; created_at: number }
 export interface LogRunSummary { run_id: string; event_count: number; last_event: string; last_event_time: string }

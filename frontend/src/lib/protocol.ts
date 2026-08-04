@@ -39,44 +39,47 @@ export interface AgentEvent {
   event: AgentStreamEvent
 }
 
-// All RPC method signatures with parameter and return types
+// RPC wire convention: every method's result is an object whose keys match the Rust
+// payload struct (e.g. `agent.list` → {"agents": [...]}, `session.list` → {"sessions": [...]}),
+// except `system.connected` which returns the ConnectedInfo object itself.
+// Task 1.4's JsonRpcClient resolves RPC results by these envelope keys.
 export interface RpcMethods {
-  'agent.submit': { params: { input: string; target?: string }; result: string }
-  'agent.approve': { params: { req_id: string; approved: boolean; reason?: string }; result: null }
-  'agent.cancel': { params: { run_id: string }; result: null }
-  'agent.list': { params: { node_id?: string }; result: AgentListEntry[] }
+  'agent.submit': { params: { input: string; target?: string }; result: { run_id: string; response: unknown } }
+  'agent.approve': { params: { run_id: string; approved: boolean; reason?: string }; result: { run_id: string; accepted: boolean } }
+  'agent.cancel': { params: { run_id: string }; result: { run_id: string; cancelled: boolean } }
+  'agent.list': { params: { node_id?: string }; result: { agents: AgentListEntry[] } }
   'agent.status': { params: { agent_id: string }; result: { status: string; run_id?: string } }
   'agent.get_capabilities': { params: { agent_id: string; session_id: string }; result: GetCapabilitiesResult }
   'agent.update_capabilities': { params: { agent_id: string; session_id: string; effective_tools: string[]; effective_skills: string[]; effective_mcp_servers: string[] }; result: UpdateCapabilitiesResult }
   'agent.context_config': { params: { agent_id: string }; result: { contributors: ContributorInfo[] } }
-  'agent.context_snapshot': { params: { agent_id: string; contributor: string }; result: { messages: ContextMessage[] } }
-  'session.list': { params: { agent_id?: string }; result: SessionListEntry[] }
-  'session.entries': { params: { session_id: string }; result: SessionEntry[] }
-  'session.resume': { params: { session_id: string; agent_id?: string }; result: null }
-  'file.list': { params: { path: string }; result: FileEntry[] }
-  'file.read': { params: { path: string }; result: string }
-  'tool.list': { params: {}; result: ToolDef[] }
-  'tool.call': { params: { tool_name: string; arguments: Record<string, unknown> }; result: string }
-  'skill.list': { params: {}; result: SkillListEntry[] }
-  'skill.get': { params: { name: string }; result: SkillDetail }
-  'skill.refresh': { params: {}; result: null }
-  'mcp.list_servers': { params: {}; result: McpServerInfo[] }
-  'mcp.list_tools': { params: { server?: string }; result: McpToolInfo[] }
-  'mcp.list_resources': { params: {}; result: McpResourceInfo[] }
-  'mcp.list_resource_templates': { params: {}; result: McpResourceTemplateInfo[] }
-  'mcp.list_prompts': { params: {}; result: McpPromptInfo[] }
-  'mcp.read_resource': { params: { uri: string }; result: string }
-  'mcp.call_tool': { params: { server: string; tool_name: string; arguments: Record<string, unknown> }; result: string }
-  'mcp.reconnect': { params: { server: string }; result: null }
-  'mcp.get_prompt': { params: { server: string; prompt_name: string; arguments: Record<string, unknown> }; result: string }
-  'task.list': { params: { status?: string; assignee?: string }; result: TaskEntry[] }
-  'task.get': { params: { task_id: number }; result: TaskEntry }
-  'log.list': { params: {}; result: LogRunSummary[] }
-  'log.read': { params: { run_id: string }; result: LogLine[] }
+  'agent.context_snapshot': { params: { agent_id: string; contributor_name: string }; result: { messages: ContextMessage[] } }
+  'session.list': { params: { agent_id?: string }; result: { sessions: SessionListEntry[] } }
+  'session.entries': { params: { session_id: string; agent_id?: string }; result: { entries: SessionEntry[] } }
+  'session.resume': { params: { session_id: string; agent_id?: string }; result: { session_id: string; restored: boolean; entry_count: number; entries: SessionEntry[] } }
+  'file.list': { params: { path: string }; result: { entries: FileEntry[] } }
+  'file.read': { params: { path: string }; result: { content: string; metadata: unknown } }
+  'tool.list': { params: {}; result: { tools: ToolDef[] } }
+  'tool.call': { params: { tool_name: string; arguments: Record<string, unknown> }; result: { tool_name: string; result: unknown } }
+  'skill.list': { params: {}; result: { skills: SkillListEntry[] } }
+  'skill.get': { params: { name: string }; result: { skill: SkillDetail; name: string } }
+  'skill.refresh': { params: {}; result: { discovered: number } }
+  'mcp.list_servers': { params: {}; result: { servers: McpServerInfo[] } }
+  'mcp.list_tools': { params: { server?: string }; result: { tools: McpToolInfo[] } }
+  'mcp.list_resources': { params: { server?: string }; result: { resources: McpResourceInfo[] } }
+  'mcp.list_resource_templates': { params: { server?: string }; result: { templates: McpResourceTemplateInfo[] } }
+  'mcp.list_prompts': { params: {}; result: { prompts: McpPromptInfo[] } }
+  'mcp.read_resource': { params: { uri: string }; result: { uri: string; content: string } }
+  'mcp.call_tool': { params: { server: string; tool_name: string; arguments: Record<string, unknown> }; result: { tool_name: string; result: unknown } }
+  'mcp.reconnect': { params: { server: string }; result: { reconnected: boolean } }
+  'mcp.get_prompt': { params: { name: string; arguments?: Record<string, unknown> }; result: { name: string; prompt: unknown } }
+  'task.list': { params: { status?: string; assignee?: string }; result: { tasks: TaskEntry[] } }
+  'task.get': { params: { task_id: number }; result: { task: TaskEntry | null } }
+  'log.list': { params: {}; result: { runs: LogRunSummary[] } }
+  'log.read': { params: { run_id: string }; result: { entries: LogLine[] } }
   'system.connected': { params: {}; result: ConnectedInfo }
-  'control.node_list': { params: {}; result: NodeListEntry[] }
-  'control.node_get': { params: { node_id: string }; result: NodeListEntry }
-  'control.capability_list': { params: { node_id: string }; result: CapabilityListResult }
+  'control.node_list': { params: {}; result: { nodes: NodeListEntry[] } }
+  'control.node_get': { params: { node_id: string }; result: { node: NodeListEntry | null } }
+  'control.capability_list': { params: { node_id?: string }; result: CapabilityListResult }
 }
 
 // Supporting types for RPC results
@@ -84,12 +87,26 @@ export interface GetCapabilitiesResult {
   effective_tools: string[]; effective_skills: string[]; effective_mcp_servers: string[]
   available_tools: unknown[]; available_skills: unknown[]; available_mcp_servers: unknown[]
   base_tools: string[]; base_skills: string[]; base_mcp_servers: string[]
-  providers?: { name: string; models: string[] }[]
-  selected_provider?: string; selected_model?: string
 }
-export interface UpdateCapabilitiesResult extends GetCapabilitiesResult {}
+export interface UpdateCapabilitiesResult {
+  effective_tools: string[]; effective_skills: string[]; effective_mcp_servers: string[]
+}
 export interface ContributorInfo { name: string; anchor_zone: string; position: number; estimated_tokens: number; message_count: number }
 export interface ContextMessage { role: string; content: string }
-export interface SessionEntry { id: string; session_id: string; created_at: string; parent_id?: string; type: string; data: unknown }
+export interface SessionEntry { id: string; session_id: string; created_at: number; parent_id?: string; type: string; data: unknown }
 export interface ToolDef { name: string; description: string; parameters?: unknown }
-export interface CapabilityListResult { node_id: string; revision: number; agents: unknown[]; tools: unknown[]; mcp_servers: unknown[]; skills: unknown[] }
+// control.capability_list → {"snapshots": [CapabilitySnapshot, ...]}
+export interface CapabilitySnapshot {
+  node_id: string
+  revision: number
+  generated_at_ms?: number
+  agents: AgentCapability[]
+  tools: ToolCapability[]
+  mcp_servers: McpServerCapability[]
+  skills: SkillCapability[]
+}
+export interface AgentCapability { agent_id: string; name: string; description?: string | null; status?: string | null }
+export interface ToolCapability { name: string; description?: string | null; sensitivity?: string | null; requires_approval: boolean }
+export interface McpServerCapability { name: string; status?: string | null }
+export interface SkillCapability { name: string; description?: string | null }
+export interface CapabilityListResult { snapshots: CapabilitySnapshot[] }
