@@ -5,6 +5,7 @@ import { AgentsPanel } from '@/components/panels/AgentsPanel'
 import { ToolsTab } from '@/components/panels/ToolsTab'
 import { McpPanel } from '@/components/panels/McpPanel'
 import { SkillsPanel } from '@/components/panels/SkillsPanel'
+import { TasksPanel } from '@/components/panels/TasksPanel'
 
 function PlaceholderPanel({ name }: { name: string }) {
   return (
@@ -18,7 +19,7 @@ export function TabContent() {
   const active = useAtomValue(activeTabAtom)
 
   switch (active) {
-    case 'tasks': return <PlaceholderPanel name="Tasks" />
+    case 'tasks': return <TasksPanel />
     case 'agents': return <AgentsPanel />
     case 'tools': return <ToolsTab />
     case 'workspace': return <PlaceholderPanel name="Workspace" />
