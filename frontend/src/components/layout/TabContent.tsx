@@ -7,6 +7,7 @@ import { McpPanel } from '@/components/panels/McpPanel'
 import { SkillsPanel } from '@/components/panels/SkillsPanel'
 import { TasksPanel } from '@/components/panels/TasksPanel'
 import { FileContentView } from '@/components/panels/FileContentView'
+import { LogViewer } from '@/components/panels/LogViewer'
 
 function PlaceholderPanel({ name }: { name: string }) {
   return (
@@ -26,7 +27,7 @@ export function TabContent() {
     case 'workspace': return <FileContentView />
     case 'skills': return <SkillsPanel />
     case 'mcp': return <McpPanel />
-    case 'logs': return <PlaceholderPanel name="Logs" />
+    case 'logs': return <LogViewer />
     default: return <PlaceholderPanel name="Agents" />
   }
 }
