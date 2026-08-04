@@ -1,11 +1,13 @@
 // frontend/src/components/panels/AgentsPanel.tsx
 import { useCallback, useEffect } from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
-import { JsonRpcClient } from '@/lib/jsonrpc-client'
-import { deriveWsUrl } from '@/lib/ws-url'
+import { getPanelClient } from '@/lib/panel-client'
 import { formatToolArgs, truncatePreview } from '@/lib/event-handlers'
 import { cn } from '@/lib/utils'
 import { ConversationView } from '@/components/panels/ConversationView'
+import { InputArea } from '@/components/inputs/InputArea'
+import { CapabilityBar } from '@/components/inputs/CapabilityBar'
+import { CapabilityDrawer } from '@/components/inputs/CapabilityDrawer'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,17 +19,6 @@ import { activeNodeIdAtom } from '@/stores/ui'
 import { runMapAtom, runningAgentsAtom } from '@/stores/connection'
 import type { AgentListEntry, AgentSubTab, ConversationEntry, SessionListEntry } from '@/types'
 import type { SessionEntry } from '@/lib/protocol'
-
-// --- Shared client -----------------------------------------------------------
-// Temporary: this panel creates its own JsonRpcClient against the same WS URL.
-// The shared client pattern (useClient hook) lands in a later task.
-// autoSubscribe is off because App.tsx's client already subscribes to the event
-// stream; this client is used purely for RPC calls.
-let rpcClient: JsonRpcClient | null = null
-function getClient(): JsonRpcClient {
-  if (!rpcClient) rpcClient = new JsonRpcClient(deriveWsUrl(), { autoSubscribe: false })
-  return rpcClient
-}
 
 // --- Session entry conversion -------------------------------------------------
 // Raw session entry data shapes (see crates/vol-llm-ui/src/web/client.rs and
@@ -161,25 +152,6 @@ function AgentCard({
   )
 }
 
-// --- Placeholders (CapabilityBar + InputArea land in Task 2.5) ------------------
-function CapabilityBarPlaceholder() {
-  return (
-    <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1e1e36] border-t border-[#333355] text-[12px] text-[#888] flex-shrink-0">
-      Capabilities — coming soon
-    </div>
-  )
-}
-
-function InputAreaPlaceholder() {
-  return (
-    <div className="flex-shrink-0 px-3 py-2 bg-[#252540] border-t border-[#333355]">
-      <div className="rounded-lg border border-[#333355] bg-[#1a1a2e] px-3 py-2 text-[13px] text-[#666]">
-        Input — coming soon
-      </div>
-    </div>
-  )
-}
-
 // --- Panel ----------------------------------------------------------------------
 const SUB_TABS: { id: AgentSubTab; label: string }[] = [
   { id: 'conversation', label: 'Conversation' },
@@ -209,7 +181,7 @@ export function AgentsPanel() {
     setLoading(true)
     setError(null)
     try {
-      const res = await getClient().call<{ agents: AgentListEntry[] }>('agent.list', { node_id: nodeId })
+      const res = await getPanelClient().call<{ agents: AgentListEntry[] }>('agent.list', { node_id: nodeId })
       setAgents(res.agents ?? [])
     } catch (err) {
       setAgents([])
@@ -233,12 +205,12 @@ export function AgentsPanel() {
   // conversation with a RunningBanner prepended (mirrors agents_panel.rs).
   const checkAgentRunning = useCallback(async (agentId: string) => {
     try {
-      const status = await getClient().call<{ status: string; run_id?: string }>('agent.status', { agent_id: agentId })
+      const status = await getPanelClient().call<{ status: string; run_id?: string }>('agent.status', { agent_id: agentId })
       if (status.status !== 'running' || !status.run_id) return
-      const sessions = await getClient().call<{ sessions: SessionListEntry[] }>('session.list', { agent_id: agentId })
+      const sessions = await getPanelClient().call<{ sessions: SessionListEntry[] }>('session.list', { agent_id: agentId })
       const latest = sessions.sessions?.[0]
       if (latest) {
-        const res = await getClient().call<{ entries: SessionEntry[] }>('session.entries', {
+        const res = await getPanelClient().call<{ entries: SessionEntry[] }>('session.entries', {
           session_id: latest.id,
           agent_id: agentId,
         })
@@ -322,6 +294,9 @@ export function AgentsPanel() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      {/* Fixed right-side overlay — rendered at panel level so it stays open
+          across sub-tab switches while an agent is selected. */}
+      <CapabilityDrawer />
       {/* Card grid — scrollable, stacks on mobile, wraps on desktop */}
       <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 p-2 border-b border-[#333355] overflow-y-auto max-h-[200px] min-h-[60px] flex-shrink-0">
         {agents.map((agent) => (
@@ -364,8 +339,8 @@ export function AgentsPanel() {
 
           <TabsContent value="conversation" className="flex-1 min-h-0 flex flex-col overflow-hidden mt-0">
             <ConversationView />
-            <CapabilityBarPlaceholder />
-            <InputAreaPlaceholder />
+            <CapabilityBar />
+            <InputArea />
           </TabsContent>
           <TabsContent value="sessions" className="flex-1 min-h-0 mt-0">
             <div className="flex items-center justify-center h-full text-[#666] text-sm">Sessions — coming soon</div>

@@ -7,6 +7,7 @@ import {
 } from '@/stores/connection'
 import { agentStatusMapAtom } from '@/stores/agents'
 import { conversationMapAtom, activeAgentIdAtom } from '@/stores/conversation'
+import { approvalPendingAtom } from '@/stores/dialogs'
 import type { AgentConversation } from '@/types'
 
 const store = getDefaultStore()
@@ -230,7 +231,11 @@ export function handleUiEvent(event: UiEvent, runId: string) {
     }
 
     case 'approval_request':
+      store.set(approvalPendingAtom, true)
+      break
     case 'approval_resolved':
+      store.set(approvalPendingAtom, false)
+      break
     case 'ws_connected':
     case 'ws_connecting':
     case 'ws_disconnected':
@@ -297,6 +302,8 @@ export function agentEventToUiEvent(
     case 'MaxIterationsReached': return { type: 'max_iterations_reached', current: (n('current_iteration') ?? 0) as number, max: (n('max_iterations') ?? 0) as number }
     case 'IterationContinued': return { type: 'iteration_continued', from_iteration: (n('from_iteration') ?? 0) as number }
     case 'IterationComplete': return { type: 'iteration_complete', iteration: (n('iteration') ?? 0) as number, final_answer: s('final_answer') || undefined }
+    case 'ApprovalRequest': return { type: 'approval_request', tool_name: s('tool_name'), reason: s('reason'), arguments: s('arguments') }
+    case 'ApprovalResolved': return { type: 'approval_resolved', approved: data.approved === true }
     default: return null
   }
 }
