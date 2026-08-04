@@ -6,6 +6,7 @@ import { ToolsTab } from '@/components/panels/ToolsTab'
 import { McpPanel } from '@/components/panels/McpPanel'
 import { SkillsPanel } from '@/components/panels/SkillsPanel'
 import { TasksPanel } from '@/components/panels/TasksPanel'
+import { FileContentView } from '@/components/panels/FileContentView'
 
 function PlaceholderPanel({ name }: { name: string }) {
   return (
@@ -22,7 +23,7 @@ export function TabContent() {
     case 'tasks': return <TasksPanel />
     case 'agents': return <AgentsPanel />
     case 'tools': return <ToolsTab />
-    case 'workspace': return <PlaceholderPanel name="Workspace" />
+    case 'workspace': return <FileContentView />
     case 'skills': return <SkillsPanel />
     case 'mcp': return <McpPanel />
     case 'logs': return <PlaceholderPanel name="Logs" />

@@ -118,3 +118,23 @@ export interface CapabilityOverlayState {
 }
 
 export type ToggleSavingState = { kind: 'saving' } | { kind: 'saved' } | { kind: 'error'; message: string }
+
+// Workspace file tree — mirrors crates/vol-llm-ui/src/state/mod.rs
+// WorkspaceTreeNode (recursive node; loaded/load_error describe whether the
+// dir's children have been fetched via file.list).
+export interface WorkspaceTreeNode {
+  name: string
+  path: string
+  is_dir: boolean
+  loaded: boolean
+  load_error: boolean
+  children: WorkspaceTreeNode[]
+}
+
+// Open file tab in the Workspace tab. content/error are filled asynchronously
+// by file.read after the tab is added.
+export interface OpenFileTab {
+  path: string
+  content?: string
+  error?: string
+}
