@@ -6,23 +6,42 @@ import { StatusBar } from '@/components/layout/StatusBar'
 import { TabBar } from '@/components/layout/TabBar'
 import { TabContent } from '@/components/layout/TabContent'
 import { ApprovalDialog } from '@/components/dialogs/ApprovalDialog'
+import { DebugPanel } from '@/components/dialogs/DebugPanel'
 import { FileTree } from '@/components/panels/FileTree'
 import { JsonRpcClient } from '@/lib/jsonrpc-client'
 import { deriveWsUrl } from '@/lib/ws-url'
 import { agentEventToUiEvent, handleUiEvent } from '@/lib/event-handlers'
 import { connectionStateAtom, serverModeAtom, wsUrlAtom } from '@/stores/connection'
+import { debugPanelAtom } from '@/stores/dialogs'
 
 function AppInner() {
   const setConnectionState = useSetAtom(connectionStateAtom)
   const setServerMode = useSetAtom(serverModeAtom)
   const setWsUrl = useSetAtom(wsUrlAtom)
+  const setDebugPanel = useSetAtom(debugPanelAtom)
   const clientRef = useRef<JsonRpcClient | null>(null)
+  const debugStartRef = useRef<number | null>(null)
 
   useEffect(() => {
     const url = deriveWsUrl()
     setWsUrl(url)
     const client = new JsonRpcClient(url)
     clientRef.current = client
+
+    // WS message capture for the DebugPanel: every outbound call and every
+    // inbound message is recorded with elapsed time since the first capture.
+    client.setDebugCapture(({ direction, method, payload }) => {
+      const now = performance.now()
+      let start = debugStartRef.current
+      if (start === null) {
+        start = now
+        debugStartRef.current = now
+      }
+      setDebugPanel((prev) => ({
+        ...prev,
+        messages: [...prev.messages, { direction, method, payload, elapsedMs: now - start }],
+      }))
+    })
 
     // After "clientRef.current = client"
     const clientForEvents = client
@@ -70,6 +89,8 @@ function AppInner() {
       </div>
       {/* Global HITL overlay: approval_request events arrive on any tab. */}
       <ApprovalDialog />
+      {/* Global debug overlay: WS message inspector toggled from the StatusBar. */}
+      <DebugPanel />
     </div>
   )
 }

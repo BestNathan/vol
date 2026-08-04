@@ -1,10 +1,11 @@
 // frontend/src/components/layout/StatusBar.tsx
-import { useAtomValue } from 'jotai'
+import { useAtomValue, useSetAtom } from 'jotai'
 import { ConnectionIndicator } from '@/components/shared/ConnectionIndicator'
 import {
   sessionIdAtom, runCountAtom, iterationAtom, toolCallCountAtom,
   isRunningAtom, exitingAtom, unsafeModeAtom, runElapsedAtom,
 } from '@/stores/connection'
+import { debugPanelAtom } from '@/stores/dialogs'
 
 function formatElapsed(ms: number): string {
   const secs = Math.floor(ms / 1000)
@@ -20,6 +21,7 @@ export function StatusBar() {
   const elapsed = useAtomValue(runElapsedAtom)
   const exiting = useAtomValue(exitingAtom)
   const unsafeMode = useAtomValue(unsafeModeAtom)
+  const setDebugPanel = useSetAtom(debugPanelAtom)
 
   const statusLabel = isRunning ? 'Running' : 'Idle'
   const statusCls = isRunning
@@ -42,6 +44,15 @@ export function StatusBar() {
       </div>
       <div className="flex items-center gap-1 text-[11px] text-[#888]">
         <span>UI: {__BUILD_TIME__}</span>
+        <button
+          type="button"
+          aria-label="Toggle debug panel"
+          title="Debug panel"
+          onClick={() => setDebugPanel((prev) => ({ ...prev, open: !prev.open }))}
+          className="hover:text-white cursor-pointer"
+        >
+          🐛
+        </button>
       </div>
     </div>
   )

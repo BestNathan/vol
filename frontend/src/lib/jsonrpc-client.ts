@@ -5,6 +5,15 @@ import type { AgentEvent } from './protocol'
 type ResponseCallback = (result: unknown) => void
 type ErrorCallback = (error: { code: number; message: string }) => void
 
+// Debug capture hook (DebugPanel WS inspector): notified for every outbound
+// JSON-RPC request and every inbound WS message, with the extracted method
+// name and the raw payload string.
+export interface DebugCapture {
+  direction: 'in' | 'out'
+  method: string
+  payload: string
+}
+
 interface PendingCall {
   resolve: ResponseCallback
   reject: ErrorCallback
@@ -19,6 +28,7 @@ export class JsonRpcClient {
   private autoSubscribe: boolean
   private sendQueue: string[] = []
   private state: ConnectionState = 'connecting'
+  private debugCapture: ((capture: DebugCapture) => void) | null = null
 
   // Event stream: push-based via callbacks stored by consumers
   private eventListeners: Array<(event: AgentEvent) => void> = []
@@ -68,6 +78,12 @@ export class JsonRpcClient {
           listener(event)
         }
       }
+      // Capture for debug AFTER processing — never blocks message handling
+      this.debugCapture?.({
+        direction: 'in',
+        method: typeof msg.method === 'string' ? msg.method : '<response>',
+        payload: e.data as string,
+      })
     }
 
     ws.onclose = () => {
@@ -91,12 +107,21 @@ export class JsonRpcClient {
 
       this.pending.set(id, { resolve: resolve as ResponseCallback, reject })
 
+      // Capture for debug (DebugPanel WS inspector) — includes internal calls
+      // such as agent.subscribe and system.connected
+      this.debugCapture?.({ direction: 'out', method, payload: message })
+
       if (this.ws?.readyState === WebSocket.OPEN) {
         this.ws.send(message)
       } else {
         this.sendQueue.push(message)
       }
     })
+  }
+
+  /** Attach the DebugPanel WS capture hook (null detaches). */
+  setDebugCapture(cb: ((capture: DebugCapture) => void) | null): void {
+    this.debugCapture = cb
   }
 
   onStateChange(cb: (state: ConnectionState) => void): void {
