@@ -52,10 +52,14 @@ export function defaultCapabilities(overrides = {}) {
 
 /**
  * Intercept the app's WebSocket and answer JSON-RPC requests.
+ * `handlers` optionally maps extra method names to result-producing functions
+ * (e.g. `{ 'file.list': (params) => ({ entries: [...] }) }`); unknown methods
+ * still resolve harmlessly to `{}`.
  * @returns {{ pushEvent: (agentEvent: unknown) => void, capabilities: object }}
  */
-export async function installMockBackend(page, { capabilities } = {}) {
+export async function installMockBackend(page, { capabilities, handlers } = {}) {
   const caps = capabilities ?? defaultCapabilities()
+  const extra = handlers ?? {}
   // Event channel for agent.event notifications. App.tsx is the only caller of
   // system.connected (it is not called by the panel/DP clients), and React
   // StrictMode double-mounts App.tsx's effect — the app listens on the LAST
@@ -104,8 +108,9 @@ export async function installMockBackend(page, { capabilities } = {}) {
           }
           break
         default:
-          // Unknown methods (file.list, tool.list, ...) resolve harmlessly.
-          result = {}
+          // Custom handlers first, then harmless `{}` for everything else
+          // (tool.list, task.list, log.list, ...).
+          result = extra[msg.method] ? extra[msg.method](msg.params, msg.id) : {}
       }
       ws.send(JSON.stringify({ id: msg.id, result }))
     })

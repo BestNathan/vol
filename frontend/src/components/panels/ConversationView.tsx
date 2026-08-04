@@ -92,7 +92,7 @@ function TimelineEntry({
         )}
         {entry.type === 'ToolResult' && (
           <div className="cursor-pointer" onClick={() => setDetailOpen(true)}>
-            <span className={`text-xs px-1 py-0.5 rounded mr-1 ${entry.success ? 'text-[#40c040] bg-[#1a3a1a]' : 'text-[#c04040] bg-[#3a1a1a]'}`}>
+            <span className={`text-xs px-1 py-0.5 rounded mr-1 ${entry.success ? 'text-[#40c040] bg-[#1a2a1a]' : 'text-[#c04040] bg-[#2a1a1a]'}`}>
               {entry.success ? 'OK' : 'ERR'}
             </span>
             <span className="text-[#e0e0e0] text-sm line-clamp-2">{entry.preview}</span>

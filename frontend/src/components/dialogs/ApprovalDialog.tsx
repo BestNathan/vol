@@ -76,7 +76,7 @@ export function ApprovalDialog() {
           <button
             type="button"
             onClick={() => void resolve(true)}
-            className="px-3 py-1.5 border-none rounded-md cursor-pointer text-[13px] bg-[#408040] text-[#e0e0e0] hover:bg-[#509050]"
+            className="px-3 py-1.5 border-none rounded-md cursor-pointer text-[13px] bg-[#408040] text-[#e0e0e0] hover:bg-[#50a050]"
           >
             Approve
           </button>

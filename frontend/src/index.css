@@ -23,7 +23,7 @@
 
 /* shadcn dark theme CSS variables */
 :root {
-  --background: 240 10% 11%;       /* #1a1a2e */
+  --background: 240 28% 14%;       /* #1a1a2e (hsl(240 28% 14%) = rgb(26,26,46)) */
   --foreground: 0 0% 88%;          /* #e0e0e0 */
   --card: 240 10% 15%;             /* #252540 */
   --card-foreground: 0 0% 88%;
