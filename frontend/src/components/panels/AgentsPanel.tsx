@@ -2,9 +2,10 @@
 import { useCallback, useEffect } from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import { getPanelClient } from '@/lib/panel-client'
-import { formatToolArgs, truncatePreview } from '@/lib/event-handlers'
+import { sessionEntriesToConversation } from '@/lib/session-conversion'
 import { cn } from '@/lib/utils'
 import { ConversationView } from '@/components/panels/ConversationView'
+import { SessionsPanel } from '@/components/panels/SessionsPanel'
 import { InputArea } from '@/components/inputs/InputArea'
 import { CapabilityBar } from '@/components/inputs/CapabilityBar'
 import { CapabilityDrawer } from '@/components/inputs/CapabilityDrawer'
@@ -17,101 +18,8 @@ import {
 import { conversationMapAtom, activeAgentIdAtom } from '@/stores/conversation'
 import { activeNodeIdAtom } from '@/stores/ui'
 import { runMapAtom, runningAgentsAtom } from '@/stores/connection'
-import type { AgentListEntry, AgentSubTab, ConversationEntry, SessionListEntry } from '@/types'
+import type { AgentListEntry, AgentSubTab, SessionListEntry } from '@/types'
 import type { SessionEntry } from '@/lib/protocol'
-
-// --- Session entry conversion -------------------------------------------------
-// Raw session entry data shapes (see crates/vol-llm-ui/src/web/client.rs and
-// the Dioxus sessions_panel.rs::session_entries_to_conversation, which this
-// mirrors so resumed/running sessions render as the same timeline entries).
-interface SessionMsg {
-  role?: string
-  name?: string
-  content?: unknown
-  thinking?: unknown
-  tool_calls?: unknown
-}
-
-function messageText(content: unknown): string {
-  if (typeof content === 'string') return content
-  if (Array.isArray(content)) {
-    return content
-      .map((part) => {
-        if (part && typeof part === 'object') {
-          const rec = part as Record<string, unknown>
-          if (typeof rec.text === 'string') return rec.text
-          if (typeof rec.type === 'string') return rec.type
-        }
-        return ''
-      })
-      .filter(Boolean)
-      .join('\n')
-  }
-  return ''
-}
-
-export function sessionEntriesToConversation(entries: SessionEntry[]): ConversationEntry[] {
-  const out: ConversationEntry[] = []
-  for (const e of entries) {
-    const data = (e.data ?? {}) as {
-      message?: { message?: SessionMsg }
-      checkpoint?: { reason?: string; note?: string | null }
-    }
-    switch (e.type) {
-      case 'message': {
-        const msg = data.message?.message
-        if (!msg) break
-        const role = msg.role ?? ''
-        const text = messageText(msg.content)
-        if (role === 'user') {
-          out.push({ type: 'UserInput', text })
-        } else if (role === 'assistant') {
-          const thinking = typeof msg.thinking === 'string' ? msg.thinking : ''
-          if (thinking) out.push({ type: 'Thinking', content: thinking })
-          if (Array.isArray(msg.tool_calls)) {
-            for (const tc of msg.tool_calls) {
-              const t = tc as { name?: string; arguments?: unknown }
-              const fullArguments =
-                typeof t.arguments === 'string' ? t.arguments : JSON.stringify(t.arguments ?? {})
-              out.push({
-                type: 'ToolCall',
-                toolName: t.name ?? 'tool',
-                argPreview: formatToolArgs(fullArguments),
-                fullArguments,
-              })
-            }
-          }
-          out.push({ type: 'AgentAnswer', text })
-        } else if (role === 'tool') {
-          out.push({
-            type: 'ToolResult',
-            toolName: msg.name ?? 'tool',
-            preview: truncatePreview(text, 200),
-            fullResult: text,
-            success: true,
-          })
-        }
-        break
-      }
-      case 'checkpoint': {
-        const cp = data.checkpoint
-        out.push({
-          type: 'EntryCheckpoint',
-          reason: cp?.reason ?? 'Checkpoint',
-          note: cp?.note ?? null,
-          createdAt: e.created_at,
-        })
-        break
-      }
-      case 'summary': {
-        out.push({ type: 'RunSummary', iterations: 0, toolCalls: 0, elapsedMs: 0 })
-        break
-      }
-      default: break
-    }
-  }
-  return out
-}
 
 // --- Agent card ----------------------------------------------------------------
 function AgentCard({
@@ -342,8 +250,8 @@ export function AgentsPanel() {
             <CapabilityBar />
             <InputArea />
           </TabsContent>
-          <TabsContent value="sessions" className="flex-1 min-h-0 mt-0">
-            <div className="flex items-center justify-center h-full text-[#666] text-sm">Sessions — coming soon</div>
+          <TabsContent value="sessions" className="flex-1 min-h-0 mt-0 flex flex-col overflow-hidden">
+            <SessionsPanel />
           </TabsContent>
           <TabsContent value="context" className="flex-1 min-h-0 mt-0">
             <div className="flex items-center justify-center h-full text-[#666] text-sm">Context — coming soon</div>
