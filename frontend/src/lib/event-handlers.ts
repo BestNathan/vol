@@ -8,7 +8,8 @@ import {
 import { agentStatusMapAtom } from '@/stores/agents'
 import { conversationMapAtom, activeAgentIdAtom } from '@/stores/conversation'
 import { approvalPendingAtom } from '@/stores/dialogs'
-import type { AgentConversation } from '@/types'
+import { toolCallsAtom } from '@/stores/tools'
+import type { AgentConversation, ToolCallStatus } from '@/types'
 
 const store = getDefaultStore()
 
@@ -24,6 +25,20 @@ function updateConversation(agentId: string, fn: (conv: AgentConversation) => vo
   fn(conv)
   map.set(agentId, conv)
   store.set(conversationMapAtom, map)
+}
+
+// Feed the Tools tab call history (mirrors tools_tab.rs reduce_tool_state):
+// update the latest still-running entry for a tool name with its terminal
+// status and duration. No-op when no matching running entry exists.
+function markToolCallStatus(name: string, status: ToolCallStatus, durationMs: number | null) {
+  const calls = [...store.get(toolCallsAtom)]
+  for (let i = calls.length - 1; i >= 0; i--) {
+    if (calls[i].toolName === name && calls[i].status === 'Running') {
+      calls[i] = { ...calls[i], status, durationMs }
+      break
+    }
+  }
+  store.set(toolCallsAtom, calls)
 }
 
 let runStartTime = 0
@@ -152,6 +167,18 @@ export function handleUiEvent(event: UiEvent, runId: string) {
       const seq = store.get(toolCallCountAtom) + 1
       store.set(toolCallCountAtom, seq)
 
+      // Append a Running entry to the call history (mirrors tools_tab.rs
+      // reduce_tool_state: sequence, tool name, arg preview, Running).
+      const calls = [...store.get(toolCallsAtom)]
+      calls.push({
+        sequence: seq,
+        toolName: event.tool_name,
+        argPreview: formatToolArgs(event.arguments),
+        status: 'Running',
+        durationMs: null,
+      })
+      store.set(toolCallsAtom, calls)
+
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
       if (agentId) updateConversation(agentId, conv => {
         const preview = formatToolArgs(event.arguments)
@@ -165,6 +192,8 @@ export function handleUiEvent(event: UiEvent, runId: string) {
       break
     }
     case 'tool_call_complete': {
+      markToolCallStatus(event.tool_name, 'Success', event.duration_ms ?? null)
+
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
       if (agentId) updateConversation(agentId, conv => {
         const preview = truncatePreview(event.result, 200)
@@ -179,6 +208,8 @@ export function handleUiEvent(event: UiEvent, runId: string) {
       break
     }
     case 'tool_call_error': {
+      markToolCallStatus(event.tool_name, 'Error', event.duration_ms ?? null)
+
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
       if (agentId) updateConversation(agentId, conv => {
         conv.entries.push({
@@ -192,6 +223,8 @@ export function handleUiEvent(event: UiEvent, runId: string) {
       break
     }
     case 'tool_call_skipped': {
+      markToolCallStatus(event.tool_name, 'Skipped', event.duration_ms ?? null)
+
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
       if (agentId) updateConversation(agentId, conv => {
         conv.entries.push({
