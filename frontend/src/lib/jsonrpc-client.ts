@@ -41,6 +41,27 @@ export class JsonRpcClient {
     this.connect()
   }
 
+  isConnected(): boolean {
+    return this.state === 'connected'
+  }
+
+  close(): void {
+    if (this.ws) {
+      this.ws.onclose = null
+      this.ws.onerror = null
+      this.ws.onmessage = null
+      this.ws.close()
+      this.ws = null
+    }
+    this.state = 'disconnected'
+    // Fail all pending calls
+    for (const [, { reject }] of this.pending) {
+      reject({ code: -1, message: 'WebSocket closed' })
+    }
+    this.pending.clear()
+    this.sendQueue = []
+  }
+
   private connect(): void {
     this.state = 'connecting'
     this.stateChangeCallback?.('connecting')

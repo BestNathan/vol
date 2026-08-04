@@ -1,5 +1,5 @@
 // frontend/src/App.tsx
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useSetAtom, getDefaultStore } from 'jotai'
 import { Provider } from 'jotai'
 import { StatusBar } from '@/components/layout/StatusBar'
@@ -10,17 +10,46 @@ import { DebugPanel } from '@/components/dialogs/DebugPanel'
 import { FileTree } from '@/components/panels/FileTree'
 import { JsonRpcClient } from '@/lib/jsonrpc-client'
 import { deriveWsUrl } from '@/lib/ws-url'
+import { setPanelClient } from '@/lib/panel-client'
+import { attemptReconnect } from '@/lib/reconnect'
 import { agentEventToUiEvent, handleUiEvent } from '@/lib/event-handlers'
-import { connectionStateAtom, serverModeAtom, wsUrlAtom } from '@/stores/connection'
+import {
+  connectionStateAtom, serverModeAtom, wsUrlAtom,
+  wsConnectedAtom, wsLastErrorAtom,
+} from '@/stores/connection'
 import { debugPanelAtom } from '@/stores/dialogs'
 
 function AppInner() {
   const setConnectionState = useSetAtom(connectionStateAtom)
   const setServerMode = useSetAtom(serverModeAtom)
   const setWsUrl = useSetAtom(wsUrlAtom)
+  const setWsConnected = useSetAtom(wsConnectedAtom)
+  const setWsLastError = useSetAtom(wsLastErrorAtom)
   const setDebugPanel = useSetAtom(debugPanelAtom)
   const clientRef = useRef<JsonRpcClient | null>(null)
   const debugStartRef = useRef<number | null>(null)
+  const reconnectAbortRef = useRef<AbortController | null>(null)
+
+  const startReconnect = useCallback((client: JsonRpcClient) => {
+    // Cancel any previous reconnect loop
+    reconnectAbortRef.current?.abort()
+    const ac = new AbortController()
+    reconnectAbortRef.current = ac
+
+    attemptReconnect(
+      client,
+      (_attempt, delaySecs) => {
+        if (ac.signal.aborted) return
+        setWsConnected(false)
+        setWsLastError(`Reconnecting (${delaySecs}s)`)
+      },
+    ).then((ok) => {
+      if (ac.signal.aborted) return
+      if (!ok) {
+        setWsLastError('Connection lost. Please refresh.')
+      }
+    })
+  }, [setWsConnected, setWsLastError])
 
   useEffect(() => {
     const url = deriveWsUrl()
@@ -28,8 +57,11 @@ function AppInner() {
     const client = new JsonRpcClient(url)
     clientRef.current = client
 
-    // WS message capture for the DebugPanel: every outbound call and every
-    // inbound message is recorded with elapsed time since the first capture.
+    // Share this client with all panel components so they reuse the same
+    // WebSocket connection (one connection, one reconnect loop).
+    setPanelClient(client)
+
+    // WS message capture for the DebugPanel
     client.setDebugCapture(({ direction, method, payload }) => {
       const now = performance.now()
       let start = debugStartRef.current
@@ -43,37 +75,42 @@ function AppInner() {
       }))
     })
 
-    // After "clientRef.current = client"
-    const clientForEvents = client
-
     // Spawn event stream consumer
     let running = true
-    ;(async () => {
-      clientForEvents.onEvent((agentEvent) => {
-        if (!running) return
-        const rawEvent = agentEvent.event
-        // Server sends externally-tagged: {"VariantName": {fields}}
-        const entries = Object.entries(rawEvent)
-        if (entries.length === 0) return
-        const [variant, data] = entries[0]
-        const uiEvent = agentEventToUiEvent(variant, data as Record<string, unknown>, agentEvent.run_id)
-        if (uiEvent) {
-          handleUiEvent(uiEvent, agentEvent.run_id)
-        }
-      })
-    })()
+    client.onEvent((agentEvent) => {
+      if (!running) return
+      const rawEvent = agentEvent.event
+      const entries = Object.entries(rawEvent)
+      if (entries.length === 0) return
+      const [variant, data] = entries[0]
+      const uiEvent = agentEventToUiEvent(variant, data as Record<string, unknown>, agentEvent.run_id)
+      if (uiEvent) {
+        handleUiEvent(uiEvent, agentEvent.run_id)
+      }
+    })
 
     client.onStateChange((state) => {
       setConnectionState(state)
       if (state === 'connected') {
+        setWsConnected(true)
+        setWsLastError(null)
+        // Cancel any running reconnect loop
+        reconnectAbortRef.current?.abort()
         client.call<{ server_type: string }>('system.connected').then(info => {
           setServerMode(info.server_type as any)
         }).catch(() => {})
+      } else if (state === 'disconnected') {
+        setWsConnected(false)
+        setWsLastError('Disconnected')
+        startReconnect(client)
       }
     })
 
-    return () => { running = false }
-  }, [])
+    return () => {
+      running = false
+      reconnectAbortRef.current?.abort()
+    }
+  }, [setConnectionState, setServerMode, setWsUrl, setWsConnected, setWsLastError, setDebugPanel, startReconnect])
 
   return (
     <div className="relative h-[100dvh] w-[100vw] font-[system-ui] text-[14px] text-[#e0e0e0] bg-[#1a1a2e]">
@@ -87,9 +124,7 @@ function AppInner() {
           </div>
         </div>
       </div>
-      {/* Global HITL overlay: approval_request events arrive on any tab. */}
       <ApprovalDialog />
-      {/* Global debug overlay: WS message inspector toggled from the StatusBar. */}
       <DebugPanel />
     </div>
   )

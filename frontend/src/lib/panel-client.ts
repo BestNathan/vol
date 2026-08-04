@@ -1,17 +1,16 @@
-// frontend/src/lib/panel-client.ts
-// Shared RPC-only JsonRpcClient for panel components (AgentsPanel, InputArea,
-// CapabilityBar, CapabilityDrawer). A single module-level instance keeps one
-// WebSocket connection for panel RPC. autoSubscribe is off because App.tsx's
-// client already subscribes to the event stream and dispatches events into
-// stores; this client is used purely for call().
+// Shared RPC client reference for panel components. Set by App on mount so
+// all panels reuse the same WebSocket connection (and its reconnect loop).
 import { JsonRpcClient } from './jsonrpc-client'
-import { deriveWsUrl } from './ws-url'
 
 let panelClient: JsonRpcClient | null = null
 
+export function setPanelClient(client: JsonRpcClient): void {
+  panelClient = client
+}
+
 export function getPanelClient(): JsonRpcClient {
   if (!panelClient) {
-    panelClient = new JsonRpcClient(deriveWsUrl(), { autoSubscribe: false })
+    throw new Error('Panel client not initialized — App must call setPanelClient on mount')
   }
   return panelClient
 }

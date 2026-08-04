@@ -1,14 +1,10 @@
 // frontend/tests/unit/reconnect.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// We need a controllable client mock
 function createMockClient(isConnected: () => boolean) {
   return {
     reconnect: vi.fn(),
-    call: vi.fn().mockResolvedValue(null),
-    onStateChange: vi.fn(),
-    onEvent: vi.fn(() => () => {}),
-    _connected: isConnected,
+    isConnected: () => isConnected(),
   }
 }
 
@@ -21,8 +17,7 @@ describe('attemptReconnect', () => {
     const client = createMockClient(() => true)
     const onAttempt = vi.fn()
 
-    const resultPromise = attemptReconnect(client as any, onAttempt)
-    // Fast-forward past any timers
+    const resultPromise = attemptReconnect(client, onAttempt)
     await vi.runAllTimersAsync()
 
     const result = await resultPromise
@@ -34,19 +29,16 @@ describe('attemptReconnect', () => {
     const client = createMockClient(() => false)
     const onAttempt = vi.fn()
 
-    const resultPromise = attemptReconnect(client as any, onAttempt)
+    const resultPromise = attemptReconnect(client, onAttempt)
 
-    // The function checks connected state after each reconnect call
-    // Fast-forward all 10 attempts
     for (let i = 0; i < 10; i++) {
-      await vi.advanceTimersByTimeAsync(1000) // wait for delay
+      await vi.advanceTimersByTimeAsync(1000)
       await vi.runAllTimersAsync()
     }
 
     const result = await resultPromise
     expect(result).toBe(false)
     expect(onAttempt).toHaveBeenCalledTimes(10)
-    // Verify delays: 3,6,12,24,30,30,30,30,30,30
     expect(onAttempt.mock.calls[0][1]).toBe(3)
     expect(onAttempt.mock.calls[3][1]).toBe(24)
     expect(onAttempt.mock.calls[4][1]).toBe(30)
