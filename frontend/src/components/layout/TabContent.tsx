@@ -3,6 +3,7 @@ import { useAtomValue } from 'jotai'
 import { activeTabAtom } from '@/stores/ui'
 import { AgentsPanel } from '@/components/panels/AgentsPanel'
 import { ToolsTab } from '@/components/panels/ToolsTab'
+import { McpPanel } from '@/components/panels/McpPanel'
 
 function PlaceholderPanel({ name }: { name: string }) {
   return (
@@ -21,7 +22,7 @@ export function TabContent() {
     case 'tools': return <ToolsTab />
     case 'workspace': return <PlaceholderPanel name="Workspace" />
     case 'skills': return <PlaceholderPanel name="Skills" />
-    case 'mcp': return <PlaceholderPanel name="MCP" />
+    case 'mcp': return <McpPanel />
     case 'logs': return <PlaceholderPanel name="Logs" />
     default: return <PlaceholderPanel name="Agents" />
   }
