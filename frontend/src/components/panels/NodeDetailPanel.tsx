@@ -7,7 +7,7 @@
 // interval is cleared on unmount / node switch. Port of node_detail_panel.rs.
 import { useEffect, useState } from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { getPanelClient } from '@/lib/panel-client'
+import { getControlClient } from '@/lib/panel-client'
 import { dpPool } from '@/lib/dp-pool'
 import { viewingNodeDetailAtom } from '@/stores/ui'
 import type { AgentListEntry, NodeListEntry } from '@/types'
@@ -46,7 +46,7 @@ export function NodeDetailPanel() {
   useEffect(() => {
     if (!nodeId) return
     let alive = true
-    const client = getPanelClient()
+    const client = getControlClient()
 
     setState({ node: null, agents: [], capabilities: null, loading: true, error: null })
 

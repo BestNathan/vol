@@ -5,7 +5,7 @@
 // nodes_panel.rs.
 import { useEffect, useState } from 'react'
 import { useAtomValue } from 'jotai'
-import { getPanelClient } from '@/lib/panel-client'
+import { getControlClient } from '@/lib/panel-client'
 import { viewingNodeDetailAtom } from '@/stores/ui'
 import { NodeDetailPanel } from '@/components/panels/NodeDetailPanel'
 import type { NodeListEntry } from '@/types'
@@ -25,7 +25,7 @@ export function NodesPanel() {
   useEffect(() => {
     if (viewingNodeDetail) return
     let alive = true
-    getPanelClient()
+    getControlClient()
       .call<RpcMethods['control.node_list']['result']>('control.node_list')
       .then((res) => {
         if (!alive) return

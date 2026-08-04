@@ -10,7 +10,7 @@ import { DebugPanel } from '@/components/dialogs/DebugPanel'
 import { FileTree } from '@/components/panels/FileTree'
 import { JsonRpcClient } from '@/lib/jsonrpc-client'
 import { deriveWsUrl } from '@/lib/ws-url'
-import { setPanelClient } from '@/lib/panel-client'
+import { initClients } from '@/lib/panel-client'
 import { attemptReconnect } from '@/lib/reconnect'
 import { agentEventToUiEvent, handleUiEvent } from '@/lib/event-handlers'
 import {
@@ -57,9 +57,9 @@ function AppInner() {
     const client = new JsonRpcClient(url)
     clientRef.current = client
 
-    // Share this client with all panel components so they reuse the same
-    // WebSocket connection (one connection, one reconnect loop).
-    setPanelClient(client)
+    // Initialise the connection routing layer: one CP connection for
+    // control-plane ops, plus the DP pool for per-node agent connections.
+    initClients(client)
 
     // WS message capture for the DebugPanel
     client.setDebugCapture(({ direction, method, payload }) => {

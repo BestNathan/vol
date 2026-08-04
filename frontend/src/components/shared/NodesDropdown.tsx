@@ -5,7 +5,7 @@
 // status dots and load counts stay live). Port of nodes_dropdown.rs.
 import { useCallback, useEffect, useState } from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { getPanelClient } from '@/lib/panel-client'
+import { getControlClient } from '@/lib/panel-client'
 import { dpPool } from '@/lib/dp-pool'
 import { activeNodeIdAtom, viewingNodeDetailAtom } from '@/stores/ui'
 import { serverModeAtom } from '@/stores/connection'
@@ -33,7 +33,7 @@ export function NodesDropdown() {
 
   const loadNodes = useCallback(async () => {
     try {
-      const res = await getPanelClient().call<RpcMethods['control.node_list']['result']>('control.node_list')
+      const res = await getControlClient().call<RpcMethods['control.node_list']['result']>('control.node_list')
       setNodes(res.nodes ?? [])
       setError(null)
     } catch (err) {
