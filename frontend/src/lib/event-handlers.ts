@@ -7,7 +7,7 @@ import {
 } from '@/stores/connection'
 import { agentStatusMapAtom } from '@/stores/agents'
 import { conversationMapAtom, activeAgentIdAtom } from '@/stores/conversation'
-import { approvalPendingAtom } from '@/stores/dialogs'
+import { approvalAtom, approvalPendingAtom } from '@/stores/dialogs'
 import { toolCallsAtom } from '@/stores/tools'
 import type { AgentConversation, ToolCallStatus } from '@/types'
 
@@ -265,9 +265,19 @@ export function handleUiEvent(event: UiEvent, runId: string) {
 
     case 'approval_request':
       store.set(approvalPendingAtom, true)
+      // Populate the HITL dialog (ApprovalDialog). The wire event carries
+      // tool_name/reason/arguments only; reqId is the run_id the event was
+      // published under — the run_id agent.approve must answer.
+      store.set(approvalAtom, {
+        toolName: event.tool_name,
+        reason: event.reason,
+        arguments: event.arguments,
+        reqId: runId,
+      })
       break
     case 'approval_resolved':
       store.set(approvalPendingAtom, false)
+      store.set(approvalAtom, { toolName: null, reason: null, arguments: null, reqId: null })
       break
     case 'ws_connected':
     case 'ws_connecting':

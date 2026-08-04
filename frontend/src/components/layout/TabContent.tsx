@@ -4,6 +4,7 @@ import { activeTabAtom } from '@/stores/ui'
 import { AgentsPanel } from '@/components/panels/AgentsPanel'
 import { ToolsTab } from '@/components/panels/ToolsTab'
 import { McpPanel } from '@/components/panels/McpPanel'
+import { SkillsPanel } from '@/components/panels/SkillsPanel'
 
 function PlaceholderPanel({ name }: { name: string }) {
   return (
@@ -21,7 +22,7 @@ export function TabContent() {
     case 'agents': return <AgentsPanel />
     case 'tools': return <ToolsTab />
     case 'workspace': return <PlaceholderPanel name="Workspace" />
-    case 'skills': return <PlaceholderPanel name="Skills" />
+    case 'skills': return <SkillsPanel />
     case 'mcp': return <McpPanel />
     case 'logs': return <PlaceholderPanel name="Logs" />
     default: return <PlaceholderPanel name="Agents" />

@@ -3,6 +3,7 @@ import { beforeEach, describe, it, expect } from 'vitest'
 import { getDefaultStore } from 'jotai'
 import { agentEventToUiEvent, handleUiEvent } from '@/lib/event-handlers'
 import { toolCallsAtom } from '@/stores/tools'
+import { approvalAtom, approvalPendingAtom } from '@/stores/dialogs'
 
 describe('agentEventToUiEvent', () => {
   it('maps ApprovalRequest to the approval_request UiEvent', () => {
@@ -111,5 +112,43 @@ describe('handleUiEvent → toolCallsAtom', () => {
     expect(store.get(toolCallsAtom)).toEqual([
       { sequence: 1, toolName: 'bash', argPreview: 'ls', status: 'Success', durationMs: 5 },
     ])
+  })
+})
+
+// handleUiEvent → approval state (HITL): approval_request populates
+// approvalAtom — the source for ApprovalDialog — with the run_id as reqId,
+// and approval_resolved clears it alongside the pending banner flag.
+describe('handleUiEvent → approval state', () => {
+  const store = getDefaultStore()
+
+  beforeEach(() => {
+    store.set(approvalPendingAtom, false)
+    store.set(approvalAtom, { toolName: null, reason: null, arguments: null, reqId: null })
+  })
+
+  it('populates approvalAtom on approval_request with the run_id as reqId', () => {
+    handleUiEvent(
+      { type: 'approval_request', tool_name: 'bash', reason: 'sensitive command', arguments: '{"cmd":"ls"}' },
+      'run-42'
+    )
+    expect(store.get(approvalPendingAtom)).toBe(true)
+    expect(store.get(approvalAtom)).toEqual({
+      toolName: 'bash',
+      reason: 'sensitive command',
+      arguments: '{"cmd":"ls"}',
+      reqId: 'run-42',
+    })
+  })
+
+  it('clears approvalAtom and the pending flag on approval_resolved', () => {
+    store.set(approvalPendingAtom, true)
+    store.set(approvalAtom, {
+      toolName: 'bash', reason: 'r', arguments: 'a', reqId: 'run-42',
+    })
+    handleUiEvent({ type: 'approval_resolved', approved: true }, 'run-42')
+    expect(store.get(approvalPendingAtom)).toBe(false)
+    expect(store.get(approvalAtom)).toEqual({
+      toolName: null, reason: null, arguments: null, reqId: null,
+    })
   })
 })

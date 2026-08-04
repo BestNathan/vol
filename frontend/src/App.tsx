@@ -5,6 +5,7 @@ import { Provider } from 'jotai'
 import { StatusBar } from '@/components/layout/StatusBar'
 import { TabBar } from '@/components/layout/TabBar'
 import { TabContent } from '@/components/layout/TabContent'
+import { ApprovalDialog } from '@/components/dialogs/ApprovalDialog'
 import { FileTree } from '@/components/panels/FileTree'
 import { JsonRpcClient } from '@/lib/jsonrpc-client'
 import { deriveWsUrl } from '@/lib/ws-url'
@@ -67,6 +68,8 @@ function AppInner() {
           </div>
         </div>
       </div>
+      {/* Global HITL overlay: approval_request events arrive on any tab. */}
+      <ApprovalDialog />
     </div>
   )
 }
