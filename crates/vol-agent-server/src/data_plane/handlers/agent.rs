@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use vol_session::{Session, SessionManager};
 
 use crate::data_plane::connection_holder::ConnectionHolder;
 use crate::data_plane::router::AgentRouter;
@@ -17,6 +18,9 @@ pub struct AgentHandler {
     holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
     agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>>,
     agent_status: Arc<std::sync::RwLock<HashMap<String, crate::data_plane::core::AgentStatus>>>,
+    session_manager: Arc<dyn SessionManager>,
+    /// Tracks the last session_id used per agent so we can detect "New Session".
+    agent_last_session: std::sync::Mutex<HashMap<String, String>>,
 }
 
 impl AgentHandler {
@@ -25,12 +29,15 @@ impl AgentHandler {
         holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
         agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>>,
         agent_status: Arc<std::sync::RwLock<HashMap<String, crate::data_plane::core::AgentStatus>>>,
+        session_manager: Arc<dyn SessionManager>,
     ) -> Self {
         Self {
             router,
             holders,
             agent_defs,
             agent_status,
+            session_manager,
+            agent_last_session: std::sync::Mutex::new(HashMap::new()),
         }
     }
 }
@@ -74,6 +81,38 @@ impl DomainHandler for AgentHandler {
                         .or_else(|| holders.keys().next().cloned())
                         .unwrap_or_else(|| "agent".to_string())
                 };
+
+                // Extract session_id from metadata — if it changed, create a new
+                // session and swap it so the agent starts with fresh context.
+                let new_session_id = input
+                    .metadata
+                    .get("session_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let session_changed = new_session_id.as_ref().map_or(false, |sid| {
+                    let last = self.agent_last_session.lock().unwrap();
+                    last.get(&target_id).map_or(true, |prev| prev != sid)
+                });
+                if session_changed {
+                    let store = self.session_manager.entry_store_for_agent(&target_id);
+                    let session = Arc::new(Session::new(store));
+                    self.router
+                        .swap_session(&target_id, session)
+                        .await
+                        .unwrap_or_else(|e| {
+                            tracing::warn!(
+                                agent = %target_id,
+                                error = %e,
+                                "Failed to swap session for agent"
+                            );
+                        });
+                    if let Some(ref sid) = new_session_id {
+                        self.agent_last_session
+                            .lock()
+                            .unwrap()
+                            .insert(target_id.clone(), sid.clone());
+                    }
+                }
 
                 let run_id = input
                     .run_id

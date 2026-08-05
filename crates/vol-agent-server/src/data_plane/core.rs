@@ -467,6 +467,7 @@ impl DataPlaneServerCoreBuilder {
                 Arc::clone(&holders),
                 agent_defs.clone(),
                 agent_status.clone(),
+                session_manager.clone(),
             )))
             .map_err(|e| format!("failed to register AgentHandler: {e}"))?;
         handler_registry
@@ -570,6 +571,8 @@ impl DataPlaneServerCore {
         let store_dir = PathBuf::from("/tmp/vol-llm-agent-channel-test-sessions");
         let agents_root = store_dir.join("agents");
         std::fs::create_dir_all(&agents_root).ok();
+        let session_manager: Arc<dyn vol_session::SessionManager> =
+            Arc::new(vol_session::FileSessionManager::new(agents_root));
 
         let router = AgentRouter::new();
         let holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>> =
@@ -646,6 +649,7 @@ impl DataPlaneServerCore {
                 Arc::clone(&holders),
                 agent_defs.clone(),
                 agent_status.clone(),
+                session_manager.clone(),
             )))
             .ok();
         handler_registry
