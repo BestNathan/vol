@@ -1159,26 +1159,6 @@ pub struct McpPromptViewerState {
     pub loading: bool,
 }
 
-/// Local state for SessionDialog.
-#[cfg(all(feature = "web", not(feature = "tui")))]
-#[derive(Debug)]
-pub struct SessionDialogState {
-    pub open: bool,
-    pub sessions: Vec<SessionDialogEntry>,
-    pub selected: usize,
-}
-
-#[cfg(all(feature = "web", not(feature = "tui")))]
-impl SessionDialogState {
-    pub fn new() -> Self {
-        Self {
-            open: false,
-            sessions: Vec::new(),
-            selected: 0,
-        }
-    }
-}
-
 /// Shared state for ApprovalDialog (created by App, read via context).
 #[cfg(all(feature = "web", not(feature = "tui")))]
 #[derive(Debug)]
