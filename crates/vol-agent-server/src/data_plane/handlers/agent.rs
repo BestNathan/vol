@@ -95,7 +95,11 @@ impl DomainHandler for AgentHandler {
                 });
                 if session_changed {
                     let store = self.session_manager.entry_store_for_agent(&target_id);
-                    let session = Arc::new(Session::new(store));
+                    // Use the frontend's session_id so session.list/entries can find it.
+                    let session = Arc::new(Session::with_id(
+                        new_session_id.clone().unwrap_or_default(),
+                        store,
+                    ));
                     self.router
                         .swap_session(&target_id, session)
                         .await

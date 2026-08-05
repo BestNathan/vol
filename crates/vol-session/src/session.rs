@@ -17,8 +17,13 @@ pub struct Session {
 impl Session {
     /// Create a new session — self-generates UUID, current timestamp.
     pub fn new(entry_store: Arc<dyn SessionEntryStore>) -> Self {
+        Self::with_id(uuid::Uuid::new_v4().to_string(), entry_store)
+    }
+
+    /// Create a new session with an explicit ID.
+    pub fn with_id(id: String, entry_store: Arc<dyn SessionEntryStore>) -> Self {
         Self {
-            id: uuid::Uuid::new_v4().to_string(),
+            id,
             created_at: {
                 #[allow(clippy::unwrap_used)]
                 let ts = std::time::SystemTime::now()
