@@ -1,5 +1,9 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use super::animated_overlay::AnimatedOverlay;
 use super::schema_form::SchemaForm;
-use crate::state::McpDialogState;
+use crate::state::{McpDialogState, McpToolCallState};
 use crate::web::components::app::AppState;
 use dioxus::prelude::*;
 
@@ -11,31 +15,37 @@ pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
     let mut form_value: Signal<serde_json::Value> =
         use_signal(|| serde_json::Value::Object(serde_json::Map::new()));
 
-    let maybe_dialog = {
+    // Cache the last-open dialog so the card stays rendered while the
+    // overlay plays its exit animation after the state is cleared.
+    let cached: Rc<RefCell<Option<McpToolCallState>>> =
+        use_hook(|| Rc::new(RefCell::new(None)));
+
+    let (open, input_schema) = {
         let s = signal.read();
-        s.tool_call_dialog.as_ref().map(|d| {
-            (
-                d.server.clone(),
-                d.tool_name.clone(),
-                d.input_schema.clone(),
-            )
-        })
+        if let Some(d) = &s.tool_call_dialog {
+            *cached.borrow_mut() = Some(d.clone());
+        }
+        (
+            s.tool_call_dialog.is_some(),
+            s.tool_call_dialog
+                .as_ref()
+                .and_then(|d| d.input_schema.clone()),
+        )
     };
 
-    let Some((server, tool_name, input_schema)) = maybe_dialog else {
-        return rsx! {};
-    };
-
-    // Re-initialize form when schema changes
-    let input_schema_for_effect = input_schema.clone();
-    use_effect(move || {
-        if let Some(ref schema) = input_schema_for_effect {
+    // Re-initialize the form whenever the schema changes (i.e. when a tool
+    // dialog opens). The Call button's loading/result/error writes keep the
+    // same schema, so user input is preserved mid-call.
+    use_effect(use_reactive((&input_schema,), move |(schema,)| {
+        if let Some(ref schema) = schema {
             let defaults = build_form_defaults(schema);
             form_value.set(defaults);
         } else {
             form_value.set(serde_json::Value::Object(serde_json::Map::new()));
         }
-    });
+    }));
+
+    let dialog = cached.borrow().clone();
 
     let (result, error, loading) = {
         let s = signal.read();
@@ -50,76 +60,79 @@ pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
     };
 
     rsx! {
-        div { class: "fixed inset-0 bg-black/50 flex items-center justify-center z-50",
-            div {
-                class: "w-[95vw] sm:w-[600px] h-[70vh] flex flex-col overflow-hidden bg-[#1a1a2e] border border-[#3a3a55] rounded-lg",
-                onclick: move |evt: Event<MouseData>| { evt.stop_propagation(); },
-                // Header
-                div { class: "flex items-center justify-between flex-shrink-0 px-4 pt-3 pb-2 border-b border-[#3a3a55]",
-                    div { class: "text-[14px] font-semibold text-[#e0e0e0] truncate min-w-0", "{server} / {tool_name}" }
-                    button {
-                        class: "text-[#888] hover:text-[#e0e0e0] text-[18px] flex-shrink-0 ml-2",
-                        onclick: move |_| { signal.write_unchecked().tool_call_dialog = None; },
-                        "x"
-                    }
-                }
-                // Scrollable content area
-                div { class: "flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-2",
-                    if let Some(ref schema) = input_schema {
-                        SchemaForm { schema: schema.clone(), value: form_value }
-                    } else {
-                        div { class: "text-[#888] text-[12px]", "No parameters required" }
-                    }
-                    if !loading {
+        AnimatedOverlay {
+            open,
+            on_close: move |_| { signal.write_unchecked().tool_call_dialog = None; },
+            if let Some(dialog) = dialog {
+                div {
+                    class: "w-[95vw] sm:w-[600px] h-[70vh] flex flex-col overflow-hidden bg-[#1a1a2e] border border-[#3a3a55] rounded-lg",
+                    // Header
+                    div { class: "flex items-center justify-between flex-shrink-0 px-4 pt-3 pb-2 border-b border-[#3a3a55]",
+                        div { class: "text-[14px] font-semibold text-[#e0e0e0] truncate min-w-0", "{dialog.server} / {dialog.tool_name}" }
                         button {
-                            class: "mt-2 px-3 py-1 bg-[#4080ff] text-white rounded text-[13px] cursor-pointer hover:bg-[#5090ff]",
-                            onclick: move |_| {
-                                let s = signal.clone();
-                                let client = rpc_client.clone();
-                                let (srv, tool) = {
-                                    let r = s.read();
-                                    let d = r.tool_call_dialog.as_ref().unwrap();
-                                    (d.server.clone(), d.tool_name.clone())
-                                };
-                                let form_json = serde_json::to_string(&*form_value.read()).unwrap_or("{}".to_string());
-                                let parsed: serde_json::Value = match serde_json::from_str(&form_json) {
-                                    Ok(v) => v,
-                                    Err(e) => {
-                                        s.write_unchecked().tool_call_dialog.as_mut().unwrap().error = Some(format!("Invalid form data: {e}"));
-                                        return;
-                                    }
-                                };
-                                let sig = s;
-                                sig.write_unchecked().tool_call_dialog.as_mut().unwrap().loading = true;
-                                sig.write_unchecked().tool_call_dialog.as_mut().unwrap().error = None;
-                                sig.write_unchecked().tool_call_dialog.as_mut().unwrap().result = None;
-                                client.mcp_call_tool(&srv, &tool, parsed, move |r| {
-                                    match r {
-                                        Ok(content) => {
-                                            sig.write_unchecked().tool_call_dialog.as_mut().unwrap().result = Some(content);
-                                        }
+                            class: "text-[#888] hover:text-[#e0e0e0] text-[18px] flex-shrink-0 ml-2",
+                            onclick: move |_| { signal.write_unchecked().tool_call_dialog = None; },
+                            "x"
+                        }
+                    }
+                    // Scrollable content area
+                    div { class: "flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-2",
+                        if let Some(ref schema) = dialog.input_schema {
+                            SchemaForm { schema: schema.clone(), value: form_value }
+                        } else {
+                            div { class: "text-[#888] text-[12px]", "No parameters required" }
+                        }
+                        if !loading {
+                            button {
+                                class: "mt-2 px-3 py-1 bg-[#4080ff] text-white rounded text-[13px] cursor-pointer hover:bg-[#5090ff]",
+                                onclick: move |_| {
+                                    let s = signal.clone();
+                                    let client = rpc_client.clone();
+                                    let (srv, tool) = {
+                                        let r = s.read();
+                                        let d = r.tool_call_dialog.as_ref().unwrap();
+                                        (d.server.clone(), d.tool_name.clone())
+                                    };
+                                    let form_json = serde_json::to_string(&*form_value.read()).unwrap_or("{}".to_string());
+                                    let parsed: serde_json::Value = match serde_json::from_str(&form_json) {
+                                        Ok(v) => v,
                                         Err(e) => {
-                                            sig.write_unchecked().tool_call_dialog.as_mut().unwrap().error = Some(e);
+                                            s.write_unchecked().tool_call_dialog.as_mut().unwrap().error = Some(format!("Invalid form data: {e}"));
+                                            return;
                                         }
-                                    }
-                                    sig.write_unchecked().tool_call_dialog.as_mut().unwrap().loading = false;
-                                });
-                            },
-                            "Call"
+                                    };
+                                    let sig = s;
+                                    sig.write_unchecked().tool_call_dialog.as_mut().unwrap().loading = true;
+                                    sig.write_unchecked().tool_call_dialog.as_mut().unwrap().error = None;
+                                    sig.write_unchecked().tool_call_dialog.as_mut().unwrap().result = None;
+                                    client.mcp_call_tool(&srv, &tool, parsed, move |r| {
+                                        match r {
+                                            Ok(content) => {
+                                                sig.write_unchecked().tool_call_dialog.as_mut().unwrap().result = Some(content);
+                                            }
+                                            Err(e) => {
+                                                sig.write_unchecked().tool_call_dialog.as_mut().unwrap().error = Some(e);
+                                            }
+                                        }
+                                        sig.write_unchecked().tool_call_dialog.as_mut().unwrap().loading = false;
+                                    });
+                                },
+                                "Call"
+                            }
+                        } else {
+                            div { class: "mt-2 text-[#888] text-[13px]", "Calling..." }
                         }
-                    } else {
-                        div { class: "mt-2 text-[#888] text-[13px]", "Calling..." }
-                    }
-                    if let Some(ref result) = result {
-                        div { class: "bg-[#1a2a1a] border border-[#40c040] rounded p-2",
-                            div { class: "text-[11px] text-[#40c040] font-semibold mb-1", "Result" }
-                            pre { class: "text-[12px] text-[#e0e0e0] font-mono whitespace-pre-wrap break-words overflow-x-auto", "{result}" }
+                        if let Some(ref result) = result {
+                            div { class: "bg-[#1a2a1a] border border-[#40c040] rounded p-2",
+                                div { class: "text-[11px] text-[#40c040] font-semibold mb-1", "Result" }
+                                pre { class: "text-[12px] text-[#e0e0e0] font-mono whitespace-pre-wrap break-words overflow-x-auto", "{result}" }
+                            }
                         }
-                    }
-                    if let Some(ref error) = error {
-                        div { class: "bg-[#2a1a1a] border border-[#c04040] rounded p-2",
-                            div { class: "text-[11px] text-[#c04040] font-semibold mb-1", "Error" }
-                            div { class: "text-[12px] text-[#e0e0e0] break-words", "{error}" }
+                        if let Some(ref error) = error {
+                            div { class: "bg-[#2a1a1a] border border-[#c04040] rounded p-2",
+                                div { class: "text-[11px] text-[#c04040] font-semibold mb-1", "Error" }
+                                div { class: "text-[12px] text-[#e0e0e0] break-words", "{error}" }
+                            }
                         }
                     }
                 }
