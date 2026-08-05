@@ -141,8 +141,13 @@ jobs:
             "deploy/argocd/manifests/workloads/vol-llm-ui/deployment.yaml" \
             "deploy/argocd/manifests/workloads/vol-llm-ui-cp/deployment.yaml"
           git commit -m "ci(gitops): update vol-llm-ui image to ${{ steps.image.outputs.short }} [skip ci]"
-          git pull --rebase origin main
-          git push
+          # Retry pull+push with backoff — other workflows may be pushing simultaneously.
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push && exit 0
+            echo "Push attempt $i failed, retrying in $((i * 5))s..."
+            sleep $((i * 5))
+          done
+          echo "Push failed after 3 attempts" >&2; exit 1
 
       - name: Summary
         run: |

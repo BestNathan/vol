@@ -316,8 +316,13 @@ jobs:
                   deploy/argocd/manifests/workloads/agent-server-ansible/deployment.yaml \
                   deploy/argocd/manifests/workloads/agent-server-dingtalk/deployment.yaml
           git commit -m "ci(gitops): update agent-server image to cp-${{ steps.sha.outputs.short }} / dp-${{ steps.sha.outputs.short }} [skip ci]"
-          git pull --rebase origin main
-          git push
+          # Retry pull+push with backoff — other workflows may be pushing simultaneously.
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push && exit 0
+            echo "Push attempt $i failed, retrying in $((i * 5))s..."
+            sleep $((i * 5))
+          done
+          echo "Push failed after 3 attempts" >&2; exit 1
 
   # ── Prune old per-commit tags from GHCR after a successful push ──────────
   # Keeps the floating <prefix>-latest tag plus the N most recent commit sha
