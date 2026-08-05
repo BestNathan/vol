@@ -128,7 +128,7 @@ export function ConversationView() {
   const isRunning = useAtomValue(isRunningAtom)
   // Trigger auto-scroll on entry count AND content changes (entries ref always
   // changes on every content_delta because updateConversation recreates the array).
-  const { containerRef, handleScroll, scrollToBottom, autoScrollRef } = useAutoScroll(
+  const { containerRef, scrollToBottom, autoScrollRef } = useAutoScroll(
     [conv.entries.length, conv.entries]
   )
 
@@ -144,7 +144,7 @@ export function ConversationView() {
 
   return (
     <div className="flex-1 relative min-h-0">
-      <ScrollArea className="h-full" ref={containerRef} onScroll={handleScroll}>
+      <ScrollArea className="h-full" ref={containerRef}>
         <div className="p-3 sm:p-4">
           {entries.map((entry, i) => (
             <TimelineEntry
