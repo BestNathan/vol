@@ -126,7 +126,11 @@ function TimelineEntry({
 export function ConversationView() {
   const conv = useAtomValue(conversationByAgentAtom)
   const isRunning = useAtomValue(isRunningAtom)
-  const { containerRef, handleScroll } = useAutoScroll([conv.entries.length])
+  // Trigger auto-scroll on entry count AND content changes (entries ref always
+  // changes on every content_delta because updateConversation recreates the array).
+  const { containerRef, handleScroll, scrollToBottom, autoScrollRef } = useAutoScroll(
+    [conv.entries.length, conv.entries]
+  )
 
   const entries = conv.entries
 
@@ -139,24 +143,36 @@ export function ConversationView() {
   }
 
   return (
-    <ScrollArea className="flex-1" ref={containerRef} onScroll={handleScroll}>
-      <div className="p-3 sm:p-4">
-        {entries.map((entry, i) => (
-          <TimelineEntry
-            key={i}
-            entry={entry}
-            index={i}
-            entries={entries}
-            isLast={i === entries.length - 1}
-          />
-        ))}
-        {isRunning && entries.length > 0 && entries[entries.length - 1].type === 'RunningBanner' && (
-          <div className="flex items-center gap-2 text-yellow-400 text-xs">
-            <span className="w-2 h-2 rounded-full bg-[#f0c040] animate-pulse" />
-            Running...
-          </div>
-        )}
-      </div>
-    </ScrollArea>
+    <div className="flex-1 relative min-h-0">
+      <ScrollArea className="h-full" ref={containerRef} onScroll={handleScroll}>
+        <div className="p-3 sm:p-4">
+          {entries.map((entry, i) => (
+            <TimelineEntry
+              key={i}
+              entry={entry}
+              index={i}
+              entries={entries}
+              isLast={i === entries.length - 1}
+            />
+          ))}
+          {isRunning && entries.length > 0 && entries[entries.length - 1].type === 'RunningBanner' && (
+            <div className="flex items-center gap-2 text-yellow-400 text-xs">
+              <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+              Running...
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+      {/* Scroll-to-bottom button when user has scrolled up */}
+      <button
+        type="button"
+        onClick={scrollToBottom}
+        className="absolute bottom-3 right-4 z-10 bg-primary text-primary-foreground rounded-full w-8 h-8 flex items-center justify-center shadow-lg opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
+        style={{ display: autoScrollRef.current ? 'none' : 'flex' }}
+        aria-label="Scroll to bottom"
+      >
+        ↓
+      </button>
+    </div>
   )
 }
