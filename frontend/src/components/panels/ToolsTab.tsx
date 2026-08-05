@@ -90,9 +90,11 @@ export function ToolsTab() {
     }
   }, [setTools, setLoading])
 
-  // Fetch the tool list on mount; Refresh re-fetches.
+  // Fetch the tool list on mount (skip if already cached); Refresh re-fetches.
   useEffect(() => {
-    void loadTools()
+    if (tools.length === 0) {
+      void loadTools()
+    }
   }, [loadTools])
 
   const executeTool = useCallback(async (args: Record<string, unknown>): Promise<ToolCallOutcome> => {

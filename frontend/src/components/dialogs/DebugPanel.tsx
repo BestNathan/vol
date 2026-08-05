@@ -4,7 +4,7 @@
 // direction arrows, elapsed timestamps (HH:MM:SS.mmm since first capture),
 // method names, and expandable pretty-printed JSON payloads. Port of
 // crates/vol-llm-ui/src/web/components/debug_panel.rs.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAtom } from 'jotai'
 import { debugPanelAtom, type DebugMessage } from '@/stores/dialogs'
 
@@ -31,17 +31,28 @@ export function DebugPanel() {
   const [panel, setPanel] = useAtom(debugPanelAtom)
   const { open, messages } = panel
 
-  if (!open) return null
-
   const close = () => setPanel({ open: false, messages })
 
+  // Close on Escape (must be before any early return — hooks order is fixed)
+  useEffect(() => {
+    if (!open) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [open])
+
+  if (!open) return null
+
+  // Responsive: centered modal on mobile, right-side docked panel on desktop.
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 sm:justify-end sm:p-0"
       onClick={close}
     >
       <div
-        className="bg-[#1a1a2e] border border-[#444] rounded-lg flex flex-col shadow-2xl w-[80vw] h-[80vh]"
+        className="bg-[#1a1a2e] border border-[#444] rounded-lg flex flex-col shadow-2xl w-[92vw] max-w-[640px] h-[85vh] sm:max-w-none sm:w-[420px] sm:h-full sm:rounded-none sm:border-0 sm:border-l"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-2 border-b border-[#333] shrink-0">

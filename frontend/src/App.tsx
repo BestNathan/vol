@@ -17,6 +17,7 @@ import {
   connectionStateAtom, serverModeAtom, wsUrlAtom,
   wsConnectedAtom, wsLastErrorAtom,
 } from '@/stores/connection'
+import { activeNodeIdAtom, LOCAL_NODE_ID } from '@/stores/ui'
 import { debugPanelAtom } from '@/stores/dialogs'
 
 function AppInner() {
@@ -25,6 +26,7 @@ function AppInner() {
   const setWsUrl = useSetAtom(wsUrlAtom)
   const setWsConnected = useSetAtom(wsConnectedAtom)
   const setWsLastError = useSetAtom(wsLastErrorAtom)
+  const setActiveNodeId = useSetAtom(activeNodeIdAtom)
   const setDebugPanel = useSetAtom(debugPanelAtom)
   const clientRef = useRef<JsonRpcClient | null>(null)
   const debugStartRef = useRef<number | null>(null)
@@ -98,6 +100,9 @@ function AppInner() {
         reconnectAbortRef.current?.abort()
         client.call<{ server_type: string }>('system.connected').then(info => {
           setServerMode(info.server_type as any)
+          if (info.server_type === 'DataPlane') {
+            setActiveNodeId(LOCAL_NODE_ID)
+          }
         }).catch(() => {})
       } else if (state === 'disconnected') {
         setWsConnected(false)
