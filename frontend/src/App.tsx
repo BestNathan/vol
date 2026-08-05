@@ -1,6 +1,6 @@
 // frontend/src/App.tsx
 import { useEffect, useRef, useCallback } from 'react'
-import { useSetAtom, getDefaultStore } from 'jotai'
+import { useAtomValue, useSetAtom, getDefaultStore } from 'jotai'
 import { Provider } from 'jotai'
 import { StatusBar } from '@/components/layout/StatusBar'
 import { TabBar } from '@/components/layout/TabBar'
@@ -8,6 +8,7 @@ import { TabContent } from '@/components/layout/TabContent'
 import { ApprovalDialog } from '@/components/dialogs/ApprovalDialog'
 import { DebugPanel } from '@/components/dialogs/DebugPanel'
 import { FileTree } from '@/components/panels/FileTree'
+import { NodesPanel } from '@/components/panels/NodesPanel'
 import { JsonRpcClient } from '@/lib/jsonrpc-client'
 import { deriveWsUrl } from '@/lib/ws-url'
 import { initClients } from '@/lib/panel-client'
@@ -18,7 +19,7 @@ import {
   connectionStateAtom, serverModeAtom, wsUrlAtom,
   wsConnectedAtom, wsLastErrorAtom,
 } from '@/stores/connection'
-import { activeNodeIdAtom, LOCAL_NODE_ID } from '@/stores/ui'
+import { activeNodeIdAtom, LOCAL_NODE_ID, viewingNodeDetailAtom } from '@/stores/ui'
 import { debugPanelAtom } from '@/stores/dialogs'
 
 function AppInner() {
@@ -28,6 +29,7 @@ function AppInner() {
   const setWsConnected = useSetAtom(wsConnectedAtom)
   const setWsLastError = useSetAtom(wsLastErrorAtom)
   const setActiveNodeId = useSetAtom(activeNodeIdAtom)
+  const viewingNodeDetail = useAtomValue(viewingNodeDetailAtom)
   const setDebugPanel = useSetAtom(debugPanelAtom)
   const clientRef = useRef<JsonRpcClient | null>(null)
   const debugStartRef = useRef<number | null>(null)
@@ -128,13 +130,17 @@ function AppInner() {
     <div className="relative h-[100dvh] w-[100vw] font-[system-ui] text-[14px] text-[#e0e0e0] bg-[#1a1a2e]">
       <div className="flex flex-col h-full w-full overflow-hidden">
         <StatusBar />
-        <div className="flex flex-1 overflow-hidden relative">
-          <FileTree />
-          <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
-            <TabBar />
-            <TabContent />
+        {viewingNodeDetail ? (
+          <NodesPanel />
+        ) : (
+          <div className="flex flex-1 overflow-hidden relative">
+            <FileTree />
+            <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
+              <TabBar />
+              <TabContent />
+            </div>
           </div>
-        </div>
+        )}
       </div>
       <ApprovalDialog />
       <DebugPanel />
