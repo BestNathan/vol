@@ -1,14 +1,31 @@
 //! Dialog showing full details of a skill with file viewer.
 
-use crate::state::SkillDialogState;
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use super::animated_overlay::AnimatedOverlay;
+use crate::state::{SkillDetail, SkillDialogState};
 use crate::web::components::app::AppState;
 use dioxus::prelude::*;
 
 #[component]
 pub fn SkillDetailDialog(mut signal: Signal<SkillDialogState>) -> Element {
-    let (open, skill) = {
+    let app_state: AppState = use_context();
+    let rpc_client = app_state.agent_client();
+
+    // Cache the last-open dialog content so the card stays rendered while
+    // the overlay plays its exit animation after `open` flips to false.
+    // The cache mirrors `skill` (an Option): refreshed on every render while
+    // open, then frozen during the 150ms exit. `None` (e.g. while a skill is
+    // loading) clears the cache so the "Failed to load" state still shows.
+    let cached: Rc<RefCell<Option<SkillDetail>>> = use_hook(|| Rc::new(RefCell::new(None)));
+
+    let open = {
         let s = signal.read();
-        (s.open, s.skill.clone())
+        if s.open {
+            *cached.borrow_mut() = s.skill.clone();
+        }
+        s.open
     };
 
     let mut selected_file: Signal<Option<String>> = use_signal(|| None);
@@ -20,23 +37,18 @@ pub fn SkillDetailDialog(mut signal: Signal<SkillDialogState>) -> Element {
         file_content.set(None);
     });
 
-    if !open {
-        return rsx! {};
-    }
-
-    let app_state: AppState = use_context();
-    let rpc_client = app_state.agent_client();
+    let skill = cached.borrow().clone();
 
     rsx! {
-        div { class: "fixed inset-0 bg-black/50 flex items-center justify-center z-50",
-            onclick: move |_| {
+        AnimatedOverlay {
+            open,
+            on_close: move |_| {
                 let mut s = signal.write_unchecked();
                 s.open = false;
                 s.skill = None;
             },
             div {
                 class: "w-[95vw] sm:w-[700px] max-h-[80vh] sm:max-h-[80vh] flex flex-col overflow-hidden bg-[#1a1a2e] border border-[#3a3a55] rounded-lg",
-                onclick: move |evt: Event<MouseData>| { evt.stop_propagation(); },
                 // Header
                 div { class: "flex items-center justify-between flex-shrink-0 px-4 pt-3 pb-2 border-b border-[#3a3a55]",
                     div { class: "flex items-center gap-2 min-w-0",

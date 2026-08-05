@@ -1,9 +1,14 @@
 //! Conversation view showing all message types.
 //! Tool calls/results show a summary line; clicking opens a detail modal.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use dioxus::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
+
+use super::animated_overlay::AnimatedOverlay;
 
 use crate::state::{ConversationEntry, ConversationState, GlobalState, UiEvent};
 
@@ -347,9 +352,10 @@ pub fn ConversationView() -> Element {
             onscroll: on_scroll,
             {messages.into_iter()}
         }
-        if let Some(ref d) = *detail.read() {
-            ToolDetailModal { detail: d.clone(), detail_signal: detail }
-        }
+        // Always rendered — ToolDetailModal manages its own visibility via
+        // the AnimatedOverlay (which also keeps the card mounted through the
+        // exit animation after the detail is cleared).
+        ToolDetailModal { detail_signal: detail }
     }
 }
 
@@ -507,27 +513,46 @@ fn TimelineEntry(
 
 /// Modal overlay for tool call details.
 #[component]
-fn ToolDetailModal(detail: ToolDetail, detail_signal: Signal<Option<ToolDetail>>) -> Element {
-    let args_display = format_json_pretty(&detail.arguments);
-    let result_display = detail.result.as_deref().map(format_json_pretty);
-    let status_badge: Option<(String, String)> = detail.success.map(|ok| {
-        if ok {
-            ("OK".to_string(), "#40c040".to_string())
-        } else {
-            ("ERR".to_string(), "#c04040".to_string())
+fn ToolDetailModal(detail_signal: Signal<Option<ToolDetail>>) -> Element {
+    // Cache the last-open detail so the card stays rendered while the
+    // overlay plays its exit animation after the state is cleared.
+    let cached: Rc<RefCell<Option<ToolDetail>>> = use_hook(|| Rc::new(RefCell::new(None)));
+
+    let open = {
+        let s = detail_signal.read();
+        if let Some(d) = &*s {
+            *cached.borrow_mut() = Some(d.clone());
         }
-    });
+        s.is_some()
+    };
+
+    let detail = cached.borrow().clone();
+
+    let (args_display, result_display, status_badge) = match &detail {
+        Some(d) => (
+            format_json_pretty(&d.arguments),
+            d.result.as_deref().map(format_json_pretty),
+            d.success.map(|ok| {
+                if ok {
+                    ("OK".to_string(), "#40c040".to_string())
+                } else {
+                    ("ERR".to_string(), "#c04040".to_string())
+                }
+            }),
+        ),
+        None => (String::new(), None, None),
+    };
 
     rsx! {
-        div {
-            class: "fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4",
-            onclick: {
+        AnimatedOverlay {
+            open,
+            on_close: {
                 let mut d = detail_signal;
                 move |_| d.set(None)
             },
-            div {
-                class: "bg-[#1a1a2e] border border-[#444] rounded-lg w-full max-w-[640px] max-h-[80vh] flex flex-col shadow-2xl",
-                onclick: move |e: Event<MouseData>| e.stop_propagation(),
+            if let Some(ref detail) = detail {
+                div {
+                    class: "bg-[#1a1a2e] border border-[#444] rounded-lg w-full max-w-[640px] max-h-[80vh] flex flex-col shadow-2xl",
                 div { class: "flex items-center justify-between px-4 py-3 border-b border-[#333] shrink-0",
                     div { class: "flex items-center gap-2",
                         span { class: "font-bold text-[#c0c040] text-sm font-mono", "[{detail.tool_name}]" }
@@ -562,6 +587,7 @@ fn ToolDetailModal(detail: ToolDetail, detail_signal: Signal<Option<ToolDetail>>
                     } else if detail.result.is_none() && detail.success.is_none() {
                         div { class: "text-[#888] text-xs italic", "Waiting for result..." }
                     }
+                }
                 }
             }
         }
