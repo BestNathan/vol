@@ -31,6 +31,7 @@ export function NodesDropdown() {
   const [nodes, setNodes] = useState<NodeListEntry[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
 
   // Find the active node's name for display in the trigger button.
@@ -105,7 +106,14 @@ export function NodesDropdown() {
         ref={buttonRef}
         type="button"
         title={activeNode ? `Active: ${activeNode.name}` : 'Select data-plane node'}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          const next = !open
+          setOpen(next)
+          if (next && buttonRef.current) {
+            const r = buttonRef.current.getBoundingClientRect()
+            setPanelPos({ top: r.bottom + 4, left: r.left })
+          }
+        }}
         className="flex items-center gap-1 px-2 py-0.5 text-xs rounded hover:bg-border cursor-pointer text-foreground bg-transparent border-none whitespace-nowrap"
       >
         {open ? '▴' : '▾'} {activeNode ? activeNode.name : `Nodes(${nodes.length})`}
@@ -115,7 +123,8 @@ export function NodesDropdown() {
           {/* Transparent overlay — clicking outside closes the dropdown. */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
-            className="absolute left-0 top-full mt-1 min-w-[280px] max-w-[calc(100vw-1rem)] bg-card border border-border rounded shadow-lg z-50 max-h-[400px] overflow-y-auto"
+            className="fixed min-w-[280px] max-w-[calc(100vw-1rem)] bg-card border border-border rounded shadow-lg z-50 max-h-[400px] overflow-y-auto"
+            style={panelPos ? { top: panelPos.top, left: panelPos.left } : undefined}
             onClick={(e) => e.stopPropagation()}
           >
             {loading && nodes.length === 0 && (

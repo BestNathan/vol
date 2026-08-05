@@ -11,6 +11,7 @@ import { FileTree } from '@/components/panels/FileTree'
 import { JsonRpcClient } from '@/lib/jsonrpc-client'
 import { deriveWsUrl } from '@/lib/ws-url'
 import { initClients } from '@/lib/panel-client'
+import { dpPool } from '@/lib/dp-pool'
 import { attemptReconnect } from '@/lib/reconnect'
 import { agentEventToUiEvent, handleUiEvent } from '@/lib/event-handlers'
 import {
@@ -63,6 +64,25 @@ function AppInner() {
     // control-plane ops, plus the DP pool for per-node agent connections.
     initClients(client)
 
+    // Spawn event stream consumer — handle events from the main connection.
+    let running = true
+    const handleAgentEvent = (agentEvent: Parameters<Parameters<typeof client.onEvent>[0]>[0]) => {
+      if (!running) return
+      const rawEvent = agentEvent.event
+      const entries = Object.entries(rawEvent)
+      if (entries.length === 0) return
+      const [variant, data] = entries[0]
+      const uiEvent = agentEventToUiEvent(variant, data as Record<string, unknown>, agentEvent.run_id)
+      if (uiEvent) {
+        handleUiEvent(uiEvent, agentEvent.run_id)
+      }
+    }
+    client.onEvent(handleAgentEvent)
+
+    // Register the same handler on DP pool connections — in CP mode agent
+    // events come through per-node DP connections, not the main connection.
+    dpPool.setEventHandler(handleAgentEvent)
+
     // WS message capture for the DebugPanel
     client.setDebugCapture(({ direction, method, payload }) => {
       const now = performance.now()
@@ -75,20 +95,6 @@ function AppInner() {
         ...prev,
         messages: [...prev.messages, { direction, method, payload, elapsedMs: now - start }],
       }))
-    })
-
-    // Spawn event stream consumer
-    let running = true
-    client.onEvent((agentEvent) => {
-      if (!running) return
-      const rawEvent = agentEvent.event
-      const entries = Object.entries(rawEvent)
-      if (entries.length === 0) return
-      const [variant, data] = entries[0]
-      const uiEvent = agentEventToUiEvent(variant, data as Record<string, unknown>, agentEvent.run_id)
-      if (uiEvent) {
-        handleUiEvent(uiEvent, agentEvent.run_id)
-      }
     })
 
     client.onStateChange((state) => {
