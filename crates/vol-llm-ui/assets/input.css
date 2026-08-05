@@ -12,6 +12,8 @@
   --animate-overlay-out: overlay-fade-out 150ms ease-in  both;
   --animate-dialog-in:   dialog-enter     200ms ease-out both;
   --animate-dialog-out:  dialog-exit      150ms ease-in  both;
+  --animate-drawer-in:   drawer-slide-in  200ms ease-out both;
+  --animate-drawer-out:  drawer-slide-out 150ms ease-in  both;
 }
 
 @keyframes conn-blink {
@@ -34,4 +36,12 @@
 @keyframes dialog-exit {
   from { opacity: 1; transform: scale(1) translateY(0); }
   to   { opacity: 0; transform: scale(0.95) translateY(-8px); }
+}
+@keyframes drawer-slide-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes drawer-slide-out {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
 }

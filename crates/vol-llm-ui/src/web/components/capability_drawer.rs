@@ -4,8 +4,10 @@
 use crate::state::{
     AgentsState, CapabilityDrawerState, CapabilityOverlayState, GlobalState, ToggleSavingState,
 };
+use crate::web::components::animated_overlay::{next_phase, OverlayPhase};
 use crate::web::components::app::AppState;
 use dioxus::prelude::*;
+use gloo_timers::future::TimeoutFuture;
 use std::collections::{HashMap, HashSet};
 
 #[component]
@@ -14,6 +16,44 @@ pub fn CapabilityDrawer() -> Element {
     let agents: Signal<AgentsState> = use_context();
     let global: Signal<GlobalState> = use_context();
     let mut drawer_state: Signal<CapabilityDrawerState> = use_context();
+
+    // Overlay phase state machine — drives the slide in/out animation.
+    // Same pattern as AnimatedOverlay, but keyed off `drawer_state.open`
+    // (a signal) instead of a plain prop, so no `use_reactive` bridge is
+    // needed — reading `drawer_state` inside the effect keeps it reactive.
+    let mut phase: Signal<OverlayPhase> = use_signal(|| OverlayPhase::Hidden);
+
+    use_effect(move || {
+        let ds = drawer_state.read();
+        let open = ds.open;
+        drop(ds);
+        let next = next_phase(*phase.read(), open);
+        if next == *phase.read() {
+            return;
+        }
+        phase.set(next);
+        match next {
+            OverlayPhase::Entering => {
+                let mut ph = phase;
+                wasm_bindgen_futures::spawn_local(async move {
+                    TimeoutFuture::new(200).await;
+                    ph.with_mut(|p| {
+                        if *p == OverlayPhase::Entering {
+                            *p = OverlayPhase::Visible;
+                        }
+                    });
+                });
+            }
+            OverlayPhase::Exiting => {
+                let mut ph = phase;
+                wasm_bindgen_futures::spawn_local(async move {
+                    TimeoutFuture::new(150).await;
+                    ph.set(OverlayPhase::Hidden);
+                });
+            }
+            _ => {}
+        }
+    });
 
     // Local state: selected sets (initialized from effective on load)
     let sel_tools: Signal<HashSet<String>> = use_signal(HashSet::new);
@@ -98,10 +138,28 @@ pub fn CapabilityDrawer() -> Element {
         });
     });
 
-    let ds = drawer_state.read();
-    if !ds.open {
+    // Guard on the animation phase, not on `open` directly — during Exiting
+    // the drawer must stay mounted so the slide-out animation can play.
+    let current = *phase.read();
+    if current == OverlayPhase::Hidden {
         return rsx! {};
     }
+    let backdrop_class = match current {
+        OverlayPhase::Entering => "fixed inset-0 bg-black/50 z-40 animate-overlay-in",
+        OverlayPhase::Exiting => "fixed inset-0 bg-black/50 z-40 animate-overlay-out",
+        _ => "fixed inset-0 bg-black/50 z-40",
+    };
+    let panel_class = match current {
+        OverlayPhase::Entering => {
+            "fixed right-0 top-0 h-full w-80 bg-[#1a1a2e] border-l border-[#3a3a55] z-50 flex flex-col shadow-2xl animate-drawer-in"
+        }
+        OverlayPhase::Exiting => {
+            "fixed right-0 top-0 h-full w-80 bg-[#1a1a2e] border-l border-[#3a3a55] z-50 flex flex-col shadow-2xl animate-drawer-out"
+        }
+        _ => "fixed right-0 top-0 h-full w-80 bg-[#1a1a2e] border-l border-[#3a3a55] z-50 flex flex-col shadow-2xl",
+    };
+
+    let ds = drawer_state.read();
     let search = ds.search.clone();
     let loaded = ds.loaded;
     let load_error = ds.load_error.clone();
@@ -124,7 +182,7 @@ pub fn CapabilityDrawer() -> Element {
     rsx! {
         // Backdrop overlay
         div {
-            class: "fixed inset-0 bg-black/50 z-40",
+            class: "{backdrop_class}",
             onclick: move |_| {
                 drawer_state.with_mut(|d| {
                     d.open = false;
@@ -135,7 +193,7 @@ pub fn CapabilityDrawer() -> Element {
         }
         // Drawer panel
         div {
-            class: "fixed right-0 top-0 h-full w-80 bg-[#1a1a2e] border-l border-[#3a3a55] z-50 flex flex-col shadow-2xl",
+            class: "{panel_class}",
             DrawerHeader {
                 on_close: move |_| {
                     drawer_state.with_mut(|d| {
