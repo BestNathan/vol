@@ -1,15 +1,17 @@
 //! HITL approval dialog for tool calls.
 
+use super::animated_overlay::AnimatedOverlay;
 use crate::state::ApprovalUiState;
 use dioxus::prelude::*;
 
 #[component]
 pub fn ApprovalDialog() -> Element {
     let sig: Signal<ApprovalUiState> = use_context();
+    // `open` is driven directly by pending state. The dialog clears its own
+    // state via Approve/Reject, so no content cache is needed — the card
+    // reads live state and AnimatedOverlay keeps it mounted through the
+    // 150ms exit animation.
     let has_pending = sig.read().has_pending();
-    if !has_pending {
-        return rsx! {};
-    }
 
     let tool_name = sig.read().tool_name.clone().unwrap_or_default();
     let reason = sig.read().reason.clone().unwrap_or_default();
@@ -25,7 +27,10 @@ pub fn ApprovalDialog() -> Element {
     };
 
     rsx! {
-        div { class: "fixed inset-0 bg-black/60 flex items-center justify-center z-[100]",
+        AnimatedOverlay {
+            open: has_pending,
+            // No-op: approval requires an explicit Approve/Reject click.
+            on_close: move |_| {},
             div { class: "bg-[#252540] border border-[#444466] rounded-lg p-3 sm:p-4 w-[95vw] max-w-[600px] sm:min-w-[400px] sm:w-[90vw] sm:max-w-[500px] max-h-[80vh] overflow-y-auto",
                 div { class: "text-[16px] font-bold text-[#e0e0e0] mb-3 border-b border-[#333355] pb-2", "Tool Approval Required" }
                 div { class: "text-[#f0c040] font-bold text-[15px]", "[!] {tool_name}" }

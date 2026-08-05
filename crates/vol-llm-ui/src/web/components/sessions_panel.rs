@@ -4,6 +4,7 @@
 use dioxus::prelude::*;
 use gloo_timers::future::TimeoutFuture;
 
+use super::animated_overlay::AnimatedOverlay;
 use crate::state::{AgentSubTab, AgentsState, ConversationEntry, ConversationState, SessionsState};
 use crate::web::client::{JsonRpcClient, SessionEntry};
 
@@ -215,10 +216,6 @@ fn SessionDetailOverlay(
     show: Signal<bool>,
     had_parse_failure: Signal<bool>,
 ) -> Element {
-    if !*show.read() {
-        return VNode::empty();
-    }
-
     let is_loading = *loading.read();
     let has_error = *had_parse_failure.read();
     let items: Vec<Element> = entries.read().iter().map(|entry| {
@@ -272,12 +269,11 @@ fn SessionDetailOverlay(
     }).collect();
 
     rsx! {
-        div {
-            class: "fixed inset-0 bg-black/70 z-[200] flex items-center justify-center",
-            onclick: move |_: Event<MouseData>| { show.set(false); },
+        AnimatedOverlay {
+            open: *show.read(),
+            on_close: move |_| { show.set(false); },
             div {
                 class: "bg-[#1a1a2e] border border-[#333355] rounded-lg w-[80vw] max-w-[900px] h-[70vh] flex flex-col overflow-hidden",
-                onclick: move |evt: Event<MouseData>| { evt.stop_propagation(); },
                 div { class: "flex items-center justify-between px-3 py-2 border-b border-[#2a2a44] font-mono text-[13px] text-[#e0e0e0]",
                     span { "Session: {session_id}" }
                     button {

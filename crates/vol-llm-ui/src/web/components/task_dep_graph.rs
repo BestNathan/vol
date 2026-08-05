@@ -10,6 +10,8 @@ use crate::web::components::tasks_panel::status_color;
 use dioxus::prelude::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use super::animated_overlay::AnimatedOverlay;
+
 /// A node placed in the layered layout. `known = false` means the id was
 /// referenced (as a dependency/block) but is not present in the loaded task
 /// list — e.g. a cross-agent task filtered out by the agent sub-tab.
@@ -214,12 +216,16 @@ pub fn TaskDepGraph(tasks: Vec<TaskEntry>, center: u64, on_close: EventHandler<(
     let height = PAD * 2 + (max_layer - min_layer) * ROW + NODE_H;
 
     rsx! {
-        div {
-            class: "fixed inset-0 bg-black/60 flex items-center justify-center z-[100]",
-            onclick: move |_| on_close.call(()),
+        AnimatedOverlay {
+            // The component is only mounted while `graph_target` is Some in
+            // tasks_panel, so `open` is effectively always true here. The
+            // parent unmounts us via `on_close`; backdrop clicks still play
+            // the exit animation because AnimatedOverlay handles that phase
+            // internally before invoking `on_close`.
+            open: true,
+            on_close: move |_| on_close.call(()),
             div {
                 class: "bg-[#252540] border border-[#444466] rounded-lg p-3 sm:p-4 w-[95vw] max-w-[900px] max-h-[85vh] flex flex-col overflow-hidden",
-                onclick: move |evt| evt.stop_propagation(),
                 // Header
                 div { class: "flex items-center justify-between border-b border-[#333355] pb-2 mb-2",
                     div { class: "text-[15px] font-bold text-[#e0e0e0]", "Dependency Graph — t{center}" }

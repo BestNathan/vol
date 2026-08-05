@@ -1,5 +1,6 @@
 //! Debug panel — WS message inspector and development tools.
 
+use super::animated_overlay::AnimatedOverlay;
 use crate::state::{DebugState, DebugTab, WsDirection};
 use dioxus::prelude::*;
 
@@ -42,12 +43,10 @@ pub fn DebugPanel() -> Element {
     let active_tab = guard.active_tab;
     drop(guard);
 
-    if !open {
-        return rsx! { div {} };
-    }
-
     rsx! {
-        div { class: "fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4",
+        AnimatedOverlay {
+            open,
+            on_close: move |_| { debug.write_unchecked().open = false; },
             div { class: "bg-[#1a1a2e] border border-[#444] rounded-lg flex flex-col shadow-2xl",
                 style: "width: 80vw; height: 80vh;",
                 div { class: "flex items-center justify-between px-4 py-2 border-b border-[#333] shrink-0",
