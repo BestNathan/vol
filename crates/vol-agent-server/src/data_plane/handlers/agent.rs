@@ -88,10 +88,10 @@ impl DomainHandler for AgentHandler {
                     .metadata
                     .get("session_id")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                let session_changed = new_session_id.as_ref().map_or(false, |sid| {
+                    .map(ToString::to_string);
+                let session_changed = new_session_id.as_ref().is_some_and(|sid| {
                     let last = self.agent_last_session.lock().unwrap();
-                    last.get(&target_id).map_or(true, |prev| prev != sid)
+                    last.get(&target_id) != Some(sid)
                 });
                 if session_changed {
                     let store = self.session_manager.entry_store_for_agent(&target_id);
