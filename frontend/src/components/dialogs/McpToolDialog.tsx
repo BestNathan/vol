@@ -8,11 +8,13 @@ import { useAtom } from 'jotai'
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
 import { SchemaForm } from '@/components/inputs/SchemaForm'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { mcpDialogAtom } from '@/stores/dialogs'
 import { getPanelClient } from '@/lib/panel-client'
 import type { RpcMethods } from '@/lib/protocol'
@@ -88,37 +90,39 @@ export function McpToolDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) close() }}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle className="truncate">{d ? `${d.server} / ${d.toolName}` : ''}</DialogTitle>
+          <DialogTitle className="truncate pr-8">{d ? `${d.server} / ${d.toolName}` : ''}</DialogTitle>
         </DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto space-y-3">
-          <SchemaForm
-            key={d?.toolName ?? 'closed'}
-            schema={asRecord(d?.inputSchema) ?? {}}
-            value={value}
-            onChange={setValue}
-          />
-          {d?.loading ? (
-            <div className="text-[13px] text-[#888]">Calling...</div>
-          ) : (
-            <Button size="sm" onClick={() => void handleCall()}>Call</Button>
-          )}
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="space-y-3 p-1">
+            <SchemaForm
+              key={d?.toolName ?? 'closed'}
+              schema={asRecord(d?.inputSchema) ?? {}}
+              value={value}
+              onChange={setValue}
+            />
+          </div>
+        </ScrollArea>
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between items-stretch">
+          <Button size="sm" onClick={() => void handleCall()} disabled={d?.loading}>
+            {d?.loading ? 'Calling...' : 'Call'}
+          </Button>
           {d?.result !== undefined && d.result !== '' && (
-            <div className="rounded bg-[#1a2a1a] border border-[#40c040] p-2">
-              <div className="text-[11px] text-[#40c040] font-semibold mb-1">Result</div>
-              <pre className="text-[12px] text-[#e0e0e0] font-mono whitespace-pre-wrap break-words overflow-x-auto">
+            <div className="rounded bg-emerald-950/30 border border-emerald-500/50 p-2 min-w-0 flex-1">
+              <div className="text-xs text-emerald-400 font-semibold mb-1">Result</div>
+              <pre className="text-xs text-foreground font-mono whitespace-pre-wrap break-words max-h-[200px] overflow-auto">
                 {d.result}
               </pre>
             </div>
           )}
           {d?.error !== undefined && (
-            <div className="rounded bg-[#2a1a1a] border border-[#c04040] p-2">
-              <div className="text-[11px] text-[#c04040] font-semibold mb-1">Error</div>
-              <div className="text-[12px] text-[#e0e0e0] break-words">{d.error}</div>
+            <div className="rounded bg-red-950/30 border border-destructive/50 p-2 min-w-0 flex-1">
+              <div className="text-xs text-destructive font-semibold mb-1">Error</div>
+              <div className="text-xs text-foreground break-words">{d.error}</div>
             </div>
           )}
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

@@ -18,7 +18,7 @@ export function TabBar() {
   const [active, setActive] = useAtom(activeTabAtom)
 
   return (
-    <div className="flex flex-nowrap bg-[#252540] border-b border-[#333355] flex-shrink-0 overflow-x-auto">
+    <div className="flex flex-nowrap bg-card border-b border-border flex-shrink-0 overflow-x-auto">
       {TABS.map(tab => (
         <button
           key={tab.id}
@@ -26,8 +26,8 @@ export function TabBar() {
           className={cn(
             'px-2 sm:px-4 py-1 sm:py-1.5 cursor-pointer text-[11px] sm:text-[13px] whitespace-nowrap flex-shrink-0 border-b-2',
             active === tab.id
-              ? 'bg-[#1a1a2e] text-[#e0e0e0] border-[#80a0ff]'
-              : 'bg-transparent text-[#888] border-transparent hover:text-[#ccc] hover:bg-[#2a2a44]'
+              ? 'bg-background text-foreground border-primary'
+              : 'bg-transparent text-muted-foreground border-transparent hover:text-foreground/80 hover:bg-secondary'
           )}
         >
           {tab.label}

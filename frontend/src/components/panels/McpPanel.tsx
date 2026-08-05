@@ -180,8 +180,8 @@ export function McpPanel() {
     return (
       <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-[#888] text-[14px]">Select a node to view MCP data</div>
-          <div className="text-[#666] text-[12px] mt-1">Select a node from the dropdown above.</div>
+          <div className="text-muted-foreground text-[14px]">Select a node to view MCP data</div>
+          <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
         </div>
       </div>
     )
@@ -189,8 +189,8 @@ export function McpPanel() {
 
   if (state.loading && state.servers.length === 0 && state.error === null) {
     return (
-      <div className="flex-1 flex items-center justify-center gap-2 text-[#888] text-[14px]">
-        <span className="w-4 h-4 rounded-full border-2 border-[#333355] border-t-[#80a0ff] animate-spin" />
+      <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
+        <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
         Loading MCP data...
       </div>
     )
@@ -200,8 +200,8 @@ export function McpPanel() {
     return (
       <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="text-[#ff6060] text-[14px]">Failed to load MCP data</div>
-          <div className="text-[#888] text-[12px] max-w-[300px] break-words">{state.error}</div>
+          <div className="text-destructive text-[14px]">Failed to load MCP data</div>
+          <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{state.error}</div>
           <Button variant="outline" size="sm" onClick={() => void loadAll(nodeId)}>Retry</Button>
         </div>
       </div>
@@ -215,12 +215,12 @@ export function McpPanel() {
         onValueChange={(v) => setSubTab(v as McpSubtab)}
         className="flex-1 min-h-0 flex flex-col overflow-hidden"
       >
-        <TabsList className="h-9 justify-start w-full gap-0 p-0 rounded-none bg-[#252540] border-b border-[#333355] flex-shrink-0 overflow-x-auto">
+        <TabsList className="h-9 justify-start w-full gap-0 p-0 rounded-none bg-card border-b border-border flex-shrink-0 overflow-x-auto">
           {SUB_TABS.map((t) => (
             <TabsTrigger
               key={t.id}
               value={t.id}
-              className="h-9 rounded-none px-3 py-1.5 text-[12px] font-semibold border-b-2 border-transparent data-[state=active]:bg-[#1a1a2e] data-[state=active]:text-[#e0e0e0] data-[state=active]:border-[#80a0ff] data-[state=active]:shadow-none"
+              className="h-9 rounded-none px-3 py-1.5 text-[12px] font-semibold border-b-2 border-transparent data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:border-primary data-[state=active]:shadow-none"
             >
               {t.label}
             </TabsTrigger>
@@ -260,12 +260,12 @@ export function McpPanel() {
 function ServerStatusText({ status, reconnecting }: { status: string; reconnecting: boolean }) {
   if (reconnecting) {
     return (
-      <span className="text-[11px] text-[#f0c040] animate-pulse flex-shrink-0 ml-2">
+      <span className="text-[11px] text-yellow-400 animate-pulse flex-shrink-0 ml-2">
         Reconnecting...
       </span>
     )
   }
-  return <span className="text-[11px] text-[#666] flex-shrink-0 ml-2">{status}</span>
+  return <span className="text-[11px] text-muted-foreground/70 flex-shrink-0 ml-2">{status}</span>
 }
 
 function ServerReconnect({
@@ -279,7 +279,7 @@ function ServerReconnect({
 }) {
   if (status === 'connected' || status === 'connecting') return null
   if (reconnecting) {
-    return <span className="text-[11px] text-[#888] animate-pulse flex-shrink-0">...</span>
+    return <span className="text-[11px] text-muted-foreground animate-pulse flex-shrink-0">...</span>
   }
   return (
     <Button variant="secondary" size="sm" className="flex-shrink-0" onClick={onReconnect}>
@@ -300,21 +300,21 @@ function ServerList({
   onReconnect: (server: string) => void
 }) {
   if (servers.length === 0 && error === null) {
-    return <div className="text-[#666] text-center p-4 text-[13px]">No MCP servers configured</div>
+    return <div className="text-muted-foreground/70 text-center p-4 text-[13px]">No MCP servers configured</div>
   }
   return (
     <div className="p-2">
       {/* Mobile: server cards */}
       <div className="sm:hidden flex flex-col gap-2">
         {servers.map((s) => (
-          <div key={s.name} className="rounded-lg border border-[#333355] bg-[#20203a] p-3">
+          <div key={s.name} className="rounded-lg border border-border bg-secondary p-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0">
                 <span
                   className="w-2 h-2 rounded-full flex-shrink-0"
                   style={{ backgroundColor: serverStatusColor(s.status) }}
                 />
-                <span className="text-[13px] text-[#e0e0e0] truncate">{s.name}</span>
+                <span className="text-[13px] text-foreground truncate">{s.name}</span>
               </div>
               <ServerStatusText status={s.status} reconnecting={reconnecting.includes(s.name)} />
             </div>
@@ -337,7 +337,7 @@ function ServerList({
                 className="w-2 h-2 rounded-full inline-block flex-shrink-0"
                 style={{ backgroundColor: serverStatusColor(s.status) }}
               />
-              <span className="text-[13px] text-[#e0e0e0] truncate">{s.name}</span>
+              <span className="text-[13px] text-foreground truncate">{s.name}</span>
               <ServerStatusText status={s.status} reconnecting={reconnecting.includes(s.name)} />
             </div>
             <ServerReconnect
@@ -349,7 +349,7 @@ function ServerList({
         ))}
       </div>
       {error !== null && (
-        <div className="text-[#c04040] p-2 text-[12px] bg-[#2a1a1a] border border-[#c04040] rounded mt-2">
+        <div className="text-destructive p-2 text-[12px] bg-red-950/30 border border-destructive/50 rounded mt-2">
           Error: {error}
         </div>
       )}
@@ -361,7 +361,7 @@ function ServerList({
 
 function ToolList({ tools, onCall }: { tools: McpToolInfo[]; onCall: (tool: McpToolInfo) => void }) {
   if (tools.length === 0) {
-    return <div className="text-[#666] text-center p-4 text-[13px]">No tools available</div>
+    return <div className="text-muted-foreground/70 text-center p-4 text-[13px]">No tools available</div>
   }
   const groups = groupByServer(tools, (t) => t.server)
   return (
@@ -369,11 +369,11 @@ function ToolList({ tools, onCall }: { tools: McpToolInfo[]; onCall: (tool: McpT
       {/* Mobile: flat tool cards */}
       <div className="sm:hidden flex flex-col gap-2">
         {tools.map((t) => (
-          <div key={`${t.server}/${t.name}`} className="rounded-lg border border-[#333355] bg-[#20203a] p-3">
+          <div key={`${t.server}/${t.name}`} className="rounded-lg border border-border bg-secondary p-3">
             <div className="flex items-center justify-between">
               <div className="min-w-0">
-                <div className="truncate text-[14px] font-bold text-[#e0e0e0]">{t.name}</div>
-                <div className="text-[11px] text-[#666] mt-0.5">{t.server}</div>
+                <div className="truncate text-[14px] font-bold text-foreground">{t.name}</div>
+                <div className="text-[11px] text-muted-foreground/70 mt-0.5">{t.server}</div>
                 {t.description && (
                   <div className="text-[11px] text-[#777] truncate mt-0.5">{t.description}</div>
                 )}
@@ -387,14 +387,14 @@ function ToolList({ tools, onCall }: { tools: McpToolInfo[]; onCall: (tool: McpT
       <div className="hidden sm:block font-mono text-[13px]">
         {groups.map(([server, list]) => (
           <div key={server} className="mb-2">
-            <div className="text-[12px] text-[#888] font-semibold mb-1">
+            <div className="text-[12px] text-muted-foreground font-semibold mb-1">
               {server} ({list.length} tools)
             </div>
             {list.map((t) => (
               <div key={t.name} className="flex items-center justify-between py-1 border-b border-[#2a2a44]">
                 <div className="min-w-0 flex items-baseline gap-2">
-                  <span className="text-[13px] text-[#e0e0e0]">{t.name}</span>
-                  {t.description && <span className="text-[11px] text-[#888] truncate">{t.description}</span>}
+                  <span className="text-[13px] text-foreground">{t.name}</span>
+                  {t.description && <span className="text-[11px] text-muted-foreground truncate">{t.description}</span>}
                 </div>
                 <Button variant="secondary" size="sm" className="flex-shrink-0" onClick={() => onCall(t)}>
                   Call
@@ -420,7 +420,7 @@ function ResourceList({
   onRead: (resource: McpResourceInfo) => void
 }) {
   if (resources.length === 0 && templates.length === 0) {
-    return <div className="text-[#666] text-center p-4 text-[13px]">No resources available</div>
+    return <div className="text-muted-foreground/70 text-center p-4 text-[13px]">No resources available</div>
   }
   const resByServer = new Map(groupByServer(resources, (r) => r.server))
   const tmpByServer = new Map(groupByServer(templates, (t) => t.server))
@@ -432,24 +432,24 @@ function ResourceList({
       {/* Mobile: flat resource + template cards */}
       <div className="sm:hidden flex flex-col gap-2">
         {resources.map((r) => (
-          <div key={`${r.server}/${r.uri}`} className="rounded-lg border border-[#333355] bg-[#20203a] p-3">
+          <div key={`${r.server}/${r.uri}`} className="rounded-lg border border-border bg-secondary p-3">
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
-                <div className="text-[13px] text-[#e0e0e0] truncate">{r.name}</div>
-                <div className="text-[11px] text-[#666] font-mono truncate mt-0.5">{r.uri}</div>
+                <div className="text-[13px] text-foreground truncate">{r.name}</div>
+                <div className="text-[11px] text-muted-foreground/70 font-mono truncate mt-0.5">{r.uri}</div>
               </div>
               <Button size="sm" className="flex-shrink-0 ml-2" onClick={() => onRead(r)}>Read</Button>
             </div>
           </div>
         ))}
         {templates.map((t) => (
-          <div key={`${t.server}/${t.uri_template}`} className="rounded-lg border border-[#333355] bg-[#20203a] p-3">
+          <div key={`${t.server}/${t.uri_template}`} className="rounded-lg border border-border bg-secondary p-3">
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
-                <div className="text-[13px] text-[#e0e0e0]">{t.name}</div>
-                <div className="text-[11px] text-[#666] font-mono truncate mt-0.5">{t.uri_template}</div>
+                <div className="text-[13px] text-foreground">{t.name}</div>
+                <div className="text-[11px] text-muted-foreground/70 font-mono truncate mt-0.5">{t.uri_template}</div>
               </div>
-              <span className="text-[10px] bg-[#2a2a44] text-[#888] px-1.5 py-0.5 rounded flex-shrink-0 ml-2">
+              <span className="text-[10px] bg-secondary text-muted-foreground px-1.5 py-0.5 rounded flex-shrink-0 ml-2">
                 tmpl
               </span>
             </div>
@@ -463,14 +463,14 @@ function ResourceList({
           const tmp = tmpByServer.get(server) ?? []
           return (
             <div key={server} className="mb-2">
-              <div className="text-[12px] text-[#888] font-semibold mb-1">
+              <div className="text-[12px] text-muted-foreground font-semibold mb-1">
                 {server} ({res.length + tmp.length} items)
               </div>
               {res.map((r) => (
                 <div key={r.uri} className="flex items-center justify-between py-1 border-b border-[#2a2a44]">
                   <div className="flex-1 min-w-0">
-                    <div className="text-[13px] text-[#e0e0e0] truncate">{r.name}</div>
-                    <div className="text-[11px] text-[#666] truncate">{r.uri}</div>
+                    <div className="text-[13px] text-foreground truncate">{r.name}</div>
+                    <div className="text-[11px] text-muted-foreground/70 truncate">{r.uri}</div>
                   </div>
                   <Button variant="secondary" size="sm" className="flex-shrink-0 ml-2" onClick={() => onRead(r)}>
                     Read
@@ -478,12 +478,12 @@ function ResourceList({
                 </div>
               ))}
               {tmp.map((t) => (
-                <div key={t.uri_template} className="flex items-center py-1 border-b border-[#2a2a44] text-[#888]">
+                <div key={t.uri_template} className="flex items-center py-1 border-b border-[#2a2a44] text-muted-foreground">
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px]">{t.name}</div>
-                    <div className="text-[11px] text-[#666] truncate">{t.uri_template}</div>
+                    <div className="text-[11px] text-muted-foreground/70 truncate">{t.uri_template}</div>
                   </div>
-                  <span className="text-[10px] bg-[#2a2a44] px-1 rounded ml-2">tmpl</span>
+                  <span className="text-[10px] bg-secondary px-1 rounded ml-2">tmpl</span>
                 </div>
               ))}
             </div>
@@ -504,7 +504,7 @@ function PromptList({
   onGet: (prompt: McpPromptInfo) => void
 }) {
   if (prompts.length === 0) {
-    return <div className="text-[#666] text-center p-4 text-[13px]">No prompts available</div>
+    return <div className="text-muted-foreground/70 text-center p-4 text-[13px]">No prompts available</div>
   }
   const groups = groupByServer(prompts, (p) => p.server)
   return (
@@ -512,11 +512,11 @@ function PromptList({
       {/* Mobile: prompt cards */}
       <div className="sm:hidden flex flex-col gap-2">
         {prompts.map((p) => (
-          <div key={`${p.server}/${p.name}`} className="rounded-lg border border-[#333355] bg-[#20203a] p-3">
+          <div key={`${p.server}/${p.name}`} className="rounded-lg border border-border bg-secondary p-3">
             <div className="flex items-center justify-between">
               <div className="min-w-0">
-                <div className="truncate text-[14px] font-bold text-[#e0e0e0]">{p.name}</div>
-                <div className="text-[11px] text-[#666] mt-0.5">{p.server}</div>
+                <div className="truncate text-[14px] font-bold text-foreground">{p.name}</div>
+                <div className="text-[11px] text-muted-foreground/70 mt-0.5">{p.server}</div>
                 {p.description && (
                   <div className="text-[11px] text-[#777] truncate mt-0.5">{p.description}</div>
                 )}
@@ -530,14 +530,14 @@ function PromptList({
       <div className="hidden sm:block font-mono text-[13px]">
         {groups.map(([server, list]) => (
           <div key={server} className="mb-2">
-            <div className="text-[12px] text-[#888] font-semibold mb-1">
+            <div className="text-[12px] text-muted-foreground font-semibold mb-1">
               {server} ({list.length} prompts)
             </div>
             {list.map((p) => (
               <div key={p.name} className="flex items-center justify-between py-1 border-b border-[#2a2a44]">
                 <div className="min-w-0 flex items-baseline gap-2">
-                  <span className="text-[13px] text-[#e0e0e0]">{p.name}</span>
-                  {p.description && <span className="text-[11px] text-[#888] truncate">{p.description}</span>}
+                  <span className="text-[13px] text-foreground">{p.name}</span>
+                  {p.description && <span className="text-[11px] text-muted-foreground truncate">{p.description}</span>}
                 </div>
                 <Button variant="secondary" size="sm" className="flex-shrink-0" onClick={() => onGet(p)}>
                   Get

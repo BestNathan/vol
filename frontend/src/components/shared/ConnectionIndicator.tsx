@@ -19,7 +19,7 @@ export function ConnectionIndicator() {
         className="w-2 h-2 rounded-full inline-block flex-shrink-0"
         style={{ backgroundColor: dotColor, boxShadow: `0 0 4px ${dotColor}` }}
       />
-      <span className="text-[11px] text-[#888] hidden sm:inline">{label}</span>
+      <span className="text-[11px] text-muted-foreground hidden sm:inline">{label}</span>
     </span>
   )
 }

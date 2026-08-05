@@ -64,9 +64,9 @@ export function SkillDetailDialog() {
         <DialogHeader>
           <DialogTitle className="truncate">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[15px] font-semibold text-[#e0e0e0] truncate">{skill?.name ?? ''}</span>
+              <span className="text-[15px] font-semibold text-foreground truncate">{skill?.name ?? ''}</span>
               {skill && (
-                <span className="text-[11px] text-[#888] bg-[#2a2a44] px-1.5 py-0.5 rounded flex-shrink-0">
+                <span className="text-[11px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded flex-shrink-0">
                   v{skill.version}
                 </span>
               )}
@@ -85,13 +85,13 @@ export function SkillDetailDialog() {
           {skill ? (
             <>
               {/* Description */}
-              <div className="text-[#ccc] text-[13px] mb-2 mt-2 break-words">{skill.description}</div>
+              <div className="text-foreground/80 text-[13px] mb-2 mt-2 break-words">{skill.description}</div>
 
               {/* Triggers */}
               {skill.triggers.length > 0 && (
                 <div className="flex gap-1.5 flex-wrap mb-3">
                   {skill.triggers.map((t, i) => (
-                    <span key={i} className="text-[11px] text-[#c0c040] bg-[#2a2a20] px-2 py-0.5 rounded">
+                    <span key={i} className="text-[11px] text-yellow-400/70 bg-[#2a2a20] px-2 py-0.5 rounded">
                       {t}
                     </span>
                   ))}
@@ -100,13 +100,13 @@ export function SkillDetailDialog() {
 
               {/* SKILL.md body */}
               <div className="bg-[#12121e] border border-[#2a2a44] rounded p-2 mb-3 max-h-[200px] overflow-y-auto">
-                <pre className="text-[12px] text-[#aaa] font-mono whitespace-pre-wrap">{skill.content}</pre>
+                <pre className="text-[12px] text-foreground/70 font-mono whitespace-pre-wrap">{skill.content}</pre>
               </div>
 
               {/* File listing + preview */}
               {skill.file_listing.length > 0 && (
                 <div className="flex flex-col">
-                  <div className="text-[11px] text-[#888] mb-1 font-semibold">Files</div>
+                  <div className="text-[11px] text-muted-foreground mb-1 font-semibold">Files</div>
                   <div className="bg-[#12121e] border border-[#2a2a44] rounded max-h-[150px] overflow-y-auto mb-2">
                     {skill.file_listing.map((f) => {
                       const path = skillFilePath(skill.directory, f)
@@ -114,7 +114,7 @@ export function SkillDetailDialog() {
                       return (
                         <div
                           key={f}
-                          className="text-[12px] text-[#aaa] font-mono px-2 py-0.5 border-b border-[#2a2a44] last:border-b-0 cursor-pointer hover:bg-[#2a2a44]"
+                          className="text-[12px] text-foreground/70 font-mono px-2 py-0.5 border-b border-[#2a2a44] last:border-b-0 cursor-pointer hover:bg-secondary"
                           style={isSelected ? { backgroundColor: '#2a3a4a' } : undefined}
                           onClick={() => readFile(f)}
                         >
@@ -125,16 +125,16 @@ export function SkillDetailDialog() {
                   </div>
                   <div className="border border-[#2a2a44] rounded min-h-[100px] max-h-[250px] overflow-y-auto p-2">
                     {preview === null ? (
-                      <div className="text-[#666] text-[13px] text-center py-8">Click a file to preview</div>
+                      <div className="text-muted-foreground/70 text-[13px] text-center py-8">Click a file to preview</div>
                     ) : preview.loading ? (
-                      <div className="flex items-center gap-2 text-[#888] text-[13px]">
-                        <span className="text-[11px] text-[#666] font-mono">{preview.path}</span>
+                      <div className="flex items-center gap-2 text-muted-foreground text-[13px]">
+                        <span className="text-[11px] text-muted-foreground/70 font-mono">{preview.path}</span>
                         Loading...
                       </div>
                     ) : preview.error !== undefined ? (
-                      <div className="text-[#c04040] text-[12px] break-words">{preview.error}</div>
+                      <div className="text-destructive text-[12px] break-words">{preview.error}</div>
                     ) : (
-                      <pre className="text-[12px] text-[#e0e0e0] font-mono whitespace-pre-wrap break-words">
+                      <pre className="text-[12px] text-foreground font-mono whitespace-pre-wrap break-words">
                         {preview.content ?? ''}
                       </pre>
                     )}
@@ -143,7 +143,7 @@ export function SkillDetailDialog() {
               )}
             </>
           ) : (
-            <div className="text-[#c04040] text-[13px] py-4 text-center">
+            <div className="text-destructive text-[13px] py-4 text-center">
               {loading ? 'Loading skill details...' : 'Failed to load skill details'}
             </div>
           )}

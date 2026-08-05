@@ -131,8 +131,8 @@ export function TasksPanel() {
     return (
       <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-[#888] text-[14px]">Select a node to view tasks</div>
-          <div className="text-[#666] text-[12px] mt-1">Select a node from the dropdown above.</div>
+          <div className="text-muted-foreground text-[14px]">Select a node to view tasks</div>
+          <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
         </div>
       </div>
     )
@@ -142,8 +142,8 @@ export function TasksPanel() {
     return (
       <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="text-[#ff6060] text-[14px]">Failed to load tasks</div>
-          <div className="text-[#888] text-[12px] max-w-[300px] break-words">{error}</div>
+          <div className="text-destructive text-[14px]">Failed to load tasks</div>
+          <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
           <Button variant="outline" size="sm" onClick={() => void loadTasks(nodeId)}>Retry</Button>
         </div>
       </div>
@@ -152,8 +152,8 @@ export function TasksPanel() {
 
   if (loading && tasks.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center gap-2 text-[#888] text-[14px]">
-        <span className="w-4 h-4 rounded-full border-2 border-[#333355] border-t-[#80a0ff] animate-spin" />
+      <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
+        <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
         Loading tasks...
       </div>
     )
@@ -169,21 +169,21 @@ export function TasksPanel() {
     return (
       <>
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[11px] text-[#555] font-mono whitespace-nowrap">t{task.id}</span>
+          <span className="text-[11px] text-muted-foreground/60 font-mono whitespace-nowrap">t{task.id}</span>
           <span
             className="text-[10px] px-1 rounded font-bold whitespace-nowrap"
             style={{ background: color, color: '#1a1a2e' }}
           >
             {task.status}
           </span>
-          <span className="text-[13px] text-[#e0e0e0] truncate">{task.subject}</span>
+          <span className="text-[13px] text-foreground truncate">{task.subject}</span>
           <div className="flex items-center gap-2 ml-auto flex-shrink-0">
             {task.assignee && (
-              <span className="text-[11px] text-[#666] whitespace-nowrap">{task.assignee}</span>
+              <span className="text-[11px] text-muted-foreground/70 whitespace-nowrap">{task.assignee}</span>
             )}
             <button
               type="button"
-              className="text-[11px] text-[#80a0ff] hover:text-[#a0c0ff] px-1 rounded whitespace-nowrap"
+              className="text-[11px] text-primary hover:text-[#a0c0ff] px-1 rounded whitespace-nowrap"
               title="View dependency graph"
               onClick={(e) => { e.stopPropagation(); openGraph(task.id) }}
             >
@@ -192,19 +192,19 @@ export function TasksPanel() {
           </div>
         </div>
         {expanded && (
-          <div className="mt-2 pl-4 text-[12px] text-[#aaa] flex flex-col gap-1">
+          <div className="mt-2 pl-4 text-[12px] text-foreground/70 flex flex-col gap-1">
             {task.description !== '' && (
-              <div className="text-[#ccc] mb-1">{task.description}</div>
+              <div className="text-foreground/80 mb-1">{task.description}</div>
             )}
             {task.dependencies.length > 0 && (
-              <div className="text-[#888]">
+              <div className="text-muted-foreground">
                 Dependencies:{' '}
                 {task.dependencies.map((dep, i) => (
                   <span key={dep}>
                     {i > 0 && ', '}
                     <button
                       type="button"
-                      className="text-[#80a0ff] hover:text-[#a0c0ff] font-mono"
+                      className="text-primary hover:text-[#a0c0ff] font-mono"
                       title="Open dependency graph centered on this task"
                       onClick={(e) => { e.stopPropagation(); openGraph(dep) }}
                     >
@@ -215,14 +215,14 @@ export function TasksPanel() {
               </div>
             )}
             {task.blocks.length > 0 && (
-              <div className="text-[#888]">
+              <div className="text-muted-foreground">
                 Blocks:{' '}
                 {task.blocks.map((blk, i) => (
                   <span key={blk}>
                     {i > 0 && ', '}
                     <button
                       type="button"
-                      className="text-[#80a0ff] hover:text-[#a0c0ff] font-mono"
+                      className="text-primary hover:text-[#a0c0ff] font-mono"
                       title="Open dependency graph centered on this task"
                       onClick={(e) => { e.stopPropagation(); openGraph(blk) }}
                     >
@@ -241,7 +241,7 @@ export function TasksPanel() {
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Status filter bar */}
-      <div className="flex gap-1 p-2 border-b border-[#333355] flex-shrink-0 overflow-x-auto">
+      <div className="flex gap-1 p-2 border-b border-border flex-shrink-0 overflow-x-auto">
         {STATUS_FILTERS.map((label) => {
           const isActive = filter === label
           return (
@@ -251,7 +251,7 @@ export function TasksPanel() {
               className={
                 isActive
                   ? 'px-2 py-0.5 rounded text-[11px] cursor-pointer bg-[#80a0ff] text-[#1a1a2e] whitespace-nowrap'
-                  : 'px-2 py-0.5 rounded text-[11px] cursor-pointer bg-[#2a2a44] text-[#888] hover:bg-[#3a3a55] whitespace-nowrap'
+                  : 'px-2 py-0.5 rounded text-[11px] cursor-pointer bg-secondary text-muted-foreground hover:bg-border whitespace-nowrap'
               }
               onClick={() => setFilter(label)}
             >
@@ -264,7 +264,7 @@ export function TasksPanel() {
       {/* Task list */}
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-[#666] text-[13px]">
+          <div className="flex items-center justify-center h-full text-muted-foreground/70 text-[13px]">
             No tasks found
           </div>
         ) : (
@@ -274,7 +274,7 @@ export function TasksPanel() {
               {filtered.map((task) => (
                 <div
                   key={task.id}
-                  className="cursor-pointer rounded-md border border-[#333355] bg-[#20203a] p-3 active:bg-[#2a2a44]"
+                  className="cursor-pointer rounded-md border border-border bg-secondary p-3 active:bg-secondary"
                   style={selectedId === task.id ? { background: '#1a2a44' } : undefined}
                   onClick={() => toggleRow(task.id)}
                 >
@@ -287,7 +287,7 @@ export function TasksPanel() {
               {filtered.map((task) => (
                 <div
                   key={task.id}
-                  className="p-2 border-b border-[#333355] cursor-pointer hover:bg-[#222240]"
+                  className="p-2 border-b border-border cursor-pointer hover:bg-secondary/50"
                   style={selectedId === task.id ? { background: '#1a2a44' } : undefined}
                   onClick={() => toggleRow(task.id)}
                 >

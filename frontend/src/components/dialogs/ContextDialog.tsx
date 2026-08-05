@@ -38,14 +38,14 @@ export function ContextDialog() {
         </DialogHeader>
         <div className="max-h-[70vh] overflow-y-auto">
           {loading ? (
-            <div className="text-[#888] text-[13px] py-4 text-center">Loading...</div>
+            <div className="text-muted-foreground text-[13px] py-4 text-center">Loading...</div>
           ) : error !== undefined ? (
-            <div className="rounded bg-[#2a1a1a] border border-[#c04040] p-2">
-              <div className="text-[11px] text-[#c04040] font-semibold mb-1">Error</div>
-              <div className="text-[12px] text-[#e0e0e0] break-words">{error}</div>
+            <div className="rounded bg-red-950/30 border border-destructive/50 p-2">
+              <div className="text-[11px] text-destructive font-semibold mb-1">Error</div>
+              <div className="text-[12px] text-foreground break-words">{error}</div>
             </div>
           ) : messages.length === 0 ? (
-            <div className="text-[#666] text-[13px] py-4 text-center">No messages</div>
+            <div className="text-muted-foreground/70 text-[13px] py-4 text-center">No messages</div>
           ) : (
             messages.map((msg, i) => (
               <div key={i} className="mb-3">
@@ -58,7 +58,7 @@ export function ContextDialog() {
                   </span>
                 </div>
                 <div className="bg-[#12121e] border border-[#2a2a44] rounded p-2 max-h-[300px] overflow-y-auto">
-                  <pre className="text-[12px] text-[#ccc] font-mono whitespace-pre-wrap break-words">
+                  <pre className="text-[12px] text-foreground/80 font-mono whitespace-pre-wrap break-words">
                     {msg.content}
                   </pre>
                 </div>

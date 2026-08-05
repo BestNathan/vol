@@ -156,20 +156,22 @@ function SchemaProperty({
   if (type === "boolean") {
     const id = useSchemaFieldId(name)
     return (
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id={id}
-          checked={value[name] === true}
-          onCheckedChange={(next) =>
-            onFieldChange(name, { ...value, [name]: next === true })
-          }
-        />
-        <Label htmlFor={id} className="cursor-pointer">
-          {label}
-          {required && <span className="text-destructive"> *</span>}
-        </Label>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={id}
+            checked={value[name] === true}
+            onCheckedChange={(next) =>
+              onFieldChange(name, { ...value, [name]: next === true })
+            }
+          />
+          <Label htmlFor={id} className="cursor-pointer">
+            {label}
+            {required && <span className="text-destructive"> *</span>}
+          </Label>
+        </div>
         {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
+          <p className="text-xs text-muted-foreground ml-6">{description}</p>
         )}
       </div>
     )

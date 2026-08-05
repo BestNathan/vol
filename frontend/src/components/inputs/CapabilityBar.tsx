@@ -58,10 +58,10 @@ export function CapabilityBar() {
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 border-t border-[#2a2a44] bg-[#181825] text-[12px] flex-shrink-0">
       {loading ? (
-        <span className="text-[#666]">Loading capabilities...</span>
+        <span className="text-muted-foreground/70">Loading capabilities...</span>
       ) : (
         <>
-          <span className="text-[#888]">
+          <span className="text-muted-foreground">
             🛠 {effective_tools.length} tools · {effective_skills.length} skills · {effective_mcp_servers.length} MCPs
           </span>
           <button
@@ -70,10 +70,10 @@ export function CapabilityBar() {
             onClick={() => setDrawerOpen(true)}
             aria-label="Edit capabilities"
             className={cn(
-              'ml-1 px-1.5 py-0.5 text-[11px] bg-[#2a2a44] rounded',
+              'ml-1 px-1.5 py-0.5 text-[11px] bg-secondary rounded',
               selectedAgentId
-                ? 'text-[#aaa] hover:bg-[#3a3a55] hover:text-[#ccc] cursor-pointer'
-                : 'text-[#555] cursor-not-allowed'
+                ? 'text-foreground/70 hover:bg-border hover:text-foreground/80 cursor-pointer'
+                : 'text-muted-foreground/60 cursor-not-allowed'
             )}
           >
             ✎

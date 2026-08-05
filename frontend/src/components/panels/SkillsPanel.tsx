@@ -95,8 +95,8 @@ export function SkillsPanel() {
     return (
       <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-[#888] text-[14px]">Select a node to view skills</div>
-          <div className="text-[#666] text-[12px] mt-1">Select a node from the dropdown above.</div>
+          <div className="text-muted-foreground text-[14px]">Select a node to view skills</div>
+          <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
         </div>
       </div>
     )
@@ -106,8 +106,8 @@ export function SkillsPanel() {
     return (
       <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="text-[#ff6060] text-[14px]">Failed to load skills</div>
-          <div className="text-[#888] text-[12px] max-w-[300px] break-words">{error}</div>
+          <div className="text-destructive text-[14px]">Failed to load skills</div>
+          <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
           <Button variant="outline" size="sm" onClick={() => void loadSkills(nodeId)}>Retry</Button>
         </div>
       </div>
@@ -116,8 +116,8 @@ export function SkillsPanel() {
 
   if (loading && skills.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center gap-2 text-[#888] text-[14px]">
-        <span className="w-4 h-4 rounded-full border-2 border-[#333355] border-t-[#80a0ff] animate-spin" />
+      <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
+        <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
         Loading skills...
       </div>
     )
@@ -126,14 +126,14 @@ export function SkillsPanel() {
   return (
     <div className="flex-1 overflow-y-auto p-2.5">
       <div className="flex items-center justify-between mb-2">
-        <div className="text-[12px] text-[#888]">Skills ({skills.length})</div>
+        <div className="text-[12px] text-muted-foreground">Skills ({skills.length})</div>
         <Button variant="secondary" size="sm" disabled={loading} onClick={() => void handleRefresh()}>
           Refresh
         </Button>
       </div>
-      {loading && <div className="text-[12px] text-[#888] mb-2">Loading...</div>}
+      {loading && <div className="text-[12px] text-muted-foreground mb-2">Loading...</div>}
       {skills.length === 0 ? (
-        <div className="flex items-center justify-center h-32 text-[#666] text-[13px]">
+        <div className="flex items-center justify-center h-32 text-muted-foreground/70 text-[13px]">
           No skills discovered
         </div>
       ) : (
@@ -143,28 +143,28 @@ export function SkillsPanel() {
             {skills.map((s) => (
               <div
                 key={s.id ?? s.name}
-                className="cursor-pointer rounded-md border border-[#333355] bg-[#20203a] p-3 active:bg-[#2a2a44]"
+                className="cursor-pointer rounded-md border border-border bg-secondary p-3 active:bg-secondary"
                 onClick={() => openSkill(s)}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="truncate text-[14px] font-bold text-[#e0e0e0]">{s.name}</div>
+                    <div className="truncate text-[14px] font-bold text-foreground">{s.name}</div>
                     <div className="mt-0.5 text-[11px] text-[#777]">v{s.version}</div>
                   </div>
                   <span
-                    className="flex-shrink-0 rounded border border-[#333355] px-2 py-0.5 text-[11px] font-semibold"
+                    className="flex-shrink-0 rounded border border-border px-2 py-0.5 text-[11px] font-semibold"
                     style={{ color: scopeColor(s.scope) }}
                   >
                     {s.scope}
                   </span>
                 </div>
                 {s.description !== '' && (
-                  <div className="mt-2 text-[12px] leading-[1.45] text-[#aaa]">{s.description}</div>
+                  <div className="mt-2 text-[12px] leading-[1.45] text-foreground/70">{s.description}</div>
                 )}
                 {s.triggers.length > 0 && (
                   <div className="flex gap-1 flex-wrap mt-2">
                     {s.triggers.map((t, i) => (
-                      <span key={i} className="text-[10px] text-[#c0c040] bg-[#2a2a20] px-1.5 py-0.5 rounded">
+                      <span key={i} className="text-[10px] text-yellow-400/70 bg-[#2a2a20] px-1.5 py-0.5 rounded">
                         {t}
                       </span>
                     ))}
@@ -177,28 +177,28 @@ export function SkillsPanel() {
           <table className="hidden sm:table w-full border-collapse">
             <thead>
               <tr>
-                <th className="text-left px-2 py-1 border-b border-[#333355] text-[12px] text-[#888]">Name</th>
-                <th className="text-left px-2 py-1 border-b border-[#333355] text-[12px] text-[#888]">Version</th>
-                <th className="text-left px-2 py-1 border-b border-[#333355] text-[12px] text-[#888]">Scope</th>
-                <th className="text-left px-2 py-1 border-b border-[#333355] text-[12px] text-[#888]">Description</th>
-                <th className="text-left px-2 py-1 border-b border-[#333355] text-[12px] text-[#888]">Triggers</th>
+                <th className="text-left px-2 py-1 border-b border-border text-[12px] text-muted-foreground">Name</th>
+                <th className="text-left px-2 py-1 border-b border-border text-[12px] text-muted-foreground">Version</th>
+                <th className="text-left px-2 py-1 border-b border-border text-[12px] text-muted-foreground">Scope</th>
+                <th className="text-left px-2 py-1 border-b border-border text-[12px] text-muted-foreground">Description</th>
+                <th className="text-left px-2 py-1 border-b border-border text-[12px] text-muted-foreground">Triggers</th>
               </tr>
             </thead>
             <tbody>
               {skills.map((s) => (
-                <tr key={s.id ?? s.name} className="cursor-pointer hover:bg-[#2a2a44]" onClick={() => openSkill(s)}>
-                  <td className="px-2 py-1 text-[13px] border-b border-[#2a2a44] text-[#e0e0e0] font-bold">{s.name}</td>
-                  <td className="px-2 py-1 text-[13px] border-b border-[#2a2a44] text-[#888]">{s.version}</td>
+                <tr key={s.id ?? s.name} className="cursor-pointer hover:bg-secondary" onClick={() => openSkill(s)}>
+                  <td className="px-2 py-1 text-[13px] border-b border-[#2a2a44] text-foreground font-bold">{s.name}</td>
+                  <td className="px-2 py-1 text-[13px] border-b border-[#2a2a44] text-muted-foreground">{s.version}</td>
                   <td className="px-2 py-1 text-[13px] border-b border-[#2a2a44]" style={{ color: scopeColor(s.scope) }}>
                     {s.scope}
                   </td>
-                  <td className="px-2 py-1 text-[13px] border-b border-[#2a2a44] text-[#888] max-w-[260px] truncate">
+                  <td className="px-2 py-1 text-[13px] border-b border-[#2a2a44] text-muted-foreground max-w-[260px] truncate">
                     {s.description}
                   </td>
                   <td className="px-2 py-1 border-b border-[#2a2a44]">
                     <div className="flex gap-1 flex-wrap">
                       {s.triggers.map((t, i) => (
-                        <span key={i} className="text-[10px] text-[#c0c040] bg-[#2a2a20] px-1.5 py-0.5 rounded">
+                        <span key={i} className="text-[10px] text-yellow-400/70 bg-[#2a2a20] px-1.5 py-0.5 rounded">
                           {t}
                         </span>
                       ))}

@@ -140,9 +140,9 @@ export function PromptViewer() {
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto space-y-3">
           <div className="flex flex-col gap-1">
-            <span className="text-[12px] text-[#888]">Arguments (JSON)</span>
+            <span className="text-[12px] text-muted-foreground">Arguments (JSON)</span>
             <textarea
-              className="w-full h-24 bg-[#252540] border border-[#3a3a55] rounded p-2 text-[16px] sm:text-[12px] text-[#e0e0e0] font-mono resize-none"
+              className="w-full h-24 bg-card border border-border rounded p-2 text-[16px] sm:text-[12px] text-foreground font-mono resize-none"
               value={d?.argsJson ?? '{}'}
               spellCheck={false}
               onChange={(e) =>
@@ -153,20 +153,20 @@ export function PromptViewer() {
             />
           </div>
           {d?.loading ? (
-            <div className="text-[13px] text-[#888]">Loading...</div>
+            <div className="text-[13px] text-muted-foreground">Loading...</div>
           ) : (
             <Button size="sm" onClick={() => void handleGet()}>Get</Button>
           )}
           {d?.result !== undefined && d.result !== '' && (
-            <div className="rounded bg-[#1a2a1a] border border-[#40c040] p-2">
-              <div className="text-[11px] text-[#40c040] font-semibold mb-1">Result</div>
+            <div className="rounded bg-emerald-950/30 border border-emerald-500/50 p-2">
+              <div className="text-[11px] text-emerald-400 font-semibold mb-1">Result</div>
               <Markdown content={d.result} />
             </div>
           )}
           {d?.error !== undefined && (
-            <div className="rounded bg-[#2a1a1a] border border-[#c04040] p-2">
-              <div className="text-[11px] text-[#c04040] font-semibold mb-1">Error</div>
-              <div className="text-[12px] text-[#e0e0e0] break-words">{d.error}</div>
+            <div className="rounded bg-red-950/30 border border-destructive/50 p-2">
+              <div className="text-[11px] text-destructive font-semibold mb-1">Error</div>
+              <div className="text-[12px] text-foreground break-words">{d.error}</div>
             </div>
           )}
         </div>

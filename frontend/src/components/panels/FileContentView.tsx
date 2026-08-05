@@ -28,7 +28,7 @@ export function FileContentView() {
 
   if (openFiles.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-[#666] text-[13px]">
+      <div className="flex items-center justify-center h-full text-muted-foreground/70 text-[13px]">
         Click a file in the explorer to open it
       </div>
     )
@@ -56,8 +56,8 @@ export function FileContentView() {
               className={cn(
                 'px-2 py-1 text-[12px] flex items-center gap-1 cursor-pointer border-b-2 whitespace-nowrap select-none',
                 isSelected
-                  ? 'text-[#e0e0e0] bg-[#1a1a2e] border-[#80a0ff]'
-                  : 'text-[#777] border-transparent hover:text-[#bbb] hover:bg-[#222240]',
+                  ? 'text-foreground bg-background border-primary'
+                  : 'text-[#777] border-transparent hover:text-[#bbb] hover:bg-secondary/50',
               )}
               onClick={() => setSelected(i)}
             >
@@ -66,7 +66,7 @@ export function FileContentView() {
               <button
                 type="button"
                 aria-label={`Close ${name}`}
-                className="text-[10px] text-[#555] px-0.5 rounded-[2px] leading-none hover:text-[#ff6060] hover:bg-[#3a2020] cursor-pointer"
+                className="text-[10px] text-muted-foreground/60 px-0.5 rounded-[2px] leading-none hover:text-destructive hover:bg-red-950/30 cursor-pointer"
                 onClick={(e) => { e.stopPropagation(); closeTab(i) }}
               >
                 ✕
@@ -79,14 +79,14 @@ export function FileContentView() {
       {/* Content: error > loading > <pre> (matches file_content.rs match) */}
       {selectedTab === undefined ? null : (
         selectedTab.content === undefined && selectedTab.error !== undefined ? (
-          <div className="p-3 text-[#ff6060] font-bold">Error: {selectedTab.error}</div>
+          <div className="p-3 text-destructive font-bold">Error: {selectedTab.error}</div>
         ) : selectedTab.content === undefined ? (
-          <div className="flex-1 flex items-center justify-center gap-2 text-[#888] text-[14px]">
-            <span className="w-4 h-4 rounded-full border-2 border-[#333355] border-t-[#80a0ff] animate-spin" />
+          <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
+            <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
             Loading...
           </div>
         ) : (
-          <pre className="flex-1 overflow-auto p-3 font-mono text-[12px] leading-[1.6] text-[#c8c8e0] bg-[#1a1a2e] whitespace-pre m-0">
+          <pre className="flex-1 overflow-auto p-3 font-mono text-[12px] leading-[1.6] text-[#c8c8e0] bg-background whitespace-pre m-0">
             {selectedTab.content}
           </pre>
         )

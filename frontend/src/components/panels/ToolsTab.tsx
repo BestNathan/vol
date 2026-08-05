@@ -25,13 +25,13 @@ interface SystemTool {
 export function statusBadge(status: ToolCallStatus): { label: string; className: string } {
   switch (status) {
     case 'Success':
-      return { label: 'OK', className: 'text-[#40c040] bg-[#1a2a1a]' }
+      return { label: 'OK', className: 'text-emerald-400 bg-emerald-950/30' }
     case 'Error':
-      return { label: 'ERR', className: 'text-[#c04040] bg-[#2a1a1a]' }
+      return { label: 'ERR', className: 'text-destructive bg-red-950/30' }
     case 'Skipped':
-      return { label: 'SKIP', className: 'text-[#f0c040] bg-[#2a2a1a]' }
+      return { label: 'SKIP', className: 'text-yellow-400 bg-[#2a2a1a]' }
     case 'Running':
-      return { label: '...', className: 'text-[#888] bg-[#2a2a44]' }
+      return { label: '...', className: 'text-muted-foreground bg-secondary' }
   }
 }
 
@@ -116,7 +116,7 @@ export function ToolsTab() {
       {/* System Tools section */}
       <div className="mb-3">
         <div className="flex items-center justify-between mb-1">
-          <div className="px-2.5 py-1 text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]">
+          <div className="px-2.5 py-1 text-[12px] font-semibold text-muted-foreground uppercase tracking-[0.5px]">
             System Tools ({tools.length})
           </div>
           <Button
@@ -128,17 +128,17 @@ export function ToolsTab() {
             Refresh
           </Button>
         </div>
-        {loading && <div className="text-[12px] text-[#888] px-2">Loading...</div>}
+        {loading && <div className="text-[12px] text-muted-foreground px-2">Loading...</div>}
         {loadError && (
-          <div className="text-[12px] text-[#c04040] px-2 break-words">Error: {loadError}</div>
+          <div className="text-[12px] text-destructive px-2 break-words">Error: {loadError}</div>
         )}
         {/* Mobile: tool cards */}
         <div className="sm:hidden flex flex-col gap-2 mb-2">
           {tools.map((tool) => (
-            <div key={tool.name} className="rounded-lg border border-[#333355] bg-[#20203a] p-3">
+            <div key={tool.name} className="rounded-lg border border-border bg-secondary p-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="truncate text-[14px] font-bold text-[#e0e0e0]">{tool.name}</div>
+                  <div className="truncate text-[14px] font-bold text-foreground">{tool.name}</div>
                   {tool.description && (
                     <div className="mt-0.5 text-[11px] text-[#777] truncate">{tool.description}</div>
                   )}
@@ -156,11 +156,11 @@ export function ToolsTab() {
             <div key={tool.name} className="border-b border-[#2a2a44] py-1 px-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0 flex items-baseline gap-2">
-                  <span className="text-[13px] font-semibold text-[#e0e0e0] truncate">
+                  <span className="text-[13px] font-semibold text-foreground truncate">
                     {tool.name}
                   </span>
                   {tool.description && (
-                    <span className="text-[12px] text-[#888] truncate">- {tool.description}</span>
+                    <span className="text-[12px] text-muted-foreground truncate">- {tool.description}</span>
                   )}
                 </div>
                 <Button
@@ -181,7 +181,7 @@ export function ToolsTab() {
 
       {/* Call History section */}
       {calls.length === 0 ? (
-        <div className="flex items-center justify-center h-[200px] text-[#666] text-[14px]">
+        <div className="flex items-center justify-center h-[200px] text-muted-foreground/70 text-[14px]">
           {loading
             ? 'Loading tools...'
             : loadError
@@ -192,7 +192,7 @@ export function ToolsTab() {
         </div>
       ) : (
         <>
-          <div className="px-2.5 pt-1 pb-2 text-[12px] font-semibold text-[#888] uppercase tracking-[0.5px]">
+          <div className="px-2.5 pt-1 pb-2 text-[12px] font-semibold text-muted-foreground uppercase tracking-[0.5px]">
             Call History ({calls.length})
           </div>
           {/* Mobile: history cards */}
@@ -234,20 +234,20 @@ function CallHistoryItem({ entry, variant }: { entry: ToolCallEntry; variant: 'r
       <button
         type="button"
         onClick={toggle}
-        className="w-full text-left cursor-pointer rounded-lg border border-[#333355] bg-[#20203a] p-3 active:bg-[#2a2a44]"
+        className="w-full text-left cursor-pointer rounded-lg border border-border bg-secondary p-3 active:bg-secondary"
       >
         <span className="flex items-center gap-2 w-full">
-          <span className="text-[#555] text-[11px]">{entry.sequence}.</span>
-          <span className="font-semibold text-[13px] text-[#e0e0e0] truncate">
+          <span className="text-muted-foreground/60 text-[11px]">{entry.sequence}.</span>
+          <span className="font-semibold text-[13px] text-foreground truncate">
             [{entry.toolName}]
           </span>
           <span className={cn('text-[11px] px-1.5 py-0.5 rounded-[3px] font-semibold', badge.className)}>
             {badge.label}
           </span>
-          {duration !== '' && <span className="text-[11px] text-[#666] ml-auto">{duration}</span>}
+          {duration !== '' && <span className="text-[11px] text-muted-foreground/70 ml-auto">{duration}</span>}
         </span>
         {expanded && (
-          <span className="mt-2 pt-2 border-t border-[#2a2a44] block text-[12px] font-mono text-[#888] whitespace-pre-wrap break-all">
+          <span className="mt-2 pt-2 border-t border-[#2a2a44] block text-[12px] font-mono text-muted-foreground whitespace-pre-wrap break-all">
             <span className="text-[#6090ff] font-semibold font-sans">Input: </span>
             {entry.argPreview}
           </span>
@@ -261,18 +261,18 @@ function CallHistoryItem({ entry, variant }: { entry: ToolCallEntry; variant: 'r
       <button
         type="button"
         onClick={toggle}
-        className="flex items-center gap-2 px-2.5 py-2 w-full text-left cursor-pointer hover:bg-[#222240]"
+        className="flex items-center gap-2 px-2.5 py-2 w-full text-left cursor-pointer hover:bg-secondary/50"
       >
-        <span className="text-[#555] text-[11px] min-w-[24px]">{entry.sequence}.</span>
+        <span className="text-muted-foreground/60 text-[11px] min-w-[24px]">{entry.sequence}.</span>
         <span className="font-semibold text-[13px]">{entry.toolName}</span>
         <span className={cn('text-[11px] px-1.5 py-0.5 rounded-[3px] font-semibold', badge.className)}>
           {badge.label}
         </span>
-        {duration !== '' && <span className="text-[11px] text-[#888] ml-auto">{duration}</span>}
-        <span className="text-[10px] text-[#666] ml-1">▾</span>
+        {duration !== '' && <span className="text-[11px] text-muted-foreground ml-auto">{duration}</span>}
+        <span className="text-[10px] text-muted-foreground/70 ml-1">▾</span>
       </button>
       {expanded && (
-        <div className="px-2.5 pb-2 pl-[42px] text-[12px] font-mono text-[#888] bg-[#16162a] whitespace-pre-wrap break-all">
+        <div className="px-2.5 pb-2 pl-[42px] text-[12px] font-mono text-muted-foreground bg-[#16162a] whitespace-pre-wrap break-all">
           <span className="text-[#6090ff] font-semibold font-sans">Input: </span>
           {entry.argPreview}
         </div>

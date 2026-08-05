@@ -17,21 +17,21 @@ function ToolDetailModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-[#252540] border border-[#333355] rounded-lg p-4 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
+      <div className="bg-card border border-border rounded-lg p-4 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-bold mb-2">Tool: {entry.toolCall.toolName}</h3>
         <div className="mb-4">
-          <div className="text-xs text-[#888] mb-1">Arguments</div>
-          <pre className="bg-[#1a1a2e] p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap">
+          <div className="text-xs text-muted-foreground mb-1">Arguments</div>
+          <pre className="bg-background p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap">
             {entry.toolCall.fullArguments}
           </pre>
         </div>
         {entry.result && (
           <div>
-            <div className="text-xs text-[#888] mb-1">
+            <div className="text-xs text-muted-foreground mb-1">
               Result {entry.result.success
-                ? <span className="text-[#40c040]">OK</span>
-                : <span className="text-[#c04040]">ERR</span>}
+                ? <span className="text-emerald-400">OK</span>
+                : <span className="text-destructive">ERR</span>}
             </div>
             <Markdown content={entry.result.fullResult} />
           </div>
@@ -65,7 +65,7 @@ function TimelineEntry({
       {/* Left rail */}
       <div className="flex flex-col items-center w-5 flex-shrink-0 pt-1">
         {entry.type === 'UserInput'
-          ? <span className="text-[#80a0ff] text-xs">❯</span>
+          ? <span className="text-primary text-xs">❯</span>
           : <span className="w-2 h-2 rounded-full" style={{ backgroundColor: dotColor, boxShadow: `0 0 3px ${dotColor}` }} />
         }
         {index < entries.length - 1 && <div className="w-px flex-1 bg-[#333355] mt-1" />}
@@ -74,44 +74,44 @@ function TimelineEntry({
       {/* Content */}
       <div className="flex-1 min-w-0 pb-3">
         {entry.type === 'UserInput' && (
-          <div className="text-[#e0e0e0] whitespace-pre-wrap">{entry.text}</div>
+          <div className="text-foreground whitespace-pre-wrap">{entry.text}</div>
         )}
         {entry.type === 'Thinking' && (
-          <div className="text-[#888] italic text-sm">{entry.content || 'Thinking...'}</div>
+          <div className="text-muted-foreground italic text-sm">{entry.content || 'Thinking...'}</div>
         )}
         {entry.type === 'ContentStreaming' && (
           <Markdown content={entry.content} />
         )}
         {entry.type === 'ToolCall' && (
           <div className="flex items-center gap-2 min-w-0 cursor-pointer group" onClick={() => setDetailOpen(true)}>
-            <span className="text-[#f0c040] text-xs flex-shrink-0">[tool]</span>
-            <span className="text-[#e0e0e0] text-sm flex-shrink-0">{entry.toolName}</span>
-            <span className="text-[#888] text-xs truncate min-w-0">{entry.argPreview}</span>
-            <span className="hidden group-hover:inline text-[#888] text-xs">more »</span>
+            <span className="text-yellow-400 text-xs flex-shrink-0">[tool]</span>
+            <span className="text-foreground text-sm flex-shrink-0">{entry.toolName}</span>
+            <span className="text-muted-foreground text-xs truncate min-w-0">{entry.argPreview}</span>
+            <span className="hidden group-hover:inline text-muted-foreground text-xs">more »</span>
           </div>
         )}
         {entry.type === 'ToolResult' && (
           <div className="cursor-pointer" onClick={() => setDetailOpen(true)}>
-            <span className={`text-xs px-1 py-0.5 rounded mr-1 ${entry.success ? 'text-[#40c040] bg-[#1a2a1a]' : 'text-[#c04040] bg-[#2a1a1a]'}`}>
+            <span className={`text-xs px-1 py-0.5 rounded mr-1 ${entry.success ? 'text-emerald-400 bg-emerald-950/30' : 'text-destructive bg-red-950/30'}`}>
               {entry.success ? 'OK' : 'ERR'}
             </span>
-            <span className="text-[#e0e0e0] text-sm line-clamp-2">{entry.preview}</span>
+            <span className="text-foreground text-sm line-clamp-2">{entry.preview}</span>
           </div>
         )}
         {entry.type === 'AgentAnswer' && <Markdown content={entry.text} />}
         {entry.type === 'Error' && (
-          <div className="text-[#c04040] text-sm">{entry.message}</div>
+          <div className="text-destructive text-sm">{entry.message}</div>
         )}
         {entry.type === 'RunningBanner' && (
-          <div className="text-[#f0c040] text-xs italic">Agent running (run: {entry.runId.slice(0, 8)}...)</div>
+          <div className="text-yellow-400 text-xs italic">Agent running (run: {entry.runId.slice(0, 8)}...)</div>
         )}
         {entry.type === 'RunSummary' && (
-          <div className="text-[#888] text-xs">
+          <div className="text-muted-foreground text-xs">
             Done | {entry.iterations} iterations | {entry.toolCalls} tool calls | {entry.elapsedMs}ms
           </div>
         )}
         {entry.type === 'EntryCheckpoint' && (
-          <div className="text-[#888] text-xs italic">Checkpoint: {entry.reason}</div>
+          <div className="text-muted-foreground text-xs italic">Checkpoint: {entry.reason}</div>
         )}
       </div>
 
@@ -132,7 +132,7 @@ export function ConversationView() {
 
   if (entries.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[#666] text-sm">
+      <div className="flex-1 flex items-center justify-center text-muted-foreground/70 text-sm">
         Select an agent and start a conversation
       </div>
     )
@@ -151,7 +151,7 @@ export function ConversationView() {
           />
         ))}
         {isRunning && entries.length > 0 && entries[entries.length - 1].type === 'RunningBanner' && (
-          <div className="flex items-center gap-2 text-[#f0c040] text-xs">
+          <div className="flex items-center gap-2 text-yellow-400 text-xs">
             <span className="w-2 h-2 rounded-full bg-[#f0c040] animate-pulse" />
             Running...
           </div>

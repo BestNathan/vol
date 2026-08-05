@@ -119,12 +119,12 @@ export function NodeDetailPanel() {
       <button
         type="button"
         onClick={() => setViewingNodeDetail(null)}
-        className="self-start flex items-center gap-1 px-2 py-1 mb-3 text-xs text-[#80a0ff] bg-transparent border border-[#333355] rounded cursor-pointer hover:bg-[#2a2a44]"
+        className="self-start flex items-center gap-1 px-2 py-1 mb-3 text-xs text-primary bg-transparent border border-border rounded cursor-pointer hover:bg-secondary"
       >
         ← Back
       </button>
 
-      {loading && <div className="text-[#888] text-sm">Loading node detail...</div>}
+      {loading && <div className="text-muted-foreground text-sm">Loading node detail...</div>}
       {!loading && error && <div className="text-red-400 text-sm">Error: {error}</div>}
       {!loading && !error && node && (
         <>
@@ -144,20 +144,20 @@ function OverviewSection({ node }: { node: NodeListEntry }) {
   const lastSeenLabel = node.last_seen_at_ms != null ? formatAge(node.last_seen_at_ms) : 'never'
   return (
     <div className="mb-4">
-      <h3 className="text-sm font-semibold text-[#e0e0e0] mb-2 border-b border-[#333355] pb-1">Overview</h3>
+      <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">Overview</h3>
       <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-        <span className="text-[#888]">Node ID:</span>
-        <span className="text-[#e0e0e0] font-mono text-xs">{node.node_id}</span>
-        <span className="text-[#888]">Name:</span>
-        <span className="text-[#e0e0e0]">{node.name}</span>
-        <span className="text-[#888]">Version:</span>
-        <span className="text-[#e0e0e0]">v{node.version}</span>
-        <span className="text-[#888]">Status:</span>
+        <span className="text-muted-foreground">Node ID:</span>
+        <span className="text-foreground font-mono text-xs">{node.node_id}</span>
+        <span className="text-muted-foreground">Name:</span>
+        <span className="text-foreground">{node.name}</span>
+        <span className="text-muted-foreground">Version:</span>
+        <span className="text-foreground">v{node.version}</span>
+        <span className="text-muted-foreground">Status:</span>
         <span className={statusCls}>{node.status}</span>
-        <span className="text-[#888]">Last Seen:</span>
-        <span className="text-[#e0e0e0]">{lastSeenLabel}</span>
-        <span className="text-[#888]">Cap Revision:</span>
-        <span className="text-[#e0e0e0]">{node.capability_revision}</span>
+        <span className="text-muted-foreground">Last Seen:</span>
+        <span className="text-foreground">{lastSeenLabel}</span>
+        <span className="text-muted-foreground">Cap Revision:</span>
+        <span className="text-foreground">{node.capability_revision}</span>
       </div>
     </div>
   )
@@ -167,15 +167,15 @@ function OverviewSection({ node }: { node: NodeListEntry }) {
 function ResourceSection({ node }: { node: NodeListEntry }) {
   return (
     <div className="mb-4">
-      <h3 className="text-sm font-semibold text-[#e0e0e0] mb-2 border-b border-[#333355] pb-1">Resource Usage</h3>
+      <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">Resource Usage</h3>
       <div className="flex gap-6">
-        <div className="flex flex-col items-center px-4 py-2 rounded bg-[#1a1a2e] border border-[#2a2a44]">
-          <span className="text-2xl font-bold text-[#80a0ff]">{node.load.running}</span>
-          <span className="text-xs text-[#888]">Running</span>
+        <div className="flex flex-col items-center px-4 py-2 rounded bg-background border border-[#2a2a44]">
+          <span className="text-2xl font-bold text-primary">{node.load.running}</span>
+          <span className="text-xs text-muted-foreground">Running</span>
         </div>
-        <div className="flex flex-col items-center px-4 py-2 rounded bg-[#1a1a2e] border border-[#2a2a44]">
-          <span className="text-2xl font-bold text-[#f0c040]">{node.load.queued}</span>
-          <span className="text-xs text-[#888]">Queued</span>
+        <div className="flex flex-col items-center px-4 py-2 rounded bg-background border border-[#2a2a44]">
+          <span className="text-2xl font-bold text-yellow-400">{node.load.queued}</span>
+          <span className="text-xs text-muted-foreground">Queued</span>
         </div>
       </div>
     </div>
@@ -186,11 +186,11 @@ function ResourceSection({ node }: { node: NodeListEntry }) {
 function AgentsSection({ agents }: { agents: AgentListEntry[] }) {
   return (
     <div className="mb-4">
-      <h3 className="text-sm font-semibold text-[#e0e0e0] mb-2 border-b border-[#333355] pb-1">
+      <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">
         Agents on this Node ({agents.length})
       </h3>
       {agents.length === 0 ? (
-        <div className="text-[#888] text-sm">No agents on this node</div>
+        <div className="text-muted-foreground text-sm">No agents on this node</div>
       ) : (
         <div className="flex flex-col gap-1">
           {agents.map((agent) => (
@@ -206,11 +206,11 @@ function AgentRow({ agent }: { agent: AgentListEntry }) {
   const scopeStr = agent.scope ?? 'unknown'
   const scopeColor = scopeStr === 'repo' ? '#4080ff' : scopeStr === 'user' ? '#40c040' : '#888'
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 rounded border-b border-[#333355] hover:bg-[#2a2a44]">
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded border-b border-border hover:bg-secondary">
       <span className="w-2 h-2 rounded-full bg-[#40c040] flex-shrink-0" />
       <span className="flex-1 min-w-0">
         <span className="flex items-center gap-1.5">
-          <span className="text-[#e0e0e0] text-sm font-medium truncate">{agent.name}</span>
+          <span className="text-foreground text-sm font-medium truncate">{agent.name}</span>
           <span
             className="text-[9px] px-1 py-0.5 rounded-[2px] font-bold whitespace-nowrap flex-shrink-0"
             style={{ background: scopeColor, color: '#1a1a2e' }}
@@ -218,7 +218,7 @@ function AgentRow({ agent }: { agent: AgentListEntry }) {
             {scopeStr}
           </span>
         </span>
-        <span className="text-[#666] text-xs truncate block">{agent.description ?? ''}</span>
+        <span className="text-muted-foreground/70 text-xs truncate block">{agent.description ?? ''}</span>
       </span>
     </div>
   )
@@ -229,14 +229,14 @@ function CapabilitiesSection({ capabilities }: { capabilities: CapabilitySnapsho
   if (!capabilities) {
     return (
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-[#e0e0e0] mb-2 border-b border-[#333355] pb-1">Capabilities</h3>
-        <div className="text-[#888] text-sm">No capability data available</div>
+        <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">Capabilities</h3>
+        <div className="text-muted-foreground text-sm">No capability data available</div>
       </div>
     )
   }
   return (
     <div className="mb-4">
-      <h3 className="text-sm font-semibold text-[#e0e0e0] mb-2 border-b border-[#333355] pb-1">Capabilities</h3>
+      <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">Capabilities</h3>
       <div className="flex gap-4 flex-wrap">
         <CapBadge label="Agents" count={capabilities.agents.length} color="#40c040" />
         <CapBadge label="Tools" count={capabilities.tools.length} color="#80a0ff" />
@@ -245,12 +245,12 @@ function CapabilitiesSection({ capabilities }: { capabilities: CapabilitySnapsho
       </div>
       {capabilities.tools.length > 0 && (
         <div className="mt-3">
-          <div className="text-xs text-[#888] mb-1">Tools</div>
+          <div className="text-xs text-muted-foreground mb-1">Tools</div>
           <div className="flex flex-col gap-0.5">
             {capabilities.tools.map((tool) => (
-              <div key={tool.name} className="text-sm text-[#e0e0e0] px-2 py-0.5 rounded hover:bg-[#2a2a44]">
+              <div key={tool.name} className="text-sm text-foreground px-2 py-0.5 rounded hover:bg-secondary">
                 <span className="font-mono text-xs">{tool.name}</span>
-                {tool.description && <span className="text-[#666] text-xs ml-2">{tool.description}</span>}
+                {tool.description && <span className="text-muted-foreground/70 text-xs ml-2">{tool.description}</span>}
               </div>
             ))}
           </div>
@@ -258,12 +258,12 @@ function CapabilitiesSection({ capabilities }: { capabilities: CapabilitySnapsho
       )}
       {capabilities.skills.length > 0 && (
         <div className="mt-3">
-          <div className="text-xs text-[#888] mb-1">Skills</div>
+          <div className="text-xs text-muted-foreground mb-1">Skills</div>
           <div className="flex flex-col gap-0.5">
             {capabilities.skills.map((skill) => (
-              <div key={skill.name} className="text-sm text-[#e0e0e0] px-2 py-0.5 rounded hover:bg-[#2a2a44]">
+              <div key={skill.name} className="text-sm text-foreground px-2 py-0.5 rounded hover:bg-secondary">
                 <span className="font-mono text-xs">{skill.name}</span>
-                {skill.description && <span className="text-[#666] text-xs ml-2">{skill.description}</span>}
+                {skill.description && <span className="text-muted-foreground/70 text-xs ml-2">{skill.description}</span>}
               </div>
             ))}
           </div>
@@ -271,12 +271,12 @@ function CapabilitiesSection({ capabilities }: { capabilities: CapabilitySnapsho
       )}
       {capabilities.mcp_servers.length > 0 && (
         <div className="mt-3">
-          <div className="text-xs text-[#888] mb-1">MCP Servers</div>
+          <div className="text-xs text-muted-foreground mb-1">MCP Servers</div>
           <div className="flex flex-col gap-0.5">
             {capabilities.mcp_servers.map((mcp) => (
-              <div key={mcp.name} className="flex items-center gap-2 px-2 py-0.5 rounded hover:bg-[#2a2a44]">
-                <span className="font-mono text-xs text-[#e0e0e0]">{mcp.name}</span>
-                {mcp.status && <span className="text-xs text-[#888]">({mcp.status})</span>}
+              <div key={mcp.name} className="flex items-center gap-2 px-2 py-0.5 rounded hover:bg-secondary">
+                <span className="font-mono text-xs text-foreground">{mcp.name}</span>
+                {mcp.status && <span className="text-xs text-muted-foreground">({mcp.status})</span>}
               </div>
             ))}
           </div>
@@ -288,9 +288,9 @@ function CapabilitiesSection({ capabilities }: { capabilities: CapabilitySnapsho
 
 function CapBadge({ label, count, color }: { label: string; count: number; color: string }) {
   return (
-    <div className="flex flex-col items-center px-3 py-1.5 rounded bg-[#1a1a2e] border border-[#2a2a44]">
+    <div className="flex flex-col items-center px-3 py-1.5 rounded bg-background border border-[#2a2a44]">
       <span className="text-lg font-bold" style={{ color }}>{count}</span>
-      <span className="text-[10px] text-[#888]">{label}</span>
+      <span className="text-[10px] text-muted-foreground">{label}</span>
     </div>
   )
 }

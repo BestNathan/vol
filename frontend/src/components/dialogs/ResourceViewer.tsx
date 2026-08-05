@@ -58,18 +58,18 @@ export function ResourceViewer() {
           {d && !d.loading && d.content === undefined && (
             <Button size="sm" onClick={() => void handleRead()}>Read</Button>
           )}
-          {d?.loading && <div className="text-[13px] text-[#888]">Loading...</div>}
+          {d?.loading && <div className="text-[13px] text-muted-foreground">Loading...</div>}
           {d?.content !== undefined && (
-            <div className="rounded bg-[#252540] border border-[#3a3a55] p-2">
-              <pre className="text-[12px] text-[#e0e0e0] font-mono whitespace-pre-wrap break-all overflow-x-auto">
+            <div className="rounded bg-card border border-border p-2">
+              <pre className="text-[12px] text-foreground font-mono whitespace-pre-wrap break-all overflow-x-auto">
                 {d.content}
               </pre>
             </div>
           )}
           {d?.error !== undefined && (
-            <div className="rounded bg-[#2a1a1a] border border-[#c04040] p-2">
-              <div className="text-[11px] text-[#c04040] font-semibold mb-1">Error</div>
-              <div className="text-[12px] text-[#e0e0e0] break-words">{d.error}</div>
+            <div className="rounded bg-red-950/30 border border-destructive/50 p-2">
+              <div className="text-[11px] text-destructive font-semibold mb-1">Error</div>
+              <div className="text-[12px] text-foreground break-words">{d.error}</div>
             </div>
           )}
         </div>

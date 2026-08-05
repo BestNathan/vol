@@ -230,8 +230,8 @@ export function LogViewer() {
     return (
       <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-[#888] text-[14px]">Select a node to view logs</div>
-          <div className="text-[#666] text-[12px] mt-1">Select a node from the dropdown above.</div>
+          <div className="text-muted-foreground text-[14px]">Select a node to view logs</div>
+          <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
         </div>
       </div>
     )
@@ -241,8 +241,8 @@ export function LogViewer() {
     return (
       <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="text-[#ff6060] text-[14px]">Failed to load logs</div>
-          <div className="text-[#888] text-[12px] max-w-[300px] break-words">{error}</div>
+          <div className="text-destructive text-[14px]">Failed to load logs</div>
+          <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
           <Button variant="outline" size="sm" onClick={() => void loadRuns(nodeId)}>Retry</Button>
         </div>
       </div>
@@ -251,8 +251,8 @@ export function LogViewer() {
 
   if (loading && runs.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center gap-2 text-[#888] text-[14px]">
-        <span className="w-4 h-4 rounded-full border-2 border-[#333355] border-t-[#80a0ff] animate-spin" />
+      <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
+        <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
         Loading logs...
       </div>
     )
@@ -262,7 +262,7 @@ export function LogViewer() {
   if (selectedRun !== null) {
     return (
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <div className="flex items-center gap-3 p-2 border-b border-[#333355] flex-shrink-0">
+        <div className="flex items-center gap-3 p-2 border-b border-border flex-shrink-0">
           <button
             type="button"
             className="text-[#4080ff] hover:underline text-[12px] cursor-pointer whitespace-nowrap"
@@ -270,8 +270,8 @@ export function LogViewer() {
           >
             ← Back to run list
           </button>
-          <span className="text-[12px] text-[#888] font-mono truncate min-w-0">Log: {selectedRun}</span>
-          <label className="ml-auto flex items-center gap-1.5 text-[12px] text-[#888] whitespace-nowrap flex-shrink-0 cursor-pointer">
+          <span className="text-[12px] text-muted-foreground font-mono truncate min-w-0">Log: {selectedRun}</span>
+          <label className="ml-auto flex items-center gap-1.5 text-[12px] text-muted-foreground whitespace-nowrap flex-shrink-0 cursor-pointer">
             <input
               type="checkbox"
               className="accent-[#80a0ff] cursor-pointer"
@@ -282,16 +282,16 @@ export function LogViewer() {
           </label>
         </div>
         {loading && entries.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center gap-2 text-[#888] text-[14px]">
-            <span className="w-4 h-4 rounded-full border-2 border-[#333355] border-t-[#80a0ff] animate-spin" />
+          <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
+            <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
             Loading log entries...
           </div>
         ) : error !== null && entries.length === 0 ? (
           <div className="flex-1 flex items-center justify-center p-3">
-            <div className="text-[#ff6060] text-[13px] text-center break-words max-w-[300px]">{error}</div>
+            <div className="text-destructive text-[13px] text-center break-words max-w-[300px]">{error}</div>
           </div>
         ) : entries.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-[#666] text-[13px]">
+          <div className="flex-1 flex items-center justify-center text-muted-foreground/70 text-[13px]">
             No events in this run.
           </div>
         ) : (
@@ -304,7 +304,7 @@ export function LogViewer() {
               const color = entryColor(entry.event_type)
               return (
                 <div key={i} className="py-0.5 whitespace-nowrap">
-                  <span className="text-[#666]">[{entry.timestamp}] </span>
+                  <span className="text-muted-foreground/70">[{entry.timestamp}] </span>
                   <span className="font-bold" style={{ color }}>{entry.event_type}</span>
                   <span style={{ color }}> -- {entry.summary}</span>
                 </div>
@@ -320,7 +320,7 @@ export function LogViewer() {
   return (
     <div className="flex-1 overflow-y-auto p-2.5 font-mono text-[13px]">
       {runs.length === 0 ? (
-        <div className="flex items-center justify-center h-full text-[#666] text-[13px]">
+        <div className="flex items-center justify-center h-full text-muted-foreground/70 text-[13px]">
           No log files found.
         </div>
       ) : (
@@ -330,14 +330,14 @@ export function LogViewer() {
             {runs.map((run) => (
               <div
                 key={run.run_id}
-                className="rounded-lg border border-[#333355] bg-[#20203a] p-3 cursor-pointer active:bg-[#2a2a44]"
+                className="rounded-lg border border-border bg-secondary p-3 cursor-pointer active:bg-secondary"
                 onClick={() => void openRun(run.run_id)}
               >
                 <div className="flex items-center justify-between gap-2 min-w-0">
                   <span className="text-[#c0c0c0] truncate">{shortRunId(run.run_id)}</span>
-                  <span className="text-[#888] text-[11px] flex-shrink-0">{run.event_count} events</span>
+                  <span className="text-muted-foreground text-[11px] flex-shrink-0">{run.event_count} events</span>
                 </div>
-                <div className="mt-1 text-[11px] text-[#888] truncate">
+                <div className="mt-1 text-[11px] text-muted-foreground truncate">
                   {run.last_event} ({run.last_event_time})
                 </div>
               </div>
@@ -348,12 +348,12 @@ export function LogViewer() {
             {runs.map((run) => (
               <div
                 key={run.run_id}
-                className="py-0.5 text-[#ccc] cursor-pointer hover:bg-[#333] flex items-baseline gap-2 min-w-0"
+                className="py-0.5 text-foreground/80 cursor-pointer hover:bg-[#333] flex items-baseline gap-2 min-w-0"
                 onClick={() => void openRun(run.run_id)}
               >
                 <span className="text-[#c0c0c0] flex-shrink-0">{shortRunId(run.run_id)}</span>
-                <span className="text-[#888] flex-shrink-0">{run.event_count} events</span>
-                <span className="text-[#888] truncate">{run.last_event} ({run.last_event_time})</span>
+                <span className="text-muted-foreground flex-shrink-0">{run.event_count} events</span>
+                <span className="text-muted-foreground truncate">{run.last_event} ({run.last_event_time})</span>
               </div>
             ))}
           </div>

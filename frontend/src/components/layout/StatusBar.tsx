@@ -26,25 +26,25 @@ export function StatusBar() {
 
   const statusLabel = isRunning ? 'Running' : 'Idle'
   const statusCls = isRunning
-    ? 'flex items-center justify-between px-3 py-1 bg-[#2d2d44] text-[12px] font-mono flex-shrink-0 text-[#f0c040]'
-    : 'flex items-center justify-between px-3 py-1 bg-[#2d2d44] text-[12px] font-mono flex-shrink-0 text-[#80c080]'
+    ? 'flex items-center justify-between px-3 py-1 bg-[#2d2d44] text-[12px] font-mono flex-shrink-0 text-yellow-400'
+    : 'flex items-center justify-between px-3 py-1 bg-[#2d2d44] text-[12px] font-mono flex-shrink-0 text-emerald-400'
 
   return (
     <div className={statusCls}>
       <div className="flex items-center gap-1.5 overflow-hidden flex-nowrap sm:gap-1">
         <ConnectionIndicator />
         <NodesDropdown />
-        <span className="text-[#888] text-[11px] hidden sm:inline">Session: {sessionId.slice(0, 8)}</span>
-        <span className="text-[#888] text-[11px]">Run: {runCount}</span>
-        <span className="text-[#888] text-[11px] hidden sm:inline">Iter: {iteration}</span>
-        <span className="text-[#888] text-[11px]">Tools: {toolCallCount}</span>
-        <span className="text-[#888] text-[11px] hidden sm:inline">Time: {formatElapsed(elapsed)}</span>
-        {isRunning && <span className="px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#3a3a20] text-[#f0c040]">{statusLabel}</span>}
-        {!isRunning && <span className="px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#203a20] text-[#80c080]">{statusLabel}</span>}
-        {unsafeMode && <span className="px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#3a2020] text-[#ff4040]">!! UNSAFE</span>}
-        {exiting && <span className="px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-[#3a2020] text-[#ff4040]">QUITTING</span>}
+        <span className="text-muted-foreground text-[11px] hidden sm:inline">Session: {sessionId.slice(0, 8)}</span>
+        <span className="text-muted-foreground text-[11px]">Run: {runCount}</span>
+        <span className="text-muted-foreground text-[11px] hidden sm:inline">Iter: {iteration}</span>
+        <span className="text-muted-foreground text-[11px]">Tools: {toolCallCount}</span>
+        <span className="text-muted-foreground text-[11px] hidden sm:inline">Time: {formatElapsed(elapsed)}</span>
+        {isRunning && <span className="px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-yellow-950/30 text-yellow-400">{statusLabel}</span>}
+        {!isRunning && <span className="px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-emerald-950/30 text-emerald-400">{statusLabel}</span>}
+        {unsafeMode && <span className="px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-red-950/30 text-destructive">!! UNSAFE</span>}
+        {exiting && <span className="px-1.5 py-0.5 rounded-[3px] text-[11px] font-bold bg-red-950/30 text-destructive">QUITTING</span>}
       </div>
-      <div className="flex items-center gap-1 text-[11px] text-[#888]">
+      <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
         <span className="hidden sm:inline">UI: {__BUILD_TIME__}</span>
         <button
           type="button"

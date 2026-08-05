@@ -104,19 +104,19 @@ export function ContextPanel() {
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {loading ? (
-        <div className="flex items-center justify-center h-full text-[#666] text-[14px]">
+        <div className="flex items-center justify-center h-full text-muted-foreground/70 text-[14px]">
           Loading contributors...
         </div>
       ) : error !== null ? (
         <div className="flex flex-col items-center gap-3 flex-1 overflow-y-auto p-3">
-          <div className="text-[#ff6060] text-[14px]">Failed to load context</div>
-          <div className="text-[#888] text-[12px] max-w-[300px] break-words text-center">{error}</div>
+          <div className="text-destructive text-[14px]">Failed to load context</div>
+          <div className="text-muted-foreground text-[12px] max-w-[300px] break-words text-center">{error}</div>
           <Button variant="outline" size="sm" onClick={() => void loadContributors(selectedAgentId)}>
             Retry
           </Button>
         </div>
       ) : contributors.length === 0 ? (
-        <div className="flex items-center justify-center h-full text-[#888] text-[14px]">
+        <div className="flex items-center justify-center h-full text-muted-foreground text-[14px]">
           No contributors configured
         </div>
       ) : (
@@ -124,7 +124,7 @@ export function ContextPanel() {
           {contributors.map((c) => (
             <div
               key={c.name}
-              className="flex items-center gap-3 px-3 py-2 border-b border-[#2a2a44] cursor-pointer hover:bg-[#2a2a44]"
+              className="flex items-center gap-3 px-3 py-2 border-b border-[#2a2a44] cursor-pointer hover:bg-secondary"
               onClick={() => openSnapshot(c)}
             >
               <span
@@ -133,11 +133,11 @@ export function ContextPanel() {
               >
                 {c.anchor_zone}
               </span>
-              <span className="font-semibold text-[13px] text-[#e0e0e0] flex-1 min-w-0 truncate">
+              <span className="font-semibold text-[13px] text-foreground flex-1 min-w-0 truncate">
                 {c.name}
               </span>
-              <span className="text-[11px] text-[#888] flex-shrink-0">{c.estimated_tokens} tokens</span>
-              <span className="text-[11px] text-[#666] flex-shrink-0">{c.message_count} msg</span>
+              <span className="text-[11px] text-muted-foreground flex-shrink-0">{c.estimated_tokens} tokens</span>
+              <span className="text-[11px] text-muted-foreground/70 flex-shrink-0">{c.message_count} msg</span>
             </div>
           ))}
         </div>

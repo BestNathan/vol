@@ -171,7 +171,7 @@ function TreeNode({ node, depth }: { node: WorkspaceTreeNode; depth: number }) {
     return (
       <div>
         <div
-          className="group flex items-center gap-1 py-0.5 pr-1 pl-0 cursor-pointer text-[13px] whitespace-nowrap select-none rounded mx-1 hover:bg-[#2a2a44] active:bg-[#3a3a54]"
+          className="group flex items-center gap-1 py-0.5 pr-1 pl-0 cursor-pointer text-[13px] whitespace-nowrap select-none rounded mx-1 hover:bg-secondary active:bg-[#3a3a54]"
           style={{ paddingLeft: `${depth * 16 + 4}px` }}
           onClick={onDirClick}
         >
@@ -187,7 +187,7 @@ function TreeNode({ node, depth }: { node: WorkspaceTreeNode; depth: number }) {
           <span className="min-w-0 flex-1 overflow-hidden text-ellipsis text-[#8ab4ff] font-medium">{node.name}</span>
           <span
             title="Refresh"
-            className="ml-auto inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-[12px] text-[#777799] opacity-0 transition-all duration-150 hover:bg-[#33334f] hover:text-[#e0e0e0] group-hover:opacity-100"
+            className="ml-auto inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-[12px] text-[#777799] opacity-0 transition-all duration-150 hover:bg-[#33334f] hover:text-foreground group-hover:opacity-100"
             onClick={onRefresh}
           >
             ⟳
@@ -229,15 +229,15 @@ function TreeNode({ node, depth }: { node: WorkspaceTreeNode; depth: number }) {
 
   return (
     <div
-      className="flex items-center gap-1 py-0.5 pr-2 pl-0 cursor-pointer text-[13px] whitespace-nowrap select-none rounded mx-1 hover:bg-[#2a2a44] active:bg-[#3a3a54]"
+      className="flex items-center gap-1 py-0.5 pr-2 pl-0 cursor-pointer text-[13px] whitespace-nowrap select-none rounded mx-1 hover:bg-secondary active:bg-[#3a3a54]"
       style={{ paddingLeft: `${depth * 16 + 4}px` }}
       onClick={onFileClick}
     >
-      <span className="inline-flex items-center justify-center w-5 h-5 flex-shrink-0 text-[10px] text-[#666] invisible">▾</span>
+      <span className="inline-flex items-center justify-center w-5 h-5 flex-shrink-0 text-[10px] text-muted-foreground/70 invisible">▾</span>
       <span className="inline-flex items-center justify-center w-[18px] h-[18px] flex-shrink-0 text-[14px]">
         {fileIcon(node.name, false)}
       </span>
-      <span className="min-w-0 overflow-hidden text-ellipsis text-[#ccc]">{node.name}</span>
+      <span className="min-w-0 overflow-hidden text-ellipsis text-foreground/80">{node.name}</span>
     </div>
   )
 }
@@ -328,7 +328,7 @@ export function FileTree() {
           <button
             type="button"
             aria-label="Open file explorer"
-            className="sm:hidden flex h-full w-full cursor-pointer flex-col items-center gap-2 border-0 bg-transparent px-0 py-3 text-[#8b8baa] hover:bg-[#20203a] hover:text-[#e0e0e0]"
+            className="sm:hidden flex h-full w-full cursor-pointer flex-col items-center gap-2 border-0 bg-transparent px-0 py-3 text-[#8b8baa] hover:bg-secondary hover:text-foreground"
             onClick={() => setDrawerOpen(true)}
           >
             <span className="text-[16px] leading-none">📂</span>
@@ -343,7 +343,7 @@ export function FileTree() {
             <button
               type="button"
               aria-label="Close file explorer"
-              className="sm:hidden text-[#888] hover:text-[#e0e0e0] text-[16px] cursor-pointer"
+              className="sm:hidden text-muted-foreground hover:text-foreground text-[16px] cursor-pointer"
               onClick={() => setDrawerOpen(false)}
             >
               ✕
@@ -351,27 +351,27 @@ export function FileTree() {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto py-1">
             {!nodeId ? (
-              <div className="flex items-center justify-center h-full text-[#666] p-5 text-center text-[12px]">
+              <div className="flex items-center justify-center h-full text-muted-foreground/70 p-5 text-center text-[12px]">
                 No node selected
               </div>
             ) : rootError !== null && tree.children.length === 0 ? (
               <div className="flex flex-col items-center gap-3 p-4 text-center">
-                <div className="text-[#ff6060] text-[12px]">Failed to load files</div>
-                <div className="text-[#888] text-[11px] break-words">{rootError}</div>
+                <div className="text-destructive text-[12px]">Failed to load files</div>
+                <div className="text-muted-foreground text-[11px] break-words">{rootError}</div>
                 <button
                   type="button"
-                  className="text-[11px] text-[#80a0ff] hover:text-[#a0c0ff] cursor-pointer"
+                  className="text-[11px] text-primary hover:text-[#a0c0ff] cursor-pointer"
                   onClick={() => void loadRoot(nodeId)}
                 >
                   Retry
                 </button>
               </div>
             ) : rootLoading && tree.children.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-[#666] p-5 text-center text-[12px]">
+              <div className="flex items-center justify-center h-full text-muted-foreground/70 p-5 text-center text-[12px]">
                 Loading files...
               </div>
             ) : tree.children.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-[#666] p-5 text-center text-[12px]">
+              <div className="flex items-center justify-center h-full text-muted-foreground/70 p-5 text-center text-[12px]">
                 (empty)
               </div>
             ) : (

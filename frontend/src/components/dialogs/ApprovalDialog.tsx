@@ -59,31 +59,31 @@ export function ApprovalDialog() {
       aria-modal="true"
       aria-label="Tool approval required"
     >
-      <div className="bg-[#252540] border border-[#444466] rounded-lg p-3 sm:p-4 w-[95vw] max-w-[600px] sm:min-w-[400px] sm:w-[90vw] sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
-        <div className="text-[16px] font-bold text-[#e0e0e0] mb-3 border-b border-[#333355] pb-2">
+      <div className="bg-card border border-input rounded-lg p-3 sm:p-4 w-[95vw] max-w-[600px] sm:min-w-[400px] sm:w-[90vw] sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
+        <div className="text-[16px] font-bold text-foreground mb-3 border-b border-border pb-2">
           Tool Approval Required
         </div>
-        <div className="text-[#f0c040] font-bold text-[15px]">[!] {approval.toolName ?? 'unknown tool'}</div>
+        <div className="text-yellow-400 font-bold text-[15px]">[!] {approval.toolName ?? 'unknown tool'}</div>
         {approval.reason !== null && approval.reason !== '' && (
-          <div className="text-[#ccc] my-1.5">Reason: {approval.reason}</div>
+          <div className="text-foreground/80 my-1.5">Reason: {approval.reason}</div>
         )}
         {approval.arguments !== null && approval.arguments !== '' && (
-          <div className="font-mono text-[12px] text-[#888] bg-[#1a1a2e] px-2 py-1.5 rounded-md my-2 max-h-[100px] overflow-y-auto whitespace-pre-wrap">
+          <div className="font-mono text-[12px] text-muted-foreground bg-background px-2 py-1.5 rounded-md my-2 max-h-[100px] overflow-y-auto whitespace-pre-wrap">
             {approval.arguments}
           </div>
         )}
-        <div className="mt-3 flex gap-2 pt-2 border-t border-[#333355]">
+        <div className="mt-3 flex gap-2 pt-2 border-t border-border">
           <button
             type="button"
             onClick={() => void resolve(true)}
-            className="px-3 py-1.5 border-none rounded-md cursor-pointer text-[13px] bg-[#408040] text-[#e0e0e0] hover:bg-[#50a050]"
+            className="px-3 py-1.5 border-none rounded-md cursor-pointer text-[13px] bg-[#408040] text-foreground hover:bg-[#50a050]"
           >
             Approve
           </button>
           <button
             type="button"
             onClick={() => void resolve(false)}
-            className="px-3 py-1.5 border-none rounded-md cursor-pointer text-[13px] bg-[#804040] text-[#e0e0e0] hover:bg-[#905050]"
+            className="px-3 py-1.5 border-none rounded-md cursor-pointer text-[13px] bg-[#804040] text-foreground hover:bg-[#905050]"
           >
             Reject
           </button>

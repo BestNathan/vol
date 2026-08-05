@@ -14,7 +14,7 @@ export function Markdown({ content, throttle = 80 }: MarkdownProps) {
   const throttled = useThrottledValue(content, throttle)
 
   return (
-    <div className="text-[#e0e0e0] leading-[1.5] prose prose-invert max-w-none prose-sm">
+    <div className="text-foreground leading-[1.5] prose prose-invert max-w-none prose-sm">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[

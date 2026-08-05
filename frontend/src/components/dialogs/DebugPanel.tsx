@@ -52,16 +52,16 @@ export function DebugPanel() {
       onClick={close}
     >
       <div
-        className="bg-[#1a1a2e] border border-[#444] rounded-lg flex flex-col shadow-2xl w-[92vw] max-w-[640px] h-[85vh] sm:max-w-none sm:w-[420px] sm:h-full sm:rounded-none sm:border-0 sm:border-l"
+        className="bg-background border border-border rounded-lg flex flex-col shadow-2xl w-[92vw] max-w-[640px] h-[85vh] sm:max-w-none sm:w-[420px] sm:h-full sm:rounded-none sm:border-0 sm:border-l"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-2 border-b border-[#333] shrink-0">
           <div className="flex items-center gap-3">
-            <span className="text-[#e0e0e0] font-bold text-sm">Debug Panel</span>
+            <span className="text-foreground font-bold text-sm">Debug Panel</span>
             <div className="flex gap-1">
               <button
                 type="button"
-                className="px-3 py-1 text-[12px] font-semibold cursor-pointer border-b-2 border-[#80a0ff] text-[#e0e0e0]"
+                className="px-3 py-1 text-[12px] font-semibold cursor-pointer border-b-2 border-primary text-foreground"
               >
                 WS
               </button>
@@ -71,7 +71,7 @@ export function DebugPanel() {
             type="button"
             aria-label="Close debug panel"
             onClick={close}
-            className="text-[#888] hover:text-white text-lg leading-none px-1 cursor-pointer"
+            className="text-muted-foreground hover:text-white text-lg leading-none px-1 cursor-pointer"
           >
             ×
           </button>
@@ -91,7 +91,7 @@ function WsTab({ messages }: { messages: DebugMessage[] }) {
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto font-mono text-xs">
         {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-[#666] text-sm">
+          <div className="flex items-center justify-center h-full text-muted-foreground/70 text-sm">
             No messages yet. Open the panel while the agent is active to capture WS traffic.
           </div>
         ) : (
@@ -106,7 +106,7 @@ function WsTab({ messages }: { messages: DebugMessage[] }) {
           ))
         )}
       </div>
-      <div className="px-3 py-1.5 border-t border-[#333] text-[10px] text-[#666] shrink-0 flex items-center justify-between">
+      <div className="px-3 py-1.5 border-t border-[#333] text-[10px] text-muted-foreground/70 shrink-0 flex items-center justify-between">
         <span>{messages.length} messages</span>
         <span>Recording since page load</span>
       </div>
@@ -131,17 +131,17 @@ function WsMessageRow({
 
   return (
     <div
-      className="border-b border-[#222] hover:bg-[#222240] cursor-pointer"
+      className="border-b border-[#222] hover:bg-secondary/50 cursor-pointer"
       onClick={onToggle}
     >
       <div className="flex items-center gap-2 px-3 py-1.5">
-        <span className="text-[#555] w-[100px] shrink-0">{formatElapsed(message.elapsedMs)}</span>
+        <span className="text-muted-foreground/60 w-[100px] shrink-0">{formatElapsed(message.elapsedMs)}</span>
         <span style={{ color: arrowColor, fontWeight: 'bold' }}>{arrow}</span>
-        <span className="text-[#ccc] font-bold truncate">{message.method}</span>
+        <span className="text-foreground/80 font-bold truncate">{message.method}</span>
       </div>
       {isExpanded && (
         <div className="px-3 pb-2 pl-[120px]">
-          <pre className="text-[#888] text-[11px] bg-[#111128] rounded p-2 whitespace-pre-wrap break-all max-h-[300px] overflow-y-auto">
+          <pre className="text-muted-foreground text-[11px] bg-[#111128] rounded p-2 whitespace-pre-wrap break-all max-h-[300px] overflow-y-auto">
             {formatJsonPretty(message.payload)}
           </pre>
         </div>

@@ -3,7 +3,7 @@
 // ControlPlane mode. Fetches the node list from the CP via control.node_list,
 // refreshes whenever the dropdown opens (plus a 10 s interval while open so
 // status dots and load counts stay live). Port of nodes_dropdown.rs.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { getControlClient } from '@/lib/panel-client'
 import { dpPool } from '@/lib/dp-pool'
@@ -30,33 +30,51 @@ export function NodesDropdown() {
   const [open, setOpen] = useState(false)
   const [nodes, setNodes] = useState<NodeListEntry[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+
+  // Find the active node's name for display in the trigger button.
+  const activeNode = nodes.find(n => n.node_id === activeNodeId)
 
   const loadNodes = useCallback(async () => {
+    setLoading(true)
     try {
       const res = await getControlClient().call<RpcMethods['control.node_list']['result']>('control.node_list')
       setNodes(res.nodes ?? [])
       setError(null)
     } catch (err) {
       setError(errMsg(err))
+    } finally {
+      setLoading(false)
     }
   }, [])
 
-  // Fetch once on mount; refresh on every open and every 10 s while open.
-  useEffect(() => { void loadNodes() }, [loadNodes])
+  // Fetch on open + every 10 s while open (skip in DataPlane mode).
   useEffect(() => {
-    if (!open) return
+    if (!open || serverMode !== 'ControlPlane') return
     void loadNodes()
     const timer = setInterval(() => { void loadNodes() }, 10_000)
     return () => clearInterval(timer)
-  }, [open, loadNodes])
+  }, [open, serverMode, loadNodes])
+
+  // Close on Escape, return focus to trigger button.
+  useEffect(() => {
+    if (!open) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        buttonRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [open])
 
   // Only meaningful when connected to the control plane.
   if (serverMode !== 'ControlPlane') return null
 
   const handleSelect = (node: NodeListEntry) => {
     if (!isNodeSelectable(node)) return
-    // Create (or reuse) the direct DP connection for this node, then make it
-    // the active node for all panel RPCs.
     dpPool.getOrCreate(node.node_id, node.ws_url!)
     setActiveNodeId(node.node_id)
     setOpen(false)
@@ -70,27 +88,33 @@ export function NodesDropdown() {
   return (
     <div className="relative inline-block">
       <button
+        ref={buttonRef}
         type="button"
-        title="Select data-plane node"
+        title={activeNode ? `Active: ${activeNode.name}` : 'Select data-plane node'}
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1 px-2 py-0.5 text-[11px] rounded hover:bg-[#3a3a55] cursor-pointer text-[#e0e0e0] bg-transparent border-none whitespace-nowrap"
+        className="flex items-center gap-1 px-2 py-0.5 text-xs rounded hover:bg-border cursor-pointer text-foreground bg-transparent border-none whitespace-nowrap"
       >
-        ▾ Nodes({nodes.length})
+        {open ? '▴' : '▾'} {activeNode ? activeNode.name : `Nodes(${nodes.length})`}
       </button>
       {open && (
         <>
-          {/* Transparent overlay — clicking outside the dropdown closes it.
-              Fixed positioning escapes the StatusBar's overflow-hidden. */}
+          {/* Transparent overlay — clicking outside closes the dropdown. */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
-            className="fixed right-4 top-12 min-w-[280px] bg-[#1e1e36] border border-[#333355] rounded shadow-lg z-50 max-h-[400px] overflow-y-auto"
+            className="absolute left-0 top-full mt-1 min-w-[280px] max-w-[calc(100vw-1rem)] bg-card border border-border rounded shadow-lg z-50 max-h-[400px] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {error && (
-              <div className="px-3 py-2 text-[#ff6060] text-xs">Failed to load nodes: {error}</div>
+            {loading && nodes.length === 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 text-muted-foreground text-xs">
+                <span className="w-3 h-3 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+                Loading nodes...
+              </div>
             )}
-            {!error && nodes.length === 0 && (
-              <div className="px-3 py-2 text-[#888] text-xs">No nodes available</div>
+            {error && (
+              <div className="px-3 py-2 text-destructive text-xs">Failed to load nodes: {error}</div>
+            )}
+            {!loading && !error && nodes.length === 0 && (
+              <div className="px-3 py-2 text-muted-foreground text-xs">No nodes available</div>
             )}
             {nodes.map((node) => {
               const selectable = isNodeSelectable(node)
@@ -104,37 +128,37 @@ export function NodesDropdown() {
                   onClick={() => handleSelect(node)}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelect(node) }}
                   className={
-                    'flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-[#333355] last:border-b-0 ' +
+                    'flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border last:border-b-0 ' +
                     (selectable
-                      ? (selected ? 'bg-[#2a2a55]' : 'hover:bg-[#2a2a44]')
+                      ? (selected ? 'bg-primary/20' : 'hover:bg-secondary')
                       : 'opacity-50 cursor-not-allowed')
                   }
                 >
-                  {/* Status dot: green = online, grey = offline */}
-                  <span className={'w-2 h-2 rounded-full flex-shrink-0 ' + (node.status === 'online' ? 'bg-green-500' : 'bg-[#666]')} />
+                  {/* Status dot: green = online, red = offline */}
+                  <span
+                    className={'w-2 h-2 rounded-full flex-shrink-0 ' + (node.status === 'online' ? 'bg-emerald-500 shadow-[0_0_4px] shadow-emerald-500/50' : 'bg-destructive shadow-[0_0_4px] shadow-destructive/50')}
+                  />
                   <span className="flex-1 min-w-0">
                     <span className="flex items-center gap-2">
-                      {/* Node name — opens the NodeDetailPanel (stopPropagation
-                          so the row click doesn't also select the node). */}
                       <span
                         title="Click to view node detail"
                         onClick={(e) => { e.stopPropagation(); handleViewDetail(node.node_id) }}
-                        className="text-[#e0e0e0] text-sm font-medium truncate cursor-pointer hover:text-[#80a0ff]"
+                        className="text-foreground text-sm font-medium truncate cursor-pointer hover:text-primary"
                       >
                         {node.name}
                       </span>
-                      {selected && <span className="text-[#80c080] text-xs flex-shrink-0">✓</span>}
+                      {selected && <span className="text-emerald-400 text-xs flex-shrink-0">✓</span>}
                     </span>
-                    <span className="text-[#888] text-xs truncate block">
+                    <span className="text-muted-foreground text-xs truncate block">
                       {node.node_id} · v{node.version}
                     </span>
                   </span>
                   <span className="flex-shrink-0 text-right">
-                    <span className="block text-[#888] text-xs">
+                    <span className="block text-muted-foreground text-xs">
                       R:{node.load.running} Q:{node.load.queued}
                     </span>
                     {node.agent_count != null && (
-                      <span className="block text-[#666] text-xs">{node.agent_count} agents</span>
+                      <span className="block text-muted-foreground/70 text-xs">{node.agent_count} agents</span>
                     )}
                   </span>
                 </div>

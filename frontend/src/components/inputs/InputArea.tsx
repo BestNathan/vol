@@ -53,6 +53,16 @@ export function InputArea() {
   const submit = useCallback(() => {
     const input = text.trim()
     if (!input || isRunning || !selectedAgentId) return
+    // Optimistic UserInput: append immediately so the user sees their message
+    // even before the backend sends agent_start (which can take 20s+ during
+    // MCP warm-up). If the submit fails we replace it with an Error entry.
+    const map = new Map(conversationMap)
+    const conv = map.get(selectedAgentId) ?? { entries: [], autoScroll: true }
+    const userEntry = { type: 'UserInput' as const, text: input }
+    conv.entries.push(userEntry)
+    map.set(selectedAgentId, { entries: [...conv.entries], autoScroll: conv.autoScroll })
+    setConversationMap(map)
+
     // Attribute the upcoming run to this agent (cleared on agent_start).
     setPendingSubmitAgent(selectedAgentId)
     setText('')
@@ -62,11 +72,19 @@ export function InputArea() {
         setPendingSubmitAgent(null)
         setText(input)
         const message = (err as { message?: string } | null)?.message ?? String(err)
-        const map = new Map(conversationMap)
-        const conv = map.get(selectedAgentId) ?? { entries: [], autoScroll: true }
-        conv.entries.push({ type: 'Error', message: `Submit failed: ${message}` })
-        map.set(selectedAgentId, conv)
-        setConversationMap(map)
+        // Replace the optimistic UserInput with an Error entry
+        const map2 = new Map(conversationMap)
+        const conv2 = map2.get(selectedAgentId) ?? { entries: [], autoScroll: true }
+        const idx = conv2.entries.findIndex(
+          e => e.type === 'UserInput' && e.text === input && e === userEntry
+        )
+        if (idx !== -1) {
+          conv2.entries[idx] = { type: 'Error', message: `Submit failed: ${message}` }
+        } else {
+          conv2.entries.push({ type: 'Error', message: `Submit failed: ${message}` })
+        }
+        map2.set(selectedAgentId, { entries: [...conv2.entries], autoScroll: conv2.autoScroll })
+        setConversationMap(map2)
       })
   }, [text, isRunning, selectedAgentId, setPendingSubmitAgent, conversationMap, setConversationMap])
 
@@ -110,8 +128,8 @@ export function InputArea() {
   // the user cannot send a new message before resolving the dialog.
   if (approvalPending) {
     return (
-      <div className="border-t border-[#333355] p-2.5 bg-[#252540] flex-shrink-0">
-        <div className="text-[#f0c040] text-[13px]">
+      <div className="border-t border-border p-2.5 bg-card flex-shrink-0">
+        <div className="text-yellow-400 text-[13px]">
           Tool approval pending — resolve the request before sending a new message.
         </div>
       </div>
@@ -119,7 +137,7 @@ export function InputArea() {
   }
 
   return (
-    <div className="border-t border-[#333355] p-2.5 bg-[#252540] flex-shrink-0 sm:px-2 sm:py-1.5">
+    <div className="border-t border-border p-2.5 bg-card flex-shrink-0 sm:px-2 sm:py-1.5">
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -127,20 +145,20 @@ export function InputArea() {
         disabled={isRunning}
         placeholder="Type a message to the agent..."
         rows={2}
-        className="w-full bg-[#1a1a2e] text-[#e0e0e0] border border-[#444466] rounded-md px-2 py-1.5 text-[16px] sm:text-[14px] font-sans resize-none min-h-[40px] max-h-[120px] outline-none focus:border-[#80a0ff] disabled:opacity-50"
+        className="w-full bg-background text-foreground border border-input rounded-md px-2 py-1.5 text-[16px] sm:text-[14px] font-sans resize-none min-h-[40px] max-h-[120px] outline-none focus:border-primary disabled:opacity-50"
       />
-      <div className="mt-1 flex items-center justify-between text-[10px] sm:text-[11px] text-[#666]">
+      <div className="mt-1 flex items-center justify-between text-[10px] sm:text-[11px] text-muted-foreground/70">
         {isRunning ? (
           <div className="flex items-center gap-2">
-            <span className="text-[#f0c040]">Running... (input disabled)</span>
+            <span className="text-yellow-400">Running... (input disabled)</span>
             <button
               type="button"
               onClick={handleCancel}
               disabled={!runId}
               className={cn(
-                'text-[#f0c040] cursor-pointer',
-                'hover:text-[#ff8080] hover:underline',
-                'disabled:text-[#666] disabled:cursor-not-allowed disabled:hover:no-underline',
+                'text-yellow-400 cursor-pointer',
+                'hover:text-destructive/80 hover:underline',
+                'disabled:text-muted-foreground/70 disabled:cursor-not-allowed disabled:hover:no-underline',
               )}
             >
               Cancel
@@ -148,16 +166,16 @@ export function InputArea() {
           </div>
         ) : (
           <span>
-            <span className="text-[#80a0ff] font-bold">Enter</span> Send&nbsp;&nbsp;
-            <span className="text-[#80a0ff] font-bold">Shift+Enter</span> Newline&nbsp;&nbsp;
-            <span className="text-[#80a0ff] font-bold">Esc×2</span> Clear
+            <span className="text-primary font-bold">Enter</span> Send&nbsp;&nbsp;
+            <span className="text-primary font-bold">Shift+Enter</span> Newline&nbsp;&nbsp;
+            <span className="text-primary font-bold">Esc×2</span> Clear
           </span>
         )}
         <button
           type="button"
           onClick={handleNewSession}
           disabled={isRunning}
-          className="text-[#555] hover:text-[#c0c040] hover:underline cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="text-muted-foreground/60 hover:text-yellow-400/70 hover:underline cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           + New Session
         </button>

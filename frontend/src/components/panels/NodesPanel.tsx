@@ -44,18 +44,18 @@ export function NodesPanel() {
 
   return (
     <div className="flex flex-col h-full p-3 overflow-auto">
-      <h2 className="text-lg font-bold mb-3 text-[#e0e0e0]">Nodes</h2>
+      <h2 className="text-lg font-bold mb-3 text-foreground">Nodes</h2>
       {error && <div className="text-red-400 text-sm">Error: {error}</div>}
-      {!error && nodes.length === 0 && <div className="text-[#888] text-sm">No nodes connected</div>}
+      {!error && nodes.length === 0 && <div className="text-muted-foreground text-sm">No nodes connected</div>}
       {!error && nodes.map((node) => (
-        <div key={node.node_id} className="flex items-center gap-3 p-2 border-b border-[#333355] hover:bg-[#2a2a44] rounded">
+        <div key={node.node_id} className="flex items-center gap-3 p-2 border-b border-border hover:bg-secondary rounded">
           <span className={'w-2 h-2 rounded-full flex-shrink-0 ' + (node.status === 'online' ? 'bg-green-500' : 'bg-[#666]')} />
           <span className="flex-1 min-w-0">
-            <span className="block text-[#e0e0e0] text-sm font-medium truncate">{node.name}</span>
-            <span className="block text-[#888] text-xs">id: {node.node_id} · v{node.version}</span>
+            <span className="block text-foreground text-sm font-medium truncate">{node.name}</span>
+            <span className="block text-muted-foreground text-xs">id: {node.node_id} · v{node.version}</span>
           </span>
           {node.agent_count != null && (
-            <span className="text-[#888] text-xs flex-shrink-0">{node.agent_count} agents</span>
+            <span className="text-muted-foreground text-xs flex-shrink-0">{node.agent_count} agents</span>
           )}
         </div>
       ))}

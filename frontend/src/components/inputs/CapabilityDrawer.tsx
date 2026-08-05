@@ -209,15 +209,15 @@ export function CapabilityDrawer() {
       <div className="fixed inset-0 bg-black/50 z-40" onClick={closeDrawer} />
 
       {/* Drawer panel — full width on mobile, fixed 320px right panel on desktop */}
-      <div className="fixed right-0 top-0 h-full w-full sm:w-80 bg-[#1a1a2e] border-l border-[#3a3a55] z-50 flex flex-col shadow-2xl">
+      <div className="fixed right-0 top-0 h-full w-full sm:w-80 bg-background border-l border-border z-50 flex flex-col shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-3 border-b border-[#3a3a55] flex-shrink-0">
-          <span className="text-[14px] font-semibold text-[#e0e0e0] pl-1">Capabilities</span>
+        <div className="flex items-center justify-between px-3 py-3 border-b border-border flex-shrink-0">
+          <span className="text-[14px] font-semibold text-foreground pl-1">Capabilities</span>
           <button
             type="button"
             onClick={closeDrawer}
             aria-label="Close capabilities drawer"
-            className="text-[18px] text-[#888] hover:text-[#ccc] leading-none pr-1 cursor-pointer"
+            className="text-[18px] text-muted-foreground hover:text-foreground/80 leading-none pr-1 cursor-pointer"
           >
             ✕
           </button>
@@ -225,17 +225,17 @@ export function CapabilityDrawer() {
 
         <div className="flex-1 overflow-y-auto">
           {!selectedAgentId ? (
-            <div className="p-4 text-[#888] text-[13px] text-center">No agent selected</div>
+            <div className="p-4 text-muted-foreground text-[13px] text-center">No agent selected</div>
           ) : !loaded ? (
-            <div className="p-4 text-[#888] text-[13px] text-center">Loading...</div>
+            <div className="p-4 text-muted-foreground text-[13px] text-center">Loading...</div>
           ) : loadError ? (
-            <div className="p-4 text-[#c04040] text-[13px] text-center">Error: {loadError}</div>
+            <div className="p-4 text-destructive text-[13px] text-center">Error: {loadError}</div>
           ) : (
             <>
               {/* Search */}
               <div className="px-3 py-2">
                 <div className="relative">
-                  <span className="absolute inset-y-0 left-3 flex items-center text-[#666] text-[12px] pointer-events-none">
+                  <span className="absolute inset-y-0 left-3 flex items-center text-muted-foreground/70 text-[12px] pointer-events-none">
                     🔍
                   </span>
                   <input
@@ -243,7 +243,7 @@ export function CapabilityDrawer() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search capabilities..."
-                    className="w-full pl-8 pr-2 py-1.5 bg-[#12121e] border border-[#2a2a44] rounded text-[16px] sm:text-[12px] text-[#ccc] placeholder:text-[#555] focus:outline-none focus:border-[#80a0ff]"
+                    className="w-full pl-8 pr-2 py-1.5 bg-[#12121e] border border-[#2a2a44] rounded text-[16px] sm:text-[12px] text-foreground/80 placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary"
                   />
                 </div>
               </div>
@@ -300,18 +300,18 @@ function SectionGroup({
       <button
         type="button"
         onClick={onCollapse}
-        className="flex items-center justify-between w-full hover:bg-[#2a2a44] rounded px-1 py-1 cursor-pointer"
+        className="flex items-center justify-between w-full hover:bg-secondary rounded px-1 py-1 cursor-pointer"
       >
-        <span className="text-[11px] font-semibold text-[#888] uppercase tracking-[0.5px]">
+        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.5px]">
           {title} ({filtered.length})
         </span>
-        <span className="text-[10px] text-[#666]">{isCollapsed ? '▸' : '▾'}</span>
+        <span className="text-[10px] text-muted-foreground/70">{isCollapsed ? '▸' : '▾'}</span>
       </button>
 
       {/* Items */}
       {!isCollapsed && (
         filtered.length === 0 ? (
-          <div className="text-[11px] text-[#666] px-1 py-1 w-full">No matching capabilities</div>
+          <div className="text-[11px] text-muted-foreground/70 px-1 py-1 w-full">No matching capabilities</div>
         ) : (
           filtered.map(({ name, isBase }) => (
             <CapabilityToggle
@@ -339,7 +339,7 @@ function CapabilityToggle({
   onToggle: () => void
 }) {
   return (
-    <div className="flex items-center gap-2 py-1 px-1 hover:bg-[#222240] rounded w-full">
+    <div className="flex items-center gap-2 py-1 px-1 hover:bg-secondary/50 rounded w-full">
       {/* Toggle switch */}
       <button
         type="button"
@@ -360,7 +360,7 @@ function CapabilityToggle({
         />
       </button>
       {/* Name — blue when NOT in the base list (a capability the user added) */}
-      <span className={cn('text-[12px] flex-1 truncate', isBase ? 'text-[#e0e0e0]' : 'text-[#80a0ff]')}>
+      <span className={cn('text-[12px] flex-1 truncate', isBase ? 'text-foreground' : 'text-primary')}>
         {name}
       </span>
       {/* Saving feedback: spinner → checkmark → (ages out) / error */}
@@ -368,10 +368,10 @@ function CapabilityToggle({
         <span className="text-[#c0a040] text-[12px] animate-spin flex-shrink-0 inline-block" aria-label={`Saving ${name}`}>◌</span>
       )}
       {savingState?.kind === 'saved' && (
-        <span className="text-[#40c040] text-[12px] flex-shrink-0" aria-label={`Saved ${name}`}>✓</span>
+        <span className="text-emerald-400 text-[12px] flex-shrink-0" aria-label={`Saved ${name}`}>✓</span>
       )}
       {savingState?.kind === 'error' && (
-        <span className="text-[#c04040] text-[12px] cursor-help flex-shrink-0" title={savingState.message} aria-label={`Error: ${savingState.message}`}>⚠</span>
+        <span className="text-destructive text-[12px] cursor-help flex-shrink-0" title={savingState.message} aria-label={`Error: ${savingState.message}`}>⚠</span>
       )}
     </div>
   )

@@ -114,6 +114,7 @@ function AppInner() {
     return () => {
       running = false
       reconnectAbortRef.current?.abort()
+      client.close()
     }
   }, [setConnectionState, setServerMode, setWsUrl, setWsConnected, setWsLastError, setDebugPanel, startReconnect])
 

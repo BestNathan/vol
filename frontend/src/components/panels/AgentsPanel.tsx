@@ -40,14 +40,14 @@ function AgentCard({
       className={cn(
         'flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer border w-full sm:w-auto text-left',
         isSelected
-          ? 'border-[#80a0ff] bg-[#1a2a44]'
-          : 'border-[#2a2a44] bg-[#1e1e36] hover:bg-[#222240]'
+          ? 'border-primary bg-[#1a2a44]'
+          : 'border-[#2a2a44] bg-card hover:bg-secondary/50'
       )}
     >
       <span className="w-2 h-2 rounded-full bg-[#40c040] flex-shrink-0" />
       <span className="flex flex-col min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="font-semibold text-[13px] text-[#e0e0e0] truncate">{agent.name}</span>
+          <span className="font-semibold text-[13px] text-foreground truncate">{agent.name}</span>
           <span
             className="text-[9px] px-1 py-0.5 rounded-[2px] font-bold whitespace-nowrap flex-shrink-0"
             style={{ background: scopeColor, color: '#1a1a2e' }}
@@ -55,7 +55,7 @@ function AgentCard({
             {scopeStr}
           </span>
         </span>
-        <span className="text-[11px] text-[#666] truncate">{agent.description ?? ''}</span>
+        <span className="text-[11px] text-muted-foreground/70 truncate">{agent.description ?? ''}</span>
       </span>
     </button>
   )
@@ -165,8 +165,8 @@ export function AgentsPanel() {
     return (
       <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-[#888] text-[14px]">Select a node to view agents</div>
-          <div className="text-[#666] text-[12px] mt-1">Select a node from the dropdown above to view its agents.</div>
+          <div className="text-muted-foreground text-[14px]">Select a node to view agents</div>
+          <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above to view its agents.</div>
         </div>
       </div>
     )
@@ -174,8 +174,8 @@ export function AgentsPanel() {
 
   if (loading && agents.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center gap-2 text-[#888] text-[14px]">
-        <span className="w-4 h-4 rounded-full border-2 border-[#333355] border-t-[#80a0ff] animate-spin" />
+      <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
+        <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
         Loading agents...
       </div>
     )
@@ -185,8 +185,8 @@ export function AgentsPanel() {
     return (
       <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="text-[#ff6060] text-[14px]">Failed to load agents</div>
-          <div className="text-[#888] text-[12px] max-w-[300px] break-words">{error}</div>
+          <div className="text-destructive text-[14px]">Failed to load agents</div>
+          <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
           <Button variant="outline" size="sm" onClick={() => void loadAgents()}>Retry</Button>
         </div>
       </div>
@@ -195,7 +195,7 @@ export function AgentsPanel() {
 
   if (agents.length === 0) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center text-[#888] text-[14px]">
+      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center text-muted-foreground text-[14px]">
         No agents available
       </div>
     )
@@ -207,7 +207,7 @@ export function AgentsPanel() {
           across sub-tab switches while an agent is selected. */}
       <CapabilityDrawer />
       {/* Card grid — scrollable, stacks on mobile, wraps on desktop */}
-      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 p-2 border-b border-[#333355] overflow-y-auto max-h-[200px] min-h-[60px] flex-shrink-0">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 p-2 border-b border-border overflow-y-auto max-h-[200px] min-h-[60px] flex-shrink-0">
         {agents.map((agent) => (
           <AgentCard
             key={agent.id}
@@ -220,9 +220,9 @@ export function AgentsPanel() {
 
       {/* Info bar: selected agent name + description */}
       {selectedAgent && (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1a2a44] border-b border-[#333355] flex-shrink-0">
-          <span className="font-bold text-[13px] text-[#e0e0e0] truncate">{selectedAgent.name}</span>
-          <span className="text-[12px] text-[#888] truncate hidden sm:inline">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1a2a44] border-b border-border flex-shrink-0">
+          <span className="font-bold text-[13px] text-foreground truncate">{selectedAgent.name}</span>
+          <span className="text-[12px] text-muted-foreground truncate hidden sm:inline">
             {selectedAgent.description ?? ''}
           </span>
         </div>
@@ -234,12 +234,12 @@ export function AgentsPanel() {
           onValueChange={(v) => setSubTab(v as AgentSubTab)}
           className="flex-1 min-h-0 flex flex-col overflow-hidden"
         >
-          <TabsList className="h-9 justify-start w-full gap-0 p-0 rounded-none bg-[#252540] border-b border-[#333355] flex-shrink-0 overflow-x-auto">
+          <TabsList className="h-9 justify-start w-full gap-0 p-0 rounded-none bg-card border-b border-border flex-shrink-0 overflow-x-auto">
             {SUB_TABS.map((t) => (
               <TabsTrigger
                 key={t.id}
                 value={t.id}
-                className="h-9 rounded-none px-3 py-1.5 text-[12px] font-semibold border-b-2 border-transparent data-[state=active]:bg-[#1a1a2e] data-[state=active]:text-[#e0e0e0] data-[state=active]:border-[#80a0ff] data-[state=active]:shadow-none"
+                className="h-9 rounded-none px-3 py-1.5 text-[12px] font-semibold border-b-2 border-transparent data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:border-primary data-[state=active]:shadow-none"
               >
                 {t.label}
               </TabsTrigger>
@@ -258,11 +258,11 @@ export function AgentsPanel() {
             <ContextPanel />
           </TabsContent>
           <TabsContent value="tasks" className="flex-1 min-h-0 mt-0">
-            <div className="flex items-center justify-center h-full text-[#666] text-sm">Tasks — coming soon</div>
+            <div className="flex items-center justify-center h-full text-muted-foreground/70 text-sm">Tasks — coming soon</div>
           </TabsContent>
         </Tabs>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-[#666] text-[14px]">
+        <div className="flex-1 flex items-center justify-center text-muted-foreground/70 text-[14px]">
           Select an agent to start
         </div>
       )}

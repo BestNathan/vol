@@ -213,7 +213,7 @@ export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
       <DialogContent className="sm:max-w-[900px]">
         <DialogHeader>
           <DialogTitle>
-            <span className="text-[15px] font-semibold text-[#e0e0e0]">Dependency Graph — t{centerId}</span>
+            <span className="text-[15px] font-semibold text-foreground">Dependency Graph — t{centerId}</span>
           </DialogTitle>
         </DialogHeader>
         <div className="flex flex-col min-h-0 max-h-[70vh]">
@@ -273,28 +273,28 @@ export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
           </div>
           {/* Detail panel for the clicked node */}
           {selected !== null && (
-            <div className="mt-2 pt-2 border-t border-[#333355] text-[12px] text-[#ccc]">
+            <div className="mt-2 pt-2 border-t border-border text-[12px] text-foreground/80">
               {selectedTask ? (
                 <>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-[#80a0ff]">t{selectedTask.id}</span>
+                    <span className="font-mono text-primary">t{selectedTask.id}</span>
                     <span
                       className="px-1 rounded text-[10px] font-bold"
                       style={{ background: statusColor(selectedTask.status), color: '#10101a' }}
                     >
                       {selectedTask.status}
                     </span>
-                    <span className="text-[#e0e0e0]">{selectedTask.subject}</span>
+                    <span className="text-foreground">{selectedTask.subject}</span>
                     {selectedTask.assignee && (
-                      <span className="text-[#666] ml-auto">{selectedTask.assignee}</span>
+                      <span className="text-muted-foreground/70 ml-auto">{selectedTask.assignee}</span>
                     )}
                   </div>
                   {selectedTask.description !== '' && (
-                    <div className="mt-1 text-[#aaa]">{selectedTask.description}</div>
+                    <div className="mt-1 text-foreground/70">{selectedTask.description}</div>
                   )}
                 </>
               ) : (
-                <div className="text-[#888]">t{selected} — task not loaded (outside current filter)</div>
+                <div className="text-muted-foreground">t{selected} — task not loaded (outside current filter)</div>
               )}
             </div>
           )}

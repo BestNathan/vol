@@ -76,10 +76,8 @@ export function handleUiEvent(event: UiEvent, runId: string) {
         statusMap[pendingAgent] = { status: 'running', runId }
         store.set(agentStatusMapAtom, statusMap)
 
-        // Append UserInput
-        updateConversation(pendingAgent, conv => {
-          conv.entries.push({ type: 'UserInput', text: event.input })
-        })
+        // The UserInput was already optimistically appended by InputArea
+        // — do not duplicate it here.
       }
       break
     }
