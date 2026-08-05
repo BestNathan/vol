@@ -49,13 +49,27 @@ export function NodesDropdown() {
     }
   }, [])
 
-  // Fetch on open + every 10 s while open (skip in DataPlane mode).
+  // Fetch on mount; refresh on open and every 10 s while open.
+  useEffect(() => {
+    if (serverMode !== 'ControlPlane') return
+    void loadNodes()
+  }, [serverMode, loadNodes])
   useEffect(() => {
     if (!open || serverMode !== 'ControlPlane') return
     void loadNodes()
     const timer = setInterval(() => { void loadNodes() }, 10_000)
     return () => clearInterval(timer)
   }, [open, serverMode, loadNodes])
+
+  // Auto-select first online node with ws_url after nodes load.
+  useEffect(() => {
+    if (activeNodeId || nodes.length === 0) return
+    const first = nodes.find(n => isNodeSelectable(n))
+    if (first) {
+      dpPool.getOrCreate(first.node_id, first.ws_url!)
+      setActiveNodeId(first.node_id)
+    }
+  }, [nodes, activeNodeId, setActiveNodeId])
 
   // Close on Escape, return focus to trigger button.
   useEffect(() => {

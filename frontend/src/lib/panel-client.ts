@@ -68,15 +68,16 @@ export function getAgentClient(): JsonRpcClient {
   const serverMode: ServerType = store.get(serverModeAtom)
   const activeNodeId: string | null = store.get(activeNodeIdAtom)
 
-  if (serverMode === 'ControlPlane' && activeNodeId) {
+  if (serverMode === 'ControlPlane') {
+    if (!activeNodeId) {
+      throw new Error('No data-plane node selected — select a node from the dropdown')
+    }
     const dpClient = pool.get(activeNodeId)
     if (dpClient) return dpClient
-    // No DP connection yet for this node — the caller should create one first.
-    // Fall through to return the CP client so the caller at least gets an
-    // RPC error rather than a thrown exception.
+    throw new Error(`Data-plane connection not available for node "${activeNodeId}" — the node may be offline`)
   }
 
-  // DataPlane mode OR CP mode without an active DP connection
+  // DataPlane mode: the main connection IS the DP connection.
   return controlClient
 }
 
