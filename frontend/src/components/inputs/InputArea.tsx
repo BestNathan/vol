@@ -3,7 +3,7 @@
 // and above the status bar region of the conversation tab. Port of the Dioxus
 // input_area.rs with the Cancel-button gap fix.
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { useAtomValue, useSetAtom } from 'jotai'
+import { useAtomValue, useSetAtom, getDefaultStore } from 'jotai'
 import { getPanelClient } from '@/lib/panel-client'
 import { cn } from '@/lib/utils'
 import { selectedAgentIdAtom, agentStatusMapAtom } from '@/stores/agents'
@@ -66,8 +66,16 @@ export function InputArea() {
     // Attribute the upcoming run to this agent (cleared on agent_start).
     setPendingSubmitAgent(selectedAgentId)
     setText('')
+    const store = getDefaultStore()
+    const sessionId = store.get(sessionIdAtom)
     getPanelClient()
-      .call<{ run_id: string }>('agent.submit', { input, target: selectedAgentId })
+      .call<{ run_id: string }>('agent.submit', {
+        input: {
+          parts: [{ type: 'text', text: input }],
+          metadata: { session_id: sessionId },
+        },
+        target: selectedAgentId,
+      })
       .catch((err) => {
         setPendingSubmitAgent(null)
         setText(input)
