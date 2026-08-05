@@ -128,7 +128,7 @@ export function ConversationView() {
   const isRunning = useAtomValue(isRunningAtom)
   // Trigger auto-scroll on entry count AND content changes (entries ref always
   // changes on every content_delta because updateConversation recreates the array).
-  const { containerRef, scrollToBottom, autoScrollRef } = useAutoScroll(
+  const { containerRef, scrollToBottom, isAtBottom } = useAutoScroll(
     [conv.entries.length, conv.entries]
   )
 
@@ -168,7 +168,7 @@ export function ConversationView() {
         type="button"
         onClick={scrollToBottom}
         className="absolute bottom-3 right-4 z-10 bg-primary text-primary-foreground rounded-full w-8 h-8 flex items-center justify-center shadow-lg opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
-        style={{ display: autoScrollRef.current ? 'none' : 'flex' }}
+        style={{ display: isAtBottom ? 'none' : 'flex' }}
         aria-label="Scroll to bottom"
       >
         ↓
