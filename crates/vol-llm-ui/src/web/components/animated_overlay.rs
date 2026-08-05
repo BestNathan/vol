@@ -53,6 +53,15 @@ pub fn AnimatedOverlay(
     children: Element,
 ) -> Element {
     let mut phase: Signal<OverlayPhase> = use_signal(|| OverlayPhase::Hidden);
+    // Last `open` value the effect acted on. The effect also re-runs on
+    // `phase` changes (it reads `phase`), so this guard makes sure it only
+    // reacts to real `open` transitions — otherwise a backdrop-click close
+    // (which sets `phase = Exiting` while `open` is still true) would be
+    // immediately overwritten by `next_phase(Exiting, true) = Entering`,
+    // replacing the exit animation with a re-enter after ~1 frame.
+    // Initialized to `!open` so a dialog that mounts already-open still
+    // runs the enter animation on its first effect run.
+    let mut prev_open = use_signal(|| !open);
 
     // React to `open` prop changes: kick off enter or exit animation.
     // NOTE: `open` is a plain (non-signal) prop, so we bridge it into the
@@ -60,6 +69,15 @@ pub fn AnimatedOverlay(
     // re-run on `phase` changes and the overlay would never respond to
     // external `open` toggles (Dioxus 0.6 does not track plain prop reads).
     use_effect(use_reactive((&open,), move |(open,)| {
+        // No change in the `open` prop — this run was triggered by a phase
+        // change (or the prev_open bookkeeping write), not by an external
+        // open/close. Leave the phase machine alone so an in-flight exit
+        // animation is not replaced by a re-enter.
+        if open == *prev_open.read() {
+            return;
+        }
+        prev_open.set(open);
+
         let next = next_phase(*phase.read(), open);
         if next == *phase.read() {
             return;
@@ -82,7 +100,14 @@ pub fn AnimatedOverlay(
                 let mut ph = phase;
                 wasm_bindgen_futures::spawn_local(async move {
                     TimeoutFuture::new(150).await;
-                    ph.set(OverlayPhase::Hidden);
+                    ph.with_mut(|p| {
+                        // Only finish hiding if still exiting — a re-open
+                        // during the exit animation restarts Entering and
+                        // must not be cut short.
+                        if *p == OverlayPhase::Exiting {
+                            *p = OverlayPhase::Hidden;
+                        }
+                    });
                 });
             }
             _ => {}
@@ -123,7 +148,15 @@ pub fn AnimatedOverlay(
                     let cb = on_close.clone();
                     wasm_bindgen_futures::spawn_local(async move {
                         TimeoutFuture::new(150).await;
-                        ph.set(OverlayPhase::Hidden);
+                        ph.with_mut(|p| {
+                            // Guarded like the effect's exit timer: only
+                            // finish hiding if still exiting — a re-open
+                            // during the exit animation restarted Entering
+                            // and must not be yanked to Hidden.
+                            if *p == OverlayPhase::Exiting {
+                                *p = OverlayPhase::Hidden;
+                            }
+                        });
                         cb.call(());
                     });
                 }

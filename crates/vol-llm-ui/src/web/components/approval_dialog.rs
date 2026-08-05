@@ -30,6 +30,12 @@ pub fn ApprovalDialog() -> Element {
         AnimatedOverlay {
             open: has_pending,
             // No-op: approval requires an explicit Approve/Reject click.
+            // A backdrop click only plays the exit animation. Because
+            // `open` (has_pending) never flips here, AnimatedOverlay's
+            // prev_open guard keeps the phase machine from re-entering,
+            // so the dialog just fades out and stays hidden while the
+            // pending request is preserved for HITL (clearing it would
+            // lose the approval).
             on_close: move |_| {},
             div { class: "bg-[#252540] border border-[#444466] rounded-lg p-3 sm:p-4 w-[95vw] max-w-[600px] sm:min-w-[400px] sm:w-[90vw] sm:max-w-[500px] max-h-[80vh] overflow-y-auto",
                 div { class: "text-[16px] font-bold text-[#e0e0e0] mb-3 border-b border-[#333355] pb-2", "Tool Approval Required" }

@@ -29,6 +29,7 @@ fn role_color(role: &str) -> &'static str {
 /// Modal dialog showing contributor message snapshot.
 #[component]
 fn ContextDialog(
+    open: bool,
     contributor_name: String,
     messages: Vec<ContextMessageEntry>,
     loading: bool,
@@ -36,7 +37,7 @@ fn ContextDialog(
 ) -> Element {
     rsx! {
         AnimatedOverlay {
-            open: true, // This component only renders when dialog_open is true
+            open,
             on_close: move |_| on_close.call(()),
             div {
                 class: "w-[95vw] sm:w-[700px] max-h-[80vh] flex flex-col overflow-hidden bg-[#1a1a2e] border border-[#3a3a55] rounded-lg",
@@ -242,20 +243,20 @@ pub fn ContextPanel() -> Element {
                 }
             }
 
-            // Dialog
-            if dialog_open {
-                ContextDialog {
-                    contributor_name: dialog_name,
-                    messages: dialog_messages,
-                    loading: dialog_loading,
-                    on_close: move |_| {
-                        ctx_state.with_mut(|s| {
-                            s.dialog_open = false;
-                            s.dialog_contributor_name = String::new();
-                            s.dialog_messages = Vec::new();
-                        });
-                    },
-                }
+            // Dialog — always mounted so AnimatedOverlay can play the exit
+            // animation; visibility is driven by `dialog_open`.
+            ContextDialog {
+                open: dialog_open,
+                contributor_name: dialog_name,
+                messages: dialog_messages,
+                loading: dialog_loading,
+                on_close: move |_| {
+                    ctx_state.with_mut(|s| {
+                        s.dialog_open = false;
+                        s.dialog_contributor_name = String::new();
+                        s.dialog_messages = Vec::new();
+                    });
+                },
             }
         }
     }

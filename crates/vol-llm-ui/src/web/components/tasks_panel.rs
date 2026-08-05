@@ -407,15 +407,20 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
                     }
                 }
             }
-            if let Some(center) = graph_target() {
-                {
-                    let mut graph_close = graph_target;
-                    rsx! {
-                        TaskDepGraph {
-                            tasks: tasks.clone(),
-                            center,
-                            on_close: move |_| graph_close.set(None),
-                        }
+            {
+                // Always mounted so the graph overlay can play its exit
+                // animation; `open` drives visibility through AnimatedOverlay.
+                // When no task is targeted the overlay is hidden, so a
+                // placeholder center (0) is harmless.
+                let graph_open = graph_target().is_some();
+                let graph_center = graph_target().unwrap_or(0);
+                let mut graph_close = graph_target;
+                rsx! {
+                    TaskDepGraph {
+                        tasks: tasks.clone(),
+                        center: graph_center,
+                        open: graph_open,
+                        on_close: move |_| graph_close.set(None),
                     }
                 }
             }

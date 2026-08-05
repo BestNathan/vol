@@ -184,7 +184,12 @@ const PAD: i32 = 30;
 
 /// Modal showing the dependency graph centered on `center`.
 #[component]
-pub fn TaskDepGraph(tasks: Vec<TaskEntry>, center: u64, on_close: EventHandler<()>) -> Element {
+pub fn TaskDepGraph(
+    tasks: Vec<TaskEntry>,
+    center: u64,
+    open: bool,
+    on_close: EventHandler<()>,
+) -> Element {
     let selected = use_signal(|| None::<u64>);
 
     let index: HashMap<u64, &TaskEntry> = tasks.iter().map(|t| (t.id, t)).collect();
@@ -217,12 +222,10 @@ pub fn TaskDepGraph(tasks: Vec<TaskEntry>, center: u64, on_close: EventHandler<(
 
     rsx! {
         AnimatedOverlay {
-            // The component is only mounted while `graph_target` is Some in
-            // tasks_panel, so `open` is effectively always true here. The
-            // parent unmounts us via `on_close`; backdrop clicks still play
-            // the exit animation because AnimatedOverlay handles that phase
-            // internally before invoking `on_close`.
-            open: true,
+            // tasks_panel keeps this component mounted and drives `open`
+            // from `graph_target`, so AnimatedOverlay can play the exit
+            // animation before the parent clears the target via `on_close`.
+            open,
             on_close: move |_| on_close.call(()),
             div {
                 class: "bg-[#252540] border border-[#444466] rounded-lg p-3 sm:p-4 w-[95vw] max-w-[900px] max-h-[85vh] flex flex-col overflow-hidden",
