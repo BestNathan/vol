@@ -1,6 +1,7 @@
 //! UI component re-exports for the Dioxus web frontend.
 
 pub mod agents_panel;
+pub mod animated_overlay;
 pub mod app;
 pub mod approval_dialog;
 pub mod capability_bar;
@@ -33,6 +34,7 @@ pub mod tools_tab;
 pub mod workspace;
 
 pub use agents_panel::AgentsPanel;
+pub use animated_overlay::AnimatedOverlay;
 pub use app::App;
 pub use approval_dialog::ApprovalDialog;
 pub use capability_bar::CapabilityBar;
