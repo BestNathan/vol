@@ -7,6 +7,7 @@ import { TabBar } from '@/components/layout/TabBar'
 import { TabContent } from '@/components/layout/TabContent'
 import { ApprovalDialog } from '@/components/dialogs/ApprovalDialog'
 import { DebugPanel } from '@/components/dialogs/DebugPanel'
+import { Tabs } from '@/components/ui/tabs'
 import { FileTree } from '@/components/panels/FileTree'
 import { NodesPanel } from '@/components/panels/NodesPanel'
 import { JsonRpcClient } from '@/lib/jsonrpc-client'
@@ -19,7 +20,7 @@ import {
   connectionStateAtom, serverModeAtom, wsUrlAtom,
   wsConnectedAtom, wsLastErrorAtom,
 } from '@/stores/connection'
-import { activeNodeIdAtom, LOCAL_NODE_ID, viewingNodeDetailAtom } from '@/stores/ui'
+import { activeNodeIdAtom, activeTabAtom, LOCAL_NODE_ID, viewingNodeDetailAtom } from '@/stores/ui'
 import { debugPanelAtom } from '@/stores/dialogs'
 
 function AppInner() {
@@ -30,6 +31,7 @@ function AppInner() {
   const setWsLastError = useSetAtom(wsLastErrorAtom)
   const setActiveNodeId = useSetAtom(activeNodeIdAtom)
   const viewingNodeDetail = useAtomValue(viewingNodeDetailAtom)
+  const activeTab = useAtomValue(activeTabAtom)
   const setDebugPanel = useSetAtom(debugPanelAtom)
   const clientRef = useRef<JsonRpcClient | null>(null)
   const debugStartRef = useRef<number | null>(null)
@@ -135,10 +137,10 @@ function AppInner() {
         ) : (
           <div className="flex flex-1 overflow-hidden relative">
             <FileTree />
-            <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
+            <Tabs value={activeTab} className="flex-1 min-h-0 overflow-hidden flex flex-col">
               <TabBar />
               <TabContent />
-            </div>
+            </Tabs>
           </div>
         )}
       </div>
