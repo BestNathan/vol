@@ -10,7 +10,7 @@ crates/
 ├── vol-agent-server/     # Agent server binary (data-plane + control-plane)
 ├── vol-llm-runtime/      # AgentRuntime — single source of truth for tools/skills/MCP/providers
 ├── vol-llm-agent-protocol/  # JSON-RPC protocol, transport, handler abstractions
-├── vol-llm-ui/           # Dioxus WASM web frontend (use make web-* commands)
+├── vol-llm-ui/           # DEPRECATED (2026-08): Dioxus WASM web frontend — replaced by React frontend/. TUI + shared state still maintained.
 ├── vol-llm-tui/          # Terminal UI
 ├── vol-llm-agent/        # ReAct agent orchestration
 ├── vol-llm-mcp/          # MCP client
@@ -69,15 +69,15 @@ make coverage-threshold PKG=vol-agent-server PCT=80      # gate check
 make coverage-html PKG=vol-llm-agent-protocol             # browser report
 ```
 
-### Web Dev (3 terminals)
+### Web Dev
+
+The active web frontend is the **React app at `frontend/`** (not the deprecated Dioxus WASM crate).
 
 ```bash
-make web-css         # Tailwind watch
-make web-dev         # Dioxus WASM on :8080
+make web-dev         # React dev server on :5173 (WS proxy to :3001)
 make web-backend     # cargo-watch agent server on :3001
+make web-build       # Production React build
 ```
-
-Pre-flight: `which dx && npm ci --prefix crates/vol-llm-ui`
 
 ### Docker
 

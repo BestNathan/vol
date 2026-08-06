@@ -1,4 +1,11 @@
 /// Shared state model for all UI frontends.
+///
+/// # Deprecation
+///
+/// The Rust/Dioxus web frontend (`web` feature, `crates/vol-llm-ui/`) is **deprecated**
+/// as of 2026-08-06. The active web UI is the React frontend at `frontend/`.
+///
+/// The TUI frontend (`tui` feature) and shared `state` module remain maintained.
 pub mod state;
 
 // TUI-only modules
