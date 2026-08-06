@@ -112,7 +112,7 @@ export function ToolDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
-      <DialogContent className="sm:max-w-[760px] w-[95vw] max-h-[85vh] overflow-hidden flex flex-col p-0">
+      <DialogContent className="sm:max-w-[760px] w-[95vw] h-[92dvh] sm:h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
         {/* Header */}
         <DialogHeader className="px-4 py-3 border-b border-border flex-shrink-0">
           <DialogTitle className="flex items-center gap-2 text-[14px] font-semibold">

@@ -2,7 +2,7 @@
 // Tools tab: DP node tool listing with search filter and inline Run actions.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAtom } from 'jotai'
-import { Search, Wrench } from 'lucide-react'
+import { ChevronRight, Search, Wrench } from 'lucide-react'
 import { getPanelClient } from '@/lib/panel-client'
 import { systemToolsAtom, toolsLoadingAtom } from '@/stores/tools'
 import { ToolDetailDialog, type ToolCallOutcome } from '@/components/dialogs/ToolDetailDialog'
@@ -141,7 +141,7 @@ export function ToolsTab() {
         {loading ? (
           <div className="space-y-2 py-1">
             {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-[44px] w-full rounded-md" />
+              <Skeleton key={i} className="h-[52px] w-full rounded-lg" />
             ))}
           </div>
         ) : loadError ? (
@@ -160,7 +160,7 @@ export function ToolsTab() {
             No tools match "{search}"
           </div>
         ) : (
-          <div className="space-y-0.5">
+          <div className="space-y-1.5">
             {filteredTools.map((tool) => (
               <ToolRow key={tool.name} tool={tool} onClick={() => setDialogTool(tool)} />
             ))}
@@ -186,19 +186,22 @@ function ToolRow({ tool, onClick }: { tool: SystemTool; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-secondary/50 transition-colors w-full text-left cursor-pointer"
+      className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-transparent hover:border-border hover:bg-secondary/40 active:bg-secondary/60 transition-all w-full text-left cursor-pointer group"
     >
-      <Wrench className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+      <div className="flex items-center justify-center h-7 w-7 rounded-md bg-secondary/80 flex-shrink-0 group-hover:bg-secondary transition-colors">
+        <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
+      </div>
       <div className="min-w-0 flex-1">
         <span className="text-[13px] font-semibold text-foreground truncate block">
           {tool.name}
         </span>
         {tool.description && (
-          <div className="text-[11px] text-muted-foreground truncate" title={tool.description}>
+          <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={tool.description}>
             {tool.description}
           </div>
         )}
       </div>
+      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-all flex-shrink-0" />
     </button>
   )
 }
