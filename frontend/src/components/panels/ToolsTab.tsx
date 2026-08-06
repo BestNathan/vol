@@ -129,6 +129,7 @@ export function ToolsTab() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60 pointer-events-none" />
           <Input
             type="text"
+            aria-label="Search tools"
             placeholder="Search tools..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -207,7 +208,7 @@ function ToolRow({ tool, onRun }: { tool: SystemTool; onRun: () => void }) {
       <Button
         variant="secondary"
         size="sm"
-        className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity flex-shrink-0"
         onClick={onRun}
       >
         Run
