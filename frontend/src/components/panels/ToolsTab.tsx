@@ -5,7 +5,7 @@ import { useAtom } from 'jotai'
 import { Search, Wrench } from 'lucide-react'
 import { getPanelClient } from '@/lib/panel-client'
 import { systemToolsAtom, toolsLoadingAtom } from '@/stores/tools'
-import { ToolCallDialog, type ToolCallOutcome } from '@/components/dialogs/ToolCallDialog'
+import { ToolDetailDialog, type ToolCallOutcome } from '@/components/dialogs/ToolDetailDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -162,17 +162,15 @@ export function ToolsTab() {
         ) : (
           <div className="space-y-0.5">
             {filteredTools.map((tool) => (
-              <ToolRow key={tool.name} tool={tool} onRun={() => setDialogTool(tool)} />
+              <ToolRow key={tool.name} tool={tool} onClick={() => setDialogTool(tool)} />
             ))}
           </div>
         )}
 
-        {/* Run dialog */}
-        <ToolCallDialog
+        {/* Tool detail dialog */}
+        <ToolDetailDialog
           open={dialogTool !== null}
-          toolName={dialogTool?.name ?? ''}
-          description={dialogTool?.description || undefined}
-          schema={toolSchemaToRecord(dialogTool?.parameters)}
+          tool={dialogTool}
           onClose={() => setDialogTool(null)}
           onExecute={executeTool}
         />
@@ -183,48 +181,25 @@ export function ToolsTab() {
 
 // ── Sub-components ────────────────────────────────────────────────────────
 
-function ToolRow({ tool, onRun }: { tool: SystemTool; onRun: () => void }) {
+function ToolRow({ tool, onClick }: { tool: SystemTool; onClick: () => void }) {
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-secondary/50 transition-colors group">
-      {/* Icon */}
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-secondary/50 transition-colors w-full text-left cursor-pointer"
+    >
       <Wrench className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-
-      {/* Name + description */}
       <div className="min-w-0 flex-1">
         <span className="text-[13px] font-semibold text-foreground truncate block">
           {tool.name}
         </span>
         {tool.description && (
-          <div
-            className="text-[11px] text-muted-foreground truncate"
-            title={tool.description}
-          >
+          <div className="text-[11px] text-muted-foreground truncate" title={tool.description}>
             {tool.description}
           </div>
         )}
       </div>
-
-      {/* Run button — visible on hover (desktop) */}
-      <Button
-        variant="secondary"
-        size="sm"
-        className="opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity flex-shrink-0"
-        onClick={onRun}
-      >
-        Run
-      </Button>
-    </div>
+    </button>
   )
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function asRecord(v: unknown): Record<string, unknown> | undefined {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-    ? (v as Record<string, unknown>)
-    : undefined
-}
-
-function toolSchemaToRecord(params: unknown): Record<string, unknown> | undefined {
-  return asRecord(params)
-}
