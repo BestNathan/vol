@@ -8,11 +8,12 @@
 import { test, expect } from '@playwright/test'
 import { installMockBackend, selectAgent } from './helpers/mock-backend.js'
 
-// The drawer panel is a fixed right-side container holding the "Capabilities"
-// header (src/components/inputs/CapabilityDrawer.tsx). It returns null from
-// the React tree while closed, so this locator matches nothing on load.
+// The drawer panel is a shadcn Sheet (Radix Dialog, role="dialog") holding the
+// "Capabilities" header (src/components/inputs/CapabilityDrawer.tsx). It is
+// unmounted from the React tree while closed, so this locator matches nothing
+// on load.
 const drawerPanel = (page) =>
-  page.locator('div.fixed.right-0.top-0.h-full').filter({ hasText: 'Capabilities' })
+  page.getByRole('dialog').filter({ hasText: 'Capabilities' })
 
 test.beforeEach(async ({ page }) => {
   await installMockBackend(page)
@@ -27,8 +28,8 @@ test('drawer opens when the edit-capabilities button is clicked and closes via â
   await selectAgent(page)
   await page.getByRole('button', { name: 'Edit capabilities' }).click()
   await expect(drawerPanel(page)).toBeVisible()
-  // Close button in the drawer header.
-  await page.getByRole('button', { name: 'Close capabilities drawer' }).click()
+  // Close button provided by the Sheet component.
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(drawerPanel(page)).not.toBeVisible()
 })
 

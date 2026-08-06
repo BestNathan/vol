@@ -106,7 +106,7 @@ test('4. conversation timeline renders streamed content', async ({ page }) => {
 test('5. capability drawer opens, search filters, and toggles work', async ({ page }) => {
   await selectAgent(page)
   await page.getByRole('button', { name: 'Edit capabilities' }).click()
-  const drawer = page.locator('div.fixed.right-0.top-0.h-full').filter({ hasText: 'Capabilities' })
+  const drawer = page.getByRole('dialog').filter({ hasText: 'Capabilities' })
   await expect(drawer).toBeVisible()
 
   // Search filters the available tools.
@@ -122,8 +122,8 @@ test('5. capability drawer opens, search filters, and toggles work', async ({ pa
   await expect(toggle).toHaveAttribute('aria-checked', 'true')
   await expect(page.locator('[aria-label="Saved bash"]')).toBeVisible()
 
-  // Close via the header ✕.
-  await page.getByRole('button', { name: 'Close capabilities drawer' }).click()
+  // Close via the Sheet's built-in close button.
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(drawer).not.toBeVisible()
 })
 

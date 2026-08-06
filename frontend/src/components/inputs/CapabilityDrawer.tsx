@@ -3,8 +3,12 @@
 // (tools / skills / MCP servers). Instant-apply toggles: optimistic local
 // update → agent.update_capabilities → on success update effective atoms, on
 // failure rollback + show warning. Port of capability_drawer.rs.
+//
+// Built on shadcn primitives: Sheet (panel + backdrop + Esc-to-close),
+// Input (search), Accordion (collapsible sections), Switch (toggles).
 import { useCallback, useEffect, useState } from 'react'
 import { useAtom, useAtomValue, useStore, type WritableAtom } from 'jotai'
+import { Search } from 'lucide-react'
 import { getPanelClient } from '@/lib/panel-client'
 import { cn } from '@/lib/utils'
 import { selectedAgentIdAtom } from '@/stores/agents'
@@ -15,6 +19,10 @@ import {
 } from '@/stores/capability'
 import type { GetCapabilitiesResult, UpdateCapabilitiesResult } from '@/lib/protocol'
 import type { ToggleSavingState } from '@/types'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Input } from '@/components/ui/input'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Switch } from '@/components/ui/switch'
 
 type CapGroup = 'tools' | 'skills' | 'mcps'
 
@@ -61,22 +69,9 @@ export function CapabilityDrawer() {
   const selectedSkills = useAtomValue(selectedSkillsAtom)
   const selectedMcps = useAtomValue(selectedMcpsAtom)
 
-  // Local per-open-session state: fetch done, fetch error, collapsed sections.
+  // Local per-open-session state: fetch done, fetch error.
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-
-  // Keep the drawer mounted for 200ms after close so the exit animation
-  // (slide-out + fade-out) can play before unmounting.
-  const [visible, setVisible] = useState(false)
-  useEffect(() => {
-    if (open) {
-      setVisible(true)
-      return
-    }
-    const t = setTimeout(() => setVisible(false), 200)
-    return () => clearTimeout(t)
-  }, [open])
 
   // Load capabilities when the drawer opens; refetch if the agent or session
   // changes while open. On close, reset per-open state so the next open
@@ -192,17 +187,6 @@ export function CapabilityDrawer() {
     store.set(drawerOpenAtom, false)
   }, [store])
 
-  const toggleCollapsed = useCallback((section: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      if (next.has(section)) next.delete(section)
-      else next.add(section)
-      return next
-    })
-  }, [])
-
-  if (!visible) return null
-
   const sections: {
     group: CapGroup
     title: string
@@ -216,144 +200,75 @@ export function CapabilityDrawer() {
   ]
 
   return (
-    <>
-      {/* Backdrop overlay — fades in/out with the drawer */}
-      <div
-        className={cn(
-          'fixed inset-0 z-40 bg-black/50',
-          open ? 'animate-in fade-in-0 duration-200' : 'animate-out fade-out-0 duration-200'
+    <Sheet open={open} onOpenChange={(next) => { if (!next) closeDrawer() }}>
+      <SheetContent side="right" className="w-full sm:w-80 p-0 flex flex-col">
+        {/* Header — Sheet provides the close button */}
+        <SheetHeader className="px-3 py-3 border-b border-border flex-shrink-0">
+          <SheetTitle className="text-[14px] font-semibold text-foreground">Capabilities</SheetTitle>
+        </SheetHeader>
+
+        {!selectedAgentId ? (
+          <div className="p-4 text-muted-foreground text-[13px] text-center">No agent selected</div>
+        ) : !loaded ? (
+          <div className="p-4 text-muted-foreground text-[13px] text-center">Loading...</div>
+        ) : loadError ? (
+          <div className="p-4 text-destructive text-[13px] text-center">Error: {loadError}</div>
+        ) : (
+          <>
+            {/* Search */}
+            <div className="relative px-3 py-2">
+              <Search className="absolute left-6 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/70 pointer-events-none" />
+              <Input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search capabilities..."
+                className="pl-8 bg-[#12121e] border-[#2a2a44] text-[16px] sm:text-[12px] text-foreground/80 placeholder:text-muted-foreground/60"
+              />
+            </div>
+
+            {/* Capability groups — collapsible sections (all expanded by default) */}
+            <Accordion
+              type="multiple"
+              defaultValue={sections.map((s) => s.group)}
+              className="flex-1 overflow-y-auto"
+            >
+              {sections.map((section, i) => {
+                const filtered = filterCapabilityItems(section.items, section.base, search)
+                return (
+                  <AccordionItem key={section.group} value={section.group} className="border-0">
+                    {i > 0 && <div className="border-t border-[#2a2a44] mx-3" />}
+                    <AccordionTrigger className="px-3 py-1 hover:bg-secondary rounded-none text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.5px] hover:no-underline">
+                      {section.title} ({filtered.length})
+                    </AccordionTrigger>
+                    <AccordionContent className="px-3 pb-1">
+                      {filtered.length === 0 ? (
+                        <div className="text-[11px] text-muted-foreground/70 px-1 py-1">No matching capabilities</div>
+                      ) : (
+                        filtered.map(({ name, isBase }) => (
+                          <CapabilityToggle
+                            key={name}
+                            name={name}
+                            isBase={isBase}
+                            checked={section.selected.has(name)}
+                            savingState={savingStates[`${section.group}:${name}`]}
+                            onToggle={() => handleToggle(section.group, name, !section.selected.has(name))}
+                          />
+                        ))
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                )
+              })}
+            </Accordion>
+          </>
         )}
-        onClick={closeDrawer}
-      />
-
-      {/* Drawer panel — full width on mobile, fixed 320px right panel on
-          desktop; slides in from the right edge and out on close. */}
-      <div
-        className={cn(
-          'fixed right-0 top-0 h-full w-full sm:w-80 bg-background border-l border-border z-50 flex flex-col shadow-2xl',
-          open
-            ? 'animate-in slide-in-from-right-full fade-in-0 duration-200'
-            : 'animate-out slide-out-to-right-full fade-out-0 duration-200'
-        )}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 py-3 border-b border-border flex-shrink-0">
-          <span className="text-[14px] font-semibold text-foreground pl-1">Capabilities</span>
-          <button
-            type="button"
-            onClick={closeDrawer}
-            aria-label="Close capabilities drawer"
-            className="text-[18px] text-muted-foreground hover:text-foreground/80 leading-none pr-1 cursor-pointer"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {!selectedAgentId ? (
-            <div className="p-4 text-muted-foreground text-[13px] text-center">No agent selected</div>
-          ) : !loaded ? (
-            <div className="p-4 text-muted-foreground text-[13px] text-center">Loading...</div>
-          ) : loadError ? (
-            <div className="p-4 text-destructive text-[13px] text-center">Error: {loadError}</div>
-          ) : (
-            <>
-              {/* Search */}
-              <div className="px-3 py-2">
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-3 flex items-center text-muted-foreground/70 text-[12px] pointer-events-none">
-                    🔍
-                  </span>
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search capabilities..."
-                    className="w-full pl-8 pr-2 py-1.5 bg-[#12121e] border border-[#2a2a44] rounded text-[16px] sm:text-[12px] text-foreground/80 placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary"
-                  />
-                </div>
-              </div>
-
-              {/* Capability groups */}
-              {sections.map((section, i) => (
-                <div key={section.group}>
-                  {i > 0 && <div className="border-t border-[#2a2a44] my-1" />}
-                  <SectionGroup
-                    title={section.title}
-                    group={section.group}
-                    items={section.items}
-                    base={section.base}
-                    selected={section.selected}
-                    savingStates={savingStates}
-                    collapsed={collapsed}
-                    search={search}
-                    onToggle={handleToggle}
-                    onCollapse={() => toggleCollapsed(section.title)}
-                  />
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      </div>
-    </>
+      </SheetContent>
+    </Sheet>
   )
 }
 
 // --- Sub-components -----------------------------------------------------------
-
-function SectionGroup({
-  title, group, items, base, selected, savingStates, collapsed, search,
-  onToggle, onCollapse,
-}: {
-  title: string
-  group: CapGroup
-  items: unknown[]
-  base: string[]
-  selected: Set<string>
-  savingStates: Record<string, ToggleSavingState>
-  collapsed: Set<string>
-  search: string
-  onToggle: (group: CapGroup, name: string, enabled: boolean) => void
-  onCollapse: () => void
-}) {
-  const isCollapsed = collapsed.has(title)
-  const filtered = filterCapabilityItems(items, base, search)
-
-  return (
-    <div className="px-3 py-1">
-      {/* Header row */}
-      <button
-        type="button"
-        onClick={onCollapse}
-        className="flex items-center justify-between w-full hover:bg-secondary rounded px-1 py-1 cursor-pointer"
-      >
-        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.5px]">
-          {title} ({filtered.length})
-        </span>
-        <span className="text-[10px] text-muted-foreground/70">{isCollapsed ? '▸' : '▾'}</span>
-      </button>
-
-      {/* Items */}
-      {!isCollapsed && (
-        filtered.length === 0 ? (
-          <div className="text-[11px] text-muted-foreground/70 px-1 py-1 w-full">No matching capabilities</div>
-        ) : (
-          filtered.map(({ name, isBase }) => (
-            <CapabilityToggle
-              key={name}
-              name={name}
-              isBase={isBase}
-              checked={selected.has(name)}
-              savingState={savingStates[`${group}:${name}`]}
-              onToggle={() => onToggle(group, name, !selected.has(name))}
-            />
-          ))
-        )
-      )}
-    </div>
-  )
-}
 
 function CapabilityToggle({
   name, isBase, checked, savingState, onToggle,
@@ -367,24 +282,7 @@ function CapabilityToggle({
   return (
     <div className="flex items-center gap-2 py-1 px-1 hover:bg-secondary/50 rounded w-full">
       {/* Toggle switch */}
-      <button
-        type="button"
-        onClick={onToggle}
-        role="switch"
-        aria-checked={checked}
-        aria-label={name}
-        className={cn(
-          'inline-flex w-8 h-4 rounded-full relative transition-colors flex-shrink-0 border-0 p-0 cursor-pointer',
-          checked ? 'bg-[#4080ff]' : 'bg-[#3a3a55]'
-        )}
-      >
-        <span
-          className={cn(
-            'absolute top-[2px] w-3 h-3 rounded-full transition-all',
-            checked ? 'right-[2px] bg-white' : 'left-[2px] bg-[#888]'
-          )}
-        />
-      </button>
+      <Switch checked={checked} onCheckedChange={onToggle} aria-label={name} />
       {/* Name — blue when NOT in the base list (a capability the user added) */}
       <span className={cn('text-[12px] flex-1 truncate', isBase ? 'text-foreground' : 'text-primary')}>
         {name}
