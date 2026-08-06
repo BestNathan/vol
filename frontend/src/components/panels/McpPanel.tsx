@@ -16,6 +16,8 @@ import { ResourceViewer } from '@/components/dialogs/ResourceViewer'
 import { PromptViewer } from '@/components/dialogs/PromptViewer'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { RpcMethods } from '@/lib/protocol'
 import type {
   McpPromptInfo, McpResourceInfo, McpResourceTemplateInfo, McpServerInfo, McpSubtab, McpToolInfo,
@@ -178,33 +180,38 @@ export function McpPanel() {
 
   if (!nodeId) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-muted-foreground text-[14px]">Select a node to view MCP data</div>
-          <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
+      <ScrollArea className="flex-1">
+        <div className="h-full p-3 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-muted-foreground text-[14px]">Select a node to view MCP data</div>
+            <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
+          </div>
         </div>
-      </div>
+      </ScrollArea>
     )
   }
 
   if (state.loading && state.servers.length === 0 && state.error === null) {
     return (
-      <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
-        <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
-        Loading MCP data...
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-40" />
       </div>
     )
   }
 
   if (state.error !== null && state.servers.length === 0) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="text-destructive text-[14px]">Failed to load MCP data</div>
-          <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{state.error}</div>
-          <Button variant="outline" size="sm" onClick={() => void loadAll(nodeId)}>Retry</Button>
+      <ScrollArea className="flex-1">
+        <div className="h-full p-3 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="text-destructive text-[14px]">Failed to load MCP data</div>
+            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{state.error}</div>
+            <Button variant="outline" size="sm" onClick={() => void loadAll(nodeId)}>Retry</Button>
+          </div>
         </div>
-      </div>
+      </ScrollArea>
     )
   }
 
@@ -226,26 +233,34 @@ export function McpPanel() {
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value="servers" className="flex-1 min-h-0 overflow-y-auto mt-0">
-          <ServerList
-            servers={state.servers}
-            error={state.error}
-            reconnecting={reconnecting}
-            onReconnect={(server) => void handleReconnect(server)}
-          />
+        <TabsContent value="servers" className="flex-1 min-h-0 mt-0 flex flex-col">
+          <ScrollArea className="flex-1 min-h-0">
+            <ServerList
+              servers={state.servers}
+              error={state.error}
+              reconnecting={reconnecting}
+              onReconnect={(server) => void handleReconnect(server)}
+            />
+          </ScrollArea>
         </TabsContent>
-        <TabsContent value="tools" className="flex-1 min-h-0 overflow-y-auto mt-0">
-          <ToolList tools={state.tools} onCall={openToolDialog} />
+        <TabsContent value="tools" className="flex-1 min-h-0 mt-0 flex flex-col">
+          <ScrollArea className="flex-1 min-h-0">
+            <ToolList tools={state.tools} onCall={openToolDialog} />
+          </ScrollArea>
         </TabsContent>
-        <TabsContent value="resources" className="flex-1 min-h-0 overflow-y-auto mt-0">
-          <ResourceList
-            resources={state.resources}
-            templates={state.resourceTemplates}
-            onRead={openResourceViewer}
-          />
+        <TabsContent value="resources" className="flex-1 min-h-0 mt-0 flex flex-col">
+          <ScrollArea className="flex-1 min-h-0">
+            <ResourceList
+              resources={state.resources}
+              templates={state.resourceTemplates}
+              onRead={openResourceViewer}
+            />
+          </ScrollArea>
         </TabsContent>
-        <TabsContent value="prompts" className="flex-1 min-h-0 overflow-y-auto mt-0">
-          <PromptList prompts={state.prompts} onGet={openPromptViewer} />
+        <TabsContent value="prompts" className="flex-1 min-h-0 mt-0 flex flex-col">
+          <ScrollArea className="flex-1 min-h-0">
+            <PromptList prompts={state.prompts} onGet={openPromptViewer} />
+          </ScrollArea>
         </TabsContent>
       </Tabs>
       <McpToolDialog />

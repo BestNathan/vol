@@ -13,6 +13,8 @@ import { CapabilityDrawer } from '@/components/inputs/CapabilityDrawer'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   agentsAtom, selectedAgentIdAtom, agentsLoadingAtom, agentsErrorAtom,
   agentSubTabAtom, agentStatusMapAtom,
@@ -163,41 +165,48 @@ export function AgentsPanel() {
   // Empty states
   if (!nodeId) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-muted-foreground text-[14px]">Select a node to view agents</div>
-          <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above to view its agents.</div>
+      <ScrollArea className="flex-1">
+        <div className="h-full p-3 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-muted-foreground text-[14px]">Select a node to view agents</div>
+            <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above to view its agents.</div>
+          </div>
         </div>
-      </div>
+      </ScrollArea>
     )
   }
 
   if (loading && agents.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
-        <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
-        Loading agents...
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-40" />
       </div>
     )
   }
 
   if (error && agents.length === 0) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="text-destructive text-[14px]">Failed to load agents</div>
-          <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadAgents()}>Retry</Button>
+      <ScrollArea className="flex-1">
+        <div className="h-full p-3 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="text-destructive text-[14px]">Failed to load agents</div>
+            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
+            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadAgents()}>Retry</Button>
+          </div>
         </div>
-      </div>
+      </ScrollArea>
     )
   }
 
   if (agents.length === 0) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center text-muted-foreground text-[14px]">
-        No agents available
-      </div>
+      <ScrollArea className="flex-1">
+        <div className="h-full p-3 flex items-center justify-center text-muted-foreground text-[14px]">
+          No agents available
+        </div>
+      </ScrollArea>
     )
   }
 
@@ -206,17 +215,23 @@ export function AgentsPanel() {
       {/* Fixed right-side overlay — rendered at panel level so it stays open
           across sub-tab switches while an agent is selected. */}
       <CapabilityDrawer />
-      {/* Card grid — scrollable, stacks on mobile, wraps on desktop */}
-      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 p-2 border-b border-border overflow-y-auto max-h-[200px] min-h-[60px] flex-shrink-0">
-        {agents.map((agent) => (
-          <AgentCard
-            key={agent.id}
-            agent={agent}
-            isSelected={agent.id === selectedAgentId}
-            onSelect={() => handleAgentClick(agent)}
-          />
-        ))}
-      </div>
+      {/* Card grid — scrollable, stacks on mobile, wraps on desktop. The grid
+          row track reproduces the old max-h-[200px] min-h-[60px] clamping:
+          the radix viewport (h-full) resolves against the definite track
+          height instead of the auto-height root, so the strip scrolls only
+          when the cards exceed 200px. */}
+      <ScrollArea className="grid grid-rows-[minmax(60px,200px)] border-b border-border flex-shrink-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 p-2">
+          {agents.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              isSelected={agent.id === selectedAgentId}
+              onSelect={() => handleAgentClick(agent)}
+            />
+          ))}
+        </div>
+      </ScrollArea>
 
       {/* Info bar: selected agent name + description */}
       {selectedAgent && (

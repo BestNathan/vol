@@ -16,6 +16,8 @@ import { connectionStateAtom } from '@/stores/connection'
 import { TaskDepGraph } from '@/components/dialogs/TaskDepGraph'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { RpcMethods } from '@/lib/protocol'
 import type { TaskEntry } from '@/types'
 
@@ -130,32 +132,37 @@ export function TasksPanel() {
 
   if (!nodeId) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-muted-foreground text-[14px]">Select a node to view tasks</div>
-          <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
+      <ScrollArea className="flex-1">
+        <div className="h-full p-3 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-muted-foreground text-[14px]">Select a node to view tasks</div>
+            <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
+          </div>
         </div>
-      </div>
+      </ScrollArea>
     )
   }
 
   if (error !== null && tasks.length === 0) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="text-destructive text-[14px]">Failed to load tasks</div>
-          <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadTasks(nodeId)}>Retry</Button>
+      <ScrollArea className="flex-1">
+        <div className="h-full p-3 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="text-destructive text-[14px]">Failed to load tasks</div>
+            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
+            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadTasks(nodeId)}>Retry</Button>
+          </div>
         </div>
-      </div>
+      </ScrollArea>
     )
   }
 
   if (loading && tasks.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
-        <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
-        Loading tasks...
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-40" />
       </div>
     )
   }
@@ -265,42 +272,44 @@ export function TasksPanel() {
       </div>
 
       {/* Task list */}
-      <div className="flex-1 overflow-y-auto">
-        {filtered.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground/70 text-[13px]">
-            No tasks found
-          </div>
-        ) : (
-          <>
-            {/* Mobile: task cards */}
-            <div className="sm:hidden flex flex-col gap-2 p-2">
-              {filtered.map((task) => (
-                <div
-                  key={task.id}
-                  className="cursor-pointer rounded-md border border-border bg-secondary p-3 active:bg-secondary"
-                  style={selectedId === task.id ? { background: '#1a2a44' } : undefined}
-                  onClick={() => toggleRow(task.id)}
-                >
-                  {rowBody(task)}
-                </div>
-              ))}
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="h-full">
+          {filtered.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground/70 text-[13px]">
+              No tasks found
             </div>
-            {/* Desktop: rows */}
-            <div className="hidden sm:block">
-              {filtered.map((task) => (
-                <div
-                  key={task.id}
-                  className="p-2 border-b border-border cursor-pointer hover:bg-secondary/50"
-                  style={selectedId === task.id ? { background: '#1a2a44' } : undefined}
-                  onClick={() => toggleRow(task.id)}
-                >
-                  {rowBody(task)}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
+          ) : (
+            <>
+              {/* Mobile: task cards */}
+              <div className="sm:hidden flex flex-col gap-2 p-2">
+                {filtered.map((task) => (
+                  <div
+                    key={task.id}
+                    className="cursor-pointer rounded-md border border-border bg-secondary p-3 active:bg-secondary"
+                    style={selectedId === task.id ? { background: '#1a2a44' } : undefined}
+                    onClick={() => toggleRow(task.id)}
+                  >
+                    {rowBody(task)}
+                  </div>
+                ))}
+              </div>
+              {/* Desktop: rows */}
+              <div className="hidden sm:block">
+                {filtered.map((task) => (
+                  <div
+                    key={task.id}
+                    className="p-2 border-b border-border cursor-pointer hover:bg-secondary/50"
+                    style={selectedId === task.id ? { background: '#1a2a44' } : undefined}
+                    onClick={() => toggleRow(task.id)}
+                  >
+                    {rowBody(task)}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </ScrollArea>
 
       {graphCenter !== null && (
         <TaskDepGraph tasks={tasks} centerId={graphCenter} onClose={() => setGraphCenter(null)} />

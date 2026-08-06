@@ -14,6 +14,8 @@ import { activeTabAtom } from '@/stores/ui'
 import { conversationMapAtom } from '@/stores/conversation'
 import { SessionDetailOverlay } from '@/components/dialogs/SessionDetailOverlay'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { RpcMethods } from '@/lib/protocol'
 import type { SessionListEntry } from '@/types'
 
@@ -125,27 +127,31 @@ export function SessionsPanel() {
 
   if (loading && sessions.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
-        <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
-        Loading sessions...
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-40" />
       </div>
     )
   }
 
   if (error !== null) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="text-destructive text-[14px]">Failed to load sessions</div>
-          <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadSessions(selectedAgentId)}>Retry</Button>
+      <ScrollArea className="flex-1">
+        <div className="h-full p-3 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="text-destructive text-[14px]">Failed to load sessions</div>
+            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
+            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadSessions(selectedAgentId)}>Retry</Button>
+          </div>
         </div>
-      </div>
+      </ScrollArea>
     )
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto p-2">
+    <ScrollArea className="flex-1 min-h-0">
+      <div className="p-2">
       <div className="px-2.5 pt-1 pb-2 text-[12px] font-semibold text-muted-foreground uppercase tracking-[0.5px]">Sessions</div>
       {sessions.length === 0 ? (
         <div className="flex items-center justify-center h-32 text-muted-foreground/70 text-[13px]">No sessions found</div>
@@ -195,6 +201,7 @@ export function SessionsPanel() {
         open={overlaySession !== null}
         onClose={() => setOverlaySession(null)}
       />
-    </div>
+      </div>
+    </ScrollArea>
   )
 }

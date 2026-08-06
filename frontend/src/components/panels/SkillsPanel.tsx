@@ -13,6 +13,8 @@ import { activeNodeIdAtom } from '@/stores/ui'
 import { SkillDetailDialog } from '@/components/dialogs/SkillDetailDialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { RpcMethods } from '@/lib/protocol'
 import type { SkillListEntry } from '@/types'
 
@@ -94,38 +96,44 @@ export function SkillsPanel() {
 
   if (!nodeId) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-muted-foreground text-[14px]">Select a node to view skills</div>
-          <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
+      <ScrollArea className="flex-1">
+        <div className="h-full p-3 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-muted-foreground text-[14px]">Select a node to view skills</div>
+            <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
+          </div>
         </div>
-      </div>
+      </ScrollArea>
     )
   }
 
   if (error !== null) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="text-destructive text-[14px]">Failed to load skills</div>
-          <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadSkills(nodeId)}>Retry</Button>
+      <ScrollArea className="flex-1">
+        <div className="h-full p-3 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="text-destructive text-[14px]">Failed to load skills</div>
+            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
+            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadSkills(nodeId)}>Retry</Button>
+          </div>
         </div>
-      </div>
+      </ScrollArea>
     )
   }
 
   if (loading && skills.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
-        <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
-        Loading skills...
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-40" />
       </div>
     )
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-2.5">
+    <ScrollArea className="flex-1 min-h-0">
+      <div className="h-full p-2.5">
       <div className="flex items-center justify-between mb-2">
         <div className="text-[12px] text-muted-foreground">Skills ({skills.length})</div>
         <Button variant="secondary" size="sm" className="cursor-pointer" disabled={loading} onClick={() => void handleRefresh()}>
@@ -210,6 +218,7 @@ export function SkillsPanel() {
         </>
       )}
       <SkillDetailDialog />
-    </div>
+      </div>
+    </ScrollArea>
   )
 }

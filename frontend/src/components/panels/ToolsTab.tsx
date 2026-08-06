@@ -8,6 +8,7 @@ import { systemToolsAtom, toolCallsAtom, toolsLoadingAtom } from '@/stores/tools
 import { ToolCallDialog, type ToolCallOutcome } from '@/components/dialogs/ToolCallDialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import type { RpcMethods } from '@/lib/protocol'
 import type { ToolCallEntry, ToolCallStatus } from '@/types'
@@ -113,7 +114,8 @@ export function ToolsTab() {
   }, [dialogTool])
 
   return (
-    <div className="flex-1 overflow-y-auto p-2">
+    <ScrollArea className="flex-1 min-h-0">
+      <div className="p-2">
       {/* System Tools section */}
       <div className="mb-3">
         <div className="flex items-center justify-between mb-1">
@@ -220,7 +222,8 @@ export function ToolsTab() {
         onClose={() => setDialogTool(null)}
         onExecute={executeTool}
       />
-    </div>
+      </div>
+    </ScrollArea>
   )
 }
 

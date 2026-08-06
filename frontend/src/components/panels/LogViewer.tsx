@@ -16,6 +16,8 @@ import { activeNodeIdAtom } from '@/stores/ui'
 import { connectionStateAtom } from '@/stores/connection'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { RpcMethods } from '@/lib/protocol'
 import type { LogLine, LogRunSummary } from '@/types'
 
@@ -199,20 +201,38 @@ export function LogViewer() {
   const stickRef = useRef(true)
   const programmaticRef = useRef(false)
 
-  const scrollToBottom = useCallback(() => {
+  // ScrollArea puts the real scrollable element inside (the radix viewport);
+  // resolve it the same way useAutoScroll does so scrollTop/scrollHeight read
+  // the actual scroller.
+  const getViewport = useCallback((): HTMLElement | null => {
     const el = listRef.current
-    if (!el) return
-    programmaticRef.current = true
-    el.scrollTop = el.scrollHeight
-    requestAnimationFrame(() => { programmaticRef.current = false })
+    if (!el) return null
+    return (el.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null) ?? el
   }, [])
+
+  const scrollToBottom = useCallback(() => {
+    const vp = getViewport()
+    if (!vp) return
+    programmaticRef.current = true
+    vp.scrollTop = vp.scrollHeight
+    requestAnimationFrame(() => { programmaticRef.current = false })
+  }, [getViewport])
 
   const handleScroll = useCallback(() => {
     if (programmaticRef.current) return
-    const el = listRef.current
-    if (!el) return
-    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 2
-  }, [])
+    const vp = getViewport()
+    if (!vp) return
+    stickRef.current = vp.scrollHeight - vp.scrollTop - vp.clientHeight <= 2
+  }, [getViewport])
+
+  // Attach the scroll listener to the viewport element; re-attach whenever the
+  // entries view (re)mounts, as the viewport may be recreated on run switches.
+  useEffect(() => {
+    const vp = getViewport()
+    if (!vp) return
+    vp.addEventListener('scroll', handleScroll, { passive: true })
+    return () => vp.removeEventListener('scroll', handleScroll)
+  }, [getViewport, handleScroll, entries, selectedRun])
 
   // Toggling the switch back on re-engages the stick and jumps to the bottom.
   useEffect(() => {
@@ -229,32 +249,37 @@ export function LogViewer() {
 
   if (!nodeId) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-muted-foreground text-[14px]">Select a node to view logs</div>
-          <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
+      <ScrollArea className="flex-1">
+        <div className="h-full p-3 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-muted-foreground text-[14px]">Select a node to view logs</div>
+            <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
+          </div>
         </div>
-      </div>
+      </ScrollArea>
     )
   }
 
   if (error !== null && runs.length === 0) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="text-destructive text-[14px]">Failed to load logs</div>
-          <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadRuns(nodeId)}>Retry</Button>
+      <ScrollArea className="flex-1">
+        <div className="h-full p-3 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="text-destructive text-[14px]">Failed to load logs</div>
+            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
+            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadRuns(nodeId)}>Retry</Button>
+          </div>
         </div>
-      </div>
+      </ScrollArea>
     )
   }
 
   if (loading && runs.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
-        <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
-        Loading logs...
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-40" />
       </div>
     )
   }
@@ -277,9 +302,10 @@ export function LogViewer() {
           </label>
         </div>
         {loading && entries.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
-            <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
-            Loading log entries...
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-4 w-40" />
           </div>
         ) : error !== null && entries.length === 0 ? (
           <div className="flex-1 flex items-center justify-center p-3">
@@ -290,22 +316,20 @@ export function LogViewer() {
             No events in this run.
           </div>
         ) : (
-          <div
-            ref={listRef}
-            onScroll={handleScroll}
-            className="flex-1 overflow-y-auto p-2.5 font-mono text-[12px]"
-          >
-            {entries.map((entry, i) => {
-              const color = entryColor(entry.event_type)
-              return (
-                <div key={i} className="py-0.5 whitespace-nowrap">
-                  <span className="text-muted-foreground/70">[{entry.timestamp}] </span>
-                  <span className="font-bold" style={{ color }}>{entry.event_type}</span>
-                  <span style={{ color }}> -- {entry.summary}</span>
-                </div>
-              )
-            })}
-          </div>
+          <ScrollArea className="flex-1" ref={listRef}>
+            <div className="p-2.5 font-mono text-[12px]">
+              {entries.map((entry, i) => {
+                const color = entryColor(entry.event_type)
+                return (
+                  <div key={i} className="py-0.5 whitespace-nowrap">
+                    <span className="text-muted-foreground/70">[{entry.timestamp}] </span>
+                    <span className="font-bold" style={{ color }}>{entry.event_type}</span>
+                    <span style={{ color }}> -- {entry.summary}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </ScrollArea>
         )}
       </div>
     )
@@ -313,7 +337,8 @@ export function LogViewer() {
 
   // ---- Run list view ----
   return (
-    <div className="flex-1 overflow-y-auto p-2.5 font-mono text-[13px]">
+    <ScrollArea className="flex-1">
+      <div className="h-full p-2.5 font-mono text-[13px]">
       {runs.length === 0 ? (
         <div className="flex items-center justify-center h-full text-muted-foreground/70 text-[13px]">
           No log files found.
@@ -354,6 +379,7 @@ export function LogViewer() {
           </div>
         </>
       )}
-    </div>
+      </div>
+    </ScrollArea>
   )
 }

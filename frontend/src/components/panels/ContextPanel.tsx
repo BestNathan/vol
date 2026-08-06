@@ -15,6 +15,7 @@ import { selectedAgentIdAtom } from '@/stores/agents'
 import { ContextDialog } from '@/components/dialogs/ContextDialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import type { RpcMethods } from '@/lib/protocol'
 import type { ContributorInfoEntry } from '@/types'
 
@@ -109,37 +110,41 @@ export function ContextPanel() {
           Loading contributors...
         </div>
       ) : error !== null ? (
-        <div className="flex flex-col items-center gap-3 flex-1 overflow-y-auto p-3">
-          <div className="text-destructive text-[14px]">Failed to load context</div>
-          <div className="text-muted-foreground text-[12px] max-w-[300px] break-words text-center">{error}</div>
-          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadContributors(selectedAgentId)}>
-            Retry
-          </Button>
-        </div>
+        <ScrollArea className="flex-1">
+          <div className="h-full flex flex-col items-center gap-3 p-3">
+            <div className="text-destructive text-[14px]">Failed to load context</div>
+            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words text-center">{error}</div>
+            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadContributors(selectedAgentId)}>
+              Retry
+            </Button>
+          </div>
+        </ScrollArea>
       ) : contributors.length === 0 ? (
         <div className="flex items-center justify-center h-full text-muted-foreground text-[14px]">
           No contributors configured
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto">
-          {contributors.map((c) => (
-            <div
-              key={c.name}
-              className="flex items-center gap-3 px-3 py-2 border-b border-[#2a2a44] cursor-pointer hover:bg-secondary"
-              onClick={() => openSnapshot(c)}
-            >
-              <Badge variant="outline" className="cursor-pointer text-[9px] font-bold flex-shrink-0"
-                style={{ color: anchorZoneColor(c.anchor_zone), borderColor: anchorZoneColor(c.anchor_zone) }}>
-                {c.anchor_zone}
-              </Badge>
-              <span className="font-semibold text-[13px] text-foreground flex-1 min-w-0 truncate">
-                {c.name}
-              </span>
-              <span className="text-[11px] text-muted-foreground flex-shrink-0">{c.estimated_tokens} tokens</span>
-              <span className="text-[11px] text-muted-foreground/70 flex-shrink-0">{c.message_count} msg</span>
-            </div>
-          ))}
-        </div>
+        <ScrollArea className="flex-1">
+          <div>
+            {contributors.map((c) => (
+              <div
+                key={c.name}
+                className="flex items-center gap-3 px-3 py-2 border-b border-[#2a2a44] cursor-pointer hover:bg-secondary"
+                onClick={() => openSnapshot(c)}
+              >
+                <Badge variant="outline" className="cursor-pointer text-[9px] font-bold flex-shrink-0"
+                  style={{ color: anchorZoneColor(c.anchor_zone), borderColor: anchorZoneColor(c.anchor_zone) }}>
+                  {c.anchor_zone}
+                </Badge>
+                <span className="font-semibold text-[13px] text-foreground flex-1 min-w-0 truncate">
+                  {c.name}
+                </span>
+                <span className="text-[11px] text-muted-foreground flex-shrink-0">{c.estimated_tokens} tokens</span>
+                <span className="text-[11px] text-muted-foreground/70 flex-shrink-0">{c.message_count} msg</span>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
       )}
       <ContextDialog />
     </div>

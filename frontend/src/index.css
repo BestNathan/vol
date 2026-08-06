@@ -86,3 +86,11 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
   font-size: 14px;
 }
+
+/* shadcn ScrollArea companion rule (standard scroll-area.css): radix wraps the
+   viewport content in a display:table div whose height is content-based by
+   default; sizing it to the viewport lets h-full/min-h-full content (centered
+   empty states, filled lists) resolve correctly inside ScrollArea. */
+[data-radix-scroll-area-viewport] > div {
+  height: 100%;
+}
