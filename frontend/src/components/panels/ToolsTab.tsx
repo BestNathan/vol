@@ -7,6 +7,7 @@ import { getPanelClient } from '@/lib/panel-client'
 import { systemToolsAtom, toolCallsAtom, toolsLoadingAtom } from '@/stores/tools'
 import { ToolCallDialog, type ToolCallOutcome } from '@/components/dialogs/ToolCallDialog'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { RpcMethods } from '@/lib/protocol'
 import type { ToolCallEntry, ToolCallStatus } from '@/types'
@@ -122,6 +123,7 @@ export function ToolsTab() {
           <Button
             variant="secondary"
             size="sm"
+            className="cursor-pointer"
             onClick={() => void loadTools()}
             disabled={loading}
           >
@@ -143,7 +145,7 @@ export function ToolsTab() {
                     <div className="mt-0.5 text-[11px] text-[#777] truncate">{tool.description}</div>
                   )}
                 </div>
-                <Button size="sm" className="flex-shrink-0" onClick={() => setDialogTool(tool)}>
+                <Button size="sm" className="cursor-pointer flex-shrink-0" onClick={() => setDialogTool(tool)}>
                   Run
                 </Button>
               </div>
@@ -166,7 +168,7 @@ export function ToolsTab() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  className="flex-shrink-0"
+                  className="cursor-pointer flex-shrink-0"
                   onClick={() => setDialogTool(tool)}
                 >
                   Run
@@ -231,19 +233,20 @@ function CallHistoryItem({ entry, variant }: { entry: ToolCallEntry; variant: 'r
 
   if (variant === 'card') {
     return (
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={toggle}
-        className="w-full text-left cursor-pointer rounded-lg border border-border bg-secondary p-3 active:bg-secondary"
+        className="w-full text-left cursor-pointer rounded-lg border border-border bg-secondary p-3 active:bg-secondary hover:bg-secondary h-auto flex-col items-stretch justify-start"
       >
         <span className="flex items-center gap-2 w-full">
           <span className="text-muted-foreground/60 text-[11px]">{entry.sequence}.</span>
           <span className="font-semibold text-[13px] text-foreground truncate">
             [{entry.toolName}]
           </span>
-          <span className={cn('text-[11px] px-1.5 py-0.5 rounded-[3px] font-semibold', badge.className)}>
+          <Badge variant="secondary" className={cn('text-[11px] px-1.5 py-0.5 rounded-[3px] font-semibold', badge.className)}>
             {badge.label}
-          </span>
+          </Badge>
           {duration !== '' && <span className="text-[11px] text-muted-foreground/70 ml-auto">{duration}</span>}
         </span>
         {expanded && (
@@ -252,25 +255,26 @@ function CallHistoryItem({ entry, variant }: { entry: ToolCallEntry; variant: 'r
             {entry.argPreview}
           </span>
         )}
-      </button>
+      </Button>
     )
   }
 
   return (
     <div className="border-b border-[#2a2a44]">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={toggle}
-        className="flex items-center gap-2 px-2.5 py-2 w-full text-left cursor-pointer hover:bg-secondary/50"
+        className="flex items-center gap-2 px-2.5 py-2 w-full text-left cursor-pointer hover:bg-secondary/50 h-auto justify-start rounded-none"
       >
         <span className="text-muted-foreground/60 text-[11px] min-w-[24px]">{entry.sequence}.</span>
         <span className="font-semibold text-[13px]">{entry.toolName}</span>
-        <span className={cn('text-[11px] px-1.5 py-0.5 rounded-[3px] font-semibold', badge.className)}>
+        <Badge variant="secondary" className={cn('text-[11px] px-1.5 py-0.5 rounded-[3px] font-semibold', badge.className)}>
           {badge.label}
-        </span>
+        </Badge>
         {duration !== '' && <span className="text-[11px] text-muted-foreground ml-auto">{duration}</span>}
         <span className="text-[10px] text-muted-foreground/70 ml-1">▾</span>
-      </button>
+      </Button>
       {expanded && (
         <div className="px-2.5 pb-2 pl-[42px] text-[12px] font-mono text-muted-foreground bg-[#16162a] whitespace-pre-wrap break-all">
           <span className="text-[#6090ff] font-semibold font-sans">Input: </span>

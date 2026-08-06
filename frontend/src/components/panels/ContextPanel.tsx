@@ -14,6 +14,7 @@ import {
 import { selectedAgentIdAtom } from '@/stores/agents'
 import { ContextDialog } from '@/components/dialogs/ContextDialog'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import type { RpcMethods } from '@/lib/protocol'
 import type { ContributorInfoEntry } from '@/types'
 
@@ -111,7 +112,7 @@ export function ContextPanel() {
         <div className="flex flex-col items-center gap-3 flex-1 overflow-y-auto p-3">
           <div className="text-destructive text-[14px]">Failed to load context</div>
           <div className="text-muted-foreground text-[12px] max-w-[300px] break-words text-center">{error}</div>
-          <Button variant="outline" size="sm" onClick={() => void loadContributors(selectedAgentId)}>
+          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadContributors(selectedAgentId)}>
             Retry
           </Button>
         </div>
@@ -127,12 +128,10 @@ export function ContextPanel() {
               className="flex items-center gap-3 px-3 py-2 border-b border-[#2a2a44] cursor-pointer hover:bg-secondary"
               onClick={() => openSnapshot(c)}
             >
-              <span
-                className="text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0"
-                style={{ color: anchorZoneColor(c.anchor_zone), background: '#2a2a44' }}
-              >
+              <Badge variant="outline" className="cursor-pointer text-[9px] font-bold flex-shrink-0"
+                style={{ color: anchorZoneColor(c.anchor_zone), borderColor: anchorZoneColor(c.anchor_zone) }}>
                 {c.anchor_zone}
-              </span>
+              </Badge>
               <span className="font-semibold text-[13px] text-foreground flex-1 min-w-0 truncate">
                 {c.name}
               </span>

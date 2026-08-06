@@ -112,9 +112,7 @@ export function SessionsPanel() {
   }, [selectedAgentId, resumingId, setConversationMap, setSubTab, setActiveTab])
 
   const resumeButton = (session: SessionListEntry) => (
-    <button
-      type="button"
-      className="px-2.5 py-0.5 bg-[#408040] text-foreground border-none rounded-[3px] cursor-pointer text-[12px] flex-shrink-0 hover:bg-[#50a050] disabled:bg-[#333355] disabled:cursor-not-allowed"
+    <Button variant="success" size="sm" className="cursor-pointer text-[12px] flex-shrink-0"
       disabled={resumingId !== null}
       onClick={(e) => {
         e.stopPropagation()
@@ -122,7 +120,7 @@ export function SessionsPanel() {
       }}
     >
       {resumingId === session.id ? 'Resuming...' : 'Resume'}
-    </button>
+    </Button>
   )
 
   if (loading && sessions.length === 0) {
@@ -140,7 +138,7 @@ export function SessionsPanel() {
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="text-destructive text-[14px]">Failed to load sessions</div>
           <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-          <Button variant="outline" size="sm" onClick={() => void loadSessions(selectedAgentId)}>Retry</Button>
+          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadSessions(selectedAgentId)}>Retry</Button>
         </div>
       </div>
     )

@@ -15,6 +15,7 @@ import { logRunsAtom, selectedRunAtom, logEntriesAtom, logAutoScrollAtom } from 
 import { activeNodeIdAtom } from '@/stores/ui'
 import { connectionStateAtom } from '@/stores/connection'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import type { RpcMethods } from '@/lib/protocol'
 import type { LogLine, LogRunSummary } from '@/types'
 
@@ -243,7 +244,7 @@ export function LogViewer() {
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="text-destructive text-[14px]">Failed to load logs</div>
           <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-          <Button variant="outline" size="sm" onClick={() => void loadRuns(nodeId)}>Retry</Button>
+          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadRuns(nodeId)}>Retry</Button>
         </div>
       </div>
     )
@@ -263,20 +264,14 @@ export function LogViewer() {
     return (
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <div className="flex items-center gap-3 p-2 border-b border-border flex-shrink-0">
-          <button
-            type="button"
-            className="text-[#4080ff] hover:underline text-[12px] cursor-pointer whitespace-nowrap"
-            onClick={backToList}
-          >
+          <Button variant="link" size="sm" className="cursor-pointer text-[12px] whitespace-nowrap" onClick={backToList}>
             ← Back to run list
-          </button>
+          </Button>
           <span className="text-[12px] text-muted-foreground font-mono truncate min-w-0">Log: {selectedRun}</span>
           <label className="ml-auto flex items-center gap-1.5 text-[12px] text-muted-foreground whitespace-nowrap flex-shrink-0 cursor-pointer">
-            <input
-              type="checkbox"
-              className="accent-[#80a0ff] cursor-pointer"
+            <Checkbox
               checked={autoScroll}
-              onChange={(e) => setAutoScroll(e.target.checked)}
+              onCheckedChange={(checked) => setAutoScroll(checked === true)}
             />
             Auto-scroll
           </label>

@@ -12,6 +12,7 @@ import { skillDialogAtom } from '@/stores/dialogs'
 import { activeNodeIdAtom } from '@/stores/ui'
 import { SkillDetailDialog } from '@/components/dialogs/SkillDetailDialog'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import type { RpcMethods } from '@/lib/protocol'
 import type { SkillListEntry } from '@/types'
 
@@ -108,7 +109,7 @@ export function SkillsPanel() {
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="text-destructive text-[14px]">Failed to load skills</div>
           <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-          <Button variant="outline" size="sm" onClick={() => void loadSkills(nodeId)}>Retry</Button>
+          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadSkills(nodeId)}>Retry</Button>
         </div>
       </div>
     )
@@ -127,7 +128,7 @@ export function SkillsPanel() {
     <div className="flex-1 overflow-y-auto p-2.5">
       <div className="flex items-center justify-between mb-2">
         <div className="text-[12px] text-muted-foreground">Skills ({skills.length})</div>
-        <Button variant="secondary" size="sm" disabled={loading} onClick={() => void handleRefresh()}>
+        <Button variant="secondary" size="sm" className="cursor-pointer" disabled={loading} onClick={() => void handleRefresh()}>
           Refresh
         </Button>
       </div>
@@ -151,12 +152,10 @@ export function SkillsPanel() {
                     <div className="truncate text-[14px] font-bold text-foreground">{s.name}</div>
                     <div className="mt-0.5 text-[11px] text-[#777]">v{s.version}</div>
                   </div>
-                  <span
-                    className="flex-shrink-0 rounded border border-border px-2 py-0.5 text-[11px] font-semibold"
-                    style={{ color: scopeColor(s.scope) }}
-                  >
+                  <Badge variant="outline" className="text-[11px] flex-shrink-0"
+                    style={{ color: scopeColor(s.scope), borderColor: scopeColor(s.scope) }}>
                     {s.scope}
-                  </span>
+                  </Badge>
                 </div>
                 {s.description !== '' && (
                   <div className="mt-2 text-[12px] leading-[1.45] text-foreground/70">{s.description}</div>

@@ -12,6 +12,7 @@ import { CapabilityBar } from '@/components/inputs/CapabilityBar'
 import { CapabilityDrawer } from '@/components/inputs/CapabilityDrawer'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   agentsAtom, selectedAgentIdAtom, agentsLoadingAtom, agentsErrorAtom,
   agentSubTabAtom, agentStatusMapAtom,
@@ -34,13 +35,14 @@ function AgentCard({
   const scopeColor = scopeStr === 'repo' ? '#4080ff' : '#40c040'
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={onSelect}
       className={cn(
-        'flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer border w-full sm:w-auto text-left',
+        'cursor-pointer flex items-center gap-2 px-2.5 py-2 rounded-lg border w-full sm:w-auto text-left h-auto justify-start',
         isSelected
-          ? 'border-primary bg-[#1a2a44]'
+          ? 'border-primary bg-[#1a2a44] hover:bg-[#1a2a44]'
           : 'border-[#2a2a44] bg-card hover:bg-secondary/50'
       )}
     >
@@ -48,16 +50,14 @@ function AgentCard({
       <span className="flex flex-col min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className="font-semibold text-[13px] text-foreground truncate">{agent.name}</span>
-          <span
-            className="text-[9px] px-1 py-0.5 rounded-[2px] font-bold whitespace-nowrap flex-shrink-0"
-            style={{ background: scopeColor, color: '#1a1a2e' }}
-          >
+          <Badge variant="outline" className="text-[9px] font-bold whitespace-nowrap flex-shrink-0"
+            style={{ color: scopeColor, borderColor: scopeColor }}>
             {scopeStr}
-          </span>
+          </Badge>
         </span>
         <span className="text-[11px] text-muted-foreground/70 truncate">{agent.description ?? ''}</span>
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -187,7 +187,7 @@ export function AgentsPanel() {
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="text-destructive text-[14px]">Failed to load agents</div>
           <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-          <Button variant="outline" size="sm" onClick={() => void loadAgents()}>Retry</Button>
+          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadAgents()}>Retry</Button>
         </div>
       </div>
     )

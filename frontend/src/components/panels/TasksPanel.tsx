@@ -15,6 +15,7 @@ import { activeNodeIdAtom } from '@/stores/ui'
 import { connectionStateAtom } from '@/stores/connection'
 import { TaskDepGraph } from '@/components/dialogs/TaskDepGraph'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import type { RpcMethods } from '@/lib/protocol'
 import type { TaskEntry } from '@/types'
 
@@ -144,7 +145,7 @@ export function TasksPanel() {
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="text-destructive text-[14px]">Failed to load tasks</div>
           <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-          <Button variant="outline" size="sm" onClick={() => void loadTasks(nodeId)}>Retry</Button>
+          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadTasks(nodeId)}>Retry</Button>
         </div>
       </div>
     )
@@ -170,25 +171,24 @@ export function TasksPanel() {
       <>
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[11px] text-muted-foreground/60 font-mono whitespace-nowrap">t{task.id}</span>
-          <span
-            className="text-[10px] px-1 rounded font-bold whitespace-nowrap"
-            style={{ background: color, color: '#1a1a2e' }}
-          >
+          <Badge variant="secondary" className="text-[10px] px-1 rounded font-bold whitespace-nowrap"
+            style={{ background: color, color: '#1a1a2e' }}>
             {task.status}
-          </span>
+          </Badge>
           <span className="text-[13px] text-foreground truncate">{task.subject}</span>
           <div className="flex items-center gap-2 ml-auto flex-shrink-0">
             {task.assignee && (
               <span className="text-[11px] text-muted-foreground/70 whitespace-nowrap">{task.assignee}</span>
             )}
-            <button
-              type="button"
-              className="text-[11px] text-primary hover:text-[#a0c0ff] px-1 rounded whitespace-nowrap"
+            <Button
+              variant="link"
+              size="sm"
+              className="cursor-pointer text-[11px] px-1 h-auto whitespace-nowrap hover:text-[#a0c0ff]"
               title="View dependency graph"
               onClick={(e) => { e.stopPropagation(); openGraph(task.id) }}
             >
               ⇄ deps
-            </button>
+            </Button>
           </div>
         </div>
         {expanded && (
@@ -202,14 +202,15 @@ export function TasksPanel() {
                 {task.dependencies.map((dep, i) => (
                   <span key={dep}>
                     {i > 0 && ', '}
-                    <button
-                      type="button"
-                      className="text-primary hover:text-[#a0c0ff] font-mono"
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="cursor-pointer font-mono h-auto p-0 hover:text-[#a0c0ff]"
                       title="Open dependency graph centered on this task"
                       onClick={(e) => { e.stopPropagation(); openGraph(dep) }}
                     >
                       t{dep}
-                    </button>
+                    </Button>
                   </span>
                 ))}
               </div>
@@ -220,14 +221,15 @@ export function TasksPanel() {
                 {task.blocks.map((blk, i) => (
                   <span key={blk}>
                     {i > 0 && ', '}
-                    <button
-                      type="button"
-                      className="text-primary hover:text-[#a0c0ff] font-mono"
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="cursor-pointer font-mono h-auto p-0 hover:text-[#a0c0ff]"
                       title="Open dependency graph centered on this task"
                       onClick={(e) => { e.stopPropagation(); openGraph(blk) }}
                     >
                       t{blk}
-                    </button>
+                    </Button>
                   </span>
                 ))}
               </div>
@@ -245,18 +247,19 @@ export function TasksPanel() {
         {STATUS_FILTERS.map((label) => {
           const isActive = filter === label
           return (
-            <button
+            <Button
               key={label}
-              type="button"
+              variant="ghost"
+              size="sm"
               className={
                 isActive
-                  ? 'px-2 py-0.5 rounded text-[11px] cursor-pointer bg-[#80a0ff] text-[#1a1a2e] whitespace-nowrap'
-                  : 'px-2 py-0.5 rounded text-[11px] cursor-pointer bg-secondary text-muted-foreground hover:bg-border whitespace-nowrap'
+                  ? 'cursor-pointer px-2 py-0.5 h-auto rounded text-[11px] bg-[#80a0ff] text-[#1a1a2e] hover:bg-[#80a0ff] hover:text-[#1a1a2e] whitespace-nowrap'
+                  : 'cursor-pointer px-2 py-0.5 h-auto rounded text-[11px] bg-secondary text-muted-foreground hover:bg-border hover:text-muted-foreground whitespace-nowrap'
               }
               onClick={() => setFilter(label)}
             >
               {label}
-            </button>
+            </Button>
           )
         })}
       </div>
