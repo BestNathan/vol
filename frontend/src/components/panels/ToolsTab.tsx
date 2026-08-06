@@ -46,7 +46,7 @@ export function filterToolList(tools: SystemTool[], search: string): SystemTool[
   const q = search.trim().toLowerCase()
   if (q === '') return tools
   return tools.filter(
-    (t) => t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q),
+    (t) => t.name.toLowerCase().includes(q) || (t.description ?? '').toLowerCase().includes(q),
   )
 }
 
@@ -208,7 +208,7 @@ function ToolRow({ tool, onRun }: { tool: SystemTool; onRun: () => void }) {
       <Button
         variant="secondary"
         size="sm"
-        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity flex-shrink-0"
+        className="opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity flex-shrink-0"
         onClick={onRun}
       >
         Run
