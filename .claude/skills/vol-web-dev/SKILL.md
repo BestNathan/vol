@@ -1,116 +1,179 @@
 ---
 name: vol-web-dev
-description: Use when developing the vol-llm-ui Dioxus/WASM web frontend in the vol project — starting dev servers, adding Tailwind classes, debugging frontend-backend connection issues, or troubleshooting why styles don't appear
+description: Use when developing the React/Vite web frontend in the vol project — starting dev servers, adding Tailwind classes, debugging frontend-backend connection issues, or troubleshooting why styles don't appear
 ---
 
 # Vol Web Development
 
 ## Overview
 
-The web frontend is a Dioxus 0.6 WASM app (`crates/vol-llm-ui`) that connects to a JSON-RPC agent backend over WebSocket. Three watch-mode services must run simultaneously: Tailwind CSS, Dioxus dev server, and the JSON-RPC backend.
+The web frontend is a React 18 + Vite + TypeScript app (`frontend/`) with shadcn/ui components and Jotai state management. It connects to a JSON-RPC agent backend over WebSocket. Two services run simultaneously: the Vite dev server (which includes Tailwind CSS via its Vite plugin) and the JSON-RPC backend.
 
 ## Architecture
 
 ```
-Browser (port 8080)                  Backend (port 3001)
+Browser (port 5173)                  Backend (port 3001)
 ┌─────────────────────┐     WS      ┌──────────────────────┐
-│ Dioxus WASM (web)   │◄───────────►│ JSON-RPC over WS     │
-│ vol-llm-ui          │  ws://host  │ jsonrpc_agent_service│
-│ AgentConnection     │  :3001      │ AgentServerCore      │
+│ React SPA (Vite)    │◄───────────►│ JSON-RPC over WS     │
+│ frontend/           │  ws://host  │ jsonrpc_agent_service│
+│ JSON-RPC client     │  :3001      │ AgentServerCore      │
 └─────────────────────┘             └──────────────────────┘
 ```
 
-The frontend uses `AgentConnection` trait with two implementations:
-- `RemoteConnection` — WebSocket JSON-RPC client (production/dev)
-- `LocalConnection` — in-process agent (alternative)
+Vite proxies `/ws` to `ws://localhost:3001`, so the frontend connects to its own origin without cross-origin WebSocket issues.
 
-In dev mode, the frontend connects via `RemoteConnection` to `ws://<host>:3001`.
+## Project Structure
+
+```
+frontend/
+├── src/
+│   ├── main.tsx              # Entry point
+│   ├── App.tsx               # Root component
+│   ├── index.css             # Tailwind v4 + shadcn/ui dark theme
+│   ├── components/
+│   │   ├── dialogs/          # Overlay dialogs (ApprovalDialog, DebugPanel, ...)
+│   │   ├── panels/           # Main panel views (ConversationView, NodesPanel, ...)
+│   │   ├── inputs/           # Input components
+│   │   ├── layout/           # Layout shell
+│   │   ├── shared/           # Shared/reusable components
+│   │   └── ui/               # shadcn/ui primitives (Button, Dialog, Select, ...)
+│   ├── stores/               # Jotai atoms (connection.ts, conversation.ts, agents.ts, ...)
+│   ├── hooks/                # Custom hooks (useAutoScroll, useThrottledValue)
+│   ├── lib/                  # Utilities (jsonrpc-client.ts, ws-url.ts, protocol.ts, ...)
+│   └── types/                # TypeScript type definitions
+├── tests/                    # Test files
+│   └── e2e/                  # Playwright e2e specs
+├── vite.config.ts            # Vite config (plugins: react, tailwind; proxy /ws → :3001)
+├── tsconfig.json             # TypeScript config
+└── package.json              # Dependencies and scripts
+```
 
 ## Startup
 
-All three commands run in separate terminals. **Order matters.**
+All commands run in separate terminals.
 
 ### Pre-flight: Check if Already Running
 
 Before starting, check whether each service is already listening on its port:
 
 ```bash
-# Check if Dioxus dev server is already running
-lsof -i :8080 2>/dev/null && echo "dev server already running" || echo "port 8080 free"
+# Check if Vite dev server is already running
+lsof -i :5173 2>/dev/null && echo "Vite dev server already running" || echo "port 5173 free"
 
 # Check if JSON-RPC backend is already running
 lsof -i :3001 2>/dev/null && echo "backend already running" || echo "port 3001 free"
 ```
 
-`make web-css` has no fixed port — check with `pgrep -f tailwindcss`.
-
-If a service is already running, don't start a duplicate. If a port is occupied by a stale process, kill it first: `kill $(lsof -ti :8080)`.
+If a service is already running, don't start a duplicate. If a port is occupied by a stale process, kill it first: `kill $(lsof -ti :5173)`.
 
 ### Start Commands
 
 ```bash
-# Terminal 1: Tailwind CSS watch (MUST start first)
-make web-css
-
-# Terminal 2: Dioxus dev server (MUST start after web-css is running)
+# Terminal 1: Vite React dev server (includes Tailwind CSS via Vite plugin)
 make web-dev
 
-# Terminal 3: JSON-RPC backend (can start anytime)
+# Terminal 2: JSON-RPC backend
 make web-backend
 ```
 
-`make web-css` compiles `assets/input.css` → `assets/tailwind.css` in watch mode. If it's not running when `make web-dev` starts, new Tailwind classes (especially arbitrary values like `w-[600px]`) won't be in the compiled CSS and won't take effect.
+Tailwind CSS v4 is integrated via the `@tailwindcss/vite` plugin — **no separate CSS watch process is needed**. The Vite plugin handles CSS compilation and HMR automatically.
+
+`make web-backend` uses `cargo watch`, which recompiles and restarts on any Rust source change in the workspace.
 
 ## Debugging
 
-**All three services must be running to debug the full stack.** Missing any one causes incomplete behavior:
+**Both services must be running to debug the full stack.** Missing either causes incomplete behavior:
 
 | Service Down | Symptom |
 |-------------|---------|
-| `web-css` | New Tailwind classes don't take effect; arbitrary values like `w-[600px]` are ignored |
-| `web-dev` | No frontend at all; browser can't load the page on port 8080 |
+| `web-dev` | No frontend at all; browser can't load the page on port 5173 |
 | `web-backend` | Agent panel shows "disconnected"; no agent interaction works |
 
 **Debugging workflow:**
 
-1. Run the pre-flight port checks above to confirm all three are running
-2. If any service is missing, start it in a new terminal
-3. Check each terminal's output for compile errors — `cargo watch` and `dx serve` both print errors on change
-4. Open browser DevTools (F12): check the Console tab for WASM panics and the Network tab for WebSocket connection status to `ws://<host>:3001`
-5. After fixing code, verify the relevant watch process picked up the change (look for recompilation output in its terminal)
+1. Run the pre-flight port checks above to confirm both are running
+2. If a service is missing, start it in a new terminal
+3. Check each terminal's output for errors — Vite prints TypeScript/import errors on change; `cargo watch` prints Rust compile errors
+4. Open browser DevTools (F12):
+   - **Console tab**: React errors, JSON-RPC client logs, connection status
+   - **Network tab**: WebSocket connection status (`ws://host:5173/ws` proxied to `:3001`)
+   - **React DevTools** (if installed): component tree and Jotai atom state
+5. After fixing code, Vite HMR applies changes instantly for components/styles; the backend auto-reloads via `cargo watch`
 
 ## What Each Command Watches
 
 | Command | Tool | Watches | Does NOT watch |
 |---------|------|---------|----------------|
-| `make web-css` | `@tailwindcss/cli --watch` | `assets/input.css`, files matched by `@source` globs | Nothing else |
-| `make web-dev` | `dx serve` | `crates/vol-llm-ui/src/**` (Rust source) | CSS output, backend |
+| `make web-dev` | `vite` | `frontend/src/**` (TSX, CSS, TS) | Backend |
 | `make web-backend` | `cargo watch -x "run ..."` | All workspace crate sources | Nothing outside workspace |
 
-`make web-backend` **does** auto-reload — it uses `cargo watch`, which recompiles and restarts on any source change in the workspace dependency tree.
+Vite HMR handles CSS and component changes near-instantly. `make web-backend` auto-reloads on any Rust source change.
 
-## Tailwind Scanning
+## Tailwind CSS (v4)
 
-The Tailwind v4 setup scans Rust component files for class names. In `assets/input.css`:
+Tailwind CSS v4 is configured in `frontend/src/index.css` via `@import "tailwindcss"` and integrated through the `@tailwindcss/vite` Vite plugin. The plugin automatically scans all modules imported through Vite's module graph — **no manual `@source` directives needed**.
 
-```css
-@import "tailwindcss";
-@source "../src/web/components/*.rs";
+Custom theme tokens are defined with `@theme { ... }` in `index.css`. shadcn/ui CSS variables (HSL triples) are mapped via `@theme inline { ... }` for component compatibility.
+
+## shadcn/ui Components
+
+The project uses [shadcn/ui](https://ui.shadcn.com/docs/components) primitives built on Radix UI. Installed components live in `frontend/src/components/ui/`.
+
+### Installed Primitives
+
+| Component | Source | Usage |
+|-----------|--------|-------|
+| Button | `@/components/ui/button` | All buttons, with variants: `default`, `destructive`, `outline`, `secondary`, `ghost`, `link`, `success` |
+| Dialog | `@/components/ui/dialog` | All modal overlays |
+| Tabs | `@/components/ui/tabs` | Tab navigation in main layout and sub-panels |
+| Sheet | `@/components/ui/sheet` | Slide-in panels (CapabilityDrawer) |
+| Switch | `@/components/ui/switch` | Toggle switches |
+| Checkbox | `@/components/ui/checkbox` | Checkbox inputs |
+| Input | `@/components/ui/input` | Text input fields |
+| Select | `@/components/ui/select` | Dropdown selects |
+| Label | `@/components/ui/label` | Form labels |
+| Badge | `@/components/ui/badge` | Status/count indicators |
+| ScrollArea | `@/components/ui/scroll-area` | Styled scrollable regions |
+| Accordion | `@/components/ui/accordion` | Collapsible sections |
+| Skeleton | `@/components/ui/skeleton` | Loading placeholders |
+| Tooltip | `@/components/ui/tooltip` | Hover tooltips |
+
+### Adding a New shadcn Component
+
+```bash
+cd frontend && npx shadcn@latest add <component-name>
 ```
 
-Only files matching `crates/vol-llm-ui/src/web/components/*.rs` are scanned. Classes used in other directories (e.g., `src/web/bin/`, `src/tui/`, `src/connection/`) will NOT be picked up unless a `@source` directive covers them.
+Note: the CLI may write to a stray `frontend/@/` directory due to project-references tsconfig layout. Move files to `frontend/src/components/ui/` after install.
 
-**Adding a new component directory?** Add a corresponding `@source` line to `input.css`.
+Available components: https://ui.shadcn.com/docs/components
+
+### Conventions
+
+- **Always use `<Button>`** — never raw `<button>` elements. Pick the closest variant. Add `cursor-pointer` in className (Tailwind v4 resets button cursor).
+- **Always use `<ScrollArea>`** for scrollable panel containers — never raw `overflow-y-auto`.
+- **Always use `<Badge>`** for status/count indicators — never raw styled `<span>` elements.
+- **Loading states** — use `<Skeleton>` placeholders, not CSS spinner spans.
+- **Dialogs** — use `<Dialog>` + `<DialogContent>`, not custom overlays.
+- **Slide-in panels** — use `<Sheet>`, not custom fixed-position divs.
 
 ## Build and Check Commands
 
-| Command | What it does | WASM target? |
-|---------|-------------|--------------|
-| `make web-check` | `cargo check` with `--features web` | No — checks native compilation only |
-| `make web-build` | Full WASM build | Yes — `--target wasm32-unknown-unknown` |
-| `make web-clippy` | Clippy with `--features web`, `-D warnings` | No |
+| Command | What it does |
+|---------|-------------|
+| `make web-check` | TypeScript type-check + Vite production build |
+| `make web-build` | Production build (same as `make web-check`) |
+| `make web-clippy` | TypeScript type-check only (`tsc -b --noEmit`) |
 
-Use `make web-check` for fast iteration (compile-check without WASM target overhead). Use `make web-build` when you need the actual WASM binary. Use `make web-clippy` before landing changes.
+Use `make web-clippy` for fast iteration (type-check without building). Use `make web-check` or `make web-build` when you need the full production bundle in `frontend/dist/`.
+
+For running tests:
+
+```bash
+npm --prefix frontend run test:run    # vitest unit tests (single run)
+npm --prefix frontend run test        # vitest in watch mode
+npx playwright test --config frontend/playwright.config.ts  # e2e tests
+```
 
 ## Environment Variables
 
@@ -123,18 +186,29 @@ Use `make web-check` for fast iteration (compile-check without WASM target overh
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
-| New Tailwind class has no effect | `make web-css` not running before `make web-dev` | Restart both in correct order |
-| Class used outside `src/web/components/` | Not in `@source` glob | Add `@source` directive to `input.css` |
+| Page won't load on :5173 | Vite dev server not running | Start `make web-dev` |
 | Agent panel shows "disconnected" | Backend not running on port 3001 | Start `make web-backend` |
-| Backend change not reflected | `cargo watch` missed it or compile error | Check terminal output; `cargo watch` auto-reloads on any workspace source change |
-| WASM build errors but `web-check` passes | `web-check` doesn't target WASM | Use `make web-build` for WASM-specific checks |
-| `dx serve` not found | Dioxus CLI not installed | `cargo install dioxus-cli` |
-| Port 8080/3001 already in use | Previous instance still running | Run pre-flight checks; kill stale process with `kill $(lsof -ti :8080)` |
-| Debugging but something not working | Not all three services running | Run pre-flight checks to verify all three are up |
+| New Tailwind class has no effect | Vite HMR may have missed it; check for syntax errors in the class | Hard-refresh browser; verify class name is spelled correctly |
+| TypeScript error on import | Path alias or missing type | `@/` alias maps to `frontend/src/` (configured in `vite.config.ts` and `tsconfig.json`) |
+| Vite build fails but dev works | TypeScript strictness catches more in build mode | Run `make web-clippy` to see all type errors; fix before building |
+| Backend change not reflected | `cargo watch` missed it or compile error | Check terminal output; restart `make web-backend` if needed |
+| Port 5173/3001 already in use | Previous instance still running | Run pre-flight checks; kill stale process with `kill $(lsof -ti :5173)` |
+| CSS variables not working | Tailwind v4 `@theme` config issue | Check `frontend/src/index.css` for correct `@theme` / `@theme inline` blocks |
+| shadcn/ui component broken | Missing CSS variable or Radix dependency | Verify all `@radix-ui/*` deps are installed and CSS variables are defined in `index.css` |
 
 ## Adding New Dependencies
 
-When adding a new crate dependency to `crates/vol-llm-ui/Cargo.toml`:
-- Ensure it compiles to `wasm32-unknown-unknown` (no native-only deps)
-- `cargo watch` on the backend does NOT pick up new Cargo.toml changes automatically — restart `make web-backend` manually after `cargo update`
-- Run `make web-check` first, then `make web-build` to verify WASM compatibility
+When adding a new npm dependency:
+
+```bash
+npm --prefix frontend install <package>
+```
+
+- Ensure the package is compatible with the React 18 / Vite 6 / TypeScript 5.6 toolchain
+- Run `make web-check` to verify the build still passes
+- After installing, `make web-dev` picks up new deps automatically (Vite handles dependency changes)
+- `make web-backend` is unaffected by frontend dependency changes
+
+When adding a new Rust crate dependency (for backend changes):
+- Add to the relevant `Cargo.toml` in the workspace
+- Restart `make web-backend` manually — `cargo watch` does NOT pick up new Cargo.toml dependencies automatically
