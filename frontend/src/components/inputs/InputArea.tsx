@@ -4,8 +4,8 @@
 // input_area.rs with the Cancel-button gap fix.
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAtomValue, useSetAtom, getDefaultStore } from 'jotai'
+import { Button } from '@/components/ui/button'
 import { getPanelClient } from '@/lib/panel-client'
-import { cn } from '@/lib/utils'
 import { selectedAgentIdAtom, agentStatusMapAtom } from '@/stores/agents'
 import {
   isRunningAtom, pendingSubmitAgentAtom, runMapAtom, sessionIdAtom,
@@ -159,18 +159,15 @@ export function InputArea() {
         {isRunning ? (
           <div className="flex items-center gap-2">
             <span className="text-yellow-400">Running... (input disabled)</span>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="cursor-pointer text-yellow-400 hover:text-destructive/80 text-[10px] sm:text-[11px]"
               onClick={handleCancel}
               disabled={!runId}
-              className={cn(
-                'text-yellow-400 cursor-pointer',
-                'hover:text-destructive/80 hover:underline',
-                'disabled:text-muted-foreground/70 disabled:cursor-not-allowed disabled:hover:no-underline',
-              )}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         ) : (
           <span>
@@ -179,14 +176,15 @@ export function InputArea() {
             <span className="text-primary font-bold">Esc×2</span> Clear
           </span>
         )}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
+          className="cursor-pointer text-muted-foreground/60 hover:text-yellow-400/70 text-[10px] sm:text-[11px]"
           onClick={handleNewSession}
           disabled={isRunning}
-          className="text-muted-foreground/60 hover:text-yellow-400/70 hover:underline cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           + New Session
-        </button>
+        </Button>
       </div>
     </div>
   )

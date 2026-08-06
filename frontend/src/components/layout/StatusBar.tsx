@@ -2,6 +2,7 @@
 import { useAtomValue, useSetAtom } from 'jotai'
 import { ConnectionIndicator } from '@/components/shared/ConnectionIndicator'
 import { NodesDropdown } from '@/components/shared/NodesDropdown'
+import { Button } from '@/components/ui/button'
 import {
   sessionIdAtom, runCountAtom, iterationAtom, toolCallCountAtom,
   isRunningAtom, exitingAtom, unsafeModeAtom, runElapsedAtom,
@@ -46,15 +47,16 @@ export function StatusBar() {
       </div>
       <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
         <span className="hidden sm:inline">UI: {__BUILD_TIME__}</span>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="cursor-pointer hover:text-white text-[14px]"
           aria-label="Toggle debug panel"
           title="Debug panel"
           onClick={() => setDebugPanel((prev) => ({ ...prev, open: !prev.open }))}
-          className="hover:text-white cursor-pointer"
         >
           🐛
-        </button>
+        </Button>
       </div>
     </div>
   )
