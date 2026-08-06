@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Badge } from '@/components/ui/badge'
 import { skillDialogAtom } from '@/stores/dialogs'
 import { getPanelClient } from '@/lib/panel-client'
 import { scopeColor } from '@/components/panels/SkillsPanel'
@@ -66,17 +67,13 @@ export function SkillDetailDialog() {
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-[15px] font-semibold text-foreground truncate">{skill?.name ?? ''}</span>
               {skill && (
-                <span className="text-[11px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded flex-shrink-0">
-                  v{skill.version}
-                </span>
+                <Badge variant="secondary" className="text-[11px] flex-shrink-0">v{skill.version}</Badge>
               )}
               {skill && (
-                <span
-                  className="text-[11px] px-1.5 py-0.5 rounded flex-shrink-0"
-                  style={{ color: scopeColor(skill.scope), background: '#2a2a44' }}
-                >
+                <Badge variant="outline" className="text-[11px] flex-shrink-0"
+                  style={{ color: scopeColor(skill.scope), borderColor: scopeColor(skill.scope) }}>
                   {skill.scope}
-                </span>
+                </Badge>
               )}
             </div>
           </DialogTitle>

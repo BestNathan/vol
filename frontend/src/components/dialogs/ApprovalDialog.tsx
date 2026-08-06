@@ -8,6 +8,7 @@
 // Esc / close button) — a pending request must be answered.
 import { useAtom } from 'jotai'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { approvalAtom } from '@/stores/dialogs'
 import { getPanelClient } from '@/lib/panel-client'
 import type { RpcMethods } from '@/lib/protocol'
@@ -82,20 +83,8 @@ export function ApprovalDialog() {
           </div>
         )}
         <div className="mt-3 flex gap-2 pt-2 border-t border-border">
-          <button
-            type="button"
-            onClick={() => void resolve(true)}
-            className="px-3 py-1.5 border-none rounded-md cursor-pointer text-[13px] bg-[#408040] text-foreground hover:bg-[#50a050]"
-          >
-            Approve
-          </button>
-          <button
-            type="button"
-            onClick={() => void resolve(false)}
-            className="px-3 py-1.5 border-none rounded-md cursor-pointer text-[13px] bg-[#804040] text-foreground hover:bg-[#905050]"
-          >
-            Reject
-          </button>
+          <Button variant="success" size="sm" onClick={() => void resolve(true)}>Approve</Button>
+          <Button variant="destructive" size="sm" onClick={() => void resolve(false)}>Reject</Button>
         </div>
       </DialogContent>
     </Dialog>

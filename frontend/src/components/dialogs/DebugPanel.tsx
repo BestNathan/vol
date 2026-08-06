@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import { useAtom } from 'jotai'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { debugPanelAtom, type DebugMessage } from '@/stores/dialogs'
 
 /** Elapsed time since the first captured message, as HH:MM:SS.mmm. */
@@ -52,12 +53,7 @@ export function DebugPanel() {
           <div className="flex items-center gap-3">
             <DialogTitle className="text-foreground font-bold text-sm">Debug Panel</DialogTitle>
             <div className="flex gap-1">
-              <button
-                type="button"
-                className="px-3 py-1 text-[12px] font-semibold cursor-pointer border-b-2 border-primary text-foreground"
-              >
-                WS
-              </button>
+              <Button variant="ghost" size="sm" className="border-b-2 border-primary rounded-none font-semibold text-[12px]">WS</Button>
             </div>
           </div>
         </div>
