@@ -83,8 +83,8 @@ export function ApprovalDialog() {
           </div>
         )}
         <div className="mt-3 flex gap-2 pt-2 border-t border-border">
-          <Button variant="success" size="sm" onClick={() => void resolve(true)}>Approve</Button>
-          <Button variant="destructive" size="sm" onClick={() => void resolve(false)}>Reject</Button>
+          <Button variant="success" size="sm" className="cursor-pointer" onClick={() => void resolve(true)}>Approve</Button>
+          <Button variant="destructive" size="sm" className="cursor-pointer" onClick={() => void resolve(false)}>Reject</Button>
         </div>
       </DialogContent>
     </Dialog>

@@ -53,7 +53,7 @@ export function DebugPanel() {
           <div className="flex items-center gap-3">
             <DialogTitle className="text-foreground font-bold text-sm">Debug Panel</DialogTitle>
             <div className="flex gap-1">
-              <Button variant="ghost" size="sm" className="border-b-2 border-primary rounded-none font-semibold text-[12px]">WS</Button>
+              <Button variant="ghost" size="sm" className="border-b-2 border-primary rounded-none font-semibold text-[12px] cursor-pointer">WS</Button>
             </div>
           </div>
         </div>
