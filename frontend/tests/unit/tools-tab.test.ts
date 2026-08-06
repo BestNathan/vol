@@ -1,32 +1,10 @@
 // frontend/tests/unit/tools-tab.test.ts
 import { describe, it, expect } from 'vitest'
-import { formatToolCallResult, statusBadge } from '@/components/panels/ToolsTab'
+import { formatToolCallResult, filterToolList } from '@/components/panels/ToolsTab'
 
-describe('statusBadge', () => {
-  it('maps Success to the OK badge in green', () => {
-    const badge = statusBadge('Success')
-    expect(badge.label).toBe('OK')
-    expect(badge.className).toContain('#40c040')
-  })
-
-  it('maps Error to the ERR badge in red', () => {
-    const badge = statusBadge('Error')
-    expect(badge.label).toBe('ERR')
-    expect(badge.className).toContain('#c04040')
-  })
-
-  it('maps Skipped to the SKIP badge in yellow', () => {
-    const badge = statusBadge('Skipped')
-    expect(badge.label).toBe('SKIP')
-    expect(badge.className).toContain('#f0c040')
-  })
-
-  it('maps Running to the "..." badge in grey', () => {
-    const badge = statusBadge('Running')
-    expect(badge.label).toBe('...')
-    expect(badge.className).toContain('#888')
-  })
-})
+function tool(name: string, description: string) {
+  return { name, description, parameters: undefined }
+}
 
 describe('formatToolCallResult', () => {
   it('extracts the content string from the tool.call result envelope', () => {
@@ -45,12 +23,38 @@ describe('formatToolCallResult', () => {
     const text = formatToolCallResult(result)
     expect(text).toContain('"tool_name": "bash"')
     expect(text).toContain('"error": "boom"')
-    expect(text).toContain('\n') // pretty-printed, not single-line
+    expect(text).toContain('\n')
   })
 
   it('handles non-object results without throwing', () => {
     expect(formatToolCallResult(null)).toBe('null')
     expect(formatToolCallResult('raw')).toBe('"raw"')
     expect(formatToolCallResult(42)).toBe('42')
+  })
+})
+
+describe('filterToolList', () => {
+  const tools = [
+    tool('bash', 'Execute shell commands'),
+    tool('read', 'Read a file from disk'),
+    tool('grep', 'Search file contents with regex'),
+  ]
+
+  it('returns all tools when search is empty', () => {
+    expect(filterToolList(tools, '')).toHaveLength(3)
+  })
+
+  it('matches by tool name (case-insensitive)', () => {
+    expect(filterToolList(tools, 'BASH')).toHaveLength(1)
+    expect(filterToolList(tools, 'BASH')[0].name).toBe('bash')
+  })
+
+  it('matches by description (case-insensitive)', () => {
+    expect(filterToolList(tools, 'regex')).toHaveLength(1)
+    expect(filterToolList(tools, 'regex')[0].name).toBe('grep')
+  })
+
+  it('returns empty array when nothing matches', () => {
+    expect(filterToolList(tools, 'nonexistent')).toHaveLength(0)
   })
 })
