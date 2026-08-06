@@ -314,30 +314,57 @@ export function FileTree() {
     void loadRoot(nodeId)
   }, [nodeId, loadRoot, setCollapsedDirs])
 
+  // Keep the backdrop mounted for 200ms after close so the fade-out can play
+  // before unmounting.
+  const [backdropVisible, setBackdropVisible] = useState(false)
+  useEffect(() => {
+    if (drawerOpen) {
+      setBackdropVisible(true)
+      return
+    }
+    const t = setTimeout(() => setBackdropVisible(false), 200)
+    return () => clearTimeout(t)
+  }, [drawerOpen])
+
+  // True while the drawer is sliding out (backdrop still fading).
+  const closing = backdropVisible && !drawerOpen
+
   return (
     <>
       {/* Backdrop — mobile only, positioned inside the content flex row */}
-      {drawerOpen && (
+      {backdropVisible && (
         <div
-          className="sm:hidden absolute inset-0 z-40 bg-black/50"
+          className={cn(
+            'sm:hidden absolute inset-0 z-40 bg-black/50',
+            drawerOpen ? 'animate-in fade-in-0 duration-200' : 'animate-out fade-out-0 duration-200'
+          )}
           onClick={() => setDrawerOpen(false)}
         />
       )}
-      <div className={fileTreeOuterClass(drawerOpen)}>
-        {!drawerOpen && (
-          <button
-            type="button"
-            aria-label="Open file explorer"
-            className="sm:hidden flex h-full w-full cursor-pointer flex-col items-center gap-2 border-0 bg-transparent px-0 py-3 text-[#8b8baa] hover:bg-secondary hover:text-foreground"
-            onClick={() => setDrawerOpen(true)}
-          >
-            <span className="text-[16px] leading-none">📂</span>
-            <span className="text-[10px] font-semibold uppercase" style={{ writingMode: 'vertical-rl' }}>
-              Files
-            </span>
-          </button>
+      {/* Mobile rail — visible when the drawer is closed. */}
+      {!drawerOpen && (
+        <button
+          type="button"
+          aria-label="Open file explorer"
+          className="sm:hidden flex h-full w-10 flex-shrink-0 cursor-pointer flex-col items-center gap-2 border-0 border-r border-[#2a2a44] bg-[#16162a] px-0 py-3 text-[#8b8baa] hover:bg-secondary hover:text-foreground"
+          onClick={() => setDrawerOpen(true)}
+        >
+          <span className="text-[16px] leading-none">📂</span>
+          <span className="text-[10px] font-semibold uppercase" style={{ writingMode: 'vertical-rl' }}>
+            Files
+          </span>
+        </button>
+      )}
+      {/* Drawer panel — slides in from the left on mobile; static sidebar on
+          desktop. Always mounted so the transform can transition both ways. */}
+      <div
+        className={cn(
+          fileTreeOuterClass(true),
+          'transition-transform duration-200',
+          drawerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'
         )}
-        <div className={fileTreeContentClass(drawerOpen)}>
+      >
+        <div className={cn(fileTreeContentClass(drawerOpen), closing && 'flex')}>
           <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.8px] text-[#6a6a9a] border-b border-[#2a2a44] flex-shrink-0 flex items-center justify-between">
             <span>Explorer</span>
             <button

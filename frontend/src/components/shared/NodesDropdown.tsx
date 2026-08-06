@@ -9,6 +9,7 @@ import { getControlClient } from '@/lib/panel-client'
 import { dpPool } from '@/lib/dp-pool'
 import { activeNodeIdAtom, viewingNodeDetailAtom } from '@/stores/ui'
 import { serverModeAtom } from '@/stores/connection'
+import { cn } from '@/lib/utils'
 import type { NodeListEntry } from '@/types'
 import type { RpcMethods } from '@/lib/protocol'
 
@@ -85,6 +86,18 @@ export function NodesDropdown() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [open])
 
+  // Keep the dropdown mounted for 150ms after close so the exit animation
+  // (fade + zoom out) can play before unmounting.
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    if (open) {
+      setVisible(true)
+      return
+    }
+    const t = setTimeout(() => setVisible(false), 150)
+    return () => clearTimeout(t)
+  }, [open])
+
   // Only meaningful when connected to the control plane.
   if (serverMode !== 'ControlPlane') return null
 
@@ -118,12 +131,23 @@ export function NodesDropdown() {
       >
         {open ? '▴' : '▾'} {activeNode ? activeNode.name : `Nodes(${nodes.length})`}
       </button>
-      {open && (
+      {visible && (
         <>
           {/* Transparent overlay — clicking outside closes the dropdown. */}
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
-            className="fixed min-w-[280px] max-w-[calc(100vw-1rem)] bg-card border border-border rounded shadow-lg z-50 max-h-[400px] overflow-y-auto"
+            className={cn(
+              'fixed inset-0 z-40 bg-black/20',
+              open ? 'animate-in fade-in-0 duration-150' : 'animate-out fade-out-0 duration-150'
+            )}
+            onClick={() => setOpen(false)}
+          />
+          <div
+            className={cn(
+              'fixed min-w-[280px] max-w-[calc(100vw-1rem)] origin-top-left bg-card border border-border rounded shadow-lg z-50 max-h-[400px] overflow-y-auto',
+              open
+                ? 'animate-in fade-in-0 zoom-in-95 duration-150'
+                : 'animate-out fade-out-0 zoom-out-95 duration-150'
+            )}
             style={panelPos ? { top: panelPos.top, left: panelPos.left } : undefined}
             onClick={(e) => e.stopPropagation()}
           >

@@ -4,8 +4,9 @@
 // direction arrows, elapsed timestamps (HH:MM:SS.mmm since first capture),
 // method names, and expandable pretty-printed JSON payloads. Port of
 // crates/vol-llm-ui/src/web/components/debug_panel.rs.
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useAtom } from 'jotai'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { debugPanelAtom, type DebugMessage } from '@/stores/dialogs'
 
 /** Elapsed time since the first captured message, as HH:MM:SS.mmm. */
@@ -33,31 +34,23 @@ export function DebugPanel() {
 
   const close = () => setPanel({ open: false, messages })
 
-  // Close on Escape (must be before any early return — hooks order is fixed)
-  useEffect(() => {
-    if (!open) return
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close()
-    }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [open])
-
-  if (!open) return null
-
-  // Responsive: centered modal on mobile, right-side docked panel on desktop.
+  // Esc is handled natively by Radix (onEscapeKeyDown → onOpenChange(false)).
+  // Responsive: centered modal on mobile, right-side docked panel on desktop
+  // (override DialogContent's fixed-center positioning on sm+).
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 sm:justify-end sm:p-0"
-      onClick={close}
-    >
-      <div
-        className="bg-background border border-border rounded-lg flex flex-col shadow-2xl w-[92vw] max-w-[640px] h-[85vh] sm:max-w-none sm:w-[420px] sm:h-full sm:rounded-none sm:border-0 sm:border-l"
-        onClick={(e) => e.stopPropagation()}
+    <Dialog open={open} onOpenChange={(next) => { if (!next) close() }}>
+      <DialogContent
+        overlayClassName="bg-black/50"
+        className="
+          p-0 gap-0 rounded-lg flex flex-col shadow-2xl
+          w-[92vw] max-w-[640px] h-[85vh]
+          sm:left-auto sm:right-0 sm:top-0 sm:translate-x-0 sm:translate-y-0
+          sm:w-[420px] sm:max-w-[420px] sm:h-full sm:rounded-none sm:border-l
+        "
       >
-        <div className="flex items-center justify-between px-4 py-2 border-b border-[#333] shrink-0">
+        <div className="flex items-center px-4 py-2 border-b border-[#333] shrink-0">
           <div className="flex items-center gap-3">
-            <span className="text-foreground font-bold text-sm">Debug Panel</span>
+            <DialogTitle className="text-foreground font-bold text-sm">Debug Panel</DialogTitle>
             <div className="flex gap-1">
               <button
                 type="button"
@@ -67,20 +60,12 @@ export function DebugPanel() {
               </button>
             </div>
           </div>
-          <button
-            type="button"
-            aria-label="Close debug panel"
-            onClick={close}
-            className="text-muted-foreground hover:text-white text-lg leading-none px-1 cursor-pointer"
-          >
-            ×
-          </button>
         </div>
         <div className="flex-1 overflow-hidden">
           <WsTab messages={messages} />
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

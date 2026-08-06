@@ -4,22 +4,25 @@ import { useState } from 'react'
 import { conversationByAgentAtom } from '@/stores/conversation'
 import { isRunningAtom } from '@/stores/connection'
 import { Markdown } from '@/components/shared/Markdown'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useAutoScroll } from '@/hooks/useAutoScroll'
-import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { ConversationEntry } from '@/types'
 
 function ToolDetailModal({
-  entry, onClose
+  entry, open, onClose
 }: {
   entry: { toolCall: ConversationEntry & { type: 'ToolCall' }; result?: ConversationEntry & { type: 'ToolResult' } }
+  open: boolean
   onClose: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-card border border-border rounded-lg p-4 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
-        onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold mb-2">Tool: {entry.toolCall.toolName}</h3>
+    <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
+      <DialogContent
+        overlayClassName="bg-black/50"
+        className="w-[95vw] sm:max-w-2xl max-h-[80vh] overflow-y-auto rounded-lg"
+      >
+        <DialogTitle className="text-lg font-bold mb-2">Tool: {entry.toolCall.toolName}</DialogTitle>
         <div className="mb-4">
           <div className="text-xs text-muted-foreground mb-1">Arguments</div>
           <pre className="bg-background p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap">
@@ -36,9 +39,8 @@ function ToolDetailModal({
             <Markdown content={entry.result.fullResult} />
           </div>
         )}
-        <Button variant="outline" size="sm" className="mt-4" onClick={onClose}>Close</Button>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -115,9 +117,10 @@ function TimelineEntry({
         )}
       </div>
 
-      {/* Tool detail modal */}
-      {detailOpen && toolDetail && (
-        <ToolDetailModal entry={toolDetail} onClose={() => setDetailOpen(false)} />
+      {/* Tool detail modal — always mounted while a tool call exists; Radix
+          animates open/close via the detailOpen state. */}
+      {toolDetail && (
+        <ToolDetailModal entry={toolDetail} open={detailOpen} onClose={() => setDetailOpen(false)} />
       )}
     </div>
   )

@@ -66,6 +66,18 @@ export function CapabilityDrawer() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
+  // Keep the drawer mounted for 200ms after close so the exit animation
+  // (slide-out + fade-out) can play before unmounting.
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    if (open) {
+      setVisible(true)
+      return
+    }
+    const t = setTimeout(() => setVisible(false), 200)
+    return () => clearTimeout(t)
+  }, [open])
+
   // Load capabilities when the drawer opens; refetch if the agent or session
   // changes while open. On close, reset per-open state so the next open
   // fetches fresh data.
@@ -189,7 +201,7 @@ export function CapabilityDrawer() {
     })
   }, [])
 
-  if (!open) return null
+  if (!visible) return null
 
   const sections: {
     group: CapGroup
@@ -205,11 +217,25 @@ export function CapabilityDrawer() {
 
   return (
     <>
-      {/* Backdrop overlay */}
-      <div className="fixed inset-0 bg-black/50 z-40" onClick={closeDrawer} />
+      {/* Backdrop overlay — fades in/out with the drawer */}
+      <div
+        className={cn(
+          'fixed inset-0 z-40 bg-black/50',
+          open ? 'animate-in fade-in-0 duration-200' : 'animate-out fade-out-0 duration-200'
+        )}
+        onClick={closeDrawer}
+      />
 
-      {/* Drawer panel — full width on mobile, fixed 320px right panel on desktop */}
-      <div className="fixed right-0 top-0 h-full w-full sm:w-80 bg-background border-l border-border z-50 flex flex-col shadow-2xl">
+      {/* Drawer panel — full width on mobile, fixed 320px right panel on
+          desktop; slides in from the right edge and out on close. */}
+      <div
+        className={cn(
+          'fixed right-0 top-0 h-full w-full sm:w-80 bg-background border-l border-border z-50 flex flex-col shadow-2xl',
+          open
+            ? 'animate-in slide-in-from-right-full fade-in-0 duration-200'
+            : 'animate-out slide-out-to-right-full fade-out-0 duration-200'
+        )}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-3 border-b border-border flex-shrink-0">
           <span className="text-[14px] font-semibold text-foreground pl-1">Capabilities</span>

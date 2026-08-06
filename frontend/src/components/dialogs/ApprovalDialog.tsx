@@ -7,6 +7,7 @@
 // the atom. The modal is deliberately not dismissible (no backdrop click /
 // Esc / close button) — a pending request must be answered.
 import { useAtom } from 'jotai'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { approvalAtom } from '@/stores/dialogs'
 import { getPanelClient } from '@/lib/panel-client'
 import type { RpcMethods } from '@/lib/protocol'
@@ -30,7 +31,6 @@ function errMsg(err: unknown): string {
 export function ApprovalDialog() {
   const [approval, setApproval] = useAtom(approvalAtom)
   const pending = approval.toolName !== null || approval.reqId !== null
-  if (!pending) return null
 
   const clear = () => setApproval({ toolName: null, reason: null, arguments: null, reqId: null })
 
@@ -53,16 +53,25 @@ export function ApprovalDialog() {
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100]"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Tool approval required"
+    <Dialog
+      open={pending}
+      onOpenChange={(open) => {
+        if (!open) {
+          // no-op — HITL must be explicitly answered: no backdrop click, Esc,
+          // or close button may dismiss a pending request.
+        }
+      }}
     >
-      <div className="bg-card border border-input rounded-lg p-3 sm:p-4 w-[95vw] max-w-[600px] sm:min-w-[400px] sm:w-[90vw] sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
-        <div className="text-[16px] font-bold text-foreground mb-3 border-b border-border pb-2">
+      <DialogContent
+        className="z-[100] rounded-lg w-[95vw] max-w-[600px] sm:min-w-[400px] sm:w-[90vw] sm:max-w-[500px] max-h-[80vh] overflow-y-auto"
+        overlayClassName="bg-black/60"
+        hideCloseButton
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+        <DialogTitle className="text-[16px] font-bold text-foreground mb-3 border-b border-border pb-2">
           Tool Approval Required
-        </div>
+        </DialogTitle>
         <div className="text-yellow-400 font-bold text-[15px]">[!] {approval.toolName ?? 'unknown tool'}</div>
         {approval.reason !== null && approval.reason !== '' && (
           <div className="text-foreground/80 my-1.5">Reason: {approval.reason}</div>
@@ -88,7 +97,7 @@ export function ApprovalDialog() {
             Reject
           </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
