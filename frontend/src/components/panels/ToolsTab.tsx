@@ -2,7 +2,7 @@
 // Tools tab: DP node tool listing with search filter and inline Run actions.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAtom } from 'jotai'
-import { ChevronRight, Search, Wrench } from 'lucide-react'
+import { ChevronRight, Search, Wrench, Hash } from 'lucide-react'
 import { getPanelClient } from '@/lib/panel-client'
 import { systemToolsAtom, toolsLoadingAtom } from '@/stores/tools'
 import { ToolDetailDialog, type ToolCallOutcome } from '@/components/dialogs/ToolDetailDialog'
@@ -181,27 +181,57 @@ export function ToolsTab() {
 
 // ── Sub-components ────────────────────────────────────────────────────────
 
+function paramCount(params: unknown): number {
+  if (params && typeof params === 'object' && !Array.isArray(params)) {
+    const props = (params as Record<string, unknown>).properties
+    if (props && typeof props === 'object') return Object.keys(props).length
+  }
+  return 0
+}
+
 function ToolRow({ tool, onClick }: { tool: SystemTool; onClick: () => void }) {
+  const nParams = paramCount(tool.parameters)
+  // Derive a stable hue from the tool name for the icon background color
+  const hue = tool.name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-transparent hover:border-border hover:bg-secondary/40 active:bg-secondary/60 transition-all w-full text-left cursor-pointer group"
+      className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-[#2a2a44] bg-[#16162a]
+        hover:border-[#4a4a6a] hover:bg-[#1c1c32]
+        active:scale-[0.99] transition-all w-full text-left cursor-pointer group"
     >
-      <div className="flex items-center justify-center h-7 w-7 rounded-md bg-secondary/80 flex-shrink-0 group-hover:bg-secondary transition-colors">
-        <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
+      {/* Colored icon square */}
+      <div
+        className="flex items-center justify-center h-8 w-8 rounded-lg flex-shrink-0 transition-transform group-hover:scale-105"
+        style={{ backgroundColor: `hsl(${hue}, 25%, 18%)`, color: `hsl(${hue}, 60%, 65%)` }}
+      >
+        <Wrench className="h-4 w-4" style={{ color: `hsl(${hue}, 55%, 60%)` }} />
       </div>
+
+      {/* Text content */}
       <div className="min-w-0 flex-1">
-        <span className="text-[13px] font-semibold text-foreground truncate block">
-          {tool.name}
-        </span>
-        {tool.description && (
-          <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={tool.description}>
+        <div className="flex items-center gap-2">
+          <span className="text-[13px] font-semibold text-foreground truncate">{tool.name}</span>
+          {nParams > 0 && (
+            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/60 flex-shrink-0">
+              <Hash className="h-3 w-3" />
+              {nParams}
+            </span>
+          )}
+        </div>
+        {tool.description ? (
+          <div className="text-[11px] text-muted-foreground/70 truncate mt-0.5" title={tool.description}>
             {tool.description}
           </div>
+        ) : (
+          <div className="text-[11px] text-muted-foreground/40 italic mt-0.5">No description</div>
         )}
       </div>
-      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-all flex-shrink-0" />
+
+      {/* Chevron indicator */}
+      <ChevronRight className="h-4 w-4 text-muted-foreground/20 group-hover:text-muted-foreground/50 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
     </button>
   )
 }
