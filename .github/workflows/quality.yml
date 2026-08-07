@@ -1,6 +1,9 @@
-# Quality gate — runs on pull requests and manual dispatch.
-# Fast feedback loop: fmt → check → clippy → test → boundaries.
-# Uses rust-toolchain.toml (pinned toolchain with rustfmt + clippy components).
+# Quality gates — run on PRs and pushes to main.
+# Each job only triggers when its directory actually changed.
+#
+#   quality-rust     — crates/** changed  → fmt, clippy, tests, boundaries
+#   quality-frontend — frontend/** changed → tsc, vitest
+#   coverage         — crates/** changed  → llvm-cov ≥ 80%
 
 name: quality
 
@@ -9,15 +12,6 @@ on:
     branches: [main]
   push:
     branches: [main]
-    paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
-      - "rust-toolchain.toml"
-      - "clippy.toml"
-      - ".cargo/config.toml"
-      - "Makefile"
-      - ".github/workflows/quality.yml"
   workflow_dispatch:
 
 env:
@@ -29,8 +23,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality:
-    name: quality
+  # ── Detect which paths changed ──────────────────────────────────────────
+  changes:
+    name: detect changes
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'crates/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain.toml'
+              - 'clippy.toml'
+              - '.cargo/config.toml'
+              - 'Makefile'
+              - 'scripts/**'
+            frontend:
+              - 'frontend/**'
+
+  # ── Rust quality gate ───────────────────────────────────────────────────
+  quality-rust:
+    name: quality-rust
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -50,26 +75,59 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-      - name: Clippy (workspace, covers check, deny warnings)
+      - name: Clippy (workspace, deny warnings)
         run: cargo clippy --workspace -- -D warnings
 
       - name: Check no doc tests
         run: ./scripts/check-no-doc-tests.sh
 
-      - name: Install cargo-nextest (pre-built binary)
+      - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 
-      - name: Run all tests (nextest, fallback to cargo test)
+      - name: Run all tests
         run: cargo nextest run --workspace --no-fail-fast 2>/dev/null || cargo test --workspace --no-fail-fast
 
       - name: Check agent boundaries
         run: ./scripts/check-agent-boundaries.sh
 
-  # ── Coverage (blocking quality gate) ─────────────────────────────────
+  # ── Frontend quality gate ───────────────────────────────────────────────
+  quality-frontend:
+    name: quality-frontend
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: TypeScript type check
+        run: npx tsc -b
+        working-directory: frontend
+
+      - name: Vitest
+        run: npx vitest run
+        working-directory: frontend
+
+  # ── Rust coverage gate ──────────────────────────────────────────────────
   coverage:
     name: coverage
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -85,7 +143,7 @@ jobs:
           cache-all-crates: "true"
           components: "llvm-tools-preview"
 
-      - name: Install cargo-llvm-cov (pre-built binary)
+      - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov
