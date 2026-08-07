@@ -22,57 +22,119 @@ Use for any Rust change in `crates/`. Symptoms that trigger this skill:
 ## Development Workflow
 
 ```
-Edit code → Test (tiered) → Quality gate → Coverage check → Wiki ingest → Done
+Edit code → Pre-commit hook (auto) → Quality gate → Wiki ingest → Done
 ```
 
-### Step 1: Test (tiered — fast to slow)
+Development happens in iterations: write code, commit (hooks catch issues early),
+run the full quality gate before pushing, fix what the gate reports, re-run.
+Only proceed to push/PR after the full gate passes with zero failures.
 
-| Tier | Command | When to use |
-|------|---------|-------------|
-| Compile check | `cargo check -p <crate>` | During development, after each edit |
-| Test compile | `make test-compile` | Quick gate, ~3s warm |
-| Unit tests | `make test-unit` | After completing a function/module |
-| Integration tests | `make test-integration` | Before claiming done; includes `tests/` dir |
-| E2E tests | `make test-e2e` | Only when changing external service interactions |
+### Git hooks — first line of defense
 
-Always start at the fastest tier. Run the full suite with `make test` before claiming completion.
+The project has a `.githooks/pre-commit` hook that runs before every commit.
+Verify it is configured:
 
-### Step 2: Quality Gate
+```bash
+git config core.hooksPath   # must output ".githooks"
+```
 
-**Fast gate** (local development, before committing):
+If it is not set, configure it once:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The pre-commit hook runs on staged Rust files:
+- `cargo fmt --all -- --check`
+- `cargo clippy --workspace`
+- `./scripts/check-coverage.sh` (for changed crates)
+
+If the hook blocks your commit, read the output. Each check prints what failed
+and how to fix it. Fix the issues, `git add` the fixes, and commit again.
+
+---
+
+## Quality Gate (MANDATORY — run before every commit)
+
+The quality gate mirrors what CI runs. It is NOT optional. A commit that hasn't passed
+the gate locally will fail in CI.
+
+### Tier 1: Fast gate (run after every significant edit)
 
 ```bash
 make quality
 ```
 
-This runs: `fmt-check` + `clippy` + `test-compile` + `no-doc-tests`
+| Check | Command | Catches |
+|-------|---------|---------|
+| Formatting | `cargo fmt --all -- --check` | Style violations, inconsistent indentation |
+| Clippy | `cargo clippy --workspace` | Redundant code, non-idiomatic patterns, potential bugs |
+| Test compile | `cargo test --no-run --workspace` | Code that doesn't compile in test configuration |
+| No doc tests | `./scripts/check-no-doc-tests.sh` | Doc comments with ` ```rust` instead of ` ```text` |
 
-**Full gate** (pre-PR, CI equivalent):
+### Tier 2: Full gate (run before pushing / creating PR)
 
 ```bash
 make quality-full
 ```
 
-This runs: `fmt-check` + `clippy-strict` + `test-unit` + `no-doc-tests` + `check-agent-boundaries.sh`
+Includes Tier 1 checks plus:
 
-**Always run `make quality` before committing.** The full gate runs in CI; running it locally catches issues early.
+| Check | Command | Catches |
+|-------|---------|---------|
+| Clippy strict | `cargo clippy --workspace -- -D warnings` | All warnings treated as errors |
+| All tests | `cargo test --workspace --no-fail-fast` | Broken tests in ANY crate, not just the one you changed |
+| Crate boundaries | `./scripts/check-agent-boundaries.sh` | Forbidden inter-crate dependencies |
 
-### Step 3: Coverage Check
+### Tier 3: Coverage gate (run before claiming completeness)
 
 ```bash
 make coverage-threshold PKG=<crate>
 ```
 
-**Requirement:** line coverage ≥ 80% for every crate. Exception: `main.rs`, `app.rs`, `health.rs` are exempt.
+Line coverage must be ≥ 80%. Exempt files: `main.rs`, `app.rs`, `health.rs`.
 
 If coverage is below threshold:
-1. Check which functions/lines are uncovered: `make coverage-html PKG=<crate>`
+1. `make coverage-html PKG=<crate>` to see uncovered lines
 2. Add tests for uncovered paths
-3. Re-run threshold check
+3. Re-run `make coverage-threshold PKG=<crate>`
 
-### Step 4: Wiki Ingest
+### Gate failure protocol
 
-After completing any non-trivial backend change, **invoke `wiki-ingest`** to update `docs/wiki/`. This is not optional — the wiki is the project's persistent knowledge base.
+When any gate check fails, do NOT proceed to commit. Read the output of the failing
+check. Each tool (fmt, clippy, rustc, nextest) prints the exact file, line number,
+and problem description. Fix the reported issues, then re-run the gate from the
+beginning. Never skip a failing check — the same check runs in CI and will block
+the PR.
+
+| Tool | Failure looks like | How to fix |
+|------|-------------------|------------|
+| `cargo fmt` | Diff showing lines that differ from canonical format | Run `cargo fmt --all` to auto-fix |
+| `cargo clippy` | `error: <description>` with file:line | Read the suggestion (often includes `help:` with the fix) |
+| `cargo test` | `test ... FAILED` or `error: test failed` | Read the assertion failure; fix the code or update the test |
+| `check-no-doc-tests.sh` | Lists files with doc tests | Convert ` ```rust` to ` ```text` or move code to `#[cfg(test)]` |
+| `check-agent-boundaries.sh` | Lists forbidden dependency paths | Remove the forbidden import; restructure code if needed |
+| `make coverage-threshold` | `FAIL: line coverage X% is below 80%` | Add tests for uncovered functions/paths |
+
+### What changed? Searching for downstream impact
+
+Before committing any change that modifies a public API, output format, or function
+signature, grep the workspace for callers and consumers that may need updating:
+
+```bash
+grep -rn "<old name / old output / old signature>" crates/ --include="*.rs"
+```
+
+Run the full test suite (`cargo test --workspace`) after grep-assisted fixes to
+catch any callers that grep missed (e.g., dynamic dispatch, trait objects).
+
+---
+
+## Wiki Ingest
+
+After completing any non-trivial backend change, **invoke `wiki-ingest`** to update
+`docs/wiki/`. This is not optional — the wiki is the project's persistent knowledge
+base.
 
 ## Code Conventions
 
@@ -158,15 +220,15 @@ If you are adding a new JSON-RPC operation (e.g., `agent.new_operation`), **invo
 | Mistake | Symptom | Fix |
 |---------|---------|-----|
 | Doc tests in doc comments | `check-no-doc-tests.sh` fails | Convert to `#[cfg(test)]` or use ` ```text` |
-| Committing without `make quality` | CI fails on fmt/clippy | Run `make quality` before every commit |
+| Committing without running quality gate | CI fails on fmt/clippy/tests | Run `make quality` before every commit |
+| Changing public API without grepping callers | Downstream tests break in other crates | Grep workspace for old name/signature, update all callers |
 | Claiming done without coverage | Coverage below 80% | Run `make coverage-threshold PKG=<crate>` |
 | Registering tools outside `AgentRuntimeBuilder::build()` | Duplicate or missed registrations | Use `AgentRuntimeBuilder::build()` as single source of truth |
 | Wire types in `vol-agent-server` | Boundary check fails | Move to `vol-llm-agent-protocol::agent_server_protocol` |
 | Importing `vol-agent-server` in `vol-llm-runtime` | Boundary check fails | Refactor to avoid dependency |
 | Forgetting wiki-ingest | Wiki goes stale | Invoke `wiki-ingest` after every non-trivial change |
-| Running full test suite for quick check | Slow feedback loop | Use tiered approach: compile check first, then unit, then integration |
 | Adding protocol op without `vol-protocol` skill | Silent runtime failure | Invoke `vol-protocol` before adding any operation |
-| Skipping `cargo fmt` | CI fmt-check fails | Run `cargo fmt --all` or `make quality` |
+| Adding dep to sub-crate Cargo.toml not in workspace | Build fails | Check workspace `[dependencies]` first; add there if missing |
 
 ## Red Flags — STOP and Check
 
@@ -177,4 +239,4 @@ If you are adding a new JSON-RPC operation (e.g., `agent.new_operation`), **invo
 - "Wiki ingest can wait"
 - "The crate boundary check is probably not needed for this change"
 
-**All of these mean: follow the workflow. Run quality gates now.**
+**All of these mean: run the quality gate. Do not proceed until it passes.**

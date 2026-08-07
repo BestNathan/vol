@@ -8337,12 +8337,14 @@ name = "vol-llm-tools-builtin-glob"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "glob",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
  "vol-llm-sandbox",
  "vol-llm-tool",
 ]

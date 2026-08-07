@@ -408,10 +408,13 @@ mod tests {
             json["result"]["success"], true,
             "glob empty dir should succeed: {json:?}"
         );
-        assert!(json["result"]["content"]
-            .as_str()
-            .unwrap()
-            .contains("No files matched"));
+        assert!(
+            json["result"]["content"]
+                .as_str()
+                .unwrap()
+                .contains("No matches found"),
+            "glob empty dir should return no-matches message: {json:?}"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
