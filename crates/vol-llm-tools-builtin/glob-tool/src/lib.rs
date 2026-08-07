@@ -872,7 +872,7 @@ impl ExecutableTool for GlobTool {
 
                 let (size_bytes, modified_at) = if params.with_metadata {
                     let sz = *size;
-                    let mt = mtime.and_then(|t| mtime_to_iso8601(t));
+                    let mt = mtime.and_then(mtime_to_iso8601);
                     (sz, mt)
                 } else {
                     (None, None)
