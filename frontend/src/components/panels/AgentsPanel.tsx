@@ -1,5 +1,6 @@
 // frontend/src/components/panels/AgentsPanel.tsx
 import { useCallback, useEffect } from 'react'
+import { Bot, Hash, Globe, Wifi, Activity, FileText, Server } from 'lucide-react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import { getPanelClient } from '@/lib/panel-client'
 import { sessionEntriesToConversation } from '@/lib/session-conversion'
@@ -26,8 +27,8 @@ import { runMapAtom, runningAgentsAtom } from '@/stores/connection'
 import type { AgentListEntry, AgentSubTab, SessionListEntry } from '@/types'
 import type { SessionEntry } from '@/lib/protocol'
 
-// --- Agent card ----------------------------------------------------------------
-function AgentCard({
+// --- Agent row ----------------------------------------------------------------
+function AgentRow({
   agent, isSelected, onSelect,
 }: {
   agent: AgentListEntry
@@ -35,32 +36,102 @@ function AgentCard({
   onSelect: () => void
 }) {
   const scopeStr = agent.scope ?? 'unknown'
-  const scopeColor = scopeStr === 'repo' ? '#4080ff' : '#40c040'
+  const isOnline = agent.status === 'online' || agent.status === 'idle' || agent.status === 'running'
 
   return (
-    <Button
+    <button
       type="button"
-      variant="ghost"
       onClick={onSelect}
       className={cn(
-        'cursor-pointer flex items-center gap-2 px-2.5 py-2 rounded-lg border w-full sm:w-auto text-left h-auto justify-start',
+        'cursor-pointer flex items-center gap-3 px-3 py-2.5 w-full text-left transition-colors border-b border-border last:border-b-0',
         isSelected
-          ? 'border-primary bg-[#1a2a44] hover:bg-[#1a2a44]'
-          : 'border-[#2a2a44] bg-card hover:bg-secondary/50'
+          ? 'bg-[#1a2a44] hover:bg-[#1e2e4a]'
+          : 'hover:bg-secondary/30'
       )}
     >
-      <span className="w-2 h-2 rounded-full bg-[#40c040] flex-shrink-0" />
+      {/* Status dot */}
+      <span
+        className={cn(
+          'w-2 h-2 rounded-full flex-shrink-0',
+          isOnline ? 'bg-emerald-500 shadow-[0_0_4px] shadow-emerald-500/50' : 'bg-muted-foreground/40'
+        )}
+      />
+
+      {/* Agent icon */}
+      <span className="flex items-center justify-center size-8 rounded-lg bg-secondary flex-shrink-0">
+        <Bot className="size-4 text-muted-foreground" />
+      </span>
+
+      {/* Text */}
       <span className="flex flex-col min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className="font-semibold text-[13px] text-foreground truncate">{agent.name}</span>
-          <Badge variant="outline" className="text-[9px] font-bold whitespace-nowrap flex-shrink-0"
-            style={{ color: scopeColor, borderColor: scopeColor }}>
+          {agent.type && (
+            <Badge variant="secondary" className="text-[9px] px-1 py-0 rounded-[3px] font-medium flex-shrink-0">
+              {agent.type}
+            </Badge>
+          )}
+          <Badge variant="outline" className="text-[9px] font-bold flex-shrink-0"
+            style={{ color: scopeStr === 'repo' ? '#4080ff' : '#40c040', borderColor: scopeStr === 'repo' ? '#4080ff' : '#40c040' }}>
             {scopeStr}
           </Badge>
         </span>
-        <span className="text-[11px] text-muted-foreground/70 truncate">{agent.description ?? ''}</span>
+        <span className="text-[11px] text-muted-foreground/70 truncate mt-0.5">{agent.description ?? 'No description'}</span>
       </span>
-    </Button>
+    </button>
+  )
+}
+
+// --- Agent detail panel --------------------------------------------------------
+
+const DETAIL_FIELDS: { key: keyof AgentListEntry; label: string; icon: typeof Bot }[] = [
+  { key: 'id', label: 'ID', icon: Hash },
+  { key: 'name', label: 'Name', icon: Bot },
+  { key: 'type', label: 'Type', icon: FileText },
+  { key: 'description', label: 'Description', icon: FileText },
+  { key: 'scope', label: 'Scope', icon: Globe },
+  { key: 'status', label: 'Status', icon: Activity },
+  { key: 'node_id', label: 'Node ID', icon: Server },
+  { key: 'ws_url', label: 'WebSocket URL', icon: Wifi },
+  { key: 'current_input', label: 'Current Input', icon: FileText },
+]
+
+function AgentDetailPanel({ agent }: { agent: AgentListEntry }) {
+  return (
+    <ScrollArea className="flex-1 min-h-0">
+      <div className="p-3 flex flex-col gap-3">
+        <div className="flex items-center gap-2 px-1">
+          <Bot className="size-4 text-muted-foreground" />
+          <span className="text-[12px] font-semibold text-muted-foreground uppercase tracking-[0.5px]">
+            Agent Parameters
+          </span>
+        </div>
+        <div className="flex flex-col gap-1">
+          {DETAIL_FIELDS.map(({ key, label, icon: Icon }) => {
+            const value = agent[key]
+            if (value === undefined || value === null) return null
+            return (
+              <div
+                key={key}
+                className="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-border/60 bg-card/50"
+              >
+                <span className="flex items-center justify-center size-7 rounded-md bg-secondary flex-shrink-0 mt-0.5">
+                  <Icon className="size-3.5 text-muted-foreground" />
+                </span>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.5px]">
+                    {label}
+                  </span>
+                  <span className="text-[13px] text-foreground break-all">
+                    {typeof value === 'string' ? value : JSON.stringify(value)}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </ScrollArea>
   )
 }
 
@@ -70,6 +141,7 @@ const SUB_TABS: { id: AgentSubTab; label: string }[] = [
   { id: 'sessions', label: 'Sessions' },
   { id: 'context', label: 'Context' },
   { id: 'tasks', label: 'Tasks' },
+  { id: 'details', label: 'Details' },
 ]
 
 export function AgentsPanel() {
@@ -218,15 +290,11 @@ export function AgentsPanel() {
       {/* Fixed right-side overlay — rendered at panel level so it stays open
           across sub-tab switches while an agent is selected. */}
       <CapabilityDrawer />
-      {/* Card grid — scrollable, stacks on mobile, wraps on desktop. The grid
-          row track reproduces the old max-h-[200px] min-h-[60px] clamping:
-          the radix viewport (h-full) resolves against the definite track
-          height instead of the auto-height root, so the strip scrolls only
-          when the cards exceed 200px. */}
-      <ScrollArea className="grid grid-rows-[minmax(60px,200px)] border-b border-border flex-shrink-0">
-        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 p-2">
+      {/* Agent list — one per row, scrollable when many agents */}
+      <ScrollArea className="border-b border-border flex-shrink-0" style={{ maxHeight: '200px' }}>
+        <div className="flex flex-col">
           {agents.map((agent) => (
-            <AgentCard
+            <AgentRow
               key={agent.id}
               agent={agent}
               isSelected={agent.id === selectedAgentId}
@@ -277,6 +345,9 @@ export function AgentsPanel() {
           </TabsContent>
           <TabsContent value="tasks" className="flex-1 min-h-0 mt-0">
             <div className="flex items-center justify-center h-full text-muted-foreground/70 text-sm">Tasks — coming soon</div>
+          </TabsContent>
+          <TabsContent value="details" className="flex-1 min-h-0 mt-0">
+            {selectedAgent ? <AgentDetailPanel agent={selectedAgent} /> : null}
           </TabsContent>
         </Tabs>
       ) : (

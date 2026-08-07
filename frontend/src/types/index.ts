@@ -1,6 +1,6 @@
 // Tab routing
 export type ActiveTab = 'tasks' | 'agents' | 'tools' | 'workspace' | 'skills' | 'mcp' | 'logs'
-export type AgentSubTab = 'conversation' | 'sessions' | 'context' | 'tasks'
+export type AgentSubTab = 'conversation' | 'sessions' | 'context' | 'tasks' | 'details'
 export type McpSubtab = 'servers' | 'tools' | 'resources' | 'prompts'
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
 export type ServerType = 'ControlPlane' | 'DataPlane' | 'Unknown'
