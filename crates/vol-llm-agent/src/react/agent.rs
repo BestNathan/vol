@@ -585,7 +585,13 @@ impl ReActAgent {
                         } else {
                             match &sandbox {
                                 Some(sb) => sb.clone(),
-                                None => Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None)),
+                                None => {
+                                    // Use the agent's working_dir so tools (glob,
+                                    // read_file, etc.) can access actual project files
+                                    // instead of an empty temp directory.
+                                    let root = run_ctx.config.working_dir.clone();
+                                    Arc::new(vol_llm_sandbox::local::LocalSandbox::new(Some(root)))
+                                }
                             }
                         };
                         let mut tool_ctx = ToolContext::default().with_sandbox(sandbox_ref);
