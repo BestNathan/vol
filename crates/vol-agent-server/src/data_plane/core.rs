@@ -401,6 +401,18 @@ impl Default for DataPlaneServerCoreBuilder {
 
 impl DataPlaneServerCoreBuilder {
     pub fn new(working_dir: PathBuf, store_dir: PathBuf) -> Self {
+        // Canonicalize working_dir to absolute so sandbox path resolution
+        // (normalize_path → read_dir) works even with "." relative paths.
+        let working_dir = std::fs::canonicalize(&working_dir).unwrap_or_else(|_| {
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("/"))
+                .join(&working_dir)
+        });
+        let store_dir = std::fs::canonicalize(&store_dir).unwrap_or_else(|_| {
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("/"))
+                .join(&store_dir)
+        });
         Self {
             working_dir,
             store_dir,
@@ -486,7 +498,7 @@ impl DataPlaneServerCoreBuilder {
             .register(Arc::new(SkillHandler::new(Some(skill_loader.clone()))))
             .map_err(|e| format!("failed to register SkillHandler: {e}"))?;
         handler_registry
-            .register(Arc::new(ToolHandler::new(tool_registry.clone())))
+            .register(Arc::new(ToolHandler::new(tool_registry.clone(), self.working_dir.clone())))
             .map_err(|e| format!("failed to register ToolHandler: {e}"))?;
         handler_registry
             .register(Arc::new(LogHandler::new(self.store_dir.join("logs"))))
@@ -669,7 +681,7 @@ impl DataPlaneServerCore {
             .register(Arc::new(SkillHandler::new(None)))
             .ok();
         handler_registry
-            .register(Arc::new(ToolHandler::new(Arc::new(ToolRegistry::new()))))
+            .register(Arc::new(ToolHandler::new(Arc::new(ToolRegistry::new()), PathBuf::from("/tmp"))))
             .ok();
         handler_registry
             .register(Arc::new(LogHandler::new(PathBuf::from("."))))

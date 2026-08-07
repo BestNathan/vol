@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -12,11 +13,15 @@ use vol_llm_agent_protocol::DomainHandler;
 /// Handler for tool-domain operations.
 pub struct ToolHandler {
     tool_registry: Arc<vol_llm_tool::ToolRegistry>,
+    working_dir: PathBuf,
 }
 
 impl ToolHandler {
-    pub fn new(tool_registry: Arc<vol_llm_tool::ToolRegistry>) -> Self {
-        Self { tool_registry }
+    pub fn new(tool_registry: Arc<vol_llm_tool::ToolRegistry>, working_dir: PathBuf) -> Self {
+        Self {
+            tool_registry,
+            working_dir,
+        }
     }
 }
 
@@ -81,7 +86,11 @@ impl DomainHandler for ToolHandler {
                         .unwrap_or_else(|_| "{}".to_string()),
                     r#type: "function".to_string(),
                 };
-                let context = ToolContext::default();
+                let context = ToolContext::default().with_sandbox(
+                    std::sync::Arc::new(vol_llm_sandbox::local::LocalSandbox::new(Some(
+                        self.working_dir.clone(),
+                    ))),
+                );
                 match self.tool_registry.execute(&call, &context).await {
                     Ok(result) => {
                         let value = serde_json::json!({
@@ -119,6 +128,7 @@ impl DomainHandler for ToolHandler {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use std::sync::Arc;
 
     use async_trait::async_trait;
@@ -174,7 +184,7 @@ mod tests {
     async fn tool_list_returns_registered_tools() {
         let mut registry = vol_llm_tool::ToolRegistry::new();
         registry.register(EchoTool);
-        let handler = ToolHandler::new(Arc::new(registry));
+        let handler = ToolHandler::new(Arc::new(registry), PathBuf::from("/tmp"));
 
         let replies = handler
             .handle(msg(
@@ -194,7 +204,7 @@ mod tests {
     #[tokio::test]
     async fn tool_list_returns_empty_when_no_tools() {
         let registry = vol_llm_tool::ToolRegistry::new();
-        let handler = ToolHandler::new(Arc::new(registry));
+        let handler = ToolHandler::new(Arc::new(registry), PathBuf::from("/tmp"));
 
         let replies = handler
             .handle(msg(
@@ -214,7 +224,7 @@ mod tests {
     async fn tool_call_echoes_back_input() {
         let mut registry = vol_llm_tool::ToolRegistry::new();
         registry.register(EchoTool);
-        let handler = ToolHandler::new(Arc::new(registry));
+        let handler = ToolHandler::new(Arc::new(registry), PathBuf::from("/tmp"));
 
         let replies = handler
             .handle(msg(
@@ -236,7 +246,7 @@ mod tests {
     #[tokio::test]
     async fn tool_call_unknown_tool_returns_error() {
         let registry = vol_llm_tool::ToolRegistry::new();
-        let handler = ToolHandler::new(Arc::new(registry));
+        let handler = ToolHandler::new(Arc::new(registry), PathBuf::from("/tmp"));
 
         let replies = handler
             .handle(msg(
@@ -257,7 +267,7 @@ mod tests {
     #[tokio::test]
     async fn tool_list_with_wrong_payload_returns_error() {
         let registry = vol_llm_tool::ToolRegistry::new();
-        let handler = ToolHandler::new(Arc::new(registry));
+        let handler = ToolHandler::new(Arc::new(registry), PathBuf::from("/tmp"));
 
         let err = handler
             .handle(msg(
@@ -276,7 +286,7 @@ mod tests {
     #[tokio::test]
     async fn tool_call_with_wrong_payload_returns_error() {
         let registry = vol_llm_tool::ToolRegistry::new();
-        let handler = ToolHandler::new(Arc::new(registry));
+        let handler = ToolHandler::new(Arc::new(registry), PathBuf::from("/tmp"));
 
         let err = handler
             .handle(msg(

@@ -181,5 +181,10 @@ pub fn normalize_path(path: &Path) -> PathBuf {
             _ => result.push(component),
         }
     }
+    // Guard: an all-CurDir path like "." normalizes to empty, which breaks
+    // read_dir/read_file. Fall back to "." so relative resolution works.
+    if result.as_os_str().is_empty() && !path.as_os_str().is_empty() {
+        result.push(".");
+    }
     result
 }
