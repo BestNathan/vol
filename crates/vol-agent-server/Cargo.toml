@@ -45,3 +45,5 @@ tempfile = "3"
 tokio-tungstenite = { workspace = true }
 vol-llm-runtime = { path = "../vol-llm-runtime" }
 vol-session = { path = "../vol-session" }
+vol-llm-tools-builtin-glob = { path = "../vol-llm-tools-builtin/glob-tool" }
+vol-llm-tools-builtin-read = { path = "../vol-llm-tools-builtin/read-tool" }

@@ -298,4 +298,137 @@ mod tests {
             .unwrap_err();
         assert!(err.to_string().contains("tool.call"));
     }
+
+    // ── Integration tests: real tools (glob, read_file) via tool.call ──────
+
+    #[tokio::test]
+    async fn tool_call_glob_returns_files() {
+        let mut registry = vol_llm_tool::ToolRegistry::new();
+        registry.register(vol_llm_tools_builtin_glob::GlobTool::new());
+        // Use a real temp dir with known contents
+        let dir = std::env::temp_dir().join("tool_call_glob_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.txt"), b"").unwrap();
+        std::fs::write(dir.join("b.rs"), b"").unwrap();
+        std::fs::create_dir(dir.join("sub")).unwrap();
+
+        let handler = ToolHandler::new(Arc::new(registry), dir.clone());
+
+        let replies = handler
+            .handle(msg(
+                "1",
+                Operation::Tool(ToolOperation::Call),
+                Payload::Tool(ToolPayload::Call {
+                    tool_name: "glob".to_string(),
+                    arguments: serde_json::json!({"pattern": "*.txt", "path": "."}),
+                }),
+            ))
+            .await
+            .unwrap();
+
+        let json = replies[0].payload.data_json();
+        assert_eq!(json["result"]["success"], true, "glob should succeed: {json:?}");
+        let content = json["result"]["content"].as_str().unwrap();
+        assert!(content.contains("a.txt"), "should find a.txt: {content}");
+        assert!(!content.contains("b.rs"), "should not match b.rs: {content}");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn tool_call_read_file_returns_content() {
+        let mut registry = vol_llm_tool::ToolRegistry::new();
+        registry.register(vol_llm_tools_builtin_read::ReadTool::new());
+        let dir = std::env::temp_dir().join("tool_call_read_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hello.txt"), b"hello world\nline two\n").unwrap();
+
+        let handler = ToolHandler::new(Arc::new(registry), dir.clone());
+
+        let replies = handler
+            .handle(msg(
+                "1",
+                Operation::Tool(ToolOperation::Call),
+                Payload::Tool(ToolPayload::Call {
+                    tool_name: "read_file".to_string(),
+                    arguments: serde_json::json!({"file_path": "hello.txt", "limit": 2}),
+                }),
+            ))
+            .await
+            .unwrap();
+
+        let json = replies[0].payload.data_json();
+        assert_eq!(json["result"]["success"], true, "read_file should succeed: {json:?}");
+        let content = json["result"]["content"].as_str().unwrap();
+        assert!(content.contains("hello world"), "should contain file content: {content}");
+        assert!(content.contains("line two"), "should contain second line: {content}");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn tool_call_glob_empty_dir_returns_success() {
+        let mut registry = vol_llm_tool::ToolRegistry::new();
+        registry.register(vol_llm_tools_builtin_glob::GlobTool::new());
+        let dir = std::env::temp_dir().join("tool_call_glob_empty_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let handler = ToolHandler::new(Arc::new(registry), dir.clone());
+
+        let replies = handler
+            .handle(msg(
+                "1",
+                Operation::Tool(ToolOperation::Call),
+                Payload::Tool(ToolPayload::Call {
+                    tool_name: "glob".to_string(),
+                    arguments: serde_json::json!({"pattern": "*", "path": "."}),
+                }),
+            ))
+            .await
+            .unwrap();
+
+        let json = replies[0].payload.data_json();
+        assert_eq!(json["result"]["success"], true, "glob empty dir should succeed: {json:?}");
+        assert!(json["result"]["content"].as_str().unwrap().contains("No files matched"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn tool_call_glob_relative_path_resolves_correctly() {
+        // Regression: "." path was normalized to "" causing ENOENT
+        let mut registry = vol_llm_tool::ToolRegistry::new();
+        registry.register(vol_llm_tools_builtin_glob::GlobTool::new());
+        let dir = std::env::temp_dir().join("tool_call_glob_rel_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("x.log"), b"").unwrap();
+
+        let handler = ToolHandler::new(Arc::new(registry), dir.clone());
+
+        // path="." is the key regression case
+        let replies = handler
+            .handle(msg(
+                "1",
+                Operation::Tool(ToolOperation::Call),
+                Payload::Tool(ToolPayload::Call {
+                    tool_name: "glob".to_string(),
+                    arguments: serde_json::json!({"pattern": "*.log", "path": "."}),
+                }),
+            ))
+            .await
+            .unwrap();
+
+        let json = replies[0].payload.data_json();
+        assert_eq!(
+            json["result"]["success"], true,
+            "glob with '.' path should succeed, got: {json:?}"
+        );
+        assert!(json["result"]["content"].as_str().unwrap().contains("x.log"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
