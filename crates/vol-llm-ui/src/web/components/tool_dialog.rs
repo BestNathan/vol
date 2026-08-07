@@ -49,8 +49,7 @@ pub fn SystemToolDialog(mut signal: Signal<SystemToolDialogState>) -> Element {
 
     // Cache the last-open dialog content so the card stays rendered while
     // the overlay plays its exit animation after `open` flips to false.
-    let cached: Rc<RefCell<Option<CachedToolDialog>>> =
-        use_hook(|| Rc::new(RefCell::new(None)));
+    let cached: Rc<RefCell<Option<CachedToolDialog>>> = use_hook(|| Rc::new(RefCell::new(None)));
 
     // Capture current state: refresh the cache while open; `open` drives
     // the overlay. (No early return — AnimatedOverlay handles the Hidden
