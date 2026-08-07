@@ -95,7 +95,7 @@ export function McpToolDialog() {
           <DialogTitle className="truncate pr-8">{d ? `${d.server} / ${d.toolName}` : ''}</DialogTitle>
         </DialogHeader>
         <ScrollArea className="flex-1 min-h-0">
-          <div className="space-y-3 p-1">
+          <div className="flex flex-col gap-3 p-1">
             <SchemaForm
               key={d?.toolName ?? 'closed'}
               schema={asRecord(d?.inputSchema) ?? {}}

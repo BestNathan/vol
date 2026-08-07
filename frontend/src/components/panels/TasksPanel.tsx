@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import type { RpcMethods } from '@/lib/protocol'
 import type { TaskEntry } from '@/types'
 
@@ -275,9 +276,11 @@ export function TasksPanel() {
       <ScrollArea className="flex-1 min-h-0">
         <div className="h-full">
           {filtered.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground/70 text-[13px]">
-              No tasks found
-            </div>
+            <Empty>
+              <EmptyHeader>
+                <EmptyTitle>No tasks found</EmptyTitle>
+              </EmptyHeader>
+            </Empty>
           ) : (
             <>
               {/* Mobile: task cards */}

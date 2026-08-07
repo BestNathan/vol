@@ -138,7 +138,7 @@ export function PromptViewer() {
           <DialogTitle className="truncate">{d?.promptName ?? ''}</DialogTitle>
           {d && <DialogDescription>Server: {d.server}</DialogDescription>}
         </DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto space-y-3">
+        <div className="max-h-[60vh] overflow-y-auto flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <span className="text-[12px] text-muted-foreground">Arguments (JSON)</span>
             <textarea

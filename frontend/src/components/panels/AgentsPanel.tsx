@@ -10,6 +10,7 @@ import { ContextPanel } from '@/components/panels/ContextPanel'
 import { InputArea } from '@/components/inputs/InputArea'
 import { CapabilityBar } from '@/components/inputs/CapabilityBar'
 import { CapabilityDrawer } from '@/components/inputs/CapabilityDrawer'
+import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -203,9 +204,11 @@ export function AgentsPanel() {
   if (agents.length === 0) {
     return (
       <ScrollArea className="flex-1">
-        <div className="h-full p-3 flex items-center justify-center text-muted-foreground text-[14px]">
-          No agents available
-        </div>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No agents available</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
       </ScrollArea>
     )
   }

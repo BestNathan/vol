@@ -81,7 +81,7 @@ export function ToolCallDialog({
           {description && <DialogDescription className="truncate">{description}</DialogDescription>}
         </DialogHeader>
         <ScrollArea className="flex-1 min-h-0">
-          <div className="space-y-3 p-1">
+          <div className="flex flex-col gap-3 p-1">
             <SchemaForm
               key={toolName}
               schema={schema ?? {}}

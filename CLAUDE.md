@@ -79,6 +79,32 @@ make web-backend     # cargo-watch agent server on :3001
 make web-build       # Production React build
 ```
 
+#### Web Frontend shadcn/ui Conventions
+
+The frontend uses **shadcn/ui** (Radix base) with Tailwind CSS v4. All UI primitives live in `frontend/src/components/ui/`. See `frontend/components.json` for config.
+
+**CRITICAL — these rules are enforced in code review:**
+
+| Rule | ✅ Correct | ❌ Wrong |
+|------|-----------|----------|
+| **Spacing** | `flex flex-col gap-4` | `space-y-4` |
+| **Icons in buttons** | `<SearchIcon data-icon="inline-start" />` | `<SearchIcon className="h-4 w-4" />` (no data-icon) |
+| **Truncate** | `className="truncate"` | `className="overflow-hidden text-ellipsis whitespace-nowrap"` |
+| **Conditional classes** | `cn("base", condition && "extra")` | `` className={`base ${condition && "extra"}`} `` |
+| **Items in groups** | `SelectItem` inside `SelectGroup` | `SelectItem` directly in `SelectContent` |
+| **Icon sizing in components** | Let component handle via `[&_svg]:size-4` | Add `h-4 w-4` on icons inside Buttons/Badges |
+| **Semantic colors** | `bg-primary`, `text-muted-foreground` | `bg-blue-500`, `text-gray-400` |
+| **Empty states** | `<Empty><EmptyHeader><EmptyTitle>...</EmptyTitle></EmptyHeader></Empty>` | Custom `<div>` with centered text |
+| **Separators** | `<Separator />` | `<hr>` or `<div className="border-t">` |
+| **Button variants** | Use built-in variants + semantic `success` | Raw color overrides like `bg-emerald-600` |
+| **Dialog/Sheet** | Always include `DialogTitle` / `SheetTitle` | Missing title (accessibility violation) |
+| **Loading** | `<Skeleton className="h-4 w-48" />` | Custom `animate-pulse` divs |
+| **Status badges** | `<Badge variant="secondary">` | Custom styled `<span>` |
+
+**Adding components:** `cd frontend && npx shadcn@latest add <name>` — move files from any stray `frontend/@/` path to `frontend/src/components/ui/`. Never create UI primitives manually.
+
+**Tailwind v4 specifics:** `@theme` block for custom tokens, `@theme inline` for shadcn CSS variable mapping. No `tailwind.config.js` — all config is in `frontend/src/index.css`.
+
 ### Docker
 
 ```bash
