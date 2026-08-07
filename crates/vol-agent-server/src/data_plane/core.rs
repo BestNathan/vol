@@ -498,7 +498,10 @@ impl DataPlaneServerCoreBuilder {
             .register(Arc::new(SkillHandler::new(Some(skill_loader.clone()))))
             .map_err(|e| format!("failed to register SkillHandler: {e}"))?;
         handler_registry
-            .register(Arc::new(ToolHandler::new(tool_registry.clone(), self.working_dir.clone())))
+            .register(Arc::new(ToolHandler::new(
+                tool_registry.clone(),
+                self.working_dir.clone(),
+            )))
             .map_err(|e| format!("failed to register ToolHandler: {e}"))?;
         handler_registry
             .register(Arc::new(LogHandler::new(self.store_dir.join("logs"))))
@@ -681,7 +684,10 @@ impl DataPlaneServerCore {
             .register(Arc::new(SkillHandler::new(None)))
             .ok();
         handler_registry
-            .register(Arc::new(ToolHandler::new(Arc::new(ToolRegistry::new()), PathBuf::from("/tmp"))))
+            .register(Arc::new(ToolHandler::new(
+                Arc::new(ToolRegistry::new()),
+                PathBuf::from("/tmp"),
+            )))
             .ok();
         handler_registry
             .register(Arc::new(LogHandler::new(PathBuf::from("."))))

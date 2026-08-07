@@ -7854,6 +7854,8 @@ dependencies = [
  "vol-llm-skill",
  "vol-llm-task",
  "vol-llm-tool",
+ "vol-llm-tools-builtin-glob",
+ "vol-llm-tools-builtin-read",
  "vol-observability",
  "vol-session",
 ]

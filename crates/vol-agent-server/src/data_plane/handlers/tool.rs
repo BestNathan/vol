@@ -86,11 +86,9 @@ impl DomainHandler for ToolHandler {
                         .unwrap_or_else(|_| "{}".to_string()),
                     r#type: "function".to_string(),
                 };
-                let context = ToolContext::default().with_sandbox(
-                    std::sync::Arc::new(vol_llm_sandbox::local::LocalSandbox::new(Some(
-                        self.working_dir.clone(),
-                    ))),
-                );
+                let context = ToolContext::default().with_sandbox(std::sync::Arc::new(
+                    vol_llm_sandbox::local::LocalSandbox::new(Some(self.working_dir.clone())),
+                ));
                 match self.tool_registry.execute(&call, &context).await {
                     Ok(result) => {
                         let value = serde_json::json!({
@@ -328,10 +326,16 @@ mod tests {
             .unwrap();
 
         let json = replies[0].payload.data_json();
-        assert_eq!(json["result"]["success"], true, "glob should succeed: {json:?}");
+        assert_eq!(
+            json["result"]["success"], true,
+            "glob should succeed: {json:?}"
+        );
         let content = json["result"]["content"].as_str().unwrap();
         assert!(content.contains("a.txt"), "should find a.txt: {content}");
-        assert!(!content.contains("b.rs"), "should not match b.rs: {content}");
+        assert!(
+            !content.contains("b.rs"),
+            "should not match b.rs: {content}"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -360,10 +364,19 @@ mod tests {
             .unwrap();
 
         let json = replies[0].payload.data_json();
-        assert_eq!(json["result"]["success"], true, "read_file should succeed: {json:?}");
+        assert_eq!(
+            json["result"]["success"], true,
+            "read_file should succeed: {json:?}"
+        );
         let content = json["result"]["content"].as_str().unwrap();
-        assert!(content.contains("hello world"), "should contain file content: {content}");
-        assert!(content.contains("line two"), "should contain second line: {content}");
+        assert!(
+            content.contains("hello world"),
+            "should contain file content: {content}"
+        );
+        assert!(
+            content.contains("line two"),
+            "should contain second line: {content}"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -391,8 +404,14 @@ mod tests {
             .unwrap();
 
         let json = replies[0].payload.data_json();
-        assert_eq!(json["result"]["success"], true, "glob empty dir should succeed: {json:?}");
-        assert!(json["result"]["content"].as_str().unwrap().contains("No files matched"));
+        assert_eq!(
+            json["result"]["success"], true,
+            "glob empty dir should succeed: {json:?}"
+        );
+        assert!(json["result"]["content"]
+            .as_str()
+            .unwrap()
+            .contains("No files matched"));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -427,7 +446,10 @@ mod tests {
             json["result"]["success"], true,
             "glob with '.' path should succeed, got: {json:?}"
         );
-        assert!(json["result"]["content"].as_str().unwrap().contains("x.log"));
+        assert!(json["result"]["content"]
+            .as_str()
+            .unwrap()
+            .contains("x.log"));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
