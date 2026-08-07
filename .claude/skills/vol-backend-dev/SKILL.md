@@ -22,12 +22,35 @@ Use for any Rust change in `crates/`. Symptoms that trigger this skill:
 ## Development Workflow
 
 ```
-Edit code → Quality gate (MANDATORY) → Wiki ingest → Done
+Edit code → Pre-commit hook (auto) → Quality gate → Wiki ingest → Done
 ```
 
-Development happens in iterations: write code, run the quality gate, fix what the gate
-reports, re-run the gate. Only proceed to commit/push/PR after the gate passes with
-zero failures.
+Development happens in iterations: write code, commit (hooks catch issues early),
+run the full quality gate before pushing, fix what the gate reports, re-run.
+Only proceed to push/PR after the full gate passes with zero failures.
+
+### Git hooks — first line of defense
+
+The project has a `.githooks/pre-commit` hook that runs before every commit.
+Verify it is configured:
+
+```bash
+git config core.hooksPath   # must output ".githooks"
+```
+
+If it is not set, configure it once:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The pre-commit hook runs on staged Rust files:
+- `cargo fmt --all -- --check`
+- `cargo clippy --workspace`
+- `./scripts/check-coverage.sh` (for changed crates)
+
+If the hook blocks your commit, read the output. Each check prints what failed
+and how to fix it. Fix the issues, `git add` the fixes, and commit again.
 
 ---
 
