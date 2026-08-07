@@ -53,7 +53,7 @@ export function ResourceViewer() {
           <DialogTitle className="truncate">{d?.uri ?? ''}</DialogTitle>
           <DialogDescription>MCP resource</DialogDescription>
         </DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto space-y-3">
+        <div className="max-h-[60vh] overflow-y-auto flex flex-col gap-3">
           {/* Read stays visible after an error so the user can retry. */}
           {d && !d.loading && d.content === undefined && (
             <Button size="sm" onClick={() => void handleRead()}>Read</Button>

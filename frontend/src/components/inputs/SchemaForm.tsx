@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -241,11 +242,13 @@ function SchemaProperty({
             <SelectValue placeholder="Select..." />
           </SelectTrigger>
           <SelectContent>
-            {enumValues.map((opt) => (
-              <SelectItem key={opt} value={opt}>
-                {opt}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              {enumValues.map((opt) => (
+                <SelectItem key={opt} value={opt}>
+                  {opt}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
         {description && (

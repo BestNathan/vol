@@ -17,8 +17,7 @@ pub fn ToolCallDialog(mut signal: Signal<McpDialogState>) -> Element {
 
     // Cache the last-open dialog so the card stays rendered while the
     // overlay plays its exit animation after the state is cleared.
-    let cached: Rc<RefCell<Option<McpToolCallState>>> =
-        use_hook(|| Rc::new(RefCell::new(None)));
+    let cached: Rc<RefCell<Option<McpToolCallState>>> = use_hook(|| Rc::new(RefCell::new(None)));
 
     let (open, input_schema) = {
         let s = signal.read();

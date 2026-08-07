@@ -16,6 +16,7 @@ import { SessionDetailOverlay } from '@/components/dialogs/SessionDetailOverlay'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import type { RpcMethods } from '@/lib/protocol'
 import type { SessionListEntry } from '@/types'
 
@@ -154,7 +155,11 @@ export function SessionsPanel() {
       <div className="p-2">
       <div className="px-2.5 pt-1 pb-2 text-[12px] font-semibold text-muted-foreground uppercase tracking-[0.5px]">Sessions</div>
       {sessions.length === 0 ? (
-        <div className="flex items-center justify-center h-32 text-muted-foreground/70 text-[13px]">No sessions found</div>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No sessions found</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <>
           {/* Mobile: session cards */}

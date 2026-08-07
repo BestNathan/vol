@@ -3,6 +3,7 @@
 // (SchemaForm + Execute + Result). Opens when a tool row is clicked in ToolsTab.
 import { useLayoutEffect, useMemo, useState } from 'react'
 import { Wrench } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import {
   Dialog,
   DialogContent,
@@ -125,7 +126,7 @@ export function ToolDetailDialog({
         <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
           {/* ── Left panel: Description + Parameters ── */}
           <ScrollArea className="flex-1 min-h-0 sm:min-w-[280px] sm:max-w-[45%] border-b sm:border-b-0 sm:border-r border-border">
-            <div className="p-4 space-y-4">
+            <div className="p-4 flex flex-col gap-4">
               {/* Description */}
               {tool?.description && (
                 <div>
@@ -144,7 +145,7 @@ export function ToolDetailDialog({
                   <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.5px] mb-1.5">
                     Parameters ({params.length})
                   </div>
-                  <div className="space-y-2">
+                  <div className="flex flex-col gap-2">
                     {params.map((p) => (
                       <div key={p.name} className="rounded-md border border-border/70 bg-secondary/30 p-2">
                         <div className="flex items-center gap-1.5 mb-0.5">
@@ -154,7 +155,7 @@ export function ToolDetailDialog({
                           )}
                           <Badge
                             variant="secondary"
-                            className={`text-[10px] px-1 py-0 rounded-[3px] font-medium ${TYPE_COLORS[p.type] ?? 'text-muted-foreground bg-secondary'}`}
+                            className={cn("text-[10px] px-1 py-0 rounded-[3px] font-medium", TYPE_COLORS[p.type] ?? 'text-muted-foreground bg-secondary')}
                           >
                             {p.type}
                           </Badge>
@@ -181,7 +182,7 @@ export function ToolDetailDialog({
 
           {/* ── Right panel: SchemaForm + Execute + Result ── */}
           <ScrollArea className="flex-1 min-h-0 sm:min-w-[300px]">
-            <div className="p-4 space-y-3">
+            <div className="p-4 flex flex-col gap-3">
               <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.5px]">
                 Run
               </div>

@@ -62,7 +62,7 @@ export function FileContentView() {
               onClick={() => setSelected(i)}
             >
               <span className="text-[13px]">{fileIcon(name, false)}</span>
-              <span className="max-w-[150px] overflow-hidden text-ellipsis">{name}</span>
+              <span className="max-w-[150px] truncate">{name}</span>
               <button
                 type="button"
                 aria-label={`Close ${name}`}

@@ -117,26 +117,36 @@ Custom theme tokens are defined with `@theme { ... }` in `index.css`. shadcn/ui 
 
 ## shadcn/ui Components
 
-The project uses [shadcn/ui](https://ui.shadcn.com/docs/components) primitives built on Radix UI. Installed components live in `frontend/src/components/ui/`.
+The project uses [shadcn/ui](https://ui.shadcn.com/docs/components) primitives built on **Radix UI** (`base: radix`). Installed components live in `frontend/src/components/ui/`. Config is in `frontend/components.json`.
+
+### Project Context
+
+Run `cd frontend && npx shadcn@latest info` to refresh. Key fields:
+- `base: radix` — use `asChild` (not `render`) for custom triggers
+- `iconLibrary: lucide` — import from `lucide-react`
+- `tailwindVersion: v4` — `@theme` blocks, no `tailwind.config.js`
+- `aliases.ui: @/components/ui` — import path for all UI primitives
 
 ### Installed Primitives
 
 | Component | Source | Usage |
 |-----------|--------|-------|
-| Button | `@/components/ui/button` | All buttons, with variants: `default`, `destructive`, `outline`, `secondary`, `ghost`, `link`, `success` |
-| Dialog | `@/components/ui/dialog` | All modal overlays |
+| Button | `@/components/ui/button` | All buttons, variants: `default`, `destructive`, `outline`, `secondary`, `ghost`, `link`, `success` |
+| Dialog | `@/components/ui/dialog` | All modal overlays (custom: `hideCloseButton`, `overlayClassName` props) |
 | Tabs | `@/components/ui/tabs` | Tab navigation in main layout and sub-panels |
 | Sheet | `@/components/ui/sheet` | Slide-in panels (CapabilityDrawer) |
 | Switch | `@/components/ui/switch` | Toggle switches |
 | Checkbox | `@/components/ui/checkbox` | Checkbox inputs |
 | Input | `@/components/ui/input` | Text input fields |
-| Select | `@/components/ui/select` | Dropdown selects |
+| Select | `@/components/ui/select` | Dropdown selects (use `SelectGroup` + `SelectItem`) |
 | Label | `@/components/ui/label` | Form labels |
 | Badge | `@/components/ui/badge` | Status/count indicators |
 | ScrollArea | `@/components/ui/scroll-area` | Styled scrollable regions |
 | Accordion | `@/components/ui/accordion` | Collapsible sections |
 | Skeleton | `@/components/ui/skeleton` | Loading placeholders |
 | Tooltip | `@/components/ui/tooltip` | Hover tooltips |
+| Empty | `@/components/ui/empty` | Empty states (`EmptyHeader`, `EmptyTitle`, `EmptyDescription`, `EmptyMedia`, `EmptyContent`) |
+| Separator | `@/components/ui/separator` | Visual dividers (horizontal/vertical) |
 
 ### Adding a New shadcn Component
 
@@ -144,9 +154,100 @@ The project uses [shadcn/ui](https://ui.shadcn.com/docs/components) primitives b
 cd frontend && npx shadcn@latest add <component-name>
 ```
 
-Note: the CLI may write to a stray `frontend/@/` directory due to project-references tsconfig layout. Move files to `frontend/src/components/ui/` after install.
+**CRITICAL:** The CLI may write files to `frontend/@/components/ui/` instead of `frontend/src/components/ui/` due to the `@` import alias. After install, check `ls frontend/@/components/ui/` — if files exist there, move them:
+```bash
+mv frontend/@/components/ui/<file>.tsx frontend/src/components/ui/
+rm -rf frontend/@/
+```
 
-Available components: https://ui.shadcn.com/docs/components
+Search for components: `npx shadcn@latest search -q "<query>"`
+Get docs: `npx shadcn@latest docs <component>`
+Preview before overwriting: `npx shadcn@latest add <component> --dry-run --diff`
+
+### Coding Rules (enforced in review)
+
+These rules mirror the shadcn skill's critical rules. Violations block PRs.
+
+#### Spacing
+- **Use `flex` with `gap-*`** for all spacing. Never `space-y-*` or `space-x-*`.
+  ```tsx
+  // ✅ correct
+  <div className="flex flex-col gap-4">
+  // ❌ wrong
+  <div className="space-y-4">
+  ```
+- Exception: `space-y-0` is acceptable to override inherited spacing on a specific child.
+
+#### Icons (lucide-react)
+- **Icons in `Button`: use `data-icon` attribute.** No sizing classes on the icon.
+  ```tsx
+  // ✅ correct
+  <Button>
+    <SearchIcon data-icon="inline-start" />
+    Search
+  </Button>
+  // ❌ wrong
+  <Button>
+    <SearchIcon className="h-4 w-4" />
+    Search
+  </Button>
+  ```
+- Standalone icons (not in buttons) can use `className="h-4 w-4"`.
+- Use `size-*` when width and height are equal: `size-10` not `w-10 h-10`.
+
+#### Text Truncation
+- **Use `truncate` shorthand.** Never manual `overflow-hidden text-ellipsis whitespace-nowrap`.
+  ```tsx
+  // ✅ correct
+  <span className="truncate">
+  // ❌ wrong
+  <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+  ```
+
+#### Conditional Classes
+- **Use `cn()` from `@/lib/utils`** for all conditional class merging. Never template literals.
+  ```tsx
+  // ✅ correct
+  className={cn("base-class", isActive && "active-class")}
+  // ❌ wrong
+  className={`base-class ${isActive && "active-class"}`}
+  ```
+
+#### Component Composition
+- **Items always inside their Group.** `SelectItem` → `SelectGroup`. `DropdownMenuItem` → `DropdownMenuGroup`.
+  ```tsx
+  // ✅ correct
+  <SelectContent>
+    <SelectGroup>
+      <SelectItem value="a">A</SelectItem>
+    </SelectGroup>
+  </SelectContent>
+  ```
+- **Dialog, Sheet, Drawer always need a Title.** `DialogTitle`, `SheetTitle` required for accessibility. Use `className="sr-only"` if visually hidden.
+- **Button has no `isPending`/`isLoading`.** Compose with `Spinner` + `data-icon` + `disabled`.
+- **`TabsTrigger` must be inside `TabsList`.** Never render triggers directly in `Tabs`.
+- **`Avatar` always needs `AvatarFallback`.**
+
+#### Use Components, Not Raw Markup
+- **Empty states** → `<Empty>` + `<EmptyHeader>` + `<EmptyTitle>`, not custom centered divs.
+- **Dividers** → `<Separator />`, not `<hr>` or `<div className="border-t">`.
+- **Status badges** → `<Badge variant="secondary">`, not raw `<span>`.
+- **Loading** → `<Skeleton>`, not custom `animate-pulse` divs.
+- **Callouts** → `<Alert>`, not custom styled divs.
+- **Toast** → `toast()` from `sonner` (Radix projects).
+
+#### Colors
+- **Use semantic tokens** (`bg-primary`, `text-muted-foreground`, `bg-destructive`). Never raw Tailwind colors (`bg-blue-500`, `text-emerald-400`).
+- **Exception:** Status result boxes (success/error) may use `bg-emerald-950/30 border-emerald-500/50` and `bg-red-950/30 border-destructive/50` as these are approved patterns for result display.
+- **Button variants** use semantic tokens: the `success` variant uses `bg-success text-success-foreground` (defined in `index.css`), not `bg-emerald-600`.
+
+#### Overlays
+- **No manual `z-index`** on Dialog, Sheet, Popover — they handle their own stacking via `z-50`.
+- **No `dark:` color overrides** — use semantic tokens that work in both themes.
+
+#### Forms
+- The project uses a custom `SchemaForm` (JSON Schema → form) with `Input`, `Select`, `Checkbox`, `Label`. When adding net-new forms, follow the existing SchemaForm patterns.
+- If adding static forms, use `FieldGroup` + `Field` pattern (requires installing the `field` component).
 
 ### Conventions
 
@@ -195,6 +296,10 @@ npx playwright test --config frontend/playwright.config.ts  # e2e tests
 | Port 5173/3001 already in use | Previous instance still running | Run pre-flight checks; kill stale process with `kill $(lsof -ti :5173)` |
 | CSS variables not working | Tailwind v4 `@theme` config issue | Check `frontend/src/index.css` for correct `@theme` / `@theme inline` blocks |
 | shadcn/ui component broken | Missing CSS variable or Radix dependency | Verify all `@radix-ui/*` deps are installed and CSS variables are defined in `index.css` |
+| shadcn CLI writes to wrong path | `@` alias resolves to `frontend/@/` in CLI context | After `npx shadcn@latest add`, check `frontend/@/` and move files to `frontend/src/components/ui/` |
+| New shadcn component not found | Import path wrong or component not installed | Use CLI to add: `cd frontend && npx shadcn@latest add <name>`; never create UI primitives manually |
+| `space-y-*` used in new code | Violates shadcn spacing rule | Use `flex flex-col gap-*` instead; run `grep -rn 'space-y-\|space-x-' src/` to check |
+| Icons in Button missing `data-icon` | Violates shadcn icon rule | Add `data-icon="inline-start"` or `data-icon="inline-end"` on the icon element |
 
 ## Adding New Dependencies
 

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import type { RpcMethods } from '@/lib/protocol'
 
 /** System tool row as stored in systemToolsAtom (description coerced to string). */
@@ -105,7 +106,7 @@ export function ToolsTab() {
 
   return (
     <ScrollArea className="flex-1 min-h-0">
-      <div className="p-2 space-y-2">
+      <div className="p-2 flex flex-col gap-2">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 px-1">
@@ -139,7 +140,7 @@ export function ToolsTab() {
 
         {/* Content area */}
         {loading ? (
-          <div className="space-y-2 py-1">
+          <div className="flex flex-col gap-2 py-1">
             {[1, 2, 3, 4].map((i) => (
               <Skeleton key={i} className="h-[52px] w-full rounded-lg" />
             ))}
@@ -152,15 +153,19 @@ export function ToolsTab() {
             </Button>
           </div>
         ) : tools.length === 0 ? (
-          <div className="flex items-center justify-center h-[200px] text-[14px] text-muted-foreground/70">
-            No tools available
-          </div>
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>No tools available</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
         ) : filteredTools.length === 0 ? (
-          <div className="flex items-center justify-center h-[200px] text-[14px] text-muted-foreground/70">
-            No tools match "{search}"
-          </div>
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>No tools match "{search}"</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
         ) : (
-          <div className="space-y-1.5">
+          <div className="flex flex-col gap-1.5">
             {filteredTools.map((tool) => (
               <ToolRow key={tool.name} tool={tool} onClick={() => setDialogTool(tool)} />
             ))}

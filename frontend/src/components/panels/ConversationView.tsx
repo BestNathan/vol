@@ -1,6 +1,7 @@
 // frontend/src/components/panels/ConversationView.tsx
 import { useAtomValue } from 'jotai'
 import { useState } from 'react'
+import { cn } from '@/lib/utils'
 import { conversationByAgentAtom } from '@/stores/conversation'
 import { isRunningAtom } from '@/stores/connection'
 import { Markdown } from '@/components/shared/Markdown'
@@ -94,7 +95,7 @@ function TimelineEntry({
         )}
         {entry.type === 'ToolResult' && (
           <div className="cursor-pointer" onClick={() => setDetailOpen(true)}>
-            <span className={`text-xs px-1 py-0.5 rounded mr-1 ${entry.success ? 'text-emerald-400 bg-emerald-950/30' : 'text-destructive bg-red-950/30'}`}>
+            <span className={cn("text-xs px-1 py-0.5 rounded mr-1", entry.success ? 'text-emerald-400 bg-emerald-950/30' : 'text-destructive bg-red-950/30')}>
               {entry.success ? 'OK' : 'ERR'}
             </span>
             <span className="text-foreground text-sm line-clamp-2">{entry.preview}</span>

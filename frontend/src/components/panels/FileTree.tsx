@@ -184,7 +184,7 @@ function TreeNode({ node, depth }: { node: WorkspaceTreeNode; depth: number }) {
           <span className="inline-flex items-center justify-center w-[18px] h-[18px] flex-shrink-0 text-[14px]">
             {fileIcon(node.name, true)}
           </span>
-          <span className="min-w-0 flex-1 overflow-hidden text-ellipsis text-[#8ab4ff] font-medium">{node.name}</span>
+          <span className="min-w-0 flex-1 truncate text-[#8ab4ff] font-medium">{node.name}</span>
           <span
             title="Refresh"
             className="ml-auto inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-[12px] text-[#777799] opacity-0 transition-all duration-150 hover:bg-[#33334f] hover:text-foreground group-hover:opacity-100"
@@ -237,7 +237,7 @@ function TreeNode({ node, depth }: { node: WorkspaceTreeNode; depth: number }) {
       <span className="inline-flex items-center justify-center w-[18px] h-[18px] flex-shrink-0 text-[14px]">
         {fileIcon(node.name, false)}
       </span>
-      <span className="min-w-0 overflow-hidden text-ellipsis text-foreground/80">{node.name}</span>
+      <span className="min-w-0 truncate text-foreground/80">{node.name}</span>
     </div>
   )
 }
