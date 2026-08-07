@@ -394,10 +394,7 @@ fn expand_braces(pattern: &str) -> Option<Vec<String>> {
 
 /// Validate that a user-supplied path/pattern is a safe relative path.
 /// Rejects: absolute paths, paths containing `..`, and NUL bytes.
-fn validate_relative(
-    value: &str,
-    field_name: &str,
-) -> Result<(), (GlobErrorCode, String, String)> {
+fn validate_relative(value: &str, field_name: &str) -> Result<(), (GlobErrorCode, String, String)> {
     if value.contains('\0') {
         return Err((
             GlobErrorCode::InvalidPath,
@@ -568,15 +565,14 @@ impl ExecutableTool for GlobTool {
         context: &ToolContext,
     ) -> ToolResultType<ToolResult> {
         // ── Parse parameters ──────────────────────────────────────────
-        let params: GlobParams = serde_json::from_value(args.clone())
-            .map_err(|e| {
-                ToolError::InvalidArguments(format!(
-                    "Failed to parse glob arguments: {e}. \
+        let params: GlobParams = serde_json::from_value(args.clone()).map_err(|e| {
+            ToolError::InvalidArguments(format!(
+                "Failed to parse glob arguments: {e}. \
                      Ensure `pattern` is a string. Valid parameters: \
                      pattern (required), path, exclude, kind, max_results, \
                      include_hidden, follow_symlinks, sort, with_metadata."
-                ))
-            })?;
+            ))
+        })?;
 
         // ── Validate parameters ───────────────────────────────────────
         if params.pattern.is_empty() {
@@ -610,7 +606,10 @@ impl ExecutableTool for GlobTool {
                     "max_results must be between 1 and {}, got {}",
                     MAX_RESULTS_LIMIT, params.max_results
                 ),
-                format!("Set max_results to a value between 1 and {}.", MAX_RESULTS_LIMIT),
+                format!(
+                    "Set max_results to a value between 1 and {}.",
+                    MAX_RESULTS_LIMIT
+                ),
             );
         }
 
@@ -826,7 +825,13 @@ impl ExecutableTool for GlobTool {
                     (None, None)
                 };
 
-                results.push((workspace_rel_str, search_rel_str, mtime, size, entry.file_type.clone()));
+                results.push((
+                    workspace_rel_str,
+                    search_rel_str,
+                    mtime,
+                    size,
+                    entry.file_type.clone(),
+                ));
             }
         }
 
@@ -1265,7 +1270,10 @@ mod tests {
         assert_eq!(params["type"], "object");
         // Should have required field
         assert!(params["required"].is_array());
-        assert!(params["required"].as_array().unwrap().contains(&serde_json::json!("pattern")));
+        assert!(params["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("pattern")));
         // Should have properties
         assert!(params["properties"].is_object());
         // All expected parameters should be present

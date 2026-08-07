@@ -71,11 +71,7 @@ async fn test_glob_basic_wildcard() {
     write_file(&tmp, "src/lib.rs", "pub fn lib() {}");
     write_file(&tmp, "README.md", "# Project");
 
-    let json = glob(
-        serde_json::json!({"pattern": "*.rs", "path": "src"}),
-        &ctx,
-    )
-    .await;
+    let json = glob(serde_json::json!({"pattern": "*.rs", "path": "src"}), &ctx).await;
 
     let paths = match_paths(&json);
     assert_eq!(paths, vec!["src/lib.rs", "src/main.rs"]);
@@ -96,7 +92,10 @@ async fn test_glob_no_matches() {
 
     assert_eq!(json["total_matched"], 0);
     assert!(!json["truncated"].as_bool().unwrap());
-    assert!(json["message"].as_str().unwrap().contains("No matches found"));
+    assert!(json["message"]
+        .as_str()
+        .unwrap()
+        .contains("No matches found"));
     assert!(json["matches"].as_array().unwrap().is_empty());
 }
 
@@ -125,11 +124,7 @@ async fn test_glob_recursive_double_star() {
     write_file(&tmp, "src/components/header.rs", "");
     write_file(&tmp, "README.md", "");
 
-    let json = glob(
-        serde_json::json!({"pattern": "**/*.rs", "path": "."}),
-        &ctx,
-    )
-    .await;
+    let json = glob(serde_json::json!({"pattern": "**/*.rs", "path": "."}), &ctx).await;
 
     let paths = match_paths(&json);
     assert_eq!(paths.len(), 3);
@@ -555,11 +550,7 @@ async fn test_glob_default_excludes_are_applied() {
     write_file(&tmp, "node_modules/pkg/index.js", "");
     write_file(&tmp, ".git/config", "");
 
-    let json = glob(
-        serde_json::json!({"pattern": "**/*", "path": "."}),
-        &ctx,
-    )
-    .await;
+    let json = glob(serde_json::json!({"pattern": "**/*", "path": "."}), &ctx).await;
 
     let paths = match_paths(&json);
     assert!(paths.contains(&"src/main.rs"));
@@ -620,11 +611,7 @@ async fn test_glob_empty_pattern_rejected() {
 #[tokio::test]
 async fn test_glob_absolute_path_rejected() {
     let (ctx, _tmp) = test_context();
-    let result = glob_raw(
-        serde_json::json!({"pattern": "*.rs", "path": "/etc"}),
-        &ctx,
-    )
-    .await;
+    let result = glob_raw(serde_json::json!({"pattern": "*.rs", "path": "/etc"}), &ctx).await;
     assert!(!result.success);
     assert!(result.content.contains("INVALID_PATH"));
     assert!(result.content.contains("must be a relative path"));
@@ -696,11 +683,7 @@ async fn test_glob_invalid_sort_rejected() {
 #[tokio::test]
 async fn test_glob_unbalanced_braces_rejected() {
     let (ctx, _tmp) = test_context();
-    let result = glob_raw(
-        serde_json::json!({"pattern": "{a,b"}),
-        &ctx,
-    )
-    .await;
+    let result = glob_raw(serde_json::json!({"pattern": "{a,b"}), &ctx).await;
     assert!(!result.success);
     assert!(result.content.contains("INVALID_PATTERN"));
     assert!(result.content.contains("Unbalanced braces"));
@@ -825,21 +808,22 @@ async fn test_glob_output_contains_expected_top_level_fields() {
     let (ctx, tmp) = test_context();
     write_file(&tmp, "test.rs", "");
 
-    let json = glob(
-        serde_json::json!({"pattern": "*.rs", "path": "."}),
-        &ctx,
-    )
-    .await;
+    let json = glob(serde_json::json!({"pattern": "*.rs", "path": "."}), &ctx).await;
 
     // Verify all top-level fields from the spec are present
     assert!(json.get("matches").is_some(), "missing 'matches'");
-    assert!(json.get("total_matched").is_some(), "missing 'total_matched'");
+    assert!(
+        json.get("total_matched").is_some(),
+        "missing 'total_matched'"
+    );
     assert!(json.get("truncated").is_some(), "missing 'truncated'");
     assert!(json.get("search_path").is_some(), "missing 'search_path'");
     assert!(json.get("pattern").is_some(), "missing 'pattern'");
     assert!(json.get("excluded").is_some(), "missing 'excluded'");
-    assert!(json.get("message").is_some() || json.get("message").is_none(),
-            "message field should be present or null");
+    assert!(
+        json.get("message").is_some() || json.get("message").is_none(),
+        "message field should be present or null"
+    );
 }
 
 #[tokio::test]
