@@ -2,8 +2,14 @@
 import type { UiEvent } from './protocol'
 import { getDefaultStore } from 'jotai'
 import {
-  runCountAtom, iterationAtom, toolCallCountAtom, isRunningAtom,
-  runElapsedAtom, runningAgentsAtom, runMapAtom, pendingSubmitAgentAtom,
+  runCountAtom,
+  iterationAtom,
+  toolCallCountAtom,
+  isRunningAtom,
+  runElapsedAtom,
+  runningAgentsAtom,
+  runMapAtom,
+  pendingSubmitAgentAtom,
 } from '@/stores/connection'
 import { agentStatusMapAtom } from '@/stores/agents'
 import { conversationMapAtom, activeAgentIdAtom } from '@/stores/conversation'
@@ -104,12 +110,12 @@ export function handleUiEvent(event: UiEvent, runId: string) {
       }
 
       if (event.type === 'agent_aborted' && agentId) {
-        updateConversation(agentId, conv => {
+        updateConversation(agentId, (conv) => {
           conv.entries.push({ type: 'Error', message: event.reason })
         })
       }
       if (event.type === 'agent_error' && agentId) {
-        updateConversation(agentId, conv => {
+        updateConversation(agentId, (conv) => {
           conv.entries.push({ type: 'Error', message: event.message })
         })
       }
@@ -118,53 +124,59 @@ export function handleUiEvent(event: UiEvent, runId: string) {
 
     case 'thinking_start': {
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
-      if (agentId) updateConversation(agentId, conv => {
-        conv.entries.push({ type: 'Thinking', content: '' })
-      })
+      if (agentId)
+        updateConversation(agentId, (conv) => {
+          conv.entries.push({ type: 'Thinking', content: '' })
+        })
       break
     }
     case 'thinking_delta': {
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
-      if (agentId) updateConversation(agentId, conv => {
-        const last = conv.entries[conv.entries.length - 1]
-        if (last?.type === 'Thinking') {
-          last.content += event.delta
-        }
-      })
+      if (agentId)
+        updateConversation(agentId, (conv) => {
+          const last = conv.entries[conv.entries.length - 1]
+          if (last?.type === 'Thinking') {
+            last.content += event.delta
+          }
+        })
       break
     }
-    case 'thinking_complete': break // no-op
+    case 'thinking_complete':
+      break // no-op
 
     case 'content_start': {
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
-      if (agentId) updateConversation(agentId, conv => {
-        conv.entries.push({ type: 'ContentStreaming', content: '' })
-      })
+      if (agentId)
+        updateConversation(agentId, (conv) => {
+          conv.entries.push({ type: 'ContentStreaming', content: '' })
+        })
       break
     }
     case 'content_delta': {
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
-      if (agentId) updateConversation(agentId, conv => {
-        const last = conv.entries[conv.entries.length - 1]
-        if (last?.type === 'ContentStreaming') {
-          last.content += event.delta
-        }
-      })
+      if (agentId)
+        updateConversation(agentId, (conv) => {
+          const last = conv.entries[conv.entries.length - 1]
+          if (last?.type === 'ContentStreaming') {
+            last.content += event.delta
+          }
+        })
       break
     }
     case 'content_complete': {
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
-      if (agentId) updateConversation(agentId, conv => {
-        const last = conv.entries[conv.entries.length - 1]
-        if (last?.type === 'ContentStreaming') {
-          conv.entries[conv.entries.length - 1] = {
-            type: 'AgentAnswer',
-            text: event.content
+      if (agentId)
+        updateConversation(agentId, (conv) => {
+          const last = conv.entries[conv.entries.length - 1]
+          if (last?.type === 'ContentStreaming') {
+            conv.entries[conv.entries.length - 1] = {
+              type: 'AgentAnswer',
+              text: event.content,
+            }
+          } else if (event.content) {
+            conv.entries.push({ type: 'AgentAnswer', text: event.content })
           }
-        } else if (event.content) {
-          conv.entries.push({ type: 'AgentAnswer', text: event.content })
-        }
-      })
+        })
       break
     }
 
@@ -185,61 +197,65 @@ export function handleUiEvent(event: UiEvent, runId: string) {
       store.set(toolCallsAtom, calls)
 
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
-      if (agentId) updateConversation(agentId, conv => {
-        const preview = formatToolArgs(event.arguments)
-        conv.entries.push({
-          type: 'ToolCall',
-          toolName: event.tool_name,
-          argPreview: preview,
-          fullArguments: event.arguments,
+      if (agentId)
+        updateConversation(agentId, (conv) => {
+          const preview = formatToolArgs(event.arguments)
+          conv.entries.push({
+            type: 'ToolCall',
+            toolName: event.tool_name,
+            argPreview: preview,
+            fullArguments: event.arguments,
+          })
         })
-      })
       break
     }
     case 'tool_call_complete': {
       markToolCallStatus(event.tool_name, 'Success', event.duration_ms ?? null)
 
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
-      if (agentId) updateConversation(agentId, conv => {
-        const preview = truncatePreview(event.result, 200)
-        conv.entries.push({
-          type: 'ToolResult',
-          toolName: event.tool_name,
-          preview,
-          fullResult: event.result,
-          success: true,
+      if (agentId)
+        updateConversation(agentId, (conv) => {
+          const preview = truncatePreview(event.result, 200)
+          conv.entries.push({
+            type: 'ToolResult',
+            toolName: event.tool_name,
+            preview,
+            fullResult: event.result,
+            success: true,
+          })
         })
-      })
       break
     }
     case 'tool_call_error': {
       markToolCallStatus(event.tool_name, 'Error', event.duration_ms ?? null)
 
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
-      if (agentId) updateConversation(agentId, conv => {
-        conv.entries.push({
-          type: 'ToolResult',
-          toolName: event.tool_name,
-          preview: event.error,
-          fullResult: event.error,
-          success: false,
+      if (agentId)
+        updateConversation(agentId, (conv) => {
+          conv.entries.push({
+            type: 'ToolResult',
+            toolName: event.tool_name,
+            preview: event.error,
+            fullResult: event.error,
+            success: false,
+          })
         })
-      })
       break
     }
     case 'tool_call_skipped': {
       markToolCallStatus(event.tool_name, 'Skipped', event.duration_ms ?? null)
 
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
-      if (agentId) updateConversation(agentId, conv => {
-        conv.entries.push({
-          type: 'ToolResult',
-          toolName: event.tool_name,
-          preview: event.reason,
-          fullResult: event.reason,
-          success: false,
+      if (agentId)
+        updateConversation(agentId, (conv) => {
+          conv.entries.push({
+            type: 'ToolResult',
+            toolName: event.tool_name,
+            preview: event.reason,
+            fullResult: event.reason,
+            success: false,
+          })
         })
-      })
       break
     }
 
@@ -249,22 +265,24 @@ export function handleUiEvent(event: UiEvent, runId: string) {
     }
     case 'max_iterations_reached': {
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
-      if (agentId) updateConversation(agentId, conv => {
-        conv.entries.push({
-          type: 'Error',
-          message: `Max iterations reached (${event.current}/${event.max}) — waiting for user decision...`
+      if (agentId)
+        updateConversation(agentId, (conv) => {
+          conv.entries.push({
+            type: 'Error',
+            message: `Max iterations reached (${event.current}/${event.max}) — waiting for user decision...`,
+          })
         })
-      })
       break
     }
     case 'iteration_continued': {
       const agentId = agentForRun(runId) ?? store.get(activeAgentIdAtom)
-      if (agentId) updateConversation(agentId, conv => {
-        conv.entries.push({
-          type: 'AgentAnswer',
-          text: `Continuing from iteration ${event.from_iteration} (counter reset to 0)`
+      if (agentId)
+        updateConversation(agentId, (conv) => {
+          conv.entries.push({
+            type: 'AgentAnswer',
+            text: `Continuing from iteration ${event.from_iteration} (counter reset to 0)`,
+          })
         })
-      })
       break
     }
 
@@ -293,7 +311,8 @@ export function handleUiEvent(event: UiEvent, runId: string) {
       // Handled at connection/approval dialog level
       break
 
-    default: break
+    default:
+      break
   }
 }
 
@@ -308,7 +327,9 @@ export function formatToolArgs(arguments_: string): string {
       return entries.map(([k, v]) => `${k}=${jsonValueToDisplay(v)}`).join(', ')
     }
     return jsonValueToDisplay(parsed)
-  } catch { return arguments_ }
+  } catch {
+    return arguments_
+  }
 }
 
 function jsonValueToDisplay(v: unknown): string {
@@ -330,28 +351,76 @@ export function agentEventToUiEvent(
   runId: string,
 ): UiEvent | null {
   const s = (k: string) => (data[k] as string) ?? ''
-  const n = (k: string) => (data[k] as number)
+  const n = (k: string) => data[k] as number
 
   switch (variant) {
-    case 'AgentStart': return { type: 'agent_start', run_id: runId, input: s('input') }
-    case 'AgentComplete': return { type: 'agent_complete', run_id: runId, response: s('response') }
-    case 'AgentAborted': return { type: 'agent_aborted', run_id: runId, reason: s('reason') }
-    case 'ThinkingStart': return { type: 'thinking_start' }
-    case 'ThinkingDelta': return { type: 'thinking_delta', delta: s('delta') }
-    case 'ThinkingComplete': return { type: 'thinking_complete' }
-    case 'ContentStart': return { type: 'content_start' }
-    case 'ContentDelta': return { type: 'content_delta', delta: s('delta') }
-    case 'ContentComplete': return { type: 'content_complete', content: s('content') }
-    case 'ToolCallBegin': return { type: 'tool_call_begin', tool_name: s('tool_name'), arguments: s('arguments') }
-    case 'ToolCallArgumentDelta': return { type: 'tool_call_argument_delta', delta: s('delta') }
-    case 'ToolCallComplete': return { type: 'tool_call_complete', tool_name: s('tool_name'), result: s('result'), duration_ms: n('duration_ms') as number | undefined }
-    case 'ToolCallError': return { type: 'tool_call_error', tool_name: s('tool_name'), error: s('error'), duration_ms: n('duration_ms') as number | undefined }
-    case 'ToolCallSkipped': return { type: 'tool_call_skipped', tool_name: s('tool_name'), reason: s('reason'), duration_ms: n('duration_ms') as number | undefined }
-    case 'MaxIterationsReached': return { type: 'max_iterations_reached', current: (n('current_iteration') ?? 0) as number, max: (n('max_iterations') ?? 0) as number }
-    case 'IterationContinued': return { type: 'iteration_continued', from_iteration: (n('from_iteration') ?? 0) as number }
-    case 'IterationComplete': return { type: 'iteration_complete', iteration: (n('iteration') ?? 0) as number, final_answer: s('final_answer') || undefined }
-    case 'ApprovalRequest': return { type: 'approval_request', tool_name: s('tool_name'), reason: s('reason'), arguments: s('arguments') }
-    case 'ApprovalResolved': return { type: 'approval_resolved', approved: data.approved === true }
-    default: return null
+    case 'AgentStart':
+      return { type: 'agent_start', run_id: runId, input: s('input') }
+    case 'AgentComplete':
+      return { type: 'agent_complete', run_id: runId, response: s('response') }
+    case 'AgentAborted':
+      return { type: 'agent_aborted', run_id: runId, reason: s('reason') }
+    case 'ThinkingStart':
+      return { type: 'thinking_start' }
+    case 'ThinkingDelta':
+      return { type: 'thinking_delta', delta: s('delta') }
+    case 'ThinkingComplete':
+      return { type: 'thinking_complete' }
+    case 'ContentStart':
+      return { type: 'content_start' }
+    case 'ContentDelta':
+      return { type: 'content_delta', delta: s('delta') }
+    case 'ContentComplete':
+      return { type: 'content_complete', content: s('content') }
+    case 'ToolCallBegin':
+      return { type: 'tool_call_begin', tool_name: s('tool_name'), arguments: s('arguments') }
+    case 'ToolCallArgumentDelta':
+      return { type: 'tool_call_argument_delta', delta: s('delta') }
+    case 'ToolCallComplete':
+      return {
+        type: 'tool_call_complete',
+        tool_name: s('tool_name'),
+        result: s('result'),
+        duration_ms: n('duration_ms') as number | undefined,
+      }
+    case 'ToolCallError':
+      return {
+        type: 'tool_call_error',
+        tool_name: s('tool_name'),
+        error: s('error'),
+        duration_ms: n('duration_ms') as number | undefined,
+      }
+    case 'ToolCallSkipped':
+      return {
+        type: 'tool_call_skipped',
+        tool_name: s('tool_name'),
+        reason: s('reason'),
+        duration_ms: n('duration_ms') as number | undefined,
+      }
+    case 'MaxIterationsReached':
+      return {
+        type: 'max_iterations_reached',
+        current: (n('current_iteration') ?? 0) as number,
+        max: (n('max_iterations') ?? 0) as number,
+      }
+    case 'IterationContinued':
+      return { type: 'iteration_continued', from_iteration: (n('from_iteration') ?? 0) as number }
+    case 'IterationComplete':
+      return {
+        type: 'iteration_complete',
+        iteration: (n('iteration') ?? 0) as number,
+        final_answer: s('final_answer') || undefined,
+      }
+    case 'ApprovalRequest':
+      return {
+        type: 'approval_request',
+        tool_name: s('tool_name'),
+        reason: s('reason'),
+        arguments: s('arguments'),
+      }
+    case 'ApprovalResolved':
+      return { type: 'approval_resolved', approved: data.approved === true }
+    default:
+      return null
   }
 }

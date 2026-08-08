@@ -28,12 +28,16 @@ export function TabContent() {
 
   return (
     <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-      {TABS.map(tab => {
+      {TABS.map((tab) => {
         const Panel = PANELS[tab]
         if (!Panel) return null
         return (
-          <TabsContent key={tab} value={tab} forceMount={tab === active ? true : undefined}
-            className="flex-1 min-h-0 overflow-hidden mt-0 flex flex-col data-[state=inactive]:hidden">
+          <TabsContent
+            key={tab}
+            value={tab}
+            forceMount={tab === active ? true : undefined}
+            className="flex-1 min-h-0 overflow-hidden mt-0 flex flex-col data-[state=inactive]:hidden"
+          >
             {tab === active ? <Panel /> : null}
           </TabsContent>
         )

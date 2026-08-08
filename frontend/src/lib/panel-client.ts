@@ -74,7 +74,9 @@ export function getAgentClient(): JsonRpcClient {
     }
     const dpClient = pool.get(activeNodeId)
     if (dpClient) return dpClient
-    throw new Error(`Data-plane connection not available for node "${activeNodeId}" — the node may be offline`)
+    throw new Error(
+      `Data-plane connection not available for node "${activeNodeId}" — the node may be offline`,
+    )
   }
 
   // DataPlane mode: the main connection IS the DP connection.

@@ -2,7 +2,14 @@
 // MCP panel state: the five node-cached lists (servers, tools, resources,
 // resource templates, prompts) plus loading/error, and the active sub-tab.
 import { atom } from 'jotai'
-import type { McpServerInfo, McpToolInfo, McpResourceInfo, McpResourceTemplateInfo, McpPromptInfo, McpSubtab } from '@/types'
+import type {
+  McpServerInfo,
+  McpToolInfo,
+  McpResourceInfo,
+  McpResourceTemplateInfo,
+  McpPromptInfo,
+  McpSubtab,
+} from '@/types'
 
 export interface McpState {
   servers: McpServerInfo[]
@@ -15,7 +22,12 @@ export interface McpState {
 }
 
 export const mcpStateAtom = atom<McpState>({
-  servers: [], tools: [], resources: [], resourceTemplates: [], prompts: [],
-  loading: true, error: null,
+  servers: [],
+  tools: [],
+  resources: [],
+  resourceTemplates: [],
+  prompts: [],
+  loading: true,
+  error: null,
 })
 export const mcpActiveSubtabAtom = atom<McpSubtab>('servers')

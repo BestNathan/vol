@@ -18,7 +18,9 @@ export function useThrottledValue<T>(value: T, delayMs: number): T {
         setThrottled(value)
       }, delayMs - elapsed)
     }
-    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
   }, [value, delayMs])
 
   return throttled

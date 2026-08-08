@@ -30,24 +30,38 @@ export function ResourceViewer() {
   const handleRead = async () => {
     if (!d) return
     setDialog((s) =>
-      s.resourceViewer ? { ...s, resourceViewer: { ...s.resourceViewer, loading: true, error: undefined } } : s
+      s.resourceViewer
+        ? { ...s, resourceViewer: { ...s.resourceViewer, loading: true, error: undefined } }
+        : s,
     )
     try {
-      const res = await getPanelClient().call<RpcMethods['mcp.read_resource']['result']>('mcp.read_resource', {
-        uri: d.uri,
-      })
+      const res = await getPanelClient().call<RpcMethods['mcp.read_resource']['result']>(
+        'mcp.read_resource',
+        {
+          uri: d.uri,
+        },
+      )
       setDialog((s) =>
-        s.resourceViewer ? { ...s, resourceViewer: { ...s.resourceViewer, content: res.content, loading: false } } : s
+        s.resourceViewer
+          ? { ...s, resourceViewer: { ...s.resourceViewer, content: res.content, loading: false } }
+          : s,
       )
     } catch (err) {
       setDialog((s) =>
-        s.resourceViewer ? { ...s, resourceViewer: { ...s.resourceViewer, error: errMsg(err), loading: false } } : s
+        s.resourceViewer
+          ? { ...s, resourceViewer: { ...s.resourceViewer, error: errMsg(err), loading: false } }
+          : s,
       )
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) close() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) close()
+      }}
+    >
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle className="truncate">{d?.uri ?? ''}</DialogTitle>
@@ -56,7 +70,9 @@ export function ResourceViewer() {
         <div className="max-h-[60vh] overflow-y-auto flex flex-col gap-3">
           {/* Read stays visible after an error so the user can retry. */}
           {d && !d.loading && d.content === undefined && (
-            <Button size="sm" onClick={() => void handleRead()}>Read</Button>
+            <Button size="sm" onClick={() => void handleRead()}>
+              Read
+            </Button>
           )}
           {d?.loading && <div className="text-[13px] text-muted-foreground">Loading...</div>}
           {d?.content !== undefined && (

@@ -8,7 +8,10 @@ import { Button } from '@/components/ui/button'
 import { getPanelClient } from '@/lib/panel-client'
 import { selectedAgentIdAtom, agentStatusMapAtom } from '@/stores/agents'
 import {
-  isRunningAtom, pendingSubmitAgentAtom, runMapAtom, sessionIdAtom,
+  isRunningAtom,
+  pendingSubmitAgentAtom,
+  runMapAtom,
+  sessionIdAtom,
 } from '@/stores/connection'
 import { conversationMapAtom, activeAgentIdAtom } from '@/stores/conversation'
 import { approvalPendingAtom } from '@/stores/dialogs'
@@ -44,9 +47,7 @@ export function InputArea() {
   const runId = useMemo(() => {
     if (!selectedAgentId) return null
     return (
-      findRunIdForAgent(runMap, selectedAgentId)
-      ?? agentStatusMap[selectedAgentId]?.runId
-      ?? null
+      findRunIdForAgent(runMap, selectedAgentId) ?? agentStatusMap[selectedAgentId]?.runId ?? null
     )
   }, [runMap, agentStatusMap, selectedAgentId])
 
@@ -84,7 +85,7 @@ export function InputArea() {
         const map2 = new Map(conversationMap)
         const conv2 = map2.get(selectedAgentId) ?? { entries: [], autoScroll: true }
         const idx = conv2.entries.findIndex(
-          e => e.type === 'UserInput' && e.text === input && e === userEntry
+          (e) => e.type === 'UserInput' && e.text === input && e === userEntry,
         )
         if (idx !== -1) {
           conv2.entries[idx] = { type: 'Error', message: `Submit failed: ${message}` }
@@ -96,23 +97,26 @@ export function InputArea() {
       })
   }, [text, isRunning, selectedAgentId, setPendingSubmitAgent, conversationMap, setConversationMap])
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
-      // Plain Enter submits; Ctrl+Enter / Shift+Enter fall through to the
-      // default textarea newline.
-      e.preventDefault()
-      submit()
-    } else if (e.key === 'Escape') {
-      // Esc twice within 500ms clears the input.
-      const now = Date.now()
-      if (now - lastEscAtRef.current < 500) {
-        setText('')
-        lastEscAtRef.current = 0
-      } else {
-        lastEscAtRef.current = now
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+        // Plain Enter submits; Ctrl+Enter / Shift+Enter fall through to the
+        // default textarea newline.
+        e.preventDefault()
+        submit()
+      } else if (e.key === 'Escape') {
+        // Esc twice within 500ms clears the input.
+        const now = Date.now()
+        if (now - lastEscAtRef.current < 500) {
+          setText('')
+          lastEscAtRef.current = 0
+        } else {
+          lastEscAtRef.current = now
+        }
       }
-    }
-  }, [submit])
+    },
+    [submit],
+  )
 
   const handleCancel = useCallback(() => {
     if (!runId) return

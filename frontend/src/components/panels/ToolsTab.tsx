@@ -115,12 +115,7 @@ export function ToolsTab() {
               Tools ({tools.length})
             </span>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => void loadTools()}
-            disabled={loading}
-          >
+          <Button variant="secondary" size="sm" onClick={() => void loadTools()} disabled={loading}>
             Refresh
           </Button>
         </div>
@@ -227,7 +222,10 @@ function ToolRow({ tool, onClick }: { tool: SystemTool; onClick: () => void }) {
           )}
         </div>
         {tool.description ? (
-          <div className="text-[11px] text-muted-foreground/70 truncate mt-0.5" title={tool.description}>
+          <div
+            className="text-[11px] text-muted-foreground/70 truncate mt-0.5"
+            title={tool.description}
+          >
             {tool.description}
           </div>
         ) : (
@@ -240,4 +238,3 @@ function ToolRow({ tool, onClick }: { tool: SystemTool; onClick: () => void }) {
     </button>
   )
 }
-

@@ -19,7 +19,7 @@ export function TabBar() {
 
   return (
     <TabsList className="flex flex-nowrap bg-card border-b border-border rounded-none h-auto p-0 w-full justify-start overflow-x-auto flex-shrink-0">
-      {TABS.map(tab => (
+      {TABS.map((tab) => (
         <TabsTrigger
           key={tab.id}
           value={tab.id}

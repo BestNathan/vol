@@ -5,12 +5,7 @@
 // via skillDialogAtom — the SkillsPanel opens it by setting `open: true`.
 import { useEffect, useState } from 'react'
 import { useAtom } from 'jotai'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { skillDialogAtom } from '@/stores/dialogs'
 import { getPanelClient } from '@/lib/panel-client'
@@ -54,24 +49,37 @@ export function SkillDetailDialog() {
     if (!skill) return
     const path = skillFilePath(skill.directory, file)
     setPreview({ path, loading: true })
-    getPanelClient().call<RpcMethods['file.read']['result']>('file.read', { path })
+    getPanelClient()
+      .call<RpcMethods['file.read']['result']>('file.read', { path })
       .then((res) => setPreview({ path, loading: false, content: res.content }))
       .catch((err) => setPreview({ path, loading: false, error: errMsg(err) }))
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) close() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) close()
+      }}
+    >
       <DialogContent className="sm:max-w-[700px]">
         <DialogHeader>
           <DialogTitle className="truncate">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[15px] font-semibold text-foreground truncate">{skill?.name ?? ''}</span>
+              <span className="text-[15px] font-semibold text-foreground truncate">
+                {skill?.name ?? ''}
+              </span>
               {skill && (
-                <Badge variant="secondary" className="text-[11px] flex-shrink-0">v{skill.version}</Badge>
+                <Badge variant="secondary" className="text-[11px] flex-shrink-0">
+                  v{skill.version}
+                </Badge>
               )}
               {skill && (
-                <Badge variant="outline" className="text-[11px] flex-shrink-0"
-                  style={{ color: scopeColor(skill.scope), borderColor: scopeColor(skill.scope) }}>
+                <Badge
+                  variant="outline"
+                  className="text-[11px] flex-shrink-0"
+                  style={{ color: scopeColor(skill.scope), borderColor: scopeColor(skill.scope) }}
+                >
                   {skill.scope}
                 </Badge>
               )}
@@ -82,13 +90,18 @@ export function SkillDetailDialog() {
           {skill ? (
             <>
               {/* Description */}
-              <div className="text-foreground/80 text-[13px] mb-2 mt-2 break-words">{skill.description}</div>
+              <div className="text-foreground/80 text-[13px] mb-2 mt-2 break-words">
+                {skill.description}
+              </div>
 
               {/* Triggers */}
               {skill.triggers.length > 0 && (
                 <div className="flex gap-1.5 flex-wrap mb-3">
                   {skill.triggers.map((t, i) => (
-                    <span key={i} className="text-[11px] text-yellow-400/70 bg-[#2a2a20] px-2 py-0.5 rounded">
+                    <span
+                      key={i}
+                      className="text-[11px] text-yellow-400/70 bg-[#2a2a20] px-2 py-0.5 rounded"
+                    >
                       {t}
                     </span>
                   ))}
@@ -97,7 +110,9 @@ export function SkillDetailDialog() {
 
               {/* SKILL.md body */}
               <div className="bg-[#12121e] border border-[#2a2a44] rounded p-2 mb-3 max-h-[200px] overflow-y-auto">
-                <pre className="text-[12px] text-foreground/70 font-mono whitespace-pre-wrap">{skill.content}</pre>
+                <pre className="text-[12px] text-foreground/70 font-mono whitespace-pre-wrap">
+                  {skill.content}
+                </pre>
               </div>
 
               {/* File listing + preview */}
@@ -122,14 +137,20 @@ export function SkillDetailDialog() {
                   </div>
                   <div className="border border-[#2a2a44] rounded min-h-[100px] max-h-[250px] overflow-y-auto p-2">
                     {preview === null ? (
-                      <div className="text-muted-foreground/70 text-[13px] text-center py-8">Click a file to preview</div>
+                      <div className="text-muted-foreground/70 text-[13px] text-center py-8">
+                        Click a file to preview
+                      </div>
                     ) : preview.loading ? (
                       <div className="flex items-center gap-2 text-muted-foreground text-[13px]">
-                        <span className="text-[11px] text-muted-foreground/70 font-mono">{preview.path}</span>
+                        <span className="text-[11px] text-muted-foreground/70 font-mono">
+                          {preview.path}
+                        </span>
                         Loading...
                       </div>
                     ) : preview.error !== undefined ? (
-                      <div className="text-destructive text-[12px] break-words">{preview.error}</div>
+                      <div className="text-destructive text-[12px] break-words">
+                        {preview.error}
+                      </div>
                     ) : (
                       <pre className="text-[12px] text-foreground font-mono whitespace-pre-wrap break-words">
                         {preview.content ?? ''}

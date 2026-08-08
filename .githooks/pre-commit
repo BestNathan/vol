@@ -1,80 +1,48 @@
 #!/usr/bin/env bash
+# Pre-commit quality gate: fast checks only (fmt, lint, typecheck).
+# Slow checks (coverage) run at pre-push.
+#
+# All checks run in series.  First failure stops the chain.
+# No bypass: all checks must pass before committing.
 set -euo pipefail
 
-# ── Colors ───────────────────────────────────────────────────────────────
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 
-# ── Staged files ─────────────────────────────────────────────────────────
-STAGED_RUST=$(git diff --cached --name-only --diff-filter=ACM | grep '\.rs$' || true)
-STAGED_ALL=$(git diff --cached --name-only --diff-filter=ACM)
+# ── Detect what changed ───────────────────────────────────────────────
+CHANGES=$(git diff --cached --name-only --diff-filter=ACM)
+if [ -z "$CHANGES" ]; then
+  exit 0
+fi
 
-# ── Nothing to check ─────────────────────────────────────────────────────
-if [ -z "$STAGED_ALL" ]; then
+eval "$(echo "$CHANGES" | "$SCRIPT_DIR/scripts/detect-changes.sh")"
+
+if [ "$NO_CHANGES" = "true" ]; then
   exit 0
 fi
 
 HAS_ERROR=0
 
-# ── Rust checks ──────────────────────────────────────────────────────────
-if [ -n "$STAGED_RUST" ]; then
-  echo -e "${YELLOW}→ cargo fmt --all -- --check${NC}"
-  if ! cargo fmt --all -- --check 2>/dev/null; then
-    echo -e "${RED}✗ cargo fmt failed — run 'cargo fmt --all' to fix${NC}"
-    HAS_ERROR=1
-  else
-    echo -e "${GREEN}✓ cargo fmt${NC}"
-  fi
+# ── Rust checks ───────────────────────────────────────────────────────
+if [ "$RUST_CHANGED" = "true" ]; then
+  "$SCRIPT_DIR/scripts/check-rust-fmt.sh" || HAS_ERROR=1
+  if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 
-  echo -e "${YELLOW}→ cargo clippy --workspace${NC}"
-  if ! cargo clippy --workspace 2>&1; then
-    echo -e "${RED}✗ cargo clippy failed — fix the warnings above${NC}"
-    HAS_ERROR=1
-  else
-    echo -e "${GREEN}✓ cargo clippy${NC}"
-  fi
+  "$SCRIPT_DIR/scripts/check-rust-clippy.sh" || HAS_ERROR=1
+  if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 fi
 
+# ── Frontend checks ───────────────────────────────────────────────────
+if [ "$FRONTEND_CHANGED" = "true" ]; then
+  "$SCRIPT_DIR/scripts/check-fe-format.sh" || HAS_ERROR=1
+  if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 
-# ── Coverage gate ──────────────────────────────────────────────────
-if [ -n "$STAGED_RUST" ]; then
-  # Check cargo-llvm-cov is installed
-  if ! command -v cargo-llvm-cov &>/dev/null; then
-    echo -e "${RED}✗ cargo-llvm-cov not installed${NC}"
-    echo -e "${RED}  Install: cargo install cargo-llvm-cov && rustup component add llvm-tools-preview${NC}"
-    HAS_ERROR=1
-  else
-    # Extract changed crate names from staged Rust files.
-    # Cargo.toml change → check all crates (no args = full workspace).
-    if echo "$STAGED_ALL" | grep -q '^Cargo.toml$'; then
-      CHANGED_CRATES=""
-      echo -e "${YELLOW}→ Cargo.toml staged — checking coverage for all crates${NC}"
-    else
-      CHANGED_CRATES=$(echo "$STAGED_RUST" \
-        | sed -n 's|^crates/\([^/]*\)/.*|\1|p' \
-        | sort -u \
-        | tr '\n' ' ' \
-        || true)
-    fi
+  "$SCRIPT_DIR/scripts/check-fe-lint.sh" || HAS_ERROR=1
+  if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 
-    if [ -n "$CHANGED_CRATES" ] || echo "$STAGED_ALL" | grep -q '^Cargo.toml$'; then
-      echo -e "${YELLOW}→ coverage check for changed crates${NC}"
-      if ./scripts/check-coverage.sh $CHANGED_CRATES; then
-        echo -e "${GREEN}✓ coverage${NC}"
-      else
-        echo -e "${RED}✗ coverage below threshold — add tests and commit again${NC}"
-        HAS_ERROR=1
-      fi
-    fi
-  fi
-fi
-# ── Result ───────────────────────────────────────────────────────────────
-if [ $HAS_ERROR -eq 1 ]; then
-  echo -e "\n${RED}Commit blocked — fix the issues above and try again${NC}"
-  exit 1
+  "$SCRIPT_DIR/scripts/check-fe-type.sh" || HAS_ERROR=1
+  if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 fi
 
-echo -e "\n${GREEN}All checks passed ✓${NC}"
+echo ""
+echo -e "\033[0;32mAll pre-commit checks passed ✓\033[0m"
 exit 0

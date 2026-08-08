@@ -9,7 +9,10 @@ import { getPanelClient } from '@/lib/panel-client'
 import { getCacheKey, nodeDataCacheAtom } from '@/stores/cache'
 import { activeNodeIdAtom, activeTabAtom, fileTreeDrawerOpenAtom } from '@/stores/ui'
 import {
-  workspaceTreeAtom, openFilesAtom, selectedFileTabAtom, collapsedDirsAtom,
+  workspaceTreeAtom,
+  openFilesAtom,
+  selectedFileTabAtom,
+  collapsedDirsAtom,
   replaceDirChildren,
 } from '@/stores/workspace'
 import { cn } from '@/lib/utils'
@@ -22,7 +25,12 @@ export const WORKSPACE_TREE_CACHE_KEY = 'workspace_tree'
 
 /** Root node of a fresh (unloaded) tree. */
 export const ROOT_NODE: WorkspaceTreeNode = {
-  name: '', path: '.', is_dir: true, loaded: false, load_error: false, children: [],
+  name: '',
+  path: '.',
+  is_dir: true,
+  loaded: false,
+  load_error: false,
+  children: [],
 }
 
 function errMsg(err: unknown): string {
@@ -35,32 +43,44 @@ export function fileIcon(name: string, isDir: boolean): string {
   const dot = name.lastIndexOf('.')
   const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : ''
   switch (ext) {
-    case 'rs': return '🦀'
+    case 'rs':
+      return '🦀'
     case 'toml':
-    case 'lock': return '⚙️'
-    case 'md': return '📝'
-    case 'json': return '📊'
+    case 'lock':
+      return '⚙️'
+    case 'md':
+      return '📝'
+    case 'json':
+      return '📊'
     case 'yaml':
     case 'yml':
     case 'js':
-    case 'ts': return '📜'
+    case 'ts':
+      return '📜'
     case 'sh':
-    case 'bash': return '🐚'
+    case 'bash':
+      return '🐚'
     case 'html':
-    case 'htm': return '🌐'
-    case 'css': return '🎨'
-    default: return '📄'
+    case 'htm':
+      return '🌐'
+    case 'css':
+      return '🎨'
+    default:
+      return '📄'
   }
 }
 
 /** True when `raw` looks like a cached WorkspaceTreeNode (cache guard). */
 export function isWorkspaceTreeNode(raw: unknown): raw is WorkspaceTreeNode {
   const n = raw as WorkspaceTreeNode | null
-  return typeof n === 'object' && n !== null
-    && typeof n.name === 'string'
-    && typeof n.path === 'string'
-    && typeof n.is_dir === 'boolean'
-    && Array.isArray(n.children)
+  return (
+    typeof n === 'object' &&
+    n !== null &&
+    typeof n.name === 'string' &&
+    typeof n.path === 'string' &&
+    typeof n.is_dir === 'boolean' &&
+    Array.isArray(n.children)
+  )
 }
 
 /** Build a loaded root tree from a file.list result. */
@@ -90,9 +110,7 @@ export function fileTreeOuterClass(drawerOpen: boolean): string {
 
 /** Panel content classes: visible in the drawer, or only on desktop. */
 export function fileTreeContentClass(drawerOpen: boolean): string {
-  return drawerOpen
-    ? 'flex min-h-0 flex-1 flex-col'
-    : 'hidden min-h-0 flex-1 flex-col sm:flex'
+  return drawerOpen ? 'flex min-h-0 flex-1 flex-col' : 'hidden min-h-0 flex-1 flex-col sm:flex'
 }
 
 /** One row in the tree: a directory (chevron + lazy load + ⟳ refresh) or a
@@ -108,7 +126,9 @@ function TreeNode({ node, depth }: { node: WorkspaceTreeNode; depth: number }) {
 
   // Live node mirror for the stale-response guard in async callbacks.
   const nodeIdRef = useRef(nodeId)
-  useEffect(() => { nodeIdRef.current = nodeId }, [nodeId])
+  useEffect(() => {
+    nodeIdRef.current = nodeId
+  }, [nodeId])
 
   // Latest request id per path: a file.list response only applies when its id
   // still matches, so a ⟳ refresh issued after an in-flight request wins.
@@ -118,7 +138,8 @@ function TreeNode({ node, depth }: { node: WorkspaceTreeNode; depth: number }) {
     const targetNode = nodeIdRef.current
     const id = (reqIdsRef.current.get(path) ?? 0) + 1
     reqIdsRef.current.set(path, id)
-    getPanelClient().call<RpcMethods['file.list']['result']>('file.list', { path })
+    getPanelClient()
+      .call<RpcMethods['file.list']['result']>('file.list', { path })
       .then((res) => {
         if (nodeIdRef.current !== targetNode) return
         if (reqIdsRef.current.get(path) !== id) return
@@ -175,10 +196,12 @@ function TreeNode({ node, depth }: { node: WorkspaceTreeNode; depth: number }) {
           style={{ paddingLeft: `${depth * 16 + 4}px` }}
           onClick={onDirClick}
         >
-          <span className={cn(
-            'w-3 h-3 flex-shrink-0 origin-center transition-transform duration-150',
-            !collapsed && 'rotate-90',
-          )}>
+          <span
+            className={cn(
+              'w-3 h-3 flex-shrink-0 origin-center transition-transform duration-150',
+              !collapsed && 'rotate-90',
+            )}
+          >
             <span className="block h-1.5 w-1.5 origin-center border-r-2 border-t-2 border-[#8b8baa] rotate-45" />
           </span>
           <span className="inline-flex items-center justify-center w-[18px] h-[18px] flex-shrink-0 text-[14px]">
@@ -215,9 +238,12 @@ function TreeNode({ node, depth }: { node: WorkspaceTreeNode; depth: number }) {
       const next = [...openFiles, { path }]
       setOpenFiles(next)
       setSelectedTab(next.length - 1)
-      getPanelClient().call<RpcMethods['file.read']['result']>('file.read', { path })
+      getPanelClient()
+        .call<RpcMethods['file.read']['result']>('file.read', { path })
         .then((res) => {
-          setOpenFiles((prev) => prev.map((t) => (t.path === path ? { ...t, content: res.content } : t)))
+          setOpenFiles((prev) =>
+            prev.map((t) => (t.path === path ? { ...t, content: res.content } : t)),
+          )
         })
         .catch((err) => {
           const msg = errMsg(err)
@@ -233,7 +259,9 @@ function TreeNode({ node, depth }: { node: WorkspaceTreeNode; depth: number }) {
       style={{ paddingLeft: `${depth * 16 + 4}px` }}
       onClick={onFileClick}
     >
-      <span className="inline-flex items-center justify-center w-5 h-5 flex-shrink-0 text-[10px] text-muted-foreground/70 invisible">▾</span>
+      <span className="inline-flex items-center justify-center w-5 h-5 flex-shrink-0 text-[10px] text-muted-foreground/70 invisible">
+        ▾
+      </span>
       <span className="inline-flex items-center justify-center w-[18px] h-[18px] flex-shrink-0 text-[14px]">
         {fileIcon(node.name, false)}
       </span>
@@ -255,57 +283,67 @@ export function FileTree() {
 
   // Live node mirror for the stale-response guard in async callbacks.
   const nodeIdRef = useRef(nodeId)
-  useEffect(() => { nodeIdRef.current = nodeId }, [nodeId])
+  useEffect(() => {
+    nodeIdRef.current = nodeId
+  }, [nodeId])
 
   // Load the root listing for `target`: hydrate from the per-node cache
   // ("workspace_tree" full tree, or "files" root entries) when present,
   // otherwise file.list(".") and write both back to the cache. Writes are
   // dropped once the active node no longer matches the fetch target.
-  const loadRoot = useCallback(async (target: string | null) => {
-    if (!target) {
-      setTree(ROOT_NODE)
-      setRootLoading(false)
+  const loadRoot = useCallback(
+    async (target: string | null) => {
+      if (!target) {
+        setTree(ROOT_NODE)
+        setRootLoading(false)
+        setRootError(null)
+        return
+      }
+      const treeCacheKey = getCacheKey(target, WORKSPACE_TREE_CACHE_KEY)
+      const cachedTree = store
+        .get(nodeDataCacheAtom)
+        .get(treeCacheKey)
+        ?.get(WORKSPACE_TREE_CACHE_KEY)
+      if (isWorkspaceTreeNode(cachedTree)) {
+        setTree(cachedTree)
+        setRootLoading(false)
+        setRootError(null)
+        return
+      }
+      const filesCacheKey = getCacheKey(target, FILES_CACHE_KEY)
+      const cachedEntries = store.get(nodeDataCacheAtom).get(filesCacheKey)?.get(FILES_CACHE_KEY)
+      if (Array.isArray(cachedEntries)) {
+        setTree(buildRootFromEntries(cachedEntries as FileEntry[]))
+        setRootLoading(false)
+        setRootError(null)
+        return
+      }
+      setRootLoading(true)
       setRootError(null)
-      return
-    }
-    const treeCacheKey = getCacheKey(target, WORKSPACE_TREE_CACHE_KEY)
-    const cachedTree = store.get(nodeDataCacheAtom).get(treeCacheKey)?.get(WORKSPACE_TREE_CACHE_KEY)
-    if (isWorkspaceTreeNode(cachedTree)) {
-      setTree(cachedTree)
-      setRootLoading(false)
-      setRootError(null)
-      return
-    }
-    const filesCacheKey = getCacheKey(target, FILES_CACHE_KEY)
-    const cachedEntries = store.get(nodeDataCacheAtom).get(filesCacheKey)?.get(FILES_CACHE_KEY)
-    if (Array.isArray(cachedEntries)) {
-      setTree(buildRootFromEntries(cachedEntries as FileEntry[]))
-      setRootLoading(false)
-      setRootError(null)
-      return
-    }
-    setRootLoading(true)
-    setRootError(null)
-    try {
-      const res = await getPanelClient().call<RpcMethods['file.list']['result']>('file.list', { path: '.' })
-      if (nodeIdRef.current !== target) return
-      const entries = res.entries ?? []
-      const nextTree = buildRootFromEntries(entries)
-      setTree(nextTree)
-      // Write back to cache for instant switching.
-      setCache((prev) => {
-        const next = new Map(prev)
-        next.set(filesCacheKey, new Map<string, unknown>([[FILES_CACHE_KEY, entries]]))
-        next.set(treeCacheKey, new Map<string, unknown>([[WORKSPACE_TREE_CACHE_KEY, nextTree]]))
-        return next
-      })
-    } catch (err) {
-      if (nodeIdRef.current !== target) return
-      setRootError(errMsg(err))
-    } finally {
-      if (nodeIdRef.current === target) setRootLoading(false)
-    }
-  }, [setTree, setCache, store])
+      try {
+        const res = await getPanelClient().call<RpcMethods['file.list']['result']>('file.list', {
+          path: '.',
+        })
+        if (nodeIdRef.current !== target) return
+        const entries = res.entries ?? []
+        const nextTree = buildRootFromEntries(entries)
+        setTree(nextTree)
+        // Write back to cache for instant switching.
+        setCache((prev) => {
+          const next = new Map(prev)
+          next.set(filesCacheKey, new Map<string, unknown>([[FILES_CACHE_KEY, entries]]))
+          next.set(treeCacheKey, new Map<string, unknown>([[WORKSPACE_TREE_CACHE_KEY, nextTree]]))
+          return next
+        })
+      } catch (err) {
+        if (nodeIdRef.current !== target) return
+        setRootError(errMsg(err))
+      } finally {
+        if (nodeIdRef.current === target) setRootLoading(false)
+      }
+    },
+    [setTree, setCache, store],
+  )
 
   // Load on mount and whenever the active node changes; collapse the tree
   // (open files stay open — they are global, not per-node).
@@ -336,7 +374,9 @@ export function FileTree() {
         <div
           className={cn(
             'sm:hidden absolute inset-0 z-40 bg-black/50',
-            drawerOpen ? 'animate-in fade-in-0 duration-200' : 'animate-out fade-out-0 duration-200'
+            drawerOpen
+              ? 'animate-in fade-in-0 duration-200'
+              : 'animate-out fade-out-0 duration-200',
           )}
           onClick={() => setDrawerOpen(false)}
         />
@@ -350,7 +390,10 @@ export function FileTree() {
           onClick={() => setDrawerOpen(true)}
         >
           <span className="text-[16px] leading-none">📂</span>
-          <span className="text-[10px] font-semibold uppercase" style={{ writingMode: 'vertical-rl' }}>
+          <span
+            className="text-[10px] font-semibold uppercase"
+            style={{ writingMode: 'vertical-rl' }}
+          >
             Files
           </span>
         </button>
@@ -361,7 +404,7 @@ export function FileTree() {
         className={cn(
           fileTreeOuterClass(true),
           'transition-transform duration-200',
-          drawerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'
+          drawerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0',
         )}
       >
         <div className={cn(fileTreeContentClass(drawerOpen), closing && 'flex')}>
@@ -402,9 +445,7 @@ export function FileTree() {
                 (empty)
               </div>
             ) : (
-              tree.children.map((child) => (
-                <TreeNode key={child.path} node={child} depth={0} />
-              ))
+              tree.children.map((child) => <TreeNode key={child.path} node={child} depth={0} />)
             )}
           </div>
         </div>

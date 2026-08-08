@@ -7,12 +7,7 @@
 // drawn below). Cycles are handled defensively via a visited set. Port of
 // crates/vol-llm-ui/src/web/components/task_dep_graph.rs.
 import { useMemo, useState } from 'react'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { statusColor } from '@/components/panels/TasksPanel'
 import type { TaskEntry } from '@/types'
 
@@ -186,10 +181,13 @@ export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
 
   const minLayer = Math.min(...layout.nodes.map((n) => n.layer), 0)
   const maxLayer = Math.max(...layout.nodes.map((n) => n.layer), 0)
-  const maxPerLayer = layout.nodes.reduce((acc, n) => {
-    acc[n.layer] = (acc[n.layer] ?? 0) + 1
-    return acc
-  }, {} as Record<number, number>)
+  const maxPerLayer = layout.nodes.reduce(
+    (acc, n) => {
+      acc[n.layer] = (acc[n.layer] ?? 0) + 1
+      return acc
+    },
+    {} as Record<number, number>,
+  )
   const maxPerLayerCount = Math.max(...Object.values(maxPerLayer), 1)
 
   const pos = (layer: number, order: number): [number, number] => [
@@ -209,11 +207,18 @@ export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
   const selectedTask = selected !== null ? index.get(selected) : undefined
 
   return (
-    <Dialog open onOpenChange={(next) => { if (!next) onClose() }}>
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
       <DialogContent className="sm:max-w-[900px]">
         <DialogHeader>
           <DialogTitle>
-            <span className="text-[15px] font-semibold text-foreground">Dependency Graph — t{centerId}</span>
+            <span className="text-[15px] font-semibold text-foreground">
+              Dependency Graph — t{centerId}
+            </span>
           </DialogTitle>
         </DialogHeader>
         <div className="flex flex-col min-h-0 max-h-[70vh]">
@@ -239,8 +244,12 @@ export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
                 return (
                   <line
                     key={`${e.from}-${e.to}`}
-                    x1={fx} y1={fy} x2={tx} y2={ty}
-                    stroke="#7080b0" strokeWidth="1.5"
+                    x1={fx}
+                    y1={fy}
+                    x2={tx}
+                    y2={ty}
+                    stroke="#7080b0"
+                    strokeWidth="1.5"
                     markerEnd="url(#depArrow)"
                   />
                 )
@@ -260,12 +269,23 @@ export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
                 return (
                   <g key={n.id} style={{ cursor: 'pointer' }} onClick={() => setSelected(n.id)}>
                     <rect
-                      x={x} y={y} width={NODE_W} height={NODE_H} rx="6"
-                      fill={fill} fillOpacity="0.85"
-                      stroke={stroke} strokeWidth={strokeWidth} strokeDasharray={dash}
+                      x={x}
+                      y={y}
+                      width={NODE_W}
+                      height={NODE_H}
+                      rx="6"
+                      fill={fill}
+                      fillOpacity="0.85"
+                      stroke={stroke}
+                      strokeWidth={strokeWidth}
+                      strokeDasharray={dash}
                     />
-                    <text x={x + 8} y={y + 17} fontSize="12" fontWeight="bold" fill="#10101a">{label}</text>
-                    <text x={x + 8} y={y + 34} fontSize="11" fill="#10101a">{subject}</text>
+                    <text x={x + 8} y={y + 17} fontSize="12" fontWeight="bold" fill="#10101a">
+                      {label}
+                    </text>
+                    <text x={x + 8} y={y + 34} fontSize="11" fill="#10101a">
+                      {subject}
+                    </text>
                   </g>
                 )
               })}
@@ -286,7 +306,9 @@ export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
                     </span>
                     <span className="text-foreground">{selectedTask.subject}</span>
                     {selectedTask.assignee && (
-                      <span className="text-muted-foreground/70 ml-auto">{selectedTask.assignee}</span>
+                      <span className="text-muted-foreground/70 ml-auto">
+                        {selectedTask.assignee}
+                      </span>
                     )}
                   </div>
                   {selectedTask.description !== '' && (
@@ -294,7 +316,9 @@ export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
                   )}
                 </>
               ) : (
-                <div className="text-muted-foreground">t{selected} — task not loaded (outside current filter)</div>
+                <div className="text-muted-foreground">
+                  t{selected} — task not loaded (outside current filter)
+                </div>
               )}
             </div>
           )}
