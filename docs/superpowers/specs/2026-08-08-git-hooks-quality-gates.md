@@ -42,27 +42,76 @@ frontend/src/** staged    → FRONTEND_CHANGED=true
 
 Hooks call this first, skip checks for unchanged languages.
 
+## Configuration ownership
+
+Tools are configured where they belong.  Root-level `scripts/` and
+`.githooks/` only orchestrate — they call into the toolchain, they don't
+configure it.
+
+| Layer | Owns |
+|-------|------|
+| `Cargo.toml` / `rustfmt.toml` / `clippy.toml` | Rust fmt, clippy, test config |
+| `frontend/package.json` npm scripts | Frontend format, lint, typecheck, test commands |
+| `frontend/.prettierrc` / `eslint.config.js` / `tsconfig.json` | Frontend tool config |
+| `frontend/vitest.config.ts` | Frontend test + coverage config |
+| `scripts/check-*.sh` | Thin wrappers that call the above, format error output |
+| `.githooks/pre-commit` / `pre-push` | Change detection → dispatch to scripts |
+
+Scripts under `scripts/` never contain tool-specific configuration (no
+prettier rules, no eslint settings, no coverage thresholds for frontend).
+
 ## Scripts
 
-Each script is standalone — runnable by hooks, CI, or manually.  Every script
-returns exit 0 on pass, exit 1 on fail with structured output.
+Each script is a thin wrapper.  It calls the underlying tool, formats
+failure output with file:line + fix suggestion, and returns exit 0 or 1.
 
 ### pre-commit scripts
 
-| Script | Runs | Speed |
-|--------|------|-------|
-| `scripts/check-rust-fmt.sh` | `cargo fmt --all -- --check` | ~2s |
-| `scripts/check-rust-clippy.sh` | `cargo clippy --workspace` | ~5s |
-| `scripts/check-fe-format.sh` | `npx prettier --check frontend/src` | ~1s |
-| `scripts/check-fe-lint.sh` | `npx eslint frontend/src` | ~3s |
-| `scripts/check-fe-type.sh` | `npx tsc -b --noEmit` | ~3s |
+| Script | Delegates to |
+|--------|-------------|
+| `scripts/check-rust-fmt.sh` | `cargo fmt --all -- --check` |
+| `scripts/check-rust-clippy.sh` | `cargo clippy --workspace` |
+| `scripts/check-fe-format.sh` | `npm --prefix frontend run format:check` |
+| `scripts/check-fe-lint.sh` | `npm --prefix frontend run lint` |
+| `scripts/check-fe-type.sh` | `npm --prefix frontend run typecheck` |
 
 ### pre-push scripts
 
-| Script | Runs | Speed |
-|--------|------|-------|
-| `scripts/check-rust-coverage.sh` | Existing, modified to run only changed crates | ~30s-2min |
-| `scripts/check-fe-test.sh` | `npx vitest run --coverage` | ~10s-1min |
+| Script | Delegates to |
+|--------|-------------|
+| `scripts/check-rust-coverage.sh` | Existing, modified to accept changed crate names |
+| `scripts/check-fe-test.sh` | `npm --prefix frontend run test:coverage` |
+
+### Frontend npm scripts (defined in `frontend/package.json`)
+
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/",
+    "lint": "eslint src/",
+    "typecheck": "tsc -b --noEmit",
+    "test:coverage": "vitest run --coverage"
+  }
+}
+```
+
+### Speed
+
+| Script | Speed |
+|--------|-------|
+| `check-rust-fmt.sh` | ~2s |
+| `check-rust-clippy.sh` | ~5s |
+| `check-fe-format.sh` | ~1s |
+| `check-fe-lint.sh` | ~3s |
+| `check-fe-type.sh` | ~3s |
+| `check-rust-coverage.sh` | ~30s-2min (per changed crate) |
+| `check-fe-test.sh` | ~10s-1min |
 
 ## Fail output format
 
@@ -105,7 +154,10 @@ Runs against the push range (commits being pushed), not just staged files.
 
 ## Frontend tooling setup
 
-### New devDependencies
+All frontend config lives under `frontend/`.  Root-level scripts and hooks
+only invoke npm scripts — they don't configure prettier, eslint, or vitest.
+
+### New devDependencies (in `frontend/package.json`)
 
 ```json
 {
@@ -119,30 +171,38 @@ Runs against the push range (commits being pushed), not just staged files.
 }
 ```
 
-### Configuration files
+### Configuration files (all under `frontend/`)
 
-- `frontend/.prettierrc` — single quotes, trailing commas, 100 char width
-- `frontend/eslint.config.js` — flat config (ESLint 9), TypeScript + React Hooks rules
-- `frontend/vitest.config.ts` — add `coverage` plugin, set thresholds
-- `frontend/.prettierignore` — node_modules, dist, coverage
-- `frontend/.eslintignore` — same
+| File | Purpose |
+|------|---------|
+| `frontend/.prettierrc` | Single quotes, trailing commas, 100 char width |
+| `frontend/eslint.config.js` | Flat config (ESLint 9), TypeScript + React Hooks |
+| `frontend/.prettierignore` | node_modules, dist, coverage |
+| `frontend/.eslintignore` | Same |
+
+Existing files to modify:
+
+| File | Change |
+|------|--------|
+| `frontend/tsconfig.json` | Already exists — verify `noEmit` is set |
+| `frontend/vitest.config.ts` | Add `coverage` provider (v8), set thresholds |
 
 ### Format existing code
 
-Run `npx prettier --write frontend/src` once to baseline all existing code.
+Run `npm --prefix frontend run format` once to baseline all existing code.
 Include that commit separately before adding the pre-commit hook so the
 format commit is clean and bisectable.
 
 ### Makefile targets
 
-Add these for manual use:
+Add these for manual use — thin wrappers around npm scripts:
 
 ```makefile
-fe-fmt:     npx prettier --write frontend/src
-fe-fmt-check: npx prettier --check frontend/src
-fe-lint:    npx eslint frontend/src
-fe-type:    npx tsc -b --noEmit
-fe-test:    npx vitest run --coverage
+fe-fmt:       npm --prefix frontend run format
+fe-fmt-check: npm --prefix frontend run format:check
+fe-lint:      npm --prefix frontend run lint
+fe-type:      npm --prefix frontend run typecheck
+fe-test:      npm --prefix frontend run test:coverage
 ```
 
 ## Hard gate policy
