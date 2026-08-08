@@ -82,67 +82,78 @@ export function LogViewer() {
 
   // Live node mirror for the stale-response guard in async callbacks.
   const nodeIdRef = useRef(nodeId)
-  useEffect(() => { nodeIdRef.current = nodeId }, [nodeId])
+  useEffect(() => {
+    nodeIdRef.current = nodeId
+  }, [nodeId])
 
   // Write a partial state patch into the node's "log_viewer" cache entry,
   // preserving the current atoms for any fields not in the patch.
-  const writeCache = useCallback((target: string, patch: Partial<LogViewerCacheState>) => {
-    const cacheKey = getCacheKey(target, LOG_VIEWER_CACHE_KEY)
-    setCache((prev) => {
-      const next = new Map(prev)
-      const existing = next.get(cacheKey)?.get(LOG_VIEWER_CACHE_KEY)
-      const base = isLogViewerCacheState(existing)
-        ? existing
-        : {
-            run_logs: store.get(logRunsAtom),
-            entries: store.get(logEntriesAtom),
-            selected_run: store.get(selectedRunAtom),
-            loading: false,
-            error: null,
-          }
-      next.set(cacheKey, new Map<string, unknown>([[LOG_VIEWER_CACHE_KEY, { ...base, ...patch }]]))
-      return next
-    })
-  }, [setCache, store])
+  const writeCache = useCallback(
+    (target: string, patch: Partial<LogViewerCacheState>) => {
+      const cacheKey = getCacheKey(target, LOG_VIEWER_CACHE_KEY)
+      setCache((prev) => {
+        const next = new Map(prev)
+        const existing = next.get(cacheKey)?.get(LOG_VIEWER_CACHE_KEY)
+        const base = isLogViewerCacheState(existing)
+          ? existing
+          : {
+              run_logs: store.get(logRunsAtom),
+              entries: store.get(logEntriesAtom),
+              selected_run: store.get(selectedRunAtom),
+              loading: false,
+              error: null,
+            }
+        next.set(
+          cacheKey,
+          new Map<string, unknown>([[LOG_VIEWER_CACHE_KEY, { ...base, ...patch }]]),
+        )
+        return next
+      })
+    },
+    [setCache, store],
+  )
 
   // Fetch the run list for `target`; hydrates from the per-node cache when a
   // cached copy exists (restoring the selected run + entries too), otherwise
   // fetches and writes the result back to the cache. Writes are dropped once
   // the active node no longer matches the node this fetch was started for.
-  const loadRuns = useCallback(async (target: string | null) => {
-    if (!target) {
-      setRuns([])
-      setEntries([])
-      setSelectedRun(null)
-      setLoading(false)
+  const loadRuns = useCallback(
+    async (target: string | null) => {
+      if (!target) {
+        setRuns([])
+        setEntries([])
+        setSelectedRun(null)
+        setLoading(false)
+        setError(null)
+        return
+      }
+      const cacheKey = getCacheKey(target, LOG_VIEWER_CACHE_KEY)
+      const cached = store.get(nodeDataCacheAtom).get(cacheKey)?.get(LOG_VIEWER_CACHE_KEY)
+      if (isLogViewerCacheState(cached)) {
+        setRuns(cached.run_logs)
+        setEntries(cached.entries)
+        setSelectedRun(cached.selected_run)
+        setLoading(cached.loading)
+        setError(cached.error)
+        return
+      }
+      setLoading(true)
       setError(null)
-      return
-    }
-    const cacheKey = getCacheKey(target, LOG_VIEWER_CACHE_KEY)
-    const cached = store.get(nodeDataCacheAtom).get(cacheKey)?.get(LOG_VIEWER_CACHE_KEY)
-    if (isLogViewerCacheState(cached)) {
-      setRuns(cached.run_logs)
-      setEntries(cached.entries)
-      setSelectedRun(cached.selected_run)
-      setLoading(cached.loading)
-      setError(cached.error)
-      return
-    }
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await getPanelClient().call<RpcMethods['log.list']['result']>('log.list')
-      if (nodeIdRef.current !== target) return
-      const list = res.runs ?? []
-      setRuns(list)
-      writeCache(target, { run_logs: list, loading: false, error: null })
-    } catch (err) {
-      if (nodeIdRef.current !== target) return
-      setError(errMsg(err))
-    } finally {
-      if (nodeIdRef.current === target) setLoading(false)
-    }
-  }, [setRuns, setEntries, setSelectedRun, setLoading, setError, writeCache, store])
+      try {
+        const res = await getPanelClient().call<RpcMethods['log.list']['result']>('log.list')
+        if (nodeIdRef.current !== target) return
+        const list = res.runs ?? []
+        setRuns(list)
+        writeCache(target, { run_logs: list, loading: false, error: null })
+      } catch (err) {
+        if (nodeIdRef.current !== target) return
+        setError(errMsg(err))
+      } finally {
+        if (nodeIdRef.current === target) setLoading(false)
+      }
+    },
+    [setRuns, setEntries, setSelectedRun, setLoading, setError, writeCache, store],
+  )
 
   // Fetch on mount and whenever the active node changes.
   useEffect(() => {
@@ -166,28 +177,33 @@ export function LogViewer() {
 
   // Open a run: select it, clear the entries, mark loading (in the cache too,
   // mirroring the Dioxus reference), then fetch log.read.
-  const openRun = useCallback(async (runId: string) => {
-    const target = nodeIdRef.current
-    if (!target) return
-    setSelectedRun(runId)
-    setEntries([])
-    setLoading(true)
-    setError(null)
-    writeCache(target, { selected_run: runId, entries: [], loading: true, error: null })
-    try {
-      const res = await getPanelClient().call<RpcMethods['log.read']['result']>('log.read', { run_id: runId })
-      if (nodeIdRef.current !== target) return
-      const list = res.entries ?? []
-      setEntries(list)
-      setLoading(false)
-      writeCache(target, { entries: list, loading: false, error: null })
-    } catch (err) {
-      if (nodeIdRef.current !== target) return
-      setError(errMsg(err))
-      setLoading(false)
-      writeCache(target, { loading: false, error: errMsg(err) })
-    }
-  }, [setSelectedRun, setEntries, setLoading, setError, writeCache])
+  const openRun = useCallback(
+    async (runId: string) => {
+      const target = nodeIdRef.current
+      if (!target) return
+      setSelectedRun(runId)
+      setEntries([])
+      setLoading(true)
+      setError(null)
+      writeCache(target, { selected_run: runId, entries: [], loading: true, error: null })
+      try {
+        const res = await getPanelClient().call<RpcMethods['log.read']['result']>('log.read', {
+          run_id: runId,
+        })
+        if (nodeIdRef.current !== target) return
+        const list = res.entries ?? []
+        setEntries(list)
+        setLoading(false)
+        writeCache(target, { entries: list, loading: false, error: null })
+      } catch (err) {
+        if (nodeIdRef.current !== target) return
+        setError(errMsg(err))
+        setLoading(false)
+        writeCache(target, { loading: false, error: errMsg(err) })
+      }
+    },
+    [setSelectedRun, setEntries, setLoading, setError, writeCache],
+  )
 
   const backToList = useCallback(() => {
     setSelectedRun(null)
@@ -215,7 +231,9 @@ export function LogViewer() {
     if (!vp) return
     programmaticRef.current = true
     vp.scrollTop = vp.scrollHeight
-    requestAnimationFrame(() => { programmaticRef.current = false })
+    requestAnimationFrame(() => {
+      programmaticRef.current = false
+    })
   }, [getViewport])
 
   const handleScroll = useCallback(() => {
@@ -253,7 +271,9 @@ export function LogViewer() {
         <div className="h-full p-3 flex items-center justify-center">
           <div className="text-center">
             <div className="text-muted-foreground text-[14px]">Select a node to view logs</div>
-            <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
+            <div className="text-muted-foreground/70 text-[12px] mt-1">
+              Select a node from the dropdown above.
+            </div>
           </div>
         </div>
       </ScrollArea>
@@ -266,8 +286,17 @@ export function LogViewer() {
         <div className="h-full p-3 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 text-center">
             <div className="text-destructive text-[14px]">Failed to load logs</div>
-            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadRuns(nodeId)}>Retry</Button>
+            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">
+              {error}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="cursor-pointer"
+              onClick={() => void loadRuns(nodeId)}
+            >
+              Retry
+            </Button>
           </div>
         </div>
       </ScrollArea>
@@ -289,10 +318,17 @@ export function LogViewer() {
     return (
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <div className="flex items-center gap-3 p-2 border-b border-border flex-shrink-0">
-          <Button variant="link" size="sm" className="cursor-pointer text-[12px] whitespace-nowrap" onClick={backToList}>
+          <Button
+            variant="link"
+            size="sm"
+            className="cursor-pointer text-[12px] whitespace-nowrap"
+            onClick={backToList}
+          >
             ← Back to run list
           </Button>
-          <span className="text-[12px] text-muted-foreground font-mono truncate min-w-0">Log: {selectedRun}</span>
+          <span className="text-[12px] text-muted-foreground font-mono truncate min-w-0">
+            Log: {selectedRun}
+          </span>
           <label className="ml-auto flex items-center gap-1.5 text-[12px] text-muted-foreground whitespace-nowrap flex-shrink-0 cursor-pointer">
             <Checkbox
               checked={autoScroll}
@@ -309,7 +345,9 @@ export function LogViewer() {
           </div>
         ) : error !== null && entries.length === 0 ? (
           <div className="flex-1 flex items-center justify-center p-3">
-            <div className="text-destructive text-[13px] text-center break-words max-w-[300px]">{error}</div>
+            <div className="text-destructive text-[13px] text-center break-words max-w-[300px]">
+              {error}
+            </div>
           </div>
         ) : entries.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground/70 text-[13px]">
@@ -323,7 +361,9 @@ export function LogViewer() {
                 return (
                   <div key={i} className="py-0.5 whitespace-nowrap">
                     <span className="text-muted-foreground/70">[{entry.timestamp}] </span>
-                    <span className="font-bold" style={{ color }}>{entry.event_type}</span>
+                    <span className="font-bold" style={{ color }}>
+                      {entry.event_type}
+                    </span>
                     <span style={{ color }}> -- {entry.summary}</span>
                   </div>
                 )
@@ -339,46 +379,52 @@ export function LogViewer() {
   return (
     <ScrollArea className="flex-1">
       <div className="h-full p-2.5 font-mono text-[13px]">
-      {runs.length === 0 ? (
-        <div className="flex items-center justify-center h-full text-muted-foreground/70 text-[13px]">
-          No log files found.
-        </div>
-      ) : (
-        <>
-          {/* Mobile: run cards */}
-          <div className="sm:hidden flex flex-col gap-2">
-            {runs.map((run) => (
-              <div
-                key={run.run_id}
-                className="rounded-lg border border-border bg-secondary p-3 cursor-pointer active:bg-secondary"
-                onClick={() => void openRun(run.run_id)}
-              >
-                <div className="flex items-center justify-between gap-2 min-w-0">
-                  <span className="text-[#c0c0c0] truncate">{shortRunId(run.run_id)}</span>
-                  <span className="text-muted-foreground text-[11px] flex-shrink-0">{run.event_count} events</span>
-                </div>
-                <div className="mt-1 text-[11px] text-muted-foreground truncate">
-                  {run.last_event} ({run.last_event_time})
-                </div>
-              </div>
-            ))}
+        {runs.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground/70 text-[13px]">
+            No log files found.
           </div>
-          {/* Desktop: run rows */}
-          <div className="hidden sm:block">
-            {runs.map((run) => (
-              <div
-                key={run.run_id}
-                className="py-0.5 text-foreground/80 cursor-pointer hover:bg-[#333] flex items-baseline gap-2 min-w-0"
-                onClick={() => void openRun(run.run_id)}
-              >
-                <span className="text-[#c0c0c0] flex-shrink-0">{shortRunId(run.run_id)}</span>
-                <span className="text-muted-foreground flex-shrink-0">{run.event_count} events</span>
-                <span className="text-muted-foreground truncate">{run.last_event} ({run.last_event_time})</span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+        ) : (
+          <>
+            {/* Mobile: run cards */}
+            <div className="sm:hidden flex flex-col gap-2">
+              {runs.map((run) => (
+                <div
+                  key={run.run_id}
+                  className="rounded-lg border border-border bg-secondary p-3 cursor-pointer active:bg-secondary"
+                  onClick={() => void openRun(run.run_id)}
+                >
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <span className="text-[#c0c0c0] truncate">{shortRunId(run.run_id)}</span>
+                    <span className="text-muted-foreground text-[11px] flex-shrink-0">
+                      {run.event_count} events
+                    </span>
+                  </div>
+                  <div className="mt-1 text-[11px] text-muted-foreground truncate">
+                    {run.last_event} ({run.last_event_time})
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop: run rows */}
+            <div className="hidden sm:block">
+              {runs.map((run) => (
+                <div
+                  key={run.run_id}
+                  className="py-0.5 text-foreground/80 cursor-pointer hover:bg-[#333] flex items-baseline gap-2 min-w-0"
+                  onClick={() => void openRun(run.run_id)}
+                >
+                  <span className="text-[#c0c0c0] flex-shrink-0">{shortRunId(run.run_id)}</span>
+                  <span className="text-muted-foreground flex-shrink-0">
+                    {run.event_count} events
+                  </span>
+                  <span className="text-muted-foreground truncate">
+                    {run.last_event} ({run.last_event_time})
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </ScrollArea>
   )

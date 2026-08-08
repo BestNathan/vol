@@ -105,34 +105,56 @@ export function PromptViewer() {
       args = parsed as Record<string, unknown>
     } catch (err) {
       setDialog((s) =>
-        s.promptViewer ? { ...s, promptViewer: { ...s.promptViewer, error: `Invalid JSON: ${errMsg(err)}` } } : s
+        s.promptViewer
+          ? { ...s, promptViewer: { ...s.promptViewer, error: `Invalid JSON: ${errMsg(err)}` } }
+          : s,
       )
       return
     }
     setDialog((s) =>
       s.promptViewer
-        ? { ...s, promptViewer: { ...s.promptViewer, loading: true, error: undefined, result: undefined } }
-        : s
+        ? {
+            ...s,
+            promptViewer: { ...s.promptViewer, loading: true, error: undefined, result: undefined },
+          }
+        : s,
     )
     try {
-      const res = await getPanelClient().call<RpcMethods['mcp.get_prompt']['result']>('mcp.get_prompt', {
-        name: d.promptName,
-        arguments: args,
-      })
+      const res = await getPanelClient().call<RpcMethods['mcp.get_prompt']['result']>(
+        'mcp.get_prompt',
+        {
+          name: d.promptName,
+          arguments: args,
+        },
+      )
       setDialog((s) =>
         s.promptViewer
-          ? { ...s, promptViewer: { ...s.promptViewer, result: formatPromptResult(res.prompt), loading: false } }
-          : s
+          ? {
+              ...s,
+              promptViewer: {
+                ...s.promptViewer,
+                result: formatPromptResult(res.prompt),
+                loading: false,
+              },
+            }
+          : s,
       )
     } catch (err) {
       setDialog((s) =>
-        s.promptViewer ? { ...s, promptViewer: { ...s.promptViewer, error: errMsg(err), loading: false } } : s
+        s.promptViewer
+          ? { ...s, promptViewer: { ...s.promptViewer, error: errMsg(err), loading: false } }
+          : s,
       )
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) close() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) close()
+      }}
+    >
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle className="truncate">{d?.promptName ?? ''}</DialogTitle>
@@ -147,7 +169,9 @@ export function PromptViewer() {
               spellCheck={false}
               onChange={(e) =>
                 setDialog((s) =>
-                  s.promptViewer ? { ...s, promptViewer: { ...s.promptViewer, argsJson: e.target.value } } : s
+                  s.promptViewer
+                    ? { ...s, promptViewer: { ...s.promptViewer, argsJson: e.target.value } }
+                    : s,
                 )
               }
             />
@@ -155,7 +179,9 @@ export function PromptViewer() {
           {d?.loading ? (
             <div className="text-[13px] text-muted-foreground">Loading...</div>
           ) : (
-            <Button size="sm" onClick={() => void handleGet()}>Get</Button>
+            <Button size="sm" onClick={() => void handleGet()}>
+              Get
+            </Button>
           )}
           {d?.result !== undefined && d.result !== '' && (
             <div className="rounded bg-emerald-950/30 border border-emerald-500/50 p-2">

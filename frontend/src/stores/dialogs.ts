@@ -9,21 +9,62 @@ import { atom } from 'jotai'
 // "Tool approval pending" banner in place of the textarea.
 export const approvalPendingAtom = atom(false)
 
-export interface ApprovalState { toolName: string | null; reason: string | null; arguments: string | null; reqId: string | null }
-export const approvalAtom = atom<ApprovalState>({ toolName: null, reason: null, arguments: null, reqId: null })
+export interface ApprovalState {
+  toolName: string | null
+  reason: string | null
+  arguments: string | null
+  reqId: string | null
+}
+export const approvalAtom = atom<ApprovalState>({
+  toolName: null,
+  reason: null,
+  arguments: null,
+  reqId: null,
+})
 
 export interface McpDialogState {
-  toolCallDialog: { server: string; toolName: string; argumentsJson: string; inputSchema?: unknown; result?: string; error?: string; loading: boolean } | null
+  toolCallDialog: {
+    server: string
+    toolName: string
+    argumentsJson: string
+    inputSchema?: unknown
+    result?: string
+    error?: string
+    loading: boolean
+  } | null
   resourceViewer: { uri: string; content?: string; error?: string; loading: boolean } | null
-  promptViewer: { server: string; promptName: string; argsJson: string; result?: string; error?: string; loading: boolean } | null
+  promptViewer: {
+    server: string
+    promptName: string
+    argsJson: string
+    result?: string
+    error?: string
+    loading: boolean
+  } | null
 }
-export const mcpDialogAtom = atom<McpDialogState>({ toolCallDialog: null, resourceViewer: null, promptViewer: null })
+export const mcpDialogAtom = atom<McpDialogState>({
+  toolCallDialog: null,
+  resourceViewer: null,
+  promptViewer: null,
+})
 
-export interface SkillDialogState { open: boolean; skill: import('@/types').SkillDetail | null; loading: boolean }
+export interface SkillDialogState {
+  open: boolean
+  skill: import('@/types').SkillDetail | null
+  loading: boolean
+}
 export const skillDialogAtom = atom<SkillDialogState>({ open: false, skill: null, loading: false })
 
-export interface DebugMessage { direction: 'in' | 'out'; method: string; payload: string; elapsedMs: number }
-export const debugPanelAtom = atom<{ open: boolean; messages: DebugMessage[] }>({ open: false, messages: [] })
+export interface DebugMessage {
+  direction: 'in' | 'out'
+  method: string
+  payload: string
+  elapsedMs: number
+}
+export const debugPanelAtom = atom<{ open: boolean; messages: DebugMessage[] }>({
+  open: false,
+  messages: [],
+})
 
 // capability.ts already exists from Task 2.5 — these atoms already exist:
 // capOverlayAtom, drawerOpenAtom, drawerSearchAtom, savingStatesAtom, selectedToolsAtom, selectedSkillsAtom, selectedMcpsAtom

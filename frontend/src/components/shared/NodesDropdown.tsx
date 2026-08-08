@@ -36,12 +36,15 @@ export function NodesDropdown() {
   const buttonRef = useRef<HTMLButtonElement>(null)
 
   // Find the active node's name for display in the trigger button.
-  const activeNode = nodes.find(n => n.node_id === activeNodeId)
+  const activeNode = nodes.find((n) => n.node_id === activeNodeId)
 
   const loadNodes = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await getControlClient().call<RpcMethods['control.node_list']['result']>('control.node_list')
+      const res =
+        await getControlClient().call<RpcMethods['control.node_list']['result']>(
+          'control.node_list',
+        )
       setNodes(res.nodes ?? [])
       setError(null)
     } catch (err) {
@@ -59,14 +62,16 @@ export function NodesDropdown() {
   useEffect(() => {
     if (!open || serverMode !== 'ControlPlane') return
     void loadNodes()
-    const timer = setInterval(() => { void loadNodes() }, 10_000)
+    const timer = setInterval(() => {
+      void loadNodes()
+    }, 10_000)
     return () => clearInterval(timer)
   }, [open, serverMode, loadNodes])
 
   // Auto-select first online node with ws_url after nodes load.
   useEffect(() => {
     if (activeNodeId || nodes.length === 0) return
-    const first = nodes.find(n => isNodeSelectable(n))
+    const first = nodes.find((n) => isNodeSelectable(n))
     if (first) {
       dpPool.getOrCreate(first.node_id, first.ws_url!)
       setActiveNodeId(first.node_id)
@@ -137,7 +142,7 @@ export function NodesDropdown() {
           <div
             className={cn(
               'fixed inset-0 z-40 bg-black/20',
-              open ? 'animate-in fade-in-0 duration-150' : 'animate-out fade-out-0 duration-150'
+              open ? 'animate-in fade-in-0 duration-150' : 'animate-out fade-out-0 duration-150',
             )}
             onClick={() => setOpen(false)}
           />
@@ -146,7 +151,7 @@ export function NodesDropdown() {
               'fixed min-w-[280px] max-w-[calc(100vw-1rem)] origin-top-left bg-card border border-border rounded shadow-lg z-50 max-h-[400px] overflow-y-auto',
               open
                 ? 'animate-in fade-in-0 zoom-in-95 duration-150'
-                : 'animate-out fade-out-0 zoom-out-95 duration-150'
+                : 'animate-out fade-out-0 zoom-out-95 duration-150',
             )}
             style={panelPos ? { top: panelPos.top, left: panelPos.left } : undefined}
             onClick={(e) => e.stopPropagation()}
@@ -158,7 +163,9 @@ export function NodesDropdown() {
               </div>
             )}
             {error && (
-              <div className="px-3 py-2 text-destructive text-xs">Failed to load nodes: {error}</div>
+              <div className="px-3 py-2 text-destructive text-xs">
+                Failed to load nodes: {error}
+              </div>
             )}
             {!loading && !error && nodes.length === 0 && (
               <div className="px-3 py-2 text-muted-foreground text-xs">No nodes available</div>
@@ -173,28 +180,42 @@ export function NodesDropdown() {
                   tabIndex={0}
                   title={selectable ? `Select ${node.name}` : 'Node offline or no ws_url'}
                   onClick={() => handleSelect(node)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelect(node) }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') handleSelect(node)
+                  }}
                   className={
                     'flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border last:border-b-0 ' +
                     (selectable
-                      ? (selected ? 'bg-primary/20' : 'hover:bg-secondary')
+                      ? selected
+                        ? 'bg-primary/20'
+                        : 'hover:bg-secondary'
                       : 'opacity-50 cursor-not-allowed')
                   }
                 >
                   {/* Status dot: green = online, red = offline */}
                   <span
-                    className={'w-2 h-2 rounded-full flex-shrink-0 ' + (node.status === 'online' ? 'bg-emerald-500 shadow-[0_0_4px] shadow-emerald-500/50' : 'bg-destructive shadow-[0_0_4px] shadow-destructive/50')}
+                    className={
+                      'w-2 h-2 rounded-full flex-shrink-0 ' +
+                      (node.status === 'online'
+                        ? 'bg-emerald-500 shadow-[0_0_4px] shadow-emerald-500/50'
+                        : 'bg-destructive shadow-[0_0_4px] shadow-destructive/50')
+                    }
                   />
                   <span className="flex-1 min-w-0">
                     <span className="flex items-center gap-2">
                       <span
                         title="Click to view node detail"
-                        onClick={(e) => { e.stopPropagation(); handleViewDetail(node.node_id) }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleViewDetail(node.node_id)
+                        }}
                         className="text-foreground text-sm font-medium truncate cursor-pointer hover:text-primary"
                       >
                         {node.name}
                       </span>
-                      {selected && <span className="text-emerald-400 text-xs flex-shrink-0">✓</span>}
+                      {selected && (
+                        <span className="text-emerald-400 text-xs flex-shrink-0">✓</span>
+                      )}
                     </span>
                     <span className="text-muted-foreground text-xs truncate block">
                       {node.node_id} · v{node.version}
@@ -205,7 +226,9 @@ export function NodesDropdown() {
                       R:{node.load.running} Q:{node.load.queued}
                     </span>
                     {node.agent_count != null && (
-                      <span className="block text-muted-foreground/70 text-xs">{node.agent_count} agents</span>
+                      <span className="block text-muted-foreground/70 text-xs">
+                        {node.agent_count} agents
+                      </span>
                     )}
                   </span>
                 </div>

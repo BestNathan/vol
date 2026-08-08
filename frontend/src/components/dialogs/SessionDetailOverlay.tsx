@@ -5,12 +5,7 @@
 // re-opening the same session is instant (mirrors the Rust
 // `if entries.is_empty() && !loading` guard).
 import { useEffect, useRef, useState } from 'react'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getPanelClient } from '@/lib/panel-client'
 import { sessionEntriesToConversation } from '@/lib/session-conversion'
 import type { RpcMethods } from '@/lib/protocol'
@@ -57,7 +52,9 @@ function EntryView({ entry }: { entry: ConversationEntry }) {
       return (
         <div className={cls}>
           <div>
-            <span className="font-bold" style={{ color }}>[{entry.success ? 'OK' : 'ERR'}] </span>
+            <span className="font-bold" style={{ color }}>
+              [{entry.success ? 'OK' : 'ERR'}]{' '}
+            </span>
             <span style={{ color, fontWeight: 'bold' }}>{entry.toolName}</span>
           </div>
           <div className="text-muted-foreground text-[12px] mt-1 pl-1 max-h-[120px] overflow-y-auto font-mono">
@@ -70,7 +67,8 @@ function EntryView({ entry }: { entry: ConversationEntry }) {
       const note = entry.note ? ` (${entry.note})` : ''
       return (
         <div className="mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#2a2a20] border-l-[3px] border-[#c0a040] text-foreground/70 text-[12px] italic">
-          [Checkpoint] {entry.reason}{note}
+          [Checkpoint] {entry.reason}
+          {note}
         </div>
       )
     }
@@ -86,7 +84,7 @@ function EntryView({ entry }: { entry: ConversationEntry }) {
     case 'RunningBanner':
       return (
         <div className="mb-2 px-3 py-2 rounded-md bg-[#1a2a44] border border-[#3a5a7a] text-sm">
-          <span className="text-[#c0d0e0]">&#9679; Running  [{entry.runId}]</span>
+          <span className="text-[#c0d0e0]">&#9679; Running [{entry.runId}]</span>
         </div>
       )
     case 'AgentAnswer':
@@ -97,13 +95,18 @@ function EntryView({ entry }: { entry: ConversationEntry }) {
       )
     default:
       return (
-        <div className="mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap">Entry</div>
+        <div className="mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap">
+          Entry
+        </div>
       )
   }
 }
 
 export function SessionDetailOverlay({
-  session, agentId, open, onClose,
+  session,
+  agentId,
+  open,
+  onClose,
 }: {
   session: SessionListEntry | null
   agentId: string | null
@@ -153,7 +156,12 @@ export function SessionDetailOverlay({
   }, [open, session, agentId])
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
       <DialogContent className="sm:max-w-[900px] h-[70vh] max-h-[70vh] flex flex-col gap-0 p-0 overflow-hidden">
         <DialogHeader className="flex flex-row items-center justify-between px-3 py-2 border-b border-[#2a2a44] space-y-0 text-left">
           <DialogTitle className="font-mono text-[13px] text-foreground truncate">
@@ -161,14 +169,20 @@ export function SessionDetailOverlay({
           </DialogTitle>
         </DialogHeader>
         {loading ? (
-          <div className="flex items-center justify-center flex-1 text-muted-foreground/70">Loading...</div>
+          <div className="flex items-center justify-center flex-1 text-muted-foreground/70">
+            Loading...
+          </div>
         ) : parseFailure && entries.length === 0 ? (
           <div className="flex-1 flex items-center justify-center flex-col text-destructive p-5 text-center">
             <div className="text-[14px] font-semibold mb-2">Failed to parse session entries</div>
-            <div className="text-[12px] text-muted-foreground">Check browser console (F12) for details</div>
+            <div className="text-[12px] text-muted-foreground">
+              Check browser console (F12) for details
+            </div>
           </div>
         ) : entries.length === 0 ? (
-          <div className="flex items-center justify-center flex-1 text-muted-foreground/70">No entries</div>
+          <div className="flex items-center justify-center flex-1 text-muted-foreground/70">
+            No entries
+          </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-2">
             {entries.map((entry, i) => (

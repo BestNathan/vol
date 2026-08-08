@@ -36,7 +36,9 @@ export function NodesPanel() {
       .catch((err) => {
         if (alive) setError(errMsg(err))
       })
-    return () => { alive = false }
+    return () => {
+      alive = false
+    }
   }, [viewingNodeDetail])
 
   if (viewingNodeDetail) {
@@ -48,19 +50,36 @@ export function NodesPanel() {
       <div className="flex flex-col p-3">
         <h2 className="text-lg font-bold mb-3 text-foreground">Nodes</h2>
         {error && <div className="text-red-400 text-sm">Error: {error}</div>}
-        {!error && nodes.length === 0 && <div className="text-muted-foreground text-sm">No nodes connected</div>}
-        {!error && nodes.map((node) => (
-          <div key={node.node_id} className="flex items-center gap-3 p-2 border-b border-border hover:bg-secondary rounded">
-            <span className={'w-2 h-2 rounded-full flex-shrink-0 ' + (node.status === 'online' ? 'bg-green-500' : 'bg-[#666]')} />
-            <span className="flex-1 min-w-0">
-              <span className="block text-foreground text-sm font-medium truncate">{node.name}</span>
-              <span className="block text-muted-foreground text-xs">id: {node.node_id} · v{node.version}</span>
-            </span>
-            {node.agent_count != null && (
-              <span className="text-muted-foreground text-xs flex-shrink-0">{node.agent_count} agents</span>
-            )}
-          </div>
-        ))}
+        {!error && nodes.length === 0 && (
+          <div className="text-muted-foreground text-sm">No nodes connected</div>
+        )}
+        {!error &&
+          nodes.map((node) => (
+            <div
+              key={node.node_id}
+              className="flex items-center gap-3 p-2 border-b border-border hover:bg-secondary rounded"
+            >
+              <span
+                className={
+                  'w-2 h-2 rounded-full flex-shrink-0 ' +
+                  (node.status === 'online' ? 'bg-green-500' : 'bg-[#666]')
+                }
+              />
+              <span className="flex-1 min-w-0">
+                <span className="block text-foreground text-sm font-medium truncate">
+                  {node.name}
+                </span>
+                <span className="block text-muted-foreground text-xs">
+                  id: {node.node_id} · v{node.version}
+                </span>
+              </span>
+              {node.agent_count != null && (
+                <span className="text-muted-foreground text-xs flex-shrink-0">
+                  {node.agent_count} agents
+                </span>
+              )}
+            </div>
+          ))}
       </div>
     </ScrollArea>
   )

@@ -104,7 +104,8 @@ export function sessionEntriesToConversation(entries: SessionEntry[]): Conversat
         out.push({ type: 'RunSummary', iterations: 0, toolCalls: 0, elapsedMs: 0 })
         break
       }
-      default: break
+      default:
+        break
     }
   }
   return out

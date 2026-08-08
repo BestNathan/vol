@@ -73,7 +73,9 @@ export function ApprovalDialog() {
         <DialogTitle className="text-[16px] font-bold text-foreground mb-3 border-b border-border pb-2">
           Tool Approval Required
         </DialogTitle>
-        <div className="text-yellow-400 font-bold text-[15px]">[!] {approval.toolName ?? 'unknown tool'}</div>
+        <div className="text-yellow-400 font-bold text-[15px]">
+          [!] {approval.toolName ?? 'unknown tool'}
+        </div>
         {approval.reason !== null && approval.reason !== '' && (
           <div className="text-foreground/80 my-1.5">Reason: {approval.reason}</div>
         )}
@@ -83,8 +85,22 @@ export function ApprovalDialog() {
           </div>
         )}
         <div className="mt-3 flex gap-2 pt-2 border-t border-border">
-          <Button variant="success" size="sm" className="cursor-pointer" onClick={() => void resolve(true)}>Approve</Button>
-          <Button variant="destructive" size="sm" className="cursor-pointer" onClick={() => void resolve(false)}>Reject</Button>
+          <Button
+            variant="success"
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => void resolve(true)}
+          >
+            Approve
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => void resolve(false)}
+          >
+            Reject
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

@@ -17,8 +17,11 @@ import { dpPool } from '@/lib/dp-pool'
 import { attemptReconnect } from '@/lib/reconnect'
 import { agentEventToUiEvent, handleUiEvent } from '@/lib/event-handlers'
 import {
-  connectionStateAtom, serverModeAtom, wsUrlAtom,
-  wsConnectedAtom, wsLastErrorAtom,
+  connectionStateAtom,
+  serverModeAtom,
+  wsUrlAtom,
+  wsConnectedAtom,
+  wsLastErrorAtom,
 } from '@/stores/connection'
 import { activeNodeIdAtom, activeTabAtom, LOCAL_NODE_ID, viewingNodeDetailAtom } from '@/stores/ui'
 import { debugPanelAtom } from '@/stores/dialogs'
@@ -37,26 +40,26 @@ function AppInner() {
   const debugStartRef = useRef<number | null>(null)
   const reconnectAbortRef = useRef<AbortController | null>(null)
 
-  const startReconnect = useCallback((client: JsonRpcClient) => {
-    // Cancel any previous reconnect loop
-    reconnectAbortRef.current?.abort()
-    const ac = new AbortController()
-    reconnectAbortRef.current = ac
+  const startReconnect = useCallback(
+    (client: JsonRpcClient) => {
+      // Cancel any previous reconnect loop
+      reconnectAbortRef.current?.abort()
+      const ac = new AbortController()
+      reconnectAbortRef.current = ac
 
-    attemptReconnect(
-      client,
-      (_attempt, delaySecs) => {
+      attemptReconnect(client, (_attempt, delaySecs) => {
         if (ac.signal.aborted) return
         setWsConnected(false)
         setWsLastError(`Reconnecting (${delaySecs}s)`)
-      },
-    ).then((ok) => {
-      if (ac.signal.aborted) return
-      if (!ok) {
-        setWsLastError('Connection lost. Please refresh.')
-      }
-    })
-  }, [setWsConnected, setWsLastError])
+      }).then((ok) => {
+        if (ac.signal.aborted) return
+        if (!ok) {
+          setWsLastError('Connection lost. Please refresh.')
+        }
+      })
+    },
+    [setWsConnected, setWsLastError],
+  )
 
   useEffect(() => {
     const url = deriveWsUrl()
@@ -76,7 +79,11 @@ function AppInner() {
       const entries = Object.entries(rawEvent)
       if (entries.length === 0) return
       const [variant, data] = entries[0]
-      const uiEvent = agentEventToUiEvent(variant, data as Record<string, unknown>, agentEvent.run_id)
+      const uiEvent = agentEventToUiEvent(
+        variant,
+        data as Record<string, unknown>,
+        agentEvent.run_id,
+      )
       if (uiEvent) {
         handleUiEvent(uiEvent, agentEvent.run_id)
       }
@@ -108,12 +115,15 @@ function AppInner() {
         setWsLastError(null)
         // Cancel any running reconnect loop
         reconnectAbortRef.current?.abort()
-        client.call<{ server_type: string }>('system.connected').then(info => {
-          setServerMode(info.server_type as any)
-          if (info.server_type === 'DataPlane') {
-            setActiveNodeId(LOCAL_NODE_ID)
-          }
-        }).catch(() => {})
+        client
+          .call<{ server_type: string }>('system.connected')
+          .then((info) => {
+            setServerMode(info.server_type as any)
+            if (info.server_type === 'DataPlane') {
+              setActiveNodeId(LOCAL_NODE_ID)
+            }
+          })
+          .catch(() => {})
       } else if (state === 'disconnected') {
         setWsConnected(false)
         setWsLastError('Disconnected')
@@ -126,7 +136,15 @@ function AppInner() {
       reconnectAbortRef.current?.abort()
       client.close()
     }
-  }, [setConnectionState, setServerMode, setWsUrl, setWsConnected, setWsLastError, setDebugPanel, startReconnect])
+  }, [
+    setConnectionState,
+    setServerMode,
+    setWsUrl,
+    setWsConnected,
+    setWsLastError,
+    setDebugPanel,
+    startReconnect,
+  ])
 
   return (
     <div className="relative h-[100dvh] w-[100vw] font-[system-ui] text-[14px] text-[#e0e0e0] bg-[#1a1a2e]">

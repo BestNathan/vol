@@ -72,7 +72,9 @@ export class JsonRpcClient {
       this.state = 'connected'
       this.stateChangeCallback?.('connected')
       // Flush send queue
-      for (const msg of this.sendQueue) { ws.send(msg) }
+      for (const msg of this.sendQueue) {
+        ws.send(msg)
+      }
       this.sendQueue = []
       // Auto-subscribe to agent events
       if (this.autoSubscribe) {
@@ -117,7 +119,9 @@ export class JsonRpcClient {
       this.pending.clear()
     }
 
-    ws.onerror = () => { /* onclose will fire after this */ }
+    ws.onerror = () => {
+      /* onclose will fire after this */
+    }
   }
 
   call<T>(method: string, params?: unknown): Promise<T> {
@@ -162,7 +166,7 @@ export class JsonRpcClient {
   onEvent(listener: (event: AgentEvent) => void): () => void {
     this.eventListeners.push(listener)
     return () => {
-      this.eventListeners = this.eventListeners.filter(l => l !== listener)
+      this.eventListeners = this.eventListeners.filter((l) => l !== listener)
     }
   }
 

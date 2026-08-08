@@ -5,22 +5,22 @@
 // contributorName. Port of context_panel.rs's ContextDialog, built on the
 // shadcn Dialog like McpToolDialog.
 import { useAtom } from 'jotai'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { contextDialogAtom } from '@/stores/context'
 
 /** Message role text color: system grey, user blue, assistant white, tool gold. */
 export function roleColor(role: string): string {
   switch (role) {
-    case 'system': return '#888'
-    case 'user': return '#80a0ff'
-    case 'assistant': return '#e0e0e0'
-    case 'tool': return '#c0a040'
-    default: return '#888'
+    case 'system':
+      return '#888'
+    case 'user':
+      return '#80a0ff'
+    case 'assistant':
+      return '#e0e0e0'
+    case 'tool':
+      return '#c0a040'
+    default:
+      return '#888'
   }
 }
 
@@ -31,7 +31,12 @@ export function ContextDialog() {
   const close = () => setDialog({ open: false, contributorName: '', messages: [], loading: false })
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) close() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) close()
+      }}
+    >
       <DialogContent className="sm:max-w-[700px]">
         <DialogHeader>
           <DialogTitle className="truncate">{contributorName}</DialogTitle>

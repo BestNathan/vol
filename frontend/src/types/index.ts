@@ -66,7 +66,10 @@ export interface ContextMessageEntry {
 }
 
 // Node types
-export interface NodeLoad { running: number; queued: number }
+export interface NodeLoad {
+  running: number
+  queued: number
+}
 export interface NodeListEntry {
   node_id: string
   name: string
@@ -80,44 +83,123 @@ export interface NodeListEntry {
 }
 
 // RPC response types
-export interface ConnectedInfo { server_type: ServerType; version: string; capabilities: string[] }
+export interface ConnectedInfo {
+  server_type: ServerType
+  version: string
+  capabilities: string[]
+}
 export interface SkillDetail {
-  name: string; version: string; scope: string; description: string
-  triggers: string[]; content: string; file_listing: string[]; directory: string
+  name: string
+  version: string
+  scope: string
+  description: string
+  triggers: string[]
+  content: string
+  file_listing: string[]
+  directory: string
 }
 export interface SkillListEntry {
-  id: string; name: string; version: string; scope: string; description: string; triggers: string[]
+  id: string
+  name: string
+  version: string
+  scope: string
+  description: string
+  triggers: string[]
 }
-export interface McpServerInfo { name: string; status: string }
-export interface McpToolInfo { server: string; name: string; description?: string; input_schema?: unknown }
-export interface McpResourceInfo { server: string; name: string; uri: string; mime_type?: string; description?: string }
-export interface McpResourceTemplateInfo { server: string; name: string; uri_template: string; description?: string }
-export interface McpPromptInfo { server: string; name: string; description?: string; arguments?: McpPromptArgInfo[] }
-export interface McpPromptArgInfo { name: string; description?: string; required: boolean }
+export interface McpServerInfo {
+  name: string
+  status: string
+}
+export interface McpToolInfo {
+  server: string
+  name: string
+  description?: string
+  input_schema?: unknown
+}
+export interface McpResourceInfo {
+  server: string
+  name: string
+  uri: string
+  mime_type?: string
+  description?: string
+}
+export interface McpResourceTemplateInfo {
+  server: string
+  name: string
+  uri_template: string
+  description?: string
+}
+export interface McpPromptInfo {
+  server: string
+  name: string
+  description?: string
+  arguments?: McpPromptArgInfo[]
+}
+export interface McpPromptArgInfo {
+  name: string
+  description?: string
+  required: boolean
+}
 // TaskEntry — mirrors data_plane/handlers/task.rs JSON: created_at/started_at/completed_at are
 // epoch seconds (numbers); publisher/assignee/active_form serialize as null when unset.
 export interface TaskEntry {
-  id: number; status: string; kind: string
-  publisher?: string | null; assignee?: string | null
-  subject: string; description: string; active_form?: string | null
-  dependencies: number[]; blocks: number[]
-  created_at: number; started_at?: number | null; completed_at?: number | null
+  id: number
+  status: string
+  kind: string
+  publisher?: string | null
+  assignee?: string | null
+  subject: string
+  description: string
+  active_form?: string | null
+  dependencies: number[]
+  blocks: number[]
+  created_at: number
+  started_at?: number | null
+  completed_at?: number | null
 }
-export interface SessionListEntry { id: string; entry_count: number; created_at: number }
-export interface LogRunSummary { run_id: string; event_count: number; last_event: string; last_event_time: string }
-export interface LogLine { timestamp: string; event_type: string; summary: string }
-export interface FileEntry { name: string; is_dir: boolean; size: number }
-export interface ProviderOption { name: string; models: string[] }
+export interface SessionListEntry {
+  id: string
+  entry_count: number
+  created_at: number
+}
+export interface LogRunSummary {
+  run_id: string
+  event_count: number
+  last_event: string
+  last_event_time: string
+}
+export interface LogLine {
+  timestamp: string
+  event_type: string
+  summary: string
+}
+export interface FileEntry {
+  name: string
+  is_dir: boolean
+  size: number
+}
+export interface ProviderOption {
+  name: string
+  models: string[]
+}
 
 // Capability state
 export interface CapabilityOverlayState {
-  effective_tools: string[]; effective_skills: string[]; effective_mcp_servers: string[]
-  available_tools: unknown[]; available_skills: unknown[]; available_mcp_servers: unknown[]
-  base_tools: string[]; base_skills: string[]; base_mcp_servers: string[]
-  loading: boolean; dirty: boolean
+  effective_tools: string[]
+  effective_skills: string[]
+  effective_mcp_servers: string[]
+  available_tools: unknown[]
+  available_skills: unknown[]
+  available_mcp_servers: unknown[]
+  base_tools: string[]
+  base_skills: string[]
+  base_mcp_servers: string[]
+  loading: boolean
+  dirty: boolean
 }
 
-export type ToggleSavingState = { kind: 'saving' } | { kind: 'saved' } | { kind: 'error'; message: string }
+export type ToggleSavingState =
+  { kind: 'saving' } | { kind: 'saved' } | { kind: 'error'; message: string }
 
 // Workspace file tree — mirrors crates/vol-llm-ui/src/state/mod.rs
 // WorkspaceTreeNode (recursive node; loaded/load_error describe whether the

@@ -14,14 +14,24 @@ import { cn } from '@/lib/utils'
 import { selectedAgentIdAtom } from '@/stores/agents'
 import { sessionIdAtom } from '@/stores/connection'
 import {
-  capOverlayAtom, drawerOpenAtom, drawerSearchAtom, savingStatesAtom,
-  selectedToolsAtom, selectedSkillsAtom, selectedMcpsAtom,
+  capOverlayAtom,
+  drawerOpenAtom,
+  drawerSearchAtom,
+  savingStatesAtom,
+  selectedToolsAtom,
+  selectedSkillsAtom,
+  selectedMcpsAtom,
 } from '@/stores/capability'
 import type { GetCapabilitiesResult, UpdateCapabilitiesResult } from '@/lib/protocol'
 import type { ToggleSavingState } from '@/types'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion'
 import { Switch } from '@/components/ui/switch'
 
 type CapGroup = 'tools' | 'skills' | 'mcps'
@@ -46,9 +56,9 @@ export function filterCapabilityItems(
     if (item && typeof item === 'object') {
       const name = (item as Record<string, unknown>).name
       if (
-        typeof name === 'string'
-        && name !== ''
-        && (searchLower === '' || name.toLowerCase().includes(searchLower))
+        typeof name === 'string' &&
+        name !== '' &&
+        (searchLower === '' || name.toLowerCase().includes(searchLower))
       ) {
         out.push({ name, isBase: baseSet.has(name) })
       }
@@ -120,68 +130,73 @@ export function CapabilityDrawer() {
         setLoaded(true)
         setOverlay((o) => ({ ...o, loading: false }))
       })
-    return () => { stale = true }
+    return () => {
+      stale = true
+    }
   }, [open, selectedAgentId, sessionId, setOverlay, setSavingStates, store])
 
   // Instant-apply toggle: optimistic local update, then RPC; on success write
   // the server's effective lists back to the overlay, on failure rollback and
   // surface the error. Stale responses (item toggled again mid-flight) are
   // discarded so an older response cannot clobber newer state.
-  const handleToggle = useCallback((group: CapGroup, name: string, enabled: boolean) => {
-    if (!selectedAgentId) return
-    const key = `${group}:${name}`
-    const selAtom = GROUP_ATOMS[group]
+  const handleToggle = useCallback(
+    (group: CapGroup, name: string, enabled: boolean) => {
+      if (!selectedAgentId) return
+      const key = `${group}:${name}`
+      const selAtom = GROUP_ATOMS[group]
 
-    const optimistic = new Set(store.get(selAtom))
-    if (enabled) optimistic.add(name)
-    else optimistic.delete(name)
-    store.set(selAtom, optimistic)
+      const optimistic = new Set(store.get(selAtom))
+      if (enabled) optimistic.add(name)
+      else optimistic.delete(name)
+      store.set(selAtom, optimistic)
 
-    setSavingStates((prev) => ({ ...prev, [key]: { kind: 'saving' } }))
+      setSavingStates((prev) => ({ ...prev, [key]: { kind: 'saving' } }))
 
-    const effective_tools = [...store.get(selectedToolsAtom)]
-    const effective_skills = [...store.get(selectedSkillsAtom)]
-    const effective_mcp_servers = [...store.get(selectedMcpsAtom)]
+      const effective_tools = [...store.get(selectedToolsAtom)]
+      const effective_skills = [...store.get(selectedSkillsAtom)]
+      const effective_mcp_servers = [...store.get(selectedMcpsAtom)]
 
-    getPanelClient()
-      .call<UpdateCapabilitiesResult>('agent.update_capabilities', {
-        agent_id: selectedAgentId,
-        session_id: sessionId,
-        effective_tools,
-        effective_skills,
-        effective_mcp_servers,
-      })
-      .then((res) => {
-        // Race guard: user toggled this item again while in flight.
-        if (store.get(selAtom).has(name) !== enabled) return
-        setOverlay((o) => ({
-          ...o,
-          effective_tools: res.effective_tools,
-          effective_skills: res.effective_skills,
-          effective_mcp_servers: res.effective_mcp_servers,
-        }))
-        setSavingStates((prev) => ({ ...prev, [key]: { kind: 'saved' } }))
-        // Checkmark ages out after 1.5s.
-        window.setTimeout(() => {
-          setSavingStates((prev) => {
-            if (prev[key]?.kind !== 'saved') return prev
-            const next = { ...prev }
-            delete next[key]
-            return next
-          })
-        }, 1500)
-      })
-      .catch((err) => {
-        if (store.get(selAtom).has(name) !== enabled) return
-        // Rollback the optimistic update.
-        const rollback = new Set(store.get(selAtom))
-        if (enabled) rollback.delete(name)
-        else rollback.add(name)
-        store.set(selAtom, rollback)
-        const message = (err as { message?: string } | null)?.message ?? String(err)
-        setSavingStates((prev) => ({ ...prev, [key]: { kind: 'error', message } }))
-      })
-  }, [selectedAgentId, sessionId, setOverlay, setSavingStates, store])
+      getPanelClient()
+        .call<UpdateCapabilitiesResult>('agent.update_capabilities', {
+          agent_id: selectedAgentId,
+          session_id: sessionId,
+          effective_tools,
+          effective_skills,
+          effective_mcp_servers,
+        })
+        .then((res) => {
+          // Race guard: user toggled this item again while in flight.
+          if (store.get(selAtom).has(name) !== enabled) return
+          setOverlay((o) => ({
+            ...o,
+            effective_tools: res.effective_tools,
+            effective_skills: res.effective_skills,
+            effective_mcp_servers: res.effective_mcp_servers,
+          }))
+          setSavingStates((prev) => ({ ...prev, [key]: { kind: 'saved' } }))
+          // Checkmark ages out after 1.5s.
+          window.setTimeout(() => {
+            setSavingStates((prev) => {
+              if (prev[key]?.kind !== 'saved') return prev
+              const next = { ...prev }
+              delete next[key]
+              return next
+            })
+          }, 1500)
+        })
+        .catch((err) => {
+          if (store.get(selAtom).has(name) !== enabled) return
+          // Rollback the optimistic update.
+          const rollback = new Set(store.get(selAtom))
+          if (enabled) rollback.delete(name)
+          else rollback.add(name)
+          store.set(selAtom, rollback)
+          const message = (err as { message?: string } | null)?.message ?? String(err)
+          setSavingStates((prev) => ({ ...prev, [key]: { kind: 'error', message } }))
+        })
+    },
+    [selectedAgentId, sessionId, setOverlay, setSavingStates, store],
+  )
 
   const closeDrawer = useCallback(() => {
     store.set(drawerOpenAtom, false)
@@ -194,17 +209,42 @@ export function CapabilityDrawer() {
     base: string[]
     selected: Set<string>
   }[] = [
-    { group: 'tools', title: 'Tools', items: overlay.available_tools, base: overlay.base_tools, selected: selectedTools },
-    { group: 'skills', title: 'Skills', items: overlay.available_skills, base: overlay.base_skills, selected: selectedSkills },
-    { group: 'mcps', title: 'MCP Servers', items: overlay.available_mcp_servers, base: overlay.base_mcp_servers, selected: selectedMcps },
+    {
+      group: 'tools',
+      title: 'Tools',
+      items: overlay.available_tools,
+      base: overlay.base_tools,
+      selected: selectedTools,
+    },
+    {
+      group: 'skills',
+      title: 'Skills',
+      items: overlay.available_skills,
+      base: overlay.base_skills,
+      selected: selectedSkills,
+    },
+    {
+      group: 'mcps',
+      title: 'MCP Servers',
+      items: overlay.available_mcp_servers,
+      base: overlay.base_mcp_servers,
+      selected: selectedMcps,
+    },
   ]
 
   return (
-    <Sheet open={open} onOpenChange={(next) => { if (!next) closeDrawer() }}>
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) closeDrawer()
+      }}
+    >
       <SheetContent side="right" className="w-full sm:w-80 p-0 flex flex-col">
         {/* Header — Sheet provides the close button */}
         <SheetHeader className="px-3 py-3 border-b border-border flex-shrink-0">
-          <SheetTitle className="text-[14px] font-semibold text-foreground">Capabilities</SheetTitle>
+          <SheetTitle className="text-[14px] font-semibold text-foreground">
+            Capabilities
+          </SheetTitle>
         </SheetHeader>
 
         {!selectedAgentId ? (
@@ -243,7 +283,9 @@ export function CapabilityDrawer() {
                     </AccordionTrigger>
                     <AccordionContent className="px-3 pb-1">
                       {filtered.length === 0 ? (
-                        <div className="text-[11px] text-muted-foreground/70 px-1 py-1">No matching capabilities</div>
+                        <div className="text-[11px] text-muted-foreground/70 px-1 py-1">
+                          No matching capabilities
+                        </div>
                       ) : (
                         filtered.map(({ name, isBase }) => (
                           <CapabilityToggle
@@ -252,7 +294,9 @@ export function CapabilityDrawer() {
                             isBase={isBase}
                             checked={section.selected.has(name)}
                             savingState={savingStates[`${section.group}:${name}`]}
-                            onToggle={() => handleToggle(section.group, name, !section.selected.has(name))}
+                            onToggle={() =>
+                              handleToggle(section.group, name, !section.selected.has(name))
+                            }
                           />
                         ))
                       )}
@@ -271,7 +315,11 @@ export function CapabilityDrawer() {
 // --- Sub-components -----------------------------------------------------------
 
 function CapabilityToggle({
-  name, isBase, checked, savingState, onToggle,
+  name,
+  isBase,
+  checked,
+  savingState,
+  onToggle,
 }: {
   name: string
   isBase: boolean
@@ -284,18 +332,33 @@ function CapabilityToggle({
       {/* Toggle switch */}
       <Switch checked={checked} onCheckedChange={onToggle} aria-label={name} />
       {/* Name — blue when NOT in the base list (a capability the user added) */}
-      <span className={cn('text-[12px] flex-1 truncate', isBase ? 'text-foreground' : 'text-primary')}>
+      <span
+        className={cn('text-[12px] flex-1 truncate', isBase ? 'text-foreground' : 'text-primary')}
+      >
         {name}
       </span>
       {/* Saving feedback: spinner → checkmark → (ages out) / error */}
       {savingState?.kind === 'saving' && (
-        <span className="text-[#c0a040] text-[12px] animate-spin flex-shrink-0 inline-block" aria-label={`Saving ${name}`}>◌</span>
+        <span
+          className="text-[#c0a040] text-[12px] animate-spin flex-shrink-0 inline-block"
+          aria-label={`Saving ${name}`}
+        >
+          ◌
+        </span>
       )}
       {savingState?.kind === 'saved' && (
-        <span className="text-emerald-400 text-[12px] flex-shrink-0" aria-label={`Saved ${name}`}>✓</span>
+        <span className="text-emerald-400 text-[12px] flex-shrink-0" aria-label={`Saved ${name}`}>
+          ✓
+        </span>
       )}
       {savingState?.kind === 'error' && (
-        <span className="text-destructive text-[12px] cursor-help flex-shrink-0" title={savingState.message} aria-label={`Error: ${savingState.message}`}>⚠</span>
+        <span
+          className="text-destructive text-[12px] cursor-help flex-shrink-0"
+          title={savingState.message}
+          aria-label={`Error: ${savingState.message}`}
+        >
+          ⚠
+        </span>
       )}
     </div>
   )

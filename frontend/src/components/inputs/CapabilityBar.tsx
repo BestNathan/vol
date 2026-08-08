@@ -50,7 +50,9 @@ export function CapabilityBar() {
         console.error('Failed to load capabilities:', err)
         setOverlay((o) => ({ ...o, loading: false }))
       })
-    return () => { stale = true }
+    return () => {
+      stale = true
+    }
   }, [selectedAgentId, sessionId, setOverlay])
 
   const { effective_tools, effective_skills, effective_mcp_servers, loading } = overlay
@@ -62,7 +64,8 @@ export function CapabilityBar() {
       ) : (
         <>
           <span className="text-muted-foreground">
-            🛠 {effective_tools.length} tools · {effective_skills.length} skills · {effective_mcp_servers.length} MCPs
+            🛠 {effective_tools.length} tools · {effective_skills.length} skills ·{' '}
+            {effective_mcp_servers.length} MCPs
           </span>
           <button
             type="button"
@@ -73,7 +76,7 @@ export function CapabilityBar() {
               'ml-1 px-1.5 py-0.5 text-[11px] bg-secondary rounded',
               selectedAgentId
                 ? 'text-foreground/70 hover:bg-border hover:text-foreground/80 cursor-pointer'
-                : 'text-muted-foreground/60 cursor-not-allowed'
+                : 'text-muted-foreground/60 cursor-not-allowed',
             )}
           >
             ✎

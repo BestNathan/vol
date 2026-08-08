@@ -9,7 +9,10 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useAtom } from 'jotai'
 import { getPanelClient } from '@/lib/panel-client'
 import {
-  contributorsAtom, contextLoadingAtom, contextErrorAtom, contextDialogAtom,
+  contributorsAtom,
+  contextLoadingAtom,
+  contextErrorAtom,
+  contextDialogAtom,
 } from '@/stores/context'
 import { selectedAgentIdAtom } from '@/stores/agents'
 import { ContextDialog } from '@/components/dialogs/ContextDialog'
@@ -26,10 +29,14 @@ function errMsg(err: unknown): string {
 /** Anchor zone badge color: head blue, middle gold, tail green. */
 export function anchorZoneColor(zone: string): string {
   switch (zone) {
-    case 'head': return '#4080ff'
-    case 'middle': return '#c0a040'
-    case 'tail': return '#40c040'
-    default: return '#888'
+    case 'head':
+      return '#4080ff'
+    case 'middle':
+      return '#c0a040'
+    case 'tail':
+      return '#40c040'
+    default:
+      return '#888'
   }
 }
 
@@ -42,33 +49,38 @@ export function ContextPanel() {
 
   // Live agent mirror for the stale-response guard in async callbacks.
   const agentIdRef = useRef(selectedAgentId)
-  useEffect(() => { agentIdRef.current = selectedAgentId }, [selectedAgentId])
+  useEffect(() => {
+    agentIdRef.current = selectedAgentId
+  }, [selectedAgentId])
 
   // Fetch the contributor list; writes are dropped once the selected agent no
   // longer matches the agent this fetch was started for.
-  const loadContributors = useCallback(async (agentId: string | null) => {
-    if (!agentId) {
-      setContributors([])
+  const loadContributors = useCallback(
+    async (agentId: string | null) => {
+      if (!agentId) {
+        setContributors([])
+        setError(null)
+        setLoading(false)
+        return
+      }
+      setLoading(true)
       setError(null)
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await getPanelClient().call<RpcMethods['agent.context_config']['result']>(
-        'agent.context_config',
-        { agent_id: agentId }
-      )
-      if (agentIdRef.current !== agentId) return
-      setContributors(res.contributors ?? [])
-    } catch (err) {
-      if (agentIdRef.current !== agentId) return
-      setError(errMsg(err))
-    } finally {
-      if (agentIdRef.current === agentId) setLoading(false)
-    }
-  }, [setContributors, setError, setLoading])
+      try {
+        const res = await getPanelClient().call<RpcMethods['agent.context_config']['result']>(
+          'agent.context_config',
+          { agent_id: agentId },
+        )
+        if (agentIdRef.current !== agentId) return
+        setContributors(res.contributors ?? [])
+      } catch (err) {
+        if (agentIdRef.current !== agentId) return
+        setError(errMsg(err))
+      } finally {
+        if (agentIdRef.current === agentId) setLoading(false)
+      }
+    },
+    [setContributors, setError, setLoading],
+  )
 
   // Fetch on mount and whenever the selected agent changes; a new agent also
   // closes any open snapshot dialog (it belongs to the previous agent).
@@ -78,30 +90,34 @@ export function ContextPanel() {
   }, [loadContributors, selectedAgentId, setDialog])
 
   // Click a contributor: fetch its message snapshot into the dialog.
-  const openSnapshot = useCallback((contributor: ContributorInfoEntry) => {
-    const agentId = agentIdRef.current
-    if (!agentId) return
-    const name = contributor.name
-    setDialog({ open: true, contributorName: name, messages: [], loading: true })
-    getPanelClient().call<RpcMethods['agent.context_snapshot']['result']>('agent.context_snapshot', {
-      agent_id: agentId,
-      contributor_name: name,
-    })
-      .then((res) => {
-        setDialog((d) =>
-          d.open && d.contributorName === name
-            ? { ...d, messages: res.messages ?? [], loading: false }
-            : d
-        )
-      })
-      .catch((err) => {
-        setDialog((d) =>
-          d.open && d.contributorName === name
-            ? { ...d, loading: false, error: `Failed to load snapshot: ${errMsg(err)}` }
-            : d
-        )
-      })
-  }, [setDialog])
+  const openSnapshot = useCallback(
+    (contributor: ContributorInfoEntry) => {
+      const agentId = agentIdRef.current
+      if (!agentId) return
+      const name = contributor.name
+      setDialog({ open: true, contributorName: name, messages: [], loading: true })
+      getPanelClient()
+        .call<RpcMethods['agent.context_snapshot']['result']>('agent.context_snapshot', {
+          agent_id: agentId,
+          contributor_name: name,
+        })
+        .then((res) => {
+          setDialog((d) =>
+            d.open && d.contributorName === name
+              ? { ...d, messages: res.messages ?? [], loading: false }
+              : d,
+          )
+        })
+        .catch((err) => {
+          setDialog((d) =>
+            d.open && d.contributorName === name
+              ? { ...d, loading: false, error: `Failed to load snapshot: ${errMsg(err)}` }
+              : d,
+          )
+        })
+    },
+    [setDialog],
+  )
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -113,8 +129,15 @@ export function ContextPanel() {
         <ScrollArea className="flex-1">
           <div className="h-full flex flex-col items-center gap-3 p-3">
             <div className="text-destructive text-[14px]">Failed to load context</div>
-            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words text-center">{error}</div>
-            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadContributors(selectedAgentId)}>
+            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words text-center">
+              {error}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="cursor-pointer"
+              onClick={() => void loadContributors(selectedAgentId)}
+            >
               Retry
             </Button>
           </div>
@@ -132,15 +155,25 @@ export function ContextPanel() {
                 className="flex items-center gap-3 px-3 py-2 border-b border-[#2a2a44] cursor-pointer hover:bg-secondary"
                 onClick={() => openSnapshot(c)}
               >
-                <Badge variant="outline" className="cursor-pointer text-[9px] font-bold flex-shrink-0"
-                  style={{ color: anchorZoneColor(c.anchor_zone), borderColor: anchorZoneColor(c.anchor_zone) }}>
+                <Badge
+                  variant="outline"
+                  className="cursor-pointer text-[9px] font-bold flex-shrink-0"
+                  style={{
+                    color: anchorZoneColor(c.anchor_zone),
+                    borderColor: anchorZoneColor(c.anchor_zone),
+                  }}
+                >
                   {c.anchor_zone}
                 </Badge>
                 <span className="font-semibold text-[13px] text-foreground flex-1 min-w-0 truncate">
                   {c.name}
                 </span>
-                <span className="text-[11px] text-muted-foreground flex-shrink-0">{c.estimated_tokens} tokens</span>
-                <span className="text-[11px] text-muted-foreground/70 flex-shrink-0">{c.message_count} msg</span>
+                <span className="text-[11px] text-muted-foreground flex-shrink-0">
+                  {c.estimated_tokens} tokens
+                </span>
+                <span className="text-[11px] text-muted-foreground/70 flex-shrink-0">
+                  {c.message_count} msg
+                </span>
               </div>
             ))}
           </div>

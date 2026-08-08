@@ -4,7 +4,7 @@ const MIN_DELAY = 3
 const MAX_DELAY = 30
 
 function delay(seconds: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, seconds * 1000))
+  return new Promise((resolve) => setTimeout(resolve, seconds * 1000))
 }
 
 export async function attemptReconnect(

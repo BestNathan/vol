@@ -74,7 +74,12 @@ export function ToolCallDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
       <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="truncate pr-8">{toolName}</DialogTitle>
@@ -82,12 +87,7 @@ export function ToolCallDialog({
         </DialogHeader>
         <ScrollArea className="flex-1 min-h-0">
           <div className="flex flex-col gap-3 p-1">
-            <SchemaForm
-              key={toolName}
-              schema={schema ?? {}}
-              value={value}
-              onChange={setValue}
-            />
+            <SchemaForm key={toolName} schema={schema ?? {}} value={value} onChange={setValue} />
           </div>
         </ScrollArea>
         <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between items-stretch">
