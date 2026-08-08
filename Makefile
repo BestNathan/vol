@@ -1,6 +1,7 @@
 .PHONY: help web-dev web-backend web-check web-build web-serve \
         coverage coverage-html coverage-threshold \
-        fmt fmt-check check clippy clippy-strict test test-unit test-integration test-e2e audit quality quality-strict quality-full no-doc-tests
+        fmt fmt-check check clippy clippy-strict test test-unit test-integration test-e2e audit quality quality-strict quality-full no-doc-tests \
+        fe-fmt fe-fmt-check fe-lint fe-type fe-test
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
@@ -77,6 +78,23 @@ web-build: ## Production build
 
 web-clippy: ## TypeScript type-check only
 	cd frontend && npx tsc -b --noEmit
+
+# ── Frontend quality ──────────────────────────────────────────────────
+
+fe-fmt: ## Format frontend code with prettier
+	npm --prefix frontend run format
+
+fe-fmt-check: ## Check frontend formatting
+	npm --prefix frontend run format:check
+
+fe-lint: ## Lint frontend code with eslint
+	npm --prefix frontend run lint
+
+fe-type: ## Type-check frontend code with tsc
+	npm --prefix frontend run typecheck
+
+fe-test: ## Run frontend tests with coverage
+	npm --prefix frontend run test:coverage
 
 # ── Coverage ──
 #
