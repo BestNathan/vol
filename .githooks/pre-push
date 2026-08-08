@@ -33,17 +33,9 @@ if [ -z "$CHANGES" ]; then
   exit 0
 fi
 
-RUST_CHANGED=false
-FRONTEND_CHANGED=false
+eval "$(echo "$CHANGES" | "$SCRIPT_DIR/scripts/detect-changes.sh")"
 
-if echo "$CHANGES" | grep -q '\.rs$'; then
-  RUST_CHANGED=true
-fi
-if echo "$CHANGES" | grep -q '^frontend/src/'; then
-  FRONTEND_CHANGED=true
-fi
-
-if [ "$RUST_CHANGED" = "false" ] && [ "$FRONTEND_CHANGED" = "false" ]; then
+if [ "$NO_CHANGES" = "true" ]; then
   echo "No Rust or frontend changes in push range — skipping."
   exit 0
 fi

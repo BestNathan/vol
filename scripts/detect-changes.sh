@@ -32,7 +32,8 @@ fi
 echo "RUST_CHANGED=$RUST_CHANGED"
 echo "FRONTEND_CHANGED=$FRONTEND_CHANGED"
 
-# Return non-zero if nothing changed at all
+# Use with eval: eval "$(git diff ... | ./scripts/detect-changes.sh)"
+# Sets RUST_CHANGED, FRONTEND_CHANGED, NO_CHANGES. Always exits 0.
 if [ "$RUST_CHANGED" = "false" ] && [ "$FRONTEND_CHANGED" = "false" ]; then
   echo "NO_CHANGES=true"
 else
