@@ -104,22 +104,22 @@ export interface RpcMethods {
   }
   'file.list': { params: { path: string }; result: { entries: FileEntry[] } }
   'file.read': { params: { path: string }; result: { content: string; metadata: unknown } }
-  'tool.list': { params: {}; result: { tools: ToolDef[] } }
+  'tool.list': { params: object; result: { tools: ToolDef[] } }
   'tool.call': {
     params: { tool_name: string; arguments: Record<string, unknown> }
     result: { tool_name: string; result: unknown }
   }
-  'skill.list': { params: {}; result: { skills: SkillListEntry[] } }
+  'skill.list': { params: object; result: { skills: SkillListEntry[] } }
   'skill.get': { params: { name: string }; result: { skill: SkillDetail; name: string } }
-  'skill.refresh': { params: {}; result: { discovered: number } }
-  'mcp.list_servers': { params: {}; result: { servers: McpServerInfo[] } }
+  'skill.refresh': { params: object; result: { discovered: number } }
+  'mcp.list_servers': { params: object; result: { servers: McpServerInfo[] } }
   'mcp.list_tools': { params: { server?: string }; result: { tools: McpToolInfo[] } }
   'mcp.list_resources': { params: { server?: string }; result: { resources: McpResourceInfo[] } }
   'mcp.list_resource_templates': {
     params: { server?: string }
     result: { templates: McpResourceTemplateInfo[] }
   }
-  'mcp.list_prompts': { params: {}; result: { prompts: McpPromptInfo[] } }
+  'mcp.list_prompts': { params: object; result: { prompts: McpPromptInfo[] } }
   'mcp.read_resource': { params: { uri: string }; result: { uri: string; content: string } }
   'mcp.call_tool': {
     params: { server: string; tool_name: string; arguments: Record<string, unknown> }
@@ -132,10 +132,10 @@ export interface RpcMethods {
   }
   'task.list': { params: { status?: string; assignee?: string }; result: { tasks: TaskEntry[] } }
   'task.get': { params: { task_id: number }; result: { task: TaskEntry | null } }
-  'log.list': { params: {}; result: { runs: LogRunSummary[] } }
+  'log.list': { params: object; result: { runs: LogRunSummary[] } }
   'log.read': { params: { run_id: string }; result: { entries: LogLine[] } }
-  'system.connected': { params: {}; result: ConnectedInfo }
-  'control.node_list': { params: {}; result: { nodes: NodeListEntry[] } }
+  'system.connected': { params: object; result: ConnectedInfo }
+  'control.node_list': { params: object; result: { nodes: NodeListEntry[] } }
   'control.node_get': { params: { node_id: string }; result: { node: NodeListEntry | null } }
   'control.capability_list': { params: { node_id?: string }; result: CapabilityListResult }
 }

@@ -127,6 +127,9 @@ function SchemaProperty({ name, propSchema, required, value, onFieldChange }: Sc
   const label = typeof propSchema.title === 'string' ? propSchema.title : name
   const description =
     typeof propSchema.description === 'string' ? propSchema.description : undefined
+  // Hook call hoisted to top level (rules-of-hooks): the checkbox branch needs
+  // a stable id, but the hook must run unconditionally on every render.
+  const id = useSchemaFieldId(name)
 
   if (type === 'object') {
     const subValue = (value[name] as Record<string, unknown> | undefined) ?? {}
@@ -147,7 +150,6 @@ function SchemaProperty({ name, propSchema, required, value, onFieldChange }: Sc
   }
 
   if (type === 'boolean') {
-    const id = useSchemaFieldId(name)
     return (
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">

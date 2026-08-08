@@ -25,6 +25,7 @@ import {
 } from '@/stores/connection'
 import { activeNodeIdAtom, activeTabAtom, LOCAL_NODE_ID, viewingNodeDetailAtom } from '@/stores/ui'
 import { debugPanelAtom } from '@/stores/dialogs'
+import type { ConnectedInfo } from '@/types'
 
 function AppInner() {
   const setConnectionState = useSetAtom(connectionStateAtom)
@@ -116,9 +117,9 @@ function AppInner() {
         // Cancel any running reconnect loop
         reconnectAbortRef.current?.abort()
         client
-          .call<{ server_type: string }>('system.connected')
+          .call<ConnectedInfo>('system.connected')
           .then((info) => {
-            setServerMode(info.server_type as any)
+            setServerMode(info.server_type)
             if (info.server_type === 'DataPlane') {
               setActiveNodeId(LOCAL_NODE_ID)
             }
