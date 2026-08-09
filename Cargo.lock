@@ -8275,6 +8275,7 @@ dependencies = [
 name = "vol-llm-tools-builtin"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "serde",
  "serde_json",
  "tempfile",
@@ -8396,10 +8397,13 @@ dependencies = [
  "readability",
  "reqwest 0.11.27",
  "serde",
+ "serde_json",
  "thiserror 1.0.69",
+ "tokio",
  "url",
  "vol-llm-core",
  "vol-llm-tool",
+ "vol-llm-tools-builtin-web-search",
 ]
 
 [[package]]

@@ -52,6 +52,7 @@ pub fn sandbox_in_subdir(subdir: &str) -> (ToolContext, TempDir) {
 /// Note: writes directly to the temp dir via `std::fs`, not through the sandbox
 /// trait. The sandbox root is `temp_dir.path()`, so the sandbox's `read_file`
 /// will see these files at the same paths.
+#[allow(dead_code)]
 pub fn populate_files(temp_dir: &TempDir, files: &[(&str, &str)]) {
     for (rel_path, content) in files {
         let full = temp_dir.path().join(rel_path);

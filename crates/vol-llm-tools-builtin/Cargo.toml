@@ -22,6 +22,7 @@ serde = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+async-trait = { workspace = true }
 vol-llm-sandbox = { workspace = true }
 vol-llm-tool = { workspace = true }
 vol-llm-core = { workspace = true }
