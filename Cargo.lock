@@ -8276,7 +8276,12 @@ name = "vol-llm-tools-builtin"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
  "tracing",
+ "vol-llm-core",
+ "vol-llm-sandbox",
  "vol-llm-tool",
  "vol-llm-tools-builtin-bash",
  "vol-llm-tools-builtin-cli-tool",

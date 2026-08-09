@@ -20,3 +20,11 @@ vol-llm-tools-builtin-web-fetch = { path = "web-fetch" }
 vol-llm-tools-builtin-cli-tool = { path = "cli-tool" }
 serde = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+vol-llm-sandbox = { workspace = true }
+vol-llm-tool = { workspace = true }
+vol-llm-core = { workspace = true }
+tempfile = "3.10"
+tokio = { workspace = true, features = ["rt", "macros"] }
+serde_json = { workspace = true }
