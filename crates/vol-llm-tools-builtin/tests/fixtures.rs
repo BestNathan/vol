@@ -4,6 +4,10 @@
 //! at a `TempDir` — never at `/`. This simulates the real agent execution
 //! environment where tools operate within a bounded sandbox.
 
+// Test fixtures panic on setup failure by design; the crate inherits the
+// workspace's deny-level unwrap/expect lints, which apply to test targets too.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -26,6 +30,11 @@ pub fn sandbox_in_tempdir() -> (ToolContext, TempDir) {
 ///
 /// Simulates an agent whose `working_dir` is a subdirectory of the sandbox root.
 /// The subdirectory is created on disk.
+///
+/// Note: each integration-test target compiles `fixtures.rs` independently, so
+/// functions not used by a given target are dead code in that target. Consumed
+/// by the centralized agent-context tests (SDD task 13).
+#[allow(dead_code)]
 pub fn sandbox_in_subdir(subdir: &str) -> (ToolContext, TempDir) {
     let temp_dir = TempDir::new().expect("Failed to create temp dir for sandbox");
     let subdir_path = temp_dir.path().join(subdir);
@@ -57,6 +66,11 @@ pub fn populate_files(temp_dir: &TempDir, files: &[(&str, &str)]) {
 ///
 /// The working_dir in the AgentDef is informational; actual path resolution
 /// goes through the sandbox.
+///
+/// Note: each integration-test target compiles `fixtures.rs` independently, so
+/// functions not used by a given target are dead code in that target. Consumed
+/// by the centralized agent-context tests (SDD task 13).
+#[allow(dead_code)]
 pub fn agent_context(sandbox: SandboxRef, name: &str, working_dir: Option<&str>) -> ToolContext {
     let agent_def = vol_llm_core::AgentDef {
         id: format!("test:{name}"),
