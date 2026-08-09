@@ -1,6 +1,6 @@
 /* frontend/src/index.css — Tailwind CSS v4 + shadcn/ui dark theme (vol-llm-ui) */
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
 @theme {
   --color-bg-primary: #1a1a2e;
@@ -24,21 +24,21 @@
 
 /* shadcn dark theme CSS variables */
 :root {
-  --background: 240 28% 14%;       /* #1a1a2e (hsl(240 28% 14%) = rgb(26,26,46)) */
-  --foreground: 0 0% 88%;          /* #e0e0e0 */
-  --card: 240 10% 15%;             /* #252540 */
+  --background: 240 28% 14%; /* #1a1a2e (hsl(240 28% 14%) = rgb(26,26,46)) */
+  --foreground: 0 0% 88%; /* #e0e0e0 */
+  --card: 240 10% 15%; /* #252540 */
   --card-foreground: 0 0% 88%;
   --popover: 240 10% 15%;
   --popover-foreground: 0 0% 88%;
-  --primary: 220 100% 75%;         /* #80a0ff */
+  --primary: 220 100% 75%; /* #80a0ff */
   --primary-foreground: 240 10% 11%;
-  --secondary: 240 10% 17%;        /* #2a2a44 */
+  --secondary: 240 10% 17%; /* #2a2a44 */
   --secondary-foreground: 0 0% 88%;
   --muted: 240 10% 17%;
-  --muted-foreground: 0 0% 53%;    /* #888 */
+  --muted-foreground: 0 0% 53%; /* #888 */
   --accent: 240 10% 17%;
   --accent-foreground: 0 0% 88%;
-  --destructive: 0 62% 50%;        /* #c04040 */
+  --destructive: 0 62% 50%; /* #c04040 */
   --destructive-foreground: 0 0% 88%;
   --border: 240 10% 27%;
   --input: 240 10% 27%;
@@ -84,7 +84,10 @@
 }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 14px;
 }
 

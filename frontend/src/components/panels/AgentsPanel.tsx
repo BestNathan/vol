@@ -18,8 +18,12 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  agentsAtom, selectedAgentIdAtom, agentsLoadingAtom, agentsErrorAtom,
-  agentSubTabAtom, agentStatusMapAtom,
+  agentsAtom,
+  selectedAgentIdAtom,
+  agentsLoadingAtom,
+  agentsErrorAtom,
+  agentSubTabAtom,
+  agentStatusMapAtom,
 } from '@/stores/agents'
 import { conversationMapAtom, activeAgentIdAtom } from '@/stores/conversation'
 import { activeNodeIdAtom } from '@/stores/ui'
@@ -29,14 +33,17 @@ import type { SessionEntry } from '@/lib/protocol'
 
 // --- Agent row ----------------------------------------------------------------
 function AgentRow({
-  agent, isSelected, onSelect,
+  agent,
+  isSelected,
+  onSelect,
 }: {
   agent: AgentListEntry
   isSelected: boolean
   onSelect: () => void
 }) {
   const scopeStr = agent.scope ?? 'unknown'
-  const isOnline = agent.status === 'online' || agent.status === 'idle' || agent.status === 'running'
+  const isOnline =
+    agent.status === 'online' || agent.status === 'idle' || agent.status === 'running'
 
   return (
     <button
@@ -44,16 +51,16 @@ function AgentRow({
       onClick={onSelect}
       className={cn(
         'cursor-pointer flex items-center gap-3 px-3 py-2.5 w-full text-left transition-colors border-b border-border last:border-b-0',
-        isSelected
-          ? 'bg-[#1a2a44] hover:bg-[#1e2e4a]'
-          : 'hover:bg-secondary/30'
+        isSelected ? 'bg-[#1a2a44] hover:bg-[#1e2e4a]' : 'hover:bg-secondary/30',
       )}
     >
       {/* Status dot */}
       <span
         className={cn(
           'w-2 h-2 rounded-full flex-shrink-0',
-          isOnline ? 'bg-emerald-500 shadow-[0_0_4px] shadow-emerald-500/50' : 'bg-muted-foreground/40'
+          isOnline
+            ? 'bg-emerald-500 shadow-[0_0_4px] shadow-emerald-500/50'
+            : 'bg-muted-foreground/40',
         )}
       />
 
@@ -67,16 +74,27 @@ function AgentRow({
         <span className="flex items-center gap-1.5">
           <span className="font-semibold text-[13px] text-foreground truncate">{agent.name}</span>
           {agent.type && (
-            <Badge variant="secondary" className="text-[9px] px-1 py-0 rounded-[3px] font-medium flex-shrink-0">
+            <Badge
+              variant="secondary"
+              className="text-[9px] px-1 py-0 rounded-[3px] font-medium flex-shrink-0"
+            >
               {agent.type}
             </Badge>
           )}
-          <Badge variant="outline" className="text-[9px] font-bold flex-shrink-0"
-            style={{ color: scopeStr === 'repo' ? '#4080ff' : '#40c040', borderColor: scopeStr === 'repo' ? '#4080ff' : '#40c040' }}>
+          <Badge
+            variant="outline"
+            className="text-[9px] font-bold flex-shrink-0"
+            style={{
+              color: scopeStr === 'repo' ? '#4080ff' : '#40c040',
+              borderColor: scopeStr === 'repo' ? '#4080ff' : '#40c040',
+            }}
+          >
             {scopeStr}
           </Badge>
         </span>
-        <span className="text-[11px] text-muted-foreground/70 truncate mt-0.5">{agent.description ?? 'No description'}</span>
+        <span className="text-[11px] text-muted-foreground/70 truncate mt-0.5">
+          {agent.description ?? 'No description'}
+        </span>
       </span>
     </button>
   )
@@ -165,7 +183,9 @@ export function AgentsPanel() {
     setLoading(true)
     setError(null)
     try {
-      const res = await getPanelClient().call<{ agents: AgentListEntry[] }>('agent.list', { node_id: nodeId })
+      const res = await getPanelClient().call<{ agents: AgentListEntry[] }>('agent.list', {
+        node_id: nodeId,
+      })
       setAgents(res.agents ?? [])
     } catch (err) {
       setAgents([])
@@ -187,51 +207,63 @@ export function AgentsPanel() {
 
   // When selecting an agent that is mid-run, load its latest session into the
   // conversation with a RunningBanner prepended (mirrors agents_panel.rs).
-  const checkAgentRunning = useCallback(async (agentId: string) => {
-    try {
-      const status = await getPanelClient().call<{ status: string; run_id?: string }>('agent.status', { agent_id: agentId })
-      if (status.status !== 'running' || !status.run_id) return
-      const sessions = await getPanelClient().call<{ sessions: SessionListEntry[] }>('session.list', { agent_id: agentId })
-      const latest = sessions.sessions?.[0]
-      if (latest) {
-        const res = await getPanelClient().call<{ entries: SessionEntry[] }>('session.entries', {
-          session_id: latest.id,
-          agent_id: agentId,
-        })
-        const convEntries = sessionEntriesToConversation(res.entries ?? [])
-        const map = new Map(store.get(conversationMapAtom))
-        map.set(agentId, {
-          entries: [{ type: 'RunningBanner', runId: status.run_id }, ...convEntries],
-          autoScroll: true,
-        })
-        store.set(conversationMapAtom, map)
+  const checkAgentRunning = useCallback(
+    async (agentId: string) => {
+      try {
+        const status = await getPanelClient().call<{ status: string; run_id?: string }>(
+          'agent.status',
+          { agent_id: agentId },
+        )
+        if (status.status !== 'running' || !status.run_id) return
+        const sessions = await getPanelClient().call<{ sessions: SessionListEntry[] }>(
+          'session.list',
+          { agent_id: agentId },
+        )
+        const latest = sessions.sessions?.[0]
+        if (latest) {
+          const res = await getPanelClient().call<{ entries: SessionEntry[] }>('session.entries', {
+            session_id: latest.id,
+            agent_id: agentId,
+          })
+          const convEntries = sessionEntriesToConversation(res.entries ?? [])
+          const map = new Map(store.get(conversationMapAtom))
+          map.set(agentId, {
+            entries: [{ type: 'RunningBanner', runId: status.run_id }, ...convEntries],
+            autoScroll: true,
+          })
+          store.set(conversationMapAtom, map)
+        }
+        // Mark the agent running so event attribution (runMap) stays consistent.
+        const statusMap = { ...store.get(agentStatusMapAtom) }
+        statusMap[agentId] = { status: 'running', runId: status.run_id }
+        store.set(agentStatusMapAtom, statusMap)
+        const runMap = new Map(store.get(runMapAtom))
+        runMap.set(status.run_id, agentId)
+        store.set(runMapAtom, runMap)
+        const runningAgents = new Set(store.get(runningAgentsAtom))
+        runningAgents.add(agentId)
+        store.set(runningAgentsAtom, runningAgents)
+      } catch {
+        // Best-effort: a failed status check must not block agent selection.
       }
-      // Mark the agent running so event attribution (runMap) stays consistent.
-      const statusMap = { ...store.get(agentStatusMapAtom) }
-      statusMap[agentId] = { status: 'running', runId: status.run_id }
-      store.set(agentStatusMapAtom, statusMap)
-      const runMap = new Map(store.get(runMapAtom))
-      runMap.set(status.run_id, agentId)
-      store.set(runMapAtom, runMap)
-      const runningAgents = new Set(store.get(runningAgentsAtom))
-      runningAgents.add(agentId)
-      store.set(runningAgentsAtom, runningAgents)
-    } catch {
-      // Best-effort: a failed status check must not block agent selection.
-    }
-  }, [store])
+    },
+    [store],
+  )
 
-  const handleAgentClick = useCallback((agent: AgentListEntry) => {
-    if (selectedAgentId === agent.id) {
-      setSelectedAgentId(null)
-      setActiveAgentId(null)
-      return
-    }
-    setSelectedAgentId(agent.id)
-    setActiveAgentId(agent.id)
-    setSubTab('conversation')
-    void checkAgentRunning(agent.id)
-  }, [selectedAgentId, setSelectedAgentId, setActiveAgentId, setSubTab, checkAgentRunning])
+  const handleAgentClick = useCallback(
+    (agent: AgentListEntry) => {
+      if (selectedAgentId === agent.id) {
+        setSelectedAgentId(null)
+        setActiveAgentId(null)
+        return
+      }
+      setSelectedAgentId(agent.id)
+      setActiveAgentId(agent.id)
+      setSubTab('conversation')
+      void checkAgentRunning(agent.id)
+    },
+    [selectedAgentId, setSelectedAgentId, setActiveAgentId, setSubTab, checkAgentRunning],
+  )
 
   const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? null
 
@@ -242,7 +274,9 @@ export function AgentsPanel() {
         <div className="h-full p-3 flex items-center justify-center">
           <div className="text-center">
             <div className="text-muted-foreground text-[14px]">Select a node to view agents</div>
-            <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above to view its agents.</div>
+            <div className="text-muted-foreground/70 text-[12px] mt-1">
+              Select a node from the dropdown above to view its agents.
+            </div>
           </div>
         </div>
       </ScrollArea>
@@ -265,8 +299,17 @@ export function AgentsPanel() {
         <div className="h-full p-3 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 text-center">
             <div className="text-destructive text-[14px]">Failed to load agents</div>
-            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadAgents()}>Retry</Button>
+            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">
+              {error}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="cursor-pointer"
+              onClick={() => void loadAgents()}
+            >
+              Retry
+            </Button>
           </div>
         </div>
       </ScrollArea>
@@ -307,7 +350,9 @@ export function AgentsPanel() {
       {/* Info bar: selected agent name + description */}
       {selectedAgent && (
         <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1a2a44] border-b border-border flex-shrink-0">
-          <span className="font-bold text-[13px] text-foreground truncate">{selectedAgent.name}</span>
+          <span className="font-bold text-[13px] text-foreground truncate">
+            {selectedAgent.name}
+          </span>
           <span className="text-[12px] text-muted-foreground truncate hidden sm:inline">
             {selectedAgent.description ?? ''}
           </span>
@@ -332,19 +377,30 @@ export function AgentsPanel() {
             ))}
           </TabsList>
 
-          <TabsContent value="conversation" className="flex-1 min-h-0 flex flex-col overflow-hidden mt-0">
+          <TabsContent
+            value="conversation"
+            className="flex-1 min-h-0 flex flex-col overflow-hidden mt-0"
+          >
             <ConversationView />
             <CapabilityBar />
             <InputArea />
           </TabsContent>
-          <TabsContent value="sessions" className="flex-1 min-h-0 mt-0 flex flex-col overflow-hidden">
+          <TabsContent
+            value="sessions"
+            className="flex-1 min-h-0 mt-0 flex flex-col overflow-hidden"
+          >
             <SessionsPanel />
           </TabsContent>
-          <TabsContent value="context" className="flex-1 min-h-0 mt-0 flex flex-col overflow-hidden">
+          <TabsContent
+            value="context"
+            className="flex-1 min-h-0 mt-0 flex flex-col overflow-hidden"
+          >
             <ContextPanel />
           </TabsContent>
           <TabsContent value="tasks" className="flex-1 min-h-0 mt-0">
-            <div className="flex items-center justify-center h-full text-muted-foreground/70 text-sm">Tasks — coming soon</div>
+            <div className="flex items-center justify-center h-full text-muted-foreground/70 text-sm">
+              Tasks — coming soon
+            </div>
           </TabsContent>
           <TabsContent value="details" className="flex-1 min-h-0 mt-0">
             {selectedAgent ? <AgentDetailPanel agent={selectedAgent} /> : null}

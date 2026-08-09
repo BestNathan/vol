@@ -39,7 +39,12 @@ export function DebugPanel() {
   // Responsive: centered modal on mobile, right-side docked panel on desktop
   // (override DialogContent's fixed-center positioning on sm+).
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) close() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) close()
+      }}
+    >
       <DialogContent
         overlayClassName="bg-black/50"
         className="
@@ -53,7 +58,13 @@ export function DebugPanel() {
           <div className="flex items-center gap-3">
             <DialogTitle className="text-foreground font-bold text-sm">Debug Panel</DialogTitle>
             <div className="flex gap-1">
-              <Button variant="ghost" size="sm" className="border-b-2 border-primary rounded-none font-semibold text-[12px] cursor-pointer">WS</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="border-b-2 border-primary rounded-none font-semibold text-[12px] cursor-pointer"
+              >
+                WS
+              </Button>
             </div>
           </div>
         </div>
@@ -111,12 +122,11 @@ function WsMessageRow({
   const arrowColor = message.direction === 'in' ? '#40c040' : '#80a0ff'
 
   return (
-    <div
-      className="border-b border-[#222] hover:bg-secondary/50 cursor-pointer"
-      onClick={onToggle}
-    >
+    <div className="border-b border-[#222] hover:bg-secondary/50 cursor-pointer" onClick={onToggle}>
       <div className="flex items-center gap-2 px-3 py-1.5">
-        <span className="text-muted-foreground/60 w-[100px] shrink-0">{formatElapsed(message.elapsedMs)}</span>
+        <span className="text-muted-foreground/60 w-[100px] shrink-0">
+          {formatElapsed(message.elapsedMs)}
+        </span>
         <span style={{ color: arrowColor, fontWeight: 'bold' }}>{arrow}</span>
         <span className="text-foreground/80 font-bold truncate">{message.method}</span>
       </div>

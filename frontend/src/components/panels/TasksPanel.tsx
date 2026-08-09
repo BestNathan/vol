@@ -28,12 +28,18 @@ export const TASKS_CACHE_KEY = 'tasks'
 /** Status badge/text color, mirroring tasks_panel.rs::status_color. */
 export function statusColor(status: string): string {
   switch (status) {
-    case 'pending': return '#888'
-    case 'running': return '#4080ff'
-    case 'completed': return '#40c040'
-    case 'failed': return '#ff4040'
-    case 'killed': return '#ff8800'
-    default: return '#888'
+    case 'pending':
+      return '#888'
+    case 'running':
+      return '#4080ff'
+    case 'completed':
+      return '#40c040'
+    case 'failed':
+      return '#ff4040'
+    case 'killed':
+      return '#ff8800'
+    default:
+      return '#888'
   }
 }
 
@@ -57,51 +63,59 @@ export function TasksPanel() {
 
   // Live node mirror for the stale-response guard in async callbacks.
   const nodeIdRef = useRef(nodeId)
-  useEffect(() => { nodeIdRef.current = nodeId }, [nodeId])
+  useEffect(() => {
+    nodeIdRef.current = nodeId
+  }, [nodeId])
 
   // Fetch the task list for `target`; hydrates from the per-node cache when a
   // cached copy exists, otherwise fetches and writes the result back to the
   // cache. Writes are dropped once the active node no longer matches the node
   // this fetch was started for.
-  const loadTasks = useCallback(async (target: string | null) => {
-    if (!target) {
-      setTasks([])
-      setLoading(false)
+  const loadTasks = useCallback(
+    async (target: string | null) => {
+      if (!target) {
+        setTasks([])
+        setLoading(false)
+        setError(null)
+        return
+      }
+      const cacheKey = getCacheKey(target, TASKS_CACHE_KEY)
+      const cached = store.get(nodeDataCacheAtom).get(cacheKey)?.get('tasks')
+      if (Array.isArray(cached)) {
+        // Node-cached: hydrate instantly without refetching.
+        setTasks(cached as TaskEntry[])
+        setLoading(false)
+        setError(null)
+        return
+      }
+      setLoading(true)
       setError(null)
-      return
-    }
-    const cacheKey = getCacheKey(target, TASKS_CACHE_KEY)
-    const cached = store.get(nodeDataCacheAtom).get(cacheKey)?.get('tasks')
-    if (Array.isArray(cached)) {
-      // Node-cached: hydrate instantly without refetching.
-      setTasks(cached as TaskEntry[])
-      setLoading(false)
-      setError(null)
-      return
-    }
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await getPanelClient().call<RpcMethods['task.list']['result']>('task.list')
-      if (nodeIdRef.current !== target) return
-      const list = res.tasks ?? []
-      setTasks(list)
-      setCache((prev) => {
-        const next = new Map(prev)
-        next.set(cacheKey, new Map<string, unknown>([
-          ['tasks', list],
-          ['error', null],
-          ['loading', false],
-        ]))
-        return next
-      })
-    } catch (err) {
-      if (nodeIdRef.current !== target) return
-      setError(errMsg(err))
-    } finally {
-      if (nodeIdRef.current === target) setLoading(false)
-    }
-  }, [setTasks, setLoading, setError, setCache, store])
+      try {
+        const res = await getPanelClient().call<RpcMethods['task.list']['result']>('task.list')
+        if (nodeIdRef.current !== target) return
+        const list = res.tasks ?? []
+        setTasks(list)
+        setCache((prev) => {
+          const next = new Map(prev)
+          next.set(
+            cacheKey,
+            new Map<string, unknown>([
+              ['tasks', list],
+              ['error', null],
+              ['loading', false],
+            ]),
+          )
+          return next
+        })
+      } catch (err) {
+        if (nodeIdRef.current !== target) return
+        setError(errMsg(err))
+      } finally {
+        if (nodeIdRef.current === target) setLoading(false)
+      }
+    },
+    [setTasks, setLoading, setError, setCache, store],
+  )
 
   // Fetch on mount and whenever the active node changes.
   useEffect(() => {
@@ -123,9 +137,12 @@ export function TasksPanel() {
     void loadTasks(nodeIdRef.current)
   }, [connectionState, nodeId, loadTasks, setCache])
 
-  const toggleRow = useCallback((id: number) => {
-    setSelectedId((cur) => (cur === id ? null : id))
-  }, [setSelectedId])
+  const toggleRow = useCallback(
+    (id: number) => {
+      setSelectedId((cur) => (cur === id ? null : id))
+    },
+    [setSelectedId],
+  )
 
   const openGraph = useCallback((id: number) => {
     setGraphCenter(id)
@@ -137,7 +154,9 @@ export function TasksPanel() {
         <div className="h-full p-3 flex items-center justify-center">
           <div className="text-center">
             <div className="text-muted-foreground text-[14px]">Select a node to view tasks</div>
-            <div className="text-muted-foreground/70 text-[12px] mt-1">Select a node from the dropdown above.</div>
+            <div className="text-muted-foreground/70 text-[12px] mt-1">
+              Select a node from the dropdown above.
+            </div>
           </div>
         </div>
       </ScrollArea>
@@ -150,8 +169,17 @@ export function TasksPanel() {
         <div className="h-full p-3 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 text-center">
             <div className="text-destructive text-[14px]">Failed to load tasks</div>
-            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadTasks(nodeId)}>Retry</Button>
+            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">
+              {error}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="cursor-pointer"
+              onClick={() => void loadTasks(nodeId)}
+            >
+              Retry
+            </Button>
           </div>
         </div>
       </ScrollArea>
@@ -178,22 +206,32 @@ export function TasksPanel() {
     return (
       <>
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[11px] text-muted-foreground/60 font-mono whitespace-nowrap">t{task.id}</span>
-          <Badge variant="secondary" className="text-[10px] px-1 rounded font-bold whitespace-nowrap"
-            style={{ background: color, color: '#1a1a2e' }}>
+          <span className="text-[11px] text-muted-foreground/60 font-mono whitespace-nowrap">
+            t{task.id}
+          </span>
+          <Badge
+            variant="secondary"
+            className="text-[10px] px-1 rounded font-bold whitespace-nowrap"
+            style={{ background: color, color: '#1a1a2e' }}
+          >
             {task.status}
           </Badge>
           <span className="text-[13px] text-foreground truncate">{task.subject}</span>
           <div className="flex items-center gap-2 ml-auto flex-shrink-0">
             {task.assignee && (
-              <span className="text-[11px] text-muted-foreground/70 whitespace-nowrap">{task.assignee}</span>
+              <span className="text-[11px] text-muted-foreground/70 whitespace-nowrap">
+                {task.assignee}
+              </span>
             )}
             <Button
               variant="link"
               size="sm"
               className="cursor-pointer text-[11px] px-1 h-auto whitespace-nowrap hover:text-[#a0c0ff]"
               title="View dependency graph"
-              onClick={(e) => { e.stopPropagation(); openGraph(task.id) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                openGraph(task.id)
+              }}
             >
               ⇄ deps
             </Button>
@@ -215,7 +253,10 @@ export function TasksPanel() {
                       size="sm"
                       className="cursor-pointer font-mono h-auto p-0 hover:text-[#a0c0ff]"
                       title="Open dependency graph centered on this task"
-                      onClick={(e) => { e.stopPropagation(); openGraph(dep) }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openGraph(dep)
+                      }}
                     >
                       t{dep}
                     </Button>
@@ -234,7 +275,10 @@ export function TasksPanel() {
                       size="sm"
                       className="cursor-pointer font-mono h-auto p-0 hover:text-[#a0c0ff]"
                       title="Open dependency graph centered on this task"
-                      onClick={(e) => { e.stopPropagation(); openGraph(blk) }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openGraph(blk)
+                      }}
                     >
                       t{blk}
                     </Button>

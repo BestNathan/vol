@@ -65,34 +65,59 @@ export function McpToolDialog() {
     if (!d) return
     setDialog((s) =>
       s.toolCallDialog
-        ? { ...s, toolCallDialog: { ...s.toolCallDialog, loading: true, error: undefined, result: undefined } }
-        : s
+        ? {
+            ...s,
+            toolCallDialog: {
+              ...s.toolCallDialog,
+              loading: true,
+              error: undefined,
+              result: undefined,
+            },
+          }
+        : s,
     )
     try {
-      const res = await getPanelClient().call<RpcMethods['mcp.call_tool']['result']>('mcp.call_tool', {
-        server: d.server,
-        tool_name: d.toolName,
-        arguments: value,
-      })
+      const res = await getPanelClient().call<RpcMethods['mcp.call_tool']['result']>(
+        'mcp.call_tool',
+        {
+          server: d.server,
+          tool_name: d.toolName,
+          arguments: value,
+        },
+      )
       setDialog((s) =>
         s.toolCallDialog
-          ? { ...s, toolCallDialog: { ...s.toolCallDialog, result: formatMcpCallResult(res), loading: false } }
-          : s
+          ? {
+              ...s,
+              toolCallDialog: {
+                ...s.toolCallDialog,
+                result: formatMcpCallResult(res),
+                loading: false,
+              },
+            }
+          : s,
       )
     } catch (err) {
       setDialog((s) =>
         s.toolCallDialog
           ? { ...s, toolCallDialog: { ...s.toolCallDialog, error: errMsg(err), loading: false } }
-          : s
+          : s,
       )
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) close() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) close()
+      }}
+    >
       <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle className="truncate pr-8">{d ? `${d.server} / ${d.toolName}` : ''}</DialogTitle>
+          <DialogTitle className="truncate pr-8">
+            {d ? `${d.server} / ${d.toolName}` : ''}
+          </DialogTitle>
         </DialogHeader>
         <ScrollArea className="flex-1 min-h-0">
           <div className="flex flex-col gap-3 p-1">

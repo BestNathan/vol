@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Pre-push quality gate: slow checks (coverage, integration tests).
+# Fast checks run at pre-commit, so we assume those already passed.
+#
+# Runs only for changed crates/modules against origin/main.
+# No bypass: all checks must pass before pushing.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+
+# ── Detect what changed in the push range ─────────────────────────────
+REMOTE=${1:-origin}
+REMOTE_URL=${2:-}
+
+# Get the range of commits being pushed, or fall back to main..HEAD
+PUSH_RANGE=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ -n "$remote_sha" ] && [ "$remote_sha" != "0000000000000000000000000000000000000000" ]; then
+    PUSH_RANGE="$remote_sha..$local_sha"
+  else
+    PUSH_RANGE="origin/main..HEAD"
+  fi
+  break
+done
+
+if [ -z "$PUSH_RANGE" ]; then
+  PUSH_RANGE="origin/main..HEAD"
+fi
+
+CHANGES=$(git diff --name-only "$PUSH_RANGE" 2>/dev/null || git diff --name-only origin/main...HEAD)
+if [ -z "$CHANGES" ]; then
+  echo "No changes to push — skipping pre-push checks."
+  exit 0
+fi
+
+eval "$(echo "$CHANGES" | "$SCRIPT_DIR/scripts/detect-changes.sh")"
+
+if [ "$NO_CHANGES" = "true" ]; then
+  echo "No Rust or frontend changes in push range — skipping."
+  exit 0
+fi
+
+HAS_ERROR=0
+
+# ── Rust coverage (changed crates only) ────────────────────────────────
+if [ "$RUST_CHANGED" = "true" ]; then
+  # Extract changed crate names
+  CHANGED_CRATES=$(echo "$CHANGES" \
+    | grep '^crates/' \
+    | sed -n 's|^crates/\([^/]*\)/.*|\1|p' \
+    | sort -u \
+    | tr '\n' ' ' \
+    || true)
+
+  if [ -n "$CHANGED_CRATES" ]; then
+    echo "→ Changed crates: $CHANGED_CRATES"
+    "$SCRIPT_DIR/scripts/check-rust-coverage.sh" $CHANGED_CRATES || HAS_ERROR=1
+  else
+    echo "→ No crates changed in push range — skipping Rust coverage."
+  fi
+
+  if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
+fi
+
+# ── Frontend coverage ──────────────────────────────────────────────────
+if [ "$FRONTEND_CHANGED" = "true" ]; then
+  "$SCRIPT_DIR/scripts/check-fe-test.sh" || HAS_ERROR=1
+  if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
+fi
+
+echo ""
+echo -e "\033[0;32mAll pre-push checks passed ✓\033[0m"
+exit 0

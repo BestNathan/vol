@@ -4,21 +4,14 @@
 import { useLayoutEffect, useMemo, useState } from 'react'
 import { Wrench } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { SchemaForm } from '@/components/inputs/SchemaForm'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { SystemTool } from '@/components/panels/ToolsTab'
 
-export type ToolCallOutcome =
-  | { ok: true; content: string }
-  | { ok: false; error: string }
+export type ToolCallOutcome = { ok: true; content: string } | { ok: false; error: string }
 
 export interface ToolDetailDialogProps {
   open: boolean
@@ -47,7 +40,9 @@ function parseParams(schema: unknown): ParamInfo[] {
   const properties = asRecord(rec.properties)
   if (!properties) return []
   const required = new Set(
-    Array.isArray(rec.required) ? rec.required.filter((r): r is string => typeof r === 'string') : [],
+    Array.isArray(rec.required)
+      ? rec.required.filter((r): r is string => typeof r === 'string')
+      : [],
   )
   const out: ParamInfo[] = []
   for (const [name, raw] of Object.entries(properties)) {
@@ -70,12 +65,7 @@ const TYPE_COLORS: Record<string, string> = {
   object: 'text-purple-400 bg-purple-950/30',
 }
 
-export function ToolDetailDialog({
-  open,
-  tool,
-  onClose,
-  onExecute,
-}: ToolDetailDialogProps) {
+export function ToolDetailDialog({ open, tool, onClose, onExecute }: ToolDetailDialogProps) {
   const [value, setValue] = useState<Record<string, unknown>>({})
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<string | null>(null)
@@ -112,7 +102,12 @@ export function ToolDetailDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
       <DialogContent className="sm:max-w-[760px] w-[95vw] h-[92dvh] sm:h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
         {/* Header */}
         <DialogHeader className="px-4 py-3 border-b border-border flex-shrink-0">
@@ -147,15 +142,25 @@ export function ToolDetailDialog({
                   </div>
                   <div className="flex flex-col gap-2">
                     {params.map((p) => (
-                      <div key={p.name} className="rounded-md border border-border/70 bg-secondary/30 p-2">
+                      <div
+                        key={p.name}
+                        className="rounded-md border border-border/70 bg-secondary/30 p-2"
+                      >
                         <div className="flex items-center gap-1.5 mb-0.5">
-                          <code className="text-[12px] font-semibold text-foreground">{p.name}</code>
+                          <code className="text-[12px] font-semibold text-foreground">
+                            {p.name}
+                          </code>
                           {p.required && (
-                            <span className="text-[10px] text-destructive font-semibold">required</span>
+                            <span className="text-[10px] text-destructive font-semibold">
+                              required
+                            </span>
                           )}
                           <Badge
                             variant="secondary"
-                            className={cn("text-[10px] px-1 py-0 rounded-[3px] font-medium", TYPE_COLORS[p.type] ?? 'text-muted-foreground bg-secondary')}
+                            className={cn(
+                              'text-[10px] px-1 py-0 rounded-[3px] font-medium',
+                              TYPE_COLORS[p.type] ?? 'text-muted-foreground bg-secondary',
+                            )}
                           >
                             {p.type}
                           </Badge>

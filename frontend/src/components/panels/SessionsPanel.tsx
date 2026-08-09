@@ -53,28 +53,36 @@ export function SessionsPanel() {
   // Live mirror of the agent the panel currently shows, for the stale-response
   // guard in async callbacks (agent switch mid-flight must drop the response).
   const agentRef = useRef(selectedAgentId)
-  useEffect(() => { agentRef.current = selectedAgentId }, [selectedAgentId])
+  useEffect(() => {
+    agentRef.current = selectedAgentId
+  }, [selectedAgentId])
 
-  const loadSessions = useCallback(async (target: string | null) => {
-    if (!target) {
-      setSessions([])
-      setLoading(false)
+  const loadSessions = useCallback(
+    async (target: string | null) => {
+      if (!target) {
+        setSessions([])
+        setLoading(false)
+        setError(null)
+        return
+      }
+      setLoading(true)
       setError(null)
-      return
-    }
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await getPanelClient().call<RpcMethods['session.list']['result']>('session.list', { agent_id: target })
-      if (agentRef.current !== target) return
-      setSessions(res.sessions ?? [])
-    } catch (err) {
-      if (agentRef.current !== target) return
-      setError(errMsg(err))
-    } finally {
-      if (agentRef.current === target) setLoading(false)
-    }
-  }, [setSessions, setLoading, setError])
+      try {
+        const res = await getPanelClient().call<RpcMethods['session.list']['result']>(
+          'session.list',
+          { agent_id: target },
+        )
+        if (agentRef.current !== target) return
+        setSessions(res.sessions ?? [])
+      } catch (err) {
+        if (agentRef.current !== target) return
+        setError(errMsg(err))
+      } finally {
+        if (agentRef.current === target) setLoading(false)
+      }
+    },
+    [setSessions, setLoading, setError],
+  )
 
   // Fetch on mount and whenever the selected agent changes; close any overlay
   // that belongs to a previous agent.
@@ -87,35 +95,44 @@ export function SessionsPanel() {
   // return to the Conversation sub-tab. The button self-resets after 15s even
   // if the response never arrives (safety timeout, mirrors the Rust
   // TimeoutFuture::new(15_000)).
-  const handleResume = useCallback(async (session: SessionListEntry) => {
-    if (!selectedAgentId || resumingId !== null) return
-    setResumingId(session.id)
-    const reset = () => setResumingId((id) => (id === session.id ? null : id))
-    const timer = window.setTimeout(reset, 15_000)
-    try {
-      const res = await getPanelClient().call<RpcMethods['session.resume']['result']>('session.resume', {
-        session_id: session.id,
-        agent_id: selectedAgentId,
-      })
-      const convEntries = sessionEntriesToConversation(res.entries ?? [])
-      setConversationMap((prev) => {
-        const map = new Map(prev)
-        map.set(selectedAgentId, { entries: convEntries, autoScroll: true })
-        return map
-      })
-      setSubTab('conversation')
-      setActiveTab('agents')
-    } catch (err) {
-      // Non-fatal: keep the list visible; the button resets via the timeout/finally.
-      console.error('Failed to resume session:', err)
-    } finally {
-      window.clearTimeout(timer)
-      reset()
-    }
-  }, [selectedAgentId, resumingId, setConversationMap, setSubTab, setActiveTab])
+  const handleResume = useCallback(
+    async (session: SessionListEntry) => {
+      if (!selectedAgentId || resumingId !== null) return
+      setResumingId(session.id)
+      const reset = () => setResumingId((id) => (id === session.id ? null : id))
+      const timer = window.setTimeout(reset, 15_000)
+      try {
+        const res = await getPanelClient().call<RpcMethods['session.resume']['result']>(
+          'session.resume',
+          {
+            session_id: session.id,
+            agent_id: selectedAgentId,
+          },
+        )
+        const convEntries = sessionEntriesToConversation(res.entries ?? [])
+        setConversationMap((prev) => {
+          const map = new Map(prev)
+          map.set(selectedAgentId, { entries: convEntries, autoScroll: true })
+          return map
+        })
+        setSubTab('conversation')
+        setActiveTab('agents')
+      } catch (err) {
+        // Non-fatal: keep the list visible; the button resets via the timeout/finally.
+        console.error('Failed to resume session:', err)
+      } finally {
+        window.clearTimeout(timer)
+        reset()
+      }
+    },
+    [selectedAgentId, resumingId, setConversationMap, setSubTab, setActiveTab],
+  )
 
   const resumeButton = (session: SessionListEntry) => (
-    <Button variant="success" size="sm" className="cursor-pointer text-[12px] flex-shrink-0"
+    <Button
+      variant="success"
+      size="sm"
+      className="cursor-pointer text-[12px] flex-shrink-0"
       disabled={resumingId !== null}
       onClick={(e) => {
         e.stopPropagation()
@@ -142,8 +159,17 @@ export function SessionsPanel() {
         <div className="h-full p-3 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 text-center">
             <div className="text-destructive text-[14px]">Failed to load sessions</div>
-            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">{error}</div>
-            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => void loadSessions(selectedAgentId)}>Retry</Button>
+            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">
+              {error}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="cursor-pointer"
+              onClick={() => void loadSessions(selectedAgentId)}
+            >
+              Retry
+            </Button>
           </div>
         </div>
       </ScrollArea>
@@ -153,59 +179,69 @@ export function SessionsPanel() {
   return (
     <ScrollArea className="flex-1 min-h-0">
       <div className="p-2">
-      <div className="px-2.5 pt-1 pb-2 text-[12px] font-semibold text-muted-foreground uppercase tracking-[0.5px]">Sessions</div>
-      {sessions.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No sessions found</EmptyTitle>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <>
-          {/* Mobile: session cards */}
-          <div className="sm:hidden flex flex-col gap-2">
-            {sessions.map((s) => (
-              <div
-                key={s.id}
-                className="cursor-pointer rounded-lg border border-border bg-secondary p-3 active:bg-secondary"
-                onClick={() => setOverlaySession(s)}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-[13px] text-foreground font-semibold truncate">{truncateId(s.id)}</span>
-                  <span className="bg-secondary text-foreground/70 rounded-full px-2 py-0.5 text-[11px] flex-shrink-0 ml-2">
-                    {s.entry_count} entries
-                  </span>
+        <div className="px-2.5 pt-1 pb-2 text-[12px] font-semibold text-muted-foreground uppercase tracking-[0.5px]">
+          Sessions
+        </div>
+        {sessions.length === 0 ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>No sessions found</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <>
+            {/* Mobile: session cards */}
+            <div className="sm:hidden flex flex-col gap-2">
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className="cursor-pointer rounded-lg border border-border bg-secondary p-3 active:bg-secondary"
+                  onClick={() => setOverlaySession(s)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[13px] text-foreground font-semibold truncate">
+                      {truncateId(s.id)}
+                    </span>
+                    <span className="bg-secondary text-foreground/70 rounded-full px-2 py-0.5 text-[11px] flex-shrink-0 ml-2">
+                      {s.entry_count} entries
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1.5">
+                    <span className="text-[11px] text-muted-foreground/70">
+                      {formatAge(s.created_at)}
+                    </span>
+                    {resumeButton(s)}
+                  </div>
                 </div>
-                <div className="flex items-center justify-between mt-1.5">
-                  <span className="text-[11px] text-muted-foreground/70">{formatAge(s.created_at)}</span>
+              ))}
+            </div>
+            {/* Desktop: session rows */}
+            <div className="hidden sm:block">
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center px-2.5 py-2 border-b border-[#2a2a44] cursor-pointer gap-2 hover:bg-secondary/50"
+                  onClick={() => setOverlaySession(s)}
+                >
+                  <span className="font-mono text-[13px] text-foreground font-semibold min-w-[80px]">
+                    {truncateId(s.id)}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">{s.entry_count} entries</span>
+                  <span className="text-[11px] text-muted-foreground/70 ml-auto">
+                    {formatAge(s.created_at)}
+                  </span>
                   {resumeButton(s)}
                 </div>
-              </div>
-            ))}
-          </div>
-          {/* Desktop: session rows */}
-          <div className="hidden sm:block">
-            {sessions.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center px-2.5 py-2 border-b border-[#2a2a44] cursor-pointer gap-2 hover:bg-secondary/50"
-                onClick={() => setOverlaySession(s)}
-              >
-                <span className="font-mono text-[13px] text-foreground font-semibold min-w-[80px]">{truncateId(s.id)}</span>
-                <span className="text-[11px] text-muted-foreground">{s.entry_count} entries</span>
-                <span className="text-[11px] text-muted-foreground/70 ml-auto">{formatAge(s.created_at)}</span>
-                {resumeButton(s)}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-      <SessionDetailOverlay
-        session={overlaySession}
-        agentId={selectedAgentId}
-        open={overlaySession !== null}
-        onClose={() => setOverlaySession(null)}
-      />
+              ))}
+            </div>
+          </>
+        )}
+        <SessionDetailOverlay
+          session={overlaySession}
+          agentId={selectedAgentId}
+          open={overlaySession !== null}
+          onClose={() => setOverlaySession(null)}
+        />
       </div>
     </ScrollArea>
   )

@@ -40,7 +40,11 @@ export function NodeDetailPanel() {
   const nodeId = useAtomValue(viewingNodeDetailAtom)
   const setViewingNodeDetail = useSetAtom(viewingNodeDetailAtom)
   const [state, setState] = useState<NodeDetailState>({
-    node: null, agents: [], capabilities: null, loading: true, error: null,
+    node: null,
+    agents: [],
+    capabilities: null,
+    loading: true,
+    error: null,
   })
 
   useEffect(() => {
@@ -54,7 +58,10 @@ export function NodeDetailPanel() {
     const loadAll = async () => {
       let node: NodeListEntry | null = null
       try {
-        const res = await client.call<RpcMethods['control.node_get']['result']>('control.node_get', { node_id: nodeId })
+        const res = await client.call<RpcMethods['control.node_get']['result']>(
+          'control.node_get',
+          { node_id: nodeId },
+        )
         node = res.node ?? null
       } catch (err) {
         if (alive) setState((s) => ({ ...s, error: errMsg(err), loading: false }))
@@ -81,7 +88,10 @@ export function NodeDetailPanel() {
 
       // Capability snapshot for this node.
       try {
-        const res = await client.call<RpcMethods['control.capability_list']['result']>('control.capability_list', { node_id: nodeId })
+        const res = await client.call<RpcMethods['control.capability_list']['result']>(
+          'control.capability_list',
+          { node_id: nodeId },
+        )
         if (alive) setState((s) => ({ ...s, capabilities: res.snapshots?.[0] ?? null }))
       } catch {
         // Best-effort — capabilities section shows "no data" on failure.
@@ -93,7 +103,10 @@ export function NodeDetailPanel() {
     // error and polling stops on the next tick via the !alive guard.
     const refreshNode = async () => {
       try {
-        const res = await client.call<RpcMethods['control.node_get']['result']>('control.node_get', { node_id: nodeId })
+        const res = await client.call<RpcMethods['control.node_get']['result']>(
+          'control.node_get',
+          { node_id: nodeId },
+        )
         if (!alive) return
         if (!res.node) {
           setState((s) => ({ ...s, error: 'Node not found' }))
@@ -106,8 +119,13 @@ export function NodeDetailPanel() {
     }
 
     void loadAll()
-    const timer = setInterval(() => { void refreshNode() }, REFRESH_MS)
-    return () => { alive = false; clearInterval(timer) }
+    const timer = setInterval(() => {
+      void refreshNode()
+    }, REFRESH_MS)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
   }, [nodeId])
 
   if (!nodeId) return null
@@ -144,7 +162,9 @@ function OverviewSection({ node }: { node: NodeListEntry }) {
   const lastSeenLabel = node.last_seen_at_ms != null ? formatAge(node.last_seen_at_ms) : 'never'
   return (
     <div className="mb-4">
-      <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">Overview</h3>
+      <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">
+        Overview
+      </h3>
       <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
         <span className="text-muted-foreground">Node ID:</span>
         <span className="text-foreground font-mono text-xs">{node.node_id}</span>
@@ -167,7 +187,9 @@ function OverviewSection({ node }: { node: NodeListEntry }) {
 function ResourceSection({ node }: { node: NodeListEntry }) {
   return (
     <div className="mb-4">
-      <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">Resource Usage</h3>
+      <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">
+        Resource Usage
+      </h3>
       <div className="flex gap-6">
         <div className="flex flex-col items-center px-4 py-2 rounded bg-background border border-[#2a2a44]">
           <span className="text-2xl font-bold text-primary">{node.load.running}</span>
@@ -218,7 +240,9 @@ function AgentRow({ agent }: { agent: AgentListEntry }) {
             {scopeStr}
           </span>
         </span>
-        <span className="text-muted-foreground/70 text-xs truncate block">{agent.description ?? ''}</span>
+        <span className="text-muted-foreground/70 text-xs truncate block">
+          {agent.description ?? ''}
+        </span>
       </span>
     </div>
   )
@@ -229,14 +253,18 @@ function CapabilitiesSection({ capabilities }: { capabilities: CapabilitySnapsho
   if (!capabilities) {
     return (
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">Capabilities</h3>
+        <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">
+          Capabilities
+        </h3>
         <div className="text-muted-foreground text-sm">No capability data available</div>
       </div>
     )
   }
   return (
     <div className="mb-4">
-      <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">Capabilities</h3>
+      <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">
+        Capabilities
+      </h3>
       <div className="flex gap-4 flex-wrap">
         <CapBadge label="Agents" count={capabilities.agents.length} color="#40c040" />
         <CapBadge label="Tools" count={capabilities.tools.length} color="#80a0ff" />
@@ -248,9 +276,14 @@ function CapabilitiesSection({ capabilities }: { capabilities: CapabilitySnapsho
           <div className="text-xs text-muted-foreground mb-1">Tools</div>
           <div className="flex flex-col gap-0.5">
             {capabilities.tools.map((tool) => (
-              <div key={tool.name} className="text-sm text-foreground px-2 py-0.5 rounded hover:bg-secondary">
+              <div
+                key={tool.name}
+                className="text-sm text-foreground px-2 py-0.5 rounded hover:bg-secondary"
+              >
                 <span className="font-mono text-xs">{tool.name}</span>
-                {tool.description && <span className="text-muted-foreground/70 text-xs ml-2">{tool.description}</span>}
+                {tool.description && (
+                  <span className="text-muted-foreground/70 text-xs ml-2">{tool.description}</span>
+                )}
               </div>
             ))}
           </div>
@@ -261,9 +294,14 @@ function CapabilitiesSection({ capabilities }: { capabilities: CapabilitySnapsho
           <div className="text-xs text-muted-foreground mb-1">Skills</div>
           <div className="flex flex-col gap-0.5">
             {capabilities.skills.map((skill) => (
-              <div key={skill.name} className="text-sm text-foreground px-2 py-0.5 rounded hover:bg-secondary">
+              <div
+                key={skill.name}
+                className="text-sm text-foreground px-2 py-0.5 rounded hover:bg-secondary"
+              >
                 <span className="font-mono text-xs">{skill.name}</span>
-                {skill.description && <span className="text-muted-foreground/70 text-xs ml-2">{skill.description}</span>}
+                {skill.description && (
+                  <span className="text-muted-foreground/70 text-xs ml-2">{skill.description}</span>
+                )}
               </div>
             ))}
           </div>
@@ -274,9 +312,14 @@ function CapabilitiesSection({ capabilities }: { capabilities: CapabilitySnapsho
           <div className="text-xs text-muted-foreground mb-1">MCP Servers</div>
           <div className="flex flex-col gap-0.5">
             {capabilities.mcp_servers.map((mcp) => (
-              <div key={mcp.name} className="flex items-center gap-2 px-2 py-0.5 rounded hover:bg-secondary">
+              <div
+                key={mcp.name}
+                className="flex items-center gap-2 px-2 py-0.5 rounded hover:bg-secondary"
+              >
                 <span className="font-mono text-xs text-foreground">{mcp.name}</span>
-                {mcp.status && <span className="text-xs text-muted-foreground">({mcp.status})</span>}
+                {mcp.status && (
+                  <span className="text-xs text-muted-foreground">({mcp.status})</span>
+                )}
               </div>
             ))}
           </div>
@@ -289,7 +332,9 @@ function CapabilitiesSection({ capabilities }: { capabilities: CapabilitySnapsho
 function CapBadge({ label, count, color }: { label: string; count: number; color: string }) {
   return (
     <div className="flex flex-col items-center px-3 py-1.5 rounded bg-background border border-[#2a2a44]">
-      <span className="text-lg font-bold" style={{ color }}>{count}</span>
+      <span className="text-lg font-bold" style={{ color }}>
+        {count}
+      </span>
       <span className="text-[10px] text-muted-foreground">{label}</span>
     </div>
   )

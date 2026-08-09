@@ -11,11 +11,11 @@
 // field changes. Schema `default` values are pre-populated for keys that are
 // not already set (via `collectMissingDefaults`).
 
-import { useEffect, useId, useRef } from "react"
+import { useEffect, useId, useRef } from 'react'
 
-import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -23,7 +23,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from '@/components/ui/select'
 
 export interface SchemaFormProps {
   /** JSON Schema object (with `properties` and optional `required`). */
@@ -41,7 +41,7 @@ export interface SchemaFormProps {
  */
 export function collectMissingDefaults(
   schema: Record<string, unknown>,
-  value: Record<string, unknown>
+  value: Record<string, unknown>,
 ): Record<string, unknown> {
   const properties = asRecord(schema.properties)
   if (!properties) return {}
@@ -50,7 +50,7 @@ export function collectMissingDefaults(
   for (const [key, prop] of Object.entries(properties)) {
     if (value[key] !== undefined) continue
     const propSchema = asRecord(prop)
-    if (propSchema && "default" in propSchema) {
+    if (propSchema && 'default' in propSchema) {
       missing[key] = propSchema.default
     }
   }
@@ -89,8 +89,8 @@ export function SchemaForm({ schema, value, onChange }: SchemaFormProps) {
 
   const required = new Set(
     Array.isArray(schema.required)
-      ? schema.required.filter((r): r is string => typeof r === "string")
-      : []
+      ? schema.required.filter((r): r is string => typeof r === 'string')
+      : [],
   )
 
   const handleFieldChange = (name: string, next: Record<string, unknown>) => {
@@ -122,19 +122,16 @@ interface SchemaPropertyProps {
   onFieldChange: (name: string, next: Record<string, unknown>) => void
 }
 
-function SchemaProperty({
-  name,
-  propSchema,
-  required,
-  value,
-  onFieldChange,
-}: SchemaPropertyProps) {
+function SchemaProperty({ name, propSchema, required, value, onFieldChange }: SchemaPropertyProps) {
   const type = schemaType(propSchema)
-  const label = typeof propSchema.title === "string" ? propSchema.title : name
+  const label = typeof propSchema.title === 'string' ? propSchema.title : name
   const description =
-    typeof propSchema.description === "string" ? propSchema.description : undefined
+    typeof propSchema.description === 'string' ? propSchema.description : undefined
+  // Hook call hoisted to top level (rules-of-hooks): the checkbox branch needs
+  // a stable id, but the hook must run unconditionally on every render.
+  const id = useSchemaFieldId(name)
 
-  if (type === "object") {
+  if (type === 'object') {
     const subValue = (value[name] as Record<string, unknown> | undefined) ?? {}
     return (
       <div className="ml-2 rounded-md border border-border/70 p-3">
@@ -147,45 +144,34 @@ function SchemaProperty({
           value={subValue}
           onChange={(sub) => onFieldChange(name, { ...value, [name]: sub })}
         />
-        {description && (
-          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-        )}
+        {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
       </div>
     )
   }
 
-  if (type === "boolean") {
-    const id = useSchemaFieldId(name)
+  if (type === 'boolean') {
     return (
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <Checkbox
             id={id}
             checked={value[name] === true}
-            onCheckedChange={(next) =>
-              onFieldChange(name, { ...value, [name]: next === true })
-            }
+            onCheckedChange={(next) => onFieldChange(name, { ...value, [name]: next === true })}
           />
           <Label htmlFor={id} className="cursor-pointer">
             {label}
             {required && <span className="text-destructive"> *</span>}
           </Label>
         </div>
-        {description && (
-          <p className="text-xs text-muted-foreground ml-6">{description}</p>
-        )}
+        {description && <p className="text-xs text-muted-foreground ml-6">{description}</p>}
       </div>
     )
   }
 
-  if (type === "number" || type === "integer") {
+  if (type === 'number' || type === 'integer') {
     const current = value[name]
     const numText =
-      typeof current === "number"
-        ? String(current)
-        : typeof current === "string"
-          ? current
-          : ""
+      typeof current === 'number' ? String(current) : typeof current === 'string' ? current : ''
     return (
       <div className="flex flex-col gap-1">
         <Label>
@@ -194,11 +180,11 @@ function SchemaProperty({
         </Label>
         <Input
           type="number"
-          step={type === "integer" ? 1 : "any"}
+          step={type === 'integer' ? 1 : 'any'}
           value={numText}
           onChange={(e) => {
             const raw = e.target.value
-            if (raw === "") {
+            if (raw === '') {
               const next = { ...value }
               delete next[name]
               onFieldChange(name, next)
@@ -210,9 +196,7 @@ function SchemaProperty({
             }
           }}
         />
-        {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        )}
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </div>
     )
   }
@@ -221,9 +205,7 @@ function SchemaProperty({
   if (enumValues.length > 0) {
     const current = value[name]
     const selected =
-      typeof current === "string" && enumValues.includes(current)
-        ? current
-        : undefined
+      typeof current === 'string' && enumValues.includes(current) ? current : undefined
     return (
       <div className="flex flex-col gap-1">
         <Label>
@@ -233,10 +215,8 @@ function SchemaProperty({
         {/* Always controlled: "" shows the placeholder and avoids an
             uncontrolled → controlled transition when defaults hydrate. */}
         <Select
-          value={selected ?? ""}
-          onValueChange={(next) =>
-            onFieldChange(name, { ...value, [name]: next })
-          }
+          value={selected ?? ''}
+          onValueChange={(next) => onFieldChange(name, { ...value, [name]: next })}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select..." />
@@ -251,16 +231,14 @@ function SchemaProperty({
             </SelectGroup>
           </SelectContent>
         </Select>
-        {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        )}
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </div>
     )
   }
 
-  if (type === "string") {
+  if (type === 'string') {
     const current = value[name]
-    const text = typeof current === "string" ? current : ""
+    const text = typeof current === 'string' ? current : ''
     return (
       <div className="flex flex-col gap-1">
         <Label>
@@ -269,20 +247,14 @@ function SchemaProperty({
         </Label>
         <Input
           value={text}
-          onChange={(e) =>
-            onFieldChange(name, { ...value, [name]: e.target.value })
-          }
+          onChange={(e) => onFieldChange(name, { ...value, [name]: e.target.value })}
         />
-        {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        )}
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </div>
     )
   }
 
-  return (
-    <div className="text-xs text-muted-foreground">Unsupported type: {type}</div>
-  )
+  return <div className="text-xs text-muted-foreground">Unsupported type: {type}</div>
 }
 
 /** Unique id for a field, so checkbox labels stay associated across nesting. */
@@ -292,14 +264,14 @@ function useSchemaFieldId(name: string): string {
 }
 
 function asRecord(v: unknown): Record<string, unknown> | undefined {
-  return typeof v === "object" && v !== null && !Array.isArray(v)
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
     ? (v as Record<string, unknown>)
     : undefined
 }
 
 /** Schema `type` keyword; missing/non-string types default to "string". */
 function schemaType(prop: Record<string, unknown>): string {
-  return typeof prop.type === "string" ? prop.type : "string"
+  return typeof prop.type === 'string' ? prop.type : 'string'
 }
 
 /**
@@ -309,8 +281,6 @@ function schemaType(prop: Record<string, unknown>): string {
 function stringEnumValues(prop: Record<string, unknown>): string[] {
   const raw = prop.enum
   if (!Array.isArray(raw)) return []
-  const strings = raw.filter(
-    (v): v is string => typeof v === "string" && v.length > 0
-  )
+  const strings = raw.filter((v): v is string => typeof v === 'string' && v.length > 0)
   return strings.length === raw.length ? strings : []
 }

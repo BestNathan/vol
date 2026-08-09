@@ -5,5 +5,7 @@ import { atom } from 'jotai'
 import type { ToolCallEntry } from '@/types'
 
 export const toolCallsAtom = atom<ToolCallEntry[]>([])
-export const systemToolsAtom = atom<{ name: string; description: string; parameters?: unknown }[]>([])
+export const systemToolsAtom = atom<{ name: string; description: string; parameters?: unknown }[]>(
+  [],
+)
 export const toolsLoadingAtom = atom(false)

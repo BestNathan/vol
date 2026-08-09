@@ -67,7 +67,10 @@ export function FileContentView() {
                 type="button"
                 aria-label={`Close ${name}`}
                 className="text-[10px] text-muted-foreground/60 px-0.5 rounded-[2px] leading-none hover:text-destructive hover:bg-red-950/30 cursor-pointer"
-                onClick={(e) => { e.stopPropagation(); closeTab(i) }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  closeTab(i)
+                }}
               >
                 ✕
               </button>
@@ -77,19 +80,18 @@ export function FileContentView() {
       </div>
 
       {/* Content: error > loading > <pre> (matches file_content.rs match) */}
-      {selectedTab === undefined ? null : (
-        selectedTab.content === undefined && selectedTab.error !== undefined ? (
-          <div className="p-3 text-destructive font-bold">Error: {selectedTab.error}</div>
-        ) : selectedTab.content === undefined ? (
-          <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
-            <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
-            Loading...
-          </div>
-        ) : (
-          <pre className="flex-1 overflow-auto p-3 font-mono text-[12px] leading-[1.6] text-[#c8c8e0] bg-background whitespace-pre m-0">
-            {selectedTab.content}
-          </pre>
-        )
+      {selectedTab === undefined ? null : selectedTab.content === undefined &&
+        selectedTab.error !== undefined ? (
+        <div className="p-3 text-destructive font-bold">Error: {selectedTab.error}</div>
+      ) : selectedTab.content === undefined ? (
+        <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-[14px]">
+          <span className="w-4 h-4 rounded-full border-2 border-border border-t-[#80a0ff] animate-spin" />
+          Loading...
+        </div>
+      ) : (
+        <pre className="flex-1 overflow-auto p-3 font-mono text-[12px] leading-[1.6] text-[#c8c8e0] bg-background whitespace-pre m-0">
+          {selectedTab.content}
+        </pre>
       )}
     </div>
   )

@@ -6,12 +6,17 @@ export function ConnectionIndicator() {
   const state = useAtomValue(connectionStateAtom)
   const error = useAtomValue(wsLastErrorAtom)
 
-  const dotColor = state === 'connected' ? '#40c040' :
-    state === 'connecting' ? '#f0c040' : '#c04040'
+  const dotColor =
+    state === 'connected' ? '#40c040' : state === 'connecting' ? '#f0c040' : '#c04040'
 
-  const label = state === 'connected' ? 'Connected' :
-    state === 'connecting' ? 'Connecting...' :
-    error ? `Error: ${error}` : 'No connection'
+  const label =
+    state === 'connected'
+      ? 'Connected'
+      : state === 'connecting'
+        ? 'Connecting...'
+        : error
+          ? `Error: ${error}`
+          : 'No connection'
 
   return (
     <span className="flex items-center gap-1 mr-1">
