@@ -19,7 +19,7 @@ pub struct FetchResult {
 }
 
 /// Fetch error type
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum FetchError {
     #[error("Request failed: {0}")]
     RequestFailed(String),
