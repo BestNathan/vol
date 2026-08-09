@@ -8400,6 +8400,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "toml",
  "url",
  "vol-llm-core",
  "vol-llm-tool",

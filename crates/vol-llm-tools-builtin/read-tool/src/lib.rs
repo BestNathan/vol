@@ -117,3 +117,42 @@ impl ExecutableTool for ReadTool {
         Ok(ToolResult::success(output))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_name() {
+        assert_eq!(ReadTool::new().name(), "read_file");
+    }
+    #[test]
+    fn test_description() {
+        assert!(!ReadTool::new().description().is_empty());
+    }
+    #[test]
+    fn test_parameters_is_valid() {
+        let p = ReadTool::new().parameters();
+        assert_eq!(p["type"], "object");
+        assert!(p["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("file_path")));
+    }
+    #[test]
+    fn test_default() {
+        let _: ReadTool = Default::default();
+    }
+    #[test]
+    fn test_default_limit() {
+        assert_eq!(default_limit(), 2000);
+    }
+    #[test]
+    fn test_params_deserialize_minimal() {
+        let p: ReadParams =
+            serde_json::from_value(serde_json::json!({"file_path": "test.txt"})).unwrap();
+        assert_eq!(p.file_path, "test.txt");
+        assert_eq!(p.offset, 0);
+        assert_eq!(p.limit, 2000);
+    }
+}

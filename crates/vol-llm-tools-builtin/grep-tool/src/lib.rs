@@ -194,3 +194,56 @@ fn format_results(output_mode: &str, results: &[SearchResult]) -> String {
         _ => String::new(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_name() {
+        assert_eq!(GrepTool::new().name(), "grep");
+    }
+    #[test]
+    fn test_description() {
+        assert!(!GrepTool::new().description().is_empty());
+    }
+    #[test]
+    fn test_parameters_is_valid() {
+        let p = GrepTool::new().parameters();
+        assert_eq!(p["type"], "object");
+        assert!(p["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("pattern")));
+    }
+    #[test]
+    fn test_default_output_mode() {
+        assert_eq!(default_output_mode(), "files_with_matches");
+    }
+    #[test]
+    fn test_default() {
+        let t: GrepTool = Default::default();
+        assert_eq!(t.name(), "grep");
+    }
+    #[test]
+    fn test_format_results_unknown_mode() {
+        assert_eq!(format_results("bogus", &[]), "");
+    }
+    #[tokio::test]
+    async fn test_execute_invalid_args() {
+        let tool = GrepTool::new();
+        // Missing required "pattern" field
+        let args = serde_json::json!({});
+        let result = tool.execute(&args, &ToolContext::for_test()).await;
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Failed to parse arguments"));
+    }
+    #[tokio::test]
+    async fn test_execute_default_path() {
+        let tool = GrepTool::new();
+        // No "path" provided — falls back to the current directory
+        let args = serde_json::json!({"pattern": "zqxqvqz-no-such-pattern"});
+        let result = tool.execute(&args, &ToolContext::for_test()).await;
+        assert!(result.is_ok());
+    }
+}

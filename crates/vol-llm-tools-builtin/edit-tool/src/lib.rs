@@ -146,3 +146,38 @@ impl ExecutableTool for EditTool {
         Ok(ToolResult::success(output))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_name() {
+        assert_eq!(EditTool::new().name(), "edit_file");
+    }
+    #[test]
+    fn test_description() {
+        assert!(!EditTool::new().description().is_empty());
+    }
+    #[test]
+    fn test_parameters_is_valid() {
+        let p = EditTool::new().parameters();
+        assert_eq!(p["type"], "object");
+        let req = p["required"].as_array().unwrap();
+        assert!(req.contains(&serde_json::json!("file_path")));
+        assert!(req.contains(&serde_json::json!("old_string")));
+        assert!(req.contains(&serde_json::json!("new_string")));
+    }
+    #[test]
+    fn test_default() {
+        let _: EditTool = Default::default();
+    }
+    #[test]
+    fn test_params_defaults() {
+        let p: EditParams = serde_json::from_value(serde_json::json!({
+            "file_path": "f.txt", "old_string": "a", "new_string": "b"
+        }))
+        .unwrap();
+        assert!(!p.replace_all);
+    }
+}
