@@ -148,3 +148,237 @@ impl FetchFn for DefaultFetchProvider {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fetch_provider_config_default() {
+        let cfg = FetchProviderConfig::default();
+        assert!(cfg.max_content_length.is_none());
+        assert!(cfg.proxy.proxy_url.is_none());
+    }
+    #[test]
+    fn test_fetch_provider_config_deserialize() {
+        let cfg: FetchProviderConfig = toml::from_str("").unwrap_or_default();
+        assert!(cfg.max_content_length.is_none());
+    }
+    #[test]
+    fn test_max_content_length_default() {
+        assert_eq!(DEFAULT_MAX_CONTENT_LENGTH, 2 * 1024 * 1024);
+    }
+    #[test]
+    fn test_default_timeout() {
+        assert_eq!(DEFAULT_TIMEOUT_SECS, 30);
+    }
+    #[test]
+    fn test_new() {
+        let provider = DefaultFetchProvider::new(None).unwrap();
+        assert_eq!(provider.max_content_length, DEFAULT_MAX_CONTENT_LENGTH);
+    }
+    #[test]
+    fn test_new_with_proxy() {
+        // A syntactically valid proxy URL builds a client successfully
+        let provider = DefaultFetchProvider::new(Some("http://127.0.0.1:9".to_string())).unwrap();
+        assert_eq!(provider.max_content_length, DEFAULT_MAX_CONTENT_LENGTH);
+    }
+    #[test]
+    fn test_new_invalid_proxy_url() {
+        assert!(DefaultFetchProvider::new(Some("not a proxy url".to_string())).is_err());
+    }
+    #[test]
+    fn test_from_config_custom_max_length() {
+        let cfg = FetchProviderConfig {
+            max_content_length: Some(1024),
+            proxy: ProxyConfig::default(),
+        };
+        let provider = DefaultFetchProvider::from_config(&cfg).unwrap();
+        assert_eq!(provider.max_content_length, 1024);
+    }
+    #[test]
+    fn test_from_config_default_max_length() {
+        let provider = DefaultFetchProvider::from_config(&FetchProviderConfig::default()).unwrap();
+        assert_eq!(provider.max_content_length, DEFAULT_MAX_CONTENT_LENGTH);
+    }
+
+    /// Serve a single HTTP response on a background thread and return its address.
+    fn spawn_http_server(
+        status: u16,
+        body: &str,
+        content_length: Option<usize>,
+    ) -> std::net::SocketAddr {
+        let body = body.to_string();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 8192];
+                let _ = stream.read(&mut buf);
+                let reason = if status == 200 { "OK" } else { "Not Found" };
+                let mut head = format!(
+                    "HTTP/1.1 {status} {reason}\r\nContent-Type: text/html\r\nConnection: close\r\n"
+                );
+                if let Some(len) = content_length {
+                    head.push_str(&format!("Content-Length: {len}\r\n"));
+                }
+                head.push_str("\r\n");
+                let _ = stream.write_all(head.as_bytes());
+                let _ = stream.write_all(body.as_bytes());
+            }
+        });
+        addr
+    }
+
+    #[tokio::test]
+    async fn test_fetch_invalid_url() {
+        let provider = DefaultFetchProvider::new(None).unwrap();
+        let err = provider
+            .fetch(
+                "not a url",
+                FetchOptions {
+                    prompt: None,
+                    proxy_url: None,
+                    max_length: None,
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, FetchError::InvalidUrl(_)));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_request_failed() {
+        // Nothing listens on port 1 — connection refused
+        let provider = DefaultFetchProvider::new(None).unwrap();
+        let err = provider
+            .fetch(
+                "http://127.0.0.1:1/",
+                FetchOptions {
+                    prompt: None,
+                    proxy_url: None,
+                    max_length: None,
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, FetchError::RequestFailed(_)));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_not_accessible() {
+        let addr = spawn_http_server(404, "<html><body>missing</body></html>", Some(30));
+        let provider = DefaultFetchProvider::new(None).unwrap();
+        let err = provider
+            .fetch(
+                &format!("http://{addr}/missing"),
+                FetchOptions {
+                    prompt: None,
+                    proxy_url: None,
+                    max_length: None,
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, FetchError::NotAccessible(_)));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_too_large_header() {
+        let addr = spawn_http_server(200, "x", Some(10 * 1024 * 1024));
+        let provider = DefaultFetchProvider::new(None).unwrap();
+        let err = provider
+            .fetch(
+                &format!("http://{addr}/big"),
+                FetchOptions {
+                    prompt: None,
+                    proxy_url: None,
+                    max_length: None,
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, FetchError::TooLarge { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_too_large_body() {
+        // No Content-Length header — the actual body size triggers the limit
+        let body = "a".repeat(2 * 1024 * 1024 + 1);
+        let addr = spawn_http_server(200, &body, None);
+        let provider = DefaultFetchProvider::new(None).unwrap();
+        let err = provider
+            .fetch(
+                &format!("http://{addr}/big"),
+                FetchOptions {
+                    prompt: None,
+                    proxy_url: None,
+                    max_length: None,
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, FetchError::TooLarge { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_success() {
+        let body = "<html><head><title>Test Page</title></head><body><p>Hello from the local server</p></body></html>";
+        let addr = spawn_http_server(200, body, Some(body.len()));
+        let provider = DefaultFetchProvider::new(None).unwrap();
+        let result = provider
+            .fetch(
+                &format!("http://{addr}/page"),
+                FetchOptions {
+                    prompt: None,
+                    proxy_url: None,
+                    max_length: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.title.as_deref(), Some("Test Page"));
+        assert!(result.content.contains("Hello from the local server"));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_truncates_large_content() {
+        // Body larger than the default max_length (1MB) is truncated
+        let body = "a".repeat(1024 * 1024 + 100);
+        let addr = spawn_http_server(200, &body, Some(body.len()));
+        let provider = DefaultFetchProvider::new(None).unwrap();
+        let result = provider
+            .fetch(
+                &format!("http://{addr}/long"),
+                FetchOptions {
+                    prompt: None,
+                    proxy_url: None,
+                    max_length: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert!(result.content.contains("[Content truncated at"));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_fallback_to_raw_html() {
+        // Readability extracts nothing — falls back to the raw HTML
+        let body = "<html><head><title></title></head><body></body></html>";
+        let addr = spawn_http_server(200, body, Some(body.len()));
+        let provider = DefaultFetchProvider::new(None).unwrap();
+        let result = provider
+            .fetch(
+                &format!("http://{addr}/empty"),
+                FetchOptions {
+                    prompt: None,
+                    proxy_url: None,
+                    max_length: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert!(result.content.contains("<html>"));
+    }
+}

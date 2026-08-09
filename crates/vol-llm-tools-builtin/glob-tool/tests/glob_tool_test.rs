@@ -134,6 +134,67 @@ async fn test_glob_recursive_double_star() {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Sandbox root path verification
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+#[tokio::test]
+async fn test_glob_paths_are_relative_to_sandbox_root() {
+    let (ctx, tmp) = test_context();
+    write_file(&tmp, "src/main.rs", "fn main() {}");
+    write_file(&tmp, "src/lib.rs", "pub fn lib() {}");
+
+    let json = glob(serde_json::json!({"pattern": "**/*.rs"}), &ctx).await;
+    let paths = match_paths(&json);
+
+    // Paths should be relative, not absolute
+    for path in &paths {
+        assert!(
+            !path.starts_with('/'),
+            "Path '{}' should be relative, not absolute",
+            path
+        );
+        assert!(
+            !path.starts_with(".."),
+            "Path '{}' should not contain '..'",
+            path
+        );
+    }
+    assert!(paths.contains(&"src/main.rs"));
+    assert!(paths.contains(&"src/lib.rs"));
+}
+
+#[tokio::test]
+async fn test_glob_sandbox_root_is_subdirectory() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let sub_root = temp_dir.path().join("project");
+    std::fs::create_dir_all(&sub_root).unwrap();
+
+    // Create files in the sub_root (which IS the sandbox root)
+    write_file_raw(&sub_root, "src/main.rs", "fn main() {}");
+    write_file_raw(&sub_root, "README.md", "# Project");
+
+    let sandbox = Arc::new(LocalSandbox::new(Some(sub_root.clone())));
+    let ctx = ToolContext::default().with_sandbox(sandbox);
+
+    let json = glob(serde_json::json!({"pattern": "**/*"}), &ctx).await;
+    let paths = match_paths(&json);
+    // Paths should be relative to sub_root (which is the sandbox root)
+    assert!(
+        paths.contains(&"src/main.rs"),
+        "Expected paths relative to sandbox root, got: {:?}",
+        paths
+    );
+}
+
+fn write_file_raw(root: &std::path::Path, rel_path: &str, content: &str) {
+    let full = root.join(rel_path);
+    if let Some(parent) = full.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+    std::fs::write(full, content).unwrap();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Brace expansion
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -577,6 +638,21 @@ async fn test_glob_path_not_found() {
     assert_eq!(json["total_matched"], 0);
     assert!(json["message"].as_str().unwrap().contains("does not exist"));
     assert!(json["error"].is_null() || json["error"].as_object().is_none());
+}
+
+#[tokio::test]
+async fn test_glob_search_path_not_found() {
+    let (ctx, _tmp) = test_context();
+
+    let json = glob(
+        serde_json::json!({"pattern": "*.rs", "path": "nonexistent_dir"}),
+        &ctx,
+    )
+    .await;
+
+    assert_eq!(json["total_matched"], 0);
+    assert!(!json["truncated"].as_bool().unwrap());
+    assert!(json["message"].as_str().unwrap().contains("does not exist"));
 }
 
 #[tokio::test]

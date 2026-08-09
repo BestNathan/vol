@@ -214,3 +214,107 @@ impl ExecutableTool for BashTool {
         Ok(ToolResult::success(content))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_name() {
+        assert_eq!(BashTool::new().name(), "bash");
+    }
+    #[test]
+    fn test_description() {
+        assert!(!BashTool::new().description().is_empty());
+    }
+    #[test]
+    fn test_parameters_is_valid_schema() {
+        let p = BashTool::new().parameters();
+        assert_eq!(p["type"], "object");
+        assert!(p["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("command")));
+    }
+    #[test]
+    fn test_default() {
+        let t: BashTool = Default::default();
+        assert_eq!(t.name(), "bash");
+    }
+    #[test]
+    fn test_check_security_allows_safe_command() {
+        let tool = BashTool::new();
+        assert!(tool.check_security("echo hello").is_ok());
+    }
+    #[test]
+    fn test_truncate_output_under_limit() {
+        let tool = BashTool::new();
+        assert_eq!(tool.truncate_output("short".into()), "short");
+    }
+    #[test]
+    fn test_dangerous_patterns_count() {
+        assert_eq!(DANGEROUS_PATTERNS.len(), 9);
+    }
+    #[test]
+    fn test_default_timeout_value() {
+        assert_eq!(DEFAULT_TIMEOUT_MS, 120_000);
+    }
+    #[test]
+    fn test_max_output_size() {
+        assert_eq!(MAX_OUTPUT_SIZE, 1024 * 1024);
+    }
+    #[test]
+    fn test_bash_tool_error_display() {
+        let e = BashToolError::SecurityViolation("test".into());
+        assert!(e.to_string().contains("test"));
+        let e = BashToolError::Timeout(std::time::Duration::from_secs(1));
+        assert!(e.to_string().contains("1s"));
+        let e = BashToolError::OutputTooLarge(100);
+        assert!(e.to_string().contains("100"));
+    }
+    #[test]
+    fn test_sensitivity_requires_approval() {
+        let tool = BashTool::new();
+        let s = tool.sensitivity(&serde_json::json!({"command": "echo hi"}));
+        match s {
+            vol_llm_tool::ToolSensitivity::RequiresApproval { .. } => {}
+            _ => panic!("Expected RequiresApproval"),
+        }
+    }
+    #[test]
+    fn test_sensitivity_safe_without_command() {
+        let tool = BashTool::new();
+        let s = tool.sensitivity(&serde_json::json!({}));
+        assert!(matches!(s, vol_llm_tool::ToolSensitivity::Safe));
+    }
+    #[test]
+    fn test_truncate_output_over_limit() {
+        let tool = BashTool::new();
+        let long = "a".repeat(MAX_OUTPUT_SIZE + 10);
+        let truncated = tool.truncate_output(long);
+        assert!(truncated.ends_with("..."));
+        assert_eq!(truncated.len(), MAX_OUTPUT_SIZE + 3);
+    }
+    #[tokio::test]
+    async fn test_execute_invalid_arguments() {
+        let tool = BashTool::new();
+        // Missing required "command" field
+        let result = tool
+            .execute(&serde_json::json!({}), &ToolContext::for_test())
+            .await;
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Failed to parse arguments"));
+    }
+    #[tokio::test]
+    async fn test_execute_sandbox_failure() {
+        let tool = BashTool::new();
+        // Nonexistent working directory — sandbox spawn fails
+        let args = serde_json::json!({
+            "command": "echo hi",
+            "working_dir": "/nonexistent-dir-xyz"
+        });
+        let result = tool.execute(&args, &ToolContext::for_test()).await;
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Command execution failed"));
+    }
+}

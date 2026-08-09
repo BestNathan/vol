@@ -188,3 +188,33 @@ impl ExecutableTool for WebFetchTool {
         Ok(ToolResult::success(content))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_params_deserialize() {
+        let p: WebSearchParams =
+            serde_json::from_value(serde_json::json!({"query": "rust"})).unwrap();
+        assert_eq!(p.query, "rust");
+        assert!(p.num_results.is_none());
+    }
+    #[test]
+    fn test_params_full() {
+        let p: WebSearchParams = serde_json::from_value(serde_json::json!({
+            "query": "rust", "num_results": 10,
+            "allowed_domains": ["docs.rs"], "blocked_domains": ["spam.com"]
+        }))
+        .unwrap();
+        assert_eq!(p.num_results, Some(10));
+        assert_eq!(p.allowed_domains.unwrap(), vec!["docs.rs"]);
+    }
+    #[test]
+    fn test_web_fetch_params() {
+        let p: WebFetchParams =
+            serde_json::from_value(serde_json::json!({"url": "https://example.com"})).unwrap();
+        assert_eq!(p.url, "https://example.com");
+        assert!(p.prompt.is_none());
+    }
+}
