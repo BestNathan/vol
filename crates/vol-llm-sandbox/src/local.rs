@@ -96,6 +96,9 @@ impl Sandbox for LocalSandbox {
                 .cwd
                 .map(|p| root.join(p))
                 .unwrap_or_else(|| root.clone());
+            // Ensure working directory exists (sandbox root may have been
+            // cleaned up since start, e.g. by a process manager).
+            let _ = std::fs::create_dir_all(&cwd);
             cmd.current_dir(&cwd);
             cmd.stdin(std::process::Stdio::piped());
             cmd.stdout(std::process::Stdio::piped());

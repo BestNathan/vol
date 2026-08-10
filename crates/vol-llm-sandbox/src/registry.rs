@@ -194,6 +194,7 @@ impl SandboxRegistry {
 
         // Always register LocalSandbox (hardcoded, no config file needed)
         let local = Arc::new(LocalSandbox::new(None)) as Arc<dyn Sandbox>;
+        local.start().await?;
         sandboxes.insert("local".to_string(), local);
 
         #[cfg(feature = "firecracker")]
