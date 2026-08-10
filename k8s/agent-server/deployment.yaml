@@ -135,9 +135,7 @@ spec:
           items:
           - key: anthropic-dashscope.toml
             path: anthropic-dashscope.toml
-          - key: openai-example.toml
-            path: openai-example.toml
-          defaultMode: 0644
+defaultMode: 0644
       - name: data
         emptyDir:
           sizeLimit: 1Gi

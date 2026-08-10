@@ -3,7 +3,7 @@
 # Contains:
 #   1. agent-server.toml — server/runtime/tracing config
 #   2. anthropic-dashscope.toml — LLM provider definition
-#   3. openai-example.toml — OpenAI-compatible provider definition
+#
 # =============================================================================
 
 apiVersion: v1
@@ -49,14 +49,3 @@ data:
 
     [headers]
     "anthropic-version" = "2023-06-01"
-
-  # ── LLM Provider: OpenAI-compatible local service ────────────────────────
-  openai-example.toml: |
-    provider = "openai"
-    model = "qwen3.6-plus"
-    api_key = "${OPENAI_API_KEY}"
-    base_url = "http://k8s.nhome.local:31693"
-
-    [body]
-    max_tokens = 2048
-    temperature = 0.7
