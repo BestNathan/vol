@@ -131,7 +131,7 @@ spec:
             defaultMode: 0644
         - name: agent-providers
           configMap:
-            name: agent-providers-ansible
+            name: agent-providers
             defaultMode: 0644
         - name: agent-skills
           configMap:
