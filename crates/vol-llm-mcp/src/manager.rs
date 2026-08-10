@@ -42,6 +42,26 @@ struct ServerState {
     reconnect_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
+// `RunningService` and `JoinHandle` are not `Clone`, so a manual impl sets
+// `running_service`/`reconnect_handle` to `None` — cloned (filtered) managers
+// are read-only views and don't own live connections.
+impl Clone for ServerState {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            status: self.status.clone(),
+            retry_count: self.retry_count,
+            running_service: None,
+            cancel_token: self.cancel_token.clone(),
+            cached_tools: self.cached_tools.clone(),
+            cached_resources: self.cached_resources.clone(),
+            cached_resource_templates: self.cached_resource_templates.clone(),
+            cached_prompts: self.cached_prompts.clone(),
+            reconnect_handle: None,
+        }
+    }
+}
+
 impl ServerState {
     fn new(config: McpServerConfig) -> Self {
         Self {
@@ -98,6 +118,43 @@ impl McpManager {
         self.backoff_min = min;
         self.backoff_max = max;
         self
+    }
+
+    /// Return a filtered McpManager containing only the named servers.
+    /// None = all servers. Some([]) = no servers.
+    pub fn filter(&self, server_names: Option<&[String]>) -> Self {
+        match server_names {
+            None => self.clone(),
+            Some(names) => {
+                use std::collections::HashSet;
+                let allowed: HashSet<&str> = names.iter().map(String::as_str).collect();
+                let servers = self
+                    .servers
+                    .try_read()
+                    .unwrap_or_else(|_| panic!("McpManager servers lock poisoned"));
+                let filtered: HashMap<String, ServerState> = servers
+                    .iter()
+                    .filter(|(name, _)| allowed.contains(name.as_str()))
+                    .map(|(name, state)| (name.clone(), state.clone()))
+                    .collect();
+                Self {
+                    servers: Arc::new(tokio::sync::RwLock::new(filtered)),
+                    max_retries: self.max_retries,
+                    backoff_min: self.backoff_min,
+                    backoff_max: self.backoff_max,
+                }
+            }
+        }
+    }
+
+    /// An McpManager with no servers.
+    pub fn empty() -> Self {
+        Self {
+            servers: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            max_retries: 0,
+            backoff_min: std::time::Duration::from_secs(1),
+            backoff_max: std::time::Duration::from_secs(30),
+        }
     }
 
     async fn connect_single(
@@ -1013,5 +1070,81 @@ mod tests {
             "expected error after reconnect, got: {:?}",
             status.get("failing-server")
         );
+    }
+
+    #[test]
+    fn test_filter_none_returns_all() {
+        let configs = vec![
+            McpServerConfig {
+                name: "k8s".into(),
+                transport: McpTransport::Http {
+                    url: "http://localhost:1".into(),
+                    headers: None,
+                    env: std::collections::HashMap::new(),
+                },
+            },
+            McpServerConfig {
+                name: "docs-rs".into(),
+                transport: McpTransport::Http {
+                    url: "http://localhost:2".into(),
+                    headers: None,
+                    env: std::collections::HashMap::new(),
+                },
+            },
+        ];
+        let manager = McpManager::new(configs);
+        let filtered = manager.filter(None);
+        let names: Vec<String> = filtered.server_status().keys().cloned().collect();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"k8s".to_string()));
+        assert!(names.contains(&"docs-rs".to_string()));
+    }
+
+    #[test]
+    fn test_filter_some_returns_subset() {
+        let configs = vec![
+            McpServerConfig {
+                name: "k8s".into(),
+                transport: McpTransport::Http {
+                    url: "http://localhost:1".into(),
+                    headers: None,
+                    env: std::collections::HashMap::new(),
+                },
+            },
+            McpServerConfig {
+                name: "docs-rs".into(),
+                transport: McpTransport::Http {
+                    url: "http://localhost:2".into(),
+                    headers: None,
+                    env: std::collections::HashMap::new(),
+                },
+            },
+        ];
+        let manager = McpManager::new(configs);
+        let filtered = manager.filter(Some(&["k8s".to_string()]));
+        let names: Vec<String> = filtered.server_status().keys().cloned().collect();
+        assert_eq!(names.len(), 1);
+        assert_eq!(names[0], "k8s");
+    }
+
+    #[test]
+    fn test_filter_empty_returns_none() {
+        let configs = vec![McpServerConfig {
+            name: "k8s".into(),
+            transport: McpTransport::Http {
+                url: "http://localhost:1".into(),
+                headers: None,
+                env: std::collections::HashMap::new(),
+            },
+        }];
+        let manager = McpManager::new(configs);
+        let filtered = manager.filter(Some(&[]));
+        assert!(filtered.server_status().is_empty());
+    }
+
+    #[test]
+    fn test_empty_has_no_servers() {
+        let manager = McpManager::empty();
+        assert!(manager.server_status().is_empty());
     }
 }
