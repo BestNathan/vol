@@ -194,22 +194,6 @@ impl DataPlaneServerCore {
             .map_err(|e| format!("failed to create agent dirs: {e}"))?;
 
         let llm = self.llm.clone();
-
-        // Clone the full shared registry and apply per-agent filters (mcps, tools, disallowed_tools).
-        let mut tool_registry = (*self.tool_registry).clone();
-        if let Some(ref server_names) = def.mcps {
-            tool_registry = tool_registry.filter_mcp_servers(server_names);
-        }
-        let allowed_refs: Option<Vec<&str>> = def
-            .tools
-            .as_ref()
-            .map(|v| v.iter().map(std::string::String::as_str).collect());
-        let disallowed_refs: Option<Vec<&str>> = def
-            .disallowed_tools
-            .as_ref()
-            .map(|v| v.iter().map(std::string::String::as_str).collect());
-        let tools = tool_registry.filter(allowed_refs.as_deref(), disallowed_refs.as_deref());
-
         let mcp = self.mcp_manager.clone();
 
         let session_store = self
@@ -221,7 +205,7 @@ impl DataPlaneServerCore {
         let mut config = AgentConfig::builder()
             .with_def(def.clone())
             .with_llm(llm)
-            .with_tools(tools)
+            .with_tools(self.tool_registry.clone()) // full, unfiltered registry
             .with_session(session)
             .with_sandbox_registry(self.sandbox_registry.clone())
             .with_working_dir(agent_dir.clone())
