@@ -489,11 +489,16 @@ impl ReActAgent {
         let (mut run_ctx, plugin_rx) =
             RunContext::new(run_id.clone(), user_input.clone(), self.config.clone());
 
-        // Wire capability overlays for runtime adjustment
-        if let Some(ref overlays) = self.config.capability_overlays {
-            run_ctx =
-                run_ctx.with_capability_overlays(overlays.clone(), self.config.agent_id.clone());
-        }
+        // Resolve tools and skills once at run start (overlay > AgentDef > global).
+        let sid = run_ctx.session_id.clone();
+        let resolved_tools = self.resolve_tools(&sid);
+        let resolved_skills = self.resolve_skills(&sid);
+
+        // Set the pre-resolved (filtered) tool registry on the run context.
+        run_ctx.tools = resolved_tools;
+
+        // Replace the skills contributor with the resolved SkillInjector.
+        run_ctx.replace_contributor("skills", Box::new(resolved_skills));
 
         for (key, value) in input.metadata {
             run_ctx.data.write().await.insert(key, value);
@@ -576,7 +581,7 @@ impl ReActAgent {
                 }
 
                 // Reason phase - call LLM with streaming
-                let tools_defs = run_ctx.effective_tools();
+                let tools_defs = run_ctx.tools.definitions();
 
                 // Get messages from ctx (not local variable)
                 let messages = run_ctx.get_context().await?;

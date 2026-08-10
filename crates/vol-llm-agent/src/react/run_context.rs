@@ -7,9 +7,10 @@ use super::state::{ReasoningStep, ToolCallRecord};
 use super::stream::AgentStreamEvent;
 use super::AgentConfig;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, AtomicU64};
+use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
+use vol_llm_context::ContextContributor;
 use vol_llm_core::Message;
 use vol_llm_core::ToolCall;
 use vol_llm_tool::ToolRegistry;
@@ -50,6 +51,7 @@ pub struct RunContext {
 
     // Resource references
     pub session: Arc<Session>,
+    /// Pre-resolved tool registry — filtered (overlay > AgentDef > global) at run start.
     pub tools: Arc<ToolRegistry>,
     pub config: Arc<AgentConfig>,
 
@@ -93,23 +95,6 @@ pub struct RunContext {
     /// Arc pointer. Plugin infrastructure contexts can remove sender handles to
     /// avoid keeping shutdown channels alive.
     pub plugin_event_tx: Option<Arc<mpsc::Sender<PluginRequest>>>,
-
-    // === Capability overlay support ===
-    /// Reference to capability overlay map for runtime tool/skill/MCP adjustment.
-    pub capability_overlays: Option<
-        Arc<
-            tokio::sync::RwLock<
-                std::collections::HashMap<
-                    (String, String),
-                    vol_llm_core::capability_overlay::CapabilityOverlay,
-                >,
-            >,
-        >,
-    >,
-    /// Agent ID for overlay lookup.
-    pub agent_id: String,
-    /// Last seen overlay version — when this changes we rebuild the filtered registry.
-    pub(crate) current_overlay_version: Arc<AtomicU64>,
 
     // Internal state collection
     pub(crate) reasoning_chain: Arc<RwLock<Vec<ReasoningStep>>>,
@@ -161,9 +146,6 @@ impl RunContext {
             config,
             event_tx: Some(event_tx),
             plugin_event_tx: Some(Arc::new(plugin_event_tx)),
-            capability_overlays: None,
-            agent_id: String::new(),
-            current_overlay_version: Arc::new(AtomicU64::new(0)),
             reasoning_chain: Arc::new(RwLock::new(Vec::new())),
             tool_call_records: Arc::new(RwLock::new(Vec::new())),
             final_content: Arc::new(RwLock::new(None)),
@@ -172,24 +154,6 @@ impl RunContext {
         };
 
         (ctx, plugin_event_rx)
-    }
-
-    /// Wire capability overlays for runtime adjustment.
-    pub fn with_capability_overlays(
-        mut self,
-        overlays: Arc<
-            tokio::sync::RwLock<
-                std::collections::HashMap<
-                    (String, String),
-                    vol_llm_core::capability_overlay::CapabilityOverlay,
-                >,
-            >,
-        >,
-        agent_id: String,
-    ) -> Self {
-        self.capability_overlays = Some(overlays);
-        self.agent_id = agent_id;
-        self
     }
 
     /// Get the current iteration number
@@ -270,6 +234,18 @@ impl RunContext {
         Ok(output.messages)
     }
 
+    /// Replace a context contributor by name (e.g. swap in the run-resolved SkillInjector).
+    ///
+    /// If no contributor with the given name exists, the new one is appended.
+    #[allow(clippy::unwrap_used)]
+    pub fn replace_contributor(&self, name: &str, contributor: Box<dyn ContextContributor>) {
+        self.config
+            .context_builder
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .replace_contributor(name, contributor);
+    }
+
     /// Add a tool call to both current and all_tool_calls lists
     pub async fn add_tool_call(&self, tool_call: ToolCall) {
         self.current_tool_calls
@@ -326,101 +302,21 @@ impl RunContext {
         let _ = self.event_tx.as_ref().unwrap().send(traced_event);
     }
 
-    /// Get effective (filtered) tool definitions for LLM request.
-    ///
-    /// Filters tools based on AgentDef's `tools` (allowlist) and
-    /// `disallowed_tools` (blocklist). If no def is present, returns all tools.
-    pub fn effective_tools(&self) -> Vec<vol_llm_core::ToolDefinition> {
-        self.effective_registry().definitions()
-    }
-
     /// Execute a tool by its call specification.
     ///
-    /// Only executes tools that are in the effective (filtered) set.
-    /// Returns an error if the tool is not in the allowed set.
+    /// Delegates to the pre-resolved [`ToolRegistry`] set at run start
+    /// (filtered by overlay > AgentDef > global). Returns an error if the
+    /// tool is not present in the resolved registry.
     #[tracing::instrument(skip(self, ctx), fields(tool.name = %call.name))]
     pub async fn execute_tool(
         &self,
         call: &vol_llm_core::ToolCall,
         ctx: &vol_llm_tool::ToolContext,
-    ) -> vol_llm_tool::Result<vol_llm_tool::ToolResult> {
-        self.effective_registry()
+    ) -> Result<vol_llm_tool::ToolResult, String> {
+        self.tools
             .execute(call, ctx)
             .await
-            .map_err(vol_llm_tool::ToolError::ExecutionFailed)
-    }
-
-    /// Build a filtered ToolRegistry based on AgentDef configuration or capability overlay.
-    ///
-    /// If a capability overlay is present and its version has changed since last check,
-    /// rebuilds the filtered registry from the overlay's effective tool/skill/MCP settings.
-    /// Otherwise falls back to AgentDef-based filtering.
-    fn effective_registry(&self) -> Arc<ToolRegistry> {
-        // Check for runtime overlay first — if version changed, rebuild
-        if let Some(ref overlays) = self.capability_overlays {
-            if let Ok(guard) = overlays.try_read() {
-                let key = (self.agent_id.clone(), self.session_id.clone());
-                if let Some(overlay) = guard.get(&key) {
-                    let version = overlay.version;
-                    let last = self
-                        .current_overlay_version
-                        .load(std::sync::atomic::Ordering::Acquire);
-                    if version != last {
-                        // Build filtered registry from overlay
-                        let allowed: Option<Vec<&str>> = if overlay.effective_tools.is_empty() {
-                            None // empty = allow all
-                        } else {
-                            Some(overlay.effective_tools.iter().map(String::as_str).collect())
-                        };
-                        let disallowed: Option<Vec<&str>> = self
-                            .config
-                            .def
-                            .as_ref()
-                            .and_then(|d| d.disallowed_tools.as_ref())
-                            .map(|v| v.iter().map(String::as_str).collect());
-                        let mut filtered = ToolRegistry::filter(
-                            &self.tools,
-                            allowed.as_deref(),
-                            disallowed.as_deref(),
-                        );
-
-                        // Apply MCP server filter
-                        if !overlay.effective_mcp_servers.is_empty() {
-                            filtered = Arc::new(
-                                (*filtered)
-                                    .clone()
-                                    .filter_mcp_servers(&overlay.effective_mcp_servers),
-                            );
-                        }
-
-                        self.current_overlay_version
-                            .store(version, std::sync::atomic::Ordering::Release);
-                        tracing::debug!(
-                            version = version,
-                            tools = overlay.effective_tools.len(),
-                            skills = overlay.effective_skills.len(),
-                            "Capability overlay applied"
-                        );
-                        return filtered;
-                    }
-                }
-            }
-        }
-
-        // Fall back to AgentDef-based filtering (original logic)
-        if let Some(def) = &self.config.def {
-            let allowed: Option<Vec<&str>> = def
-                .tools
-                .as_ref()
-                .map(|t| t.iter().map(std::string::String::as_str).collect());
-            let disallowed: Option<Vec<&str>> = def
-                .disallowed_tools
-                .as_ref()
-                .map(|t| t.iter().map(std::string::String::as_str).collect());
-            ToolRegistry::filter(&self.tools, allowed.as_deref(), disallowed.as_deref())
-        } else {
-            self.tools.clone()
-        }
+            .map_err(|e| format!("Tool execution failed: {e}"))
     }
 
     /// Emit a traced event to the event bus (non-blocking, fire-and-forget).
@@ -559,9 +455,6 @@ impl Clone for RunContext {
             config: self.config.clone(),
             event_tx: self.event_tx.clone(),
             plugin_event_tx: self.plugin_event_tx.clone(),
-            capability_overlays: self.capability_overlays.clone(),
-            agent_id: self.agent_id.clone(),
-            current_overlay_version: self.current_overlay_version.clone(),
             reasoning_chain: self.reasoning_chain.clone(),
             tool_call_records: self.tool_call_records.clone(),
             final_content: self.final_content.clone(),
@@ -662,6 +555,77 @@ mod tests {
         ctx.set("key1", "value1").await.unwrap();
         let val: Option<String> = ctx.get("key1").await;
         assert_eq!(val, Some("value1".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_replace_contributor_swaps_by_name() {
+        use vol_llm_context::builtin::SimpleContributor;
+
+        // Register a contributor named "skills" with original content
+        let context_builder = ContextBuilderBuilder::new(128_000)
+            .add_contributor(Box::new(SimpleContributor::new(
+                "skills",
+                vec![Message::system("original skills")],
+                AttentionAnchor::Head(1),
+            )))
+            .build();
+
+        let config = Arc::new(AgentConfig {
+            context_builder: std::sync::RwLock::new(context_builder),
+            ..Default::default()
+        });
+
+        let (ctx, _rx) = RunContext::new("test-run".to_string(), "test input".to_string(), config);
+
+        // Replace the "skills" contributor with new content
+        ctx.replace_contributor(
+            "skills",
+            Box::new(SimpleContributor::new(
+                "skills",
+                vec![Message::system("resolved skills")],
+                AttentionAnchor::Head(1),
+            )),
+        );
+
+        let messages = ctx.get_context().await.unwrap();
+        let joined = messages
+            .iter()
+            .filter_map(|m| m.content.as_ref().map(|c| c.as_str()))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(joined.contains("resolved skills"), "got: {joined}");
+        assert!(!joined.contains("original skills"), "got: {joined}");
+    }
+
+    #[tokio::test]
+    async fn test_replace_contributor_appends_if_name_missing() {
+        use vol_llm_context::builtin::SimpleContributor;
+
+        let context_builder = ContextBuilderBuilder::new(128_000).build();
+        let config = Arc::new(AgentConfig {
+            context_builder: std::sync::RwLock::new(context_builder),
+            ..Default::default()
+        });
+
+        let (ctx, _rx) = RunContext::new("test-run".to_string(), "test input".to_string(), config);
+
+        // No contributor named "skills" yet — replace should append it
+        ctx.replace_contributor(
+            "skills",
+            Box::new(SimpleContributor::new(
+                "skills",
+                vec![Message::system("appended skills")],
+                AttentionAnchor::Head(1),
+            )),
+        );
+
+        let messages = ctx.get_context().await.unwrap();
+        let joined = messages
+            .iter()
+            .filter_map(|m| m.content.as_ref().map(|c| c.as_str()))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(joined.contains("appended skills"), "got: {joined}");
     }
 
     #[tokio::test]
@@ -932,24 +896,5 @@ mod tests {
         assert_eq!(ctx.current_iteration(), 2);
         ctx.reset_iteration();
         assert_eq!(ctx.current_iteration(), 0);
-    }
-
-    #[tokio::test]
-    async fn test_capability_overlays_default_to_none() {
-        let ctx = create_test_context();
-        assert!(ctx.capability_overlays.is_none());
-        assert!(ctx.agent_id.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_with_capability_overlays_sets_fields() {
-        use std::collections::HashMap;
-        use tokio::sync::RwLock;
-        use vol_llm_core::capability_overlay::CapabilityOverlay;
-        let ctx = create_test_context();
-        let map = Arc::new(RwLock::new(HashMap::new()));
-        let ctx = ctx.with_capability_overlays(map.clone(), "test-agent".into());
-        assert!(ctx.capability_overlays.is_some());
-        assert_eq!(ctx.agent_id, "test-agent");
     }
 }
