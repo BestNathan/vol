@@ -107,6 +107,7 @@ impl AgentLoader {
                     sandbox: fm.sandbox.clone(),
                     tool_config: fm.tool_config.clone(),
                     mcps: fm.mcps.clone(),
+                    skills: fm.skills.clone(),
                 };
 
                 match agents_map.entry(doc.frontmatter.name) {
@@ -226,6 +227,50 @@ mod tests {
         let def = agent.unwrap();
         assert_eq!(def.r#type, "test-runner");
         assert!(def.prompt.contains("You are a test runner."));
+    }
+
+    #[tokio::test]
+    async fn test_discover_agent_skills_from_frontmatter() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let agents_dir = temp_dir.path().join(".agents").join("agents");
+        std::fs::create_dir_all(&agents_dir).unwrap();
+
+        let mut f = std::fs::File::create(agents_dir.join("skilled.md")).unwrap();
+        writeln!(f, "---").unwrap();
+        writeln!(f, "name: skilled").unwrap();
+        writeln!(f, "type: skilled").unwrap();
+        writeln!(f, "description: Has a skill allowlist").unwrap();
+        writeln!(f, "skills:").unwrap();
+        writeln!(f, "  - wiki-query").unwrap();
+        writeln!(f, "  - wiki-ingest").unwrap();
+        writeln!(f, "---").unwrap();
+        writeln!(f, "You are a skilled agent.").unwrap();
+
+        let mut loader = AgentLoader::new(None);
+        loader.roots.clear();
+        loader.add_root(AgentScope::User, agents_dir.clone());
+        loader.discover_all().await.unwrap();
+
+        let def = loader.get("skilled").await.unwrap();
+        assert_eq!(
+            def.skills,
+            Some(vec!["wiki-query".to_string(), "wiki-ingest".to_string()])
+        );
+
+        // A second file without a skills key must default to None.
+        create_agent_file(
+            &agents_dir,
+            "plain",
+            "plain",
+            "No skills",
+            "You are a plain agent.",
+        );
+        let mut loader2 = AgentLoader::new(None);
+        loader2.roots.clear();
+        loader2.add_root(AgentScope::User, agents_dir);
+        loader2.discover_all().await.unwrap();
+        let plain = loader2.get("plain").await.unwrap();
+        assert!(plain.skills.is_none());
     }
 
     #[tokio::test]

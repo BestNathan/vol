@@ -76,6 +76,8 @@ pub struct AgentDef {
     /// MCP server names to use. When set, only MCP tools from these servers
     /// are registered. When absent (None), all configured MCP tools are available.
     pub mcps: Option<Vec<String>>,
+    /// Skill allowlist. None = all skills available.
+    pub skills: Option<Vec<String>>,
 }
 
 impl Default for AgentDef {
@@ -97,6 +99,7 @@ impl Default for AgentDef {
             sandbox: None,
             tool_config: None,
             mcps: None,
+            skills: None,
         }
     }
 }
@@ -122,6 +125,7 @@ impl AgentDef {
             sandbox: None,
             tool_config: None,
             mcps: None,
+            skills: None,
         }
     }
 
@@ -272,5 +276,22 @@ impl AgentDefError {
     /// Create a TypeNotFound error. Used internally by AgentTool (via ToolError wrapper).
     pub fn type_not_found(r#type: &str) -> Self {
         Self::TypeNotFound(r#type.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_agent_def_default_skills_is_none() {
+        let def = AgentDef::default();
+        assert!(def.skills.is_none());
+    }
+
+    #[test]
+    fn test_agent_def_new_skills_is_none() {
+        let def = AgentDef::new("test", "prompt");
+        assert!(def.skills.is_none());
     }
 }
