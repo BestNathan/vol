@@ -18,6 +18,7 @@ use vol_llm_core::{
 use vol_llm_mcp::McpManager;
 use vol_llm_sandbox::registry::SandboxRegistry;
 use vol_llm_sandbox::SandboxRef;
+use vol_llm_skill::SkillLoader;
 use vol_llm_tool::{ToolConfig, ToolContext};
 use vol_session::{InMemoryEntryStore, Session, SessionContributor};
 
@@ -55,8 +56,9 @@ pub struct AgentConfig {
             >,
         >,
     >,
-    /// Shared skill filter from SkillInjector, for runtime updates via capability overlay.
-    pub skill_injector_filter: Option<Arc<tokio::sync::RwLock<Option<Vec<String>>>>>,
+    /// Shared skill loader — discovers and loads skills from working_dir.
+    /// Used by SkillInjector (context) and SkillTool (tool registry).
+    pub skill_loader: Arc<SkillLoader>,
 
     // === MCP ===
     pub mcp_manager: Option<Arc<McpManager>>,
@@ -113,7 +115,7 @@ impl Default for AgentConfig {
             context_builder: RwLock::new(ContextBuilderBuilder::new(128_000).build()),
             plugin_registry: PluginRegistry::new(),
             capability_overlays: None,
-            skill_injector_filter: None,
+            skill_loader: Arc::new(SkillLoader::new_empty()),
             mcp_manager: None,
             agent_id: generate_agent_id(),
             working_dir: PathBuf::from("."),

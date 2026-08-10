@@ -393,19 +393,6 @@ impl RunContext {
                             );
                         }
 
-                        // Update the skill injector's shared filter
-                        if let Some(ref filter_lock) = self.config.skill_injector_filter {
-                            let new_filter = if overlay.effective_skills.is_empty() {
-                                None // empty = include all
-                            } else {
-                                Some(overlay.effective_skills.clone())
-                            };
-                            // Use try_write to avoid blocking the agent loop
-                            if let Ok(mut f) = filter_lock.try_write() {
-                                *f = new_filter;
-                            }
-                        }
-
                         self.current_overlay_version
                             .store(version, std::sync::atomic::Ordering::Release);
                         tracing::debug!(

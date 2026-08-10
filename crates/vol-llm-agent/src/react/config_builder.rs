@@ -29,8 +29,6 @@ pub struct AgentConfigBuilder {
     working_dir: Option<PathBuf>,
     sandbox_registry: Option<Arc<SandboxRegistry>>,
     default_sandbox: Option<String>,
-    /// Captured from SkillInjector for runtime updates via capability overlay.
-    skill_injector_filter: Option<Arc<tokio::sync::RwLock<Option<Vec<String>>>>>,
 }
 
 impl AgentConfigBuilder {
@@ -49,7 +47,6 @@ impl AgentConfigBuilder {
             working_dir: None,
             sandbox_registry: None,
             default_sandbox: None,
-            skill_injector_filter: None,
         }
     }
 
@@ -179,7 +176,7 @@ impl AgentConfigBuilder {
         self
     }
 
-    pub fn build(mut self) -> Result<AgentConfig, AgentConfigBuildError> {
+    pub fn build(self) -> Result<AgentConfig, AgentConfigBuildError> {
         let llm = self.llm.ok_or(AgentConfigBuildError::MissingLlm)?;
 
         // Determine effective working_dir: explicit override > def > None
@@ -272,9 +269,8 @@ impl AgentConfigBuilder {
             ));
 
             // 2. Skills — always Head(1)
-            let skill_injector = SkillInjector::new(skill_loader, AttentionAnchor::Head(1), None);
-            // Capture the shared filter for runtime updates via capability overlay
-            self.skill_injector_filter = Some(skill_injector.skill_filter.clone());
+            let skill_injector =
+                SkillInjector::new(skill_loader.clone(), AttentionAnchor::Head(1), None);
             b = b.add_contributor(Box::new(skill_injector));
 
             // 3. Custom Files — Middle(0..n) from AgentDef.context_files
@@ -329,7 +325,7 @@ impl AgentConfigBuilder {
             context_builder: std::sync::RwLock::new(context_builder),
             plugin_registry: self.plugin_registry,
             capability_overlays: None,
-            skill_injector_filter: self.skill_injector_filter,
+            skill_loader,
             mcp_manager: self.mcp_manager,
             agent_id: working_dir
                 .as_ref()
