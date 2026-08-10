@@ -89,6 +89,24 @@ impl SkillInjector {
         output.push_str("\nUse the `skill` tool to load any skill's full instructions.");
         output
     }
+
+    /// Return skill names after applying the current filter.
+    pub async fn skill_names(&self) -> Vec<String> {
+        let metadata = self.loader.list_metadata().await;
+        let filter_guard = self.skill_filter.read().await;
+        match &*filter_guard {
+            Some(filter) if !filter.is_empty() => {
+                let set: std::collections::HashSet<&str> =
+                    filter.iter().map(String::as_str).collect();
+                metadata
+                    .into_iter()
+                    .filter(|m| set.contains(m.name.as_str()))
+                    .map(|m| m.name)
+                    .collect()
+            }
+            _ => metadata.into_iter().map(|m| m.name).collect(),
+        }
+    }
 }
 
 #[async_trait]
@@ -270,5 +288,56 @@ mod tests {
         let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0), None);
         let output = injector.format_metadata().await;
         assert!(output.contains("test-skill"));
+    }
+
+    #[tokio::test]
+    async fn test_skill_names_no_filter_returns_all() {
+        let loader = SkillLoader::new_empty();
+        let mut skill_a = SkillDef::new("skill-a", "# A").with_description("Skill A");
+        skill_a.id = "user:skill-a".into();
+        let mut skill_b = SkillDef::new("skill-b", "# B").with_description("Skill B");
+        skill_b.id = "user:skill-b".into();
+        loader.register(skill_a).await;
+        loader.register(skill_b).await;
+
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0), None);
+        let names = injector.skill_names().await;
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"skill-a".to_string()));
+        assert!(names.contains(&"skill-b".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_skill_names_with_filter_returns_subset() {
+        let loader = SkillLoader::new_empty();
+        let mut skill_a = SkillDef::new("skill-a", "# A").with_description("Skill A");
+        skill_a.id = "user:skill-a".into();
+        let mut skill_b = SkillDef::new("skill-b", "# B").with_description("Skill B");
+        skill_b.id = "user:skill-b".into();
+        loader.register(skill_a).await;
+        loader.register(skill_b).await;
+
+        let injector = SkillInjector::new(
+            Arc::new(loader),
+            AttentionAnchor::Head(0),
+            Some(vec!["skill-a".into()]),
+        );
+        let names = injector.skill_names().await;
+        assert_eq!(names.len(), 1);
+        assert_eq!(names[0], "skill-a");
+    }
+
+    #[tokio::test]
+    async fn test_skill_names_empty_filter_returns_all() {
+        let loader = SkillLoader::new_empty();
+        let mut skill = SkillDef::new("test-skill", "# T").with_description("Test");
+        skill.id = "user:test-skill".into();
+        loader.register(skill).await;
+
+        // Empty filter behaves like None per struct docs: include all skills.
+        let injector = SkillInjector::new(Arc::new(loader), AttentionAnchor::Head(0), Some(vec![]));
+        let names = injector.skill_names().await;
+        assert_eq!(names.len(), 1);
+        assert!(names.contains(&"test-skill".to_string()));
     }
 }
