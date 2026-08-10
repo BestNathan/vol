@@ -291,7 +291,9 @@ async fn test_code_agent_market_data_query() {
         .with_plugin(tracker)
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     // Test: Query BTC price
 
@@ -322,7 +324,9 @@ async fn test_code_agent_volatility_query() {
         .with_system_prompt("You are a volatility analysis assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     // Test: Query volatility
 
@@ -346,7 +350,9 @@ async fn test_code_agent_multi_turn_conversation() {
         .with_system_prompt("You are a helpful market data assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     // Test: Multi-turn with follow-up
 
@@ -373,7 +379,9 @@ async fn test_code_agent_tool_choice_auto() {
         .with_system_prompt("You are a helpful assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     // Test: Simple greeting (may not need tools)
 

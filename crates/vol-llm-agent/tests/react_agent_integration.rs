@@ -103,7 +103,9 @@ async fn test_basic_run_empty_session() {
         .with_session(session)
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let response = agent.run("What is 6 * 7?").await.unwrap();
     assert!(!response.content.is_empty());
@@ -121,7 +123,9 @@ async fn test_run_with_session_history() {
         .with_session(session)
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let response = agent.run("Summarize what we discussed.").await.unwrap();
     assert!(!response.content.is_empty());
@@ -186,7 +190,9 @@ async fn test_run_with_large_history_limit() {
         .with_session(session)
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let response = agent.run("Continue.").await.unwrap();
     assert!(!response.content.is_empty());

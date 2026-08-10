@@ -58,7 +58,9 @@ async fn test_task_cli_tool_with_real_llm_create_and_list() {
         .build()
         .expect("AgentConfig build should succeed");
 
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     // Step 1: Create tasks
     let result = agent
@@ -112,7 +114,9 @@ async fn test_task_cli_tool_json_output_mode() {
         .build()
         .expect("AgentConfig build should succeed");
 
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     // Create a task, then list with JSON
     let result = agent

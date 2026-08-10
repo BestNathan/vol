@@ -25,7 +25,7 @@
 //! //     .with_tool(my_tool)
 //! //     .build()
 //! //     .unwrap();
-//! // let agent = ReActAgent::new(config);
+//! // let agent = ReActAgent::new(config, config.tools.clone(), config.skill_loader.clone());
 //! ```
 
 pub mod agent;

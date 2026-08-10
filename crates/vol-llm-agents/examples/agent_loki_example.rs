@@ -126,7 +126,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_plugin_registry(plugin_registry)
         .build()?;
 
-    let agent = ReActAgent::new(agent_config);
+    let base_tools = agent_config.tools.clone();
+    let skill_loader = agent_config.skill_loader.clone();
+    let agent = ReActAgent::new(agent_config, base_tools, skill_loader);
 
     println!("  ✓ ReActAgent built with AgentDef + tools + LoggingPlugin");
     println!();

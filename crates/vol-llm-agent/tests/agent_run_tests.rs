@@ -50,7 +50,9 @@ async fn react_agent_run_with_id_returns_caller_run_id() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let result = agent
         .run_input(AgentInput::text("Hi").with_run_id("run_supplied_1"))
@@ -76,7 +78,9 @@ async fn test_agent_run_single_iteration() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let result = agent.run("Hi").await.unwrap();
     assert!(result.error.is_none());
@@ -95,7 +99,9 @@ async fn test_agent_run_input_text_matches_run() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let result = agent.run_input(AgentInput::text("Hi")).await.unwrap();
 
@@ -114,7 +120,9 @@ async fn test_agent_run_input_uses_provided_run_id() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let result = agent
         .run_input(AgentInput::text("Hi").with_run_id("caller-run-id"))
@@ -135,7 +143,9 @@ async fn test_agent_run_input_sends_multipart_user_message() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     agent
         .run_input(
@@ -168,7 +178,9 @@ async fn test_agent_run_input_rejects_empty_parts_before_llm_call() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let result = agent.run_input(AgentInput::new()).await;
 
@@ -309,7 +321,9 @@ async fn test_agent_run_multiple_iterations() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let result = agent.run("Read test.txt").await.unwrap();
     assert!(result.error.is_none());
@@ -376,7 +390,9 @@ async fn test_agent_run_llm_error_propagates() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let result = agent.run("test").await;
     assert!(result.is_err());
@@ -410,7 +426,9 @@ async fn test_agent_run_session_recording() {
         .with_session(session.clone())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let result = agent.run("Session question?").await.unwrap();
     assert!(result.error.is_none());
@@ -476,7 +494,9 @@ async fn test_agent_run_event_emission() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let result = agent.run("Event question?").await.unwrap();
     assert!(result.error.is_none());
@@ -514,7 +534,9 @@ async fn test_agent_run_emits_llm_call_events() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let result = agent.run("LLM call events?").await.unwrap();
     assert!(result.error.is_none());
@@ -629,7 +651,9 @@ async fn test_agent_run_max_iterations_reached() {
         .with_plugin(RejectMaxIterationsPlugin)
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let result = agent.run("Keep querying...").await;
     match result {
@@ -663,7 +687,9 @@ async fn test_mock_llm_call_tracking() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let _ = agent.run("Track me").await.unwrap();
 
@@ -709,7 +735,9 @@ async fn test_plugin_intercept_abort() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     let result = agent.run("Hello").await;
     assert!(result.is_err());

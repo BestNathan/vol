@@ -74,7 +74,9 @@ async fn test_history_limit_applied() {
         .with_session(session.clone())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     // Run agent
 

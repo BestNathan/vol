@@ -253,7 +253,9 @@ impl DataPlaneServerCore {
                 self.store_dir.clone(),
             ));
 
-        let agent = vol_llm_agent::ReActAgent::new(config);
+        let base_tools = self.tool_registry.clone();
+        let skill_loader = self.skill_loader.clone();
+        let agent = vol_llm_agent::ReActAgent::new(config, base_tools, skill_loader);
         let dispatcher = Arc::new(AgentDispatcher::new(agent));
 
         self.router.register(agent_id.clone(), dispatcher).await;
@@ -639,7 +641,9 @@ impl DataPlaneServerCore {
                 .with_session(session)
                 .build()
                 .expect("AgentConfig build failed for test");
-            let agent = ReActAgent::new(config);
+            let base_tools = config.tools.clone();
+            let skill_loader = config.skill_loader.clone();
+            let agent = ReActAgent::new(config, base_tools, skill_loader);
             let dispatcher = Arc::new(AgentDispatcher::new(agent));
             let holder = Arc::new(ConnectionHolder::new(
                 "test_agent".to_string(),

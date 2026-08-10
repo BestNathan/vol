@@ -96,7 +96,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .to_string(),
         )
         .build()?;
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     println!("  ✓ Agent built with observability plugin");
     println!();

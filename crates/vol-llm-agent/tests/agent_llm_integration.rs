@@ -215,7 +215,9 @@ async fn test_agent_with_real_anthropic_api() {
         )
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     println!("\n--- Running agent with user input: 'What is the BTC price?' ---\n");
 

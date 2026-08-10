@@ -167,7 +167,11 @@ impl AgentRuntime {
 
         config.mcp_manager = Some(self.mcp_manager.clone());
 
-        let agent = ReActAgent::new(config);
+        let agent = ReActAgent::new(
+            config,
+            self.tool_registry.clone(),
+            self.skill_loader.clone(),
+        );
 
         self.agent_defs
             .write()
