@@ -5,8 +5,24 @@ use vol_llm_agent_protocol::agent_server_protocol::{
 };
 
 #[tokio::test]
-async fn submit_emits_ack_and_result_with_same_message_id() {
+async fn submit_emits_single_result_with_enriched_metadata() {
     let core = DataPlaneServerCore::for_test().await;
+
+    // Ground truth from the registered test agent instance (TestLlm in for_test).
+    let agent = core
+        .router()
+        .get_agent("test_agent")
+        .await
+        .expect("test_agent registered by for_test");
+    let expected_tools: Vec<String> = agent
+        .tools()
+        .definitions()
+        .iter()
+        .map(|d| d.name.clone())
+        .collect();
+    let expected_mcps: Vec<String> = agent.mcps().server_status().keys().cloned().collect();
+    let expected_skills: Vec<String> = agent.skills().skill_names().await;
+
     let msg = AgentServerMessage::new_command(
         "msg_submit_1",
         Operation::Agent(AgentOperation::Submit),
@@ -17,27 +33,27 @@ async fn submit_emits_ack_and_result_with_same_message_id() {
     );
 
     let outputs = core.handle(msg).await.unwrap();
-    assert_eq!(outputs.len(), 2);
-    assert_eq!(outputs[0].kind, MessageKind::Ack);
-    assert_eq!(outputs[1].kind, MessageKind::Result);
+    assert_eq!(outputs.len(), 1);
+    assert_eq!(outputs[0].kind, MessageKind::Result);
     assert_eq!(outputs[0].message_id, "msg_submit_1");
-    assert_eq!(outputs[1].message_id, "msg_submit_1");
 
-    let run_id = match &outputs[0].payload {
-        Payload::Agent(AgentPayload::SubmitAck { run_id, accepted }) => {
+    match &outputs[0].payload {
+        Payload::Agent(AgentPayload::SubmitResult {
+            run_id,
+            accepted,
+            provider,
+            tools,
+            mcps,
+            skills,
+        }) => {
             assert!(*accepted);
             assert_eq!(run_id, "run_supplied_1");
-            run_id.clone()
-        }
-        other => panic!("expected SubmitAck payload, got {other:?}"),
-    };
-
-    match &outputs[1].payload {
-        Payload::Agent(AgentPayload::SubmitResult {
-            run_id: result_run_id,
-            ..
-        }) => {
-            assert_eq!(result_run_id, &run_id);
+            // Resolved from the test agent instance (TestLlm registered by for_test)
+            assert_eq!(provider.name, "anthropic");
+            assert_eq!(provider.model, "test");
+            assert_eq!(tools, &expected_tools);
+            assert_eq!(mcps, &expected_mcps);
+            assert_eq!(skills, &expected_skills);
         }
         other => panic!("expected SubmitResult payload, got {other:?}"),
     }

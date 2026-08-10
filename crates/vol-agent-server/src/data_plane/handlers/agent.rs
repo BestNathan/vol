@@ -126,6 +126,39 @@ impl DomainHandler for AgentHandler {
                 let run_id_clone = run_id.clone();
                 let request = AgentRequest::new(&target_id, input);
 
+                // Read resolved config from agent instance
+                let agent = self.router.get_agent(&target_id).await;
+                let (provider, tools, mcps, skills) = match agent {
+                    Some(ref a) => {
+                        let tools_obj = a.tools();
+                        let skills_obj = a.skills();
+                        let mcps_obj = a.mcps();
+                        let llm = a.llm();
+                        (
+                            ProviderInfo {
+                                name: llm.provider().to_string(),
+                                model: llm.model().to_string(),
+                            },
+                            tools_obj
+                                .definitions()
+                                .iter()
+                                .map(|d| d.name.clone())
+                                .collect(),
+                            mcps_obj.server_status().keys().cloned().collect(),
+                            skills_obj.skill_names().await,
+                        )
+                    }
+                    None => (
+                        ProviderInfo {
+                            name: "unknown".into(),
+                            model: "unknown".into(),
+                        },
+                        vec![],
+                        vec![],
+                        vec![],
+                    ),
+                };
+
                 match self.router.send(&target_id, request).await {
                     Ok(rx) => {
                         let router = self.router.clone();
@@ -133,31 +166,19 @@ impl DomainHandler for AgentHandler {
                             Self::process_run_result(rx, &run_id_clone, &router).await;
                         });
 
-                        Ok(vec![
-                            AgentServerMessage::new_ack(
-                                message.message_id.clone(),
-                                Operation::Agent(AgentOperation::Submit),
-                                Payload::Agent(AgentPayload::SubmitAck {
-                                    run_id: run_id.clone(),
-                                    accepted: true,
-                                }),
-                            ),
-                            AgentServerMessage::new_result(
-                                message.message_id,
-                                Operation::Agent(AgentOperation::Submit),
-                                Payload::Agent(AgentPayload::SubmitResult {
-                                    run_id: run_id.clone(),
-                                    accepted: true,
-                                    provider: ProviderInfo {
-                                        name: "unknown".into(),
-                                        model: "unknown".into(),
-                                    },
-                                    tools: vec![],
-                                    mcps: vec![],
-                                    skills: vec![],
-                                }),
-                            ),
-                        ])
+                        // Single response — no more Ack + Result pair
+                        Ok(vec![AgentServerMessage::new_result(
+                            message.message_id,
+                            Operation::Agent(AgentOperation::Submit),
+                            Payload::Agent(AgentPayload::SubmitResult {
+                                run_id,
+                                accepted: true,
+                                provider,
+                                tools,
+                                mcps,
+                                skills,
+                            }),
+                        )])
                     }
                     Err(e) => Ok(vec![AgentServerMessage::new_error(
                         message.message_id,

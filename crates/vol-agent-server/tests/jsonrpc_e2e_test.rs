@@ -169,6 +169,21 @@ async fn test_e2e_all_methods() {
     assert_eq!(resp[0].kind, MessageKind::Result);
 
     // ── 5. agent.submit ──
+    // Ground truth from the registered agent instance (TestLlm in for_test).
+    let agent = core
+        .router()
+        .get_agent("test-agent")
+        .await
+        .expect("test-agent registered");
+    let expected_tools: Vec<String> = agent
+        .tools()
+        .definitions()
+        .iter()
+        .map(|d| d.name.clone())
+        .collect();
+    let expected_mcps: Vec<String> = agent.mcps().server_status().keys().cloned().collect();
+    let expected_skills: Vec<String> = agent.skills().skill_names().await;
+
     let resp = handle(command(
         "5",
         Operation::Agent(AgentOperation::Submit),
@@ -179,9 +194,27 @@ async fn test_e2e_all_methods() {
     ))
     .await
     .unwrap();
-    assert_eq!(resp.len(), 2);
-    assert_eq!(resp[0].kind, MessageKind::Ack);
-    assert_eq!(resp[1].kind, MessageKind::Result);
+    assert_eq!(resp.len(), 1);
+    assert_eq!(resp[0].kind, MessageKind::Result);
+    match &resp[0].payload {
+        Payload::Agent(AgentPayload::SubmitResult {
+            accepted,
+            provider,
+            tools,
+            mcps,
+            skills,
+            ..
+        }) => {
+            assert!(*accepted);
+            // Resolved from the registered agent instance (TestLlm in for_test)
+            assert_eq!(provider.name, "anthropic");
+            assert_eq!(provider.model, "test");
+            assert_eq!(tools, &expected_tools);
+            assert_eq!(mcps, &expected_mcps);
+            assert_eq!(skills, &expected_skills);
+        }
+        other => panic!("expected SubmitResult payload, got {other:?}"),
+    }
 
     // ── 6. agent.cancel ──
     let resp = handle(command(
