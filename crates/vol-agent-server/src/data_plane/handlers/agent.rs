@@ -8,6 +8,7 @@ use crate::data_plane::connection_holder::ConnectionHolder;
 use crate::data_plane::router::AgentRouter;
 use vol_llm_agent_protocol::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, Operation, Payload, ProtocolError,
+    ProviderInfo,
 };
 use vol_llm_agent_protocol::request::AgentRequest;
 use vol_llm_agent_protocol::DomainHandler;
@@ -146,7 +147,14 @@ impl DomainHandler for AgentHandler {
                                 Operation::Agent(AgentOperation::Submit),
                                 Payload::Agent(AgentPayload::SubmitResult {
                                     run_id: run_id.clone(),
-                                    response: serde_json::json!({"run_id": run_id}),
+                                    accepted: true,
+                                    provider: ProviderInfo {
+                                        name: "unknown".into(),
+                                        model: "unknown".into(),
+                                    },
+                                    tools: vec![],
+                                    mcps: vec![],
+                                    skills: vec![],
                                 }),
                             ),
                         ])
