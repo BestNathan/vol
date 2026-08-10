@@ -319,6 +319,33 @@ pub struct UpdateCapabilitiesResult {
     pub effective_mcp_servers: Vec<String>,
 }
 
+/// Provider and model used for the run — mirrors
+/// `vol_llm_agent_protocol::agent_server_protocol::ProviderInfo`.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ProviderInfo {
+    pub name: String,
+    pub model: String,
+}
+
+/// Response from `agent.submit` — mirrors `AgentPayload::SubmitResult`.
+///
+/// The submit result carries `run_id`, the `accepted` flag (merged from the
+/// old SubmitAck), provider info, and the effective tool/MCP/skill capability
+/// lists — replacing the old single `response` value. The server sends a
+/// single SubmitResult response; there is no more Ack+Result pair.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SubmitResult {
+    pub run_id: String,
+    pub accepted: bool,
+    pub provider: ProviderInfo,
+    #[serde(default)]
+    pub tools: Vec<String>,
+    #[serde(default)]
+    pub mcps: Vec<String>,
+    #[serde(default)]
+    pub skills: Vec<String>,
+}
+
 impl JsonRpcClient {
     /// Create a new client and connect to the server.
     /// Auto-subscribes to agent events on connect (behaviour for data-plane connections).
@@ -503,6 +530,11 @@ impl JsonRpcClient {
     }
 
     /// Submit input to the agent. Returns the request ID.
+    ///
+    /// The single `agent.submit` response (a `SubmitResult` carrying `run_id`,
+    /// `accepted`, `provider`, `tools`, `mcps`, `skills` — no more
+    /// Ack+Result pair) is parsed on arrival and logged. The run lifecycle
+    /// itself is driven by `agent.event` notifications (`AgentStart` etc.).
     pub fn submit(&self, input: &str, target: Option<&str>) -> Result<String, String> {
         let id = self.alloc_id();
         let mut params = serde_json::json!({ "input": input });
@@ -517,6 +549,38 @@ impl JsonRpcClient {
         });
         let json = serde_json::to_string(&msg).map_err(|e| e.to_string())?;
         self.send_raw(&json)?;
+
+        // Parse the single SubmitResult response with the new shape:
+        // { run_id, accepted, provider, tools, mcps, skills }.
+        let cb: ResponseCallback = Box::new(move |result| {
+            if let Some(error) = result.get("error") {
+                let msg = error
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("unknown RPC error");
+                log::warn!("agent.submit RPC error: {msg}");
+                return;
+            }
+            match serde_json::from_value::<SubmitResult>(result) {
+                Ok(sr) => {
+                    log::info!(
+                        "agent.submit: run_id={} accepted={} provider={}/{} tools={} mcps={} skills={}",
+                        sr.run_id,
+                        sr.accepted,
+                        sr.provider.name,
+                        sr.provider.model,
+                        sr.tools.len(),
+                        sr.mcps.len(),
+                        sr.skills.len(),
+                    );
+                    if !sr.accepted {
+                        log::warn!("agent.submit rejected: run_id={}", sr.run_id);
+                    }
+                }
+                Err(e) => log::warn!("agent.submit response parse failed: {e}"),
+            }
+        });
+        self.inner.pending.borrow_mut().insert(id, cb);
 
         Ok(id.to_string())
     }
