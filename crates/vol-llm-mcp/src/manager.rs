@@ -128,20 +128,28 @@ impl McpManager {
             Some(names) => {
                 use std::collections::HashSet;
                 let allowed: HashSet<&str> = names.iter().map(String::as_str).collect();
-                let servers = self
-                    .servers
-                    .try_read()
-                    .unwrap_or_else(|_| panic!("McpManager servers lock poisoned"));
-                let filtered: HashMap<String, ServerState> = servers
-                    .iter()
-                    .filter(|(name, _)| allowed.contains(name.as_str()))
-                    .map(|(name, state)| (name.clone(), state.clone()))
-                    .collect();
-                Self {
-                    servers: Arc::new(tokio::sync::RwLock::new(filtered)),
-                    max_retries: self.max_retries,
-                    backoff_min: self.backoff_min,
-                    backoff_max: self.backoff_max,
+                if let Ok(servers) = self.servers.try_read() {
+                    let filtered: HashMap<String, ServerState> = servers
+                        .iter()
+                        .filter(|(name, _)| allowed.contains(name.as_str()))
+                        .map(|(name, state)| (name.clone(), state.clone()))
+                        .collect();
+                    Self {
+                        servers: Arc::new(tokio::sync::RwLock::new(filtered)),
+                        max_retries: self.max_retries,
+                        backoff_min: self.backoff_min,
+                        backoff_max: self.backoff_max,
+                    }
+                } else {
+                    // try_read fails with WouldBlock when a writer holds the
+                    // lock (e.g. in-flight connect/reconnect), not just on
+                    // poisoning — return an empty manager rather than panicking.
+                    Self {
+                        servers: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+                        max_retries: self.max_retries,
+                        backoff_min: self.backoff_min,
+                        backoff_max: self.backoff_max,
+                    }
                 }
             }
         }
