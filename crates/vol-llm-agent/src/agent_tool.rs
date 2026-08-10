@@ -186,7 +186,9 @@ impl ExecutableTool for AgentTool {
                 ToolError::ExecutionFailed(format!("Failed to build agent config: {e}"))
             })?;
 
-        let sub_agent = crate::react::ReActAgent::new(agent_config);
+        let base_tools = agent_config.tools.clone();
+        let skill_loader = agent_config.skill_loader.clone();
+        let sub_agent = crate::react::ReActAgent::new(agent_config, base_tools, skill_loader);
 
         let response = sub_agent
             .run(&params.prompt)

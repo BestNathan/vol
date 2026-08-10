@@ -151,7 +151,9 @@ async fn test_agent_executes_full_react_cycle() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     agent.run("What is the BTC price?").await.unwrap();
 
@@ -269,7 +271,9 @@ async fn test_agent_max_iterations() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     // Agent should return MaxIterationsReached error when max_iterations is exceeded
     let result = agent.run("Keep querying...").await;

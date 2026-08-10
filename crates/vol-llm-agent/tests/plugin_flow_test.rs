@@ -143,7 +143,9 @@ async fn test_plugin_interceptor_chain_executes() {
         ))
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     agent.run("Say hello").await.unwrap();
 
@@ -209,7 +211,9 @@ async fn test_plugin_skip_stops_current_event() {
         })
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     agent.run("Say hello").await.unwrap();
 

@@ -155,7 +155,9 @@ impl AdviceAgent {
             .with_system_prompt(system_prompt().to_string())
             .build()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        let agent = vol_llm_agent::ReActAgent::new(config);
+        let base_tools = config.tools.clone();
+        let skill_loader = config.skill_loader.clone();
+        let agent = vol_llm_agent::ReActAgent::new(config, base_tools, skill_loader);
 
         // Get threshold from alert type
         let threshold = get_threshold_from_alert(&alert.alert_type);

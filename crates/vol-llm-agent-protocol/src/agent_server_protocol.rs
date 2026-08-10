@@ -932,6 +932,13 @@ impl Payload {
     }
 }
 
+/// Provider and model used for the run.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProviderInfo {
+    pub name: String,
+    pub model: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AgentPayload {
     Submit {
@@ -945,7 +952,11 @@ pub enum AgentPayload {
     },
     SubmitResult {
         run_id: String,
-        response: serde_json::Value,
+        accepted: bool,
+        provider: ProviderInfo,
+        tools: Vec<String>,
+        mcps: Vec<String>,
+        skills: Vec<String>,
     },
     Cancel {
         run_id: String,
@@ -2259,7 +2270,14 @@ mod tests {
             Operation::Agent(AgentOperation::Submit),
             Payload::Agent(AgentPayload::SubmitResult {
                 run_id: "run-1".into(),
-                response: serde_json::json!({"agents": []}),
+                accepted: true,
+                provider: ProviderInfo {
+                    name: "anthropic".into(),
+                    model: "claude-sonnet-5".into(),
+                },
+                tools: vec![],
+                mcps: vec![],
+                skills: vec![],
             }),
         );
         assert_eq!(msg.kind, MessageKind::Result);
@@ -2312,7 +2330,14 @@ mod tests {
             },
             AgentPayload::SubmitResult {
                 run_id: "r1".into(),
-                response: serde_json::json!("ok"),
+                accepted: true,
+                provider: ProviderInfo {
+                    name: "anthropic".into(),
+                    model: "claude-sonnet-5".into(),
+                },
+                tools: vec!["bash".into(), "read".into()],
+                mcps: vec!["k8s".into()],
+                skills: vec!["code-review".into()],
             },
             AgentPayload::Cancel {
                 run_id: "r1".into(),

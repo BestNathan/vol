@@ -91,7 +91,7 @@ fn agent_server_protocol_codec_test_decode_agent_cancel_uses_run_id() {
 }
 
 #[test]
-fn agent_server_protocol_codec_test_message_id_reused_across_submit_ack_not_equal_run_id() {
+fn agent_server_protocol_codec_test_message_id_reused_across_submit_result_not_equal_run_id() {
     let submit = AgentServerMessage::new_command(
         "msg_1",
         Operation::Agent(AgentOperation::Submit),
@@ -101,15 +101,57 @@ fn agent_server_protocol_codec_test_message_id_reused_across_submit_ack_not_equa
         }),
     );
 
-    let ack = AgentServerMessage::new_ack(
+    // agent.submit now answers with a single SubmitResult (merged Ack+Result).
+    let result = AgentServerMessage::new_result(
         "msg_1",
         Operation::Agent(AgentOperation::Submit),
-        Payload::Agent(AgentPayload::SubmitAck {
+        Payload::Agent(AgentPayload::SubmitResult {
             run_id: "run_abc".to_string(),
             accepted: true,
+            provider: vol_llm_agent_protocol::agent_server_protocol::ProviderInfo {
+                name: "anthropic".to_string(),
+                model: "claude-sonnet-5".to_string(),
+            },
+            tools: vec![],
+            mcps: vec![],
+            skills: vec![],
         }),
     );
 
-    assert_eq!(submit.message_id, ack.message_id);
+    assert_eq!(submit.message_id, result.message_id);
+    assert_eq!(
+        result.kind,
+        vol_llm_agent_protocol::agent_server_protocol::MessageKind::Result
+    );
     assert_ne!(submit.message_id.as_str(), "run_abc");
+}
+
+#[test]
+fn agent_server_protocol_codec_test_submit_result_flat_wire_shape() {
+    // The new SubmitResult shape carries provider info plus the resolved
+    // tool/MCP/skill capability lists — verify it encodes to the flat wire
+    // format (no variant wrapper) that the server and frontend consume.
+    let result = Payload::Agent(AgentPayload::SubmitResult {
+        run_id: "run_xyz".to_string(),
+        accepted: true,
+        provider: vol_llm_agent_protocol::agent_server_protocol::ProviderInfo {
+            name: "openai".to_string(),
+            model: "gpt-4o".to_string(),
+        },
+        tools: vec!["bash".to_string(), "read".to_string()],
+        mcps: vec!["k8s".to_string()],
+        skills: vec!["code-review".to_string()],
+    });
+
+    assert_eq!(
+        result.data_json(),
+        serde_json::json!({
+            "run_id": "run_xyz",
+            "accepted": true,
+            "provider": {"name": "openai", "model": "gpt-4o"},
+            "tools": ["bash", "read"],
+            "mcps": ["k8s"],
+            "skills": ["code-review"]
+        })
+    );
 }

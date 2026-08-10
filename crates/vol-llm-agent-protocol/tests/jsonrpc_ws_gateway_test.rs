@@ -34,7 +34,14 @@ fn encode_result_maps_message_id_back_to_jsonrpc_id() {
         Operation::Agent(AgentOperation::Submit),
         Payload::Agent(AgentPayload::SubmitResult {
             run_id: "run_1".to_string(),
-            response: serde_json::json!({"agents": []}),
+            accepted: true,
+            provider: vol_llm_agent_protocol::agent_server_protocol::ProviderInfo {
+                name: "anthropic".to_string(),
+                model: "claude-sonnet-5".to_string(),
+            },
+            tools: vec![],
+            mcps: vec![],
+            skills: vec![],
         }),
     ))
     .unwrap();

@@ -11,6 +11,7 @@ use vol_llm_context::{
     AttentionAnchor, ContextBuilder, ContextBuilderBuilder, ContextContributor, ContextError,
     ContextMessage, ContributorInfo,
 };
+use vol_llm_core::capability_overlay::CapabilityOverlay;
 use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, Message, StreamEventData, StreamReceiver,
     ToolChoice,
@@ -18,7 +19,8 @@ use vol_llm_core::{
 use vol_llm_mcp::McpManager;
 use vol_llm_sandbox::registry::SandboxRegistry;
 use vol_llm_sandbox::SandboxRef;
-use vol_llm_tool::{ToolConfig, ToolContext};
+use vol_llm_skill::{SkillInjector, SkillLoader};
+use vol_llm_tool::{ToolConfig, ToolContext, ToolRegistry};
 use vol_session::{InMemoryEntryStore, Session, SessionContributor};
 
 /// Agent configuration — single source of truth for ReActAgent.
@@ -55,8 +57,9 @@ pub struct AgentConfig {
             >,
         >,
     >,
-    /// Shared skill filter from SkillInjector, for runtime updates via capability overlay.
-    pub skill_injector_filter: Option<Arc<tokio::sync::RwLock<Option<Vec<String>>>>>,
+    /// Shared skill loader — discovers and loads skills from working_dir.
+    /// Used by SkillInjector (context) and SkillTool (tool registry).
+    pub skill_loader: Arc<SkillLoader>,
 
     // === MCP ===
     pub mcp_manager: Option<Arc<McpManager>>,
@@ -113,7 +116,7 @@ impl Default for AgentConfig {
             context_builder: RwLock::new(ContextBuilderBuilder::new(128_000).build()),
             plugin_registry: PluginRegistry::new(),
             capability_overlays: None,
-            skill_injector_filter: None,
+            skill_loader: Arc::new(SkillLoader::new_empty()),
             mcp_manager: None,
             agent_id: generate_agent_id(),
             working_dir: PathBuf::from("."),
@@ -194,14 +197,22 @@ impl Drop for RunningGuard<'_> {
 /// ReAct Agent — owns config (Arc) and running state.
 pub struct ReActAgent {
     config: Arc<AgentConfig>,
+    base_tools: Arc<ToolRegistry>,
+    skill_loader: Arc<SkillLoader>,
     run_state: Arc<RunningState>,
 }
 
 impl ReActAgent {
     /// Create a new ReActAgent from config.
-    pub fn new(config: AgentConfig) -> Self {
+    pub fn new(
+        config: AgentConfig,
+        base_tools: Arc<ToolRegistry>,
+        skill_loader: Arc<SkillLoader>,
+    ) -> Self {
         Self {
             config: Arc::new(config),
+            base_tools,
+            skill_loader,
             run_state: Arc::new(RunningState::new()),
         }
     }
@@ -251,6 +262,131 @@ impl ReActAgent {
     /// Shared running state for external status queries.
     pub fn run_state(&self) -> &Arc<RunningState> {
         &self.run_state
+    }
+
+    // ── Public query methods ──
+
+    /// The LLM client used by this agent.
+    pub fn llm(&self) -> &Arc<dyn LLMClient> {
+        &self.config.llm
+    }
+
+    /// Tools resolved for the current session (overlay > AgentDef > global).
+    pub fn tools(&self) -> Arc<ToolRegistry> {
+        self.resolve_tools(&self.current_session_id())
+    }
+
+    /// Skills resolved for the current session (overlay > AgentDef > global).
+    pub fn skills(&self) -> SkillInjector {
+        self.resolve_skills(&self.current_session_id())
+    }
+
+    /// MCP manager resolved for the current session (overlay > AgentDef > global).
+    pub fn mcps(&self) -> Arc<McpManager> {
+        self.resolve_mcps(&self.current_session_id())
+    }
+
+    // ── Internal resolve methods ──
+
+    fn resolve_tools(&self, sid: &str) -> Arc<ToolRegistry> {
+        let overlay = self.get_overlay(sid);
+
+        // Tool allowlist: overlay non-empty > def.tools
+        let allowed: Option<Vec<&str>> = overlay
+            .as_ref()
+            .and_then(|o| {
+                if o.effective_tools.is_empty() {
+                    None
+                } else {
+                    Some(o.effective_tools.as_slice())
+                }
+            })
+            .or_else(|| self.config.def.as_ref().and_then(|d| d.tools.as_deref()))
+            .map(|v| v.iter().map(String::as_str).collect());
+
+        // Blocklist: always from def
+        let disallowed: Option<Vec<&str>> = self
+            .config
+            .def
+            .as_ref()
+            .and_then(|d| d.disallowed_tools.as_deref())
+            .map(|v| v.iter().map(String::as_str).collect());
+
+        let mut filtered = self
+            .base_tools
+            .filter(allowed.as_deref(), disallowed.as_deref());
+
+        // MCP tool filter: overlay non-empty > def.mcps
+        let mcps = overlay
+            .as_ref()
+            .and_then(|o| {
+                if o.effective_mcp_servers.is_empty() {
+                    None
+                } else {
+                    Some(o.effective_mcp_servers.as_slice())
+                }
+            })
+            .or_else(|| self.config.def.as_ref().and_then(|d| d.mcps.as_deref()));
+        if let Some(mcp_names) = mcps {
+            filtered = Arc::new(filtered.filter_mcp_servers(mcp_names));
+        }
+
+        filtered
+    }
+
+    fn resolve_skills(&self, sid: &str) -> SkillInjector {
+        let overlay = self.get_overlay(sid);
+
+        let filter: Option<Vec<String>> = overlay
+            .as_ref()
+            .and_then(|o| {
+                if o.effective_skills.is_empty() {
+                    None
+                } else {
+                    Some(o.effective_skills.clone())
+                }
+            })
+            .or_else(|| self.config.def.as_ref().and_then(|d| d.skills.clone()));
+
+        SkillInjector::new(self.skill_loader.clone(), AttentionAnchor::Head(1), filter)
+    }
+
+    fn resolve_mcps(&self, sid: &str) -> Arc<McpManager> {
+        let overlay = self.get_overlay(sid);
+
+        let filter: Option<&[String]> = overlay
+            .as_ref()
+            .and_then(|o| {
+                if o.effective_mcp_servers.is_empty() {
+                    None
+                } else {
+                    Some(o.effective_mcp_servers.as_slice())
+                }
+            })
+            .or_else(|| self.config.def.as_ref().and_then(|d| d.mcps.as_deref()));
+
+        self.config
+            .mcp_manager
+            .as_ref()
+            .map(|m| Arc::new(m.filter(filter)))
+            .unwrap_or_else(|| Arc::new(McpManager::empty()))
+    }
+
+    fn get_overlay(&self, sid: &str) -> Option<CapabilityOverlay> {
+        self.config
+            .capability_overlays
+            .as_ref()
+            .and_then(|map| map.try_read().ok())
+            .and_then(|guard| {
+                guard
+                    .get(&(self.config.agent_id.clone(), sid.to_string()))
+                    .cloned()
+            })
+    }
+
+    #[allow(clippy::unwrap_used)]
+    fn current_session_id(&self) -> String {
+        self.config.session.read().unwrap().id.clone()
     }
 
     // ── Mutation (gated by is_running) ──
@@ -353,11 +489,16 @@ impl ReActAgent {
         let (mut run_ctx, plugin_rx) =
             RunContext::new(run_id.clone(), user_input.clone(), self.config.clone());
 
-        // Wire capability overlays for runtime adjustment
-        if let Some(ref overlays) = self.config.capability_overlays {
-            run_ctx =
-                run_ctx.with_capability_overlays(overlays.clone(), self.config.agent_id.clone());
-        }
+        // Resolve tools and skills once at run start (overlay > AgentDef > global).
+        let sid = run_ctx.session_id.clone();
+        let resolved_tools = self.resolve_tools(&sid);
+        let resolved_skills = self.resolve_skills(&sid);
+
+        // Set the pre-resolved (filtered) tool registry on the run context.
+        run_ctx.tools = resolved_tools;
+
+        // Replace the skills contributor with the resolved SkillInjector.
+        run_ctx.replace_contributor("skills", Box::new(resolved_skills));
 
         for (key, value) in input.metadata {
             run_ctx.data.write().await.insert(key, value);
@@ -440,7 +581,7 @@ impl ReActAgent {
                 }
 
                 // Reason phase - call LLM with streaming
-                let tools_defs = run_ctx.effective_tools();
+                let tools_defs = run_ctx.tools.definitions();
 
                 // Get messages from ctx (not local variable)
                 let messages = run_ctx.get_context().await?;
@@ -867,9 +1008,41 @@ mod tests {
     };
 
     use crate::agent_def::AgentDef;
-
-    use vol_llm_tool::ToolRegistry;
+    use vol_llm_skill::SkillDef;
+    use vol_llm_tool::{ExecutableTool, ToolRegistry, ToolResult, ToolResultType, ToolSensitivity};
     use vol_session::InMemoryEntryStore;
+
+    /// Minimal tool for registry tests.
+    struct DummyTool {
+        name: &'static str,
+    }
+    impl DummyTool {
+        fn new(name: &'static str) -> Self {
+            Self { name }
+        }
+    }
+    #[async_trait::async_trait]
+    impl ExecutableTool for DummyTool {
+        fn name(&self) -> &'static str {
+            self.name
+        }
+        fn description(&self) -> &'static str {
+            "dummy"
+        }
+        fn parameters(&self) -> serde_json::Value {
+            serde_json::json!({})
+        }
+        fn sensitivity(&self, _args: &serde_json::Value) -> ToolSensitivity {
+            ToolSensitivity::Safe
+        }
+        async fn execute(
+            &self,
+            _args: &serde_json::Value,
+            _context: &vol_llm_tool::ToolContext,
+        ) -> ToolResultType<ToolResult> {
+            Ok(ToolResult::success("ok"))
+        }
+    }
 
     struct MockLlm;
     #[async_trait::async_trait]
@@ -946,5 +1119,499 @@ mod tests {
 
         assert_eq!(config.agent_id, "test_agent");
         assert_eq!(config.working_dir, PathBuf::from("."));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_tools_no_def_no_overlay_returns_all() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        registry.register(DummyTool::new("read"));
+        let base_tools = Arc::new(registry);
+
+        let config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .build()
+            .unwrap();
+        let skills = Arc::new(SkillLoader::new_empty());
+        let agent = ReActAgent::new(config, base_tools, skills);
+
+        let tools = agent.resolve_tools("any-session");
+        let names = tools
+            .definitions()
+            .iter()
+            .map(|d| d.name.clone())
+            .collect::<Vec<_>>();
+        assert!(names.contains(&"bash".to_string()));
+        assert!(names.contains(&"read".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_tools_with_def_allowlist() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        registry.register(DummyTool::new("read"));
+        let base_tools = Arc::new(registry);
+
+        let def = AgentDef::new("test", "prompt").with_tools(vec!["bash".into()]);
+
+        let config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .with_def(def)
+            .build()
+            .unwrap();
+        let skills = Arc::new(SkillLoader::new_empty());
+        let agent = ReActAgent::new(config, base_tools, skills);
+
+        let tools = agent.resolve_tools("any-session");
+        let names: Vec<String> = tools.definitions().iter().map(|d| d.name.clone()).collect();
+        assert_eq!(names, vec!["bash"]);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_tools_def_disallowed_blocklist() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        registry.register(DummyTool::new("read"));
+        let base_tools = Arc::new(registry);
+
+        let def = AgentDef::new("test", "prompt").with_disallowed_tools(vec!["read".into()]);
+
+        let config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .with_def(def)
+            .build()
+            .unwrap();
+        let skills = Arc::new(SkillLoader::new_empty());
+        let agent = ReActAgent::new(config, base_tools, skills);
+
+        let tools = agent.resolve_tools("any-session");
+        let names: Vec<String> = tools.definitions().iter().map(|d| d.name.clone()).collect();
+        assert_eq!(names, vec!["bash"]);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_tools_overlay_takes_precedence_over_def() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        registry.register(DummyTool::new("read"));
+        registry.register(DummyTool::new("write"));
+        let base_tools = Arc::new(registry);
+
+        let def = AgentDef::new("test", "prompt").with_tools(vec!["bash".into(), "read".into()]);
+
+        let mut config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .with_def(def)
+            .build()
+            .unwrap();
+
+        // Overlay narrows to ["read"] — must win over def allowlist ["bash", "read"].
+        let overlay = CapabilityOverlay::new(vec!["read".into()], vec![], vec![]);
+        let mut map = HashMap::new();
+        map.insert(
+            (config.agent_id.clone(), "overlay-session".to_string()),
+            overlay,
+        );
+        config.capability_overlays = Some(Arc::new(tokio::sync::RwLock::new(map)));
+
+        let skills = Arc::new(SkillLoader::new_empty());
+        let agent = ReActAgent::new(config, base_tools, skills);
+
+        let tools = agent.resolve_tools("overlay-session");
+        let names: Vec<String> = tools.definitions().iter().map(|d| d.name.clone()).collect();
+        assert_eq!(names, vec!["read"]);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_skills_no_def_no_overlay_returns_all() {
+        let loader = SkillLoader::new_empty();
+        let mut skill = SkillDef::new("test-skill", "# T").with_description("Test");
+        skill.id = "user:test-skill".into();
+        loader.register(skill).await;
+        let skill_loader = Arc::new(loader);
+
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        let base_tools = Arc::new(registry);
+
+        let config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .build()
+            .unwrap();
+        let agent = ReActAgent::new(config, base_tools, skill_loader);
+
+        let injector = agent.resolve_skills("any-session");
+        let names = injector.skill_names().await;
+        assert!(names.contains(&"test-skill".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_skills_def_allowlist_filters() {
+        let loader = SkillLoader::new_empty();
+        let mut skill = SkillDef::new("test-skill", "# T").with_description("Test");
+        skill.id = "user:test-skill".into();
+        loader.register(skill).await;
+        let skill_loader = Arc::new(loader);
+
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        let base_tools = Arc::new(registry);
+
+        let mut def = AgentDef::new("test", "prompt");
+        def.skills = Some(vec!["other-skill".into()]);
+
+        let config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .with_def(def)
+            .build()
+            .unwrap();
+        let agent = ReActAgent::new(config, base_tools, skill_loader);
+
+        let injector = agent.resolve_skills("any-session");
+        let names = injector.skill_names().await;
+        assert!(!names.contains(&"test-skill".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_mcps_no_manager_returns_empty() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        let base_tools = Arc::new(registry);
+
+        let config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .build()
+            .unwrap();
+        let skills = Arc::new(SkillLoader::new_empty());
+        let agent = ReActAgent::new(config, base_tools, skills);
+
+        let mcps = agent.resolve_mcps("any-session");
+        assert!(mcps.server_status().is_empty());
+    }
+
+    fn mcp_manager_with(names: &[&str]) -> Arc<McpManager> {
+        Arc::new(McpManager::new(
+            names
+                .iter()
+                .map(|name| vol_llm_mcp::config::McpServerConfig {
+                    name: (*name).to_string(),
+                    transport: vol_llm_mcp::config::McpTransport::Http {
+                        url: "http://127.0.0.1:1".to_string(),
+                        headers: None,
+                        env: Default::default(),
+                    },
+                })
+                .collect(),
+        ))
+    }
+
+    #[tokio::test]
+    async fn test_resolve_tools_overlay_empty_tools_falls_back_to_def() {
+        // Overlay exists but carries no tool restriction -> the AgentDef
+        // allowlist applies instead of the full global registry.
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        registry.register(DummyTool::new("read"));
+        let base_tools = Arc::new(registry);
+
+        let def = AgentDef::new("test", "prompt").with_tools(vec!["bash".into()]);
+
+        let mut config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .with_def(def)
+            .build()
+            .unwrap();
+
+        let overlay = CapabilityOverlay::new(vec![], vec![], vec![]);
+        let mut map = HashMap::new();
+        map.insert(
+            (config.agent_id.clone(), "overlay-session".to_string()),
+            overlay,
+        );
+        config.capability_overlays = Some(Arc::new(tokio::sync::RwLock::new(map)));
+
+        let skills = Arc::new(SkillLoader::new_empty());
+        let agent = ReActAgent::new(config, base_tools, skills);
+
+        let names: Vec<String> = agent
+            .resolve_tools("overlay-session")
+            .definitions()
+            .iter()
+            .map(|d| d.name.clone())
+            .collect();
+        assert_eq!(names, vec!["bash"]);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_tools_mcp_filter_uses_overlay_over_def() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        registry.register(DummyTool::new("mcp__docs_rs__search"));
+        registry.register(DummyTool::new("mcp__weather__forecast"));
+        let base_tools = Arc::new(registry);
+
+        let mut def = AgentDef::new("test", "prompt");
+        def.mcps = Some(vec!["docs_rs".into()]);
+
+        let mut config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .with_def(def)
+            .build()
+            .unwrap();
+
+        // Overlay narrows MCP servers to weather — must win over def's docs_rs.
+        let overlay = CapabilityOverlay::new(vec![], vec![], vec!["weather".into()]);
+        let mut map = HashMap::new();
+        map.insert(
+            (config.agent_id.clone(), "overlay-session".to_string()),
+            overlay,
+        );
+        config.capability_overlays = Some(Arc::new(tokio::sync::RwLock::new(map)));
+
+        let skills = Arc::new(SkillLoader::new_empty());
+        let agent = ReActAgent::new(config, base_tools, skills);
+
+        let mut names: Vec<String> = agent
+            .resolve_tools("overlay-session")
+            .definitions()
+            .iter()
+            .map(|d| d.name.clone())
+            .collect();
+        names.sort();
+        assert_eq!(names, vec!["bash", "mcp__weather__forecast"]);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_tools_def_mcps_filter_mcp_tools() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        registry.register(DummyTool::new("mcp__docs_rs__search"));
+        registry.register(DummyTool::new("mcp__weather__forecast"));
+        let base_tools = Arc::new(registry);
+
+        let mut def = AgentDef::new("test", "prompt");
+        def.mcps = Some(vec!["docs_rs".into()]);
+
+        let config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .with_def(def)
+            .build()
+            .unwrap();
+        let skills = Arc::new(SkillLoader::new_empty());
+        let agent = ReActAgent::new(config, base_tools, skills);
+
+        let mut names: Vec<String> = agent
+            .resolve_tools("any-session")
+            .definitions()
+            .iter()
+            .map(|d| d.name.clone())
+            .collect();
+        names.sort();
+        // Non-MCP tools are kept; only the allowed MCP server's tools remain.
+        assert_eq!(names, vec!["bash", "mcp__docs_rs__search"]);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_skills_overlay_takes_precedence_over_def() {
+        let loader = SkillLoader::new_empty();
+        let mut skill = SkillDef::new("test-skill", "# T").with_description("Test");
+        skill.id = "user:test-skill".into();
+        loader.register(skill).await;
+        let skill_loader = Arc::new(loader);
+
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        let base_tools = Arc::new(registry);
+
+        let mut def = AgentDef::new("test", "prompt");
+        def.skills = Some(vec!["test-skill".into()]);
+
+        let mut config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .with_def(def)
+            .build()
+            .unwrap();
+
+        // Overlay's skill allowlist ["other-skill"] replaces the def allowlist.
+        let overlay = CapabilityOverlay::new(vec![], vec!["other-skill".into()], vec![]);
+        let mut map = HashMap::new();
+        map.insert(
+            (config.agent_id.clone(), "overlay-session".to_string()),
+            overlay,
+        );
+        config.capability_overlays = Some(Arc::new(tokio::sync::RwLock::new(map)));
+
+        let agent = ReActAgent::new(config, base_tools, skill_loader);
+
+        let names = agent.resolve_skills("overlay-session").skill_names().await;
+        assert!(!names.contains(&"test-skill".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_mcps_def_allowlist_filters_servers() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        let base_tools = Arc::new(registry);
+
+        let mut def = AgentDef::new("test", "prompt");
+        def.mcps = Some(vec!["docs_rs".into()]);
+
+        let mut config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .with_def(def)
+            .build()
+            .unwrap();
+        config.mcp_manager = Some(mcp_manager_with(&["docs_rs", "weather"]));
+
+        let skills = Arc::new(SkillLoader::new_empty());
+        let agent = ReActAgent::new(config, base_tools, skills);
+
+        let mcps = agent.resolve_mcps("any-session");
+        let mut names: Vec<String> = mcps.server_status().into_keys().collect();
+        names.sort();
+        assert_eq!(names, vec!["docs_rs"]);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_mcps_overlay_takes_precedence_over_def() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        let base_tools = Arc::new(registry);
+
+        let mut def = AgentDef::new("test", "prompt");
+        def.mcps = Some(vec!["docs_rs".into()]);
+
+        let mut config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .with_def(def)
+            .build()
+            .unwrap();
+        config.mcp_manager = Some(mcp_manager_with(&["docs_rs", "weather"]));
+
+        // Overlay narrows MCP servers to weather — must win over def's docs_rs.
+        let overlay = CapabilityOverlay::new(vec![], vec![], vec!["weather".into()]);
+        let mut map = HashMap::new();
+        map.insert(
+            (config.agent_id.clone(), "overlay-session".to_string()),
+            overlay,
+        );
+        config.capability_overlays = Some(Arc::new(tokio::sync::RwLock::new(map)));
+
+        let skills = Arc::new(SkillLoader::new_empty());
+        let agent = ReActAgent::new(config, base_tools, skills);
+
+        let mcps = agent.resolve_mcps("overlay-session");
+        let mut names: Vec<String> = mcps.server_status().into_keys().collect();
+        names.sort();
+        assert_eq!(names, vec!["weather"]);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_mcps_overlay_empty_falls_back_to_def() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        let base_tools = Arc::new(registry);
+
+        let mut def = AgentDef::new("test", "prompt");
+        def.mcps = Some(vec!["docs_rs".into()]);
+
+        let mut config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .with_def(def)
+            .build()
+            .unwrap();
+        config.mcp_manager = Some(mcp_manager_with(&["docs_rs", "weather"]));
+
+        // Overlay with empty MCP list -> falls through to the def allowlist.
+        let overlay = CapabilityOverlay::new(vec![], vec![], vec![]);
+        let mut map = HashMap::new();
+        map.insert(
+            (config.agent_id.clone(), "overlay-session".to_string()),
+            overlay,
+        );
+        config.capability_overlays = Some(Arc::new(tokio::sync::RwLock::new(map)));
+
+        let skills = Arc::new(SkillLoader::new_empty());
+        let agent = ReActAgent::new(config, base_tools, skills);
+
+        let mcps = agent.resolve_mcps("overlay-session");
+        let mut names: Vec<String> = mcps.server_status().into_keys().collect();
+        names.sort();
+        assert_eq!(names, vec!["docs_rs"]);
+    }
+
+    #[tokio::test]
+    async fn test_session_accessors_apply_overlay_for_current_session() {
+        // tools()/skills()/mcps() resolve against the CURRENT session id —
+        // an overlay keyed by that session must apply through the accessor.
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        registry.register(DummyTool::new("read"));
+        let base_tools = Arc::new(registry);
+
+        let mut config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .with_session(Arc::new(Session::new(Arc::new(InMemoryEntryStore::new()))))
+            .build()
+            .unwrap();
+        config.mcp_manager = Some(mcp_manager_with(&["docs_rs", "weather"]));
+
+        let session_id = config.session.read().unwrap().id.clone();
+
+        // Overlay keyed by the session id narrows tools to ["read"] and MCPs to ["weather"].
+        let overlay = CapabilityOverlay::new(vec!["read".into()], vec![], vec!["weather".into()]);
+        let mut map = HashMap::new();
+        map.insert((config.agent_id.clone(), session_id), overlay);
+        config.capability_overlays = Some(Arc::new(tokio::sync::RwLock::new(map)));
+
+        let skills = Arc::new(SkillLoader::new_empty());
+        let agent = ReActAgent::new(config, base_tools, skills);
+
+        let tool_names: Vec<String> = agent
+            .tools()
+            .definitions()
+            .iter()
+            .map(|d| d.name.clone())
+            .collect();
+        assert_eq!(tool_names, vec!["read"]);
+
+        let mcp_names: Vec<String> = agent.mcps().server_status().into_keys().collect();
+        assert_eq!(mcp_names, vec!["weather"]);
+
+        // Skills accessor works too (no skills registered -> empty).
+        assert!(agent.skills().skill_names().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_llm_returns_config_llm() {
+        let llm: Arc<dyn LLMClient> = Arc::new(MockLlm);
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("bash"));
+        let base_tools = Arc::new(registry);
+
+        let config = AgentConfig::builder()
+            .with_llm(llm.clone())
+            .with_tools(base_tools.clone())
+            .build()
+            .unwrap();
+        let skills = Arc::new(SkillLoader::new_empty());
+        let agent = ReActAgent::new(config, base_tools, skills);
+
+        assert!(Arc::ptr_eq(agent.llm(), &llm));
     }
 }

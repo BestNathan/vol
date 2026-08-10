@@ -285,7 +285,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .to_string(),
         )
         .build()?;
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     // Example query that will trigger tool calls
     let query = "请查询 BTC 当前价格，并分析 ETH 的隐含波动率是否处于高位？";

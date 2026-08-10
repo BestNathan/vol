@@ -294,6 +294,7 @@ mod tests {
             sandbox: None,
             tool_config: None,
             mcps: None,
+            skills: None,
         };
         let ctx = ctx.with_agent_def(def);
         assert!(ctx.agent_def.is_some());

@@ -95,13 +95,42 @@ async fn agent_list_and_submit_run() {
     println!("=== agent.submit ===");
     println!("{}", serde_json::to_string_pretty(&submit_resp).unwrap());
 
-    // agent.submit returns an ack with run_id
-    let run_id = submit_resp["result"]["run_id"]
+    // agent.submit now returns a single SubmitResult:
+    // { run_id, accepted, provider: {name, model}, tools, mcps, skills }
+    let result = &submit_resp["result"];
+    let run_id = result["run_id"]
         .as_str()
         .expect("run_id missing from submit response");
-    let accepted = submit_resp["result"]["accepted"].as_bool().unwrap_or(false);
+    let accepted = result["accepted"].as_bool().unwrap_or(false);
     assert!(accepted, "run not accepted");
-    println!("run submitted: {run_id}");
+
+    let provider = result["provider"].as_object().expect("provider missing");
+    assert!(provider["name"].as_str().is_some(), "provider.name missing");
+    assert!(
+        provider["model"].as_str().is_some(),
+        "provider.model missing"
+    );
+
+    assert!(
+        result["tools"].is_array(),
+        "tools array missing from submit response"
+    );
+    assert!(
+        result["mcps"].is_array(),
+        "mcps array missing from submit response"
+    );
+    assert!(
+        result["skills"].is_array(),
+        "skills array missing from submit response"
+    );
+    println!(
+        "run submitted: {run_id} (provider {} / {}, {} tools, {} mcps, {} skills)",
+        provider["name"].as_str().unwrap_or("?"),
+        provider["model"].as_str().unwrap_or("?"),
+        result["tools"].as_array().map(|a| a.len()).unwrap_or(0),
+        result["mcps"].as_array().map(|a| a.len()).unwrap_or(0),
+        result["skills"].as_array().map(|a| a.len()).unwrap_or(0),
+    );
 
     // ── 3. Wait for agent events, stop on AgentComplete ────────────────────
 

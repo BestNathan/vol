@@ -177,7 +177,9 @@ impl WikiAgent {
             .build()
             .map_err(|e| WikiAgentError::Config(format!("Failed to build agent config: {e}")))?;
 
-        let react_agent = ReActAgent::new(agent_config);
+        let base_tools = agent_config.tools.clone();
+        let skill_loader = agent_config.skill_loader.clone();
+        let react_agent = ReActAgent::new(agent_config, base_tools, skill_loader);
 
         let response = react_agent
             .run(&prompt)

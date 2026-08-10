@@ -20,6 +20,75 @@ struct ConnectionState {
     ws_url: String,
 }
 
+/// Provider and model used for the run — mirrors
+/// `vol_llm_agent_protocol::agent_server_protocol::ProviderInfo`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderInfo {
+    pub name: String,
+    pub model: String,
+}
+
+/// Response from `agent.submit` — mirrors `AgentPayload::SubmitResult`.
+///
+/// The server sends a single SubmitResult response (no more Ack+Result pair)
+/// carrying `run_id`, the `accepted` flag, provider info, and the effective
+/// tool/MCP/skill capability lists instead of the old `response` value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubmitResult {
+    pub run_id: String,
+    pub accepted: bool,
+    pub provider: ProviderInfo,
+    pub tools: Vec<String>,
+    pub mcps: Vec<String>,
+    pub skills: Vec<String>,
+}
+
+/// Parse a flat `agent.submit` JSON-RPC result into the new `SubmitResult` shape.
+fn parse_submit_result(value: &serde_json::Value) -> anyhow::Result<SubmitResult> {
+    let run_id = value
+        .get("run_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("missing run_id"))?
+        .to_string();
+    let accepted = value
+        .get("accepted")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let provider = ProviderInfo {
+        name: value
+            .get("provider")
+            .and_then(|p| p.get("name"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string(),
+        model: value
+            .get("provider")
+            .and_then(|p| p.get("model"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string(),
+    };
+    let str_list = |key: &str| {
+        value
+            .get(key)
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|e| e.as_str().map(ToString::to_string))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    };
+    Ok(SubmitResult {
+        run_id,
+        accepted,
+        provider,
+        tools: str_list("tools"),
+        mcps: str_list("mcps"),
+        skills: str_list("skills"),
+    })
+}
+
 /// Remote JSON-RPC WebSocket connection to an agent service.
 ///
 /// Implements both `AgentConnection` and `FileOperations` for remote mode.
@@ -84,21 +153,48 @@ impl AgentConnection for RemoteConnection {
                     let client = WsClientBuilder::default().build(&url).await?;
                     connected.store(true, Ordering::SeqCst);
 
-                    // Subscribe to agent events via a notification method
-                    // The server pushes ui.event notifications
-                    // For now, we do a simple request-response pattern
+                    // Simple request-response pattern: agent.submit now returns
+                    // a single SubmitResult { run_id, accepted, provider,
+                    // tools, mcps, skills } — no more Ack+Result pair.
                     let mut params = ObjectParams::new();
                     params.insert("input", &input_clone)?;
                     let response: serde_json::Value =
                         client.request("agent.submit", params).await?;
 
-                    if let Some(req_id) = response.get("req_id").and_then(|v| v.as_str()) {
-                        // Poll for events or listen on subscription
-                        // Simple polling approach -- server should push via notifications
+                    let submit_result = match parse_submit_result(&response) {
+                        Ok(sr) => sr,
+                        Err(e) => {
+                            let _ = tx
+                                .send(UiEvent::AgentError {
+                                    run_id: String::new(),
+                                    message: format!("agent.submit: invalid response: {e}"),
+                                })
+                                .await;
+                            return anyhow::Result::<()>::Ok(());
+                        }
+                    };
+
+                    if submit_result.accepted {
+                        tracing::info!(
+                            "agent.submit accepted: run_id={} provider={}/{} tools={} mcps={} skills={}",
+                            submit_result.run_id,
+                            submit_result.provider.name,
+                            submit_result.provider.model,
+                            submit_result.tools.len(),
+                            submit_result.mcps.len(),
+                            submit_result.skills.len(),
+                        );
                         let _ = tx
                             .send(UiEvent::AgentStart {
-                                run_id: req_id.to_string(),
+                                run_id: submit_result.run_id,
                                 input: input_clone.clone(),
+                            })
+                            .await;
+                    } else {
+                        let _ = tx
+                            .send(UiEvent::AgentError {
+                                run_id: submit_result.run_id,
+                                message: "agent.submit was rejected by the server".to_string(),
                             })
                             .await;
                     }
@@ -255,5 +351,47 @@ mod tests {
         let rx = conn.submit("test".into()).await.unwrap();
         // Receiver should exist; actual connection will fail in background
         drop(rx);
+    }
+
+    #[test]
+    fn parse_submit_result_parses_new_shape() {
+        let value = serde_json::json!({
+            "run_id": "run-1",
+            "accepted": true,
+            "provider": { "name": "anthropic", "model": "claude-sonnet-5" },
+            "tools": ["bash", "read"],
+            "mcps": ["k8s"],
+            "skills": ["code-review"],
+        });
+        let sr = parse_submit_result(&value).unwrap();
+        assert_eq!(sr.run_id, "run-1");
+        assert!(sr.accepted);
+        assert_eq!(sr.provider.name, "anthropic");
+        assert_eq!(sr.provider.model, "claude-sonnet-5");
+        assert_eq!(sr.tools, vec!["bash", "read"]);
+        assert_eq!(sr.mcps, vec!["k8s"]);
+        assert_eq!(sr.skills, vec!["code-review"]);
+    }
+
+    #[test]
+    fn parse_submit_result_defaults_missing_capability_lists() {
+        // Minimal response — capability lists are optional on the wire.
+        let value = serde_json::json!({
+            "run_id": "run-2",
+            "accepted": false,
+            "provider": { "name": "unknown", "model": "unknown" },
+        });
+        let sr = parse_submit_result(&value).unwrap();
+        assert_eq!(sr.run_id, "run-2");
+        assert!(!sr.accepted);
+        assert!(sr.tools.is_empty());
+        assert!(sr.mcps.is_empty());
+        assert!(sr.skills.is_empty());
+    }
+
+    #[test]
+    fn parse_submit_result_missing_run_id_errors() {
+        let value = serde_json::json!({ "accepted": true, "tools": [] });
+        assert!(parse_submit_result(&value).is_err());
     }
 }

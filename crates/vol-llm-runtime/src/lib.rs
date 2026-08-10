@@ -136,30 +136,12 @@ impl AgentRuntime {
         let session_store = self.session_manager.entry_store_for_agent(&agent_id);
         let session = Arc::new(Session::new(session_store));
 
-        // Clone the full shared registry, then apply per-agent filters.
-        let mut tool_registry = (*self.tool_registry).clone();
-
-        // Filter MCP servers if mcps is set
-        if let Some(ref server_names) = def.mcps {
-            tool_registry = tool_registry.filter_mcp_servers(server_names);
-        }
-
-        // Filter allowed/disallowed tools (existing mechanism)
-        let allowed_refs: Option<Vec<&str>> = def
-            .tools
-            .as_ref()
-            .map(|v| v.iter().map(std::string::String::as_str).collect());
-        let disallowed_refs: Option<Vec<&str>> = def
-            .disallowed_tools
-            .as_ref()
-            .map(|v| v.iter().map(std::string::String::as_str).collect());
-        let tool_registry =
-            tool_registry.filter(allowed_refs.as_deref(), disallowed_refs.as_deref());
-
         let mut config = AgentConfig::builder()
             .with_def(def.clone())
             .with_llm(llm)
-            .with_tools(tool_registry)
+            // Full, unfiltered registry — ReActAgent::resolve_tools re-filters
+            // from base_tools at run start (def.tools / disallowed_tools / mcps).
+            .with_tools(self.tool_registry.clone())
             .with_session(session)
             .with_working_dir(agent_dir)
             .build()
@@ -167,7 +149,11 @@ impl AgentRuntime {
 
         config.mcp_manager = Some(self.mcp_manager.clone());
 
-        let agent = ReActAgent::new(config);
+        let agent = ReActAgent::new(
+            config,
+            self.tool_registry.clone(),
+            self.skill_loader.clone(),
+        );
 
         self.agent_defs
             .write()
@@ -1376,7 +1362,7 @@ base_url = "https://api.test.com"
 
     #[tokio::test]
     #[ignore = "requires isolated MCP configuration (no local MCP servers)"]
-    async fn register_agent_with_mcps_creates_filtered_tool_registry() {
+    async fn register_agent_with_mcps_resolves_filtered_tools() {
         let temp = tempfile::tempdir().unwrap();
         let providers_dir = temp.path().join(".agents/providers");
         std::fs::create_dir_all(&providers_dir).unwrap();
@@ -1399,7 +1385,7 @@ base_url = "https://api.test.com"
             .await
             .expect("runtime build should succeed");
 
-        // Agent with mcps: ["nonexistent-server"] — no MCP tools should be registered
+        // Agent with mcps: ["nonexistent-server"] — no MCP tools should be resolved
         // since the test McpManager has no servers configured.
         let def = AgentDef::new("filtered-agent", "You are a filtered agent.")
             .with_type("test")
@@ -1411,8 +1397,16 @@ base_url = "https://api.test.com"
             .await
             .expect("register_agent should succeed");
 
-        // The agent should have built-in tools but no MCP tools
-        let tool_names = agent.config().tools.tool_names();
+        // config.tools holds the full shared registry (register_agent no longer pre-filters);
+        // the def-based mcps filter is applied by ReActAgent::resolve_tools at run/query time.
+        assert!(
+            !agent.config().tools.tool_names().is_empty(),
+            "config should hold the full shared registry with built-in tools"
+        );
+
+        // The resolved tool set should have built-in tools but no MCP tools
+        let resolved = agent.tools();
+        let tool_names = resolved.tool_names();
         assert!(!tool_names.is_empty(), "agent should have built-in tools");
         // No MCP tools should be present (the test McpManager has no servers)
         let mcp_tools: Vec<_> = tool_names

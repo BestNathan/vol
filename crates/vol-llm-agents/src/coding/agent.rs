@@ -231,7 +231,10 @@ impl CodingAgent {
             }
         };
 
-        let mut react_agent = ReActAgent::new(self.build_agent_config(session));
+        let config = self.build_agent_config(session);
+        let base_tools = config.tools.clone();
+        let skill_loader = config.skill_loader.clone();
+        let mut react_agent = ReActAgent::new(config, base_tools, skill_loader);
 
         if let Some(ref sandbox) = self.sandbox {
             react_agent = react_agent.with_sandbox(sandbox.clone());

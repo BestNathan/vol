@@ -57,6 +57,10 @@ fn test_agent_def() -> AgentDef {
 }
 
 fn test_handler() -> CapabilityHandler {
+    test_handler_with_def(test_agent_def())
+}
+
+fn test_handler_with_def(def: AgentDef) -> CapabilityHandler {
     let overlays = Arc::new(RwLock::new(HashMap::new()));
     let mut tool_registry = ToolRegistry::new();
     tool_registry.register(TestTool("bash"));
@@ -66,7 +70,34 @@ fn test_handler() -> CapabilityHandler {
     let mcp_manager = Arc::new(McpManager::new(vec![]));
     let agent_defs = {
         let mut map: HashMap<String, AgentDef> = HashMap::new();
-        map.insert("test-agent".into(), test_agent_def());
+        map.insert("test-agent".into(), def);
+        Arc::new(std::sync::RwLock::new(map))
+    };
+    CapabilityHandler::new(
+        overlays,
+        tool_registry,
+        skill_loader,
+        mcp_manager,
+        agent_defs,
+    )
+}
+
+/// Handler whose SkillLoader has a registered skill (so allowlisted skills
+/// pass the registry existence check).
+async fn test_handler_with_def_and_skill(def: AgentDef, skill_name: &str) -> CapabilityHandler {
+    let overlays = Arc::new(RwLock::new(HashMap::new()));
+    let mut tool_registry = ToolRegistry::new();
+    tool_registry.register(TestTool("bash"));
+    tool_registry.register(TestTool("read"));
+    let tool_registry = Arc::new(tool_registry);
+    let skill_loader = Arc::new(SkillLoader::new_empty());
+    skill_loader
+        .register(vol_llm_skill::SkillDef::new(skill_name, "test skill"))
+        .await;
+    let mcp_manager = Arc::new(McpManager::new(vec![]));
+    let agent_defs = {
+        let mut map: HashMap<String, AgentDef> = HashMap::new();
+        map.insert("test-agent".into(), def);
         Arc::new(std::sync::RwLock::new(map))
     };
     CapabilityHandler::new(
@@ -243,6 +274,82 @@ async fn update_capabilities_rejects_unknown_tool() {
         .unwrap();
     let json = replies[0].payload.data_json();
     assert_eq!(json["code"], "unknown_tool");
+}
+
+#[tokio::test]
+async fn update_capabilities_rejects_skill_not_in_allowlist() {
+    let mut def = test_agent_def();
+    def.skills = Some(vec!["skill-a".into()]);
+    let handler = test_handler_with_def(def);
+    let replies = handler
+        .handle(msg(
+            "1",
+            Operation::Agent(AgentOperation::UpdateCapabilities),
+            Payload::Agent(AgentPayload::UpdateCapabilities {
+                agent_id: "test-agent".into(),
+                session_id: "sess-1".into(),
+                effective_tools: vec![],
+                effective_skills: vec!["skill-b".into()],
+                effective_mcp_servers: vec![],
+            }),
+        ))
+        .await
+        .unwrap();
+
+    let json = replies[0].payload.data_json();
+    assert_eq!(json["code"], "skill_not_allowed");
+}
+
+#[tokio::test]
+async fn update_capabilities_allows_skill_in_allowlist() {
+    let mut def = test_agent_def();
+    def.skills = Some(vec!["skill-a".into()]);
+    let handler = test_handler_with_def_and_skill(def, "skill-a").await;
+    let replies = handler
+        .handle(msg(
+            "1",
+            Operation::Agent(AgentOperation::UpdateCapabilities),
+            Payload::Agent(AgentPayload::UpdateCapabilities {
+                agent_id: "test-agent".into(),
+                session_id: "sess-1".into(),
+                effective_tools: vec![],
+                effective_skills: vec!["skill-a".into()],
+                effective_mcp_servers: vec![],
+            }),
+        ))
+        .await
+        .unwrap();
+
+    let json = replies[0].payload.data_json();
+    let skills = json["effective_skills"].as_array().unwrap();
+    assert_eq!(skills.len(), 1);
+    assert_eq!(skills[0], "skill-a");
+}
+
+#[tokio::test]
+async fn get_capabilities_returns_base_skills_from_def() {
+    let mut def = test_agent_def();
+    def.skills = Some(vec!["skill-a".into()]);
+    let handler = test_handler_with_def_and_skill(def, "skill-a").await;
+    let replies = handler
+        .handle(msg(
+            "1",
+            Operation::Agent(AgentOperation::GetCapabilities),
+            Payload::Agent(AgentPayload::GetCapabilities {
+                agent_id: "test-agent".into(),
+                session_id: "sess-1".into(),
+            }),
+        ))
+        .await
+        .unwrap();
+
+    let json = replies[0].payload.data_json();
+    let base = json["base_skills"].as_array().unwrap();
+    assert_eq!(base.len(), 1);
+    assert_eq!(base[0], "skill-a");
+    let effective = json["effective_skills"].as_array().unwrap();
+    assert_eq!(effective.len(), 1);
+    assert_eq!(effective[0], "skill-a");
 }
 
 #[tokio::test]

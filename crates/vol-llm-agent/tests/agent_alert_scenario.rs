@@ -501,7 +501,9 @@ async fn test_agent_alert_scenario() {
         ))
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     // Build user input from alert
     let user_input = format!(

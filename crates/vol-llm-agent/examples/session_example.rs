@@ -58,7 +58,7 @@ async fn main() {
     println!("       .with_tool(tool)");
     println!("       .with_session(session)");
     println!("       .build()?;");
-    println!("   let agent = ReActAgent::new(config);");
+    println!("   let agent = ReActAgent::new(config, config.tools.clone(), config.skill_loader.clone());");
 
     // 8. Demonstrate max_history_messages configuration
     println!("\n8. Configure conversation history limit:");
@@ -68,7 +68,7 @@ async fn main() {
     println!("       .with_llm(llm)");
     println!("       .with_max_history_messages(50)  // Load up to 50 history messages");
     println!("       .build()?;");
-    println!("   let agent = ReActAgent::new(config);");
+    println!("   let agent = ReActAgent::new(config, config.tools.clone(), config.skill_loader.clone());");
 
     println!("\n=== Example Complete ===");
     println!("Session and SessionEntryStore are ready for use with ReActAgent!");

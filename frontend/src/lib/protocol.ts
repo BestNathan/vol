@@ -62,7 +62,14 @@ export interface AgentEvent {
 export interface RpcMethods {
   'agent.submit': {
     params: { input: string; target?: string }
-    result: { run_id: string; response: unknown }
+    result: {
+      run_id: string
+      accepted: boolean
+      provider: { name: string; model: string }
+      tools: string[]
+      mcps: string[]
+      skills: string[]
+    }
   }
   'agent.approve': {
     params: { run_id: string; approved: boolean; reason?: string }

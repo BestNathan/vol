@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use vol_llm_agent_protocol::agent_server_protocol::{
     AgentOperation, AgentPayload, AgentServerMessage, MessageKind, Operation, Payload,
-    ProtocolError, TaskOperation, TaskPayload,
+    ProtocolError, ProviderInfo, TaskOperation, TaskPayload,
 };
 use vol_llm_agent_protocol::DomainHandler;
 
@@ -111,13 +111,17 @@ impl DomainHandler for ClientHandler {
                 let run_id = uuid::Uuid::new_v4().to_string();
                 let run_id_simple = run_id.replace('-', "");
 
-                // Register this client connection for event relay
-                // (The client connection is not available here — we store
-                //  the run_id and rely on the core to relay events.)
-                // For now, return the ack immediately; event relay is a follow-up.
-                let ack = AgentPayload::SubmitAck {
+                // Return minimal SubmitResult (control-plane proxies, doesn't have agent instance)
+                let result = AgentPayload::SubmitResult {
                     run_id: run_id.clone(),
                     accepted: true,
+                    provider: ProviderInfo {
+                        name: "unknown".into(),
+                        model: "unknown".into(),
+                    },
+                    tools: vec![],
+                    mcps: vec![],
+                    skills: vec![],
                 };
 
                 // Forward submit to the data-plane node (fire-and-forget)
@@ -143,7 +147,7 @@ impl DomainHandler for ClientHandler {
                 let mut reply = AgentServerMessage::new_result(
                     message.message_id,
                     Operation::Agent(AgentOperation::Submit),
-                    Payload::Agent(ack),
+                    Payload::Agent(result),
                 );
                 reply.sender = "control".to_string();
                 reply.receiver = message.sender;
@@ -180,10 +184,31 @@ mod tests {
         AgentOperation, AgentPayload, AgentServerMessage, MessageKind, Operation, Payload,
         TaskOperation, TaskPayload,
     };
-    use vol_llm_agent_protocol::DomainHandler;
+    use vol_llm_agent_protocol::{Connection, DomainHandler};
 
     use crate::control_plane::handlers::client::ClientHandler;
     use crate::control_plane::state::ControlPlaneState;
+
+    /// No-op Connection for simulating a registered data-plane node.
+    struct MockConnection;
+
+    #[async_trait::async_trait]
+    impl Connection for MockConnection {
+        fn protocol(&self) -> &str {
+            "mock"
+        }
+        async fn recv(
+            &self,
+        ) -> Option<Result<AgentServerMessage, vol_llm_agent_protocol::ConnectionError>> {
+            None
+        }
+        async fn send(
+            &self,
+            _msg: AgentServerMessage,
+        ) -> Result<(), vol_llm_agent_protocol::ConnectionError> {
+            Ok(())
+        }
+    }
 
     #[tokio::test]
     async fn agent_list_returns_empty_list_from_control_plane() {
@@ -253,6 +278,75 @@ mod tests {
             err.to_string().contains("capability_not_found"),
             "expected capability_not_found, got: {err}"
         );
+    }
+
+    #[tokio::test]
+    async fn agent_submit_returns_single_submit_result() {
+        use vol_llm_agent_protocol::agent_server_protocol::{
+            AgentCapability, CapabilitySnapshot, NodeRegistration,
+        };
+
+        let state = Arc::new(ControlPlaneState::new());
+        state
+            .nodes
+            .register(
+                NodeRegistration {
+                    node_id: "node-a".to_string(),
+                    name: "Node A".to_string(),
+                    version: "0.1.0".to_string(),
+                },
+                "auth-a".to_string(),
+                1000,
+            )
+            .unwrap();
+        state
+            .capabilities
+            .apply_snapshot(CapabilitySnapshot {
+                node_id: "node-a".to_string(),
+                revision: 1,
+                generated_at_ms: Some(1000),
+                agents: vec![AgentCapability {
+                    agent_id: "coding".to_string(),
+                    name: "Coding Agent".to_string(),
+                    description: Some("A coding agent".to_string()),
+                    status: Some("idle".to_string()),
+                }],
+                tools: vec![],
+                mcp_servers: vec![],
+                skills: vec![],
+            })
+            .unwrap();
+        state
+            .node_connections
+            .write()
+            .expect("node_connections lock poisoned")
+            .insert("node-a".to_string(), Arc::new(MockConnection));
+
+        let handler = ClientHandler::new(state);
+        let msg = AgentServerMessage {
+            protocol: "agent-server/1".to_string(),
+            message_id: "1".to_string(),
+            sender: "client".to_string(),
+            receiver: "control".to_string(),
+            kind: MessageKind::Command,
+            operation: Operation::Agent(AgentOperation::Submit),
+            payload: Payload::Agent(AgentPayload::Submit {
+                input: vol_llm_agent::AgentInput::text("test"),
+                target: Some("coding".to_string()),
+            }),
+            meta: Default::default(),
+        };
+
+        let replies = handler.handle(msg).await.unwrap();
+        assert_eq!(replies.len(), 1, "expected a single SubmitResult reply");
+        let json = replies[0].payload.data_json();
+        assert_eq!(json["accepted"], true);
+        assert!(!json["run_id"].as_str().unwrap().is_empty());
+        assert_eq!(json["provider"]["name"], "unknown");
+        assert_eq!(json["provider"]["model"], "unknown");
+        assert!(json["tools"].as_array().unwrap().is_empty());
+        assert!(json["mcps"].as_array().unwrap().is_empty());
+        assert!(json["skills"].as_array().unwrap().is_empty());
     }
 
     #[tokio::test]

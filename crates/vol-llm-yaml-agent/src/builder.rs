@@ -95,7 +95,9 @@ impl YamlAgentBuilder {
             .build()
             .map_err(|e| YamlAgentError::Config(format!("Failed to build agent config: {e}")))?;
 
-        Ok(ReActAgent::new(agent_config))
+        let base_tools = agent_config.tools.clone();
+        let skill_loader = agent_config.skill_loader.clone();
+        Ok(ReActAgent::new(agent_config, base_tools, skill_loader))
     }
 
     /// Build combined system prompt: inline string + file contents.

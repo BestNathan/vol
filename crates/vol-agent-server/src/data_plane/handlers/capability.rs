@@ -64,7 +64,7 @@ impl CapabilityHandler {
         match def {
             Some(d) => (
                 d.tools.unwrap_or_default(),
-                vec![], // AgentDef has no skills field
+                d.skills.unwrap_or_default(),
                 d.mcps.unwrap_or_default(),
             ),
             None => (vec![], vec![], vec![]),
@@ -170,7 +170,7 @@ impl DomainHandler for CapabilityHandler {
                 let (base_tools, base_skills, base_mcp_servers) = match def {
                     Some(d) => (
                         d.tools.unwrap_or_default(),
-                        vec![], // AgentDef has no skills field
+                        d.skills.unwrap_or_default(),
                         d.mcps.unwrap_or_default(),
                     ),
                     None => (vec![], vec![], vec![]),
@@ -263,6 +263,26 @@ impl DomainHandler for CapabilityHandler {
                                     ErrorPayload {
                                         code: "mcp_not_allowed".to_string(),
                                         message: format!("MCP server '{server}' is not in agent's allowed mcps list"),
+                                        detail: None,
+                                        terminal: false,
+                                    },
+                                )]);
+                            }
+                        }
+                    }
+
+                    // 2.5 Check skills allowlist constraint
+                    if let Some(ref def_skills) = def.skills {
+                        for skill in &effective_skills {
+                            if !def_skills.contains(skill) {
+                                return Ok(vec![AgentServerMessage::new_error(
+                                    message.message_id,
+                                    Operation::Agent(AgentOperation::UpdateCapabilities),
+                                    ErrorPayload {
+                                        code: "skill_not_allowed".to_string(),
+                                        message: format!(
+                                            "Skill '{skill}' is not in agent's allowed skills list"
+                                        ),
                                         detail: None,
                                         terminal: false,
                                     },

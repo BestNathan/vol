@@ -52,6 +52,10 @@ pub struct AgentFrontmatter {
     /// servers are registered for the agent. When absent, all MCP tools are available.
     #[serde(default)]
     pub mcps: Option<Vec<String>>,
+    /// Optional. Skill allowlist. When set, only these skills are available
+    /// to the agent. When absent, all skills are available.
+    #[serde(default)]
+    pub skills: Option<Vec<String>>,
 }
 
 impl AgentFrontmatter {
@@ -149,6 +153,7 @@ mod tests {
             sandbox: None,
             tool_config: None,
             mcps: None,
+            skills: None,
         };
         assert_eq!(fm.resolve_type(), "my-agent");
     }
@@ -170,6 +175,7 @@ mod tests {
             sandbox: None,
             tool_config: None,
             mcps: None,
+            skills: None,
         };
         assert_eq!(fm.resolve_type(), "code-reviewer");
     }
@@ -191,6 +197,7 @@ mod tests {
             sandbox: None,
             tool_config: None,
             mcps: None,
+            skills: None,
         };
         assert_eq!(fm.resolve_max_iterations(), Some(10));
     }
@@ -212,6 +219,7 @@ mod tests {
             sandbox: None,
             tool_config: None,
             mcps: None,
+            skills: None,
         };
         assert_eq!(fm.resolve_max_iterations(), Some(20));
     }
@@ -233,6 +241,7 @@ mod tests {
             sandbox: None,
             tool_config: None,
             mcps: None,
+            skills: None,
         };
         assert!(fm.resolve_max_iterations().is_none());
     }
@@ -270,7 +279,30 @@ mod tests {
             sandbox: None,
             tool_config: None,
             mcps: None,
+            skills: None,
         };
         assert!(fm.mcps.is_none());
+    }
+
+    #[test]
+    fn test_frontmatter_skills_defaults_to_none() {
+        let fm = AgentFrontmatter {
+            name: "a".to_string(),
+            r#type: None,
+            description: "d".to_string(),
+            tools: None,
+            disallowed_tools: None,
+            model: None,
+            max_iterations: None,
+            max_turns: None,
+            max_history_messages: None,
+            working_dir: None,
+            context_files: None,
+            sandbox: None,
+            tool_config: None,
+            mcps: None,
+            skills: None,
+        };
+        assert!(fm.skills.is_none());
     }
 }

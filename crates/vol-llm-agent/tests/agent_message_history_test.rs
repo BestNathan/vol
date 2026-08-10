@@ -134,7 +134,9 @@ async fn test_tool_results_passed_to_next_iteration() {
         .with_system_prompt("You are a test assistant. Use tools to get information.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     agent.run("What is the BTC price?").await.unwrap();
 
@@ -236,7 +238,9 @@ async fn test_message_history_grows_correctly() {
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();
-    let agent = ReActAgent::new(config);
+    let base_tools = config.tools.clone();
+    let skill_loader = config.skill_loader.clone();
+    let agent = ReActAgent::new(config, base_tools, skill_loader);
 
     agent.run("What is the BTC price?").await.unwrap();
 
