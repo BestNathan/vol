@@ -19,3 +19,7 @@ toml = { workspace = true }
 vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-mcp = { path = "../vol-llm-mcp" }
 vol-llm-sandbox = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.10"
+tokio = { workspace = true, features = ["rt", "macros"] }

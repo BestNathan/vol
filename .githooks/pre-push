@@ -42,6 +42,12 @@ fi
 
 HAS_ERROR=0
 
+# ── Rust clippy-allow check (fast, runs first) ─────────────────────────
+if [ "$RUST_CHANGED" = "true" ]; then
+  "$SCRIPT_DIR/scripts/check-no-clippy-allow.sh" || HAS_ERROR=1
+  if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
+fi
+
 # ── Rust coverage (changed crates only) ────────────────────────────────
 if [ "$RUST_CHANGED" = "true" ]; then
   # Extract changed crate names

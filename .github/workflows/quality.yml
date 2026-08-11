@@ -46,7 +46,8 @@ jobs:
               - 'rust-toolchain.toml'
               - 'clippy.toml'
               - '.cargo/config.toml'
-              - 'Makefile'
+              - 'justfile'
+              - '.config/nextest.toml'
               - 'scripts/**'
             frontend:
               - 'frontend/**'
@@ -72,22 +73,30 @@ jobs:
       - name: Remove rsproxy mirror (CI can't access rsproxy.cn)
         run: rm -f .cargo/config.toml
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Clippy (workspace, deny warnings)
-        run: cargo clippy --workspace -- -D warnings
-
-      - name: Check no doc tests
-        run: ./scripts/check-no-doc-tests.sh
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 
+      - name: Format check
+        run: just fmt-check
+
+      - name: Clippy (deny warnings)
+        run: just clippy-strict
+
+      - name: Check no doc tests
+        run: just no-doc-tests
+
+      - name: Check no clippy allow annotations
+        run: just no-clippy-allow
+
       - name: Run all tests
-        run: cargo nextest run --workspace --no-fail-fast 2>/dev/null || cargo test --workspace --no-fail-fast
+        run: just test
 
       - name: Check agent boundaries
         run: ./scripts/check-agent-boundaries.sh
@@ -142,6 +151,11 @@ jobs:
           cache-workspaces: "."
           cache-all-crates: "true"
           components: "llvm-tools-preview"
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@v2

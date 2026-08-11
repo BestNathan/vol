@@ -70,12 +70,13 @@ impl Sandbox for LocalSandbox {
     }
 
     fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf> {
-        // Accept absolute paths — join to the filesystem root and check containment.
-        let resolved = if rel.starts_with('/') {
-            PathBuf::from(rel)
-        } else {
-            self.root_path.join(rel)
-        };
+        // Reject absolute paths — consistent with SSHSandbox and WasmSandbox.
+        // Callers must convert absolute paths to relative before calling.
+        // Use ToolContext::resolve_path which handles this conversion.
+        if rel.starts_with('/') || rel.starts_with('~') {
+            return Err(SandboxError::PathTraversal(rel.to_string()));
+        }
+        let resolved = self.root_path.join(rel);
         let normalized = crate::normalize_path(&resolved);
         let normalized_root = crate::normalize_path(&self.root_path);
         if !normalized.starts_with(&normalized_root) {
@@ -175,10 +176,10 @@ impl Sandbox for LocalSandbox {
         limit: Option<u64>,
     ) -> SandboxResult<Vec<u8>> {
         let content = std::fs::read(path).map_err(SandboxError::Io)?;
-        #[allow(clippy::cast_possible_truncation)]
-        let start = offset.unwrap_or(0) as usize;
-        #[allow(clippy::cast_possible_truncation)]
-        let end = limit.map(|l| start + l as usize).unwrap_or(content.len());
+        let start = usize::try_from(offset.unwrap_or(0)).unwrap_or(usize::MAX);
+        let end = limit
+            .and_then(|l| usize::try_from(l).ok().map(|l| start.saturating_add(l)))
+            .unwrap_or(content.len());
         let end = end.min(content.len());
         let slice = content.get(start..end).unwrap_or(&[]);
         Ok(slice.to_vec())
@@ -221,14 +222,13 @@ impl Sandbox for LocalSandbox {
         Ok(entries)
     }
 
-    #[allow(clippy::cast_possible_truncation)]
     async fn metadata(&self, path: &Path) -> SandboxResult<FileMetadata> {
         let meta = std::fs::metadata(path).map_err(SandboxError::Io)?;
         let mtime = meta
             .modified()
             .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_millis() as u64)
+            .and_then(|d| u64::try_from(d.as_millis()).ok())
             .unwrap_or(0);
         let file_type = if meta.is_dir() {
             FileType::Directory
@@ -269,13 +269,6 @@ mod tests {
         let resolved = sb.resolve_path("foo/bar.txt").unwrap();
         assert!(resolved.ends_with("foo/bar.txt"));
         assert!(resolved.starts_with(sb.root_path()));
-        teardown(sb).await;
-    }
-
-    #[tokio::test]
-    async fn test_resolve_path_rejects_absolute() {
-        let sb = setup().await;
-        assert!(sb.resolve_path("/etc/passwd").is_err());
         teardown(sb).await;
     }
 
@@ -352,6 +345,332 @@ mod tests {
         sb.create_dir_all(&deep).await.unwrap();
         assert!(deep.exists());
         assert!(deep.is_dir());
+        teardown(sb).await;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Path resolution: edge cases
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    #[tokio::test]
+    async fn test_resolve_path_dot() {
+        let sb = setup().await;
+        // "." resolves to the root directory itself
+        let resolved = sb.resolve_path(".").unwrap();
+        let expected = crate::normalize_path(sb.root_path());
+        assert_eq!(resolved, expected);
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_resolve_path_dot_components() {
+        let sb = setup().await;
+        // "foo/./bar" → "foo/bar"
+        let resolved = sb.resolve_path("foo/./bar").unwrap();
+        assert!(resolved.ends_with("foo/bar"));
+        assert!(!resolved.to_string_lossy().contains("/./"));
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_resolve_path_spaces() {
+        let sb = setup().await;
+        let resolved = sb.resolve_path("my dir/my file.txt").unwrap();
+        assert!(resolved.ends_with("my dir/my file.txt"));
+        assert!(resolved.starts_with(sb.root_path()));
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_resolve_path_rejects_all_absolute() {
+        let sb = setup().await;
+        // All absolute paths must be rejected (consistent with SSH and Wasm)
+        assert!(sb.resolve_path("/etc/passwd").is_err());
+        // Even absolute paths within the root are rejected at sandbox level
+        let within_root = sb.root_path().join("inside.txt");
+        assert!(sb.resolve_path(&within_root.to_string_lossy()).is_err());
+        // Home-relative paths also rejected
+        assert!(sb.resolve_path("~/foo").is_err());
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_resolve_path_unicode() {
+        let sb = setup().await;
+        let resolved = sb.resolve_path("目录/文件.txt").unwrap();
+        assert!(resolved.ends_with("目录/文件.txt"));
+        teardown(sb).await;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // read_file: edge cases
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    #[tokio::test]
+    async fn test_read_file_empty() {
+        let sb = setup().await;
+        let path = sb.root_path().join("empty.txt");
+        sb.write_file(&path, b"").await.unwrap();
+        let content = sb.read_file(&path, None, None).await.unwrap();
+        assert!(content.is_empty());
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_read_file_binary() {
+        let sb = setup().await;
+        let path = sb.root_path().join("data.bin");
+        let data = vec![0u8, 127, 128, 255];
+        sb.write_file(&path, &data).await.unwrap();
+        let content = sb.read_file(&path, None, None).await.unwrap();
+        assert_eq!(content, data);
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_read_file_offset_and_limit() {
+        let sb = setup().await;
+        let path = sb.root_path().join("data.txt");
+        sb.write_file(&path, b"0123456789").await.unwrap();
+        // offset=3, limit=4 → "3456"
+        let content = sb.read_file(&path, Some(3), Some(4)).await.unwrap();
+        assert_eq!(content, b"3456");
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_read_file_offset_beyond_file() {
+        let sb = setup().await;
+        let path = sb.root_path().join("short.txt");
+        sb.write_file(&path, b"hi").await.unwrap();
+        // offset beyond file → empty slice
+        let content = sb.read_file(&path, Some(100), None).await.unwrap();
+        assert!(content.is_empty());
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_read_file_limit_beyond_file() {
+        let sb = setup().await;
+        let path = sb.root_path().join("short.txt");
+        sb.write_file(&path, b"hi").await.unwrap();
+        // limit larger than file → returns entire remaining content
+        let content = sb.read_file(&path, Some(0), Some(100)).await.unwrap();
+        assert_eq!(content, b"hi");
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_read_file_not_found() {
+        let sb = setup().await;
+        let path = sb.root_path().join("nonexistent.txt");
+        let result = sb.read_file(&path, None, None).await;
+        assert!(result.is_err());
+        teardown(sb).await;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // write_file: edge cases
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    #[tokio::test]
+    async fn test_write_file_overwrite() {
+        let sb = setup().await;
+        let path = sb.root_path().join("overwrite.txt");
+        sb.write_file(&path, b"original").await.unwrap();
+        sb.write_file(&path, b"replaced").await.unwrap();
+        let content = sb.read_file(&path, None, None).await.unwrap();
+        assert_eq!(content, b"replaced");
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_write_file_creates_parent_dirs() {
+        let sb = setup().await;
+        let path = sb.root_path().join("deep").join("nested").join("file.txt");
+        sb.write_file(&path, b"nested content").await.unwrap();
+        assert!(path.exists());
+        let content = sb.read_file(&path, None, None).await.unwrap();
+        assert_eq!(content, b"nested content");
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_write_file_empty_content() {
+        let sb = setup().await;
+        let path = sb.root_path().join("empty.txt");
+        sb.write_file(&path, b"").await.unwrap();
+        assert!(path.exists());
+        let meta = std::fs::metadata(&path).unwrap();
+        assert_eq!(meta.len(), 0);
+        teardown(sb).await;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // create_dir_all: edge cases
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    #[tokio::test]
+    async fn test_create_dir_all_already_exists() {
+        let sb = setup().await;
+        let dir = sb.root_path().join("existing");
+        sb.create_dir_all(&dir).await.unwrap();
+        // Should succeed (no-op) when directory already exists
+        sb.create_dir_all(&dir).await.unwrap();
+        assert!(dir.is_dir());
+        teardown(sb).await;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // read_dir: edge cases
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    #[tokio::test]
+    async fn test_read_dir_empty() {
+        let sb = setup().await;
+        let entries = sb.read_dir(sb.root_path()).await.unwrap();
+        assert!(entries.is_empty());
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_read_dir_nonexistent() {
+        let sb = setup().await;
+        let path = sb.root_path().join("nonexistent_dir");
+        let result = sb.read_dir(&path).await;
+        assert!(result.is_err());
+        teardown(sb).await;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // metadata: edge cases
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    #[tokio::test]
+    async fn test_metadata_directory() {
+        let sb = setup().await;
+        let path = sb.root_path().join("subdir");
+        sb.create_dir_all(&path).await.unwrap();
+
+        let meta = sb.metadata(&path).await.unwrap();
+        assert_eq!(meta.file_type, FileType::Directory);
+        assert!(meta.mtime > 0);
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_metadata_not_found() {
+        let sb = setup().await;
+        let path = sb.root_path().join("ghost.txt");
+        let result = sb.metadata(&path).await;
+        assert!(result.is_err());
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_metadata_after_write() {
+        let sb = setup().await;
+        let path = sb.root_path().join("timed.txt");
+        sb.write_file(&path, b"first").await.unwrap();
+        let mtime1 = sb.metadata(&path).await.unwrap().mtime;
+        // Small delay to ensure mtime changes
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        sb.write_file(&path, b"second").await.unwrap();
+        let mtime2 = sb.metadata(&path).await.unwrap().mtime;
+        assert!(mtime2 >= mtime1);
+        assert_eq!(sb.metadata(&path).await.unwrap().size, 6);
+        teardown(sb).await;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // execute: edge cases
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    #[tokio::test]
+    async fn test_execute_with_env() {
+        let sb = setup().await;
+        let mut env = std::collections::HashMap::new();
+        env.insert("MY_VAR".to_string(), "my_value".to_string());
+        let req = CommandRequest {
+            program: "sh".to_string(),
+            args: vec!["-c".to_string(), "echo -n $MY_VAR".to_string()],
+            env,
+            cwd: None,
+            stdin: None,
+            timeout: Duration::from_secs(5),
+        };
+        let output = sb.execute(req).await.unwrap();
+        assert_eq!(output.exit_code, 0);
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "my_value");
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_execute_with_stdin() {
+        let sb = setup().await;
+        let req = CommandRequest {
+            program: "cat".to_string(),
+            args: vec![],
+            env: Default::default(),
+            cwd: None,
+            stdin: Some(b"hello stdin".to_vec()),
+            timeout: Duration::from_secs(5),
+        };
+        let output = sb.execute(req).await.unwrap();
+        assert_eq!(output.exit_code, 0);
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "hello stdin");
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_execute_nonzero_exit() {
+        let sb = setup().await;
+        let req = CommandRequest {
+            program: "sh".to_string(),
+            args: vec!["-c".to_string(), "exit 42".to_string()],
+            env: Default::default(),
+            cwd: None,
+            stdin: None,
+            timeout: Duration::from_secs(5),
+        };
+        let output = sb.execute(req).await.unwrap();
+        assert_eq!(output.exit_code, 42);
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_execute_binary_not_found() {
+        let sb = setup().await;
+        let req = CommandRequest {
+            program: "nonexistent_binary_xyz_abc".to_string(),
+            args: vec![],
+            env: Default::default(),
+            cwd: None,
+            stdin: None,
+            timeout: Duration::from_secs(5),
+        };
+        let result = sb.execute(req).await;
+        assert!(result.is_err(), "Binary not found should return error");
+        teardown(sb).await;
+    }
+
+    #[tokio::test]
+    async fn test_execute_stderr_capture() {
+        let sb = setup().await;
+        let req = CommandRequest {
+            program: "sh".to_string(),
+            args: vec!["-c".to_string(), "echo stdout; echo stderr >&2".to_string()],
+            env: Default::default(),
+            cwd: None,
+            stdin: None,
+            timeout: Duration::from_secs(5),
+        };
+        let output = sb.execute(req).await.unwrap();
+        assert_eq!(output.exit_code, 0);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stdout.contains("stdout"));
+        assert!(stderr.contains("stderr"));
         teardown(sb).await;
     }
 }

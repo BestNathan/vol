@@ -82,6 +82,9 @@ impl Sandbox for WasmSandbox {
     }
 
     async fn cleanup(&self) -> SandboxResult<()> {
+        if self.work_dir.exists() {
+            std::fs::remove_dir_all(&self.work_dir).map_err(SandboxError::Io)?;
+        }
         Ok(())
     }
 
@@ -90,7 +93,7 @@ impl Sandbox for WasmSandbox {
     }
 
     fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf> {
-        if rel.starts_with('/') {
+        if rel.starts_with('/') || rel.starts_with('~') {
             return Err(SandboxError::PathTraversal(rel.to_string()));
         }
         let resolved = self.root_path.join(rel);
@@ -109,9 +112,14 @@ impl Sandbox for WasmSandbox {
         limit: Option<u64>,
     ) -> SandboxResult<Vec<u8>> {
         let content = std::fs::read(path).map_err(SandboxError::Io)?;
-        let start = offset.unwrap_or(0) as usize;
-        let end = limit.map(|l| start + l as usize).unwrap_or(content.len());
-        Ok(content[start..end.min(content.len())].to_vec())
+        let start = usize::try_from(offset.unwrap_or(0)).unwrap_or(usize::MAX);
+        let end = limit
+            .and_then(|l| usize::try_from(l).ok().map(|l| start.saturating_add(l)))
+            .unwrap_or(content.len());
+        let end = end.min(content.len());
+        // Use .get() for safe slicing — handles start > len gracefully
+        let slice = content.get(start..end).unwrap_or(&[]);
+        Ok(slice.to_vec())
     }
 
     async fn write_file(&self, path: &Path, content: &[u8]) -> SandboxResult<()> {
@@ -157,7 +165,7 @@ impl Sandbox for WasmSandbox {
             .modified()
             .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_millis() as u64)
+            .and_then(|d| u64::try_from(d.as_millis()).ok())
             .unwrap_or(0);
         let file_type = if meta.is_dir() {
             FileType::Directory

@@ -15,6 +15,7 @@ pub mod local;
 pub mod registry;
 #[cfg(feature = "ssh")]
 pub mod ssh;
+pub mod tmp;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
@@ -22,6 +23,24 @@ pub mod wasm;
 pub type SandboxRef = Arc<dyn Sandbox>;
 
 /// Trait for isolated execution environments.
+///
+/// All tool I/O MUST go through sandbox methods — tools never call OS APIs directly.
+/// Implementations: LocalSandbox (local directory), SSHSandbox (remote via SSH),
+/// FirecrackerSandbox (microVM), WasmSandbox (WASI runtime).
+///
+/// # Path handling contract
+///
+/// - **`root_path()`**: returns the absolute root of the sandbox filesystem.
+///   All sandbox file operations are scoped to this directory.
+/// - **`resolve_path(rel)`**: validates that `rel` (a **relative** path string
+///   from tool arguments) is safe and resolves it to an absolute path within
+///   `root_path()`. MUST return `PathTraversal` if the resolved path escapes
+///   the root. Implementations MUST reject absolute paths (they start with `/`).
+///   Tools that receive absolute user input must convert it before calling
+///   `resolve_path` — use `ToolContext::resolve_path` which handles this.
+/// - **`read_file / write_file / create_dir_all / read_dir / metadata`**: take an
+///   already-resolved absolute path (output of `resolve_path`). The caller is
+///   responsible for calling `resolve_path` first to validate.
 ///
 /// # Interior Mutability
 ///
@@ -31,29 +50,55 @@ pub type SandboxRef = Arc<dyn Sandbox>;
 /// `tokio::sync::RwLock`, etc.).
 #[async_trait]
 pub trait Sandbox: Send + Sync {
-    /// Sandbox type identifier: "local", "ssh"
+    /// Sandbox type identifier: "local", "ssh", "firecracker", "wasm".
     fn kind(&self) -> &str;
 
-    /// Registry name, e.g. "local", "devbox"
+    /// Registry name, e.g. "local", "devbox".
     fn name(&self) -> &str;
 
-    /// Initialize the sandbox (create directory, establish connection, etc.)
+    /// Bind runtime metadata before [`start`].
+    ///
+    /// Called once after acquisition and before the first [`start`] call.
+    /// Default implementation is a no-op. Implementations can override to
+    /// extract relevant keys (e.g. `agent_id` for [`TmpSandbox`]).
+    ///
+    /// Common keys provided by the agent runtime:
+    /// - `agent_id` — the agent's unique identifier
+    /// - `agent_name` — the agent's human-readable name
+    fn bind_metadata(&self, _metadata: &std::collections::HashMap<String, String>) {}
+
+    /// Initialize the sandbox: create directories, establish connections, etc.
+    /// Idempotent — calling multiple times is safe.
     async fn start(&self) -> SandboxResult<()>;
 
-    /// Clean up the sandbox (delete temp dir, disconnect, etc.)
+    /// Clean up the sandbox: remove temp dirs, disconnect sessions, etc.
     async fn cleanup(&self) -> SandboxResult<()>;
 
-    /// Root path of the sandbox. All file operations are relative to this.
+    /// Absolute root path of the sandbox. All file operations are scoped to this.
     fn root_path(&self) -> &Path;
 
-    /// Resolve a relative path to an absolute path within the sandbox.
-    /// Returns `PathTraversal` error if the resolved path escapes `root_path()`.
+    /// Validate a **relative** path and resolve it to an absolute path within
+    /// `root_path()`. Returns `PathTraversal` if the resolved path escapes the root.
+    ///
+    /// # Contract (all implementations MUST follow)
+    ///
+    /// - Accepts: relative paths (`"foo/bar.txt"`, `"./foo"`, `"."`)
+    /// - Rejects: absolute paths (anything starting with `/` or `~`)
+    /// - Rejects: paths containing `..` that escape `root_path()`
+    /// - Normalizes: `.` and redundant separators are resolved
+    ///
+    /// Tools calling this should use `ToolContext::resolve_path` which
+    /// handles absolute→relative conversion transparently.
     fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf>;
 
-    /// Execute a command inside the sandbox.
+    /// Execute a command inside the sandbox. `req.program` is the binary name,
+    /// `req.args` are the arguments, `req.env` are environment variables.
+    /// The command runs with `root_path()` as its working directory.
     async fn execute(&self, req: CommandRequest) -> SandboxResult<CommandOutput>;
 
-    /// Read file content as raw bytes. Tools decode to String as needed.
+    /// Read file content as raw bytes at the given absolute path.
+    /// The caller MUST validate the path via `resolve_path` first.
+    /// `offset` and `limit` are byte-level, applied after reading.
     async fn read_file(
         &self,
         path: &Path,
@@ -61,16 +106,21 @@ pub trait Sandbox: Send + Sync {
         limit: Option<u64>,
     ) -> SandboxResult<Vec<u8>>;
 
-    /// Write bytes to a file. Parent directories must exist.
+    /// Write bytes to a file at the given absolute path.
+    /// The caller MUST validate the path via `resolve_path` first.
+    /// Parent directories are created automatically if they don't exist.
     async fn write_file(&self, path: &Path, content: &[u8]) -> SandboxResult<()>;
 
-    /// Create directory and all parents inside the sandbox root.
+    /// Create directory and all parents at the given absolute path.
+    /// The caller MUST validate the path via `resolve_path` first.
     async fn create_dir_all(&self, path: &Path) -> SandboxResult<()>;
 
-    /// List entries in a directory.
+    /// List entries in a directory at the given absolute path.
+    /// The caller MUST validate the path via `resolve_path` first.
     async fn read_dir(&self, path: &Path) -> SandboxResult<Vec<DirEntry>>;
 
-    /// Get file metadata.
+    /// Get file metadata at the given absolute path.
+    /// The caller MUST validate the path via `resolve_path` first.
     async fn metadata(&self, path: &Path) -> SandboxResult<FileMetadata>;
 }
 

@@ -32,7 +32,10 @@
       "Bash(rm -f .cargo/config.toml)",
       "Bash(cargo clippy *)",
       "Bash(rm -f /root/vol/.git/index.lock)",
-      "Bash(git -C /root/vol status --short)"
+      "Bash(git -C /root/vol status --short)",
+      "Bash(rm -f .claude/hooks/validate-cwd.sh docs/superpowers/plans/2026-08-06-tools-tab-redesign.md docs/superpowers/specs/2026-08-06-tools-tab-redesign.md)",
+      "Bash(git pull *)",
+      "Bash(git push *)"
     ]
   },
   "enableAllProjectMcpServers": true,

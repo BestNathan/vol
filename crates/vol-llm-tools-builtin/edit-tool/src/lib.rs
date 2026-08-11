@@ -180,4 +180,121 @@ mod tests {
         .unwrap();
         assert!(!p.replace_all);
     }
+
+    // ── Execute path tests ─────────────────────────────────────────
+
+    fn test_sandbox(dir: &tempfile::TempDir) -> ToolContext {
+        let sandbox = vol_llm_sandbox::local::LocalSandbox::new(Some(dir.path().to_path_buf()));
+        ToolContext::for_test().with_sandbox(std::sync::Arc::new(sandbox))
+    }
+
+    #[tokio::test]
+    async fn test_execute_single_replacement() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        std::fs::write(dir.path().join("doc.txt"), "hello world").unwrap();
+
+        let tool = EditTool::new();
+        let args = serde_json::json!({
+            "file_path": dir.path().join("doc.txt").to_str().unwrap(),
+            "old_string": "world",
+            "new_string": "rust"
+        });
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        assert!(result.success);
+        assert!(result.content.contains("1 occurrence"));
+
+        let content = std::fs::read_to_string(dir.path().join("doc.txt")).unwrap();
+        assert_eq!(content, "hello rust");
+    }
+
+    #[tokio::test]
+    async fn test_execute_string_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        std::fs::write(dir.path().join("doc.txt"), "hello world").unwrap();
+
+        let tool = EditTool::new();
+        let args = serde_json::json!({
+            "file_path": dir.path().join("doc.txt").to_str().unwrap(),
+            "old_string": "nonexistent",
+            "new_string": "replacement"
+        });
+        let result = tool.execute(&args, &ctx).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("not found in file"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_multiple_occurrences_no_replace_all() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        std::fs::write(dir.path().join("doc.txt"), "a a a").unwrap();
+
+        let tool = EditTool::new();
+        let args = serde_json::json!({
+            "file_path": dir.path().join("doc.txt").to_str().unwrap(),
+            "old_string": "a",
+            "new_string": "b"
+        });
+        let result = tool.execute(&args, &ctx).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("3 occurrences"));
+        assert!(err.contains("replace_all"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_replace_all() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        std::fs::write(dir.path().join("doc.txt"), "a a a").unwrap();
+
+        let tool = EditTool::new();
+        let args = serde_json::json!({
+            "file_path": dir.path().join("doc.txt").to_str().unwrap(),
+            "old_string": "a",
+            "new_string": "b",
+            "replace_all": true
+        });
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        assert!(result.success);
+        assert!(result.content.contains("3 occurrence"));
+
+        let content = std::fs::read_to_string(dir.path().join("doc.txt")).unwrap();
+        assert_eq!(content, "b b b");
+    }
+
+    #[tokio::test]
+    async fn test_execute_empty_old_string_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        std::fs::write(dir.path().join("doc.txt"), "content").unwrap();
+
+        let tool = EditTool::new();
+        let args = serde_json::json!({
+            "file_path": dir.path().join("doc.txt").to_str().unwrap(),
+            "old_string": "",
+            "new_string": "x"
+        });
+        let result = tool.execute(&args, &ctx).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_invalid_arguments_missing_field() {
+        let tool = EditTool::new();
+        // Missing required "new_string" field
+        let args = serde_json::json!({
+            "file_path": "f.txt",
+            "old_string": "a"
+        });
+        let result = tool.execute(&args, &ToolContext::for_test()).await;
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Failed to parse arguments"));
+    }
 }

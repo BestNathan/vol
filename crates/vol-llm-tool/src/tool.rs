@@ -98,12 +98,32 @@ impl ToolContext {
     }
 
     /// Resolve a path through the sandbox.
+    ///
+    /// Converts absolute paths within the sandbox root to relative paths
+    /// before delegation, so that all sandbox implementations see consistent
+    /// relative-path input regardless of how the tool or LLM formats paths.
     pub fn resolve_path(
         &self,
         rel: &str,
     ) -> std::result::Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+        // Normalize: if the input is an absolute path within the sandbox root,
+        // strip the root prefix so the sandbox receives a relative path.
+        // This keeps sandbox implementations consistent (all reject absolute).
+        let relative = if rel.starts_with('/') {
+            let root = self.sandbox.root_path().to_string_lossy();
+            if rel.starts_with(root.as_ref()) && rel.len() > root.len() {
+                // Strip root prefix + trailing separator
+                let stripped = &rel[root.len()..];
+                stripped.trim_start_matches('/')
+            } else {
+                // Absolute path outside root — let sandbox reject it
+                rel
+            }
+        } else {
+            rel
+        };
         self.sandbox
-            .resolve_path(rel)
+            .resolve_path(relative)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
 }
@@ -306,6 +326,22 @@ mod tests {
         let ctx = ToolContext::for_test();
         let path = ctx.resolve_path("/tmp/test").unwrap();
         assert!(path.is_absolute() || path.starts_with("/"));
+    }
+
+    #[test]
+    fn test_tool_context_resolve_path_rejects_traversal() {
+        // Create a restricted sandbox (not rooted at /)
+        let dir = tempfile::tempdir().unwrap();
+        let sandbox = Arc::new(vol_llm_sandbox::local::LocalSandbox::new(Some(
+            dir.path().to_path_buf(),
+        )));
+        let ctx = ToolContext::for_test().with_sandbox(sandbox);
+        // Path traversal should be rejected
+        let result = ctx.resolve_path("../../../etc/passwd");
+        assert!(
+            result.is_err(),
+            "Path traversal should be rejected by restricted sandbox"
+        );
     }
 
     #[test]

@@ -110,6 +110,26 @@ impl SSHSandbox {
         }
     }
 
+    /// Map ssh2::FileStat perm bits to our FileType (detects symlinks).
+    /// SFTP perm field uses Unix mode bits — S_IFLNK = 0o120000.
+    fn file_type_from_stat(stat: &ssh2::FileStat) -> FileType {
+        const S_IFMT: u32 = 0o170000;
+        const S_IFLNK: u32 = 0o120000;
+        // Check for symlink via Unix permission bits first
+        if let Some(perm) = stat.perm {
+            if perm & S_IFMT == S_IFLNK {
+                return FileType::Symlink;
+            }
+        }
+        if stat.is_dir() {
+            FileType::Directory
+        } else if stat.is_file() {
+            FileType::File
+        } else {
+            FileType::Other
+        }
+    }
+
     /// Resolve a local filesystem path to a remote absolute path.
     /// Relative paths are appended to `remote_work_dir`.
     fn remote_path(&self, path: &Path) -> String {
@@ -170,7 +190,7 @@ impl Sandbox for SSHSandbox {
     }
 
     fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf> {
-        if rel.starts_with('/') {
+        if rel.starts_with('/') || rel.starts_with('~') {
             return Err(SandboxError::PathTraversal(rel.to_string()));
         }
         let resolved = self.root_path.join(rel);
@@ -211,8 +231,7 @@ impl Sandbox for SSHSandbox {
                 .map_err(|e| SandboxError::Ssh(e.to_string()))?;
         }
 
-        #[allow(clippy::cast_possible_truncation)]
-        let limit = limit.unwrap_or(u64::MAX) as usize;
+        let limit = usize::try_from(limit.unwrap_or(u64::MAX)).unwrap_or(usize::MAX);
         let mut buf = Vec::new();
         let mut chunk = vec![0u8; 65536.min(limit)];
 
@@ -235,6 +254,12 @@ impl Sandbox for SSHSandbox {
 
     async fn write_file(&self, path: &Path, content: &[u8]) -> SandboxResult<()> {
         self.mark_active();
+        // Ensure parent directories exist (consistent with LocalSandbox and WasmSandbox)
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                self.create_dir_all(parent).await?;
+            }
+        }
         let sftp = self.session.sftp().await?;
         let remote_path = self.remote_path(path);
 
@@ -290,13 +315,7 @@ impl Sandbox for SSHSandbox {
                     .unwrap_or_default()
                     .to_string_lossy()
                     .to_string();
-                let file_type = if stat.is_dir() {
-                    FileType::Directory
-                } else if stat.is_file() {
-                    FileType::File
-                } else {
-                    FileType::Other
-                };
+                let file_type = Self::file_type_from_stat(&stat);
                 DirEntry { name, file_type }
             })
             .collect())
@@ -307,17 +326,12 @@ impl Sandbox for SSHSandbox {
         let sftp = self.session.sftp().await?;
         let remote_path = self.remote_path(path);
 
+        // Use lstat to avoid following symlinks (consistent with LocalSandbox)
         let stat = sftp
-            .stat(Path::new(&remote_path))
+            .lstat(Path::new(&remote_path))
             .map_err(|e| SandboxError::Ssh(e.to_string()))?;
 
-        let file_type = if stat.is_dir() {
-            FileType::Directory
-        } else if stat.is_file() {
-            FileType::File
-        } else {
-            FileType::Other
-        };
+        let file_type = Self::file_type_from_stat(&stat);
 
         Ok(FileMetadata {
             size: stat.size.unwrap_or(0),

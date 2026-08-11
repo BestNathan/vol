@@ -720,9 +720,15 @@ impl ReActAgent {
                                 .get_sandbox(&call.name)
                                 .or_else(|| run_ctx.config.default_sandbox.clone())
                                 .unwrap_or_else(|| "local".to_string());
-                            registry
+                            let sandbox = registry
                                 .acquire(&sandbox_name)
-                                .unwrap_or_else(|| registry.default())
+                                .unwrap_or_else(|| registry.default());
+                            // Bind agent metadata so sandboxes like TmpSandbox
+                            // can resolve per-agent paths (e.g. /tmp/{agent_id}/)
+                            let mut meta = std::collections::HashMap::new();
+                            meta.insert("agent_id".to_string(), run_ctx.config.agent_id.clone());
+                            sandbox.bind_metadata(&meta);
+                            sandbox
                         } else {
                             match &sandbox {
                                 Some(sb) => sb.clone(),
