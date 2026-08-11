@@ -19,6 +19,7 @@ pub use exec::{CliTool, ToolOutput};
 
 use std::path::Path;
 use std::sync::Arc;
+#[cfg(test)]
 use vol_llm_sandbox::local::LocalSandbox;
 use vol_llm_sandbox::registry::SandboxRegistry;
 
