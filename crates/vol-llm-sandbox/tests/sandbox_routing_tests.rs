@@ -52,17 +52,20 @@ fn test_normalize_path_empty() {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 #[tokio::test]
-async fn test_registry_acquire_local_returns_working_sandbox() {
+async fn test_registry_register_and_acquire() {
     let tmp = tempfile::tempdir().unwrap();
-    let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
+    let mut registry = SandboxRegistry::load(tmp.path()).await.unwrap();
+    registry.register(
+        "local",
+        Arc::new(LocalSandbox::new(Some(tmp.path().join("work")))),
+    );
 
     let sandbox = registry
         .acquire("local")
-        .expect("local sandbox should exist");
+        .expect("local should be registered");
     assert_eq!(sandbox.name(), "local");
     assert_eq!(sandbox.kind(), "local");
 
-    // Verify it works: write and read a file
     let root = sandbox.root_path().to_path_buf();
     sandbox
         .write_file(&root.join("test.txt"), b"hello")
@@ -83,18 +86,21 @@ async fn test_registry_acquire_nonexistent_returns_none() {
 }
 
 #[tokio::test]
-async fn test_registry_default_is_local() {
+async fn test_registry_default_is_tmp() {
     let tmp = tempfile::tempdir().unwrap();
     let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
     let default = registry.default();
-    assert_eq!(default.name(), "local");
+    assert_eq!(default.kind(), "tmp");
 }
 
 #[tokio::test]
-async fn test_registry_names_includes_local() {
+async fn test_registry_names_returns_registered() {
     let tmp = tempfile::tempdir().unwrap();
-    let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
+    let mut registry = SandboxRegistry::load(tmp.path()).await.unwrap();
+    assert!(registry.names().is_empty()); // no built-in entries
+    registry.register("local", Arc::new(LocalSandbox::new(None)));
     assert!(registry.names().contains(&"local"));
+    assert_eq!(registry.len(), 1);
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
