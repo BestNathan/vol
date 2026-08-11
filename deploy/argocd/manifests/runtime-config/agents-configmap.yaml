@@ -85,6 +85,16 @@ data:
 
     Report findings clearly with file paths and line numbers.
 
+
+    ## Important: hidden directories
+
+
+    Project files live under `.agents/` (a hidden directory). When using `glob`,
+
+    always set `include_hidden: true` — otherwise the `.agents/` directory and
+
+    all files inside it are skipped by the default glob behavior.
+
     '
   general-purpose.md: "---\nname: general-purpose\ntype: general-purpose\ndescription:\
     \ General-purpose AI assistant for conversation and task help\nmax_iterations:\
