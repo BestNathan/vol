@@ -1,0 +1,21 @@
+# Nextest configuration for vol workspace
+# https://nexte.st/docs/configuration/
+
+[profile.default]
+# Default: fail-fast after first failure
+fail-fast = false
+
+[profile.ci]
+# CI profile: stricter, retries for flaky tests
+retries = 1
+fail-fast = true
+status-level = "all"
+final-status-level = "flaky"
+
+[profile.coverage]
+# Coverage: run only unit tests (fast iteration)
+retries = 0
+
+[profile.slow]
+# Slow profile: longer timeout for heavy crates (vol-llm-agent, vol-llm-runtime)
+slow-timeout = { period = "120s", terminate-after = 5 }
