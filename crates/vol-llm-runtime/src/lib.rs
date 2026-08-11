@@ -473,13 +473,14 @@ impl AgentRuntimeBuilder {
             let mut registry = vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir)
                 .await
                 .map_err(|e| format!("Sandbox registry init failed: {e}"))?;
-            // Replace the default "local" TmpSandbox with a LocalSandbox
-            // rooted at the server's working directory so agents can
-            // access project files (.agents/, data/, logs/).
-            let working_sandbox = Arc::new(vol_llm_sandbox::local::LocalSandbox::new(Some(
-                self.working_dir.clone(),
-            )));
-            registry.set_default(working_sandbox);
+            // Register "local" as a LocalSandbox at the working_dir so
+            // agents that use sandbox="local" can access project files.
+            registry.register(
+                "local",
+                Arc::new(vol_llm_sandbox::local::LocalSandbox::new(Some(
+                    self.working_dir.clone(),
+                ))),
+            );
             registry
         };
         let sandbox_registry = Arc::new(sandbox_registry);

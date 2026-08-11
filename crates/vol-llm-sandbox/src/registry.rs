@@ -53,37 +53,24 @@ fn default_connect_timeout() -> u64 {
 /// Configuration for a Firecracker microVM sandbox.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FirecrackerConfig {
-    /// Path to the uncompressed ELF kernel image (vmlinux).
     pub kernel_image: String,
-    /// Path to the ext4 rootfs image.
     pub rootfs_image: String,
-    /// If true, mount rootfs read-only (writes go to tmpfs overlay).
     #[serde(default)]
     pub rootfs_readonly: bool,
-    /// Number of pre-warmed idle microVMs in the pool.
     #[serde(default = "default_pool_size")]
     pub pool_size: usize,
-    /// Seconds before an idle VM is reclaimed.
     #[serde(default = "default_idle_timeout_fc")]
     pub idle_timeout_secs: u64,
-    /// Seconds to wait for SSH to become available in the guest.
     #[serde(default = "default_connect_timeout_fc")]
     pub connect_timeout_secs: u64,
-    /// Path to firecracker binary. If unset, looks up "firecracker" on PATH.
     #[serde(default)]
     pub firecracker_binary: Option<String>,
-    /// IP address assigned to the guest VM for SSH access.
     #[serde(default = "default_guest_ip")]
     pub guest_ip: String,
-    /// SSH port inside the guest VM.
     #[serde(default = "default_guest_ssh_port")]
     pub guest_ssh_port: u16,
-    /// Host tap device name for the VM's network interface.
     pub tap_device: String,
-    /// Path to an SSH keypair for guest access (the private key).
-    /// The corresponding public key must be in the guest's ~/.ssh/authorized_keys.
     pub ssh_identity_file: String,
-    /// Optional passphrase for the SSH identity file.
     #[serde(default)]
     pub ssh_passphrase: Option<String>,
 }
@@ -91,13 +78,10 @@ pub struct FirecrackerConfig {
 /// Configuration for a Wasm sandbox.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WasmConfig {
-    /// Max linear memory per module instance, in bytes.
     #[serde(default = "default_wasm_memory")]
     pub max_memory_bytes: u64,
-    /// Per-execution timeout in milliseconds.
     #[serde(default = "default_wasm_timeout")]
     pub max_execution_ms: u64,
-    /// Wasm modules to precompile and serve.
     #[serde(default)]
     pub modules: Vec<WasmModuleConfig>,
 }
@@ -105,22 +89,18 @@ pub struct WasmConfig {
 /// A single Wasm module registered in the sandbox.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WasmModuleConfig {
-    /// Logical name — used as `program` in `CommandRequest`.
     pub name: String,
-    /// Path to the `.wasm` file on disk.
     pub path: String,
-    /// If true, register this module as a named agent tool.
     #[serde(default)]
     pub expose_as_tool: bool,
 }
 
 fn default_wasm_memory() -> u64 {
     134_217_728
-} // 128 MB
+}
 fn default_wasm_timeout() -> u64 {
     30_000
-} // 30 seconds
-
+}
 fn default_pool_size() -> usize {
     1
 }
@@ -137,29 +117,25 @@ fn default_guest_ssh_port() -> u16 {
     22
 }
 
-/// Registry of named sandbox instances.
-/// Always contains a built-in "local" sandbox. Additional sandboxes
-/// are loaded from TOML config files.
+/// Registry of named sandbox instances loaded from TOML config files.
+///
+/// No built-in entries. Use [`register`] to add programmatic sandboxes
+/// (e.g. a "local" [`LocalSandbox`] at the server's working directory).
+/// [`default`] returns a fresh [`TmpSandbox`] as the fallback.
 pub struct SandboxRegistry {
     sandboxes: HashMap<String, Arc<dyn Sandbox>>,
-    default_name: String,
-    /// Pool-based sandbox factories. acquire() creates fresh instances from these.
     #[cfg(feature = "firecracker")]
     firecracker_pools: HashMap<String, Arc<crate::firecracker::FirecrackerPool>>,
 }
 
 impl SandboxRegistry {
     /// Construct a single sandbox from a parsed config.
-    ///
-    /// Extracted from `SandboxRegistry::load` so that other crates
-    /// (e.g. `vol-llm-cli-tool`) can build inline sandboxes without
-    /// going through the directory loader.
     pub async fn build_sandbox(config: SandboxConfig) -> SandboxResult<Arc<dyn Sandbox>> {
         let sandbox: Arc<dyn Sandbox> = match config.sandbox_type.as_str() {
             "local" => Arc::new(LocalSandbox::new(
                 config.work_dir.as_ref().map(std::path::PathBuf::from),
             )),
-            "tmp" => Arc::new(crate::tmp::TmpSandbox::with_default(&config.name)),
+            "tmp" => Arc::new(crate::tmp::TmpSandbox::new()),
             #[cfg(feature = "ssh")]
             "ssh" => {
                 let ssh_config = config.ssh.ok_or_else(|| {
@@ -188,17 +164,11 @@ impl SandboxRegistry {
 
     /// Load sandboxes from a config directory.
     ///
-    /// Always registers a built-in `TmpSandbox` named "local" (rooted at `/tmp/local/`).
-    /// Callers that have a working directory should call [`set_default`] afterwards
-    /// to replace it with a `LocalSandbox` at the correct path.
-    /// Additional sandboxes are loaded from `*.toml` files in `sandboxes_dir`.
+    /// Reads `*.toml` files from `sandboxes_dir`. Individual failures are
+    /// logged and skipped. No built-in entries — use [`register`] afterwards
+    /// to add programmatic sandboxes.
     pub async fn load(sandboxes_dir: &Path) -> SandboxResult<Self> {
         let mut sandboxes: HashMap<String, Arc<dyn Sandbox>> = HashMap::new();
-
-        // Always register TmpSandbox as default "local" (hardcoded).
-        let local = Arc::new(crate::tmp::TmpSandbox::with_default("local")) as Arc<dyn Sandbox>;
-        local.start().await?;
-        sandboxes.insert("local".to_string(), local);
 
         #[cfg(feature = "firecracker")]
         #[allow(unused_mut)]
@@ -207,7 +177,6 @@ impl SandboxRegistry {
             Arc<crate::firecracker::FirecrackerPool>,
         > = HashMap::new();
 
-        // Load *.toml files — individual failures are non-fatal
         if sandboxes_dir.exists() {
             for entry in std::fs::read_dir(sandboxes_dir).map_err(SandboxError::Io)? {
                 let entry = match entry {
@@ -221,7 +190,6 @@ impl SandboxRegistry {
                 if path.extension().is_none_or(|ext| ext != "toml") {
                     continue;
                 }
-
                 let content = match std::fs::read_to_string(&path) {
                     Ok(c) => c,
                     Err(e) => {
@@ -229,7 +197,6 @@ impl SandboxRegistry {
                         continue;
                     }
                 };
-
                 let config: SandboxConfig = match toml::from_str(&content) {
                     Ok(c) => c,
                     Err(e) => {
@@ -237,16 +204,10 @@ impl SandboxRegistry {
                         continue;
                     }
                 };
-
-                if config.name == "local" {
-                    tracing::warn!(path = %path.display(), name = %config.name, "Sandbox name 'local' is reserved, skipping");
-                    continue;
-                }
                 if sandboxes.contains_key(&config.name) {
-                    tracing::warn!(path = %path.display(), name = %config.name, "Duplicate sandbox name, skipping");
+                    tracing::warn!(name = %config.name, "Duplicate sandbox name, skipping");
                     continue;
                 }
-
                 match config.sandbox_type.as_str() {
                     "local" | "ssh" | "tmp" => {
                         let sandbox = match Self::build_sandbox(config.clone()).await {
@@ -267,7 +228,6 @@ impl SandboxRegistry {
                                 continue;
                             }
                         };
-
                         #[cfg(target_os = "linux")]
                         {
                             let pool = crate::firecracker::FirecrackerPool::new(
@@ -285,12 +245,11 @@ impl SandboxRegistry {
                             sandboxes.insert(config.name.clone(), sandbox);
                             firecracker_pools.insert(config.name.clone(), pool);
                         }
-
                         #[cfg(not(target_os = "linux"))]
                         {
                             let _ = fc_config;
                             tracing::warn!(
-                                "Firecracker sandbox '{}' requires Linux/KVM — skipping registration",
+                                "Firecracker requires Linux/KVM, skipping '{}'",
                                 config.name
                             );
                         }
@@ -304,7 +263,6 @@ impl SandboxRegistry {
                                 continue;
                             }
                         };
-
                         let sb = match crate::wasm::WasmSandbox::new(
                             config.name.clone(),
                             std::path::PathBuf::from(
@@ -318,8 +276,7 @@ impl SandboxRegistry {
                                 continue;
                             }
                         };
-                        let sandbox: Arc<dyn Sandbox> = Arc::new(sb);
-                        sandboxes.insert(config.name.clone(), sandbox);
+                        sandboxes.insert(config.name.clone(), Arc::new(sb) as Arc<dyn Sandbox>);
                     }
                     other => {
                         tracing::warn!(name = %config.name, sandbox_type = %other, "Unknown sandbox type, skipping");
@@ -331,30 +288,26 @@ impl SandboxRegistry {
 
         Ok(Self {
             sandboxes,
-            default_name: "local".to_string(),
             #[cfg(feature = "firecracker")]
             firecracker_pools,
         })
     }
 
-    /// Get a sandbox by its registry name.
+    /// Register a sandbox instance by name.
+    pub fn register(&mut self, name: &str, sandbox: Arc<dyn Sandbox>) {
+        self.sandboxes.insert(name.to_string(), sandbox);
+    }
+
+    /// Get a sandbox by name.
     pub fn get(&self, name: &str) -> Option<Arc<dyn Sandbox>> {
         self.sandboxes.get(name).cloned()
     }
 
-    /// Acquire a sandbox instance by name.
+    /// Acquire a sandbox instance by name (pure lookup).
     ///
-    /// For per-agent sandboxes (`tmp`) and pool-based sandboxes
-    /// (firecracker), creates a fresh instance on every call.
-    /// For singletons (local, ssh, wasm), returns a clone of the
-    /// shared Arc.
+    /// For pool-based sandboxes (firecracker), creates a fresh instance.
+    /// For all others, returns a clone of the shared Arc.
     pub fn acquire(&self, name: &str) -> Option<Arc<dyn Sandbox>> {
-        // Per-agent sandbox: always create a fresh instance.
-        // bind_metadata is called later to set the actual agent_id.
-        if name == "tmp" {
-            return Some(Arc::new(crate::tmp::TmpSandbox::default()));
-        }
-
         #[cfg(feature = "firecracker")]
         {
             if let Some(pool) = self.firecracker_pools.get(name) {
@@ -370,26 +323,12 @@ impl SandboxRegistry {
                 )));
             }
         }
-
         self.sandboxes.get(name).cloned()
     }
 
-    /// Replace the default ("local") sandbox.
-    ///
-    /// Use this to point the default sandbox at a specific working directory
-    /// instead of the built-in temp dir. Typically called once at startup
-    /// after [`load`].
-    pub fn set_default(&mut self, sandbox: Arc<dyn Sandbox>) {
-        self.sandboxes.insert(self.default_name.clone(), sandbox);
-    }
-
-    /// Get the default sandbox (always "local").
-    /// Falls back to creating a fresh LocalSandbox if the registry is somehow corrupted.
+    /// The default fallback sandbox — a fresh [`TmpSandbox`] with a random subdir.
     pub fn default(&self) -> Arc<dyn Sandbox> {
-        self.sandboxes
-            .get(&self.default_name)
-            .cloned()
-            .unwrap_or_else(|| Arc::new(LocalSandbox::new(None)))
+        Arc::new(crate::tmp::TmpSandbox::new())
     }
 
     /// Number of registered sandboxes.
@@ -397,12 +336,10 @@ impl SandboxRegistry {
         self.sandboxes.len()
     }
 
-    /// Check if any sandboxes are registered.
     pub fn is_empty(&self) -> bool {
         self.sandboxes.is_empty()
     }
 
-    /// Names of all registered sandboxes.
     pub fn names(&self) -> Vec<&str> {
         self.sandboxes
             .keys()
@@ -416,106 +353,56 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_registry_always_has_local() {
-        let tmp = std::env::temp_dir().join("sandbox_test_empty_registry");
+    async fn test_registry_empty_default_is_tmp() {
+        let tmp = std::env::temp_dir().join("sandbox_test_empty");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
         let registry = SandboxRegistry::load(&tmp).await.unwrap();
-        assert!(registry.get("local").is_some());
-        assert_eq!(registry.default().name(), "local");
-        assert_eq!(registry.default().kind(), "tmp"); // default is TmpSandbox
-        assert_eq!(registry.len(), 1);
-
+        assert!(registry.is_empty());
+        // Default is always a fresh TmpSandbox
+        let default = registry.default();
+        assert_eq!(default.kind(), "tmp");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[tokio::test]
-    async fn test_registry_skips_local_override() {
-        let tmp = std::env::temp_dir().join("sandbox_test_local_override2");
+    async fn test_register_and_acquire() {
+        let tmp = std::env::temp_dir().join("sandbox_test_register");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
-        let config = r#"
-name = "local"
-type = "local"
-work_dir = "/tmp"
-"#;
-        std::fs::write(tmp.join("local.toml"), config).unwrap();
+        let mut registry = SandboxRegistry::load(&tmp).await.unwrap();
+        registry.register("local", Arc::new(LocalSandbox::new(Some(tmp.join("work")))));
 
-        let result = SandboxRegistry::load(&tmp).await;
-        assert!(result.is_ok());
-        let registry = result.unwrap();
-        assert!(registry.get("local").is_some());
-        assert_eq!(registry.len(), 1);
-
+        let acquired = registry.acquire("local").unwrap();
+        assert_eq!(acquired.kind(), "local");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[tokio::test]
-    async fn test_registry_skips_unknown_type() {
-        let tmp = std::env::temp_dir().join("sandbox_test_unknown_type");
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
-
-        let config = r#"
-name = "bad"
-type = "nonexistent"
-"#;
-        std::fs::write(tmp.join("bad.toml"), config).unwrap();
-
-        let result = SandboxRegistry::load(&tmp).await;
-        assert!(result.is_ok());
-        let registry = result.unwrap();
-        assert!(registry.get("local").is_some());
-        assert_eq!(registry.len(), 1);
-
-        let _ = std::fs::remove_dir_all(&tmp);
-    }
-
-    #[tokio::test]
-    async fn test_registry_names() {
-        let tmp = std::env::temp_dir().join("sandbox_test_names");
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
-
-        let registry = SandboxRegistry::load(&tmp).await.unwrap();
-        let names = registry.names();
-        assert!(names.contains(&"local"));
-        assert_eq!(names.len(), 1);
-
-        let _ = std::fs::remove_dir_all(&tmp);
-    }
-
-    #[tokio::test]
-    async fn load_skips_invalid_sandbox_keeps_valid() {
+    async fn test_registry_load_toml() {
         let tmp = tempfile::tempdir().unwrap();
-        // valid sandbox
         std::fs::write(
-            tmp.path().join("good.toml"),
+            tmp.path().join("dev.toml"),
             r#"
-name = "good"
-type = "local"
-"#,
-        )
-        .unwrap();
-        // invalid sandbox (bad TOML syntax — missing `=`)
-        std::fs::write(tmp.path().join("bad.toml"), r#"name "bad""#).unwrap();
-        // duplicate name with good — should be skipped (warn)
-        std::fs::write(
-            tmp.path().join("dup.toml"),
-            r#"
-name = "good"
-type = "local"
+name = "dev"
+type = "tmp"
 "#,
         )
         .unwrap();
 
         let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
-        // "good" is present once, "local" is always present
-        assert!(registry.get("local").is_some(), "local must always exist");
-        assert!(registry.get("good").is_some(), "good must be loaded");
-        // "good" is not duplicated
-        assert_eq!(registry.names().iter().filter(|n| **n == "good").count(), 1);
+        assert!(registry.get("dev").is_some());
+        assert_eq!(registry.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_registry_skips_invalid() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("bad.toml"), "not valid {{{").unwrap();
+
+        let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
+        assert!(registry.is_empty());
     }
 }

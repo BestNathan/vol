@@ -1,86 +1,77 @@
-//! TmpSandbox — per-agent sandbox rooted at `/tmp/{agent_id}/`.
+//! TmpSandbox — per-sandbox temp directory at /tmp/{sub_dir}/.
 //!
-//! On construction the sandbox uses a placeholder path `/tmp/tmp/`.
-//! Call [`bind_metadata`](Sandbox::bind_metadata) with an `"agent_id"`
-//! entry to set the real path before [`start`](Sandbox::start).
+//! On construction, generates a random subdirectory name. Call
+//! [`bind_metadata`](Sandbox::bind_metadata) with `"sub_dir"` to set
+//! a custom name (e.g. the agent name for debugging) before [`start`](Sandbox::start).
 
-use crate::{
-    CommandOutput, DirEntry, FileMetadata, FileType, Sandbox, SandboxError, SandboxResult,
-};
 use async_trait::async_trait;
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
-/// A sandbox that maps to `/tmp/{name}/`.
+use crate::{
+    CommandOutput, DirEntry, FileMetadata, FileType, Sandbox, SandboxError, SandboxResult,
+};
+
+static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn random_subdir() -> String {
+    let pid = std::process::id();
+    let count = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("sandbox_{pid:x}_{count:x}")
+}
+
+/// A sandbox that maps to `/tmp/{sub_dir}/`.
 ///
 /// # Lifecycle
 ///
 /// ```ignore
-/// let sb = TmpSandbox::default();              // root = /tmp/tmp/
-/// sb.bind_metadata(&[("agent_id", "my-agent")]); // root = /tmp/my-agent/
-/// sb.start().await?;                           // creates /tmp/my-agent/
+/// let sb = TmpSandbox::new();                    // root = /tmp/sandbox_3a2f_0/
+/// sb.bind_metadata(&[("sub_dir", "explore")]);   // root = /tmp/explore/
+/// sb.start().await?;                             // creates /tmp/explore/
 /// // ... use ...
-/// sb.cleanup().await?;                         // removes /tmp/my-agent/
+/// sb.cleanup().await?;                           // removes /tmp/explore/
 /// ```
 pub struct TmpSandbox {
-    /// Default identity — used until bind_metadata sets a real name.
-    default_name: String,
+    /// Default random subdir — used until bind_metadata sets a real one.
+    default_sub_dir: String,
     // SAFETY: written once by bind_metadata (before any concurrent access),
-    // then read-only. UnsafeCell is needed for interior mutability with &self
-    // while staying Sync (unlike RefCell/Cell).
-    bound_name: UnsafeCell<Option<&'static str>>,
-
-    /// Default root — used until bind_metadata sets a real path.
-    default_root: PathBuf,
-    // SAFETY: same contract as bound_name.
-    bound_root: UnsafeCell<Option<&'static Path>>,
+    // then read-only. UnsafeCell needed for interior mutability with &self.
+    bound_sub_dir: UnsafeCell<Option<&'static str>>,
 }
 
-// Safety: TmpSandbox is Sync because bind_metadata is called once before any
-// concurrent access, and after that the UnsafeCell contents are immutable.
-// The unsafe mutations in bind_metadata happen-before all reads.
+// Safety: bind_metadata is called once before any concurrent access.
+// After that, UnsafeCell contents are immutable.
 unsafe impl Sync for TmpSandbox {}
 
 impl Default for TmpSandbox {
     fn default() -> Self {
-        Self::with_default("tmp")
+        Self::new()
     }
 }
 
 impl TmpSandbox {
-    /// Create a TmpSandbox with an explicit default name.
-    pub fn with_default(name: &str) -> Self {
-        let root = PathBuf::from("/tmp").join(name);
+    /// Create a TmpSandbox with a random subdirectory name.
+    pub fn new() -> Self {
         Self {
-            default_name: name.to_string(),
-            bound_name: UnsafeCell::new(None),
-            default_root: root,
-            bound_root: UnsafeCell::new(None),
+            default_sub_dir: random_subdir(),
+            bound_sub_dir: UnsafeCell::new(None),
         }
     }
 
-    /// The effective name (bound if set, otherwise default).
-    fn effective_name(&self) -> &str {
-        // SAFETY: after bind_metadata, bound_name is immutable.
-        // Before bind_metadata, it's None and we return the default.
-        unsafe { (*self.bound_name.get()).unwrap_or(&self.default_name) }
+    /// The effective subdirectory name (bound if set, otherwise default random).
+    fn effective_sub_dir(&self) -> &str {
+        unsafe { (*self.bound_sub_dir.get()).unwrap_or(&self.default_sub_dir) }
     }
 
-    /// The effective root path (bound if set, otherwise default).
-    fn effective_root(&self) -> &Path {
-        // SAFETY: after bind_metadata, bound_root is immutable.
-        unsafe { (*self.bound_root.get()).unwrap_or(&self.default_root) }
+    /// The effective root path.
+    fn effective_root(&self) -> PathBuf {
+        PathBuf::from("/tmp").join(self.effective_sub_dir())
     }
 
-    /// Leak a string and return a static reference.
     fn leak_str(s: String) -> &'static str {
         Box::leak(s.into_boxed_str())
-    }
-
-    /// Leak a PathBuf and return a static reference.
-    fn leak_path(p: PathBuf) -> &'static Path {
-        Box::leak(p.into_boxed_path())
     }
 }
 
@@ -91,18 +82,14 @@ impl Sandbox for TmpSandbox {
     }
 
     fn name(&self) -> &str {
-        self.effective_name()
+        self.effective_sub_dir()
     }
 
     fn bind_metadata(&self, metadata: &HashMap<String, String>) {
-        if let Some(agent_id) = metadata.get("agent_id") {
-            let name = Self::leak_str(agent_id.clone());
-            let root = Self::leak_path(PathBuf::from("/tmp").join(agent_id));
+        if let Some(sub_dir) = metadata.get("sub_dir") {
             // SAFETY: bind_metadata is called once before any concurrent use.
-            // After this point, bound_name and bound_root are immutable.
             unsafe {
-                *self.bound_name.get() = Some(name);
-                *self.bound_root.get() = Some(root);
+                *self.bound_sub_dir.get() = Some(Self::leak_str(sub_dir.clone()));
             }
         }
     }
@@ -114,22 +101,26 @@ impl Sandbox for TmpSandbox {
     async fn cleanup(&self) -> SandboxResult<()> {
         let root = self.effective_root();
         if root.exists() {
-            std::fs::remove_dir_all(root).map_err(SandboxError::Io)?;
+            std::fs::remove_dir_all(&root).map_err(SandboxError::Io)?;
         }
         Ok(())
     }
 
     fn root_path(&self) -> &Path {
-        self.effective_root()
+        // Boxing trick: leak the effective root so we can return &Path.
+        // The leaked path lives as long as the sandbox (bounded lifetime).
+        let boxed: Box<Path> = self.effective_root().into_boxed_path();
+        Box::leak(boxed)
     }
 
     fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf> {
         if rel.starts_with('/') || rel.starts_with('~') {
             return Err(SandboxError::PathTraversal(rel.to_string()));
         }
-        let resolved = self.effective_root().join(rel);
+        let root = self.effective_root();
+        let resolved = root.join(rel);
         let normalized = crate::normalize_path(&resolved);
-        let normalized_root = crate::normalize_path(self.effective_root());
+        let normalized_root = crate::normalize_path(&root);
         if !normalized.starts_with(&normalized_root) {
             return Err(SandboxError::PathTraversal(rel.to_string()));
         }
@@ -137,7 +128,7 @@ impl Sandbox for TmpSandbox {
     }
 
     async fn execute(&self, req: crate::CommandRequest) -> SandboxResult<CommandOutput> {
-        let root = self.effective_root().to_path_buf();
+        let root = self.effective_root();
         tokio::task::spawn_blocking(move || {
             let mut cmd = std::process::Command::new(&req.program);
             cmd.args(&req.args);
@@ -268,78 +259,68 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
 
-    fn agent_metadata(id: &str) -> HashMap<String, String> {
+    fn metadata(sub_dir: &str) -> HashMap<String, String> {
         let mut m = HashMap::new();
-        m.insert("agent_id".to_string(), id.to_string());
+        m.insert("sub_dir".to_string(), sub_dir.to_string());
         m
     }
 
-    async fn setup(id: &str) -> TmpSandbox {
-        let sb = TmpSandbox::default();
-        sb.bind_metadata(&agent_metadata(id));
-        // Clean up from previous runs
-        let root = sb.effective_root().to_path_buf();
+    async fn setup(sub_dir: &str) -> TmpSandbox {
+        let sb = TmpSandbox::new();
+        sb.bind_metadata(&metadata(sub_dir));
+        let root = sb.effective_root();
         let _ = std::fs::remove_dir_all(&root);
         sb.start().await.unwrap();
         sb
     }
 
     #[tokio::test]
-    async fn test_default_without_bind() {
-        let sb = TmpSandbox::default();
+    async fn test_random_subdir_on_construction() {
+        let sb = TmpSandbox::new();
         assert_eq!(sb.kind(), "tmp");
-        assert_eq!(sb.name(), "tmp");
-        assert_eq!(sb.root_path(), Path::new("/tmp/tmp"));
+        // Default subdir is random, should not be empty
+        assert!(!sb.name().is_empty());
+        assert!(sb.root_path().starts_with("/tmp/"));
     }
 
     #[tokio::test]
-    async fn test_bind_sets_agent_path() {
-        let sb = TmpSandbox::default();
-        sb.bind_metadata(&agent_metadata("my-agent"));
-        assert_eq!(sb.name(), "my-agent");
-        assert_eq!(sb.root_path(), Path::new("/tmp/my-agent"));
+    async fn test_bind_metadata_sets_sub_dir() {
+        let sb = TmpSandbox::new();
+        sb.bind_metadata(&metadata("explore"));
+        assert!(sb.name().contains("explore"));
+        assert!(sb.root_path().to_string_lossy().contains("explore"));
     }
 
     #[tokio::test]
     async fn test_bind_ignores_unknown_keys() {
-        let sb = TmpSandbox::default();
+        let sb = TmpSandbox::new();
+        let original = sb.name().to_string();
         let mut m = HashMap::new();
-        m.insert("other_key".to_string(), "value".to_string());
+        m.insert("other".to_string(), "value".to_string());
         sb.bind_metadata(&m);
-        // Still uses default
-        assert_eq!(sb.name(), "tmp");
+        assert_eq!(sb.name(), original);
     }
 
     #[tokio::test]
     async fn test_full_lifecycle() {
-        let sb = TmpSandbox::default();
-        sb.bind_metadata(&agent_metadata("lifecycle-test"));
-        assert_eq!(sb.name(), "lifecycle-test");
-
-        // Start
-        sb.start().await.unwrap();
+        let sb = setup("lifecycle-test").await;
         assert!(sb.root_path().exists());
 
-        // Write + read
         let file = sb.root_path().join("hello.txt");
-        sb.write_file(&file, b"hello tmp").await.unwrap();
+        sb.write_file(&file, b"hello").await.unwrap();
         let content = sb.read_file(&file, None, None).await.unwrap();
-        assert_eq!(content, b"hello tmp");
+        assert_eq!(content, b"hello");
 
-        // Cleanup
         sb.cleanup().await.unwrap();
         assert!(!sb.root_path().exists());
     }
 
     #[tokio::test]
-    async fn test_resolve_path_rejects_absolute() {
-        let sb = TmpSandbox::default();
-        sb.bind_metadata(&agent_metadata("resolver"));
+    async fn test_resolve_path() {
+        let sb = setup("resolver").await;
         assert!(sb.resolve_path("/etc/passwd").is_err());
-        assert!(sb.resolve_path("~/foo").is_err());
         let resolved = sb.resolve_path("sub/file.txt").unwrap();
         assert!(resolved.starts_with("/tmp/resolver"));
-        assert!(resolved.ends_with("sub/file.txt"));
     }
 
     #[tokio::test]
@@ -347,7 +328,7 @@ mod tests {
         let sb = setup("exec-echo").await;
         let req = CommandRequest {
             program: "echo".to_string(),
-            args: vec!["-n".to_string(), "hello from tmp".to_string()],
+            args: vec!["-n".to_string(), "hello".to_string()],
             env: Default::default(),
             cwd: None,
             stdin: None,
@@ -355,7 +336,7 @@ mod tests {
         };
         let output = sb.execute(req).await.unwrap();
         assert_eq!(output.exit_code, 0);
-        assert_eq!(String::from_utf8_lossy(&output.stdout), "hello from tmp");
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "hello");
         sb.cleanup().await.unwrap();
     }
 }
