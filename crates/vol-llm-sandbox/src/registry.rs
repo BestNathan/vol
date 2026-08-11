@@ -189,12 +189,17 @@ impl SandboxRegistry {
     /// Load sandboxes from a config directory.
     ///
     /// Always registers a built-in `LocalSandbox` named "local".
+    /// If `working_dir` is provided, the local sandbox is rooted there
+    /// (so agents can access project files). Otherwise a temp dir is used.
     /// Additional sandboxes are loaded from `*.toml` files in `sandboxes_dir`.
-    pub async fn load(sandboxes_dir: &Path) -> SandboxResult<Self> {
+    pub async fn load(sandboxes_dir: &Path, working_dir: Option<&Path>) -> SandboxResult<Self> {
         let mut sandboxes: HashMap<String, Arc<dyn Sandbox>> = HashMap::new();
 
         // Always register LocalSandbox (hardcoded, no config file needed)
-        let local = Arc::new(LocalSandbox::new(None)) as Arc<dyn Sandbox>;
+        let local: Arc<dyn Sandbox> = match working_dir {
+            Some(dir) => Arc::new(LocalSandbox::new(Some(dir.to_path_buf()))),
+            None => Arc::new(LocalSandbox::new(None)),
+        };
         local.start().await?;
         sandboxes.insert("local".to_string(), local);
 
@@ -410,7 +415,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
-        let registry = SandboxRegistry::load(&tmp).await.unwrap();
+        let registry = SandboxRegistry::load(&tmp, None).await.unwrap();
         assert!(registry.get("local").is_some());
         assert_eq!(registry.default().name(), "local");
         assert_eq!(registry.default().kind(), "local");
@@ -432,7 +437,7 @@ work_dir = "/tmp"
 "#;
         std::fs::write(tmp.join("local.toml"), config).unwrap();
 
-        let result = SandboxRegistry::load(&tmp).await;
+        let result = SandboxRegistry::load(&tmp, None).await;
         assert!(result.is_ok());
         let registry = result.unwrap();
         assert!(registry.get("local").is_some());
@@ -453,7 +458,7 @@ type = "nonexistent"
 "#;
         std::fs::write(tmp.join("bad.toml"), config).unwrap();
 
-        let result = SandboxRegistry::load(&tmp).await;
+        let result = SandboxRegistry::load(&tmp, None).await;
         assert!(result.is_ok());
         let registry = result.unwrap();
         assert!(registry.get("local").is_some());
@@ -468,7 +473,7 @@ type = "nonexistent"
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
-        let registry = SandboxRegistry::load(&tmp).await.unwrap();
+        let registry = SandboxRegistry::load(&tmp, None).await.unwrap();
         let names = registry.names();
         assert!(names.contains(&"local"));
         assert_eq!(names.len(), 1);
@@ -500,7 +505,7 @@ type = "local"
         )
         .unwrap();
 
-        let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
+        let registry = SandboxRegistry::load(tmp.path(), None).await.unwrap();
         // "good" is present once, "local" is always present
         assert!(registry.get("local").is_some(), "local must always exist");
         assert!(registry.get("good").is_some(), "good must be loaded");

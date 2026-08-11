@@ -104,7 +104,9 @@ mod tests {
     #[tokio::test]
     async fn load_dir_empty_when_missing() {
         let sandbox_dir = tempdir().unwrap();
-        let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
+        let registry = SandboxRegistry::load(sandbox_dir.path(), None)
+            .await
+            .unwrap();
         let tools = load_dir(Path::new("/nonexistent/path/abc123"), &registry)
             .await
             .unwrap();
@@ -117,7 +119,9 @@ mod tests {
         fs::write(dir.path().join("bad.toml"), "this is not valid toml {{{").unwrap();
 
         let sandbox_dir = tempdir().unwrap();
-        let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
+        let registry = SandboxRegistry::load(sandbox_dir.path(), None)
+            .await
+            .unwrap();
 
         let err = load_dir(dir.path(), &registry)
             .await
@@ -146,7 +150,9 @@ mod tests {
         .unwrap();
 
         let sandbox_dir = tempdir().unwrap();
-        let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
+        let registry = SandboxRegistry::load(sandbox_dir.path(), None)
+            .await
+            .unwrap();
 
         let err = load_dir(dir.path(), &registry)
             .await
@@ -170,7 +176,9 @@ mod tests {
         fs::write(dir.path().join("b.toml"), body).unwrap();
 
         let sandbox_dir = tempdir().unwrap();
-        let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
+        let registry = SandboxRegistry::load(sandbox_dir.path(), None)
+            .await
+            .unwrap();
 
         let err = load_dir(dir.path(), &registry)
             .await
@@ -196,7 +204,9 @@ mod tests {
         .unwrap();
 
         let sandbox_dir = tempdir().unwrap();
-        let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
+        let registry = SandboxRegistry::load(sandbox_dir.path(), None)
+            .await
+            .unwrap();
         let tools = load_dir(dir.path(), &registry).await.unwrap();
 
         assert_eq!(tools.len(), 1);
@@ -223,7 +233,9 @@ mod tests {
         .unwrap();
 
         let sandbox_dir = tempdir().unwrap();
-        let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
+        let registry = SandboxRegistry::load(sandbox_dir.path(), None)
+            .await
+            .unwrap();
         let tools = load_dir(dir.path(), &registry).await.unwrap();
 
         assert_eq!(tools.len(), 1);
@@ -247,7 +259,9 @@ mod tests {
         .unwrap();
 
         let sandbox_dir = tempdir().unwrap();
-        let registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
+        let registry = SandboxRegistry::load(sandbox_dir.path(), None)
+            .await
+            .unwrap();
         let tools = load_dir(dir.path(), &registry).await.unwrap();
         assert_eq!(tools.len(), 0, "disabled config should be skipped");
     }
