@@ -1538,4 +1538,129 @@ mod tests {
             "include_hidden=true should find hidden files"
         );
     }
+
+    #[tokio::test]
+    async fn test_execute_star_pattern_finds_only_root_entries() {
+        // Reproduce: pattern="*" with kind="file" in deployment scenario.
+        // /app/ has: .agents/ (dir), data/ (dir), logs/ (dir), target/ (excluded)
+        // pattern="*" only matches root level; kind="file" skips all dirs → empty!
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        std::fs::create_dir_all(dir.path().join(".agents").join("agents")).unwrap();
+        std::fs::create_dir_all(dir.path().join("data")).unwrap();
+        std::fs::create_dir(dir.path().join("target")).unwrap();
+        std::fs::write(dir.path().join("README.md"), "# Root README").unwrap();
+        std::fs::write(
+            dir.path().join(".agents").join("agents").join("explore.md"),
+            "# Explore",
+        )
+        .unwrap();
+
+        let tool = GlobTool::new();
+
+        // Exact scenario from user: pattern="*", kind="file", include_hidden=true
+        let args = serde_json::json!({
+            "pattern": "*",
+            "kind": "file",
+            "include_hidden": true
+        });
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        assert!(result.success);
+        let output: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        let matches = output["matches"].as_array().unwrap();
+        let paths: Vec<&str> = matches
+            .iter()
+            .map(|m| m["path"].as_str().unwrap())
+            .collect();
+        // glob crate * matches any filename at any depth (not just root).
+        // Both README.md and .agents/agents/explore.md should be found.
+        assert!(
+            paths.contains(&"README.md"),
+            "README.md should match *: {paths:?}"
+        );
+        assert!(
+            paths.contains(&".agents/agents/explore.md"),
+            ".agents/agents/explore.md should match *: {paths:?}"
+        );
+        assert_eq!(output["total_matched"].as_u64().unwrap(), 2);
+
+        // Fix: use pattern="**/*" to find files recursively
+        let args2 = serde_json::json!({
+            "pattern": "**/*",
+            "kind": "file",
+            "include_hidden": true
+        });
+        let result2 = tool.execute(&args2, &ctx).await.unwrap();
+        let output2: serde_json::Value = serde_json::from_str(&result2.content).unwrap();
+        let paths2: Vec<&str> = output2["matches"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["path"].as_str().unwrap())
+            .collect();
+        assert!(paths2.contains(&"README.md"));
+        assert!(
+            paths2.contains(&".agents/agents/explore.md"),
+            "**/* finds files in subdirs: {paths2:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_execute_exact_production_args() {
+        // Exact reproduction of deployed data-plane glob call:
+        // {"exclude":[], "include_hidden":true, "max_results":20, "pattern":"**/*"}
+        let tool = GlobTool::new();
+        let args = serde_json::json!({
+            "exclude": [],
+            "include_hidden": true,
+            "max_results": 20,
+            "pattern": "**/*"
+        });
+
+        // Scenario A: deployed structure — .agents/ with files
+        {
+            let dir = tempfile::tempdir().unwrap();
+            let ctx = test_sandbox(&dir);
+            let agents_dir = dir.path().join(".agents").join("agents");
+            std::fs::create_dir_all(&agents_dir).unwrap();
+            std::fs::write(agents_dir.join("explore.md"), "# Explore").unwrap();
+            std::fs::write(dir.path().join("README.md"), "# README").unwrap();
+
+            let result = tool.execute(&args, &ctx).await.unwrap();
+            let output: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+            let count = output["total_matched"].as_u64().unwrap();
+            assert!(count > 0, "should find files: {output:?}");
+        }
+
+        // Scenario B: empty directory (simulates empty /app mount)
+        {
+            let dir = tempfile::tempdir().unwrap();
+            let ctx = test_sandbox(&dir);
+
+            let result = tool.execute(&args, &ctx).await.unwrap();
+            let output: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+            assert_eq!(output["total_matched"].as_u64().unwrap(), 0);
+            assert!(output["message"].as_str().unwrap().contains("No matches"));
+        }
+
+        // Scenario C: only target/ directory (Docker image with binary only)
+        {
+            let dir = tempfile::tempdir().unwrap();
+            let ctx = test_sandbox(&dir);
+            std::fs::create_dir_all(dir.path().join("target").join("release")).unwrap();
+            std::fs::write(
+                dir.path()
+                    .join("target")
+                    .join("release")
+                    .join("vol-agent-server"),
+                b"binary",
+            )
+            .unwrap();
+
+            let result = tool.execute(&args, &ctx).await.unwrap();
+            let output: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+            let count = output["total_matched"].as_u64().unwrap();
+            assert!(count > 0, "should find binary in target/: {output:?}");
+        }
+    }
 }

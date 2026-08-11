@@ -32,9 +32,48 @@ spec:
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
+      initContainers:
+        - name: copy-agent-configs
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              for dir in agents providers skills sandboxes; do
+                if [ -d "/configmap-input/$dir" ]; then
+                  cp -rL /configmap-input/"$dir"/* /app/.agents/"$dir"/ 2>/dev/null || true
+                fi
+              done
+              echo "Agent configs copied to /app/.agents/"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+          volumeMounts:
+            - name: configmap-agents
+              mountPath: /configmap-input/agents
+              readOnly: true
+            - name: configmap-providers
+              mountPath: /configmap-input/providers
+              readOnly: true
+            - name: configmap-skills
+              mountPath: /configmap-input/skills
+              readOnly: true
+            - name: configmap-sandboxes
+              mountPath: /configmap-input/sandboxes
+              readOnly: true
+            - name: agent-agents
+              mountPath: /app/.agents/agents
+            - name: agent-providers
+              mountPath: /app/.agents/providers
+            - name: agent-skills
+              mountPath: /app/.agents/skills
+            - name: agent-sandboxes
+              mountPath: /app/.agents/sandboxes
       containers:
         - name: agent-server
-          image: ghcr.io/bestnathan/vol-agent-server:dp-123570a
+          image: ghcr.io/bestnathan/vol-agent-server:dp-0713993
           imagePullPolicy: IfNotPresent
           workingDir: /app
           args:
@@ -71,18 +110,14 @@ spec:
             - name: config
               mountPath: /etc/agent-server
               readOnly: true
-            - name: agent-definitions
+            - name: agent-agents
               mountPath: /app/.agents/agents
-              readOnly: true
             - name: agent-providers
               mountPath: /app/.agents/providers
-              readOnly: true
             - name: agent-skills
               mountPath: /app/.agents/skills
-              readOnly: true
             - name: agent-sandboxes
               mountPath: /app/.agents/sandboxes
-              readOnly: true
             - name: mcp-config
               mountPath: /app/.mcp.json
               subPath: mcp.json
@@ -124,25 +159,35 @@ spec:
               - key: agent-server.toml
                 path: agent-server.toml
             defaultMode: 0644
-        - name: agent-definitions
+        # ConfigMap inputs — mounted read-only for init container to copy from
+        - name: configmap-agents
           configMap:
             name: agent-definitions
             defaultMode: 0644
-        - name: agent-providers
+        - name: configmap-providers
           configMap:
             name: agent-providers
             defaultMode: 0644
-        - name: agent-skills
+        - name: configmap-skills
           configMap:
             name: agent-skills
             items:
               - key: clarifying-requirements.SKILL.md
                 path: clarifying-requirements/SKILL.md
             defaultMode: 0644
-        - name: agent-sandboxes
+        - name: configmap-sandboxes
           configMap:
             name: agent-sandboxes
             defaultMode: 0644
+        # EmptyDir outputs — clean copies without K8s symlink artifacts
+        - name: agent-agents
+          emptyDir: {}
+        - name: agent-providers
+          emptyDir: {}
+        - name: agent-skills
+          emptyDir: {}
+        - name: agent-sandboxes
+          emptyDir: {}
         - name: mcp-config
           configMap:
             name: mcp-config
