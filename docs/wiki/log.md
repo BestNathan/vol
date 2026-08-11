@@ -1,5 +1,11 @@
 # Change Log
 
+## [2026-08-11] ingest | Sandbox Lifecycle & TmpSandbox Design
+- Created concepts: [[sandbox-lifecycle]]
+- Updated entities: [[vol-llm-sandbox-crate]] (TmpSandbox, bind_metadata, registry redesign, path resolution contract)
+- Updated index: new concept entry, updated sandbox entity summary
+- Changes: Documented final sandbox design — pure registry with `register()`, `TmpSandbox` with random subdir + `bind_metadata({"sub_dir": ...})`, `acquire()` as pure lookup, `ToolContext::resolve_path` absolute→relative adaptation
+
 ## [2026-07-24] ingest | Observability Pull-Metrics Refactor
 - Created sources: [[observability-pull-metrics-refactor]]
 - Created entities: [[vol-observability-crate]] (consolidated observability library)

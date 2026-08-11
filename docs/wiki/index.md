@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-07-24 (observability pull-metrics refactor)
+Last updated: 2026-08-11 (sandbox lifecycle & TmpSandbox design)
 
 ## Entities
 
@@ -10,7 +10,7 @@ Last updated: 2026-07-24 (observability pull-metrics refactor)
 | [[vol-llm-task-crate]] | Task models and persistence stores, including SeaORM database store for SQLite and Postgres with compiled migrations | active | 2026-06-09 |
 | [[vol-agent-server-crate]] | Standalone server crate that composes DataPlaneServerCore/ControlPlaneServerCore routes and is deployed by the self-contained ArgoCD GitOps tree as `agent-server`; supports remote control-plane registration with heartbeat/reconnect | active | 2026-06-17 |
 | [[vol-llm-ui-crate]] | Shared UI state model. Web (Dioxus) DEPRECATED 2026-08 — React frontend/ is the active web UI. TUI + state maintained. | deprecated | 2026-08-06 |
-| [[vol-llm-sandbox-crate]] | Sandbox abstraction and lifecycle management with fault-tolerant registry loading | active | 2026-06-17 |
+| [[vol-llm-sandbox-crate]] | Sandbox abstraction (Local/Tmp/SSH/Firecracker/Wasm), SandboxRegistry with pure-config loading, TmpSandbox with bind_metadata lifecycle | active | 2026-08-11 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API | active | 2026-05-21 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions, including provider-neutral multipart message content | stable | 2026-05-21 |
@@ -29,6 +29,7 @@ Last updated: 2026-07-24 (observability pull-metrics refactor)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[sandbox-lifecycle]] | Sandbox lifecycle: define→construct→register→acquire→bind→start→use→cleanup. Pure registry design with TmpSandbox default, bind_metadata for sub_dir | active | 2026-08-11 |
 | [[argocd-app-of-apps-gitops]] | Self-contained ArgoCD App-of-Apps deployment pattern split into `runtime-config` (namespace + shared agents/providers/skills ConfigMaps) and `workloads` (application deployments), with `agent-server` mounting `/app/.agents` and CI-built MCP images updating GitOps manifests | active | 2026-06-16 |
 | [[agent-server-control-data-plane]] | Single server crate with DataPlaneServerCore/ControlPlaneServerCore, channel-owned JSON-RPC protocol, route composition, data-plane snapshot facade, command/run semantics, control-plane router MVP, role-mode verification tests, dependency boundary checks, and remote data-plane registration with heartbeat/reconnect | active | 2026-06-17 |
 | [[runtime-session-store-configuration]] | Shared `[runtime.session_store]` TOML contract and runtime `SessionManager` behavior for file/database session persistence | active | 2026-06-10 |

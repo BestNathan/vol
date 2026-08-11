@@ -1,45 +1,69 @@
 ---
 type: entity
 category: service
-tags: [sandbox, container, ssh, firecracker, fault-tolerance]
+tags: [sandbox, container, ssh, firecracker, tmp, wasm, rust]
 created: 2026-06-17
-updated: 2026-06-17
-source_count: 1
+updated: 2026-08-11
+source_count: 2
 ---
 
 # vol-llm-sandbox Crate
 
 ## Overview
-`vol-llm-sandbox` is the sandbox abstraction and lifecycle management crate. It defines the `Sandbox` trait and provides implementations for local execution, SSH sandboxes, and Firecracker VM sandboxes. `SandboxRegistry` manages named sandbox instances loaded from TOML configuration files.
+`vol-llm-sandbox` is the sandbox abstraction and lifecycle management crate. It defines the `Sandbox` trait and provides implementations for local execution, temp directories, SSH sandboxes, Firecracker VM sandboxes, and Wasm sandboxes. `SandboxRegistry` manages named sandbox instances loaded from TOML configuration files.
 
 ## Key Facts
-- Defines the `Sandbox` trait with `start()`, `stop()`, `execute()`, and file-system operations.
-- `SandboxRegistry::load()` reads sandbox configs from a directory, creates and starts each valid sandbox.
-- Now tolerates individual sandbox failures: invalid TOML, missing SSH configs, failed `sandbox.start()`, or duplicate names are logged and skipped instead of crashing the server.
-- `SandboxRegistry` always has a built-in `"local"` sandbox — this name is reserved and cannot be overridden by config files.
-- Supports SSH sandboxes with known_hosts (feature-gated behind `feature = "ssh"`).
-- Supports Firecracker micro-VM sandboxes (feature-gated behind `feature = "firecracker"`, Linux-only).
+
+### Sandbox trait
+- `kind()` / `name()` / `root_path()` — identity and root path
+- `bind_metadata(metadata)` — bind runtime metadata before `start()` (default no-op). TmpSandbox uses `sub_dir` key to set its root path
+- `start()` / `cleanup()` — lifecycle
+- `resolve_path(rel)` → absolute path within root. Rejects absolute paths and `~` — consistent across all implementations
+- `execute(CommandRequest)` / `read_file` / `write_file` / `create_dir_all` / `read_dir` / `metadata`
+
+### Implementations
+
+| Type | Kind | Root | Use case |
+|------|------|------|----------|
+| `LocalSandbox` | `"local"` | `Some(path)` = fixed dir, `None` = random temp | Development, testing, DP nodes (at `/app`) |
+| `TmpSandbox` | `"tmp"` | `/tmp/{random}/` → `bind_metadata("sub_dir")` overrides | Agent sandboxes, `registry.default()` fallback |
+| `SSHSandbox` | `"ssh"` | Remote `work_dir` | Remote execution via SSH |
+| `FirecrackerSandbox` | `"firecracker"` | VM rootfs | Full VM isolation (Linux/KVM) |
+| `WasmSandbox` | `"wasm"` | Work dir preopened as `/` | Secure wasm module execution |
+
+### TmpSandbox lifecycle
+1. `TmpSandbox::new()` → random subdir: `/tmp/sandbox_{pid}_{count}/`
+2. `bind_metadata({"sub_dir": "explore"})` → root = `/tmp/explore/`
+3. `start()` → creates directory
+4. `cleanup()` → removes directory
+
+### SandboxRegistry
+- `load(sandboxes_dir)` — loads `*.toml` configs. No built-in entries
+- `register(name, sandbox)` — add programmatic sandbox
+- `acquire(name)` — pure name lookup. Firecracker creates fresh instance
+- `default()` — returns a fresh `TmpSandbox::new()` (random subdir)
+- `names()` / `get()` / `len()` / `is_empty()`
+
+### Path resolution contract
+- All `resolve_path` implementations reject absolute paths (`/...`) and `~` paths
+- `ToolContext::resolve_path` converts absolute paths within the sandbox root to relative before delegation
+- This keeps tools working with absolute paths (e.g. from `tempfile`) while sandboxes see consistent relative input
+
+### Runtime integration
+- `AgentRuntimeBuilder::build()` loads registry, then `register("local", LocalSandbox(working_dir))`
+- Agents use `sandbox = "local"` → `/app/` on DP nodes
+- Agents without explicit sandbox → `registry.default()` → fresh TmpSandbox
+- Agent loop calls `bind_metadata({"sub_dir": agent_id})` on every sandbox after acquire
 
 ## Modules
-- `sandbox.rs` — `Sandbox` trait and `SandboxResult`/`SandboxError` types
-- `local.rs` — `LocalSandbox` implementation via `tokio::process::Command`
-- `ssh.rs` — SSH sandbox with session pooling (feature = "ssh")
+- `sandbox.rs` (trait in `lib.rs`) — `Sandbox` trait, `SandboxRef`, `SandboxError`, types
+- `local.rs` — `LocalSandbox` implementation
+- `tmp.rs` — `TmpSandbox` with random subdir + bind_metadata
+- `ssh/` — SSH sandbox with session pooling (feature = "ssh")
 - `firecracker.rs` — Firecracker VM sandbox with pool (feature = "firecracker")
-- `registry.rs` — `SandboxRegistry` with fault-tolerant loading
+- `wasm.rs` — WasmTime/WASI sandbox (feature = "wasm")
+- `registry.rs` — `SandboxRegistry` with fault-tolerant TOML loading
 
-## Fault-Tolerant Loading
-Source: [[data-plane-registration-sandbox-tolerance]]
-
-`SandboxRegistry::load()` now wraps each per-file operation in error logging + `continue` instead of propagating errors. The following failures are handled gracefully:
-- Directory entry read errors
-- File read failures
-- TOML parse errors
-- Reserved name `"local"`
-- Duplicate sandbox names
-- Missing required config sections
-- SSH sandbox creation failures
-- `sandbox.start()` failures
-- Unknown sandbox types
-
-## Related
-- [[vol-agent-server-crate]] — uses `SandboxRegistry` for sandbox management
+## Timeline
+- **2026-06-17**: Initial sandbox abstraction, LocalSandbox, SSHSandbox, FirecrackerSandbox
+- **2026-08-11**: TmpSandbox added; resolve_path unified across all implementations; bind_metadata trait method; registry simplified to pure config loading; `Sandbox` trait fully documented
