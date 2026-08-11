@@ -1489,4 +1489,53 @@ mod tests {
         assert!(paths.contains(&"src/main.rs"));
         assert!(!paths.contains(&"src/test.rs"));
     }
+
+    #[tokio::test]
+    async fn test_execute_include_hidden_skips_hidden_by_default() {
+        // Reproduce the exact deployment scenario:
+        // data-plane working_dir = /app, project files under .agents/ (hidden)
+        // glob with default include_hidden=false skips .agents/
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        let agents_dir = dir.path().join(".agents").join("agents");
+        std::fs::create_dir_all(&agents_dir).unwrap();
+        std::fs::write(dir.path().join("README.md"), "# README").unwrap();
+        std::fs::write(agents_dir.join("explore.md"), "# Explore Agent").unwrap();
+
+        let tool = GlobTool::new();
+
+        // Default: include_hidden=false → skips .agents/
+        let args = serde_json::json!({"pattern": "**/*.md"});
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        assert!(result.success);
+        let output: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        let paths: Vec<&str> = output["matches"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["path"].as_str().unwrap())
+            .collect();
+        // README.md is visible, .agents/explore.md is hidden → NOT found
+        assert!(paths.contains(&"README.md"), "README.md should be visible");
+        assert!(
+            !paths.contains(&".agents/agents/explore.md"),
+            ".agents/ should be skipped by default"
+        );
+
+        // With include_hidden=true → finds hidden files too
+        let args2 = serde_json::json!({"pattern": "**/*.md", "include_hidden": true});
+        let result2 = tool.execute(&args2, &ctx).await.unwrap();
+        let output2: serde_json::Value = serde_json::from_str(&result2.content).unwrap();
+        let paths2: Vec<&str> = output2["matches"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["path"].as_str().unwrap())
+            .collect();
+        assert!(paths2.contains(&"README.md"));
+        assert!(
+            paths2.contains(&".agents/agents/explore.md"),
+            "include_hidden=true should find hidden files"
+        );
+    }
 }
