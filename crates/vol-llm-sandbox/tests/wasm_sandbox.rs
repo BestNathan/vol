@@ -4,7 +4,8 @@
 //! trait (execute, read_file, write_file, resolve_path, etc.) using a
 //! minimal WASI module compiled from WAT at test time.
 
-use vol_llm_sandbox::registry::{SandboxConfig, WasmConfig, WasmModuleConfig};
+use vol_llm_sandbox::registry::SandboxConfig;
+// WasmConfig / WasmModuleConfig are only used inside #[cfg(feature = "wasm")]
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Config deserialization — no wasm feature needed
@@ -69,6 +70,7 @@ mod runtime {
     use super::*;
     use std::collections::HashMap;
     use std::time::Duration;
+    use vol_llm_sandbox::registry::{WasmConfig, WasmModuleConfig};
     use vol_llm_sandbox::wasm::WasmSandbox;
     use vol_llm_sandbox::{CommandRequest, Sandbox};
 
