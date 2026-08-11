@@ -44,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    let sandbox_registry = SandboxRegistry::load(&cli.sandboxes_dir, None)
+    let sandbox_registry = SandboxRegistry::load(&cli.sandboxes_dir)
         .await
         .map_err(|e| anyhow::anyhow!("sandbox registry: {e}"))?;
 

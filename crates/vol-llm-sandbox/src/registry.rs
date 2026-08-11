@@ -188,18 +188,15 @@ impl SandboxRegistry {
 
     /// Load sandboxes from a config directory.
     ///
-    /// Always registers a built-in `LocalSandbox` named "local".
-    /// If `working_dir` is provided, the local sandbox is rooted there
-    /// (so agents can access project files). Otherwise a temp dir is used.
+    /// Always registers a built-in `TmpSandbox` named "local" (rooted at `/tmp/local/`).
+    /// Callers that have a working directory should call [`set_default`] afterwards
+    /// to replace it with a `LocalSandbox` at the correct path.
     /// Additional sandboxes are loaded from `*.toml` files in `sandboxes_dir`.
-    pub async fn load(sandboxes_dir: &Path, working_dir: Option<&Path>) -> SandboxResult<Self> {
+    pub async fn load(sandboxes_dir: &Path) -> SandboxResult<Self> {
         let mut sandboxes: HashMap<String, Arc<dyn Sandbox>> = HashMap::new();
 
-        // Always register LocalSandbox (hardcoded, no config file needed)
-        let local: Arc<dyn Sandbox> = match working_dir {
-            Some(dir) => Arc::new(LocalSandbox::new(Some(dir.to_path_buf()))),
-            None => Arc::new(LocalSandbox::new(None)),
-        };
+        // Always register TmpSandbox as default "local" (hardcoded).
+        let local = Arc::new(crate::tmp::TmpSandbox::with_default("local")) as Arc<dyn Sandbox>;
         local.start().await?;
         sandboxes.insert("local".to_string(), local);
 
@@ -377,6 +374,15 @@ impl SandboxRegistry {
         self.sandboxes.get(name).cloned()
     }
 
+    /// Replace the default ("local") sandbox.
+    ///
+    /// Use this to point the default sandbox at a specific working directory
+    /// instead of the built-in temp dir. Typically called once at startup
+    /// after [`load`].
+    pub fn set_default(&mut self, sandbox: Arc<dyn Sandbox>) {
+        self.sandboxes.insert(self.default_name.clone(), sandbox);
+    }
+
     /// Get the default sandbox (always "local").
     /// Falls back to creating a fresh LocalSandbox if the registry is somehow corrupted.
     pub fn default(&self) -> Arc<dyn Sandbox> {
@@ -415,10 +421,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
-        let registry = SandboxRegistry::load(&tmp, None).await.unwrap();
+        let registry = SandboxRegistry::load(&tmp).await.unwrap();
         assert!(registry.get("local").is_some());
         assert_eq!(registry.default().name(), "local");
-        assert_eq!(registry.default().kind(), "local");
+        assert_eq!(registry.default().kind(), "tmp"); // default is TmpSandbox
         assert_eq!(registry.len(), 1);
 
         let _ = std::fs::remove_dir_all(&tmp);
@@ -437,7 +443,7 @@ work_dir = "/tmp"
 "#;
         std::fs::write(tmp.join("local.toml"), config).unwrap();
 
-        let result = SandboxRegistry::load(&tmp, None).await;
+        let result = SandboxRegistry::load(&tmp).await;
         assert!(result.is_ok());
         let registry = result.unwrap();
         assert!(registry.get("local").is_some());
@@ -458,7 +464,7 @@ type = "nonexistent"
 "#;
         std::fs::write(tmp.join("bad.toml"), config).unwrap();
 
-        let result = SandboxRegistry::load(&tmp, None).await;
+        let result = SandboxRegistry::load(&tmp).await;
         assert!(result.is_ok());
         let registry = result.unwrap();
         assert!(registry.get("local").is_some());
@@ -473,7 +479,7 @@ type = "nonexistent"
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
-        let registry = SandboxRegistry::load(&tmp, None).await.unwrap();
+        let registry = SandboxRegistry::load(&tmp).await.unwrap();
         let names = registry.names();
         assert!(names.contains(&"local"));
         assert_eq!(names.len(), 1);
@@ -505,7 +511,7 @@ type = "local"
         )
         .unwrap();
 
-        let registry = SandboxRegistry::load(tmp.path(), None).await.unwrap();
+        let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
         // "good" is present once, "local" is always present
         assert!(registry.get("local").is_some(), "local must always exist");
         assert!(registry.get("good").is_some(), "good must be loaded");

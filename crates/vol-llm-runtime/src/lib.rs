@@ -277,7 +277,7 @@ impl AgentRuntime {
             let tmp = std::env::temp_dir().join("vol-llm-runtime-test-sandboxes");
             let _ = std::fs::create_dir_all(&tmp);
             Arc::new(
-                vol_llm_sandbox::registry::SandboxRegistry::load(&tmp, None)
+                vol_llm_sandbox::registry::SandboxRegistry::load(&tmp)
                     .await
                     .expect("SandboxRegistry init in for_test"),
             )
@@ -470,12 +470,17 @@ impl AgentRuntimeBuilder {
 
         let sandbox_registry = {
             let sandboxes_dir = self.working_dir.join(".agents").join("sandboxes");
-            vol_llm_sandbox::registry::SandboxRegistry::load(
-                &sandboxes_dir,
-                Some(&self.working_dir),
-            )
-            .await
-            .map_err(|e| format!("Sandbox registry init failed: {e}"))?
+            let mut registry = vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir)
+                .await
+                .map_err(|e| format!("Sandbox registry init failed: {e}"))?;
+            // Replace the default "local" TmpSandbox with a LocalSandbox
+            // rooted at the server's working directory so agents can
+            // access project files (.agents/, data/, logs/).
+            let working_sandbox = Arc::new(vol_llm_sandbox::local::LocalSandbox::new(Some(
+                self.working_dir.clone(),
+            )));
+            registry.set_default(working_sandbox);
+            registry
         };
         let sandbox_registry = Arc::new(sandbox_registry);
         let skill_loader = {
@@ -1124,7 +1129,7 @@ base_url = "https://api.test.com"
         let temp = tempfile::tempdir().unwrap();
         let sandboxes_dir = temp.path().join(".sandboxes");
         std::fs::create_dir_all(&sandboxes_dir).unwrap();
-        let registry = vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir, None)
+        let registry = vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir)
             .await
             .unwrap();
         let runtime = AgentRuntime {
@@ -1157,7 +1162,7 @@ base_url = "https://api.test.com"
         let temp = tempfile::tempdir().unwrap();
         let sandboxes_dir = temp.path().join(".sandboxes");
         std::fs::create_dir_all(&sandboxes_dir).unwrap();
-        let registry = vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir, None)
+        let registry = vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir)
             .await
             .unwrap();
         let runtime = AgentRuntime {

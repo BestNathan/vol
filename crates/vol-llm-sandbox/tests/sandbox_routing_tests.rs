@@ -54,7 +54,7 @@ fn test_normalize_path_empty() {
 #[tokio::test]
 async fn test_registry_acquire_local_returns_working_sandbox() {
     let tmp = tempfile::tempdir().unwrap();
-    let registry = SandboxRegistry::load(tmp.path(), None).await.unwrap();
+    let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
 
     let sandbox = registry
         .acquire("local")
@@ -78,14 +78,14 @@ async fn test_registry_acquire_local_returns_working_sandbox() {
 #[tokio::test]
 async fn test_registry_acquire_nonexistent_returns_none() {
     let tmp = tempfile::tempdir().unwrap();
-    let registry = SandboxRegistry::load(tmp.path(), None).await.unwrap();
+    let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
     assert!(registry.acquire("nonexistent_sandbox_xyz").is_none());
 }
 
 #[tokio::test]
 async fn test_registry_default_is_local() {
     let tmp = tempfile::tempdir().unwrap();
-    let registry = SandboxRegistry::load(tmp.path(), None).await.unwrap();
+    let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
     let default = registry.default();
     assert_eq!(default.name(), "local");
 }
@@ -93,7 +93,7 @@ async fn test_registry_default_is_local() {
 #[tokio::test]
 async fn test_registry_names_includes_local() {
     let tmp = tempfile::tempdir().unwrap();
-    let registry = SandboxRegistry::load(tmp.path(), None).await.unwrap();
+    let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
     assert!(registry.names().contains(&"local"));
 }
 
