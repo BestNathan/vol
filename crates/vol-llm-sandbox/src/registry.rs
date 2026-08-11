@@ -159,6 +159,7 @@ impl SandboxRegistry {
             "local" => Arc::new(LocalSandbox::new(
                 config.work_dir.as_ref().map(std::path::PathBuf::from),
             )),
+            "tmp" => Arc::new(crate::tmp::TmpSandbox::with_default(&config.name)),
             #[cfg(feature = "ssh")]
             "ssh" => {
                 let ssh_config = config.ssh.ok_or_else(|| {
@@ -245,7 +246,7 @@ impl SandboxRegistry {
                 }
 
                 match config.sandbox_type.as_str() {
-                    "local" | "ssh" => {
+                    "local" | "ssh" | "tmp" => {
                         let sandbox = match Self::build_sandbox(config.clone()).await {
                             Ok(s) => s,
                             Err(e) => {
@@ -341,10 +342,17 @@ impl SandboxRegistry {
 
     /// Acquire a sandbox instance by name.
     ///
-    /// For pool-based sandboxes (firecracker), creates a fresh instance
-    /// backed by a VM from the pool. For singletons (local, ssh, wasm),
-    /// returns a clone of the shared Arc.
+    /// For per-agent sandboxes (`tmp`) and pool-based sandboxes
+    /// (firecracker), creates a fresh instance on every call.
+    /// For singletons (local, ssh, wasm), returns a clone of the
+    /// shared Arc.
     pub fn acquire(&self, name: &str) -> Option<Arc<dyn Sandbox>> {
+        // Per-agent sandbox: always create a fresh instance.
+        // bind_metadata is called later to set the actual agent_id.
+        if name == "tmp" {
+            return Some(Arc::new(crate::tmp::TmpSandbox::default()));
+        }
+
         #[cfg(feature = "firecracker")]
         {
             if let Some(pool) = self.firecracker_pools.get(name) {
@@ -365,12 +373,12 @@ impl SandboxRegistry {
     }
 
     /// Get the default sandbox (always "local").
-    #[allow(clippy::expect_used)]
+    /// Falls back to creating a fresh LocalSandbox if the registry is somehow corrupted.
     pub fn default(&self) -> Arc<dyn Sandbox> {
         self.sandboxes
             .get(&self.default_name)
             .cloned()
-            .expect("LocalSandbox always present")
+            .unwrap_or_else(|| Arc::new(LocalSandbox::new(None)))
     }
 
     /// Number of registered sandboxes.

@@ -1585,4 +1585,55 @@ base_url = "https://api.test.com"
         let overlays = rt.capability_overlays.read().await;
         assert!(!overlays.contains_key(&("test-agent".to_string(), "sess-1".to_string())));
     }
+
+    // ── Tool registration tests ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_for_test_registers_core_builtins() {
+        let rt = AgentRuntime::for_test().await;
+        let names = rt.tool_registry.tool_names();
+        // Core builtin tools should be registered
+        assert!(
+            names.contains(&"read_file"),
+            "read_file should be registered"
+        );
+        assert!(
+            names.contains(&"write_file"),
+            "write_file should be registered"
+        );
+        assert!(
+            names.contains(&"edit_file"),
+            "edit_file should be registered"
+        );
+        assert!(names.contains(&"bash"), "bash should be registered");
+        assert!(names.contains(&"glob"), "glob should be registered");
+        assert!(names.contains(&"grep"), "grep should be registered");
+        // Task CLI tool should be registered
+        assert!(names.contains(&"task"), "task should be registered");
+    }
+
+    #[tokio::test]
+    async fn test_tool_registry_accessible_on_runtime() {
+        let rt = AgentRuntime::for_test().await;
+        let registry = &rt.tool_registry;
+        // Registry should contain tools
+        assert!(registry.contains("read_file"));
+        assert!(registry.contains("bash"));
+        // Definitions should be non-empty
+        let defs = registry.definitions();
+        assert!(!defs.is_empty());
+        // Each definition should have a name
+        for def in &defs {
+            assert!(!def.name.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_tool_registry_is_shared() {
+        let rt = AgentRuntime::for_test().await;
+        let r1 = &rt.tool_registry;
+        let r2 = &rt.tool_registry;
+        // Both references should point to the same registry
+        assert_eq!(r1.tool_names().len(), r2.tool_names().len());
+    }
 }

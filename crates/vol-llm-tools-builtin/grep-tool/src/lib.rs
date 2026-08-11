@@ -246,4 +246,43 @@ mod tests {
         let result = tool.execute(&args, &ToolContext::for_test()).await;
         assert!(result.is_ok());
     }
+
+    #[tokio::test]
+    async fn test_execute_in_sandbox_context() {
+        let dir = tempfile::tempdir().unwrap();
+        let sandbox = std::sync::Arc::new(vol_llm_sandbox::local::LocalSandbox::new(Some(
+            dir.path().to_path_buf(),
+        )));
+        let ctx = ToolContext::for_test().with_sandbox(sandbox);
+        std::fs::write(
+            dir.path().join("code.rs"),
+            "fn hello() {\n    println!(\"hi\");\n}",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("readme.md"), "# No matches here").unwrap();
+
+        let tool = GrepTool::new();
+        let args = serde_json::json!({
+            "pattern": "hello",
+            "path": dir.path().to_str().unwrap(),
+            "output_mode": "files_with_matches"
+        });
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        assert!(result.success);
+        assert!(result.content.contains("code.rs"));
+        assert!(!result.content.contains("readme.md"));
+    }
+
+    #[test]
+    fn test_format_results_content_mode() {
+        use std::path::PathBuf;
+        let results = vec![SearchResult {
+            path: PathBuf::from("src/main.rs"),
+            match_count: 2,
+            line_numbers: vec![5, 12],
+        }];
+        let output = format_results("content", &results);
+        assert!(output.contains("src/main.rs:5"));
+        assert!(output.contains("src/main.rs:12"));
+    }
 }

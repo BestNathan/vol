@@ -82,3 +82,108 @@ impl ExecutableTool for McpTool {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_manager() -> Arc<McpManager> {
+        Arc::new(McpManager::new(vec![]))
+    }
+
+    #[test]
+    fn test_mcp_tool_name_format() {
+        let tool = McpTool::new(
+            empty_manager(),
+            "docs.rs",
+            "search_crates",
+            "Search crates on crates.io",
+            serde_json::json!({"type": "object"}),
+        );
+        // Name should follow the mcp__{server}__{tool} convention with sanitization
+        assert_eq!(tool.name(), "mcp__docs_rs__search_crates");
+    }
+
+    #[test]
+    fn test_mcp_tool_description_is_preserved() {
+        let tool = McpTool::new(
+            empty_manager(),
+            "weather",
+            "forecast",
+            "Get weather forecast",
+            serde_json::json!({"type": "object"}),
+        );
+        assert_eq!(tool.description(), "Get weather forecast");
+    }
+
+    #[test]
+    fn test_mcp_tool_parameters_are_preserved() {
+        let params = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "city": {"type": "string"}
+            },
+            "required": ["city"]
+        });
+        let tool = McpTool::new(
+            empty_manager(),
+            "weather",
+            "forecast",
+            "desc",
+            params.clone(),
+        );
+        assert_eq!(tool.parameters(), params);
+    }
+
+    #[test]
+    fn test_mcp_tool_sensitivity_is_safe() {
+        let tool = McpTool::new(empty_manager(), "srv", "t", "d", serde_json::json!({}));
+        match tool.sensitivity(&serde_json::json!({})) {
+            ToolSensitivity::Safe => {}
+            _ => panic!("McpTool should be Safe"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_mcp_tool_execute_propagates_manager_error() {
+        let manager = empty_manager();
+        // Don't connect — call_tool on a non-existent server will fail
+        let tool = McpTool::new(
+            manager,
+            "nonexistent_server",
+            "nonexistent_tool",
+            "desc",
+            serde_json::json!({}),
+        );
+        let result = tool
+            .execute(&serde_json::json!({}), &ToolContext::for_test())
+            .await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("Execution failed")
+                || err.contains("not found")
+                || err.contains("not connected")
+        );
+    }
+
+    #[test]
+    fn test_mcp_tool_name_sanitizes_special_chars() {
+        // Names with dots/special chars (not alphanumeric, underscore, or hyphen)
+        // are sanitized: special chars become underscores.
+        let tool = McpTool::new(
+            empty_manager(),
+            "docs.rs",  // '.' → '_'
+            "get item", // ' ' → '_'
+            "desc",
+            serde_json::json!({}),
+        );
+        let name = tool.name();
+        // Dots are replaced with underscores
+        assert!(!name.contains('.'));
+        // Spaces are replaced with underscores
+        assert!(!name.contains(' '));
+        // Should match mcp__<sanitized_server>__<sanitized_tool>
+        assert!(name.starts_with("mcp__"));
+    }
+}

@@ -1364,4 +1364,129 @@ mod tests {
             assert_eq!(params.kind, *kind);
         }
     }
+
+    // ── Execute path tests ─────────────────────────────────────────
+
+    fn test_sandbox(dir: &tempfile::TempDir) -> ToolContext {
+        let sandbox = vol_llm_sandbox::local::LocalSandbox::new(Some(dir.path().to_path_buf()));
+        ToolContext::for_test().with_sandbox(std::sync::Arc::new(sandbox))
+    }
+
+    #[tokio::test]
+    async fn test_execute_basic_file_glob() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        std::fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
+        std::fs::write(dir.path().join("lib.rs"), "pub fn lib() {}").unwrap();
+        std::fs::write(dir.path().join("README.md"), "# Project").unwrap();
+
+        let tool = GlobTool::new();
+        let args = serde_json::json!({"pattern": "*.rs"});
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        assert!(result.success);
+
+        let output: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        let matches = output["matches"].as_array().unwrap();
+        let paths: Vec<&str> = matches
+            .iter()
+            .map(|m| m["path"].as_str().unwrap())
+            .collect();
+        assert!(paths.contains(&"main.rs"));
+        assert!(paths.contains(&"lib.rs"));
+        assert!(!paths.contains(&"README.md"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_glob_directory_kind() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        std::fs::create_dir(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("README.md"), "# Readme").unwrap();
+
+        let tool = GlobTool::new();
+        let args = serde_json::json!({"pattern": "*", "kind": "directory"});
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        assert!(result.success);
+
+        let output: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        let matches = output["matches"].as_array().unwrap();
+        let paths: Vec<&str> = matches
+            .iter()
+            .map(|m| m["path"].as_str().unwrap())
+            .collect();
+        assert!(paths.contains(&"src"));
+        assert!(!paths.contains(&"README.md")); // kind=directory skips files
+    }
+
+    #[tokio::test]
+    async fn test_execute_empty_pattern_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        let tool = GlobTool::new();
+        let args = serde_json::json!({"pattern": ""});
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        // Returns failure (not error) with structured error output
+        assert!(!result.success || result.content.contains("INVALID_PATTERN"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_invalid_kind_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        let tool = GlobTool::new();
+        let args = serde_json::json!({"pattern": "*", "kind": "symlink"});
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        assert!(result.content.contains("INVALID_KIND") || !result.success);
+    }
+
+    #[tokio::test]
+    async fn test_execute_max_results_out_of_range() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        let tool = GlobTool::new();
+        let args = serde_json::json!({"pattern": "*", "max_results": 0});
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        assert!(result.content.contains("MAX_RESULTS") || !result.success);
+    }
+
+    #[tokio::test]
+    async fn test_execute_path_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        // "nonexistent" subdirectory doesn't exist
+        let tool = GlobTool::new();
+        let args = serde_json::json!({"pattern": "*", "path": "nonexistent"});
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        assert!(result.success);
+        let output: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        // Should report that the search path does not exist
+        let msg = output["message"].as_str().unwrap_or("");
+        assert!(msg.contains("does not exist") || msg.contains("not a directory"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_with_exclude_pattern() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_sandbox(&dir);
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("src/main.rs"), "fn main() {}").unwrap();
+        std::fs::write(dir.path().join("src/test.rs"), "#[test] fn t() {}").unwrap();
+
+        let tool = GlobTool::new();
+        let args = serde_json::json!({
+            "pattern": "src/**/*.rs",
+            "exclude": ["**/*test*"]
+        });
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        assert!(result.success);
+
+        let output: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        let matches = output["matches"].as_array().unwrap();
+        let paths: Vec<&str> = matches
+            .iter()
+            .map(|m| m["path"].as_str().unwrap())
+            .collect();
+        assert!(paths.contains(&"src/main.rs"));
+        assert!(!paths.contains(&"src/test.rs"));
+    }
 }

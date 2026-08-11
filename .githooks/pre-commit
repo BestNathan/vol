@@ -29,6 +29,9 @@ if [ "$RUST_CHANGED" = "true" ]; then
 
   "$SCRIPT_DIR/scripts/check-rust-clippy.sh" || HAS_ERROR=1
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
+
+  "$SCRIPT_DIR/scripts/check-no-clippy-allow.sh" || HAS_ERROR=1
+  if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 fi
 
 # ── Frontend checks ───────────────────────────────────────────────────

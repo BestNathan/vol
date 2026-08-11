@@ -186,7 +186,9 @@ impl Default for ToolRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tool::{ExecutableTool, ToolResultType, ToolSensitivity};
+    use crate::tool::{
+        ExecutableTool, ToolContext, ToolError, ToolResult, ToolResultType, ToolSensitivity,
+    };
     use async_trait::async_trait;
 
     struct DummyTool {
@@ -330,5 +332,196 @@ mod tests {
         let filtered = registry.filter_mcp_servers(&["docs.rs".to_string()]);
         // "docs.rs" sanitizes to "docs_rs" — should match
         assert!(filtered.tool_names().contains(&"mcp__docs_rs__search"));
+    }
+
+    // ── execute / dispatch tests ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_execute_success() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("my_tool"));
+        let ctx = ToolContext::for_test();
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "my_tool".into(),
+            arguments: "{}".into(),
+            r#type: "function".into(),
+        };
+        let result = registry.execute(&call, &ctx).await.unwrap();
+        assert!(result.success);
+        assert_eq!(result.call_id, "call_1");
+        assert_eq!(result.content, "ok");
+    }
+
+    #[tokio::test]
+    async fn test_execute_unknown_tool() {
+        let registry = ToolRegistry::new();
+        let ctx = ToolContext::for_test();
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "nonexistent".into(),
+            arguments: "{}".into(),
+            r#type: "function".into(),
+        };
+        let result = registry.execute(&call, &ctx).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unknown tool"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_invalid_json_args() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("my_tool"));
+        let ctx = ToolContext::for_test();
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "my_tool".into(),
+            arguments: "not valid json".into(),
+            r#type: "function".into(),
+        };
+        let result = registry.execute(&call, &ctx).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid JSON"));
+    }
+
+    // ── definitions / contains / tool_names ───────────────────────────
+
+    #[test]
+    fn test_definitions_returns_all_registered_tools() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("tool_a"));
+        registry.register(DummyTool::new("tool_b"));
+        registry.register(DummyTool::new("tool_c"));
+        let defs = registry.definitions();
+        assert_eq!(defs.len(), 3);
+        let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
+        assert!(names.contains(&"tool_a"));
+        assert!(names.contains(&"tool_b"));
+        assert!(names.contains(&"tool_c"));
+    }
+
+    #[test]
+    fn test_contains() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("tool_a"));
+        assert!(registry.contains("tool_a"));
+        assert!(!registry.contains("tool_b"));
+    }
+
+    #[test]
+    fn test_tool_names_returns_registered_names() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("first"));
+        registry.register(DummyTool::new("second"));
+        let names = registry.tool_names();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"first"));
+        assert!(names.contains(&"second"));
+    }
+
+    // ── tool_sensitivity ──────────────────────────────────────────────
+
+    #[test]
+    fn test_tool_sensitivity_returns_safe_for_unknown_tool() {
+        let registry = ToolRegistry::new();
+        let s = registry.tool_sensitivity("nonexistent", &serde_json::json!({}));
+        match s {
+            ToolSensitivity::Safe => {}
+            _ => panic!("unknown tool should return Safe"),
+        }
+    }
+
+    #[test]
+    fn test_tool_sensitivity_respects_tool_declaration() {
+        // A tool that declares RequiresApproval should have that reflected
+        struct SensitiveTool;
+        #[async_trait]
+        impl ExecutableTool for SensitiveTool {
+            fn name(&self) -> &'static str {
+                "sensitive"
+            }
+            fn description(&self) -> &'static str {
+                "desc"
+            }
+            fn sensitivity(&self, _args: &serde_json::Value) -> ToolSensitivity {
+                ToolSensitivity::RequiresApproval {
+                    reason: "dangerous".into(),
+                }
+            }
+            async fn execute(
+                &self,
+                _args: &serde_json::Value,
+                _ctx: &ToolContext,
+            ) -> ToolResultType<ToolResult> {
+                Ok(ToolResult::success("ok"))
+            }
+        }
+
+        let mut registry = ToolRegistry::new();
+        registry.register(SensitiveTool);
+        let s = registry.tool_sensitivity("sensitive", &serde_json::json!({}));
+        match s {
+            ToolSensitivity::RequiresApproval { reason } => assert_eq!(reason, "dangerous"),
+            _ => panic!("SensitiveTool should require approval"),
+        }
+    }
+
+    // ── register_boxed ────────────────────────────────────────────────
+
+    #[test]
+    fn test_register_boxed_adds_tool() {
+        let mut registry = ToolRegistry::new();
+        let tool: Box<dyn ExecutableTool> = Box::new(DummyTool::new("boxed_tool"));
+        registry.register_boxed(tool);
+        assert!(registry.contains("boxed_tool"));
+        assert_eq!(registry.tool_names().len(), 1);
+    }
+
+    // ── execute: tool error propagation ───────────────────────────────
+
+    #[tokio::test]
+    async fn test_execute_propagates_tool_error() {
+        struct FailingTool;
+        #[async_trait]
+        impl ExecutableTool for FailingTool {
+            fn name(&self) -> &'static str {
+                "failer"
+            }
+            fn description(&self) -> &'static str {
+                "always fails"
+            }
+            async fn execute(
+                &self,
+                _args: &serde_json::Value,
+                _ctx: &ToolContext,
+            ) -> ToolResultType<ToolResult> {
+                Err(ToolError::ExecutionFailed("deliberate failure".into()))
+            }
+        }
+
+        let mut registry = ToolRegistry::new();
+        registry.register(FailingTool);
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "failer".into(),
+            arguments: "{}".into(),
+            r#type: "function".into(),
+        };
+        let result = registry.execute(&call, &ToolContext::for_test()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("deliberate failure"));
+    }
+
+    // ── register overwrite behavior ───────────────────────────────────
+
+    #[test]
+    fn test_register_overwrites_same_name() {
+        let mut registry = ToolRegistry::new();
+        registry.register(DummyTool::new("same_name"));
+        // Register a second tool with the same name — should overwrite
+        registry.register(DummyTool::new("same_name"));
+        // Only one entry should exist
+        assert_eq!(registry.tool_names().len(), 1);
+        assert!(registry.contains("same_name"));
     }
 }

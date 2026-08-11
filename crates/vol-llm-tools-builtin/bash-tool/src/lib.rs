@@ -306,15 +306,27 @@ mod tests {
         assert!(err.contains("Failed to parse arguments"));
     }
     #[tokio::test]
-    async fn test_execute_sandbox_failure() {
+    async fn test_execute_echo_in_sandbox() {
+        let dir = tempfile::tempdir().unwrap();
+        let sandbox = std::sync::Arc::new(vol_llm_sandbox::local::LocalSandbox::new(Some(
+            dir.path().to_path_buf(),
+        )));
+        let ctx = ToolContext::for_test().with_sandbox(sandbox);
+
         let tool = BashTool::new();
-        // Nonexistent working directory — sandbox spawn fails
-        let args = serde_json::json!({
-            "command": "echo hi",
-            "working_dir": "/nonexistent-dir-xyz"
-        });
+        let args = serde_json::json!({"command": "echo 'sandbox test'"});
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        assert!(result.success);
+        assert!(result.content.contains("sandbox test"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_dangerous_command_blocked() {
+        let tool = BashTool::new();
+        let args = serde_json::json!({"command": "rm -rf /etc"});
         let result = tool.execute(&args, &ToolContext::for_test()).await;
+        assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("Command execution failed"));
+        assert!(err.contains("Security") || err.contains("blocked") || err.contains("dangerous"));
     }
 }
