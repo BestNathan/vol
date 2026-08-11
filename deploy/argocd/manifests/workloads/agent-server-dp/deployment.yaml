@@ -41,8 +41,11 @@ spec:
             - |
               set -e
               for dir in agents providers skills sandboxes; do
-                if [ -d "/configmap-input/$dir" ]; then
-                  cp -rL /configmap-input/"$dir"/* /app/.agents/"$dir"/ 2>/dev/null || true
+                src="/configmap-input/$dir"
+                dst="/app/.agents/$dir"
+                mkdir -p "$dst"
+                if [ -d "$src" ] && [ "$(ls -A "$src" 2>/dev/null)" ]; then
+                  cp -rL "$src"/* "$dst"/
                 fi
               done
               echo "Agent configs copied to /app/.agents/"
@@ -73,7 +76,7 @@ spec:
               mountPath: /app/.agents/sandboxes
       containers:
         - name: agent-server
-          image: ghcr.io/bestnathan/vol-agent-server:dp-0713993
+          image: ghcr.io/bestnathan/vol-agent-server:dp-123570a
           imagePullPolicy: IfNotPresent
           workingDir: /app
           args:
@@ -159,7 +162,7 @@ spec:
               - key: agent-server.toml
                 path: agent-server.toml
             defaultMode: 0644
-        # ConfigMap inputs — mounted read-only for init container to copy from
+        # ConfigMap inputs — read-only for init container
         - name: configmap-agents
           configMap:
             name: agent-definitions
