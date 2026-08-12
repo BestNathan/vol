@@ -16,13 +16,14 @@ use vol_llm_agents::coding::{ChannelledEventObserver, CodingAgent, CodingAgentCo
 use vol_llm_core::{LLMClient, LLMProvider};
 use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
 use vol_llm_tool::ToolConfig;
-use vol_llm_tools_builtin::{ProxyConfig, WebFetchConfig};
+use vol_llm_tools_builtin::{ProxyConfig, RetryConfig, WebFetchConfig};
 
 /// Helper to configure web_fetch in ToolConfig
 fn configure_web_fetch(tool_config: &mut ToolConfig) {
     let fetch_cfg = WebFetchConfig {
         max_content_length: Some(2_000_000), // 2MB
         proxy: ProxyConfig::default(),
+        retry: RetryConfig::default(),
     };
     tool_config.set("web_fetch", fetch_cfg);
 }

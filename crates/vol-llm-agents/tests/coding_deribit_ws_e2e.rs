@@ -22,8 +22,9 @@ use vol_llm_agents::coding::{
     ChannelledEventObserver, CodingAgent, CodingAgentConfig, CodingAgentResponse, LocalSandbox,
 };
 use vol_llm_sandbox::Sandbox;
+use vol_llm_tool::RetryConfig;
 use vol_llm_tool::ToolConfig;
-use vol_llm_tools_builtin::{ProxyConfig, WebFetchConfig};
+use vol_llm_tools_builtin::WebFetchConfig;
 
 /// Helper to configure web_fetch in ToolConfig with proxy
 fn configure_web_fetch(tool_config: &mut ToolConfig) {
@@ -34,6 +35,7 @@ fn configure_web_fetch(tool_config: &mut ToolConfig) {
     let fetch_cfg = WebFetchConfig {
         max_content_length: Some(2_000_000),
         proxy: ProxyConfig { proxy_url },
+        retry: RetryConfig::default(),
     };
     tool_config.set("web_fetch", fetch_cfg);
 }

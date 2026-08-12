@@ -8,7 +8,7 @@ use std::sync::Arc;
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, HTMLReporter};
 use vol_llm_core::LLMProvider;
 use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
-use vol_llm_tool::{ProxyConfig, ToolConfig};
+use vol_llm_tool::{ProxyConfig, RetryConfig, ToolConfig};
 use vol_llm_tools_builtin::WebFetchConfig;
 
 #[tokio::main]
@@ -31,6 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         proxy: ProxyConfig {
             proxy_url: Some("http://192.168.2.98:8890".to_string()),
         },
+        retry: RetryConfig::default(),
     };
     tool_config.set("web_fetch", fetch_cfg);
 
