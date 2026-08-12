@@ -8,7 +8,7 @@ mod fixtures;
 
 use async_trait::async_trait;
 use serde_json::json;
-use vol_llm_tool::web::fetch::{FetchError, FetchFn, FetchOptions, FetchResult};
+use vol_llm_tool::web::fetch::{FetchError, FetchFn, FetchOptions, FetchResult, FetchStatus};
 use vol_llm_tool::web::search::{SearchError, SearchFn, SearchItem, SearchOptions, SearchResult};
 use vol_llm_tool::ExecutableTool;
 use vol_llm_tools_builtin::{WebFetchTool, WebSearchTool};
@@ -38,8 +38,10 @@ impl FetchFn for MockFetch {
     async fn fetch(&self, url: &str, _opts: FetchOptions) -> Result<FetchResult, FetchError> {
         Ok(FetchResult {
             url: url.to_string(),
+            status: FetchStatus::Success,
             content: self.html.clone(),
             title: Some("Mock Page".to_string()),
+            from_cache: false,
         })
     }
 }
