@@ -22,8 +22,7 @@ use vol_llm_agents::coding::{
     ChannelledEventObserver, CodingAgent, CodingAgentConfig, CodingAgentResponse, LocalSandbox,
 };
 use vol_llm_sandbox::Sandbox;
-use vol_llm_tool::RetryConfig;
-use vol_llm_tool::ToolConfig;
+use vol_llm_tool::{ProxyConfig, RetryConfig, ToolConfig};
 use vol_llm_tools_builtin::WebFetchConfig;
 
 /// Helper to configure web_fetch in ToolConfig with proxy
