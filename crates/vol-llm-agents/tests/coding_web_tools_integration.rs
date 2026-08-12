@@ -15,8 +15,9 @@ use vol_llm_agent::AgentStreamEvent;
 use vol_llm_agents::coding::{ChannelledEventObserver, CodingAgent, CodingAgentConfig};
 use vol_llm_core::{LLMClient, LLMProvider};
 use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
+use vol_llm_tool::RetryConfig;
 use vol_llm_tool::ToolConfig;
-use vol_llm_tools_builtin::{ProxyConfig, RetryConfig, WebFetchConfig};
+use vol_llm_tools_builtin::{ProxyConfig, WebFetchConfig};
 
 /// Helper to configure web_fetch in ToolConfig
 fn configure_web_fetch(tool_config: &mut ToolConfig) {
