@@ -1,18 +1,37 @@
 //! Build ReActAgent from YAML configuration.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use vol_llm_agent::react::AgentConfig;
 use vol_llm_agent::ReActAgent;
 use vol_llm_context::ContextBuilderBuilder;
 use vol_llm_provider::LLMProviderRegistry;
-use vol_llm_tool::ToolRegistry;
+use vol_llm_tool::{ToolConfig, ToolRegistry};
 use vol_session::{InMemoryEntryStore, Session};
 
 use crate::config::YamlAgentConfig;
 use crate::error::YamlAgentError;
 use crate::plugins::register_plugins_by_name;
 use crate::tools::register_tools_by_name;
+
+/// Convert YAML `tool_configs` map into a `ToolConfig` container.
+fn convert_tool_configs(yaml_value: &serde_yaml::Value) -> ToolConfig {
+    let mut config = ToolConfig::new();
+    if let Some(mapping) = yaml_value.as_mapping() {
+        let mut map = HashMap::new();
+        for (key, value) in mapping {
+            if let Some(key_str) = key.as_str() {
+                // Convert serde_yaml::Value -> serde_json::Value
+                if let Ok(json_val) = serde_json::to_value(value) {
+                    map.insert(key_str.to_string(), json_val);
+                }
+            }
+        }
+        config.populate_from_agent_def(&map);
+    }
+    config
+}
 
 /// Builder that creates a ReActAgent from YAML config.
 pub struct YamlAgentBuilder {
@@ -58,9 +77,10 @@ impl YamlAgentBuilder {
             .get(&self.config.llm)
             .ok_or_else(|| YamlAgentError::LlmNotFound(self.config.llm.clone()))?;
 
-        // 2. Register tools
+        // 2. Register tools (pass tool_configs from YAML for proxy/retry/etc.)
         let mut tool_registry = ToolRegistry::new();
-        register_tools_by_name(&mut tool_registry, &self.config.tools)?;
+        let tool_config = self.config.tool_configs.as_ref().map(convert_tool_configs);
+        register_tools_by_name(&mut tool_registry, &self.config.tools, tool_config.as_ref())?;
 
         // 3. Build system prompt: inline + files
         let system_prompt = self.build_system_prompt();

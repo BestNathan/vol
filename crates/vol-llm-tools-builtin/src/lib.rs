@@ -99,14 +99,16 @@ pub fn register_web_all(registry: &mut vol_llm_tool::ToolRegistry, tool_config: 
     let search_cfg = tool_config
         .get::<WebSearchConfig>("web_search")
         .unwrap_or_default();
+    let search_proxy = search_cfg.proxy.clone();
     match TavilySearchProvider::from_config(
         &vol_llm_tools_builtin_web_search::tavily::TavilyConfig {
             api_key: search_cfg.api_key,
             proxy: search_cfg.proxy,
+            retry: search_cfg.retry,
         },
     ) {
         Ok(provider) => {
-            registry.register(WebSearchTool::new(provider));
+            registry.register(WebSearchTool::with_proxy(provider, search_proxy));
         }
         Err(e) => {
             tracing::warn!(error = %e, "Failed to create web search provider (check TAVILY_API_KEY), skipping");
@@ -117,13 +119,15 @@ pub fn register_web_all(registry: &mut vol_llm_tool::ToolRegistry, tool_config: 
     let fetch_cfg = tool_config
         .get::<WebFetchConfig>("web_fetch")
         .unwrap_or_default();
+    let fetch_proxy = fetch_cfg.proxy.clone();
     let fetch_provider_cfg = vol_llm_tools_builtin_web_fetch::FetchProviderConfig {
         max_content_length: fetch_cfg.max_content_length,
         proxy: fetch_cfg.proxy,
+        retry: fetch_cfg.retry,
     };
     match DefaultFetchProvider::from_config(&fetch_provider_cfg) {
         Ok(provider) => {
-            registry.register(WebFetchTool::new(provider));
+            registry.register(WebFetchTool::with_proxy(provider, fetch_proxy));
         }
         Err(e) => {
             tracing::warn!(error = %e, "Failed to create web fetch provider, skipping");

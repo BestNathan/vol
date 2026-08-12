@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-08-12] ingest | Web Tools Proxy & Retry Support
+- Created sources: [[web-tools-proxy-retry]]
+- Created concepts: [[proxy-config-resolution]]
+- Updated concepts: [[retry-with-backoff]] (added web-tool-level retry section)
+- Updated entities: [[vol-llm-tool-crate]] (ProxyConfig enhancement, RetryConfig, web module structure)
+- Updated index: new entries, updated summaries, bumped dates
+- Cross-references added: 6
+- Changes: Three-tier proxy resolution (tool param > agent config > env var) and exponential-backoff retry for web_fetch/web_search tools. ProxyConfig got `from_env()` and `resolve()` methods. New `vol_llm_tool::web::retry` module with `RetryConfig` and `retry_async()`. Tool params now include optional `proxy_url`. Agent YAML configs support per-tool `proxy` and `retry` configuration.
+
 ## [2026-08-11] ingest | Sandbox Lifecycle & TmpSandbox Design
 - Created concepts: [[sandbox-lifecycle]]
 - Updated entities: [[vol-llm-sandbox-crate]] (TmpSandbox, bind_metadata, registry redesign, path resolution contract)

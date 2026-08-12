@@ -8395,10 +8395,12 @@ name = "vol-llm-tools-builtin-web-fetch"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "readability",
  "reqwest 0.11.27",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 1.0.69",
  "tokio",
  "toml",

@@ -33,14 +33,14 @@ scripts/                  # Build / deploy helpers
 
 - **Task done → `wiki-ingest`**: always ingest implementation results to `docs/wiki`.
 - **`docs/superpowers/*` → Lark**: upload new/updated superpowers docs to the corresponding Lark wiki node.
-- **Coverage ≥ 80%**: `make coverage-threshold PKG=<crate>` before claiming done. Exception: `main.rs`, `app.rs`, `health.rs`.
+- **Coverage ≥ 80%**: `just cover-gate <crate> 80` before claiming done. Exception: `main.rs`, `app.rs`, `health.rs`.
 - **Every new `pub fn` / handler → at least one test**.
 - **No doc tests**: write `#[cfg(test)]` unit tests or `tests/` integration tests instead. Doc comment code examples must use ` ```text` (not ` ```rust`). Check with `./scripts/check-no-doc-tests.sh`.
 - **Tool registration**: `AgentRuntimeBuilder::build()` is the primary place. `DataPlaneServerCoreBuilder` inherits from it; do not duplicate.
 - **`vol-llm-agent-protocol` owns wire types**: `Operation`, `Payload`, `control.*`, JSON-RPC codec. No wire type definitions in `vol-agent-server`.
 - **`vol-llm-runtime` knows nothing about control-plane**. No `NodeRegistry` / `ControlRouter` imports there.
 - **Docker builds use `rsproxy.cn`** mirror — copy `.cargo/config.toml` into builder stage.
-- **Web frontend**: use `make web-*` commands; never `cargo build/run` directly for vol-llm-ui.
+- **Web frontend**: use `just web-*` commands; never `cargo build/run` directly for vol-llm-ui.
 
 ## Guardrails
 
@@ -64,9 +64,9 @@ cargo build -p vol-agent-server --release
 
 ```bash
 cargo test -p vol-agent-server -p vol-llm-agent-protocol
-make coverage PKG=vol-agent-server                        # summary
-make coverage-threshold PKG=vol-agent-server PCT=80      # gate check
-make coverage-html PKG=vol-llm-agent-protocol             # browser report
+just cover vol-agent-server                               # summary
+just cover-gate vol-agent-server 80                       # gate check
+just cover-html vol-llm-agent-protocol                    # browser report
 ```
 
 ### Web Dev
@@ -74,9 +74,9 @@ make coverage-html PKG=vol-llm-agent-protocol             # browser report
 The active web frontend is the **React app at `frontend/`** (not the deprecated Dioxus WASM crate).
 
 ```bash
-make web-dev         # React dev server on :5173 (WS proxy to :3001)
-make web-backend     # cargo-watch agent server on :3001
-make web-build       # Production React build
+just web-dev         # React dev server on :5173 (WS proxy to :3001)
+just web-backend     # cargo-watch agent server on :3001
+just web-build       # Production React build
 ```
 
 #### Web Frontend shadcn/ui Conventions

@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use serde_json::json;
-use vol_llm_tool::web::fetch::{FetchError, FetchFn, FetchOptions, FetchResult};
+use vol_llm_tool::web::fetch::{FetchError, FetchFn, FetchOptions, FetchResult, FetchStatus};
 use vol_llm_tool::{ExecutableTool, ToolContext};
 use vol_llm_tools_builtin_web_search::WebFetchTool;
 
@@ -42,8 +42,10 @@ impl FetchFn for MockFetchProvider {
         }
         Ok(FetchResult {
             url: url.to_string(),
+            status: FetchStatus::Success,
             content: self.content.clone(),
             title: self.title.clone(),
+            from_cache: false,
         })
     }
 }
@@ -57,6 +59,7 @@ async fn test_web_fetch_returns_content() {
 
     let result = tool.execute(&args, &ctx).await.unwrap();
     assert!(result.success);
+    assert!(result.content.contains("<fetch success>"));
     assert!(result.content.contains("Title: Mock Page"));
     assert!(result.content.contains("https://example.com/article"));
     assert!(result
@@ -78,6 +81,7 @@ async fn test_web_fetch_no_title() {
 
     let result = tool.execute(&args, &ctx).await.unwrap();
     assert!(result.success);
+    assert!(result.content.contains("<fetch success>"));
     assert!(!result.content.contains("Title:"));
     assert!(result.content.contains("URL: https://example.com"));
 }

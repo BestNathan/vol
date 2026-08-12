@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-08-11 (sandbox lifecycle & TmpSandbox design)
+Last updated: 2026-08-12 (web tools proxy & retry support)
 
 ## Entities
 
@@ -14,7 +14,7 @@ Last updated: 2026-08-11 (sandbox lifecycle & TmpSandbox design)
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API | active | 2026-05-21 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions, including provider-neutral multipart message content | stable | 2026-05-21 |
-| [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager | stable | 2026-05-21 |
+| [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager; web module with ProxyConfig (three-tier resolution) and RetryConfig (exponential backoff) | active | 2026-08-12 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with Anthropic multipart text/image conversion | stable | 2026-05-21 |
 | [[vol-session]] | Session message store and entry persistence, including file and SeaORM database-backed session managers | active | 2026-06-10 |
 | [[vol-llm-agent-protocol-crate]] | Protocol, JSON-RPC transport, connection, handler, registry, and generic service abstraction layer | active | 2026-06-10 |
@@ -57,7 +57,8 @@ Last updated: 2026-08-11 (sandbox lifecycle & TmpSandbox design)
 | [[otel-log-routing]] | OTel Collector log routing via tracing::info! macros | active | 2026-05-06 |
 | [[semantic-caching]] | Response caching with semantic similarity matching | stable | 2026-05-04 |
 | [[human-in-the-loop]] | Human approval workflow for tool execution | stable | 2026-05-04 |
-| [[retry-with-backoff]] | Automatic retry with exponential backoff on errors | stable | 2026-05-04 |
+| [[retry-with-backoff]] | Two implementations: agent plugin retry and web-tool-level `retry_async()` with transient-error detection | active | 2026-08-12 |
+| [[proxy-config-resolution]] | Three-tier proxy resolution chain: tool parameter > agent config > environment variable (`HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`) | active | 2026-08-12 |
 | [[rate-limiting]] | Concurrency control using semaphore-based rate limiting | stable | 2026-05-04 |
 | [[pull-based-metrics]] | Prometheus pull metrics via shared registry + /metrics endpoint | active | 2026-07-24 |
 | [[http-transport]] | Historical HTTP transport with blocking and SSE streaming modes; deleted from active channel API after Task 4 | stale | 2026-06-10 |
@@ -93,6 +94,7 @@ Last updated: 2026-08-11 (sandbox lifecycle & TmpSandbox design)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[web-tools-proxy-retry]] | Three-tier proxy configuration (tool param > agent config > env var) and exponential-backoff retry for web_fetch/web_search tools | active | 2026-08-12 |
 | [[observability-pull-metrics-refactor]] | Consolidated observability crate, Prometheus pull /metrics, LLMCall event emission, run-level metrics, MetricsPlugin concurrency fix | active | 2026-07-24 |
 | [[argocd-gitops-deployment]] | Self-contained ArgoCD GitOps implementation: App-of-Apps split into runtime-config/workloads, shared .agents ConfigMaps mounted at /app/.agents, agent-provider-secrets, vol-agent-system manifests, MCP Dockerfile, and MCP image workflow | active | 2026-06-16 |
 | [[control-plane-behavior-completion-plan]] | Follow-up plan to complete JSON-RPC notifications, endpoint roles, client handlers, control.command, run status, and combined-mode registration | draft | 2026-06-10 |

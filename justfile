@@ -15,6 +15,7 @@ quality:
     just clippy
     just test-compile
     just no-doc-tests
+    @echo "All quality gates passed"
 
 # Strict quality gate: fmt + strict clippy + test compile
 quality-strict:
@@ -22,6 +23,7 @@ quality-strict:
     just clippy-strict
     just test-compile
     just no-doc-tests
+    @echo "All strict quality gates passed"
 
 # Full CI gate: strict clippy + unit tests + no-doc-tests + boundary check
 quality-full:
@@ -30,6 +32,7 @@ quality-full:
     just test-unit
     just no-doc-tests
     @./scripts/check-agent-boundaries.sh
+    @echo "All full quality gates passed"
 
 # ── Formatting ──────────────────────────────────────────────────────────
 
@@ -57,11 +60,11 @@ clippy-strict:
 check:
     cargo check --workspace
 
-# ── Tests (nextest-powered) ─────────────────────────────────────────────
+# ── Tests (nextest-powered, fallback to cargo test) ────────────────────
 
-# Run all tests (nextest, parallel)
+# Run all tests (nextest if available, fallback to cargo test)
 test *ARGS:
-    cargo nextest run --workspace --no-fail-fast {{ARGS}}
+    cargo nextest run --workspace --no-fail-fast {{ARGS}} 2>/dev/null || cargo test --workspace --no-fail-fast {{ARGS}}
 
 # Compile all tests without running (~3s warm)
 test-compile:
@@ -69,15 +72,18 @@ test-compile:
 
 # Run only unit tests (src/ inline #[cfg(test)])
 test-unit *ARGS:
-    cargo nextest run --workspace --lib --no-fail-fast {{ARGS}}
+    cargo nextest run --workspace --lib --no-fail-fast {{ARGS}} 2>/dev/null || cargo test --workspace --lib --no-fail-fast {{ARGS}}
 
-# Run all tests including integration
-test-all *ARGS:
-    cargo nextest run --workspace --no-fail-fast {{ARGS}}
+# Run all tests including integration (single pass via cargo test)
+test-integration *ARGS:
+    cargo test --workspace --no-fail-fast {{ARGS}}
+
+# Run all tests including e2e
+test-all: test-unit test-e2e
 
 # Run tests for specific crate (e.g. `just test-crate vol-llm-tool`)
 test-crate CRATE *ARGS:
-    cargo nextest run -p {{CRATE}} --no-fail-fast {{ARGS}}
+    cargo nextest run -p {{CRATE}} --no-fail-fast {{ARGS}} 2>/dev/null || cargo test -p {{CRATE}} --no-fail-fast {{ARGS}}
 
 # Run e2e tests (mostly #[ignore]d, require external services)
 test-e2e:
@@ -112,9 +118,29 @@ test-sandbox-wasm:
 
 # ── Coverage ────────────────────────────────────────────────────────────
 
-# Run llvm-cov summary for a crate (e.g. `just cover vol-llm-tool`)
+# Prerequisites:
+#   rustup component add llvm-tools-preview
+#   cargo install cargo-llvm-cov
+#
+# Usage:
+#   just cover vol-agent-server              # single crate
+#   just cover-multi vol-agent-server vol-llm-agent-protocol  # multi-crate
+#   just cover-html vol-llm-runtime           # open HTML report
+#   just cover-gate vol-agent-server 80       # gate at 80%
+#   just cover-tools                          # all tool crates
+#
+# Threshold pin values are in CLAUDE.md; update there if changed.
+
+# Run llvm-cov summary for a single crate
 cover CRATE:
     cargo llvm-cov --package {{CRATE}} --summary-only
+
+# Run llvm-cov summary for multiple crates
+cover-multi *CRATES:
+    @for crate in {{CRATES}}; do \
+        echo "=== $$crate ==="; \
+        cargo llvm-cov --package $$crate --summary-only; \
+    done
 
 # Run llvm-cov for all tool crates
 cover-tools:
@@ -124,7 +150,7 @@ cover-tools:
 cover-html CRATE:
     cargo llvm-cov --package {{CRATE}} --open
 
-# Run llvm-cov with coverage threshold (e.g. `just cover-gate vol-llm-tool 80`)
+# Run llvm-cov with coverage threshold (single crate)
 cover-gate CRATE PCT="80":
     @LINE_COV=$$(cargo llvm-cov --package {{CRATE}} --summary-only 2>&1 | grep '^TOTAL' | awk '{print $$4}' | tr -d '%'); \
     if [ "$$(echo "$$LINE_COV < {{PCT}}" | bc 2>/dev/null)" = "1" ]; then \
@@ -132,6 +158,24 @@ cover-gate CRATE PCT="80":
         exit 1; \
     else \
         echo "PASS: {{CRATE}} line coverage is $${LINE_COV}% (≥ {{PCT}}%)"; \
+    fi
+
+# Run llvm-cov with coverage threshold (multi-crate)
+cover-gate-multi PCT *CRATES:
+    @CRATE_LIST="{{CRATES}}"; \
+    FAILED=""; \
+    for crate in $$CRATE_LIST; do \
+        LINE_COV=$$(cargo llvm-cov --package $$crate --summary-only 2>&1 | grep '^TOTAL' | awk '{print $$4}' | tr -d '%'); \
+        if [ "$$(echo "$$LINE_COV < {{PCT}}" | bc 2>/dev/null)" = "1" ]; then \
+            echo "FAIL: $$crate line coverage is $${LINE_COV}% (required ≥ {{PCT}}%)"; \
+            FAILED="$$FAILED $$crate"; \
+        else \
+            echo "PASS: $$crate line coverage is $${LINE_COV}% (≥ {{PCT}}%)"; \
+        fi; \
+    done; \
+    if [ -n "$$FAILED" ]; then \
+        echo "Coverage check failed for:$$FAILED"; \
+        exit 1; \
     fi
 
 # ── Quality: no-doc-tests ───────────────────────────────────────────────
@@ -162,6 +206,10 @@ web-serve:
 # TypeScript check + Vite build
 web-check:
     npm --prefix frontend run build
+
+# TypeScript type-check only (no build)
+web-clippy:
+    cd frontend && npx tsc -b --noEmit
 
 # Production build
 web-build:

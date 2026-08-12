@@ -20,6 +20,7 @@ impl AgentCache {
                     provider: "tavily".to_string(),
                     api_key: tavily_key,
                     proxy: vol_llm_tool::ProxyConfig::default(),
+                    retry: vol_llm_tool::RetryConfig::default(),
                 },
             );
         }
@@ -30,6 +31,7 @@ impl AgentCache {
                 vol_llm_tools_builtin::WebFetchConfig {
                     max_content_length: max_len.parse().ok(),
                     proxy: vol_llm_tool::ProxyConfig::default(),
+                    retry: vol_llm_tool::RetryConfig::default(),
                 },
             );
         }

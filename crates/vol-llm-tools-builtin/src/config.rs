@@ -2,10 +2,11 @@
 //!
 //! Each tool defines its own config type that is deserialized from the
 //! dynamic `ToolConfig` container. The config struct includes the tool's
-//! own settings plus a `ProxyConfig` for proxy support.
+//! own settings plus a `ProxyConfig` for proxy support and `RetryConfig`
+//! for retry behavior.
 
 use serde::Deserialize;
-use vol_llm_tool::ProxyConfig;
+use vol_llm_tool::{ProxyConfig, RetryConfig};
 
 /// Configuration for the web search tool.
 ///
@@ -17,6 +18,10 @@ use vol_llm_tool::ProxyConfig;
 ///
 /// [tools.web_search.proxy]
 /// proxy_url = "http://proxy:8080"
+///
+/// [tools.web_search.retry]
+/// max_attempts = 3
+/// base_delay_ms = 1000
 /// ```
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct WebSearchConfig {
@@ -29,6 +34,9 @@ pub struct WebSearchConfig {
     /// Proxy configuration (optional)
     #[serde(default)]
     pub proxy: ProxyConfig,
+    /// Retry configuration (optional)
+    #[serde(default)]
+    pub retry: RetryConfig,
 }
 
 impl Default for WebSearchConfig {
@@ -37,6 +45,7 @@ impl Default for WebSearchConfig {
             provider: default_provider(),
             api_key: default_api_key(),
             proxy: ProxyConfig::default(),
+            retry: RetryConfig::default(),
         }
     }
 }
@@ -58,6 +67,10 @@ fn default_api_key() -> String {
 ///
 /// [tools.web_fetch.proxy]
 /// proxy_url = "http://proxy:8080"
+///
+/// [tools.web_fetch.retry]
+/// max_attempts = 3
+/// base_delay_ms = 1000
 /// ```
 #[derive(Debug, Clone, Default, Deserialize, serde::Serialize)]
 pub struct WebFetchConfig {
@@ -66,4 +79,7 @@ pub struct WebFetchConfig {
     /// Proxy configuration (optional)
     #[serde(default)]
     pub proxy: ProxyConfig,
+    /// Retry configuration (optional)
+    #[serde(default)]
+    pub retry: RetryConfig,
 }

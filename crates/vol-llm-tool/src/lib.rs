@@ -14,4 +14,4 @@ pub use tool::{
     ToolSensitivity,
 };
 pub use vol_llm_sandbox::SandboxRef;
-pub use web::ProxyConfig;
+pub use web::{ProxyConfig, RetryConfig};
