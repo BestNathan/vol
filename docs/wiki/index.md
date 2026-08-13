@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-08-12 (web tools proxy & retry support)
+Last updated: 2026-08-13 (playwright-mcp in-cluster deployment)
 
 ## Entities
 
@@ -24,6 +24,7 @@ Last updated: 2026-08-12 (web tools proxy & retry support)
 | [[vol-repository]] | Rust workspace with crates, docs, legacy `k8s/` manifests, and self-contained `deploy/argocd/` GitOps deployment tree | active | 2026-06-16 |
 | [[vol-observability-crate]] | Consolidated observability library (LoggingPlugin, MetricsPlugin, /metrics endpoint, OTel init) | active | 2026-07-24 |
 | [[vol-llm-mcp-crate]] | MCP Client protocol layer for ReAct Agent — config parsing, McpManager lifecycle, tool/resource/prompt discovery | active | 2026-05-13 |
+| [[playwright-mcp-service]] | Standalone in-cluster MCP service exposing Playwright browser automation (24 browser_* tools) on port 8931, referenced via http URL in mcp-config; hardened (ro rootfs, non-root, dropped caps) | active | 2026-08-13 |
 
 ## Concepts
 
@@ -69,7 +70,7 @@ Last updated: 2026-08-12 (web tools proxy & retry support)
 | [[agent-router]] | Node-local multi-agent routing with per-agent dispatchers; distributed routing sits above it | active | 2026-06-10 |
 | [[connection-holder-clone-limitation]] | ConnectionHolder cannot be both plugin and transport reference | active | 2026-05-07 |
 | [[clarifying-requirements-workflow]] | Structured dialogue for turning vague requests into requirements | active | 2026-05-06 |
-| [[mcp-transport-pattern]] | Multi-transport startup pattern for MCP servers (stdio, HTTP/SSE) | active | 2026-05-10 |
+| [[mcp-transport-pattern]] | Multi-transport startup pattern for MCP servers (stdio, HTTP/SSE); in-cluster pattern = standalone Deployment + ClusterIP Service + http URL (docs-rs-mcp / cli-tools-mcp / playwright-mcp); stdio requires the runtime image to contain the command | active | 2026-08-13 |
 | [[mcp-manager-lifecycle]] | McpManager connection lifecycle: state tracking, auto-reconnect with backoff, full MCP protocol | active | 2026-05-13 |
 | [[docs-rs-tools]] | Four MCP tools exposing docs.rs/crates.io documentation | active | 2026-05-10 |
 | [[rmcp-sdk]] | Rust SDK for Model Context Protocol — macros, transports, service | active | 2026-05-10 |
@@ -95,6 +96,7 @@ Last updated: 2026-08-12 (web tools proxy & retry support)
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
 | [[web-tools-proxy-retry]] | Three-tier proxy configuration (tool param > agent config > env var) and exponential-backoff retry for web_fetch/web_search tools | active | 2026-08-12 |
+| [[playwright-mcp-k8s-deployment]] | Playwright MCP replaced stdio/npx (unrunnable in Rust-only agent-server image) with standalone Deployment + ClusterIP Service + http URL in mcp-config; in-field fixes runAsUser 1000 and --allowed-hosts *; verified in-cluster; egress test pending | active | 2026-08-13 |
 | [[observability-pull-metrics-refactor]] | Consolidated observability crate, Prometheus pull /metrics, LLMCall event emission, run-level metrics, MetricsPlugin concurrency fix | active | 2026-07-24 |
 | [[argocd-gitops-deployment]] | Self-contained ArgoCD GitOps implementation: App-of-Apps split into runtime-config/workloads, shared .agents ConfigMaps mounted at /app/.agents, agent-provider-secrets, vol-agent-system manifests, MCP Dockerfile, and MCP image workflow | active | 2026-06-16 |
 | [[control-plane-behavior-completion-plan]] | Follow-up plan to complete JSON-RPC notifications, endpoint roles, client handlers, control.command, run status, and combined-mode registration | draft | 2026-06-10 |

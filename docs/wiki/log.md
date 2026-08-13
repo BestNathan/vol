@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-08-13] ingest | Playwright MCP on K8s Deployment
+- Created sources: [[playwright-mcp-k8s-deployment]]
+- Created entities: [[playwright-mcp-service]] (category: infrastructure)
+- Updated concepts: [[mcp-transport-pattern]] (in-cluster Deployment+ClusterIP+http-URL pattern for third-party MCP servers; stdio pitfall — runtime image must contain the command; source_count 2->3), [[mcp-client-integration]] (in-cluster http servers timeline entry, source_count 1)
+- Updated index: new entity and source entries, refreshed mcp-transport-pattern summary, bumped date
+- Cross-references added: 12
+- Changes: Replaced the unrunnable stdio/npx playwright MCP entry with a standalone `playwright-mcp` Deployment + ClusterIP Service (official multi-arch mcr image, port 8931, streamable HTTP /mcp) referenced via `"type": "http"` URL in the shared mcp-config. Verified in-cluster: initialize 200, 24 browser_* tools via session-aware tools/list, agent log `MCP server connected server="playwright"`. Two in-field manifest fixes recorded: `runAsUser: 1000` (image's named USER node fails runAsNonRoot verification) and `--allowed-hosts *` (playwright-core 403s non-localhost Host). Egress test and `--proxy-server` decision PENDING user verification; k8s-worker1 image-pull wedge was transient, not a code issue.
+
 ## [2026-08-12] ingest | Web Tools Proxy & Retry Support
 - Created sources: [[web-tools-proxy-retry]]
 - Created concepts: [[proxy-config-resolution]]

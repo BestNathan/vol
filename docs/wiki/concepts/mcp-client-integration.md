@@ -3,12 +3,14 @@ type: concept
 category: pattern
 tags: [mcp, tools, agent, executable-tool]
 created: 2026-05-11
+updated: 2026-08-13
+source_count: 1
 ---
 
 # MCP Client Integration
 
 **Category:** Integration pattern
-**Related:** [[vol-llm-mcp-crate]], [[tool-registry]], [[vol-llm-tool-crate]], [[tool-trait]], [[agent-builder-pattern]], [[react-agent-mcp-integration]], [[mcp-manager-lifecycle]], [[vol-mcp-servers-crate]]
+**Related:** [[vol-llm-mcp-crate]], [[tool-registry]], [[vol-llm-tool-crate]], [[tool-trait]], [[agent-builder-pattern]], [[react-agent-mcp-integration]], [[mcp-manager-lifecycle]], [[vol-mcp-servers-crate]], [[playwright-mcp-service]]
 
 ## Definition
 
@@ -76,3 +78,4 @@ New method: `AgentConfigBuilder::with_mcp_from_config(working_dir) -> Self`
 - **2026-05-11**: MCP client integration implemented — McpTool, register_from_mcp, with_mcp_from_config [[react-agent-mcp-integration]]
 - **2026-05-11**: Runnable example added demonstrating full flow [[docs-rs-mcp-example]]
 - **2026-05-13**: Migrated from `McpSession` to `McpManager` — connection state tracking, auto-reconnect, full MCP protocol [[mcp-manager-impl]]
+- **2026-08-13**: In-cluster `"type": "http"` servers wired into the shared mcp-config — docs-rs-mcp, cli-tools-mcp, playwright-mcp (new standalone service on port 8931) [[playwright-mcp-k8s-deployment]]
