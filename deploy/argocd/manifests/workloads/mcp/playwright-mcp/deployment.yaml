@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: playwright-mcp
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: playwright-mcp
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: playwright-mcp
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: playwright-mcp
+        app.kubernetes.io/part-of: vol-agent
+        app.kubernetes.io/component: mcp
+    spec:
+      restartPolicy: Always
+      # No nodeSelector — mcr.microsoft.com/playwright/mcp is multi-arch (amd64/arm64)
+      securityContext:
+        runAsNonRoot: true
+        # runAsUser omitted: image default user (pwuser) owns /ms-playwright browsers
+      containers:
+        - name: playwright-mcp
+          image: mcr.microsoft.com/playwright/mcp:latest
+          imagePullPolicy: Always
+          args:
+            - "--headless"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8931"
+            - "--no-sandbox"
+          ports:
+            - containerPort: 8931
+              name: http
+              protocol: TCP
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            tcpSocket:
+              port: 8931
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            tcpSocket:
+              port: 8931
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          env:
+            # HOME → /tmp so node/chromium can write caches despite readOnlyRootFilesystem
+            - name: HOME
+              value: "/tmp"
+            - name: HTTPS_PROXY
+              value: "http://192.168.2.98:8890"
+            - name: HTTP_PROXY
+              value: "http://192.168.2.98:8890"
+            - name: NO_PROXY
+              value: "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,kubernetes.default.svc,.svc.cluster.local"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 500Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            # Bigger /dev/shm — Chromium crashes with k8s default 64MB shm on complex pages
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
