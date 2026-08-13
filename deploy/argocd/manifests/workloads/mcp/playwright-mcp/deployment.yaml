@@ -28,12 +28,14 @@ spec:
       # No nodeSelector — mcr.microsoft.com/playwright/mcp is multi-arch (amd64/arm64)
       securityContext:
         runAsNonRoot: true
-        # runAsUser 1000 = image's USER node (named users fail runAsNonRoot verification; /ms-playwright owned by node)
+        # runAsUser 1000 = image's USER node (named users fail runAsNonRoot verification; /ms-playwright owned by node);
+        # re-check on image upgrades — digest-pinned above
         runAsUser: 1000
       containers:
         - name: playwright-mcp
-          image: mcr.microsoft.com/playwright/mcp:latest
-          imagePullPolicy: Always
+          # Digest-pinned to the smoke-verified build (sha256:18c0a9c9...)
+          image: mcr.microsoft.com/playwright/mcp@sha256:18c0a9c934004fe9580cc79f1e8e6e6cde7c667348b215335e8a23fd3e509804
+          imagePullPolicy: IfNotPresent
           args:
             - "--headless"
             - "--host"
