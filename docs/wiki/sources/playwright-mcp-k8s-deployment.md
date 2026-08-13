@@ -39,7 +39,7 @@ Replace the unrunnable stdio playwright entry with a standalone workload: Deploy
 
 ### Verification (post node-recovery re-run)
 
-- `deployment.apps/playwright-mcp` 1/1 Ready (scheduled on `rock-5b-plus`; no nodeSelector — image is multi-arch amd64/arm64). Rollout succeeded after the `runAsUser` fix.
+- `deployment.apps/playwright-mcp` 1/1 Ready, running on `k8s-worker1` (no nodeSelector — image is multi-arch amd64/arm64). Rollout succeeded after the `runAsUser` fix.
 - MCP `initialize` over the service DNS returned HTTP 200 with `protocolVersion` 2025-06-18 and serverInfo Playwright 1.63.0-alpha-2026-08-05 (SSE framing normal for streamable HTTP).
 - `tools/list` (session-aware: initialize first, then pass `mcp-session-id` header) returned 24 `browser_*` tools including `browser_navigate`. A literal one-shot `tools/list` without a session returns `Bad Request: Server not initialized` — expected streamable-HTTP behavior.
 - `agent-server-dp` log (after configmap apply + rollout restart of exactly the three briefed deployments): `INFO vol_llm_mcp::manager: ... MCP server connected server="playwright"`; handshake via `HTTPS with proxy http://192.168.2.98:8890` (deployment proxy env), protocolVersion 2025-11-25 (rmcp client default) — both protocol versions accepted by the server.
