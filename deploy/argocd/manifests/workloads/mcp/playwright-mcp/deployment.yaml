@@ -28,7 +28,8 @@ spec:
       # No nodeSelector — mcr.microsoft.com/playwright/mcp is multi-arch (amd64/arm64)
       securityContext:
         runAsNonRoot: true
-        # runAsUser omitted: image default user (pwuser) owns /ms-playwright browsers
+        # runAsUser 1000 = image's USER node (named users fail runAsNonRoot verification; /ms-playwright owned by node)
+        runAsUser: 1000
       containers:
         - name: playwright-mcp
           image: mcr.microsoft.com/playwright/mcp:latest
@@ -40,6 +41,10 @@ spec:
             - "--port"
             - "8931"
             - "--no-sandbox"
+            # MCP HTTP transport host-allowlist defaults to localhost:8931 (bound addr normalized)
+            # when --host is 0.0.0.0, so in-cluster clients (service DNS) get 403 without this.
+            - "--allowed-hosts"
+            - "*"
           ports:
             - containerPort: 8931
               name: http
