@@ -40,9 +40,13 @@ info() { echo -e "  ${YELLOW}→${NC} $1"; }
 
 # ── Port forward helper ───────────────────────────────────────────────────────
 port_forward() {
-    local svc=$1 port=$2
-    info "Port-forwarding $svc:$port ..."
-    kubectl -n "$NAMESPACE" port-forward "svc/$svc" "$port:$port" &
+    local svc=$1 local_port=$2 remote_port=$3
+    # stderr: stdout is captured by the caller's $(...) — only the PID may go there
+    info "Port-forwarding $svc: localhost:$local_port -> $remote_port ..." >&2
+    # Redirect kubectl's output away from the command-substitution pipe —
+    # otherwise the long-running port-forward keeps the pipe open and the
+    # caller's $(...) blocks forever.
+    kubectl -n "$NAMESPACE" port-forward "svc/$svc" "$local_port:$remote_port" >/dev/null 2>&1 &
     local pf_pid=$!
     sleep 2
     echo "$pf_pid"
@@ -102,9 +106,9 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -H|--host) TARGET="$2"; shift 2 ;;
         -n|--namespace) NAMESPACE="$2"; shift 2 ;;
-        --control-plane) MODE="cp" ;;
-        --data-plane) MODE="dp" ;;
-        --all) MODE="all" ;;
+        --control-plane) MODE="cp"; shift ;;
+        --data-plane) MODE="dp"; shift ;;
+        --all) MODE="all"; shift ;;
         -h|--help)
             sed -n '2,/^$/p' "$0"
             echo ""
@@ -118,7 +122,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         *) echo "Unknown: $1"; exit 1 ;;
     esac
-    shift
 done
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -138,13 +141,16 @@ if [ -n "$TARGET" ]; then
     health_check "$BASE/health" "agent-server"
 else
     # kubectl mode
+    local_port=13000
     for svc in agent-server agent-server-dp agent-server-dingtalk; do
         if kubectl -n "$NAMESPACE" get svc "$svc" &>/dev/null; then
-            # Try port-forward + health check
+            # Try port-forward + health check (unique local port per service —
+            # services may share the same remote port)
             port=$(kubectl -n "$NAMESPACE" get svc "$svc" -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "")
             if [ -n "$port" ]; then
-                pf_pid=$(port_forward "$svc" "$((port + 10000))")
-                health_check "http://localhost:$((port + 10000))/health" "$svc"
+                local_port=$((local_port + 1))
+                pf_pid=$(port_forward "$svc" "$local_port" "$port")
+                health_check "http://localhost:$local_port/health" "$svc"
                 kill "$pf_pid" 2>/dev/null || true
             fi
         fi
