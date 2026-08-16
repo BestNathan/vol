@@ -27,6 +27,7 @@ members = [
     "crates/vol-llm-skill",
     "crates/vol-llm-context",
     "crates/vol-llm-task",
+    "crates/vol-llm-fs",
     "crates/vol-llm-runtime",
     "crates/vol-llm-wiki",
     "crates/vol-llm-yaml-agent",

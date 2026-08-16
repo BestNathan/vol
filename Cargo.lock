@@ -8106,6 +8106,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "vol-llm-fs"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "clap",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "vol-llm-tool",
+ "vol-llm-tools-builtin-edit",
+ "vol-llm-tools-builtin-glob",
+ "vol-llm-tools-builtin-grep",
+ "vol-llm-tools-builtin-read",
+ "vol-llm-tools-builtin-write",
+]
+
+[[package]]
 name = "vol-llm-mcp"
 version = "0.1.0"
 dependencies = [

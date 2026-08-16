@@ -1,0 +1,25 @@
+[package]
+name = "vol-llm-fs"
+version.workspace = true
+edition.workspace = true
+
+
+[lints]
+workspace = true
+
+[dependencies]
+tokio = { workspace = true, features = ["fs"] }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+vol-llm-tool = { workspace = true }
+clap = { version = "4", features = ["string"] }
+vol-llm-tools-builtin-read = { path = "../vol-llm-tools-builtin/read-tool" }
+vol-llm-tools-builtin-write = { path = "../vol-llm-tools-builtin/write-tool" }
+vol-llm-tools-builtin-edit = { path = "../vol-llm-tools-builtin/edit-tool" }
+vol-llm-tools-builtin-glob = { path = "../vol-llm-tools-builtin/glob-tool" }
+vol-llm-tools-builtin-grep = { path = "../vol-llm-tools-builtin/grep-tool" }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["rt", "macros"] }
