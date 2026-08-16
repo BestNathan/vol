@@ -3,8 +3,8 @@ type: entity
 category: service
 tags: [runtime, agents, tools, task-store, session-store, data-plane]
 created: 2026-06-09
-updated: 2026-06-10
-source_count: 9
+updated: 2026-08-16
+source_count: 10
 ---
 
 # vol-llm-runtime Crate
@@ -15,6 +15,7 @@ source_count: 9
 ## Key Facts
 - `AgentRuntimeBuilder::build()` is the primary assembly point for runtime resources.
 - Tool registration belongs in the runtime builder so transport wrappers inherit the same registry.
+- `AgentRuntimeBuilder::build()` registers the CLI-style `fs` tool (`vol_llm_fs::tools::register_cli`) next to the `task` CLI; `for_test()` mirrors it. Source: [[fs-cli-tool]].
 - Runtime task store config primitives are defined here, not in the server crate, so downstream server/channel code can share one config contract.
 - Runtime session store config primitives are also defined here; `AgentRuntimeBuilder::build()` constructs the shared `Arc<dyn SessionManager>` from `[runtime.session_store]` [[session-database-store-implementation]].
 
@@ -54,6 +55,7 @@ In the proposed control/data-plane architecture, `AgentRuntime` is the authorita
 ## Related
 - [[agent-server-control-data-plane]]
 - [[vol-agent-server-crate]]
+- [[vol-llm-fs-crate]]
 - [[vol-llm-task-crate]]
 - [[runtime-task-store-configuration]]
 - [[runtime-session-store-configuration]]

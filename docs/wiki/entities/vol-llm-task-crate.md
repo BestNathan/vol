@@ -3,8 +3,8 @@ type: entity
 category: service
 tags: [task-store, persistence, seaorm, sqlite, postgres]
 created: 2026-06-09
-updated: 2026-06-09
-source_count: 5
+updated: 2026-08-16
+source_count: 6
 ---
 
 # vol-llm-task Crate
@@ -44,3 +44,4 @@ Task data is stored in a single `tasks` table. `get_ready_tasks` matches existin
 - [[seaorm-postgres-test-isolation-fix]]
 - [[seaorm-postgres-test-url-env-fix]]
 - [[seaorm-sqlite-url-normalization-fix]]
+- [[cli-style-tool-pattern]] — the `task` CLI is the first implementation of this pattern; the `fs` tool in [[vol-llm-fs-crate]] is modeled on it

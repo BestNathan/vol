@@ -1,12 +1,13 @@
 # Wiki Index
 
-Last updated: 2026-08-13 (playwright-mcp in-cluster deployment)
+Last updated: 2026-08-16 (vol-llm-fs fs cli tool)
 
 ## Entities
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[vol-llm-runtime-crate]] | AgentRuntime owner of shared agent resources, runtime task/session store config types, and data-plane capability source | active | 2026-06-10 |
+| [[vol-llm-runtime-crate]] | AgentRuntime owner of shared agent resources, runtime task/session store config types, and data-plane capability source; registers the CLI-style `fs` and `task` tools in `AgentRuntimeBuilder::build()` | active | 2026-08-16 |
+| [[vol-llm-fs-crate]] | Unified CLI-style `fs` tool (read/write/edit/grep/glob/scheme, `--json`) delegating to the five builtin file-op tools; modeled on the `task` CLI | active | 2026-08-16 |
 | [[vol-llm-task-crate]] | Task models and persistence stores, including SeaORM database store for SQLite and Postgres with compiled migrations | active | 2026-06-09 |
 | [[vol-agent-server-crate]] | Standalone server crate that composes DataPlaneServerCore/ControlPlaneServerCore routes and is deployed by the self-contained ArgoCD GitOps tree as `agent-server`; supports remote control-plane registration with heartbeat/reconnect | active | 2026-06-17 |
 | [[vol-llm-ui-crate]] | Shared UI state model. Web (Dioxus) DEPRECATED 2026-08 — React frontend/ is the active web UI. TUI + state maintained. | deprecated | 2026-08-06 |
@@ -31,6 +32,7 @@ Last updated: 2026-08-13 (playwright-mcp in-cluster deployment)
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
 | [[sandbox-lifecycle]] | Sandbox lifecycle: define→construct→register→acquire→bind→start→use→cleanup. Pure registry design with TmpSandbox default, bind_metadata for sub_dir | active | 2026-08-11 |
+| [[cli-style-tool-pattern]] | Single `ExecutableTool` taking a CLI command string (`tool <subcommand> --flag value`): tokenizer + clap parser → typed command enum → delegation to underlying tools; `task` CLI and `fs` tool are the two implementations | active | 2026-08-16 |
 | [[argocd-app-of-apps-gitops]] | Self-contained ArgoCD App-of-Apps deployment pattern split into `runtime-config` (namespace + shared agents/providers/skills ConfigMaps) and `workloads` (application deployments), with `agent-server` mounting `/app/.agents` and CI-built MCP images updating GitOps manifests | active | 2026-06-16 |
 | [[agent-server-control-data-plane]] | Single server crate with DataPlaneServerCore/ControlPlaneServerCore, channel-owned JSON-RPC protocol, route composition, data-plane snapshot facade, command/run semantics, control-plane router MVP, role-mode verification tests, dependency boundary checks, and remote data-plane registration with heartbeat/reconnect | active | 2026-06-17 |
 | [[runtime-session-store-configuration]] | Shared `[runtime.session_store]` TOML contract and runtime `SessionManager` behavior for file/database session persistence | active | 2026-06-10 |
@@ -95,6 +97,7 @@ Last updated: 2026-08-13 (playwright-mcp in-cluster deployment)
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[fs-cli-tool]] | vol-llm-fs crate implementation: CLI-style `fs` tool (read/write/edit/grep/glob/scheme, `--json` envelope) over the five builtin file-op tools; registered from AgentRuntimeBuilder::build() next to the task tool; 89.81% line coverage | active | 2026-08-16 |
 | [[web-tools-proxy-retry]] | Three-tier proxy configuration (tool param > agent config > env var) and exponential-backoff retry for web_fetch/web_search tools | active | 2026-08-12 |
 | [[playwright-mcp-k8s-deployment]] | Playwright MCP replaced stdio/npx (unrunnable in Rust-only agent-server image) with standalone Deployment + ClusterIP Service + http URL in mcp-config; in-field fixes runAsUser 1000 and --allowed-hosts *; verified in-cluster; egress test pending | active | 2026-08-13 |
 | [[observability-pull-metrics-refactor]] | Consolidated observability crate, Prometheus pull /metrics, LLMCall event emission, run-level metrics, MetricsPlugin concurrency fix | active | 2026-07-24 |

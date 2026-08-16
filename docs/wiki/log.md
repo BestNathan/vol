@@ -1,5 +1,15 @@
 # Change Log
 
+## [2026-08-16] ingest | vol-llm-fs fs CLI tool
+- Created sources: [[fs-cli-tool]]
+- Created entities: [[vol-llm-fs-crate]] (unified CLI-style `fs` tool crate)
+- Created concepts: [[cli-style-tool-pattern]] (CLI-command-string single-entry-point tool pattern; `task` CLI and `fs` tool)
+- Updated entities: [[vol-llm-runtime-crate]] (registers the `fs` tool next to the `task` CLI in `AgentRuntimeBuilder::build()`/`for_test()`, source_count 9->10), [[vol-llm-task-crate]] (forward reference to the pattern, source_count 5->6)
+- Updated concepts: [[tool-registry]] (CLI-style tool registration point, source_count 1->2)
+- Updated index: new entity/concept/source entries, refreshed runtime-crate summary, bumped date
+- Cross-references added: 11
+- Changes: Implemented the `vol-llm-fs` crate: `fs` tool with CLI subcommands read/write/edit/grep/glob/scheme and global `--json`/`-o` flag; quote-aware tokenizer + clap 4 parser; executor delegating to the five `vol-llm-tools-builtin-*` file-op tools; JSON envelope output; registered from `AgentRuntimeBuilder::build()` next to the `task` CLI. 32 unit tests, 89.81% line coverage (gate ≥ 80%), no doc tests, clean `cargo check`. No production code changed by this task.
+
 ## [2026-08-13] ingest | Playwright MCP on K8s Deployment
 - Created sources: [[playwright-mcp-k8s-deployment]]
 - Created entities: [[playwright-mcp-service]] (category: infrastructure)
