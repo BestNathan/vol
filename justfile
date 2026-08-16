@@ -138,8 +138,8 @@ cover CRATE:
 # Run llvm-cov summary for multiple crates
 cover-multi *CRATES:
     @for crate in {{CRATES}}; do \
-        echo "=== $$crate ==="; \
-        cargo llvm-cov --package $$crate --summary-only; \
+        echo "=== $crate ==="; \
+        cargo llvm-cov --package $crate --summary-only; \
     done
 
 # Run llvm-cov for all tool crates
@@ -152,29 +152,29 @@ cover-html CRATE:
 
 # Run llvm-cov with coverage threshold (single crate)
 cover-gate CRATE PCT="80":
-    @LINE_COV=$$(cargo llvm-cov --package {{CRATE}} --summary-only 2>&1 | grep '^TOTAL' | awk '{print $$4}' | tr -d '%'); \
-    if [ "$$(echo "$$LINE_COV < {{PCT}}" | bc 2>/dev/null)" = "1" ]; then \
-        echo "FAIL: {{CRATE}} line coverage is $${LINE_COV}% (required ≥ {{PCT}}%)"; \
+    @LINE_COV=$(cargo llvm-cov --package {{CRATE}} --summary-only 2>&1 | grep '^TOTAL' | awk '{print $4}' | tr -d '%'); \
+    if [ "$(echo "$LINE_COV < {{PCT}}" | bc 2>/dev/null)" = "1" ]; then \
+        echo "FAIL: {{CRATE}} line coverage is ${LINE_COV}% (required ≥ {{PCT}}%)"; \
         exit 1; \
     else \
-        echo "PASS: {{CRATE}} line coverage is $${LINE_COV}% (≥ {{PCT}}%)"; \
+        echo "PASS: {{CRATE}} line coverage is ${LINE_COV}% (≥ {{PCT}}%)"; \
     fi
 
 # Run llvm-cov with coverage threshold (multi-crate)
 cover-gate-multi PCT *CRATES:
     @CRATE_LIST="{{CRATES}}"; \
     FAILED=""; \
-    for crate in $$CRATE_LIST; do \
-        LINE_COV=$$(cargo llvm-cov --package $$crate --summary-only 2>&1 | grep '^TOTAL' | awk '{print $$4}' | tr -d '%'); \
-        if [ "$$(echo "$$LINE_COV < {{PCT}}" | bc 2>/dev/null)" = "1" ]; then \
-            echo "FAIL: $$crate line coverage is $${LINE_COV}% (required ≥ {{PCT}}%)"; \
-            FAILED="$$FAILED $$crate"; \
+    for crate in $CRATE_LIST; do \
+        LINE_COV=$(cargo llvm-cov --package $crate --summary-only 2>&1 | grep '^TOTAL' | awk '{print $4}' | tr -d '%'); \
+        if [ "$(echo "$LINE_COV < {{PCT}}" | bc 2>/dev/null)" = "1" ]; then \
+            echo "FAIL: $crate line coverage is ${LINE_COV}% (required ≥ {{PCT}}%)"; \
+            FAILED="$FAILED $crate"; \
         else \
-            echo "PASS: $$crate line coverage is $${LINE_COV}% (≥ {{PCT}}%)"; \
+            echo "PASS: $crate line coverage is ${LINE_COV}% (≥ {{PCT}}%)"; \
         fi; \
     done; \
-    if [ -n "$$FAILED" ]; then \
-        echo "Coverage check failed for:$$FAILED"; \
+    if [ -n "$FAILED" ]; then \
+        echo "Coverage check failed for:$FAILED"; \
         exit 1; \
     fi
 
