@@ -23,7 +23,7 @@ source_count: 1
 ## Module Structure
 ```
 crates/vol-llm-fs/
-├── Cargo.toml           # tokio(fs), serde_json, async-trait, tracing, clap 4 ["string"],
+├── Cargo.toml           # tokio(fs), serde_json, async-trait, clap 4 ["string"],
 │                        # vol-llm-tool (workspace), 5 builtin file-op sub-crates (path)
 └── src/
     ├── lib.rs           # pub mod cli; pub mod tools;
@@ -43,7 +43,7 @@ crates/vol-llm-fs/
 - `fs scheme` introspects parameter lists (flag, required marker, description) via `format::fmt_scheme`.
 
 ## Quality
-- 32 unit tests (parser 12, executor 11, format 3, fs_cli 6) — every `pub fn` has at least one test; no doc tests.
+- 35 unit tests (parser 16, executor 9, format 3, fs_cli 7) — every `pub fn` has at least one test; no doc tests.
 - Line coverage 89.81% (TOTAL via `cargo llvm-cov --package vol-llm-fs --summary-only`) — passes the 80% gate.
 - `cargo test -p vol-llm-fs -p vol-llm-runtime` and `cargo check` both green.
 

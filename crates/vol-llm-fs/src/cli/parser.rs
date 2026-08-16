@@ -22,7 +22,15 @@ fn tokenize(input: &str) -> Vec<String> {
     for ch in input.chars() {
         match (in_quote, ch) {
             (None, '"' | '\'') => in_quote = Some(ch),
-            (Some(q), c) if c == q => in_quote = None,
+            (Some(q), c) if c == q => {
+                in_quote = None;
+                // A quoted segment that closed with nothing accumulated is an
+                // explicit empty value (e.g. `--content ''`) — preserve it as a
+                // token so it reaches clap instead of being dropped.
+                if current.is_empty() {
+                    tokens.push(String::new());
+                }
+            }
             (None, ' ') if !current.is_empty() => {
                 tokens.push(std::mem::take(&mut current));
             }
@@ -352,6 +360,24 @@ mod tests {
     #[test]
     fn tokenize_skips_consecutive_spaces() {
         assert_eq!(tokenize("read   a"), vec!["read", "a"]);
+    }
+
+    #[test]
+    fn tokenize_preserves_empty_quoted_value() {
+        let tokens = tokenize("write --file_path a --content ''");
+        assert_eq!(tokens, vec!["write", "--file_path", "a", "--content", ""]);
+    }
+
+    #[test]
+    fn parse_write_accepts_empty_content() {
+        let cmd = parse("write --file_path a.txt --content ''").unwrap();
+        assert!(matches!(cmd, ParsedCommand::Write { content, .. } if content.is_empty()));
+    }
+
+    #[test]
+    fn parse_edit_accepts_empty_new_string() {
+        let cmd = parse("edit --file_path a --old_string foo --new_string ''").unwrap();
+        assert!(matches!(cmd, ParsedCommand::Edit { new_string, .. } if new_string.is_empty()));
     }
 
     #[test]

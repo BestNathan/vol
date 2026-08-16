@@ -8114,7 +8114,6 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
- "tracing",
  "vol-llm-tool",
  "vol-llm-tools-builtin-edit",
  "vol-llm-tools-builtin-glob",

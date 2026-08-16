@@ -11,7 +11,6 @@ workspace = true
 tokio = { workspace = true, features = ["fs"] }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
-tracing = { workspace = true }
 vol-llm-tool = { workspace = true }
 clap = { version = "4", features = ["string"] }
 vol-llm-tools-builtin-read = { path = "../vol-llm-tools-builtin/read-tool" }
