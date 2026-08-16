@@ -20,6 +20,7 @@ vol-llm-core = { path = "../vol-llm-core" }
 vol-llm-tool = { path = "../vol-llm-tool" }
 vol-llm-agent = { path = "../vol-llm-agent" }
 vol-llm-task = { path = "../vol-llm-task" }
+vol-llm-fs = { path = "../vol-llm-fs" }
 vol-llm-provider = { path = "../vol-llm-provider" }
 vol-llm-mcp = { path = "../vol-llm-mcp" }
 vol-llm-skill = { path = "../vol-llm-skill" }

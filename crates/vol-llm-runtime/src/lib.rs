@@ -271,6 +271,8 @@ impl AgentRuntime {
             Arc::new(FileSessionManager::new(store_dir.join("agents")));
         // Register the unified CLI-style `task` tool (agents using `tools: [task]`).
         vol_llm_task::tools::register_cli(&mut tool_registry, task_store.clone());
+        // Register the unified CLI-style `fs` tool — single entry point for file ops.
+        vol_llm_fs::tools::register_cli(&mut tool_registry);
         let tool_registry = Arc::new(tool_registry);
         let mcp_manager = Arc::new(McpManager::new(vec![]));
         let sandbox_registry = {
@@ -519,6 +521,8 @@ impl AgentRuntimeBuilder {
         vol_llm_tools_builtin::register_all(&mut tool_registry);
         // Register the unified CLI-style `task` tool (agents using `tools: [task]`).
         vol_llm_task::tools::register_cli(&mut tool_registry, task_store.clone());
+        // Register the unified CLI-style `fs` tool — single entry point for file ops.
+        vol_llm_fs::tools::register_cli(&mut tool_registry);
         // Register declarative CLI-as-Tool entries from .agents/cli-tools/*.toml
         // (inner register_all logs its own INFO on success)
         vol_llm_tools_builtin::cli_tool::register_all(
@@ -1367,6 +1371,16 @@ base_url = "https://api.test.com"
         assert!(rt.agent_status.read().unwrap().is_empty());
         // for_test registers builtin tools, so tool_names should be non-empty
         assert!(!rt.tool_registry.tool_names().is_empty());
+    }
+
+    #[tokio::test]
+    async fn for_test_registers_fs_cli_tool() {
+        let rt = AgentRuntime::for_test().await;
+        let names = rt.tool_registry.tool_names();
+        assert!(
+            names.iter().any(|n| *n == "fs"),
+            "fs tool not registered: {names:?}"
+        );
     }
 
     #[tokio::test]
