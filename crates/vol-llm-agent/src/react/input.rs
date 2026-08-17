@@ -126,9 +126,9 @@ impl AgentInput {
     pub fn display_text(&self) -> String {
         self.parts
             .iter()
-            .filter_map(|part| match part {
-                InputPart::Text { text } => Some(text.as_str()),
-                InputPart::ImageUrl { .. } => None,
+            .map(|part| match part {
+                InputPart::Text { text } => text.as_str(),
+                InputPart::ImageUrl { .. } => "[image]",
             })
             .collect::<Vec<_>>()
             .join("\n")
@@ -200,7 +200,7 @@ mod tests {
             .text_part("look")
             .image_url_with_detail("https://example.test/image.png", "high");
 
-        assert_eq!(input.display_text(), "look");
+        assert_eq!(input.display_text(), "look\n[image]");
         assert_eq!(
             input.to_message_content().unwrap(),
             MessageContent::MultiPart(vec![
@@ -254,5 +254,25 @@ mod tests {
             input.metadata.get("source"),
             Some(&serde_json::json!("test"))
         );
+    }
+
+    #[test]
+    fn test_display_text_marks_images() {
+        let input = AgentInput::new()
+            .text_part("look")
+            .image_url("data:image/png;base64,AAAA");
+        assert_eq!(input.display_text(), "look\n[image]");
+    }
+
+    #[test]
+    fn test_display_text_image_only() {
+        let input = AgentInput::new().image_url("https://example.test/a.png");
+        assert_eq!(input.display_text(), "[image]");
+    }
+
+    #[test]
+    fn test_display_text_text_only_unchanged() {
+        let input = AgentInput::text("hello");
+        assert_eq!(input.display_text(), "hello");
     }
 }
