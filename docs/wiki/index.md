@@ -51,9 +51,9 @@ Last updated: 2026-08-17 (multimodal image input)
 | [[skill-system]] | Skills as native ReActAgent capability via SkillsConfig | active | 2026-05-04 |
 | [[session-as-ssot]] | Session as single source of truth for messages | active | 2026-05-04 |
 | [[run-context]] | Unified run state management replacing PluginContext, with model field | active | 2026-05-06 |
-| [[context-builder]] | Pluggable prompt construction from contributors | active | 2026-05-04 |
-| [[session-contributor]] | Session history as context contributor | active | 2026-05-04 |
-| [[session-compression]] | Two-layer session message compression | active | 2026-05-04 |
+| [[context-builder]] | Pluggable prompt construction from contributors, with multipart-aware `estimate_tokens` (per-image budget 1600) | active | 2026-08-17 |
+| [[session-contributor]] | Session history as context contributor, with image-aware compression (summary `[image]` markers, sampling exemption) | active | 2026-08-17 |
+| [[session-compression]] | Two-layer session message compression that keeps images (`[image]` summary markers, sampling exemption) | active | 2026-08-17 |
 | [[plugin-context-migration]] | Migration from PluginContext to RunContext | active | 2026-05-04 |
 | [[context-error]] | Error type for context building failures | stable | 2026-05-04 |
 | [[agent-observability]] | JSONL logging + OTel structured log routing | stable | 2026-05-06 |
