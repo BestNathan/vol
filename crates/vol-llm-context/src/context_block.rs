@@ -1,4 +1,4 @@
-use vol_llm_core::Message;
+use vol_llm_core::{ContentPart, Message, MessageContent};
 
 /// Attention zone with position value for sorting.
 /// Lower position = closer to the zone boundary.
@@ -100,11 +100,28 @@ impl TokenBudget {
     }
 }
 
+/// Fixed token budget per image part (Anthropic's ≤1568px bucket ≈ 1600 tokens).
+/// Base64 payload bytes are deliberately excluded from estimation — they
+/// overcount real vision cost by ~100x and would trigger premature compression.
+pub const IMAGE_TOKEN_BUDGET: usize = 1600;
+
 /// Estimate token count for a message.
-/// Uses JSON length / 4 as a rough approximation.
+/// Multi-part content: text parts count as `len()/4`, each image part counts
+/// `IMAGE_TOKEN_BUDGET`. Everything else uses JSON length / 4 as a rough approximation.
 pub fn estimate_tokens(msg: &Message) -> usize {
-    let json = serde_json::to_string(msg).unwrap_or_default();
-    json.len() / 4
+    match &msg.content {
+        Some(MessageContent::MultiPart(parts)) => parts
+            .iter()
+            .map(|part| match part {
+                ContentPart::Text { text } => text.len() / 4,
+                ContentPart::Image { .. } => IMAGE_TOKEN_BUDGET,
+            })
+            .sum(),
+        _ => {
+            let json = serde_json::to_string(msg).unwrap_or_default();
+            json.len() / 4
+        }
+    }
 }
 
 #[cfg(test)]
@@ -145,5 +162,52 @@ mod tests {
         let msg = Message::user("Hello world");
         let tokens = estimate_tokens(&msg);
         assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_estimate_tokens_multipart_image_fixed_budget() {
+        use vol_llm_core::{ContentPart, ImageUrl, MessageContent};
+        // A ~200KB base64 payload must NOT inflate the estimate.
+        let big_data_url = format!("data:image/png;base64,{}", "A".repeat(200_000));
+        let msg = Message::user(MessageContent::MultiPart(vec![
+            ContentPart::Text {
+                text: "what is this".to_string(),
+            },
+            ContentPart::Image {
+                image_url: ImageUrl {
+                    url: big_data_url,
+                    detail: None,
+                },
+            },
+        ]));
+        let tokens = estimate_tokens(&msg);
+        assert_eq!(tokens, "what is this".len() / 4 + IMAGE_TOKEN_BUDGET);
+    }
+
+    #[test]
+    fn test_estimate_tokens_two_images() {
+        use vol_llm_core::{ContentPart, ImageUrl, MessageContent};
+        let msg = Message::user(MessageContent::MultiPart(vec![
+            ContentPart::Image {
+                image_url: ImageUrl {
+                    url: "https://e.test/a.png".to_string(),
+                    detail: None,
+                },
+            },
+            ContentPart::Image {
+                image_url: ImageUrl {
+                    url: "https://e.test/b.png".to_string(),
+                    detail: None,
+                },
+            },
+        ]));
+        assert_eq!(estimate_tokens(&msg), 2 * IMAGE_TOKEN_BUDGET);
+    }
+
+    #[test]
+    fn test_estimate_tokens_text_unchanged() {
+        let msg = Message::user("hello world");
+        let expected = serde_json::to_string(&msg).unwrap().len() / 4;
+        assert_eq!(estimate_tokens(&msg), expected);
     }
 }
