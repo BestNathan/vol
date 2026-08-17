@@ -410,7 +410,7 @@ async fn anthropic_converse_stream_propagates_invalid_utf8_chunk() {
     // surface a Parse error on the receiver.
     let mut body = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        3 + " broken\r\n\r\ndata: [DONE]".len()
+        2 + " broken\r\n\r\ndata: [DONE]".len()
     )
     .into_bytes();
     body.extend_from_slice(&[0xff, 0xfe]);
@@ -693,6 +693,53 @@ async fn openai_converse_returns_api_error_with_plain_text() {
     }
 }
 
+#[tokio::test]
+async fn openai_converse_drops_request_system_field() {
+    // NOTE: This test PINNS the current wire behavior: the OpenAI provider
+    // never serializes `ConversationRequest.system` onto the wire — the field
+    // is silently ignored by `converse`/`converse_stream`, which only convert
+    // `request.messages`. The `convert_messages` doc comment says "System
+    // prompt is sent as the first message with role: system", so a caller must
+    // embed the system prompt in the messages array (e.g. `Message::system`)
+    // for it to reach the API. This may be a deliberate convention or a bug;
+    // either way the test documents what ships. If the provider ever starts
+    // forwarding `request.system`, this test must be updated.
+    let (base_url, rx) = spawn_mock_server(http_response(
+        "200 OK",
+        "application/json",
+        OPENAI_TOOL_RESPONSE,
+    ))
+    .await;
+    let provider = OpenaiProvider::new(&openai_config(base_url)).unwrap();
+
+    let request = ConversationRequest {
+        system: Some("PINNED-SYSTEM-PROMPT".to_string()),
+        messages: vec![Message::user("hi")],
+        ..Default::default()
+    };
+    let response = provider.converse(request).await.unwrap();
+    assert_eq!(
+        response.message.content.as_ref().unwrap().as_str(),
+        "Checking weather..."
+    );
+
+    // Wire payload: `system` must not appear anywhere in the request JSON and
+    // the messages array must be exactly the caller-provided messages.
+    let body = captured_json_body(rx).await;
+    assert!(
+        body.get("system").is_none(),
+        "request.system must not be serialized to the wire"
+    );
+    assert!(
+        !body.to_string().contains("PINNED-SYSTEM-PROMPT"),
+        "request.system content must not leak into the wire payload"
+    );
+    assert_eq!(
+        body["messages"],
+        serde_json::json!([{"role": "user", "content": "hi"}])
+    );
+}
+
 // ---------------------------------------------------------------------------
 // OpenAI converse_stream
 // ---------------------------------------------------------------------------
@@ -818,7 +865,7 @@ async fn openai_converse_stream_returns_api_error() {
 async fn openai_converse_stream_propagates_invalid_utf8_chunk() {
     let mut body = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        3 + " broken".len()
+        2 + " broken".len()
     )
     .into_bytes();
     body.extend_from_slice(&[0xff, 0xfe]);
