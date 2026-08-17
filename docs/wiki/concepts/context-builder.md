@@ -3,8 +3,8 @@ type: concept
 category: framework
 tags: [context, builder, contributor]
 created: 2026-05-04
-updated: 2026-05-04
-source_count: 2
+updated: 2026-08-17
+source_count: 3
 ---
 
 # Context Builder
@@ -20,6 +20,7 @@ A builder pattern for constructing agent prompt context from multiple contributo
 - `ContextContributor` trait defines `contribute()` → `Result<Vec<ContextBlock>, ContextError>` [[session-ssot-redesign]]
 - `ContextBuilder.build()` → `Result<ContextOutput, ContextError>` — errors propagate, no partial context [[session-ssot-redesign]]
 - `ContextBuilderBuilder` provides fluent API for adding contributors with token budget management [[skills-as-react-native]]
+- Token estimation is multipart-aware: `estimate_tokens()` charges each image part a fixed `IMAGE_TOKEN_BUDGET = 1600` instead of JSON-length/4 on the base64 blob (2026-08-17) [[multimodal-image-input]]
 - Multiple built-in contributors: `SimpleContributor` (system prompt), `SessionContributor` (history), `UserInputContributor` (current input), `SkillInjector` (skill context) [[session-ssot-redesign]]
 - `ContextError` enum: `ContributorError`, `BudgetExceeded`, `Session` [[session-ssot-redesign]]
 

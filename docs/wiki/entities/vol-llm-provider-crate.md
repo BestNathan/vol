@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, provider, anthropic, openai, rust]
 created: 2026-05-04
-updated: 2026-05-21
-source_count: 2
+updated: 2026-08-17
+source_count: 3
 ---
 
 # vol-llm-provider Crate
@@ -25,3 +25,4 @@ Implements the `LLMClient` trait for Anthropic and OpenAI providers, handling pr
 ## Timeline
 - **2026-04**: Provider implementations added
 - **2026-05-21**: Anthropic user-content conversion preserves multipart text/image input, mapping URL images and base64 data URLs to provider-native content blocks [[agentinput-multimodal-run-implementation]]
+- **2026-08-17**: OpenAI provider converts multipart user content into vision content arrays (`text` + `image_url` parts) for Chat Completions, completing image support for both provider families; text-only streaming verified as a no-op [[multimodal-image-input]]

@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, agent, react, rust]
 created: 2026-05-04
-updated: 2026-05-21
-source_count: 2
+updated: 2026-08-17
+source_count: 3
 ---
 
 # vol-llm-agent Crate
@@ -29,3 +29,4 @@ The core crate implementing the ReAct Agent pattern with a plugin system for cro
 - **2026-04**: All 10 tests passing (mock, simulation, integration)
 - **2026-05-11**: MCP client integration — `AgentConfig` gains `mcp_session` field, `AgentConfigBuilder` gains `with_mcp_from_config()` for auto-discovering MCP tools [[react-agent-mcp-integration]]
 - **2026-05-21**: Multimodal run input — `AgentInput`/`InputPart` added, `run_input(AgentInput)` accepts text plus image URL/data URL parts, `run(&str)` remains a wrapper, and metadata/run_id flow into run context [[agentinput-multimodal-run-implementation]]
+- **2026-08-17**: `AgentInput::display_text()` / `text_content()` render `InputPart::ImageUrl` as `[image]` markers; the `agent_start` stream event input now shows markers instead of raw base64 [[multimodal-image-input]]

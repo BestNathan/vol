@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, session, persistence]
 created: 2026-05-04
-updated: 2026-06-10
-source_count: 3
+updated: 2026-08-17
+source_count: 4
 ---
 
 # vol-session Crate
@@ -33,6 +33,7 @@ The session crate providing `Session`, `SessionMessage`, and `SessionEntryStore`
 - **2026-04-25**: Session becomes SSOT — RunContext.messages removed [[session-ssot-redesign]]
 - **2026-06-09**: `FileSessionManager` hardened against path traversal in `agent_id` values with validation, `StoreError::InvalidInput`, and encoded quarantine paths for infallible store creation [[file-session-agent-id-validation]]
 - **2026-06-10**: SeaORM-backed `DatabaseSessionEntryStore` and `DatabaseSessionManager` added with SQLite/Postgres support, compiled migrations, scoped access validation, and `SessionManager` integration [[session-database-store-implementation]]
+- **2026-08-17**: Compression preserves images — summary messages carry `[image]` markers and position sampling exempts image-bearing messages; images persist as wire `ContentPart` shape and are re-sent from resumed sessions [[multimodal-image-input]]
 
 ## Related Concepts
 - [[session-as-ssot]]: Session is the single source of truth

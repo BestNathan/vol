@@ -3,8 +3,8 @@ type: concept
 category: architecture
 tags: [agent-input, multimodal, react-agent, api-compatibility]
 created: 2026-05-21
-updated: 2026-05-22
-source_count: 2
+updated: 2026-08-17
+source_count: 3
 ---
 
 # AgentInput Multimodal Run
@@ -20,6 +20,7 @@ source_count: 2
 - The first supported input parts are text and image URL/data URL.
 - Empty input parts are rejected before an LLM call starts.
 - `AgentInput` deserializes from either a legacy JSON string or a structured object, preserving channel compatibility.
+- `AgentInput::display_text()` (aliased as `text_content()`) renders image parts as `[image]` markers; the `agent_start` stream event input shows markers rather than raw base64 (2026-08-17) [[multimodal-image-input]].
 
 ## How It Works
 

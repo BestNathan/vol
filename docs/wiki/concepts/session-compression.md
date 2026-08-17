@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [session, compression, summarization]
 created: 2026-05-04
-updated: 2026-05-04
-source_count: 1
+updated: 2026-08-17
+source_count: 2
 ---
 
 # Session Compression
@@ -23,6 +23,7 @@ Two-layer compression for session message history that reduces token usage while
 - Keeps last 5 messages untouched (configurable via `KEEP_LAST`) [[session-compression]]
 - Graceful degradation: if LLM compression fails, includes uncompressed history as fallback [[session-compression]]
 - Output format: `[tool_summary_msg (system), conv_summary_msg (user)] + recent messages` [[session-compression]]
+- Images survive compression: summary messages embed `[image]` markers for image-bearing messages, and position sampling exempts image-bearing messages from removal (2026-08-17) [[multimodal-image-input]]
 
 ## How It Works
 

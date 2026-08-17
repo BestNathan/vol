@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-08-17] ingest | Multimodal Image Input
+- Created sources: [[multimodal-image-input]]
+- Updated concepts: [[agentinput-multimodal-run]] (`[image]` display markers in `AgentInput::display_text`), [[session-compression]] (summary markers + sampling exemption keep images), [[session-contributor]] (image-aware compression), [[context-builder]] (multipart `estimate_tokens` with `IMAGE_TOKEN_BUDGET = 1600`)
+- Updated entities: [[vol-llm-core-crate]] (`MessageContent::display_text` with `[image]` markers), [[vol-llm-agent-crate]] (input display markers), [[vol-llm-provider-crate]] (OpenAI vision content arrays), [[vol-session]] (images kept through compression, wire `ContentPart` persistence)
+- Updated index: new source entry, entity/concept summaries + dates
+- Cross-references added: 6
+- Changes: web-chat image attach/paste/drag-drop feature (frontend compression + chips + thumbnails), `[image]` display markers, per-image token budget 1600, images preserved through session compression and re-sent from resumed sessions, OpenAI vision conversion; verified end-to-end against the live stack (image described correctly by qwen3.6-plus), all gates green; WS frame-size search found no explicit limit (axum/tungstenite defaults 64MiB/16MiB) — no change needed
+
 ## [2026-08-16] ingest | vol-llm-fs fs CLI tool
 - Created sources: [[fs-cli-tool]]
 - Created entities: [[vol-llm-fs-crate]] (unified CLI-style `fs` tool crate)

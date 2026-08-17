@@ -3,8 +3,8 @@ type: concept
 category: framework
 tags: [session, contributor, context]
 created: 2026-05-04
-updated: 2026-05-04
-source_count: 1
+updated: 2026-08-17
+source_count: 2
 ---
 
 # Session Contributor
@@ -21,6 +21,7 @@ source_count: 1
 - Applies `max_history` limit (takes last N messages) [[session-ssot-redesign]]
 - Deleted `cached_blocks` field — Session itself is the cache [[session-ssot-redesign]]
 - `compress()` mutates Session in place; next `contribute()` sees the compressed result [[session-ssot-redesign]]
+- Compression is image-aware: summary messages carry `[image]` markers and image-bearing messages are exempt from position sampling, keeping images re-sendable from history (2026-08-17) [[multimodal-image-input]]
 - `estimate_size()` returns 0 (best-effort without full Session read) [[session-ssot-redesign]]
 - Returns `Result<Vec<ContextBlock>, ContextError>` — session read failures abort context build [[session-ssot-redesign]]
 

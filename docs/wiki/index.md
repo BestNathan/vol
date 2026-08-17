@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-08-16 (vol-llm-fs fs cli tool)
+Last updated: 2026-08-17 (multimodal image input)
 
 ## Entities
 
@@ -12,12 +12,12 @@ Last updated: 2026-08-16 (vol-llm-fs fs cli tool)
 | [[vol-agent-server-crate]] | Standalone server crate that composes DataPlaneServerCore/ControlPlaneServerCore routes and is deployed by the self-contained ArgoCD GitOps tree as `agent-server`; supports remote control-plane registration with heartbeat/reconnect | active | 2026-06-17 |
 | [[vol-llm-ui-crate]] | Shared UI state model. Web (Dioxus) DEPRECATED 2026-08 — React frontend/ is the active web UI. TUI + state maintained. | deprecated | 2026-08-06 |
 | [[vol-llm-sandbox-crate]] | Sandbox abstraction (Local/Tmp/SSH/Firecracker/Wasm), SandboxRegistry with pure-config loading, TmpSandbox with bind_metadata lifecycle | active | 2026-08-11 |
-| [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API | active | 2026-05-21 |
+| [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API and `[image]` display-text markers | active | 2026-08-17 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
-| [[vol-llm-core-crate]] | Core LLM interaction abstractions, including provider-neutral multipart message content | stable | 2026-05-21 |
+| [[vol-llm-core-crate]] | Core LLM interaction abstractions, including provider-neutral multipart message content and `[image]` display markers | stable | 2026-08-17 |
 | [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager; web module with ProxyConfig (three-tier resolution) and RetryConfig (exponential backoff) | active | 2026-08-12 |
-| [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with Anthropic multipart text/image conversion | stable | 2026-05-21 |
-| [[vol-session]] | Session message store and entry persistence, including file and SeaORM database-backed session managers | active | 2026-06-10 |
+| [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with multipart text/image conversion (vision content arrays) | stable | 2026-08-17 |
+| [[vol-session]] | Session message store and entry persistence, including file and SeaORM database-backed session managers; images kept through compression | active | 2026-08-17 |
 | [[vol-llm-agent-protocol-crate]] | Protocol, JSON-RPC transport, connection, handler, registry, and generic service abstraction layer | active | 2026-06-10 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
@@ -91,13 +91,14 @@ Last updated: 2026-08-16 (vol-llm-fs fs cli tool)
 | [[mcp-example-pattern]] | Pattern for runnable example files demonstrating MCP integration with ReActAgent | active | 2026-05-11 |
 | [[sessions-ui-pattern]] | Tab-based session browsing with SessionsState signal, SessionsPanel component, checkpoint CSS | active | 2026-05-11 |
 | [[tailwind-css-migration]] | Systematic migration from global CSS to Tailwind utility classes — ALL 16 components complete, GLOBAL_CSS deleted | complete | 2026-05-12 |
-| [[agentinput-multimodal-run]] | Structured ReActAgent run input envelope for text/image parts, run_id, metadata, and protocol compatibility | active | 2026-05-21 |
+| [[agentinput-multimodal-run]] | Structured ReActAgent run input envelope for text/image parts, run_id, metadata, and protocol compatibility; `[image]` display markers | active | 2026-08-17 |
 
 ## Sources
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
 | [[fs-cli-tool]] | vol-llm-fs crate implementation: CLI-style `fs` tool (read/write/edit/grep/glob/scheme, `--json` envelope) over the five builtin file-op tools; registered from AgentRuntimeBuilder::build() next to the task tool; 89.81% line coverage | active | 2026-08-16 |
+| [[multimodal-image-input]] | Multimodal image input feature: `[image]` display markers, per-image token budget (1600), images kept through session compression, OpenAI vision conversion, frontend attach/paste/render UI, WS frame-size verification (no explicit limit; defaults 64MiB/16MiB), live-stack e2e verification | active | 2026-08-17 |
 | [[web-tools-proxy-retry]] | Three-tier proxy configuration (tool param > agent config > env var) and exponential-backoff retry for web_fetch/web_search tools | active | 2026-08-12 |
 | [[playwright-mcp-k8s-deployment]] | Playwright MCP replaced stdio/npx (unrunnable in Rust-only agent-server image) with standalone Deployment + ClusterIP Service + http URL in mcp-config; in-field fixes runAsUser 1000 and --allowed-hosts *; verified in-cluster; egress test pending | active | 2026-08-13 |
 | [[observability-pull-metrics-refactor]] | Consolidated observability crate, Prometheus pull /metrics, LLMCall event emission, run-level metrics, MetricsPlugin concurrency fix | active | 2026-07-24 |
