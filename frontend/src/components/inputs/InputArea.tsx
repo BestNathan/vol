@@ -6,6 +6,8 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAtomValue, useSetAtom, getDefaultStore } from 'jotai'
 import { Button } from '@/components/ui/button'
 import { getPanelClient } from '@/lib/panel-client'
+import { compressImageFile, ImageError, MAX_IMAGES_PER_MESSAGE } from '@/lib/image'
+import { PaperclipIcon, XIcon } from 'lucide-react'
 import { selectedAgentIdAtom, agentStatusMapAtom } from '@/stores/agents'
 import {
   isRunningAtom,
@@ -27,8 +29,16 @@ export function findRunIdForAgent(
   return null
 }
 
+interface ImageAttachment {
+  id: string
+  dataUrl: string | null // null while compressing
+  error: string | null
+}
+
 export function InputArea() {
   const [text, setText] = useState('')
+  const [images, setImages] = useState<ImageAttachment[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const isRunning = useAtomValue(isRunningAtom)
   const selectedAgentId = useAtomValue(selectedAgentIdAtom)
   const activeAgentId = useAtomValue(activeAgentIdAtom)
@@ -53,13 +63,21 @@ export function InputArea() {
 
   const submit = useCallback(() => {
     const input = text.trim()
-    if (!input || isRunning || !selectedAgentId) return
+    const readyImages = images
+      .filter((img) => img.dataUrl && !img.error)
+      .map((img) => img.dataUrl as string)
+    if ((!input && readyImages.length === 0) || isRunning || !selectedAgentId) return
+    if (images.some((img) => !img.dataUrl && !img.error)) return // still compressing
     // Optimistic UserInput: append immediately so the user sees their message
     // even before the backend sends agent_start (which can take 20s+ during
     // MCP warm-up). If the submit fails we replace it with an Error entry.
     const map = new Map(conversationMap)
     const conv = map.get(selectedAgentId) ?? { entries: [], autoScroll: true }
-    const userEntry = { type: 'UserInput' as const, text: input }
+    const userEntry = {
+      type: 'UserInput' as const,
+      text: input,
+      images: readyImages.length > 0 ? readyImages : undefined,
+    }
     conv.entries.push(userEntry)
     map.set(selectedAgentId, { entries: [...conv.entries], autoScroll: conv.autoScroll })
     setConversationMap(map)
@@ -72,14 +90,22 @@ export function InputArea() {
     getPanelClient()
       .call<{ run_id: string }>('agent.submit', {
         input: {
-          parts: [{ type: 'text', text: input }],
+          parts: [
+            ...(input ? [{ type: 'text', text: input }] : []),
+            ...readyImages.map((url) => ({ type: 'image_url', url })),
+          ],
           metadata: { session_id: sessionId },
         },
         target: selectedAgentId,
       })
+      .then(() => {
+        // Attachments are consumed by the submit; drop the chips.
+        setImages([])
+      })
       .catch((err) => {
         setPendingSubmitAgent(null)
         setText(input)
+        setImages(images)
         const message = (err as { message?: string } | null)?.message ?? String(err)
         // Replace the optimistic UserInput with an Error entry
         const map2 = new Map(conversationMap)
@@ -95,7 +121,70 @@ export function InputArea() {
         map2.set(selectedAgentId, { entries: [...conv2.entries], autoScroll: conv2.autoScroll })
         setConversationMap(map2)
       })
-  }, [text, isRunning, selectedAgentId, setPendingSubmitAgent, conversationMap, setConversationMap])
+  }, [
+    text,
+    images,
+    isRunning,
+    selectedAgentId,
+    setPendingSubmitAgent,
+    conversationMap,
+    setConversationMap,
+  ])
+
+  const addFiles = useCallback(
+    (files: File[]) => {
+      const imageFiles = files.filter((f) => f.type.startsWith('image/'))
+      if (imageFiles.length === 0) return
+      const room = MAX_IMAGES_PER_MESSAGE - images.length
+      if (room <= 0) return
+      const selected = imageFiles.slice(0, room)
+      const pending: ImageAttachment[] = selected.map((f, i) => ({
+        id: `${Date.now()}-${i}-${f.name}`,
+        dataUrl: null,
+        error: null,
+      }))
+      // State updaters stay pure (no side effects inside setState — React
+      // StrictMode double-invokes updaters); compression runs outside them.
+      setImages((prev) => [...prev, ...pending])
+      selected.forEach((f, i) => {
+        void compressImageFile(f).then(
+          (dataUrl) => {
+            setImages((cur) => cur.map((a) => (a.id === pending[i].id ? { ...a, dataUrl } : a)))
+          },
+          (err: unknown) => {
+            const message = err instanceof ImageError ? err.message : 'Could not process the image'
+            setImages((cur) =>
+              cur.map((a) => (a.id === pending[i].id ? { ...a, error: message } : a)),
+            )
+          },
+        )
+      })
+    },
+    [images],
+  )
+
+  const removeImage = useCallback((id: string) => {
+    setImages((prev) => prev.filter((a) => a.id !== id))
+  }, [])
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const files = Array.from(e.clipboardData?.files ?? [])
+      if (files.length > 0) {
+        e.preventDefault()
+        addFiles(files)
+      }
+    },
+    [addFiles],
+  )
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      addFiles(Array.from(e.dataTransfer.files))
+    },
+    [addFiles],
+  )
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -149,16 +238,62 @@ export function InputArea() {
   }
 
   return (
-    <div className="border-t border-border p-2.5 bg-card flex-shrink-0 sm:px-2 sm:py-1.5">
+    <div
+      className="border-t border-border p-2.5 bg-card flex-shrink-0 sm:px-2 sm:py-1.5"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleDrop}
+    >
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         disabled={isRunning}
         placeholder="Type a message to the agent..."
         rows={2}
         className="w-full bg-background text-foreground border border-input rounded-md px-2 py-1.5 text-[16px] sm:text-[14px] font-sans resize-none min-h-[40px] max-h-[120px] outline-none focus:border-primary disabled:opacity-50"
       />
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {images.map((img) => (
+            <div key={img.id} className="relative">
+              {img.error ? (
+                <div className="text-destructive text-xs border border-destructive/50 rounded-md px-2 py-1">
+                  {img.error}
+                  <button
+                    type="button"
+                    onClick={() => removeImage(img.id)}
+                    className="ml-1 cursor-pointer"
+                    aria-label="Remove failed image"
+                  >
+                    <XIcon data-icon="inline-start" />
+                  </button>
+                </div>
+              ) : img.dataUrl ? (
+                <>
+                  <img
+                    src={img.dataUrl}
+                    alt="attachment"
+                    className="w-16 h-16 object-cover rounded-md border border-border"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(img.id)}
+                    className="absolute -top-1 -right-1 bg-background border border-border rounded-full cursor-pointer"
+                    aria-label="Remove image"
+                  >
+                    <XIcon data-icon="inline-start" />
+                  </button>
+                </>
+              ) : (
+                <div className="w-16 h-16 flex items-center justify-center border border-border rounded-md text-muted-foreground text-xs">
+                  ...
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="mt-1 flex items-center justify-between text-[10px] sm:text-[11px] text-muted-foreground/70">
         {isRunning ? (
           <div className="flex items-center gap-2">
@@ -180,6 +315,28 @@ export function InputArea() {
             <span className="text-primary font-bold">Esc×2</span> Clear
           </span>
         )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            addFiles(Array.from(e.target.files ?? []))
+            e.target.value = ''
+          }}
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="cursor-pointer text-muted-foreground/60 hover:text-yellow-400/70 text-[10px] sm:text-[11px]"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isRunning}
+          aria-label="Attach images"
+        >
+          <PaperclipIcon data-icon="inline-start" />
+          Attach
+        </Button>
         <Button
           variant="ghost"
           size="sm"

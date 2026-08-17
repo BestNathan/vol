@@ -18,7 +18,7 @@ export interface ToolCallEntry {
 
 // Conversation entries
 export type ConversationEntry =
-  | { type: 'UserInput'; text: string }
+  | { type: 'UserInput'; text: string; images?: string[] }
   | { type: 'Thinking'; content: string }
   | { type: 'ContentStreaming'; content: string }
   | { type: 'ToolCall'; toolName: string; argPreview: string; fullArguments: string }
