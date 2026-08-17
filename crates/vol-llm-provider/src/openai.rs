@@ -10,8 +10,8 @@ use tokio::sync::mpsc;
 use tracing::info;
 use vol_llm_core::{
     ContentPart, ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMError,
-    LLMProvider, Message, MessageContent, MessageRole, Result, StreamReceiver, StreamingSession,
-    SupportedParam, TokenUsage, ToolCall, ToolDefinition,
+    LLMProvider, Message, MessageContent, MessageRole, ParsedEvent, Result, StreamReceiver,
+    StreamingSession, SupportedParam, TokenUsage, ToolCall, ToolDefinition,
 };
 
 /// OpenAI Provider
@@ -640,6 +640,24 @@ impl LLMClient for OpenaiProvider {
                 }
             }
 
+            // OpenAI SSE carries no per-block stop marker for tool calls, so
+            // finalize any tool call that was accumulated but never completed
+            // (mirrors the Anthropic `content_block_stop` flush). This is a
+            // no-op when no tool call is pending.
+            for event_result in session.apply(&ParsedEvent::ContentBlockStop) {
+                match event_result {
+                    Ok(event) => {
+                        if tx.send(Ok(event)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Err(e)).await;
+                    }
+                }
+            }
+
+            // Emit any remaining events (finalization)
             for event_result in session.finalize() {
                 match event_result {
                     Ok(event) => {

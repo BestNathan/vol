@@ -812,6 +812,7 @@ async fn openai_converse_stream_full_sse() {
     let mut saw_tool_arg_delta = false;
     let mut saw_usage = false;
     let mut saw_complete = false;
+    let mut tool_call_completes = 0;
 
     while let Some(result) = tokio::time::timeout(Duration::from_secs(10), receiver.recv())
         .await
@@ -841,6 +842,12 @@ async fn openai_converse_stream_full_sse() {
                 assert_eq!(delta, r#"{"city":"Beijing"}"#);
                 saw_tool_arg_delta = true;
             }
+            StreamEventData::ToolCallComplete { tool_call } => {
+                assert_eq!(tool_call.id, "call_1");
+                assert_eq!(tool_call.name, "get_weather");
+                assert_eq!(tool_call.arguments, r#"{"city":"Beijing"}"#);
+                tool_call_completes += 1;
+            }
             StreamEventData::UsageUpdate { usage } => {
                 assert_eq!(usage.prompt_tokens, 10);
                 assert_eq!(usage.completion_tokens, 5);
@@ -860,6 +867,50 @@ async fn openai_converse_stream_full_sse() {
     assert!(saw_content_complete, "expected ContentComplete");
     assert!(saw_tool_arg_delta, "expected ToolCallArgumentDelta");
     assert!(saw_usage, "expected UsageUpdate");
+    assert!(saw_complete, "expected ResponseComplete");
+    assert_eq!(
+        tool_call_completes, 1,
+        "ToolCallComplete must be emitted exactly once for the streamed tool call"
+    );
+}
+
+#[tokio::test]
+async fn openai_converse_stream_without_tool_calls_emits_no_completion() {
+    // A conversation without tool calls must not emit spurious tool-call
+    // completion (or argument delta) events.
+    const SSE_BODY: &str = r#"data: {"id":"chatcmpl-1","model":"gpt-4o","choices":[{"index":0,"delta":{},"finish_reason":null}]}
+data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}
+data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+data: [DONE]
+"#;
+    let (base_url, rx) =
+        spawn_mock_server(http_response("200 OK", "text/event-stream", SSE_BODY)).await;
+    let provider = OpenaiProvider::new(&openai_config(base_url)).unwrap();
+
+    let mut receiver = provider
+        .converse_stream(ConversationRequest::simple("hi"))
+        .await
+        .unwrap();
+    let _ = captured_json_body(rx).await;
+
+    let mut saw_complete = false;
+    while let Some(result) = tokio::time::timeout(Duration::from_secs(10), receiver.recv())
+        .await
+        .expect("stream timed out")
+    {
+        let event = result.expect("no error expected in stream");
+        match event.data {
+            StreamEventData::ResponseComplete { .. } => saw_complete = true,
+            StreamEventData::ResponseStart { .. }
+            | StreamEventData::ContentDelta { .. }
+            | StreamEventData::ContentComplete { .. } => {}
+            StreamEventData::ToolCallComplete { .. }
+            | StreamEventData::ToolCallArgumentDelta { .. } => {
+                panic!("no tool-call events expected for a conversation without tool calls")
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
     assert!(saw_complete, "expected ResponseComplete");
 }
 
