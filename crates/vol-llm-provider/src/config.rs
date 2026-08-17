@@ -170,15 +170,21 @@ mod tests {
         assert!(json.contains(r#""headers":{"x-trace":"abc"}"#));
         assert!(json.contains(r#""Literal":"sk-test""#));
 
-        // Deserialization accepts the literal-key form
-        let json_literal = json.replace(r#"{"Literal":"sk-test"}"#, r#""sk-test""#);
-        let parsed: LLMConfig = serde_json::from_str(&json_literal).unwrap();
+        // Round-trip: the serialized form (including the tagged Secret) must
+        // deserialize back to an equivalent config.
+        let parsed: LLMConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.provider, LLMProvider::OpenAI);
         assert_eq!(parsed.model, "gpt-4o");
         assert_eq!(parsed.base_url, "https://api.test.com");
         assert_eq!(parsed.body.as_ref().unwrap()["temperature"], 0.3);
         assert_eq!(parsed.headers.as_ref().unwrap()["x-trace"], "abc");
+        assert_eq!(parsed.api_key, config.api_key);
         assert_eq!(parsed.resolve_api_key().unwrap(), "sk-test");
+
+        // Back-compat: the plain-string key form still deserializes.
+        let json_literal = json.replace(r#"{"Literal":"sk-test"}"#, r#""sk-test""#);
+        let parsed: LLMConfig = serde_json::from_str(&json_literal).unwrap();
+        assert_eq!(parsed.api_key, Secret::literal("sk-test"));
     }
 
     #[test]

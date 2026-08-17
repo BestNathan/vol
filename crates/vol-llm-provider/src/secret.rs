@@ -21,7 +21,7 @@ use vol_llm_core::LLMError;
 /// ```toml
 /// api_key = "${API_KEY:sk-fallback-key}"
 /// ```
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Secret {
     /// Direct literal value
     Literal(String),
@@ -38,31 +38,88 @@ impl<'de> Deserialize<'de> for Secret {
     where
         D: serde::Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
+        // Accept either the serialized (tagged) form `{"Literal": ...}` /
+        // `{"Env": {"env": ..., "default": ...}}`, or a plain string (with the
+        // `${VAR}` / `${VAR:default}` env-reference pattern).
+        deserializer.deserialize_any(SecretVisitor)
+    }
+}
 
-        // Check for environment variable reference pattern: ${VAR_NAME} or ${VAR_NAME:default}
-        if s.starts_with("${") && s.ends_with('}') {
-            let inner = &s[2..s.len() - 1]; // Remove ${ and }
+/// Wire shape of the `Env` variant inside the tagged form (matches the
+/// derived `Serialize` output of `Secret::Env`).
+#[derive(Deserialize)]
+struct EnvSecretWire {
+    env: String,
+    #[serde(default)]
+    default: Option<String>,
+}
 
-            // Check for default value pattern: ${VAR_NAME:default}
-            if let Some(colon_pos) = inner.find(':') {
-                let var_name = inner[..colon_pos].to_string();
-                let default_value = inner[colon_pos + 1..].to_string();
-                Ok(Secret::Env {
-                    env: var_name,
-                    default: Some(default_value),
-                })
-            } else {
-                // No default: ${VAR_NAME}
-                Ok(Secret::Env {
-                    env: inner.to_string(),
-                    default: None,
-                })
+/// Parse a plain wire string: `${VAR}` / `${VAR:default}` become `Env`,
+/// anything else is a `Literal`.
+fn secret_from_env_pattern(s: &str) -> Secret {
+    // Check for environment variable reference pattern: ${VAR_NAME} or ${VAR_NAME:default}
+    if s.starts_with("${") && s.ends_with('}') {
+        let inner = &s[2..s.len() - 1]; // Remove ${ and }
+
+        // Check for default value pattern: ${VAR_NAME:default}
+        if let Some(colon_pos) = inner.find(':') {
+            Secret::Env {
+                env: inner[..colon_pos].to_string(),
+                default: Some(inner[colon_pos + 1..].to_string()),
             }
         } else {
-            // Plain literal value
-            Ok(Secret::Literal(s))
+            // No default: ${VAR_NAME}
+            Secret::Env {
+                env: inner.to_string(),
+                default: None,
+            }
         }
+    } else {
+        // Plain literal value
+        Secret::Literal(s.to_string())
+    }
+}
+
+struct SecretVisitor;
+
+impl<'de> serde::de::Visitor<'de> for SecretVisitor {
+    type Value = Secret;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str(
+            "a plain string or a tagged secret object ({\"Literal\": ...} / {\"Env\": {...}})",
+        )
+    }
+
+    fn visit_str<E>(self, s: &str) -> Result<Secret, E> {
+        Ok(secret_from_env_pattern(s))
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Secret, A::Error>
+    where
+        A: serde::de::MapAccess<'de>,
+    {
+        let mut secret: Option<Secret> = None;
+        while let Some(key) = map.next_key::<String>()? {
+            match key.as_str() {
+                "Literal" => {
+                    let value: String = map.next_value()?;
+                    secret = Some(Secret::Literal(value));
+                }
+                "Env" => {
+                    let wire: EnvSecretWire = map.next_value()?;
+                    secret = Some(Secret::Env {
+                        env: wire.env,
+                        default: wire.default,
+                    });
+                }
+                _ => {
+                    // Ignore unknown keys but consume their value.
+                    let _: serde::de::IgnoredAny = map.next_value()?;
+                }
+            }
+        }
+        secret.ok_or_else(|| serde::de::Error::custom("missing \"Literal\" or \"Env\" key"))
     }
 }
 
@@ -208,5 +265,53 @@ mod tests {
 
         let wrapper: Wrapper = toml::from_str(r#"key = "${DESER_TEST}""#).unwrap();
         assert_eq!(wrapper.key.resolve().unwrap(), "resolved-value");
+    }
+
+    #[test]
+    fn test_json_roundtrip_literal() {
+        let secret = Secret::literal("sk-test");
+        let json = serde_json::to_string(&secret).unwrap();
+        assert_eq!(json, r#"{"Literal":"sk-test"}"#);
+        let parsed: Secret = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, secret);
+    }
+
+    #[test]
+    fn test_json_roundtrip_env() {
+        let secret = Secret::env("API_KEY");
+        let json = serde_json::to_string(&secret).unwrap();
+        let parsed: Secret = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, secret);
+    }
+
+    #[test]
+    fn test_json_roundtrip_env_with_default() {
+        let secret = Secret::env_with_default("API_KEY", "fallback");
+        let json = serde_json::to_string(&secret).unwrap();
+        let parsed: Secret = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, secret);
+    }
+
+    #[test]
+    fn test_json_plain_string_deserialization_still_works() {
+        // Back-compat: a plain string (including the ${VAR} pattern) must
+        // still deserialize into the corresponding secret kind.
+        let literal: Secret = serde_json::from_str(r#""sk-test""#).unwrap();
+        assert_eq!(literal, Secret::literal("sk-test"));
+        let env: Secret = serde_json::from_str(r#""${API_KEY}""#).unwrap();
+        assert_eq!(env, Secret::env("API_KEY"));
+        let env_default: Secret = serde_json::from_str(r#""${API_KEY:fallback}""#).unwrap();
+        assert_eq!(env_default, Secret::env_with_default("API_KEY", "fallback"));
+    }
+
+    #[test]
+    fn test_toml_tagged_form_deserializes() {
+        // The JSON round-trip shape must also work from TOML inline tables.
+        #[derive(Deserialize)]
+        struct Wrapper {
+            key: Secret,
+        }
+        let wrapper: Wrapper = toml::from_str(r#"key = { Literal = "sk-test" }"#).unwrap();
+        assert_eq!(wrapper.key, Secret::literal("sk-test"));
     }
 }
