@@ -63,6 +63,22 @@ impl MessageContent {
             MessageContent::MultiPart(_) => "",
         }
     }
+
+    /// Text representation including image markers.
+    /// Multi-part content renders each image part as `[image]`, joined with newlines.
+    pub fn display_text(&self) -> String {
+        match self {
+            MessageContent::Text(s) => s.clone(),
+            MessageContent::MultiPart(parts) => parts
+                .iter()
+                .map(|part| match part {
+                    ContentPart::Text { text } => text.as_str(),
+                    ContentPart::Image { .. } => "[image]",
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        }
+    }
 }
 
 /// Conversation message
@@ -179,5 +195,47 @@ mod tests {
     fn test_message_content_from_str() {
         let content: MessageContent = "test".into();
         assert_eq!(content.as_str(), "test");
+    }
+
+    #[test]
+    fn test_display_text_plain() {
+        let content = MessageContent::Text("hello".to_string());
+        assert_eq!(content.display_text(), "hello");
+    }
+
+    #[test]
+    fn test_display_text_multipart_marks_images() {
+        let content = MessageContent::MultiPart(vec![
+            ContentPart::Text {
+                text: "before".to_string(),
+            },
+            ContentPart::Image {
+                image_url: ImageUrl {
+                    url: "data:image/png;base64,AAAA".to_string(),
+                    detail: None,
+                },
+            },
+            ContentPart::Text {
+                text: "after".to_string(),
+            },
+        ]);
+        assert_eq!(content.display_text(), "before\n[image]\nafter");
+    }
+
+    #[test]
+    fn test_display_text_image_only() {
+        let content = MessageContent::MultiPart(vec![ContentPart::Image {
+            image_url: ImageUrl {
+                url: "https://example.test/a.png".to_string(),
+                detail: None,
+            },
+        }]);
+        assert_eq!(content.display_text(), "[image]");
+    }
+
+    #[test]
+    fn test_display_text_empty_multipart() {
+        let content = MessageContent::MultiPart(vec![]);
+        assert_eq!(content.display_text(), "");
     }
 }
