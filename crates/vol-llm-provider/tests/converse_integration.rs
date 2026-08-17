@@ -694,16 +694,12 @@ async fn openai_converse_returns_api_error_with_plain_text() {
 }
 
 #[tokio::test]
-async fn openai_converse_drops_request_system_field() {
-    // NOTE: This test PINNS the current wire behavior: the OpenAI provider
-    // never serializes `ConversationRequest.system` onto the wire — the field
-    // is silently ignored by `converse`/`converse_stream`, which only convert
-    // `request.messages`. The `convert_messages` doc comment says "System
-    // prompt is sent as the first message with role: system", so a caller must
-    // embed the system prompt in the messages array (e.g. `Message::system`)
-    // for it to reach the API. This may be a deliberate convention or a bug;
-    // either way the test documents what ships. If the provider ever starts
-    // forwarding `request.system`, this test must be updated.
+async fn openai_converse_sends_request_system_as_first_message() {
+    // The OpenAI wire format carries the system prompt as the first message
+    // with role "system" (per `convert_messages`' convention). `request.system`
+    // must therefore be embedded as the first message, exactly once, and must
+    // not be duplicated when the caller's messages already start with a
+    // system message.
     let (base_url, rx) = spawn_mock_server(http_response(
         "200 OK",
         "application/json",
@@ -723,21 +719,52 @@ async fn openai_converse_drops_request_system_field() {
         "Checking weather..."
     );
 
-    // Wire payload: `system` must not appear anywhere in the request JSON and
-    // the messages array must be exactly the caller-provided messages.
+    // Wire payload: the system prompt is the first message with role "system",
+    // followed by the caller-provided messages. There is no top-level "system"
+    // key (that is the Anthropic wire convention, not OpenAI's).
     let body = captured_json_body(rx).await;
     assert!(
         body.get("system").is_none(),
-        "request.system must not be serialized to the wire"
-    );
-    assert!(
-        !body.to_string().contains("PINNED-SYSTEM-PROMPT"),
-        "request.system content must not leak into the wire payload"
+        "OpenAI wire format must not carry a top-level system key"
     );
     assert_eq!(
         body["messages"],
-        serde_json::json!([{"role": "user", "content": "hi"}])
+        serde_json::json!([
+            {"role": "system", "content": "PINNED-SYSTEM-PROMPT"},
+            {"role": "user", "content": "hi"},
+        ])
     );
+}
+
+#[tokio::test]
+async fn openai_converse_does_not_duplicate_leading_system_message() {
+    // When the caller already embeds a system message first, `request.system`
+    // must not produce a second copy on the wire.
+    let (base_url, rx) = spawn_mock_server(http_response(
+        "200 OK",
+        "application/json",
+        OPENAI_TOOL_RESPONSE,
+    ))
+    .await;
+    let provider = OpenaiProvider::new(&openai_config(base_url)).unwrap();
+
+    let request = ConversationRequest {
+        system: Some("REQUEST-SYSTEM".to_string()),
+        messages: vec![Message::system("EMBEDDED-SYSTEM"), Message::user("hi")],
+        ..Default::default()
+    };
+    let _ = provider.converse(request).await.unwrap();
+
+    let body = captured_json_body(rx).await;
+    let messages = body["messages"].as_array().unwrap();
+    let system_messages = messages.iter().filter(|m| m["role"] == "system").count();
+    assert_eq!(
+        system_messages, 1,
+        "system prompt must be sent exactly once"
+    );
+    assert_eq!(messages[0]["role"], "system");
+    assert_eq!(messages[0]["content"], "EMBEDDED-SYSTEM");
+    assert_eq!(messages[1]["role"], "user");
 }
 
 // ---------------------------------------------------------------------------

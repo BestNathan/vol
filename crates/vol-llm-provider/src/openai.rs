@@ -188,6 +188,24 @@ fn parse_tool_arguments(value: &serde_json::Value) -> String {
     }
 }
 
+/// Embed `request.system` as the first message per the OpenAI wire convention
+/// ("System prompt is sent as the first message with role: system").
+///
+/// The invariant is: the system prompt is sent exactly once, as the first
+/// message. If the caller's messages already start with a system message it is
+/// kept as-is and `request.system` is not duplicated.
+fn apply_system_prompt(system: Option<&str>, mut messages: Vec<Message>) -> Vec<Message> {
+    if let Some(system) = system {
+        let starts_with_system = messages
+            .first()
+            .is_some_and(|m| m.role == MessageRole::System);
+        if !starts_with_system {
+            messages.insert(0, Message::system(system.to_string()));
+        }
+    }
+    messages
+}
+
 #[async_trait]
 impl LLMClient for OpenaiProvider {
     fn provider(&self) -> LLMProvider {
@@ -215,8 +233,12 @@ impl LLMClient for OpenaiProvider {
 
     #[allow(clippy::cast_possible_truncation)]
     async fn converse(&self, request: ConversationRequest) -> Result<ConversationResponse> {
-        // Convert messages
-        let openai_messages = self.convert_messages(&request.messages);
+        // Convert messages, embedding `request.system` as the first message
+        // per the OpenAI wire convention (system prompt sent exactly once).
+        let openai_messages = self.convert_messages(&apply_system_prompt(
+            request.system.as_deref(),
+            request.messages,
+        ));
 
         // Build request body
         let mut body = json!({
@@ -442,8 +464,12 @@ impl LLMClient for OpenaiProvider {
 
     #[allow(clippy::cast_possible_truncation)]
     async fn converse_stream(&self, request: ConversationRequest) -> Result<StreamReceiver> {
-        // Convert messages
-        let openai_messages = self.convert_messages(&request.messages);
+        // Convert messages, embedding `request.system` as the first message
+        // per the OpenAI wire convention (system prompt sent exactly once).
+        let openai_messages = self.convert_messages(&apply_system_prompt(
+            request.system.as_deref(),
+            request.messages,
+        ));
 
         // Build request body
         let mut body = json!({
@@ -907,6 +933,38 @@ mod tests {
         assert_eq!(parse_tool_arguments(&serde_json::json!(42)), "42");
         assert_eq!(parse_tool_arguments(&serde_json::json!(null)), "null");
         assert_eq!(parse_tool_arguments(&serde_json::json!(true)), "true");
+    }
+
+    #[test]
+    fn test_apply_system_prompt_prepends_when_missing() {
+        let messages = apply_system_prompt(Some("be helpful"), vec![Message::user("hi")]);
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, MessageRole::System);
+        assert_eq!(messages[0].content.as_ref().unwrap().as_str(), "be helpful");
+        assert_eq!(messages[1].role, MessageRole::User);
+    }
+
+    #[test]
+    fn test_apply_system_prompt_keeps_existing_leading_system_message() {
+        // The invariant: system prompt sent exactly once, as the first message.
+        let messages = apply_system_prompt(
+            Some("be helpful"),
+            vec![Message::system("already there"), Message::user("hi")],
+        );
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, MessageRole::System);
+        assert_eq!(
+            messages[0].content.as_ref().unwrap().as_str(),
+            "already there"
+        );
+        assert_eq!(messages[1].role, MessageRole::User);
+    }
+
+    #[test]
+    fn test_apply_system_prompt_none_is_unchanged() {
+        let messages = apply_system_prompt(None, vec![Message::user("hi")]);
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].role, MessageRole::User);
     }
 
     #[test]
