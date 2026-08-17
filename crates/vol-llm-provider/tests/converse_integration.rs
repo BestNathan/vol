@@ -514,9 +514,9 @@ async fn openai_converse_builds_full_request_and_parses_tool_calls() {
     let tool_calls = response.message.tool_calls.as_ref().unwrap();
     assert_eq!(tool_calls[0].id, "call_1");
     assert_eq!(tool_calls[0].name, "get_weather");
-    // NOTE: the provider maps the JSON string value through ToString, which
-    // keeps the JSON quoting/escaping (see report concern).
-    assert_eq!(tool_calls[0].arguments, r#""{\"city\":\"Beijing\"}""#);
+    // `function.arguments` is a plain JSON string of the arguments; a string
+    // value must pass through as its raw content, not the JSON-quoted form.
+    assert_eq!(tool_calls[0].arguments, r#"{"city":"Beijing"}"#);
     assert_eq!(response.usage.prompt_tokens, 20);
     assert_eq!(response.usage.completion_tokens, 8);
     assert_eq!(response.usage.total_tokens, 28);

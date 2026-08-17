@@ -175,6 +175,19 @@ impl OpenaiProvider {
     }
 }
 
+/// Extract the raw tool-call argument text from an OpenAI wire value.
+///
+/// `function.arguments` on the OpenAI wire is a plain JSON string containing
+/// the serialized arguments; a `Value::String` therefore passes through as its
+/// string content (matching the streaming parser, which accumulates raw
+/// argument text). Any other JSON value (e.g. an object) serializes normally.
+fn parse_tool_arguments(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
+}
+
 #[async_trait]
 impl LLMClient for OpenaiProvider {
     fn provider(&self) -> LLMProvider {
@@ -360,7 +373,7 @@ impl LLMClient for OpenaiProvider {
                         arguments: item
                             .get("function")
                             .and_then(|f| f.get("arguments"))
-                            .map(ToString::to_string)
+                            .map(parse_tool_arguments)
                             .unwrap_or_default(),
                         r#type: "function".to_string(),
                     })
@@ -876,6 +889,24 @@ mod tests {
             arr[0]["function"]["parameters"],
             serde_json::json!({"type": "object", "properties": {}})
         );
+    }
+
+    #[test]
+    fn test_parse_tool_arguments_passes_string_content_raw() {
+        // On the OpenAI wire, `function.arguments` is a plain JSON string of
+        // the arguments; the string content must pass through unquoted.
+        let value = serde_json::json!(r#"{"city":"Beijing"}"#);
+        assert_eq!(parse_tool_arguments(&value), r#"{"city":"Beijing"}"#);
+    }
+
+    #[test]
+    fn test_parse_tool_arguments_serializes_other_json_values() {
+        // Non-string values (defensive) serialize normally.
+        let obj = serde_json::json!({"city": "Beijing"});
+        assert_eq!(parse_tool_arguments(&obj), r#"{"city":"Beijing"}"#);
+        assert_eq!(parse_tool_arguments(&serde_json::json!(42)), "42");
+        assert_eq!(parse_tool_arguments(&serde_json::json!(null)), "null");
+        assert_eq!(parse_tool_arguments(&serde_json::json!(true)), "true");
     }
 
     #[test]
