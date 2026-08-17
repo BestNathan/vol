@@ -809,4 +809,86 @@ mod tests {
         let result = provider.convert_messages(&messages);
         assert_eq!(result[0]["content"], "Hello");
     }
+
+    #[test]
+    fn test_provider_and_model_and_supported_params() {
+        let provider = make_provider();
+        assert_eq!(provider.provider(), LLMProvider::OpenAI);
+        assert_eq!(provider.model(), "gpt-4o");
+        let params = provider.supported_params();
+        assert!(params.contains(&SupportedParam::MaxTokens));
+        assert!(params.contains(&SupportedParam::Temperature));
+        assert!(params.contains(&SupportedParam::TopP));
+        assert!(params.contains(&SupportedParam::TopK));
+        assert!(params.contains(&SupportedParam::FrequencyPenalty));
+        assert!(params.contains(&SupportedParam::PresencePenalty));
+        assert!(params.contains(&SupportedParam::Stop));
+        assert!(params.contains(&SupportedParam::Seed));
+        assert!(params.contains(&SupportedParam::LogProbs));
+        assert!(params.contains(&SupportedParam::Tools));
+    }
+
+    #[test]
+    fn test_convert_messages_user_without_content_is_empty_string() {
+        let provider = make_provider();
+        let msg = Message {
+            role: MessageRole::User,
+            content: None,
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+            thinking: None,
+        };
+        let result = provider.convert_messages(&[msg]);
+        assert_eq!(result[0]["role"], "user");
+        assert_eq!(result[0]["content"], "");
+    }
+
+    #[test]
+    fn test_convert_messages_assistant_without_content_is_null() {
+        let provider = make_provider();
+        let msg = Message {
+            role: MessageRole::Assistant,
+            content: None,
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+            thinking: None,
+        };
+        let result = provider.convert_messages(&[msg]);
+        assert_eq!(result[0]["role"], "assistant");
+        assert_eq!(result[0]["content"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_convert_tools_default_schema_when_parameters_missing() {
+        let provider = make_provider();
+        let tools = vec![ToolDefinition {
+            name: "get_time".to_string(),
+            description: None,
+            parameters: None,
+        }];
+        let result = provider.convert_tools(&tools);
+        let arr = result.as_array().unwrap();
+        assert_eq!(arr[0]["type"], "function");
+        assert_eq!(arr[0]["function"]["name"], "get_time");
+        assert_eq!(
+            arr[0]["function"]["parameters"],
+            serde_json::json!({"type": "object", "properties": {}})
+        );
+    }
+
+    #[test]
+    fn test_new_fails_when_env_key_missing() {
+        std::env::remove_var("OPENAI_MISSING_TEST_KEY");
+        let config = LLMConfig::with_env_key(
+            LLMProvider::OpenAI,
+            "gpt-4o",
+            "OPENAI_MISSING_TEST_KEY",
+            "https://api.openai.com",
+        );
+        let err = OpenaiProvider::new(&config).err().unwrap();
+        assert!(matches!(err, LLMError::Auth(_)));
+        assert!(err.to_string().contains("OPENAI_MISSING_TEST_KEY"));
+    }
 }

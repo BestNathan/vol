@@ -752,4 +752,232 @@ mod tests {
             "User-Agent must start with 'claude-code/' to access DashScope coding endpoint"
         );
     }
+
+    #[test]
+    fn provider_and_model_and_supported_params() {
+        let provider = provider();
+        assert_eq!(provider.provider(), LLMProvider::Anthropic);
+        assert_eq!(provider.model(), "claude-test");
+        let params = provider.supported_params();
+        assert!(params.contains(&SupportedParam::MaxTokens));
+        assert!(params.contains(&SupportedParam::Temperature));
+        assert!(params.contains(&SupportedParam::TopP));
+        assert!(params.contains(&SupportedParam::Tools));
+    }
+
+    #[test]
+    fn convert_messages_skips_system_and_handles_user() {
+        let provider = provider();
+        let messages = vec![Message::system("You are helpful"), Message::user("Hi")];
+        let converted = provider.convert_messages(&messages).unwrap();
+
+        // The system message must be dropped by the Anthropic provider
+        assert_eq!(converted, vec![json!({"role": "user", "content": "Hi"})]);
+    }
+
+    #[test]
+    fn convert_user_content_none_becomes_empty_string() {
+        let provider = provider();
+        let content = provider.convert_user_content(None).unwrap();
+        assert_eq!(content, json!(""));
+    }
+
+    #[test]
+    fn convert_messages_assistant_with_thinking_text_and_tool_use() {
+        let provider = provider();
+        let tool_call = ToolCall {
+            id: "tool_1".to_string(),
+            name: "get_weather".to_string(),
+            arguments: r#"{"city": "Beijing"}"#.to_string(),
+            r#type: "function".to_string(),
+        };
+        let msg = Message::assistant_with_tools("Checking weather", vec![tool_call])
+            .with_thinking("Let me think".to_string());
+        let converted = provider.convert_messages(&[msg]).unwrap();
+
+        let first = converted.first().unwrap();
+        assert_eq!(first.get("role"), Some(&json!("assistant")));
+        let content = first.get("content").unwrap().as_array().unwrap();
+        assert_eq!(
+            content.first().unwrap(),
+            &json!({"type": "thinking", "thinking": "Let me think"})
+        );
+        assert_eq!(
+            content.get(1).unwrap(),
+            &json!({"type": "text", "text": "Checking weather"})
+        );
+        let tool_use = content.get(2).unwrap();
+        assert_eq!(tool_use.get("type"), Some(&json!("tool_use")));
+        assert_eq!(tool_use.get("id"), Some(&json!("tool_1")));
+        assert_eq!(tool_use.get("name"), Some(&json!("get_weather")));
+        assert_eq!(tool_use.get("input"), Some(&json!({"city": "Beijing"})));
+    }
+
+    #[test]
+    fn convert_messages_assistant_tool_call_with_invalid_json_args() {
+        let provider = provider();
+        let tool_call = ToolCall {
+            id: "tool_1".to_string(),
+            name: "get_weather".to_string(),
+            arguments: "not json".to_string(),
+            r#type: "function".to_string(),
+        };
+        let msg = Message::assistant_with_tools("", vec![tool_call]);
+        let converted = provider.convert_messages(&[msg]).unwrap();
+
+        let content = converted
+            .first()
+            .unwrap()
+            .get("content")
+            .unwrap()
+            .as_array()
+            .unwrap();
+        // Invalid JSON arguments must fall back to an empty object
+        assert_eq!(content.get(1).unwrap().get("input"), Some(&json!({})));
+    }
+
+    #[test]
+    fn convert_messages_assistant_without_content_or_tools() {
+        let provider = provider();
+        let msg = Message {
+            role: MessageRole::Assistant,
+            content: None,
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+            thinking: None,
+        };
+        let converted = provider.convert_messages(&[msg]).unwrap();
+        let first = converted.first().unwrap();
+        assert_eq!(first.get("role"), Some(&json!("assistant")));
+        assert_eq!(first.get("content"), Some(&json!([])));
+    }
+
+    #[test]
+    fn convert_messages_tool_message() {
+        let provider = provider();
+        let msg = Message::tool("temperature=20", "call_7".to_string());
+        let converted = provider.convert_messages(&[msg]).unwrap();
+
+        let first = converted.first().unwrap();
+        assert_eq!(first.get("role"), Some(&json!("user")));
+        let block = first
+            .get("content")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .first()
+            .unwrap();
+        assert_eq!(block.get("type"), Some(&json!("tool_result")));
+        assert_eq!(block.get("tool_use_id"), Some(&json!("call_7")));
+        assert_eq!(block.get("content"), Some(&json!("temperature=20")));
+    }
+
+    #[test]
+    fn convert_messages_tool_message_without_call_id_or_content() {
+        let provider = provider();
+        let msg = Message {
+            role: MessageRole::Tool,
+            content: None,
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+            thinking: None,
+        };
+        let converted = provider.convert_messages(&[msg]).unwrap();
+
+        let block = converted
+            .first()
+            .unwrap()
+            .get("content")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .first()
+            .unwrap();
+        assert_eq!(block.get("tool_use_id"), Some(&json!("")));
+        assert_eq!(block.get("content"), Some(&json!("")));
+    }
+
+    #[test]
+    fn convert_tools_with_default_schema_when_parameters_missing() {
+        let provider = provider();
+        let tools = vec![ToolDefinition {
+            name: "get_time".to_string(),
+            description: None,
+            parameters: None,
+        }];
+        let converted = provider.convert_tools(&tools);
+        let arr = converted.as_array().unwrap();
+        let first = arr.first().unwrap();
+
+        assert_eq!(first.get("name"), Some(&json!("get_time")));
+        assert_eq!(first.get("description"), Some(&serde_json::Value::Null));
+        assert_eq!(
+            first.get("input_schema"),
+            Some(&json!({"type": "object", "properties": {}}))
+        );
+    }
+
+    #[test]
+    fn parse_image_data_url_rejects_missing_data_prefix() {
+        let err = AnthropicProvider::parse_image_data_url("image/png;base64,QUJD").unwrap_err();
+        assert!(matches!(err, LLMError::InvalidRequest(_)));
+        assert!(err.to_string().contains("Invalid image data URL"));
+    }
+
+    #[test]
+    fn parse_image_data_url_rejects_missing_comma() {
+        let provider = provider();
+        let err = provider
+            .convert_image_block(&ImageUrl {
+                url: "data:image/png;base64".to_string(),
+                detail: None,
+            })
+            .unwrap_err();
+        assert!(matches!(err, LLMError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn parse_image_data_url_rejects_empty_media_type_or_data() {
+        let provider = provider();
+        for bad in ["data:;base64,QUJD", "data:image/png;base64,", "data:,QUJD"] {
+            let err = provider
+                .convert_image_block(&ImageUrl {
+                    url: bad.to_string(),
+                    detail: None,
+                })
+                .unwrap_err();
+            assert!(
+                matches!(err, LLMError::InvalidRequest(_)),
+                "expected InvalidRequest for {bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_image_data_url_missing_base64_suffix() {
+        let provider = provider();
+        let err = provider
+            .convert_image_block(&ImageUrl {
+                url: "data:image/png,QUJD".to_string(),
+                detail: None,
+            })
+            .unwrap_err();
+        assert!(matches!(err, LLMError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn new_fails_when_env_key_missing() {
+        std::env::remove_var("ANTHROPIC_MISSING_TEST_KEY");
+        let config = LLMConfig::with_env_key(
+            LLMProvider::Anthropic,
+            "claude-test",
+            "ANTHROPIC_MISSING_TEST_KEY",
+            "https://api.test.com",
+        );
+        let err = AnthropicProvider::new(&config).err().unwrap();
+        assert!(matches!(err, LLMError::Auth(_)));
+        assert!(err.to_string().contains("ANTHROPIC_MISSING_TEST_KEY"));
+    }
 }

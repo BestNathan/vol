@@ -145,6 +145,17 @@ mod tests {
     use super::*;
     use std::io::Write;
 
+    /// Serializes tests that read or mutate `$HOME` (`load_user_dir` / HOME
+    /// mutation) so parallel test execution cannot observe each other's env.
+    /// Poisoning is recovered from so a panicking test does not cascade.
+    static HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn home_lock() -> std::sync::MutexGuard<'static, ()> {
+        HOME_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     fn write_test_file(dir: &Path, name: &str, content: &str) {
         std::fs::create_dir_all(dir.join(PROVIDERS_DIR)).unwrap();
         let mut file = std::fs::File::create(dir.join(PROVIDERS_DIR).join(name)).unwrap();
@@ -153,6 +164,7 @@ mod tests {
 
     #[test]
     fn test_load_single_provider() {
+        let _guard = home_lock();
         let dir = tempfile::tempdir().unwrap();
         write_test_file(
             dir.path(),
@@ -174,6 +186,7 @@ base_url = "https://api.test.com"
 
     #[test]
     fn test_load_with_body_and_headers() {
+        let _guard = home_lock();
         let dir = tempfile::tempdir().unwrap();
         write_test_file(
             dir.path(),
@@ -205,6 +218,7 @@ temperature = 0.5
 
     #[test]
     fn test_project_overrides_user() {
+        let _guard = home_lock();
         let user_dir = tempfile::tempdir().unwrap();
         let project_dir = tempfile::tempdir().unwrap();
 
@@ -246,6 +260,7 @@ base_url = "https://project.api.com"
 
     #[test]
     fn test_load_empty_dir() {
+        let _guard = home_lock();
         let dir = tempfile::tempdir().unwrap();
         let loader = ProviderLoader::load(Some(dir.path()));
         assert!(loader.is_empty());
@@ -253,7 +268,107 @@ base_url = "https://project.api.com"
 
     #[test]
     fn test_load_nonexistent_dir() {
+        let _guard = home_lock();
         let loader = ProviderLoader::load(None);
         assert!(loader.is_empty());
+    }
+
+    #[test]
+    fn test_insert_get_ids_and_to_provider_configs() {
+        let mut loader = ProviderLoader::default();
+        assert!(loader.is_empty());
+
+        loader.insert(
+            "provider-a",
+            ProviderFileConfig {
+                provider: vol_llm_core::LLMProvider::Anthropic,
+                model: "claude-test".to_string(),
+                api_key: crate::secret::Secret::literal("sk-a"),
+                base_url: "https://a.test".to_string(),
+                body: None,
+                headers: None,
+            },
+        );
+        loader.insert(
+            "provider-b",
+            ProviderFileConfig {
+                provider: vol_llm_core::LLMProvider::OpenAI,
+                model: "gpt-4o".to_string(),
+                api_key: crate::secret::Secret::literal("sk-b"),
+                base_url: "https://b.test".to_string(),
+                body: None,
+                headers: None,
+            },
+        );
+
+        assert!(!loader.is_empty());
+        assert_eq!(loader.len(), 2);
+        assert!(loader.contains("provider-a"));
+        assert!(loader.contains("provider-b"));
+        assert!(!loader.contains("missing"));
+
+        let mut ids = loader.ids();
+        ids.sort();
+        assert_eq!(ids, vec!["provider-a", "provider-b"]);
+
+        assert_eq!(loader.get("provider-a").unwrap().model, "claude-test");
+        assert!(loader.get("missing").is_none());
+
+        let configs = loader.to_provider_configs();
+        assert_eq!(configs.len(), 2);
+        let mut by_id: HashMap<_, _> = configs
+            .into_iter()
+            .map(|named| (named.id, named.config))
+            .collect();
+        let b = by_id.remove("provider-b").unwrap();
+        assert_eq!(b.model, "gpt-4o");
+        assert_eq!(
+            by_id.remove("provider-a").unwrap().base_url,
+            "https://a.test"
+        );
+    }
+
+    #[test]
+    fn test_invalid_toml_file_is_skipped() {
+        let _guard = home_lock();
+        let dir = tempfile::tempdir().unwrap();
+        write_test_file(
+            dir.path(),
+            "broken.toml",
+            "provider = \"anthropic\"\nmodel = [unclosed\n",
+        );
+
+        let loader = ProviderLoader::load(Some(dir.path()));
+        assert!(
+            !loader.contains("broken"),
+            "invalid TOML must be skipped with a warning"
+        );
+    }
+
+    #[test]
+    fn test_unreadable_file_is_skipped() {
+        let _guard = home_lock();
+        // A directory named like a TOML file cannot be read as a file.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(PROVIDERS_DIR)).unwrap();
+        std::fs::create_dir(dir.path().join(PROVIDERS_DIR).join("broken.toml")).unwrap();
+
+        let loader = ProviderLoader::load(Some(dir.path()));
+        assert!(
+            !loader.contains("broken"),
+            "unreadable entry must be skipped"
+        );
+    }
+
+    #[test]
+    fn test_non_toml_files_are_ignored() {
+        let _guard = home_lock();
+        let dir = tempfile::tempdir().unwrap();
+        write_test_file(dir.path(), "notes.txt", "provider = \"anthropic\"");
+        write_test_file(dir.path(), "README.md", "# docs");
+
+        let loader = ProviderLoader::load(Some(dir.path()));
+        assert!(!loader.contains("notes"), "non-.toml files must be ignored");
+        assert!(!loader.contains("README"));
     }
 }

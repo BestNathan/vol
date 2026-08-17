@@ -169,4 +169,57 @@ base_url = "https://api.test.com"
         assert!(registry.contains("test-provider"));
         assert_eq!(registry.len(), 1);
     }
+
+    #[test]
+    fn test_registry_is_empty_and_default() {
+        let registry = LLMProviderRegistry::new();
+        assert!(registry.is_empty());
+        assert_eq!(registry.len(), 0);
+        assert!(!registry.contains("anything"));
+
+        let default_registry = LLMProviderRegistry::default();
+        assert!(default_registry.is_empty());
+    }
+
+    #[test]
+    fn test_registry_from_configs_propagates_error() {
+        std::env::remove_var("REGISTRY_MISSING_KEY");
+        let configs = vec![LLMProviderConfig {
+            id: "broken".to_string(),
+            config: LLMConfig::with_env_key(
+                LLMProvider::OpenAI,
+                "gpt-4o",
+                "REGISTRY_MISSING_KEY",
+                "https://api.test.com",
+            ),
+        }];
+
+        let err = LLMProviderRegistry::from_configs(&configs).err().unwrap();
+        assert!(matches!(err, LLMError::Auth(_)));
+    }
+
+    #[test]
+    fn test_registry_from_loader_propagates_error() {
+        use crate::loader::ProviderLoader;
+        use std::io::Write;
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".agents/providers")).unwrap();
+        let mut file =
+            std::fs::File::create(dir.path().join(".agents/providers/broken.toml")).unwrap();
+        file.write_all(
+            br#"
+provider = "openai"
+model = "gpt-4o"
+api_key = "${REGISTRY_LOADER_MISSING_KEY}"
+base_url = "https://api.test.com"
+"#,
+        )
+        .unwrap();
+        std::env::remove_var("REGISTRY_LOADER_MISSING_KEY");
+
+        let loader = ProviderLoader::load(Some(dir.path()));
+        let err = LLMProviderRegistry::from_loader(&loader).err().unwrap();
+        assert!(matches!(err, LLMError::Auth(_)));
+    }
 }

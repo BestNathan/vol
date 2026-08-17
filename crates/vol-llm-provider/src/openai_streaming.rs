@@ -251,4 +251,74 @@ mod tests {
             panic!("Expected ResponseComplete with ToolCalls");
         }
     }
+
+    #[test]
+    fn test_parse_finish_reason_content_filter() {
+        let parser = OpenaiStreamParser;
+        let line = r#"data: {"id":"chatcmpl-123","choices":[{"index":0,"delta":{},"finish_reason":"content_filter"}]}"#;
+        let event = parser.parse_line(line).unwrap();
+        if let Ok(ParsedEvent::ResponseComplete { finish_reason, .. }) = event {
+            assert_eq!(finish_reason, FinishReason::ContentFilter);
+        } else {
+            panic!("Expected ResponseComplete with ContentFilter");
+        }
+    }
+
+    #[test]
+    fn test_parse_finish_reason_length() {
+        let parser = OpenaiStreamParser;
+        let line = r#"data: {"id":"chatcmpl-123","choices":[{"index":0,"delta":{},"finish_reason":"length"}]}"#;
+        let event = parser.parse_line(line).unwrap();
+        if let Ok(ParsedEvent::ResponseComplete { finish_reason, .. }) = event {
+            assert_eq!(finish_reason, FinishReason::Length);
+        } else {
+            panic!("Expected ResponseComplete with Length");
+        }
+    }
+
+    #[test]
+    fn test_parse_finish_reason_function_call_maps_to_tool_calls() {
+        let parser = OpenaiStreamParser;
+        let line = r#"data: {"id":"chatcmpl-123","choices":[{"index":0,"delta":{},"finish_reason":"function_call"}]}"#;
+        let event = parser.parse_line(line).unwrap();
+        if let Ok(ParsedEvent::ResponseComplete { finish_reason, .. }) = event {
+            assert_eq!(finish_reason, FinishReason::ToolCalls);
+        } else {
+            panic!("Expected ResponseComplete with ToolCalls");
+        }
+    }
+
+    #[test]
+    fn test_parse_unknown_finish_reason_maps_to_other() {
+        let parser = OpenaiStreamParser;
+        let line = r#"data: {"id":"chatcmpl-123","choices":[{"index":0,"delta":{},"finish_reason":"weird"}]}"#;
+        let event = parser.parse_line(line).unwrap();
+        if let Ok(ParsedEvent::ResponseComplete { finish_reason, .. }) = event {
+            assert_eq!(finish_reason, FinishReason::Other);
+        } else {
+            panic!("Expected ResponseComplete with Other");
+        }
+    }
+
+    #[test]
+    fn test_parse_tool_call_argument_delta_without_id_or_name() {
+        let parser = OpenaiStreamParser;
+        let line = r#"data: {"id":"chatcmpl-123","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"city\": \"Beijing"}}]},"finish_reason":null}]}"#;
+        let event = parser.parse_line(line).unwrap();
+        match event {
+            Ok(ParsedEvent::ToolCallDelta { index, delta }) => {
+                assert_eq!(index, 0);
+                assert_eq!(delta, r#"{"city": "Beijing"#);
+            }
+            _other => panic!("Expected ToolCallDelta, got event"),
+        }
+    }
+
+    #[test]
+    fn test_parse_tool_call_with_no_fields_is_ignored() {
+        let parser = OpenaiStreamParser;
+        let line = r#"data: {"id":"chatcmpl-123","choices":[{"index":0,"delta":{"tool_calls":[{"index":0}],"content":""},"finish_reason":null}]}"#;
+        // No id, name, or arguments -> nothing to emit
+        assert!(parser.parse_line(line).is_none());
+    }
 }
