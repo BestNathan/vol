@@ -9,9 +9,9 @@ use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing::info;
 use vol_llm_core::{
-    ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMError, LLMProvider,
-    Message, MessageRole, Result, StreamReceiver, StreamingSession, SupportedParam, TokenUsage,
-    ToolCall, ToolDefinition,
+    ContentPart, ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMError,
+    LLMProvider, Message, MessageContent, MessageRole, Result, StreamReceiver, StreamingSession,
+    SupportedParam, TokenUsage, ToolCall, ToolDefinition,
 };
 
 /// OpenAI Provider
@@ -58,6 +58,31 @@ impl OpenaiProvider {
         builder.build().map_err(LLMError::Network)
     }
 
+    /// Convert message content to the OpenAI wire shape.
+    /// Multi-part user content becomes OpenAI's vision content array; text
+    /// content passes through unchanged.
+    fn convert_content(&self, content: Option<&MessageContent>) -> serde_json::Value {
+        match content {
+            Some(MessageContent::MultiPart(parts)) => {
+                let blocks: Vec<serde_json::Value> = parts
+                    .iter()
+                    .map(|part| match part {
+                        ContentPart::Text { text } => json!({
+                            "type": "text",
+                            "text": text,
+                        }),
+                        ContentPart::Image { image_url } => json!({
+                            "type": "image_url",
+                            "image_url": { "url": image_url.url },
+                        }),
+                    })
+                    .collect();
+                json!(blocks)
+            }
+            other => json!(other.map(MessageContent::as_str).unwrap_or("")),
+        }
+    }
+
     /// Convert messages to OpenAI format.
     /// System prompt is sent as the first message with role: "system".
     fn convert_messages(&self, messages: &[Message]) -> Vec<serde_json::Value> {
@@ -76,14 +101,9 @@ impl OpenaiProvider {
                     })
                 }
                 MessageRole::User => {
-                    let content = msg
-                        .content
-                        .as_ref()
-                        .map(vol_llm_core::MessageContent::as_str)
-                        .unwrap_or("");
                     json!({
                         "role": "user",
-                        "content": content,
+                        "content": self.convert_content(msg.content.as_ref()),
                     })
                 }
                 MessageRole::Assistant => {
@@ -730,5 +750,63 @@ mod tests {
             provider.body_defaults.get("custom_param").unwrap(),
             &serde_json::json!("custom_value")
         );
+    }
+
+    #[test]
+    fn test_convert_messages_multipart_data_url_image() {
+        use vol_llm_core::{ContentPart, ImageUrl, MessageContent};
+        let provider = make_provider();
+        let messages = vec![Message::user(MessageContent::MultiPart(vec![
+            ContentPart::Text {
+                text: "What color?".to_string(),
+            },
+            ContentPart::Image {
+                image_url: ImageUrl {
+                    url: "data:image/png;base64,QUJD".to_string(),
+                    detail: None,
+                },
+            },
+        ]))];
+        let result = provider.convert_messages(&messages);
+        assert_eq!(result.len(), 1);
+        let content = result[0]["content"]
+            .as_array()
+            .expect("content must be a vision array");
+        assert_eq!(content.len(), 2);
+        assert_eq!(
+            content[0],
+            serde_json::json!({"type": "text", "text": "What color?"})
+        );
+        assert_eq!(
+            content[1],
+            serde_json::json!({"type": "image_url", "image_url": {"url": "data:image/png;base64,QUJD"}})
+        );
+    }
+
+    #[test]
+    fn test_convert_messages_multipart_http_url_image() {
+        use vol_llm_core::{ContentPart, ImageUrl, MessageContent};
+        let provider = make_provider();
+        let messages = vec![Message::user(MessageContent::MultiPart(vec![
+            ContentPart::Image {
+                image_url: ImageUrl {
+                    url: "https://example.test/chart.png".to_string(),
+                    detail: None,
+                },
+            },
+        ]))];
+        let result = provider.convert_messages(&messages);
+        assert_eq!(
+            result[0]["content"][0],
+            serde_json::json!({"type": "image_url", "image_url": {"url": "https://example.test/chart.png"}})
+        );
+    }
+
+    #[test]
+    fn test_convert_messages_text_only_unchanged() {
+        let provider = make_provider();
+        let messages = vec![Message::user("Hello")];
+        let result = provider.convert_messages(&messages);
+        assert_eq!(result[0]["content"], "Hello");
     }
 }
