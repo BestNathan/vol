@@ -505,4 +505,284 @@ mod tests {
         assert_eq!(session.content_buffer, "test");
         assert_eq!(events.len(), 1);
     }
+
+    #[test]
+    fn test_apply_content_complete() {
+        let mut session = StreamingSession::new();
+        let events = session.apply(&ParsedEvent::ContentComplete("done".to_string()));
+        assert_eq!(events.len(), 1);
+        let event = events[0].as_ref().unwrap();
+        assert_eq!(event.id, "evt_1");
+        assert!(matches!(
+            &event.data,
+            StreamEventData::ContentComplete { content } if content == "done"
+        ));
+    }
+
+    #[test]
+    fn test_apply_thinking_delta_and_complete() {
+        let mut session = StreamingSession::new();
+        let events = session.apply(&ParsedEvent::ThinkingDelta("think".to_string()));
+        assert_eq!(session.thinking_buffer, "think");
+        assert!(matches!(
+            &events[0].as_ref().unwrap().data,
+            StreamEventData::ThinkingDelta { thinking } if thinking == "think"
+        ));
+
+        let events = session.apply(&ParsedEvent::ThinkingComplete("full".to_string()));
+        assert!(matches!(
+            &events[0].as_ref().unwrap().data,
+            StreamEventData::ThinkingComplete { thinking } if thinking == "full"
+        ));
+    }
+
+    #[test]
+    fn test_apply_tool_call_complete_event() {
+        let mut session = StreamingSession::new();
+        let tool_call = ToolCall {
+            id: "call_1".to_string(),
+            name: "get_weather".to_string(),
+            arguments: "{}".to_string(),
+            r#type: "function".to_string(),
+        };
+        let events = session.apply(&ParsedEvent::ToolCallComplete(tool_call.clone()));
+        assert!(matches!(
+            &events[0].as_ref().unwrap().data,
+            StreamEventData::ToolCallComplete { tool_call: tc } if tc.id == "call_1" && tc.name == "get_weather"
+        ));
+    }
+
+    #[test]
+    fn test_apply_usage() {
+        let mut session = StreamingSession::new();
+        let usage = TokenUsage {
+            prompt_tokens: 10,
+            completion_tokens: 20,
+            total_tokens: 30,
+            cached_tokens: None,
+        };
+        let events = session.apply(&ParsedEvent::Usage(usage));
+        assert!(matches!(
+            &events[0].as_ref().unwrap().data,
+            StreamEventData::UsageUpdate { usage } if usage.total_tokens == 30
+        ));
+    }
+
+    #[test]
+    fn test_apply_response_start_and_complete() {
+        let mut session = StreamingSession::new();
+        let events = session.apply(&ParsedEvent::ResponseStart {
+            model: "qwen3.6-plus".to_string(),
+        });
+        assert!(matches!(
+            &events[0].as_ref().unwrap().data,
+            StreamEventData::ResponseStart { model } if model == "qwen3.6-plus"
+        ));
+
+        let events = session.apply(&ParsedEvent::ResponseComplete {
+            finish_reason: FinishReason::Length,
+        });
+        assert!(matches!(
+            &events[0].as_ref().unwrap().data,
+            StreamEventData::ResponseComplete { finish_reason } if *finish_reason == FinishReason::Length
+        ));
+    }
+
+    #[test]
+    fn test_event_ids_increment() {
+        let mut session = StreamingSession::new();
+        session.apply(&ParsedEvent::ContentDelta("a".to_string()));
+        session.apply(&ParsedEvent::ContentDelta("b".to_string()));
+        session.apply(&ParsedEvent::ContentDelta("c".to_string()));
+        let events = session.apply(&ParsedEvent::ContentComplete("abc".to_string()));
+        assert_eq!(events[0].as_ref().unwrap().id, "evt_4");
+    }
+
+    #[test]
+    fn test_apply_content_block_stop_finalizes_thinking() {
+        let mut session = StreamingSession::new();
+        session.apply(&ParsedEvent::ThinkingDelta("some thinking".to_string()));
+        let events = session.apply(&ParsedEvent::ContentBlockStop);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            &events[0].as_ref().unwrap().data,
+            StreamEventData::ThinkingComplete { thinking } if thinking == "some thinking"
+        ));
+        // Buffer is drained
+        assert!(session.thinking_buffer.is_empty());
+    }
+
+    #[test]
+    fn test_apply_content_block_stop_without_pending_state() {
+        let mut session = StreamingSession::new();
+        let events = session.apply(&ParsedEvent::ContentBlockStop);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_apply_tool_call_delta_without_builder_is_ignored() {
+        let mut session = StreamingSession::new();
+        let events = session.apply(&ParsedEvent::ToolCallDelta {
+            index: 0,
+            delta: "{}".to_string(),
+        });
+        assert!(events.is_empty());
+    }
+
+    struct ErrorProtocol;
+
+    impl StreamProtocol for ErrorProtocol {
+        fn parse_line(&self, _line: &str) -> Option<Result<ParsedEvent, LLMError>> {
+            Some(Err(LLMError::Parse("malformed".to_string())))
+        }
+    }
+
+    #[test]
+    fn test_process_sse_propagates_protocol_error() {
+        let mut session = StreamingSession::new();
+        let events = session.process_sse(&ErrorProtocol, "data: whatever");
+        assert_eq!(events.len(), 1);
+        let err = events[0].as_ref().unwrap_err();
+        assert!(matches!(err, LLMError::Parse(msg) if msg == "malformed"));
+    }
+
+    #[test]
+    fn test_process_anthropic_sse_wrapper() {
+        let mut session = StreamingSession::new();
+        let events = session
+            .process_anthropic_sse(r#"data: {"type": "message_start", "message": {"model": "m"}}"#);
+        assert!(matches!(
+            &events[0].as_ref().unwrap().data,
+            StreamEventData::ResponseStart { model } if model == "m"
+        ));
+    }
+
+    #[test]
+    fn test_finalize_flushes_content_and_thinking() {
+        let mut session = StreamingSession::new();
+        session.apply(&ParsedEvent::ContentDelta("Hello".to_string()));
+        session.apply(&ParsedEvent::ThinkingDelta("hmm".to_string()));
+        let events = session.finalize();
+        assert_eq!(events.len(), 2);
+        // Content completes first, then thinking
+        assert!(matches!(
+            &events[0].as_ref().unwrap().data,
+            StreamEventData::ContentComplete { content } if content == "Hello"
+        ));
+        assert!(matches!(
+            &events[1].as_ref().unwrap().data,
+            StreamEventData::ThinkingComplete { thinking } if thinking == "hmm"
+        ));
+        assert!(session.content_buffer.is_empty());
+        assert!(session.thinking_buffer.is_empty());
+    }
+
+    #[test]
+    fn test_streaming_session_default_is_empty() {
+        let mut session = StreamingSession::default();
+        assert!(session.content_buffer.is_empty());
+        assert!(session.thinking_buffer.is_empty());
+        assert!(session.finalize().is_empty());
+    }
+
+    #[test]
+    fn test_parse_message_delta_with_usage() {
+        let mut session = StreamingSession::new();
+        let line = r#"data: {"type": "message_delta", "usage": {"input_tokens": 10, "output_tokens": 20}}"#;
+        let events = session.process_sse(&AnthropicProtocol, line);
+        assert!(matches!(
+            &events[0].as_ref().unwrap().data,
+            StreamEventData::UsageUpdate { usage }
+                if usage.prompt_tokens == 10
+                    && usage.completion_tokens == 20
+                    && usage.total_tokens == 30
+                    && usage.cached_tokens.is_none()
+        ));
+    }
+
+    #[test]
+    fn test_parse_message_delta_without_usage() {
+        let mut session = StreamingSession::new();
+        let events = session.process_sse(&AnthropicProtocol, r#"data: {"type": "message_delta"}"#);
+        assert!(matches!(
+            &events[0].as_ref().unwrap().data,
+            StreamEventData::UsageUpdate { usage } if usage.total_tokens == 0
+        ));
+    }
+
+    #[test]
+    fn test_parse_message_stop_finish_reasons() {
+        let mut session = StreamingSession::new();
+        let cases = [
+            (
+                r#"data: {"type": "message_stop", "stop_reason": "end_turn"}"#,
+                FinishReason::Stop,
+            ),
+            (
+                r#"data: {"type": "message_stop", "stop_reason": "stop_sequence"}"#,
+                FinishReason::Stop,
+            ),
+            (
+                r#"data: {"type": "message_stop", "stop_reason": "max_tokens"}"#,
+                FinishReason::Length,
+            ),
+            (
+                r#"data: {"type": "message_stop", "stop_reason": "tool_use"}"#,
+                FinishReason::ToolCalls,
+            ),
+            (r#"data: {"type": "message_stop"}"#, FinishReason::Other),
+        ];
+        for (line, expected) in cases {
+            let events = session.process_sse(&AnthropicProtocol, line);
+            assert!(
+                matches!(
+                    &events[0].as_ref().unwrap().data,
+                    StreamEventData::ResponseComplete { finish_reason }
+                        if *finish_reason == expected
+                ),
+                "wrong finish reason for line: {line}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_unknown_event_type_is_ignored() {
+        let mut session = StreamingSession::new();
+        let events = session.process_sse(&AnthropicProtocol, r#"data: {"type": "unknown_event"}"#);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_parse_content_block_start_non_tool_use_is_ignored() {
+        let mut session = StreamingSession::new();
+        let line = r#"data: {"type": "content_block_start", "content_block": {"type": "text", "text": "hi"}}"#;
+        let events = session.process_sse(&AnthropicProtocol, line);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_parse_thinking_delta() {
+        let mut session = StreamingSession::new();
+        let line =
+            r#"data: {"type": "content_block_delta", "delta": {"thinking": "reasoning..."}}"#;
+        let events = session.process_sse(&AnthropicProtocol, line);
+        assert!(matches!(
+            &events[0].as_ref().unwrap().data,
+            StreamEventData::ThinkingDelta { thinking } if thinking == "reasoning..."
+        ));
+        assert_eq!(session.thinking_buffer, "reasoning...");
+    }
+
+    #[test]
+    fn test_parse_message_start_missing_model_defaults_unknown() {
+        let mut session = StreamingSession::new();
+        let events = session.process_sse(
+            &AnthropicProtocol,
+            r#"data: {"type": "message_start", "message": {}}"#,
+        );
+        assert!(matches!(
+            &events[0].as_ref().unwrap().data,
+            StreamEventData::ResponseStart { model } if model == "unknown"
+        ));
+    }
 }

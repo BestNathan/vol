@@ -548,4 +548,407 @@ mod tests {
             _ => panic!("Expected PluginEvent"),
         }
     }
+
+    #[test]
+    fn test_agent_complete_events() {
+        match AgentStreamEvent::agent_complete() {
+            AgentStreamEvent::AgentComplete { response, .. } => {
+                assert!(response.is_none());
+            }
+            _ => panic!("Expected AgentComplete"),
+        }
+
+        match AgentStreamEvent::agent_complete_with_response(serde_json::json!({"answer": 42})) {
+            AgentStreamEvent::AgentComplete { response, .. } => {
+                assert_eq!(response.as_ref().unwrap()["answer"], 42);
+            }
+            _ => panic!("Expected AgentComplete"),
+        }
+    }
+
+    #[test]
+    fn test_llm_call_events() {
+        let messages = vec![Message::user("hi")];
+
+        match AgentStreamEvent::llm_call_start(3, messages.clone()) {
+            AgentStreamEvent::LLMCallStart {
+                iteration,
+                messages,
+                ..
+            } => {
+                assert_eq!(iteration, 3);
+                assert_eq!(messages.len(), 1);
+            }
+            _ => panic!("Expected LLMCallStart"),
+        }
+
+        match AgentStreamEvent::llm_call_complete(
+            "qwen3.6-plus".to_string(),
+            Some(TokenUsage {
+                prompt_tokens: 5,
+                completion_tokens: 7,
+                total_tokens: 12,
+                cached_tokens: None,
+            }),
+        ) {
+            AgentStreamEvent::LLMCallComplete { model, usage, .. } => {
+                assert_eq!(model, "qwen3.6-plus");
+                assert_eq!(usage.unwrap().total_tokens, 12);
+            }
+            _ => panic!("Expected LLMCallComplete"),
+        }
+
+        match AgentStreamEvent::llm_call_error("boom".to_string()) {
+            AgentStreamEvent::LLMCallError { error, .. } => {
+                assert_eq!(error, "boom");
+            }
+            _ => panic!("Expected LLMCallError"),
+        }
+    }
+
+    #[test]
+    fn test_thinking_events() {
+        match AgentStreamEvent::thinking_start() {
+            AgentStreamEvent::ThinkingStart { .. } => {}
+            _ => panic!("Expected ThinkingStart"),
+        }
+        match AgentStreamEvent::thinking_delta("step 1".to_string()) {
+            AgentStreamEvent::ThinkingDelta { delta, .. } => {
+                assert_eq!(delta, "step 1");
+            }
+            _ => panic!("Expected ThinkingDelta"),
+        }
+        match AgentStreamEvent::thinking_complete("full reasoning".to_string()) {
+            AgentStreamEvent::ThinkingComplete { thinking, .. } => {
+                assert_eq!(thinking, "full reasoning");
+            }
+            _ => panic!("Expected ThinkingComplete"),
+        }
+    }
+
+    #[test]
+    fn test_content_events() {
+        match AgentStreamEvent::content_start() {
+            AgentStreamEvent::ContentStart { .. } => {}
+            _ => panic!("Expected ContentStart"),
+        }
+        match AgentStreamEvent::content_delta("Hello".to_string()) {
+            AgentStreamEvent::ContentDelta { delta, .. } => {
+                assert_eq!(delta, "Hello");
+            }
+            _ => panic!("Expected ContentDelta"),
+        }
+        match AgentStreamEvent::content_complete("Hello world".to_string()) {
+            AgentStreamEvent::ContentComplete { content, .. } => {
+                assert_eq!(content, "Hello world");
+            }
+            _ => panic!("Expected ContentComplete"),
+        }
+    }
+
+    #[test]
+    fn test_tool_result_events() {
+        match AgentStreamEvent::tool_call_complete(
+            "call_1".to_string(),
+            "get_weather".to_string(),
+            "{\"temp\": 20}".to_string(),
+            Some(120),
+        ) {
+            AgentStreamEvent::ToolCallComplete {
+                tool_call_id,
+                tool_name,
+                result,
+                duration_ms,
+                ..
+            } => {
+                assert_eq!(tool_call_id, "call_1");
+                assert_eq!(tool_name, "get_weather");
+                assert_eq!(result, "{\"temp\": 20}");
+                assert_eq!(duration_ms, Some(120));
+            }
+            _ => panic!("Expected ToolCallComplete"),
+        }
+
+        match AgentStreamEvent::tool_call_error(
+            "call_2".to_string(),
+            "bash".to_string(),
+            "exit code 1".to_string(),
+            None,
+        ) {
+            AgentStreamEvent::ToolCallError {
+                tool_call_id,
+                tool_name,
+                error,
+                duration_ms,
+                ..
+            } => {
+                assert_eq!(tool_call_id, "call_2");
+                assert_eq!(tool_name, "bash");
+                assert_eq!(error, "exit code 1");
+                assert_eq!(duration_ms, None);
+            }
+            _ => panic!("Expected ToolCallError"),
+        }
+
+        match AgentStreamEvent::tool_call_skipped(
+            "call_3".to_string(),
+            "rm".to_string(),
+            "disallowed".to_string(),
+            Some(0),
+        ) {
+            AgentStreamEvent::ToolCallSkipped {
+                tool_call_id,
+                tool_name,
+                reason,
+                duration_ms,
+                ..
+            } => {
+                assert_eq!(tool_call_id, "call_3");
+                assert_eq!(tool_name, "rm");
+                assert_eq!(reason, "disallowed");
+                assert_eq!(duration_ms, Some(0));
+            }
+            _ => panic!("Expected ToolCallSkipped"),
+        }
+
+        match AgentStreamEvent::tool_call_argument_delta(
+            "call_4".to_string(),
+            "get_weather".to_string(),
+            "{\"city\": ".to_string(),
+        ) {
+            AgentStreamEvent::ToolCallArgumentDelta {
+                tool_call_id,
+                tool_name,
+                delta,
+                ..
+            } => {
+                assert_eq!(tool_call_id, "call_4");
+                assert_eq!(tool_name, "get_weather");
+                assert_eq!(delta, "{\"city\": ");
+            }
+            _ => panic!("Expected ToolCallArgumentDelta"),
+        }
+    }
+
+    fn all_event_variants() -> Vec<AgentStreamEvent> {
+        vec![
+            AgentStreamEvent::agent_start("input".to_string()),
+            AgentStreamEvent::agent_complete(),
+            AgentStreamEvent::agent_complete_with_response(serde_json::json!({})),
+            AgentStreamEvent::agent_aborted("reason".to_string()),
+            AgentStreamEvent::max_iterations_reached(1, 5),
+            AgentStreamEvent::iteration_continued(3),
+            AgentStreamEvent::llm_call_start(1, vec![]),
+            AgentStreamEvent::llm_call_complete("m".to_string(), None),
+            AgentStreamEvent::llm_call_error("e".to_string()),
+            AgentStreamEvent::thinking_start(),
+            AgentStreamEvent::thinking_delta("d".to_string()),
+            AgentStreamEvent::thinking_complete("t".to_string()),
+            AgentStreamEvent::content_start(),
+            AgentStreamEvent::content_delta("d".to_string()),
+            AgentStreamEvent::content_complete("c".to_string()),
+            AgentStreamEvent::tool_call_begin("id".to_string(), "n".to_string(), "{}".to_string()),
+            AgentStreamEvent::tool_call_complete(
+                "id".to_string(),
+                "n".to_string(),
+                "r".to_string(),
+                None,
+            ),
+            AgentStreamEvent::tool_call_error(
+                "id".to_string(),
+                "n".to_string(),
+                "e".to_string(),
+                None,
+            ),
+            AgentStreamEvent::tool_call_skipped(
+                "id".to_string(),
+                "n".to_string(),
+                "s".to_string(),
+                None,
+            ),
+            AgentStreamEvent::tool_call_argument_delta(
+                "id".to_string(),
+                "n".to_string(),
+                "d".to_string(),
+            ),
+            AgentStreamEvent::iteration_complete(2, vec![], None),
+            AgentStreamEvent::plugin_event("p".to_string(), serde_json::Map::new()),
+        ]
+    }
+
+    #[test]
+    fn test_timestamp_returns_value_for_all_variants() {
+        let before = chrono::Utc::now();
+        let events = all_event_variants();
+        let after = chrono::Utc::now();
+        for event in events {
+            let ts = event.timestamp();
+            assert!(
+                ts >= before && ts <= after,
+                "expected a real timestamp for {}, got {ts}",
+                event.event_name()
+            );
+        }
+    }
+
+    #[test]
+    fn test_event_name_all_variants() {
+        let expected = [
+            "AgentStart",
+            "AgentComplete",
+            "AgentComplete",
+            "AgentAborted",
+            "MaxIterationsReached",
+            "IterationContinued",
+            "LLMCallStart",
+            "LLMCallComplete",
+            "LLMCallError",
+            "ThinkingStart",
+            "ThinkingDelta",
+            "ThinkingComplete",
+            "ContentStart",
+            "ContentDelta",
+            "ContentComplete",
+            "ToolCallBegin",
+            "ToolCallComplete",
+            "ToolCallError",
+            "ToolCallSkipped",
+            "ToolCallArgumentDelta",
+            "IterationComplete",
+            "PluginEvent",
+        ];
+        let variants = all_event_variants();
+        for (event, name) in variants.iter().zip(expected.iter()) {
+            assert_eq!(event.event_name(), *name);
+        }
+    }
+
+    #[test]
+    fn test_stream_event_data_serde_roundtrip() {
+        let cases = vec![
+            StreamEventData::ResponseStart {
+                model: "m".to_string(),
+            },
+            StreamEventData::ResponseComplete {
+                finish_reason: FinishReason::Stop,
+            },
+            StreamEventData::ContentDelta {
+                delta: "d".to_string(),
+            },
+            StreamEventData::ContentComplete {
+                content: "c".to_string(),
+            },
+            StreamEventData::ThinkingDelta {
+                thinking: "t".to_string(),
+            },
+            StreamEventData::ThinkingComplete {
+                thinking: "t".to_string(),
+            },
+            StreamEventData::ToolCallComplete {
+                tool_call: ToolCall {
+                    id: "id".to_string(),
+                    name: "n".to_string(),
+                    arguments: "{}".to_string(),
+                    r#type: "function".to_string(),
+                },
+            },
+            StreamEventData::ToolCallArgumentDelta {
+                tool_call_id: "id".to_string(),
+                tool_name: "n".to_string(),
+                delta: "d".to_string(),
+            },
+            StreamEventData::UsageUpdate {
+                usage: TokenUsage::default(),
+            },
+            StreamEventData::Error {
+                code: "E1".to_string(),
+                message: "msg".to_string(),
+            },
+        ];
+        for data in cases {
+            let json = serde_json::to_string(&data).unwrap();
+            let parsed: StreamEventData = serde_json::from_str(&json).unwrap();
+            match (data, parsed) {
+                (
+                    StreamEventData::ResponseStart { model: m1 },
+                    StreamEventData::ResponseStart { model: m2 },
+                ) => {
+                    assert_eq!(m1, m2);
+                }
+                (
+                    StreamEventData::Error {
+                        code: c1,
+                        message: m1,
+                    },
+                    StreamEventData::Error {
+                        code: c2,
+                        message: m2,
+                    },
+                ) => {
+                    assert_eq!(c1, c2);
+                    assert_eq!(m1, m2);
+                }
+                (
+                    StreamEventData::ToolCallComplete { tool_call: t1 },
+                    StreamEventData::ToolCallComplete { tool_call: t2 },
+                ) => {
+                    assert_eq!(t1.id, t2.id);
+                    assert_eq!(t1.name, t2.name);
+                    assert_eq!(t1.arguments, t2.arguments);
+                }
+                (other1, other2) => {
+                    // All other variants are single-field and can be compared via debug
+                    assert_eq!(format!("{other1:?}"), format!("{other2:?}"));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_stream_event_serde_roundtrip() {
+        let event = StreamEvent {
+            id: "evt_1".to_string(),
+            data: StreamEventData::ContentDelta {
+                delta: "hi".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains(r#""type":"content_delta""#));
+        let parsed: StreamEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.id, "evt_1");
+        assert_eq!(format!("{:?}", parsed.data), format!("{:?}", event.data));
+    }
+
+    #[tokio::test]
+    async fn test_stream_receiver_recv() {
+        let (tx, rx) = tokio::sync::mpsc::channel(4);
+        let mut receiver = StreamReceiver::new(rx);
+
+        let event = StreamEvent {
+            id: "evt_1".to_string(),
+            data: StreamEventData::ContentDelta {
+                delta: "hi".to_string(),
+            },
+        };
+        tx.send(Ok(event.clone())).await.unwrap();
+        drop(tx); // close channel so recv returns None afterwards
+
+        let received = receiver.recv().await.unwrap().unwrap();
+        assert_eq!(received.id, "evt_1");
+        assert_eq!(format!("{:?}", received.data), format!("{:?}", event.data));
+        // Channel closed => no more events
+        assert!(receiver.recv().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_stream_receiver_forwards_error() {
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        let mut receiver = StreamReceiver::new(rx);
+        tx.send(Err(crate::LLMError::Timeout("boom".to_string())))
+            .await
+            .unwrap();
+        drop(tx);
+        let err = receiver.recv().await.unwrap().unwrap_err();
+        assert!(err.to_string().contains("timeout"));
+    }
 }

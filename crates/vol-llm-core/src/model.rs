@@ -133,4 +133,65 @@ mod tests {
         assert!(info.supports_tools);
         assert!(info.supports_streaming);
     }
+
+    #[test]
+    fn test_model_info_vision_builder() {
+        let default = ModelInfo::new("gpt-4o");
+        assert!(!default.supports_vision);
+
+        let with_vision = ModelInfo::new("gpt-4o").vision(true);
+        assert!(with_vision.supports_vision);
+
+        let without_vision = ModelInfo::new("gpt-4o").vision(false);
+        assert!(!without_vision.supports_vision);
+    }
+
+    #[test]
+    fn test_model_config_serde_roundtrip() {
+        let config = ModelConfig {
+            max_tokens: Some(2048),
+            temperature: Some(0.2),
+            top_p: Some(0.9),
+            top_k: Some(40),
+            frequency_penalty: Some(-0.5),
+            presence_penalty: Some(1.5),
+            stop: Some(vec!["END".to_string()]),
+            seed: Some(42),
+            logprobs: Some(5),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let parsed: ModelConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.max_tokens, Some(2048));
+        assert_eq!(parsed.temperature, Some(0.2));
+        assert_eq!(parsed.top_p, Some(0.9));
+        assert_eq!(parsed.top_k, Some(40));
+        assert_eq!(parsed.frequency_penalty, Some(-0.5));
+        assert_eq!(parsed.presence_penalty, Some(1.5));
+        assert_eq!(parsed.stop, Some(vec!["END".to_string()]));
+        assert_eq!(parsed.seed, Some(42));
+        assert_eq!(parsed.logprobs, Some(5));
+        // None fields are skipped on serialization
+        let empty = ModelConfig::default();
+        assert_eq!(serde_json::to_string(&empty).unwrap(), "{}");
+        let empty_parsed: ModelConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(empty_parsed.temperature, None);
+    }
+
+    #[test]
+    fn test_model_info_serde_roundtrip() {
+        let info = ModelInfo::new("qwen3.6-plus")
+            .context_tokens(128_000)
+            .output_tokens(8192)
+            .tools(true)
+            .streaming(true)
+            .vision(true);
+        let json = serde_json::to_string(&info).unwrap();
+        let parsed: ModelInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.name, "qwen3.6-plus");
+        assert_eq!(parsed.max_context_tokens, Some(128_000));
+        assert_eq!(parsed.max_output_tokens, Some(8192));
+        assert!(parsed.supports_tools);
+        assert!(parsed.supports_streaming);
+        assert!(parsed.supports_vision);
+    }
 }
