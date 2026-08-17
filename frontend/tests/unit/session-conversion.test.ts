@@ -302,6 +302,7 @@ describe('sessionEntriesToConversation — image parts', () => {
       userMessageEntry([{ type: 'image', image_url: { url: 'https://e.test/a.png' } }]),
     ] as unknown as SessionEntry[]
     const conv = sessionEntriesToConversation(entries)
+    expect(conv[0].type).toBe('UserInput')
     if (conv[0].type === 'UserInput') {
       expect(conv[0].text).toBe('')
       expect(conv[0].images).toEqual(['https://e.test/a.png'])
@@ -311,6 +312,7 @@ describe('sessionEntriesToConversation — image parts', () => {
   it('text-only content has no images field', () => {
     const entries = [userMessageEntry('plain text')] as unknown as SessionEntry[]
     const conv = sessionEntriesToConversation(entries)
+    expect(conv[0].type).toBe('UserInput')
     if (conv[0].type === 'UserInput') {
       expect(conv[0].text).toBe('plain text')
       expect(conv[0].images).toBeUndefined()

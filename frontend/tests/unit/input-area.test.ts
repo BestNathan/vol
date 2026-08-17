@@ -1,6 +1,6 @@
 // frontend/tests/unit/input-area.test.ts
 import { describe, it, expect } from 'vitest'
-import { findRunIdForAgent } from '@/components/inputs/InputArea'
+import { buildInputParts, findRunIdForAgent } from '@/components/inputs/InputArea'
 
 describe('findRunIdForAgent', () => {
   it('returns the run_id owned by the agent', () => {
@@ -20,5 +20,24 @@ describe('findRunIdForAgent', () => {
 
   it('returns null for an empty map', () => {
     expect(findRunIdForAgent(new Map(), 'agent-a')).toBeNull()
+  })
+})
+
+describe('buildInputParts', () => {
+  it('builds text + image parts in order', () => {
+    expect(buildInputParts('look', ['data:image/png;base64,AAAA'])).toEqual([
+      { type: 'text', text: 'look' },
+      { type: 'image_url', url: 'data:image/png;base64,AAAA' },
+    ])
+  })
+
+  it('omits the text part when text is empty', () => {
+    expect(buildInputParts('', ['data:image/png;base64,AAAA'])).toEqual([
+      { type: 'image_url', url: 'data:image/png;base64,AAAA' },
+    ])
+  })
+
+  it('returns only text parts when no images', () => {
+    expect(buildInputParts('hello', [])).toEqual([{ type: 'text', text: 'hello' }])
   })
 })

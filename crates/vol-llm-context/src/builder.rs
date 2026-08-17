@@ -1,4 +1,4 @@
-use vol_llm_core::{Message, MessageRole};
+use vol_llm_core::{Message, MessageContent, MessageRole};
 
 use crate::{
     estimate_tokens, AttentionAnchor, ContextBlock, ContextContributor, ContextError, TokenBudget,
@@ -107,10 +107,12 @@ impl ContextBuilder {
                             MessageRole::Tool => "tool",
                         }
                         .to_string();
+                        // display_text renders multipart image parts as `[image]`
+                        // (as_str returns "" for multipart, losing the content).
                         let content = msg
                             .content
                             .as_ref()
-                            .map(|c| c.as_str().to_string())
+                            .map(MessageContent::display_text)
                             .unwrap_or_default();
                         ContextMessage { role, content }
                     })
@@ -280,7 +282,7 @@ impl Clone for ContextBuilderBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vol_llm_core::Message;
+    use vol_llm_core::{ContentPart, ImageUrl, Message, MessageContent};
 
     struct SimpleContributor {
         messages: Vec<Message>,
@@ -417,5 +419,59 @@ mod tests {
                 .as_str(),
             "Tail message"
         );
+    }
+
+    fn multipart_user_message() -> Message {
+        Message {
+            role: MessageRole::User,
+            content: Some(MessageContent::MultiPart(vec![
+                ContentPart::Text {
+                    text: "look at this".to_string(),
+                },
+                ContentPart::Image {
+                    image_url: ImageUrl {
+                        url: "data:image/png;base64,AAAA".to_string(),
+                        detail: None,
+                    },
+                },
+            ])),
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+            thinking: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_by_name_multipart_shows_image_marker() {
+        let builder = ContextBuilderBuilder::new(10000)
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![multipart_user_message()],
+                anchor: AttentionAnchor::Head(0),
+                name: "snap".to_string(),
+            }))
+            .build();
+
+        let snapshot = builder.snapshot_by_name("snap").await.unwrap();
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot[0].role, "user");
+        // Text part is kept and the image part renders as `[image]`.
+        assert_eq!(snapshot[0].content, "look at this\n[image]");
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_by_name_text_message_unchanged() {
+        let builder = ContextBuilderBuilder::new(10000)
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::system("plain text")],
+                anchor: AttentionAnchor::Head(0),
+                name: "snap".to_string(),
+            }))
+            .build();
+
+        let snapshot = builder.snapshot_by_name("snap").await.unwrap();
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot[0].role, "system");
+        assert_eq!(snapshot[0].content, "plain text");
     }
 }

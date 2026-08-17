@@ -29,6 +29,17 @@ export function findRunIdForAgent(
   return null
 }
 
+/** Build the agent.submit `input.parts` payload from text and ready images. */
+export function buildInputParts(
+  text: string,
+  readyImages: string[],
+): Array<{ type: 'text'; text: string } | { type: 'image_url'; url: string }> {
+  return [
+    ...(text ? [{ type: 'text' as const, text }] : []),
+    ...readyImages.map((url) => ({ type: 'image_url' as const, url })),
+  ]
+}
+
 interface ImageAttachment {
   id: string
   dataUrl: string | null // null while compressing
@@ -90,10 +101,7 @@ export function InputArea() {
     getPanelClient()
       .call<{ run_id: string }>('agent.submit', {
         input: {
-          parts: [
-            ...(input ? [{ type: 'text', text: input }] : []),
-            ...readyImages.map((url) => ({ type: 'image_url', url })),
-          ],
+          parts: buildInputParts(input, readyImages),
           metadata: { session_id: sessionId },
         },
         target: selectedAgentId,
@@ -145,7 +153,7 @@ export function InputArea() {
       }))
       // State updaters stay pure (no side effects inside setState — React
       // StrictMode double-invokes updaters); compression runs outside them.
-      setImages((prev) => [...prev, ...pending])
+      setImages((prev) => [...prev, ...pending].slice(0, MAX_IMAGES_PER_MESSAGE))
       selected.forEach((f, i) => {
         void compressImageFile(f).then(
           (dataUrl) => {
@@ -181,9 +189,10 @@ export function InputArea() {
   const handleDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault()
+      if (isRunning) return // input is disabled while running (paste/Attach already are)
       addFiles(Array.from(e.dataTransfer.files))
     },
-    [addFiles],
+    [addFiles, isRunning],
   )
 
   const handleKeyDown = useCallback(
