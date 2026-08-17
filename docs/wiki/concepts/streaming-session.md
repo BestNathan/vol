@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [streaming, sse, protocol, openai, anthropic, rust]
 created: 2026-05-15
-updated: 2026-05-15
-source_count: 2
+updated: 2026-08-17
+source_count: 3
 ---
 
 # Streaming Session and StreamProtocol
@@ -42,6 +42,14 @@ Two protocol implementations exist:
 Both `AnthropicProvider` and `OpenaiProvider` use `StreamingSession` for their `converse_stream()` implementations:
 - `AnthropicProvider` uses `process_anthropic_sse()` (backward compat wrapper for `process_sse(&AnthropicProtocol, line)`)
 - `OpenaiProvider` uses `process_sse(&OpenaiStreamParser, line)` directly
+
+## Tool-Call Completion
+
+Providers whose SSE carries a per-block stop marker (Anthropic `content_block_stop`) complete tool calls inside the parser/`apply()`. OpenAI SSE has **no per-block stop marker**, so a streamed tool call is started and fed argument deltas but never completed by the parser alone. Since `StreamingSession::finalize()` flushes only content/thinking buffers (not the pending tool call), the OpenAI provider's `converse_stream` task flushes the pending call before `finalize()` via the public primitive `session.apply(&ParsedEvent::ContentBlockStop)` — the same event the Anthropic `content_block_stop` path uses to build and emit `StreamEventData::ToolCallComplete { tool_call }`. The flush is a no-op when no tool call is pending and emits the completion exactly once (the builder is `take()`n). The completion therefore arrives at stream end, after `ResponseComplete`, which is safe for the ReAct consumer (`vol-llm-agent` collects `ToolCallComplete` events for use post-stream). [[provider-bugfixes]]
+
+## Known Limitation
+
+`StreamingSession` tracks a **single** `current_tool_call: Option<ToolCallBuilder>` slot: a new `ToolCallStart` replaces the previous builder before it completes. A multi-tool-call stream therefore only completes the **last-started** call. Pre-existing limitation (now surfaced by the provider tests); single-call streams work correctly.
 
 ## Examples
 

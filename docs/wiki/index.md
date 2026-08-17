@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-08-17 (multimodal image input)
+Last updated: 2026-08-17 (provider bugfixes, per-crate coverage gate)
 
 ## Entities
 
@@ -14,9 +14,10 @@ Last updated: 2026-08-17 (multimodal image input)
 | [[vol-llm-sandbox-crate]] | Sandbox abstraction (Local/Tmp/SSH/Firecracker/Wasm), SandboxRegistry with pure-config loading, TmpSandbox with bind_metadata lifecycle | active | 2026-08-11 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API and `[image]` display-text markers | active | 2026-08-17 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
-| [[vol-llm-core-crate]] | Core LLM interaction abstractions, including provider-neutral multipart message content and `[image]` display markers | stable | 2026-08-17 |
+| [[vol-llm-core-crate]] | Core LLM interaction abstractions, including provider-neutral multipart message content and `[image]` display markers; coverage gate PASS 95.62% | stable | 2026-08-17 |
 | [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager; web module with ProxyConfig (three-tier resolution) and RetryConfig (exponential backoff) | active | 2026-08-12 |
-| [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations with multipart text/image conversion (vision content arrays) | stable | 2026-08-17 |
+| [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations; four 2026-08-17 bugfixes (raw tool-call args, request.system forwarding, symmetric Secret JSON, streamed ToolCallComplete); coverage gate PASS 95.41% (120 tests) | stable | 2026-08-17 |
+| [[vol-llm-context-crate]] | Pluggable prompt construction: ContextBuilder, ContextContributor, builtin simple/file/user_input contributors, token-budgeted compression, snapshot APIs; coverage gate PASS 88.94% regions / 90.08% lines | active | 2026-08-17 |
 | [[vol-session]] | Session message store and entry persistence, including file and SeaORM database-backed session managers; images kept through compression | active | 2026-08-17 |
 | [[vol-llm-agent-protocol-crate]] | Protocol, JSON-RPC transport, connection, handler, registry, and generic service abstraction layer | active | 2026-06-10 |
 | [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
@@ -92,11 +93,14 @@ Last updated: 2026-08-17 (multimodal image input)
 | [[sessions-ui-pattern]] | Tab-based session browsing with SessionsState signal, SessionsPanel component, checkpoint CSS | active | 2026-05-11 |
 | [[tailwind-css-migration]] | Systematic migration from global CSS to Tailwind utility classes — ALL 16 components complete, GLOBAL_CSS deleted | complete | 2026-05-12 |
 | [[agentinput-multimodal-run]] | Structured ReActAgent run input envelope for text/image parts, run_id, metadata, and protocol compatibility; `[image]` display markers | active | 2026-08-17 |
+| [[streaming-session]] | StreamProtocol/StreamingSession SSE parsing; OpenAI stream-end ToolCallComplete flush via ContentBlockStop (no per-block stop marker); known limitation — multi-tool-call streams complete only the last-started call | active | 2026-08-17 |
 
 ## Sources
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[provider-bugfixes]] | Four vol-llm-provider production bugfixes (TDD, one commit each): raw string tool-call args, request.system as first system message, symmetric Secret JSON round-trip, streamed ToolCallComplete via ContentBlockStop flush; gate re-verified 95.41%, 120 tests / 0 failed | active | 2026-08-17 |
+| [[coverage-gate-work]] | Test-only coverage raises to ≥80%: vol-llm-context 88.94% regions / 90.08% lines, vol-llm-core 95.62%, vol-llm-provider 85.79% pre-bugfix; the provider suite surfaced the four production bugs | active | 2026-08-17 |
 | [[fs-cli-tool]] | vol-llm-fs crate implementation: CLI-style `fs` tool (read/write/edit/grep/glob/scheme, `--json` envelope) over the five builtin file-op tools; registered from AgentRuntimeBuilder::build() next to the task tool; 89.81% line coverage | active | 2026-08-16 |
 | [[multimodal-image-input]] | Multimodal image input feature: `[image]` display markers, per-image token budget (1600), images kept through session compression, OpenAI vision conversion, frontend attach/paste/render UI, WS frame-size verification (no explicit limit; defaults 64MiB/16MiB), live-stack e2e verification | active | 2026-08-17 |
 | [[web-tools-proxy-retry]] | Three-tier proxy configuration (tool param > agent config > env var) and exponential-backoff retry for web_fetch/web_search tools | active | 2026-08-12 |

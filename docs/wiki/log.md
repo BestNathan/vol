@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-08-17] ingest | Provider Bugfixes and Per-Crate Coverage Gate
+- Created sources: [[provider-bugfixes]], [[coverage-gate-work]]
+- Created entities: [[vol-llm-context-crate]]
+- Updated concepts: [[streaming-session]] (OpenAI stream-end ToolCallComplete flush via `session.apply(&ParsedEvent::ContentBlockStop)` — no per-block SSE stop marker; multi-tool-call last-started-only limitation surfaced; source_count 2->3)
+- Updated entities: [[vol-llm-provider-crate]] (4 TDD bugfixes + gate 95.41%, 120 tests; source_count 3->5), [[vol-llm-core-crate]] (coverage gate 95.62%, source_count 3->4)
+- Updated index: new entity/concept/source entries, refreshed provider/core summaries and dates, bumped header
+- Cross-references added: 7
+- Changes: Ingested the coverage-gate work (test-only, commits f6edf792/c0018d89/3846cee7/9600911d) raising vol-llm-context to 88.94% regions / 90.08% lines, vol-llm-core to 95.62%, vol-llm-provider to 85.79% pre-bugfix — the provider suite exposed four production bugs, fixed via TDD (commits 72277b0a/9fa770f0/6f56f327/de04fe83): raw string tool-call arguments in non-streaming OpenAI converse (`parse_tool_arguments`), `request.system` forwarded as first `system` message without duplication (`apply_system_prompt`), symmetric `Secret` JSON round-trip with plain-string back-compat (TOML path intact), and `ToolCallComplete` emitted at stream end for streamed OpenAI tool calls (flush mirrors Anthropic content_block_stop; completion after ResponseComplete is safe for the ReAct consumer). Gate re-verified `just cover-gate vol-llm-provider 80` PASS 95.41%; suite 120 passed / 0 failed. Known follow-up recorded: multi-tool-call streams in vol-llm-core `StreamingSession` only complete the last-started call (single `current_tool_call` slot; pre-existing, single-call streams work).
+
 ## [2026-08-17] ingest | Multimodal Image Input
 - Created sources: [[multimodal-image-input]]
 - Updated concepts: [[agentinput-multimodal-run]] (`[image]` display markers in `AgentInput::display_text`), [[session-compression]] (summary markers + sampling exemption keep images), [[session-contributor]] (image-aware compression), [[context-builder]] (multipart `estimate_tokens` with `IMAGE_TOKEN_BUDGET = 1600`)
