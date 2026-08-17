@@ -58,3 +58,85 @@ impl ContextContributor for SimpleContributor {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample() -> SimpleContributor {
+        SimpleContributor::new(
+            "sample",
+            vec![Message::user("hello")],
+            AttentionAnchor::Middle(2),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_simple_contributor_new() {
+        let c = sample();
+        assert_eq!(c.name(), "sample");
+        assert_eq!(c.estimate_size(), estimate_tokens(&Message::user("hello")));
+
+        let blocks = c.contribute().await.unwrap();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].anchor, AttentionAnchor::Middle(2));
+        assert_eq!(blocks[0].messages.len(), 1);
+        assert_eq!(
+            blocks[0].messages[0].content.as_ref().unwrap().as_str(),
+            "hello"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_simple_contributor_system() {
+        let c = SimpleContributor::system("You are a helpful assistant".to_string());
+        assert_eq!(c.name(), "system");
+
+        let blocks = c.contribute().await.unwrap();
+        assert!(matches!(blocks[0].anchor, AttentionAnchor::Head(0)));
+        assert_eq!(
+            blocks[0].messages[0].role,
+            vol_llm_core::message::MessageRole::System
+        );
+        assert_eq!(
+            blocks[0].messages[0].content.as_ref().unwrap().as_str(),
+            "You are a helpful assistant"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_simple_contributor_compress_noop() {
+        let mut c = sample();
+        c.compress().await;
+        let blocks = c.contribute().await.unwrap();
+        assert_eq!(
+            blocks[0].messages[0].content.as_ref().unwrap().as_str(),
+            "hello"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_simple_contributor_estimate_size_sums_messages() {
+        let c = SimpleContributor::new(
+            "multi",
+            vec![Message::user("first"), Message::system("second")],
+            AttentionAnchor::Tail(1),
+        );
+        let expected =
+            estimate_tokens(&Message::user("first")) + estimate_tokens(&Message::system("second"));
+        assert_eq!(c.estimate_size(), expected);
+    }
+
+    #[tokio::test]
+    async fn test_simple_contributor_clone_box() {
+        let c = sample();
+        let cloned = c.clone_box();
+        assert_eq!(cloned.name(), "sample");
+
+        let blocks = cloned.contribute().await.unwrap();
+        assert_eq!(
+            blocks[0].messages[0].content.as_ref().unwrap().as_str(),
+            "hello"
+        );
+    }
+}

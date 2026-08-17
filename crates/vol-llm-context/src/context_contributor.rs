@@ -90,5 +90,42 @@ mod tests {
         c.compress().await;
         let blocks = c.contribute().await.unwrap();
         assert!(blocks[0].messages.len() == 1);
+        // compress truncated the content to its first 20 chars.
+        assert!(blocks[0].messages[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .starts_with("[compressed] This is a long"));
+    }
+
+    #[tokio::test]
+    async fn test_contributor_name() {
+        let c = TestContributor {
+            content: "abc".to_string(),
+        };
+        assert_eq!(c.name(), "test");
+    }
+
+    #[tokio::test]
+    async fn test_contributor_estimate_size() {
+        let c = TestContributor {
+            content: "hello world".to_string(),
+        };
+        assert_eq!(c.estimate_size(), "hello world".len() / 4);
+    }
+
+    #[tokio::test]
+    async fn test_contributor_clone_box() {
+        let c = TestContributor {
+            content: "clone me".to_string(),
+        };
+        let cloned = c.clone_box();
+        assert_eq!(cloned.name(), "test");
+        let blocks = cloned.contribute().await.unwrap();
+        assert_eq!(
+            blocks[0].messages[0].content.as_ref().unwrap().as_str(),
+            "clone me"
+        );
     }
 }

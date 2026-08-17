@@ -148,4 +148,49 @@ mod tests {
         let blocks = contributor.contribute().await.unwrap();
         assert_eq!(blocks.len(), 1);
     }
+
+    #[test]
+    fn test_file_contributor_name() {
+        let contributor = FileContributor::new(vec![]);
+        assert_eq!(contributor.name(), "file");
+    }
+
+    #[tokio::test]
+    async fn test_file_contributor_estimate_size_skips_missing() {
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        writeln!(f, "# Role\nYou are helpful").unwrap();
+        let path = f.path().to_str().unwrap().to_string();
+
+        let contributor = FileContributor::new(vec![
+            FileSpec::new(&path, AttentionAnchor::Head(0)),
+            FileSpec::new("/nonexistent/path.md", AttentionAnchor::Tail(0)),
+        ]);
+
+        let size = contributor.estimate_size();
+        // Missing files contribute nothing: the estimate equals the tokens of
+        // the single readable file.
+        let expected = estimate_tokens(&Message::system(std::fs::read_to_string(&path).unwrap()));
+        assert!(size > 0);
+        assert_eq!(size, expected);
+    }
+
+    #[tokio::test]
+    async fn test_file_contributor_clone_box() {
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        writeln!(f, "# Content").unwrap();
+        let contributor = FileContributor::new(vec![FileSpec::new(
+            f.path().to_str().unwrap(),
+            AttentionAnchor::Head(0),
+        )]);
+
+        let cloned = contributor.clone_box();
+        let blocks = cloned.contribute().await.unwrap();
+        assert_eq!(blocks.len(), 1);
+        assert!(blocks[0].messages[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .contains("# Content"));
+    }
 }

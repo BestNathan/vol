@@ -74,4 +74,29 @@ mod tests {
             .as_str()
             .contains("hello"));
     }
+
+    #[tokio::test]
+    async fn test_user_input_contributor_name() {
+        let contributor = UserInputContributor::new("hi");
+        assert_eq!(contributor.name(), "user_input");
+    }
+
+    #[tokio::test]
+    async fn test_user_input_contributor_compress_noop() {
+        let mut contributor = UserInputContributor::new("keep me");
+        contributor.compress().await;
+        let blocks = contributor.contribute().await.unwrap();
+        assert_eq!(
+            blocks[0].messages[0].content.as_ref().unwrap().as_str(),
+            "keep me"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_user_input_contributor_estimate_size() {
+        let contributor = UserInputContributor::new("estimate me");
+        let expected = estimate_tokens(&Message::user("estimate me"));
+        assert!(expected > 0);
+        assert_eq!(contributor.estimate_size(), expected);
+    }
 }

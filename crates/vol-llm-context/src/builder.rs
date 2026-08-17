@@ -474,4 +474,436 @@ mod tests {
         assert_eq!(snapshot[0].role, "system");
         assert_eq!(snapshot[0].content, "plain text");
     }
+
+    #[tokio::test]
+    async fn test_replace_contributor_replaces_in_place() {
+        let mut builder = ContextBuilderBuilder::new(10000)
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::system("old prompt")],
+                anchor: AttentionAnchor::Head(0),
+                name: "role".to_string(),
+            }))
+            .build();
+
+        builder.replace_contributor(
+            "role",
+            Box::new(SimpleContributor {
+                messages: vec![Message::system("new prompt")],
+                anchor: AttentionAnchor::Head(0),
+                name: "role".to_string(),
+            }),
+        );
+
+        // Replacement keeps the contributor's position/name.
+        assert_eq!(builder.contributor_names(), vec!["role"]);
+        let snapshot = builder.snapshot_by_name("role").await.unwrap();
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot[0].content, "new prompt");
+    }
+
+    #[tokio::test]
+    async fn test_replace_contributor_missing_name_appends() {
+        let mut builder = ContextBuilderBuilder::new(10000)
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::system("role")],
+                anchor: AttentionAnchor::Head(0),
+                name: "role".to_string(),
+            }))
+            .build();
+
+        // Unknown name → the contributor is added as a fallback.
+        builder.replace_contributor(
+            "missing",
+            Box::new(SimpleContributor {
+                messages: vec![Message::user("extra context")],
+                anchor: AttentionAnchor::Tail(0),
+                name: "extra".to_string(),
+            }),
+        );
+
+        assert_eq!(builder.contributor_names(), vec!["role", "extra"]);
+    }
+
+    #[test]
+    fn test_token_budget_getter() {
+        let builder = ContextBuilderBuilder::new(10_000)
+            .head_size(3_000)
+            .tail_size(2_000)
+            .build();
+        let budget = builder.token_budget();
+        assert_eq!(budget.total, 10_000);
+        assert_eq!(budget.head_size, 3_000);
+        assert_eq!(budget.tail_size, 2_000);
+        assert_eq!(budget.used, 0);
+    }
+
+    #[test]
+    fn test_contributor_names_lists_in_order() {
+        let builder = ContextBuilderBuilder::new(10_000)
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::system("a")],
+                anchor: AttentionAnchor::Head(0),
+                name: "alpha".to_string(),
+            }))
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::user("b")],
+                anchor: AttentionAnchor::Tail(0),
+                name: "beta".to_string(),
+            }))
+            .build();
+        assert_eq!(builder.contributor_names(), vec!["alpha", "beta"]);
+    }
+
+    #[tokio::test]
+    async fn test_contributor_infos_zone_labels_and_counts() {
+        let builder = ContextBuilderBuilder::new(10_000)
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::system("head content")],
+                anchor: AttentionAnchor::Head(0),
+                name: "heady".to_string(),
+            }))
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::user("m1"), Message::user("m2")],
+                anchor: AttentionAnchor::Middle(5),
+                name: "middy".to_string(),
+            }))
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::user("tail content")],
+                anchor: AttentionAnchor::Tail(3),
+                name: "taily".to_string(),
+            }))
+            .add_contributor(Box::new(EmptyContributor))
+            .build();
+
+        let infos = builder.contributor_infos().await.unwrap();
+        assert_eq!(infos.len(), 4);
+
+        assert_eq!(infos[0].name, "heady");
+        assert_eq!(infos[0].anchor_zone, "head");
+        assert_eq!(infos[0].message_count, 1);
+        assert!(infos[0].estimated_tokens > 0);
+
+        assert_eq!(infos[1].name, "middy");
+        assert_eq!(infos[1].anchor_zone, "middle");
+        assert_eq!(infos[1].message_count, 2);
+        assert!(infos[1].estimated_tokens > 0);
+
+        assert_eq!(infos[2].name, "taily");
+        assert_eq!(infos[2].anchor_zone, "tail");
+        assert_eq!(infos[2].message_count, 1);
+
+        // A contributor that produces no blocks reports an unknown zone.
+        assert_eq!(infos[3].anchor_zone, "unknown");
+        assert_eq!(infos[3].message_count, 0);
+        assert_eq!(infos[3].estimated_tokens, 0);
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_by_name_all_roles_and_none_content() {
+        let builder = ContextBuilderBuilder::new(10_000)
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![
+                    Message::system("sys"),
+                    Message::assistant("assistant says hi"),
+                    Message::tool("tool result", "call_1".to_string()),
+                    Message {
+                        role: vol_llm_core::message::MessageRole::User,
+                        content: None,
+                        tool_calls: None,
+                        tool_call_id: None,
+                        name: None,
+                        thinking: None,
+                    },
+                ],
+                anchor: AttentionAnchor::Head(0),
+                name: "roles".to_string(),
+            }))
+            .build();
+
+        let snapshot = builder.snapshot_by_name("roles").await.unwrap();
+        assert_eq!(snapshot.len(), 4);
+        assert_eq!(snapshot[0].role, "system");
+        assert_eq!(snapshot[0].content, "sys");
+        assert_eq!(snapshot[1].role, "assistant");
+        assert_eq!(snapshot[1].content, "assistant says hi");
+        assert_eq!(snapshot[2].role, "tool");
+        assert_eq!(snapshot[2].content, "tool result");
+        // Messages without content render as an empty string.
+        assert_eq!(snapshot[3].role, "user");
+        assert_eq!(snapshot[3].content, "");
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_by_name_not_found() {
+        let builder = ContextBuilderBuilder::new(10_000)
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::system("a")],
+                anchor: AttentionAnchor::Head(0),
+                name: "alpha".to_string(),
+            }))
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::user("b")],
+                anchor: AttentionAnchor::Tail(0),
+                name: "beta".to_string(),
+            }))
+            .build();
+
+        let err = builder.snapshot_by_name("ghost").await.unwrap_err();
+        match err {
+            ContextError::ContributorError(name, message) => {
+                assert_eq!(name, "ghost");
+                assert_eq!(message, "contributor not found");
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    /// Contributor that actually shrinks its content when compressed.
+    struct CompressingContributor {
+        content: String,
+    }
+
+    #[async_trait::async_trait]
+    impl ContextContributor for CompressingContributor {
+        fn name(&self) -> &str {
+            "compressor"
+        }
+
+        async fn contribute(&self) -> Result<Vec<ContextBlock>, ContextError> {
+            Ok(vec![ContextBlock::new(
+                vec![Message::user(self.content.clone())],
+                AttentionAnchor::Head(0),
+            )])
+        }
+
+        async fn compress(&mut self) {
+            self.content = self.content.chars().take(5).collect();
+        }
+
+        fn estimate_size(&self) -> usize {
+            self.content.len() / 4
+        }
+
+        fn clone_box(&self) -> Box<dyn ContextContributor> {
+            Box::new(CompressingContributor {
+                content: self.content.clone(),
+            })
+        }
+    }
+
+    /// Contributor that never produces blocks (e.g. an empty file set).
+    struct EmptyContributor;
+
+    #[async_trait::async_trait]
+    impl ContextContributor for EmptyContributor {
+        fn name(&self) -> &str {
+            "empty"
+        }
+
+        async fn contribute(&self) -> Result<Vec<ContextBlock>, ContextError> {
+            Ok(Vec::new())
+        }
+
+        async fn compress(&mut self) {}
+
+        fn estimate_size(&self) -> usize {
+            0
+        }
+
+        fn clone_box(&self) -> Box<dyn ContextContributor> {
+            Box::new(EmptyContributor)
+        }
+    }
+
+    /// Contributor whose contribute() always fails.
+    struct FailingContributor;
+
+    #[async_trait::async_trait]
+    impl ContextContributor for FailingContributor {
+        fn name(&self) -> &str {
+            "failing"
+        }
+
+        async fn contribute(&self) -> Result<Vec<ContextBlock>, ContextError> {
+            Err(ContextError::BudgetExceeded(999))
+        }
+
+        async fn compress(&mut self) {}
+
+        fn estimate_size(&self) -> usize {
+            0
+        }
+
+        fn clone_box(&self) -> Box<dyn ContextContributor> {
+            Box::new(FailingContributor)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_build_compresses_contributors_when_over_budget() {
+        let builder = ContextBuilderBuilder::new(100)
+            .add_contributor(Box::new(CompressingContributor {
+                content: "x".repeat(10_000),
+            }))
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::user("y".repeat(10_000))],
+                anchor: AttentionAnchor::Tail(0),
+                name: "tail".to_string(),
+            }))
+            .build();
+
+        let output = builder.build().await.unwrap();
+        // The head block was compressed to its first 5 chars; the no-op
+        // SimpleContributor tail message is unchanged.
+        assert_eq!(output.messages.len(), 2);
+        assert_eq!(
+            output.messages[0].content.as_ref().unwrap().as_str(),
+            "xxxxx"
+        );
+        assert_eq!(
+            output.messages[1].content.as_ref().unwrap().as_str(),
+            "y".repeat(10_000)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_build_drops_lowest_priority_middle_when_over_budget() {
+        let builder = ContextBuilderBuilder::new(1_000)
+            .head_size(100)
+            .tail_size(100)
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::system("head")],
+                anchor: AttentionAnchor::Head(0),
+                name: "head".to_string(),
+            }))
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::user("A".repeat(900))],
+                anchor: AttentionAnchor::Middle(1),
+                name: "m1".to_string(),
+            }))
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::user("B".repeat(900))],
+                anchor: AttentionAnchor::Middle(2),
+                name: "m2".to_string(),
+            }))
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::user("C".repeat(900))],
+                anchor: AttentionAnchor::Middle(3),
+                name: "m3".to_string(),
+            }))
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::user("D".repeat(900))],
+                anchor: AttentionAnchor::Middle(4),
+                name: "m4".to_string(),
+            }))
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::user("tail")],
+                anchor: AttentionAnchor::Tail(0),
+                name: "tail".to_string(),
+            }))
+            .build();
+
+        let output = builder.build().await.unwrap();
+        // middle_budget = 1000 - 100 - 100 = 800; each middle block ≈ 230
+        // tokens, so 4 blocks ≈ 930 > 800 → the last (highest position,
+        // lowest priority) middle block is dropped.
+        assert_eq!(output.messages.len(), 5);
+        assert_eq!(
+            output.messages[0].content.as_ref().unwrap().as_str(),
+            "head"
+        );
+        assert_eq!(
+            output.messages[4].content.as_ref().unwrap().as_str(),
+            "tail"
+        );
+        assert_eq!(
+            output.messages[1].content.as_ref().unwrap().as_str(),
+            "A".repeat(900)
+        );
+        assert_eq!(
+            output.messages[2].content.as_ref().unwrap().as_str(),
+            "B".repeat(900)
+        );
+        assert_eq!(
+            output.messages[3].content.as_ref().unwrap().as_str(),
+            "C".repeat(900)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_build_propagates_contributor_error() {
+        let builder = ContextBuilderBuilder::new(1_000)
+            .add_contributor(Box::new(FailingContributor))
+            .build();
+
+        let err = match builder.build().await {
+            Ok(_) => panic!("build() should have failed"),
+            Err(e) => e,
+        };
+        assert!(matches!(err, ContextError::BudgetExceeded(999)));
+    }
+
+    #[tokio::test]
+    async fn test_contributor_infos_propagates_error() {
+        let builder = ContextBuilderBuilder::new(1_000)
+            .add_contributor(Box::new(FailingContributor))
+            .build();
+
+        let err = builder.contributor_infos().await.unwrap_err();
+        assert!(matches!(err, ContextError::BudgetExceeded(999)));
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_by_name_propagates_contributor_error() {
+        let builder = ContextBuilderBuilder::new(1_000)
+            .add_contributor(Box::new(FailingContributor))
+            .build();
+
+        let err = builder.snapshot_by_name("failing").await.unwrap_err();
+        assert!(matches!(err, ContextError::BudgetExceeded(999)));
+    }
+
+    #[tokio::test]
+    async fn test_context_builder_clone_builds_independently() {
+        let builder = ContextBuilderBuilder::new(10_000)
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::system("clone me")],
+                anchor: AttentionAnchor::Head(0),
+                name: "src".to_string(),
+            }))
+            .build();
+
+        let cloned = builder.clone();
+        let original_output = builder.build().await.unwrap();
+        let cloned_output = cloned.build().await.unwrap();
+        assert_eq!(original_output.messages.len(), 1);
+        assert_eq!(cloned_output.messages.len(), 1);
+        assert_eq!(
+            cloned_output.messages[0].content.as_ref().unwrap().as_str(),
+            "clone me"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_builder_builder_clone_and_copy_contributors() {
+        let source = ContextBuilderBuilder::new(10_000)
+            .add_contributor(Box::new(SimpleContributor {
+                messages: vec![Message::system("copied")],
+                anchor: AttentionAnchor::Head(0),
+                name: "copied".to_string(),
+            }))
+            .build();
+
+        let builder_builder = ContextBuilderBuilder::new(10_000).add_contributors_from(&source);
+        let cloned_builder_builder = builder_builder.clone();
+        let builder = cloned_builder_builder.build();
+
+        assert_eq!(builder.contributor_names(), vec!["copied"]);
+        let output = builder.build().await.unwrap();
+        assert_eq!(output.messages.len(), 1);
+        assert_eq!(
+            output.messages[0].content.as_ref().unwrap().as_str(),
+            "copied"
+        );
+    }
 }
