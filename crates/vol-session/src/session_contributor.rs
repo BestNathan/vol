@@ -103,11 +103,11 @@ impl ContextContributor for SessionContributor {
             return;
         }
 
-        // 4. Build summary text from compressed messages
+        // 4. Build summary text from compressed messages (images rendered as [image])
         let summary = compressed
             .iter()
             .filter_map(|m| m.message.content.as_ref())
-            .map(vol_llm_core::MessageContent::as_str)
+            .map(vol_llm_core::MessageContent::display_text)
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -245,5 +245,87 @@ mod tests {
 
         let blocks = contributor.contribute().await.unwrap();
         assert!(blocks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_compress_summary_includes_image_marker() {
+        use vol_llm_core::{ContentPart, ImageUrl, MessageContent};
+        let entry_store = Arc::new(InMemoryEntryStore::new());
+        let session = Session::new(entry_store);
+        let multipart = SessionMessage::new(
+            session.id.clone(),
+            Message::user(MessageContent::MultiPart(vec![
+                ContentPart::Text {
+                    text: "look".to_string(),
+                },
+                ContentPart::Image {
+                    image_url: ImageUrl {
+                        url: "data:image/png;base64,AAAA".to_string(),
+                        detail: None,
+                    },
+                },
+            ])),
+        );
+        session.add_message(multipart).await.unwrap();
+        let session = Arc::new(tokio::sync::Mutex::new(session));
+        let mut contributor =
+            SessionContributor::new(session.clone(), 10, AttentionAnchor::Middle(0));
+        contributor.compress().await;
+
+        let msgs = session.lock().await.get_messages().await.unwrap();
+        let summary_text = msgs
+            .iter()
+            .filter(|m| m.message.role == vol_llm_core::MessageRole::System)
+            .filter_map(|m| {
+                m.message
+                    .content
+                    .as_ref()
+                    .map(vol_llm_core::MessageContent::display_text)
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            summary_text.contains("[image]"),
+            "summary lost image marker: {summary_text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_compress_keeps_multipart_content_after_checkpoint() {
+        use vol_llm_core::{ContentPart, ImageUrl, MessageContent};
+        let entry_store = Arc::new(InMemoryEntryStore::new());
+        let session = Session::new(entry_store);
+        for i in 0..10 {
+            let content = if i == 7 {
+                MessageContent::MultiPart(vec![ContentPart::Image {
+                    image_url: ImageUrl {
+                        url: "https://e.test/x.png".to_string(),
+                        detail: None,
+                    },
+                }])
+            } else {
+                MessageContent::Text(format!("msg-{i}"))
+            };
+            session
+                .add_message(SessionMessage::new(
+                    session.id.clone(),
+                    Message::user(content),
+                ))
+                .await
+                .unwrap();
+        }
+        let session = Arc::new(tokio::sync::Mutex::new(session));
+        let mut contributor =
+            SessionContributor::new(session.clone(), 10, AttentionAnchor::Middle(0));
+        contributor.compress().await;
+
+        let msgs = session.lock().await.get_messages().await.unwrap();
+        assert!(
+            msgs.iter().any(|m| matches!(
+                &m.message.content,
+                Some(MessageContent::MultiPart(parts)) if parts.iter().any(|p| matches!(p, ContentPart::Image { .. }))
+            )),
+            "image-bearing message was lost after compression"
+        );
     }
 }

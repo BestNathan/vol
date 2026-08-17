@@ -29,6 +29,16 @@ impl Default for PositionSampleCompressor {
     }
 }
 
+/// Image-bearing messages are deliberately attached, high-value context:
+/// positional sampling must never drop them (mirrors `keep_first`).
+fn has_image_part(msg: &SessionMessage) -> bool {
+    matches!(
+        &msg.message.content,
+        Some(vol_llm_core::MessageContent::MultiPart(parts))
+            if parts.iter().any(|p| matches!(p, vol_llm_core::ContentPart::Image { .. }))
+    )
+}
+
 #[async_trait::async_trait]
 impl MessageCompressor for PositionSampleCompressor {
     async fn compress(&self, messages: Vec<SessionMessage>) -> Vec<SessionMessage> {
@@ -44,7 +54,7 @@ impl MessageCompressor for PositionSampleCompressor {
 
         // Sample every M-th from the rest
         for (i, msg) in messages.get(keep..).unwrap_or(&[]).iter().enumerate() {
-            if i % self.sample_every == 0 {
+            if i % self.sample_every == 0 || has_image_part(msg) {
                 result.push(msg.clone());
             }
         }
@@ -106,5 +116,34 @@ mod tests {
                 .as_str(),
             "10"
         );
+    }
+
+    #[tokio::test]
+    async fn test_image_messages_exempt_from_sampling() {
+        use vol_llm_core::{ContentPart, ImageUrl, MessageContent};
+        let compressor = PositionSampleCompressor::new(3, 5);
+        let mut messages: Vec<_> = (1..=10).map(|i| make_msg(&i.to_string())).collect();
+        // Message 7 carries an image and would otherwise be sampled out
+        // (rest-index 3 is not a multiple of sample_every=5).
+        messages[6] = SessionMessage::new(
+            "test".to_string(),
+            Message::user(MessageContent::MultiPart(vec![ContentPart::Image {
+                image_url: ImageUrl {
+                    url: "https://e.test/7.png".to_string(),
+                    detail: None,
+                },
+            }])),
+        );
+        let result = compressor.compress(messages).await;
+        // Base sampling keeps [1,2,3] + [4,9] + last 10; image msg 7 must be added.
+        let texts: Vec<String> = result
+            .iter()
+            .map(|m| m.message.content.as_ref().unwrap().display_text())
+            .collect();
+        assert!(
+            texts.contains(&"[image]".to_string()),
+            "image message was sampled away: {texts:?}"
+        );
+        assert_eq!(result.len(), 7);
     }
 }
