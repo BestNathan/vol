@@ -269,3 +269,51 @@ describe('session list helpers', () => {
     expect(truncateId('1234567890abcdef')).toBe('1234567890ab...')
   })
 })
+
+// Loose fixtures on purpose: the extraction only reads `content`, so the entry
+// arrays are cast at the call site (SessionEntry.data is `unknown`).
+function userMessageEntry(content: unknown): unknown {
+  return {
+    type: 'message',
+    created_at: 1,
+    data: { message: { message: { message: { role: 'user', content } } } },
+  }
+}
+
+describe('sessionEntriesToConversation — image parts', () => {
+  it('extracts image URLs from multipart user content', () => {
+    const entries = [
+      userMessageEntry([
+        { type: 'text', text: 'look at this' },
+        { type: 'image', image_url: { url: 'data:image/png;base64,QUJD' } },
+      ]),
+    ] as unknown as SessionEntry[]
+    const conv = sessionEntriesToConversation(entries)
+    expect(conv).toHaveLength(1)
+    expect(conv[0].type).toBe('UserInput')
+    if (conv[0].type === 'UserInput') {
+      expect(conv[0].text).toBe('look at this')
+      expect(conv[0].images).toEqual(['data:image/png;base64,QUJD'])
+    }
+  })
+
+  it('image-only multipart yields empty text with images', () => {
+    const entries = [
+      userMessageEntry([{ type: 'image', image_url: { url: 'https://e.test/a.png' } }]),
+    ] as unknown as SessionEntry[]
+    const conv = sessionEntriesToConversation(entries)
+    if (conv[0].type === 'UserInput') {
+      expect(conv[0].text).toBe('')
+      expect(conv[0].images).toEqual(['https://e.test/a.png'])
+    }
+  })
+
+  it('text-only content has no images field', () => {
+    const entries = [userMessageEntry('plain text')] as unknown as SessionEntry[]
+    const conv = sessionEntriesToConversation(entries)
+    if (conv[0].type === 'UserInput') {
+      expect(conv[0].text).toBe('plain text')
+      expect(conv[0].images).toBeUndefined()
+    }
+  })
+})

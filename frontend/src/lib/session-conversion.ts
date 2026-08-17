@@ -11,6 +11,8 @@
 //   data.message.message.message → vol_llm_core::Message (role/content/thinking/tool_calls)
 //   data.checkpoint              → { reason, note }              (SessionEntryData::Checkpoint)
 //   data.summary                 → { summary }                   (SessionEntryData::Summary)
+// Multipart message content ([{type:"text",...},{type:"image",image_url:{url}}])
+// splits into text and images; user messages render image parts as `images`.
 import type { ConversationEntry } from '@/types'
 import type { SessionEntry } from '@/lib/protocol'
 import { formatToolArgs, truncatePreview } from '@/lib/event-handlers'
@@ -30,22 +32,28 @@ type SessionEntryDataShape = {
   checkpoint?: { reason?: string; note?: string | null }
 }
 
-function messageText(content: unknown): string {
-  if (typeof content === 'string') return content
+/** Split wire content into display text and image data URLs. */
+function extractParts(content: unknown): { text: string; images: string[] } {
+  if (typeof content === 'string') return { text: content, images: [] }
   if (Array.isArray(content)) {
-    return content
-      .map((part) => {
-        if (part && typeof part === 'object') {
-          const rec = part as Record<string, unknown>
-          if (typeof rec.text === 'string') return rec.text
-          if (typeof rec.type === 'string') return rec.type
+    const text: string[] = []
+    const images: string[] = []
+    for (const part of content) {
+      if (part && typeof part === 'object') {
+        const rec = part as Record<string, unknown>
+        if (typeof rec.text === 'string') {
+          text.push(rec.text)
+        } else if (rec.type === 'image') {
+          const img = (rec.image_url ?? {}) as Record<string, unknown>
+          if (typeof img.url === 'string') images.push(img.url)
+        } else if (typeof rec.type === 'string') {
+          text.push(rec.type) // unknown future part types degrade to their name
         }
-        return ''
-      })
-      .filter(Boolean)
-      .join('\n')
+      }
+    }
+    return { text: text.filter(Boolean).join('\n'), images }
   }
-  return ''
+  return { text: '', images: [] }
 }
 
 export function sessionEntriesToConversation(entries: SessionEntry[]): ConversationEntry[] {
@@ -57,9 +65,13 @@ export function sessionEntriesToConversation(entries: SessionEntry[]): Conversat
         const msg = data.message?.message?.message
         if (!msg) break
         const role = msg.role ?? ''
-        const text = messageText(msg.content)
         if (role === 'user') {
-          out.push({ type: 'UserInput', text })
+          const { text, images } = extractParts(msg.content)
+          out.push({
+            type: 'UserInput',
+            text,
+            images: images.length > 0 ? images : undefined,
+          })
         } else if (role === 'assistant') {
           // Extract thinking if present, so resumed sessions show thinking blocks.
           const thinking = typeof msg.thinking === 'string' ? msg.thinking : ''
@@ -78,8 +90,9 @@ export function sessionEntriesToConversation(entries: SessionEntry[]): Conversat
               })
             }
           }
-          out.push({ type: 'AgentAnswer', text })
+          out.push({ type: 'AgentAnswer', text: extractParts(msg.content).text })
         } else if (role === 'tool') {
+          const text = extractParts(msg.content).text
           out.push({
             type: 'ToolResult',
             toolName: msg.name ?? 'tool',

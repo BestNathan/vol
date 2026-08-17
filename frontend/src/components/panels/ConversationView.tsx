@@ -108,7 +108,21 @@ function TimelineEntry({
       {/* Content */}
       <div className="flex-1 min-w-0 pb-3">
         {entry.type === 'UserInput' && (
-          <div className="text-foreground whitespace-pre-wrap">{entry.text}</div>
+          <div>
+            <div className="text-foreground whitespace-pre-wrap">{entry.text}</div>
+            {entry.images && entry.images.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {entry.images.map((src, i) => (
+                  <img
+                    key={i}
+                    src={src}
+                    alt={`attachment ${i + 1}`}
+                    className="w-24 h-24 object-cover rounded-md border border-border"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         )}
         {entry.type === 'Thinking' && (
           <div className="text-muted-foreground italic text-sm">
