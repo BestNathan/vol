@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-08-19] ingest | Agent Log File Location Fix: logs/ Instead of CWD
+- Created sources: [[otel-agent-log-dir-fix]]
+- Updated entities: [[vol-observability-crate]] (otel_init appender dir: logs/ with /tmp fallback; source_count 1->2)
+- Updated index: new source entry, updated entity summary
+- Cross-references added: 2
+- Changes: Root cause of `agent.*.log` files in the repo root was `RollingFileAppender::builder().build(".")` in otel_init.rs (CWD-relative; agent-server config has no log-dir option). Extracted `build_agent_file_appender()` pointing at `logs/` (created on demand, gitignored), /tmp fallback unchanged. TDD: behavior test writes a unique marker through the appender and asserts it lands in logs/agent*.log with no CWD leak. Gates: fmt/clippy/no-doc-tests/boundaries clean, 58/58 unit tests, line coverage 88.24% (>= 80%). Running dev backend (started 2026-08-07, not under cargo watch) keeps writing the old root file until restarted.
+
 ## [2026-08-19] ingest | Frontend Image UX Follow-ups: Session View Images, Lightbox, Attach Relocation
 - Created sources: [[frontend-image-session-lightbox]]
 - Updated sources: [[multimodal-image-input]] (Notes: 2026-08-19 follow-up pointer)

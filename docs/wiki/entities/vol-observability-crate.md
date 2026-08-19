@@ -3,8 +3,8 @@ type: entity
 category: infrastructure
 tags: [observability, metrics, prometheus, otel, logging, crate]
 created: 2026-07-24
-updated: 2026-07-24
-source_count: 1
+updated: 2026-08-19
+source_count: 2
 ---
 
 # vol-observability (crate)
@@ -34,6 +34,8 @@ plugin crate and the former `vol-observability` ingest binary into one library c
 - `metrics_router.rs` — shared `OnceLock<prometheus::Registry>` + `build_metrics_router()`
   serving `GET /metrics`.
 - `otel_init.rs` — full OTel init: traces + logs via OTLP push, metrics via Prometheus pull.
+  Agent log files rotate hourly into `logs/` (fallback `/tmp`) via `build_agent_file_appender()`
+  — previously written into the process CWD ([[otel-agent-log-dir-fix]]).
 
 ## What Moved Out
 - `RunLogPlugin` (JSONL file writer, formerly `LoggerPlugin`) → [[vol-llm-agent-crate]]
