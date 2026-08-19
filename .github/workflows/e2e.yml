@@ -9,8 +9,8 @@
 # degrades gracefully: unconfigured secrets simply produce skips, never
 # failures.
 #
-# The frontend Playwright suite is self-contained (mock backend) and also
-# runs on every PR via quality.yml; this job exists as a manual fallback.
+# The frontend Playwright suite is self-contained (mock backend) and is e2e
+# too, so it lives here — quality.yml never runs e2e tests.
 
 name: e2e
 
@@ -60,14 +60,10 @@ jobs:
           # Empty when unconfigured; in-test guards treat empty as missing.
           ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
           HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
-        run: |
-          # --nocapture so "SKIP (e2e): ..." guard messages reach the CI log
-          # — a fully-green run can otherwise be mostly skips with no trace.
-          if [ -n "${{ github.event.inputs.crate }}" ]; then
-            just test-e2e-crate "${{ github.event.inputs.crate }}" -- --nocapture
-          else
-            just test-e2e -- --nocapture
-          fi
+        # test-e2e-ci adds --nocapture so "SKIP (e2e): ..." guard messages
+        # reach the CI log — a fully-green run can otherwise be mostly
+        # skips with no trace.
+        run: just test-e2e-ci "${{ github.event.inputs.crate }}"
 
   e2e-frontend:
     name: e2e-frontend
@@ -86,13 +82,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
-        working-directory: frontend
+        run: just fe-install
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-        working-directory: frontend
+        run: just fe-pw-install
 
       - name: Playwright e2e (self-contained mock backend)
-        run: npm run test:e2e
-        working-directory: frontend
+        run: just fe-e2e

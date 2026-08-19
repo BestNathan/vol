@@ -5,7 +5,7 @@
 # Test tiers:
 #   unit        → pre-push (this hook, changed crates only)
 #   integration → CI (quality.yml)
-#   coverage    → CI (quality.yml coverage job)
+#   coverage    → CI report-only (quality.yml coverage jobs); local gate: just cover-gate <crate> 80
 #   e2e         → manual e2e.yml workflow (workflow_dispatch, secrets-gated)
 #
 # All checks run via just recipes.  No bypass: all checks must pass before pushing.

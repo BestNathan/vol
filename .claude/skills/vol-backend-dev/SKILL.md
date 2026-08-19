@@ -69,11 +69,11 @@ Test tiers and where each runs:
 |------|-------|---------|
 | Unit tests | pre-push hook (changed crates only) | `just test-unit-crates <crate...>` / `just test-unit` |
 | Integration tests | CI (`quality.yml`) | `just test-integration` |
-| Coverage | CI (`quality.yml` coverage job) | `just cover-gate <crate> 80` |
+| Coverage | CI report-only (`quality.yml` coverage jobs, no gate); local gate before claiming done | `just cover-gate <crate> 80` |
 | E2E (external services) | manual `e2e.yml` workflow (secrets-gated) | `just test-e2e` / `just test-e2e-crate <crate>` |
 | Frontend unit | pre-push (`just fe-test`), CI (`quality.yml`) | `just fe-test-unit` (vitest `--project unit`, node) |
 | Frontend integration | CI (`quality.yml`) | `just fe-test-integration` (vitest `--project integration`, jsdom + testing-library) |
-| Frontend e2e | CI (`quality.yml` PR gate) + manual | `just fe-e2e` (Playwright, mock backend) |
+| Frontend e2e | manual `e2e.yml` (never in quality.yml) | `just fe-e2e` (Playwright, mock backend) |
 
 All e2e tests carry `#[ignore = "e2e: ..."]` markers and in-test guards that
 skip cleanly when their prerequisites are missing — safe to run anywhere.

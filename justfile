@@ -77,6 +77,17 @@ test-e2e *ARGS:
 test-e2e-crate CRATE *ARGS:
     cargo test -p {{CRATE}} --no-fail-fast -- --ignored {{ARGS}}
 
+# --nocapture so in-test "SKIP (e2e): ..." guard messages reach the CI log.
+# CI e2e dispatch (e2e.yml): one crate, or whole workspace when CRATE is empty.
+test-e2e-ci CRATE="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "{{CRATE}}" ]; then
+        just test-e2e-crate "{{CRATE}}" -- --nocapture
+    else
+        just test-e2e -- --nocapture
+    fi
+
 # Run tests with slow timeout (for heavy crates like vol-llm-agent)
 test-slow *ARGS:
     cargo nextest run --workspace --no-fail-fast --profile slow {{ARGS}}
@@ -166,6 +177,11 @@ cover-gate-multi PCT *CRATES:
         exit 1; \
     fi
 
+# Core LLM crates by default; override with e.g. `just cover-ci vol-llm-sandbox`.
+# CI coverage report (report-only, no threshold gate; quality.yml coverage job).
+cover-ci *PKG:
+    @COV_PACKAGES="{{PKG}}" ./scripts/ci-coverage-report.sh
+
 # ── Quality: no-doc-tests ───────────────────────────────────────────────
 
 # Check no active doc tests
@@ -175,6 +191,10 @@ no-doc-tests:
 # Check no new clippy allow annotations
 no-clippy-allow:
     @./scripts/check-no-clippy-allow.sh
+
+# Check crate boundary rules (protocol/runtime must not depend on agent-server)
+boundaries:
+    @./scripts/check-agent-boundaries.sh
 
 # ── Web dev (React frontend) ────────────────────────────────────────────
 
@@ -236,6 +256,14 @@ fe-test-integration:
 # Run frontend Playwright e2e tests (self-contained: mock backend, no external services)
 fe-e2e:
     npm --prefix frontend run test:e2e
+
+# Install frontend deps (CI step: npm ci)
+fe-install:
+    npm --prefix frontend ci
+
+# Install Playwright chromium + system deps (CI step)
+fe-pw-install:
+    cd frontend && npx playwright install --with-deps chromium
 
 # ── Docker ──────────────────────────────────────────────────────────────
 
