@@ -191,7 +191,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 - [ ] **Step 1: Replace the playwright entry in .mcp.json**
 
-The whole file becomes (keep `docs-rs-mcp` and `钉钉文档` entries verbatim — including the dingtalk URL with its `?key=` token):
+The whole file becomes (the `钉钉文档` entry is not in the shared file — its permissioned URL lives only in the `agent-dingtalk-secrets` secret, mounted as `/app/.mcp.json` in the dingtalk deployment):
 
 ```json
 {
@@ -199,10 +199,6 @@ The whole file becomes (keep `docs-rs-mcp` and `钉钉文档` entries verbatim �
     "docs-rs-mcp": {
       "type": "http",
       "url": "http://docs-rs-mcp.vol-agent-system.svc.cluster.local:8080/mcp"
-    },
-    "钉钉文档": {
-      "type": "streamable-http",
-      "url": "https://mcp-gw.dingtalk.com/server/621fdbe4ef3a5dfbfca57542962095496bfdd56e03f755aeab6a50791ff167ca?key=f297c79708995fb16c3fd0b3fca48d3d"
     },
     "playwright": {
       "type": "http",
