@@ -6,11 +6,6 @@
 # No bypass: all checks must pass before committing.
 set -euo pipefail
 
-if ! command -v just >/dev/null 2>&1; then
-  echo "pre-commit requires 'just' (https://just.systems) — install it first."
-  exit 1
-fi
-
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 
 # ── Detect what changed ───────────────────────────────────────────────
@@ -23,6 +18,13 @@ eval "$(echo "$CHANGES" | "$SCRIPT_DIR/scripts/detect-changes.sh")"
 
 if [ "$NO_CHANGES" = "true" ]; then
   exit 0
+fi
+
+# `just` is only needed when a gate actually runs — docs-only commits
+# must not require it.
+if ! command -v just >/dev/null 2>&1; then
+  echo "pre-commit requires 'just' (https://just.systems) — install it first."
+  exit 1
 fi
 
 HAS_ERROR=0

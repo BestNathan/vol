@@ -23,14 +23,18 @@ on:
         type: string
 
 concurrency:
-  group: e2e-${{ github.run_id }}
+  # Static group: serialize manual dispatches so concurrent runs don't race
+  # the shared external services (LLM keys, SSH test host port 2222, etc.).
+  group: e2e
   cancel-in-progress: false
 
 jobs:
   e2e-rust:
     name: e2e-rust
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Cold-cache dispatches compile the full workspace's test binaries before
+    # any e2e test runs; give that headroom.
+    timeout-minutes: 90
     permissions:
       contents: read
     steps:
@@ -57,10 +61,12 @@ jobs:
           ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
           HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
         run: |
+          # --nocapture so "SKIP (e2e): ..." guard messages reach the CI log
+          # — a fully-green run can otherwise be mostly skips with no trace.
           if [ -n "${{ github.event.inputs.crate }}" ]; then
-            just test-e2e-crate "${{ github.event.inputs.crate }}"
+            just test-e2e-crate "${{ github.event.inputs.crate }}" -- --nocapture
           else
-            just test-e2e
+            just test-e2e -- --nocapture
           fi
 
   e2e-frontend:

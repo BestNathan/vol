@@ -58,9 +58,9 @@ impl MockLlmClient {
 
     /// Set a queue of per-call stream scripts for converse_stream().
     ///
-    /// Each call pops the next script (in order); when the queue is
-    /// exhausted, calls receive an empty stream. While the queue is
-    /// non-empty it takes precedence over [`Self::set_stream_events`].
+    /// Each call pops the next script (in order). When the queue is
+    /// exhausted, calls fall back to [`Self::set_stream_events`] (or an
+    /// empty stream if that was never set).
     pub async fn set_stream_event_queue(&self, scripts: Vec<Vec<StreamEvent>>) {
         self.state.lock().await.stream_event_queue = scripts.into();
     }

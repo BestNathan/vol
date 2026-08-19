@@ -100,6 +100,39 @@ async fn test_bash_timeout() {
 }
 
 #[tokio::test]
+async fn test_bash_timeout_kills_grandchildren() {
+    use std::time::Duration;
+    use tokio::process::Command;
+
+    // `bash -c "sh -c 'sleep 90'"` execs into sh, so the sleep is a
+    // GRANDchild of the spawned process — exercises the full descendant
+    // walk in LocalSandbox's timeout kill, not just depth-1 pkill -P.
+    let tool = BashTool::new();
+    let args = json!({
+        "command": "sh -c 'sleep 90'",
+        "timeout": 10
+    });
+
+    let result = tool.execute(&args, &ToolContext::for_test()).await;
+    assert!(result.is_err());
+
+    // Give the kill sequence time to complete
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let check = Command::new("pgrep")
+        .arg("-f")
+        .arg("^sleep 90$")
+        .output()
+        .await
+        .unwrap();
+    assert!(
+        check.stdout.is_empty(),
+        "grandchild sleep 90 should have been killed, but pgrep found: {}",
+        String::from_utf8_lossy(&check.stdout)
+    );
+}
+
+#[tokio::test]
 async fn test_bash_timeout_kills_process() {
     use std::time::Duration;
     use tokio::process::Command;

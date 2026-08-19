@@ -12,6 +12,31 @@ use std::time::Duration;
 /// Counter to guarantee unique temp directory names across parallel tests.
 static SANDBOX_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// Collect all descendant PIDs of `root` via repeated `pgrep -P` walks (BFS).
+/// Callers kill the returned list in reverse order to terminate leaves first.
+/// Requires procps `pgrep`; returns an empty list if it is unavailable.
+#[cfg(unix)]
+fn collect_descendants(root: u32) -> Vec<u32> {
+    let mut out = Vec::new();
+    let mut frontier = vec![root];
+    while let Some(parent) = frontier.pop() {
+        let Ok(output) = std::process::Command::new("pgrep")
+            .arg("-P")
+            .arg(parent.to_string())
+            .output()
+        else {
+            continue;
+        };
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            if let Ok(pid) = line.trim().parse::<u32>() {
+                out.push(pid);
+                frontier.push(pid);
+            }
+        }
+    }
+    out
+}
+
 /// A sandbox using a local directory as its root.
 ///
 /// If created with `Some(path)`, the directory is caller-owned and NOT deleted on cleanup.
@@ -149,13 +174,17 @@ impl Sandbox for LocalSandbox {
                                 // sandboxes such as the Claude Code bash sandbox kill
                                 // the caller's whole process tree when a group signal
                                 // is actually delivered. Use positive-pid kills only.
-                                // TERM the child's descendants first (pkill -P), then
-                                // the child itself; escalate to KILL after a 2s grace.
-                                let _ = KillCommand::new("pkill")
-                                    .arg("-TERM")
-                                    .arg("-P")
-                                    .arg(pid.to_string())
-                                    .status();
+                                // Walk the full descendant tree (pgrep -P, BFS) and
+                                // TERM it deepest-first, then TERM the direct child;
+                                // escalate to KILL after a 2s grace. Requires procps
+                                // (pgrep) — present in both agent-server runtime images.
+                                let descendants = collect_descendants(pid);
+                                for d in descendants.iter().rev() {
+                                    let _ = KillCommand::new("kill")
+                                        .arg("-TERM")
+                                        .arg(d.to_string())
+                                        .status();
+                                }
                                 let _ = KillCommand::new("kill")
                                     .arg("-TERM")
                                     .arg(pid.to_string())
@@ -166,21 +195,37 @@ impl Sandbox for LocalSandbox {
                                         break;
                                     }
                                     if grace.elapsed() > Duration::from_secs(2) {
-                                        let _ = KillCommand::new("pkill")
-                                            .arg("-KILL")
-                                            .arg("-P")
-                                            .arg(pid.to_string())
-                                            .status();
+                                        // Escalate to KILL, deepest-first. Then reap with
+                                        // a bound — SIGKILL can be undeliverable (D-state
+                                        // process), and this thread must not hang the
+                                        // whole tool call forever.
+                                        for d in descendants.iter().rev() {
+                                            let _ = KillCommand::new("kill")
+                                                .arg("-KILL")
+                                                .arg(d.to_string())
+                                                .status();
+                                        }
                                         let _ = KillCommand::new("kill")
                                             .arg("-KILL")
                                             .arg(pid.to_string())
                                             .status();
-                                        break;
+                                        let reap = std::time::Instant::now();
+                                        loop {
+                                            if child.try_wait().map_err(SandboxError::Io)?.is_some()
+                                            {
+                                                break;
+                                            }
+                                            if reap.elapsed() > Duration::from_secs(5) {
+                                                break;
+                                            }
+                                            std::thread::sleep(Duration::from_millis(50));
+                                        }
+                                        return Err(SandboxError::Timeout(timeout));
                                     }
                                     std::thread::sleep(Duration::from_millis(50));
                                 }
+                                let _ = child.wait();
                             }
-                            let _ = child.wait();
                             return Err(SandboxError::Timeout(timeout));
                         }
                         std::thread::sleep(Duration::from_millis(100));

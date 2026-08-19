@@ -11,11 +11,6 @@
 # All checks run via just recipes.  No bypass: all checks must pass before pushing.
 set -euo pipefail
 
-if ! command -v just >/dev/null 2>&1; then
-  echo "pre-push requires 'just' (https://just.systems) — install it first."
-  exit 1
-fi
-
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 
 # ── Detect what changed in the push range ─────────────────────────────
@@ -54,19 +49,38 @@ HAS_ERROR=0
 
 # ── Rust clippy-allow check (fast, runs first) ─────────────────────────
 if [ "$RUST_CHANGED" = "true" ]; then
+  if ! command -v just >/dev/null 2>&1; then
+    echo "pre-push requires 'just' (https://just.systems) — install it first."
+    exit 1
+  fi
   just no-clippy-allow || HAS_ERROR=1
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 fi
 
 # ── Rust unit tests (changed crates only) ──────────────────────────────
 if [ "$RUST_CHANGED" = "true" ]; then
-  # Extract changed crate names
-  CHANGED_CRATES=$(echo "$CHANGES" \
-    | grep '^crates/' \
-    | sed -n 's|^crates/\([^/]*\)/.*|\1|p' \
-    | sort -u \
-    | tr '\n' ' ' \
-    || true)
+  # Extract changed crate PACKAGE names. Workspace members nest (e.g.
+  # crates/vol-llm-tools-builtin/bash-tool/ is its own package named
+  # vol-llm-tools-builtin-bash), so resolve the deepest path prefix with a
+  # Cargo.toml and read the real package name from it (directory names are
+  # not package names).
+  CHANGED_CRATES=""
+  for path in $(echo "$CHANGES" | grep '^crates/'); do
+    dir=${path%/*}
+    while [ -n "$dir" ] && [ "$dir" != "crates" ]; do
+      if [ -f "$dir/Cargo.toml" ]; then
+        crate=$(sed -n 's/^name = "\(.*\)"/\1/p' "$dir/Cargo.toml" | head -1)
+        [ -z "$crate" ] && crate=${dir##*/}
+        case " $CHANGED_CRATES " in
+          *" $crate "*) ;;
+          *) CHANGED_CRATES="$CHANGED_CRATES $crate" ;;
+        esac
+        break
+      fi
+      dir=${dir%/*}
+    done
+  done
+  CHANGED_CRATES=${CHANGED_CRATES# }
 
   if [ -n "$CHANGED_CRATES" ]; then
     echo "→ Changed crates: $CHANGED_CRATES"
@@ -81,6 +95,10 @@ fi
 
 # ── Frontend unit tests ────────────────────────────────────────────────
 if [ "$FRONTEND_CHANGED" = "true" ]; then
+  if ! command -v just >/dev/null 2>&1; then
+    echo "pre-push requires 'just' (https://just.systems) — install it first."
+    exit 1
+  fi
   just fe-test || HAS_ERROR=1
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 fi

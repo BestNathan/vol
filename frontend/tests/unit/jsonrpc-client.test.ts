@@ -1,5 +1,5 @@
 // frontend/tests/unit/jsonrpc-client.test.ts
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 // Mock WebSocket
 class MockWebSocket {
@@ -50,7 +50,7 @@ describe('JsonRpcClient', () => {
 
     const resultPromise = client.call<{ name: string }>('agent.list', { node_id: 'n1' })
     // Simulate server response (id:1 because first call)
-    const ws = (client as any).ws as MockWebSocket
+    const ws = (client as unknown as { ws: MockWebSocket }).ws
     ws.receive({ jsonrpc: '2.0', id: 1, result: [{ name: 'test-agent' }] })
 
     const result = await resultPromise
@@ -69,7 +69,7 @@ describe('JsonRpcClient', () => {
     await new Promise(r => setTimeout(r, 10))
 
     const resultPromise = client.call('agent.list', {})
-    const ws = (client as any).ws as MockWebSocket
+    const ws = (client as unknown as { ws: MockWebSocket }).ws
     ws.receive({ jsonrpc: '2.0', id: 1, error: { code: -1, message: 'Not found' } })
 
     await expect(resultPromise).rejects.toEqual({ code: -1, message: 'Not found' })
@@ -80,7 +80,7 @@ describe('JsonRpcClient', () => {
     const client = new JsonRpcClient('ws://test/ws', { autoSubscribe: false })
     await new Promise(r => setTimeout(r, 10))
 
-    const ws = (client as any).ws as MockWebSocket
+    const ws = (client as unknown as { ws: MockWebSocket }).ws
     ws.receive({ jsonrpc: '2.0', method: 'agent.event', params: { run_id: 'r1', event: { AgentStart: { input: 'hello' } } } })
 
     // Read from event stream
@@ -93,10 +93,10 @@ describe('JsonRpcClient', () => {
     const { JsonRpcClient } = await importClient()
     const client = new JsonRpcClient('ws://test/ws', { autoSubscribe: false })
     await new Promise(r => setTimeout(r, 10))
-    const oldWs = (client as any).ws
+    const oldWs = (client as unknown as { ws: MockWebSocket }).ws
 
     client.reconnect()
     await new Promise(r => setTimeout(r, 10))
-    expect((client as any).ws).not.toBe(oldWs)
+    expect((client as unknown as { ws: MockWebSocket }).ws).not.toBe(oldWs)
   })
 })

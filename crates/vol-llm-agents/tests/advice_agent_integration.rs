@@ -60,6 +60,18 @@ async fn test_advice_agent_end_to_end() {
         eprintln!("SKIP (e2e): TDengine unreachable — requires a running TDengine");
         return;
     }
+    // The Feishu step fails hard mid-run without credentials — check them up
+    // front so an unconfigured dispatch skips instead of burning LLM calls.
+    for var in ["FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_RECEIVE_ID"] {
+        if std::env::var(var)
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .is_none()
+        {
+            eprintln!("SKIP (e2e): {var} not set — requires Feishu credentials");
+            return;
+        }
+    }
 
     // Setup LLM Provider
     let api_key = std::env::var("ANTHROPIC_AUTH_TOKEN").expect("ANTHROPIC_AUTH_TOKEN must be set");
