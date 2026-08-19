@@ -25,10 +25,11 @@ const config = {
     },
   },
   test: {
-    // Playwright e2e specs live in tests/e2e and must not be picked up by
-    // vitest (they import @playwright/test and need a browser). Note: a user
-    // `exclude` REPLACES vitest's defaults (deepMerge array semantics), so the
-    // default excludes are repeated here.
+    // Two-tier vitest split (Playwright e2e is a separate toolchain):
+    //   unit        — pure-logic tests, node environment (tests/unit/)
+    //   integration — component interaction tests, jsdom (tests/integration/)
+    // Each project is selected via `--project <name>`; `vitest run` executes
+    // both. `extends: true` inherits the root test config (exclude/coverage).
     exclude: [
       'tests/e2e/**',
       '**/node_modules/**',
@@ -56,6 +57,25 @@ const config = {
         statements: 17,
       },
     },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          environment: 'node',
+          include: ['tests/unit/**/*.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'integration',
+          environment: 'jsdom',
+          include: ['tests/integration/**/*.test.{ts,tsx}'],
+          setupFiles: ['./tests/integration/setup.ts'],
+        },
+      },
+    ],
   },
 } satisfies import('vitest/config').UserConfig
 

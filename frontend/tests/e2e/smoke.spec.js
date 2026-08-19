@@ -71,8 +71,9 @@ test('2. status bar shows connection indicator and session info', async ({ page 
   await expect(page.getByText('Connected')).toBeVisible()
   await expect(page.getByText('Session: web-sess')).toBeVisible()
   await expect(page.getByText(/Run: 0/)).toBeVisible()
-  // Nodes dropdown reflects the mocked control-plane node.
-  await expect(page.getByRole('button', { name: /Nodes\(1\)/ })).toBeVisible()
+  // Nodes dropdown reflects the mocked control-plane node (auto-selected,
+  // so the trigger shows the node name rather than "Nodes(1)").
+  await expect(page.getByRole('button', { name: /▾ Test Node/ })).toBeVisible()
 })
 
 test('3. all 7 tabs switch and render their panels', async ({ page }) => {
@@ -87,7 +88,9 @@ test('3. all 7 tabs switch and render their panels', async ({ page }) => {
     ['Logs', 'No log files found.'],
   ]
   for (const [tab, marker] of cases) {
-    await page.getByRole('button', { name: tab, exact: true }).click()
+    // `.first()`: the Agents panel has its own sub-tabs; the top-level TabBar
+    // renders first in the DOM.
+    await page.getByRole('tab', { name: tab, exact: true }).first().click()
     const target = typeof marker === 'string' ? page.getByText(marker) : marker
     await expect(target.first()).toBeVisible()
   }
@@ -130,11 +133,11 @@ test('5. capability drawer opens, search filters, and toggles work', async ({ pa
 test('6. dialogs open and close: DebugPanel, ApprovalDialog, shadcn SkillDetailDialog', async ({ page }) => {
   await selectAgent(page)
 
-  // DebugPanel: toggled from the StatusBar bug button. While open its overlay
-  // covers the whole screen, so it is closed via its own close button.
+  // DebugPanel: toggled from the StatusBar bug button. It renders as a Radix
+  // Dialog; close it via the dialog's built-in Close button.
   await page.getByRole('button', { name: 'Toggle debug panel' }).click()
   await expect(page.getByText('Debug Panel')).toBeVisible()
-  await page.getByRole('button', { name: 'Close debug panel' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click()
   await expect(page.getByText('Debug Panel')).toBeHidden()
 
   // ApprovalDialog: pushed by an approval_request event.
@@ -151,7 +154,7 @@ test('6. dialogs open and close: DebugPanel, ApprovalDialog, shadcn SkillDetailD
   await page.getByRole('tab', { name: 'Conversation' }).click()
 
   // shadcn Dialog: SkillDetailDialog from the Skills tab.
-  await page.getByRole('button', { name: 'Skills', exact: true }).click()
+  await page.getByRole('tab', { name: 'Skills', exact: true }).first().click()
   await page.getByRole('cell', { name: 'test-skill' }).click()
   const detail = page.getByRole('dialog').filter({ hasText: 'test-skill' })
   await expect(detail).toBeVisible()
@@ -167,7 +170,7 @@ test('7. FileTree expands and collapses directories', async ({ page }) => {
 
   // Expand: click the src dir -> its children load and render.
   await srcRow.click()
-  const mainTs = tree.locator('span[class*="text-[#ccc]"]', { hasText: 'main.ts' })
+  const mainTs = tree.locator('span[class*="text-foreground/80"]', { hasText: 'main.ts' })
   await expect(mainTs).toBeVisible()
   await expect(tree.locator('span[class*="8ab4ff"]', { hasText: 'lib' })).toBeVisible()
 
@@ -196,10 +199,10 @@ test('8. mobile <480px: rail FileTree, hidden StatusBar labels, drawer overlay',
   await expect(page.getByRole('button', { name: 'Close file explorer' })).toBeVisible()
   const tree = page.locator('div[class*="bg-[#16162a]"]').first()
   await tree.locator('span[class*="8ab4ff"]', { hasText: 'src' }).click()
-  await expect(tree.locator('span[class*="text-[#ccc]"]', { hasText: 'main.ts' })).toBeVisible()
+  await expect(tree.locator('span[class*="text-foreground/80"]', { hasText: 'main.ts' })).toBeVisible()
   await page.getByRole('button', { name: 'Close file explorer' }).click()
 
   // Tabs still switch on a narrow screen (bar scrolls horizontally).
-  await page.getByRole('button', { name: 'Logs', exact: true }).click()
+  await page.getByRole('tab', { name: 'Logs', exact: true }).first().click()
   await expect(page.getByText('No log files found.')).toBeVisible()
 })

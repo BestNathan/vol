@@ -129,12 +129,15 @@ export async function installMockBackend(page, { capabilities, handlers } = {}) 
 /**
  * Load the app and reach a state where an agent is selected:
  * node selector -> mock node -> agent card. Assumes installMockBackend ran.
+ *
+ * The NodesDropdown auto-selects the first online node with a ws_url, so by
+ * the time the trigger shows the node name ("▾ Test Node") the DP pool is
+ * already connected — the dropdown no longer needs manual interaction.
  */
 export async function selectAgent(page) {
   // 'domcontentloaded' avoids racing the Vite dep pre-bundling; locators below
   // auto-wait for the app to render.
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: /Nodes\(\d+\)/ }).click()
-  await page.getByTitle('Select Test Node').click()
+  await page.getByRole('button', { name: /▾ Test Node/ }).waitFor()
   await page.getByRole('button', { name: /Test Agent/ }).click()
 }
