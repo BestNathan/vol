@@ -3,8 +3,8 @@ type: entity
 category: service
 tags: [sandbox, container, ssh, firecracker, tmp, wasm, rust]
 created: 2026-06-17
-updated: 2026-08-11
-source_count: 2
+updated: 2026-08-19
+source_count: 3
 ---
 
 # vol-llm-sandbox Crate
@@ -67,3 +67,4 @@ source_count: 2
 ## Timeline
 - **2026-06-17**: Initial sandbox abstraction, LocalSandbox, SSHSandbox, FirecrackerSandbox
 - **2026-08-11**: TmpSandbox added; resolve_path unified across all implementations; bind_metadata trait method; registry simplified to pure config loading; `Sandbox` trait fully documented
+- **2026-08-19**: LocalSandbox timeout kill reworked — positive-pid kills only (`pkill -TERM/-KILL -P <pid>` for descendants + `kill <pid>` for the direct child, 2s grace poll instead of fixed 5s sleep). Process-group kills (`kill -TERM -pgid`) are forbidden: sandboxes (Claude Code bash sandbox verified) kill the caller's whole process tree when a group signal is delivered. `process_group(0)` on the child is retained but no longer depended on. Wasm exit-code test fixed: WAT modules must export `memory` or the wiggle shim bails with "missing required memory export" before calling any host function.

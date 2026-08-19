@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, llm, abstraction, rust]
 created: 2026-05-04
-updated: 2026-08-17
-source_count: 4
+updated: 2026-08-19
+source_count: 5
 ---
 
 # vol-llm-core Crate
@@ -19,6 +19,7 @@ Defines the core abstractions for LLM interaction: message types, conversation r
 ## Key Facts
 - Defines `Message`, `MessageRole`, `ConversationRequest`, `ToolDefinition`, `ToolCall` types
 - Defines `LLMClient` trait that all providers must implement
+- `test_utils::MockLlmClient` (feature `test-utils`): configurable mock with `set_converse_response`, `set_stream_events`, per-call scripting via `set_stream_event_queue` (VecDeque of event scripts — each `converse_stream` call pops the next, exhausted queue → empty stream), `set_error_at`, and call logging
 - Defines `LLMProvider` enum (Anthropic, OpenAI)
 - Provider-agnostic: agent code doesn't care which provider is used
 
