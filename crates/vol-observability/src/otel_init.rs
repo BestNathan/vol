@@ -91,20 +91,7 @@ pub fn init(
         .with_ansi(true)
         .with_writer(std::io::stdout);
 
-    let file_appender = RollingFileAppender::builder()
-        .rotation(Rotation::HOURLY)
-        .filename_prefix("agent")
-        .filename_suffix("log")
-        .max_log_files(168)
-        .build(".")
-        .unwrap_or_else(|_| {
-            RollingFileAppender::builder()
-                .rotation(Rotation::HOURLY)
-                .filename_prefix("agent")
-                .filename_suffix("log")
-                .build("/tmp")
-                .unwrap_or_else(|_| panic!("Failed to create file appender in /tmp"))
-        });
+    let file_appender = build_agent_file_appender();
     let file_layer = fmt::layer()
         .with_ansi(false)
         .with_target(true)
@@ -224,6 +211,25 @@ pub fn init(
     }
 }
 
+/// Hourly-rotated agent log files under `logs/` (the dir is created on
+/// demand), falling back to `/tmp` when the logs dir is not writable.
+fn build_agent_file_appender() -> RollingFileAppender {
+    RollingFileAppender::builder()
+        .rotation(Rotation::HOURLY)
+        .filename_prefix("agent")
+        .filename_suffix("log")
+        .max_log_files(168)
+        .build("logs")
+        .unwrap_or_else(|_| {
+            RollingFileAppender::builder()
+                .rotation(Rotation::HOURLY)
+                .filename_prefix("agent")
+                .filename_suffix("log")
+                .build("/tmp")
+                .unwrap_or_else(|_| panic!("Failed to create file appender in /tmp"))
+        })
+}
+
 /// Backward-compatible init_otel_logs. Deprecated: prefer init().
 pub fn init_otel_logs(
     endpoint: &str,
@@ -240,4 +246,53 @@ pub fn init_otel_logs(
     };
     let _guards = init(&config, "info")?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write as _;
+
+    /// The agent file appender must write under `logs/` (created on demand),
+    /// never directly into the process CWD — dev servers run from the repo
+    /// root and used to litter `agent.*.log` files there.
+    #[test]
+    fn agent_file_appender_writes_under_logs_directory() {
+        let marker = format!("otel-init-appender-marker-{}\n", std::process::id());
+        {
+            let mut appender = build_agent_file_appender();
+            appender
+                .write_all(marker.as_bytes())
+                .expect("appender write succeeds");
+        }
+
+        let found = std::fs::read_dir("logs")
+            .expect("logs dir is created by the appender")
+            .filter_map(std::result::Result::ok)
+            .any(|entry| {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if !(name.starts_with("agent") && name.ends_with(".log")) {
+                    return false;
+                }
+                std::fs::read_to_string(entry.path())
+                    .map(|content| content.contains(&marker))
+                    .unwrap_or(false)
+            });
+        assert!(found, "marker line not found under logs/agent*.log");
+
+        // The same marker must NOT appear in any agent log in the CWD.
+        let leaked = std::fs::read_dir(".")
+            .expect("cwd readable")
+            .filter_map(std::result::Result::ok)
+            .any(|entry| {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if !(name.starts_with("agent") && name.ends_with(".log")) {
+                    return false;
+                }
+                std::fs::read_to_string(entry.path())
+                    .map(|content| content.contains(&marker))
+                    .unwrap_or(false)
+            });
+        assert!(!leaked, "marker line leaked into an agent log in the CWD");
+    }
 }
