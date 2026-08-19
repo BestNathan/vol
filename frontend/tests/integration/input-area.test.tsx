@@ -1,7 +1,7 @@
 // Integration test: InputArea submit flow against a mocked panel client.
 // Renders the real component with a real jotai store — no WS connection.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createStore, Provider } from 'jotai'
 import { InputArea } from '@/components/inputs/InputArea'
@@ -9,6 +9,7 @@ import { selectedAgentIdAtom } from '@/stores/agents'
 import { conversationMapAtom } from '@/stores/conversation'
 import { approvalPendingAtom } from '@/stores/dialogs'
 import { isRunningAtom } from '@/stores/connection'
+import { imageAttachmentsAtom } from '@/stores/attachments'
 import { getPanelClient } from '@/lib/panel-client'
 
 vi.mock('@/lib/panel-client', () => ({
@@ -97,5 +98,33 @@ describe('InputArea', () => {
     expect(
       screen.queryByPlaceholderText('Type a message to the agent...'),
     ).not.toBeInTheDocument()
+  })
+
+  it('renders ready image chips from the shared attachments atom and submits them', async () => {
+    const store = createStore()
+    store.set(selectedAgentIdAtom, 'agent-1')
+    store.set(imageAttachmentsAtom, [
+      { id: 'img-1', dataUrl: 'data:image/png;base64,AAAA', error: null },
+    ])
+    const user = userEvent.setup()
+    renderInputArea(store)
+
+    expect(screen.getByAltText('attachment')).toHaveAttribute('src', 'data:image/png;base64,AAAA')
+
+    const textarea = screen.getByPlaceholderText('Type a message to the agent...')
+    await user.type(textarea, 'look{Enter}')
+
+    expect(mockCall).toHaveBeenCalledWith('agent.submit', {
+      input: {
+        parts: [
+          { type: 'text', text: 'look' },
+          { type: 'image_url', url: 'data:image/png;base64,AAAA' },
+        ],
+        metadata: { session_id: 'web-session' },
+      },
+      target: 'agent-1',
+    })
+    // Attachments are consumed by the successful submit.
+    await waitFor(() => expect(store.get(imageAttachmentsAtom)).toEqual([]))
   })
 })
