@@ -1,22 +1,32 @@
 // frontend/src/components/inputs/CapabilityBar.tsx
 // Capability summary bar — sits between the conversation and the input area.
 // Shows "🛠 N tools · N skills · N MCPs" from capOverlayAtom.effective_*;
-// the ✎ button opens the right-side CapabilityDrawer. Fetches capabilities
-// on agent change so the summary counts stay fresh. Port of capability_bar.rs.
-import { useEffect } from 'react'
+// the ✎ button opens the right-side CapabilityDrawer; the Attach button next
+// to it picks images into the shared imageAttachmentsAtom. Fetches
+// capabilities on agent change so the summary counts stay fresh. Port of
+// capability_bar.rs.
+import { useEffect, useRef } from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { PaperclipIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { getPanelClient } from '@/lib/panel-client'
 import { cn } from '@/lib/utils'
+import { useImageAttachments } from '@/hooks/useImageAttachments'
 import { selectedAgentIdAtom } from '@/stores/agents'
-import { sessionIdAtom } from '@/stores/connection'
+import { sessionIdAtom, isRunningAtom } from '@/stores/connection'
+import { approvalPendingAtom } from '@/stores/dialogs'
 import { capOverlayAtom, drawerOpenAtom } from '@/stores/capability'
 import type { GetCapabilitiesResult } from '@/lib/protocol'
 
 export function CapabilityBar() {
   const selectedAgentId = useAtomValue(selectedAgentIdAtom)
   const sessionId = useAtomValue(sessionIdAtom)
+  const isRunning = useAtomValue(isRunningAtom)
+  const approvalPending = useAtomValue(approvalPendingAtom)
   const [overlay, setOverlay] = useAtom(capOverlayAtom)
   const setDrawerOpen = useSetAtom(drawerOpenAtom)
+  const { addFiles } = useImageAttachments()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load capabilities when the selected agent (or session) changes. The
   // drawer re-fetches on open; this fetch only fills effective_* so the
@@ -83,6 +93,28 @@ export function CapabilityBar() {
           </button>
         </>
       )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          addFiles(Array.from(e.target.files ?? []))
+          e.target.value = ''
+        }}
+      />
+      <Button
+        variant="ghost"
+        size="sm"
+        className="cursor-pointer text-muted-foreground/60 hover:text-yellow-400/70 text-[11px]"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={isRunning || approvalPending}
+        aria-label="Attach images"
+      >
+        <PaperclipIcon data-icon="inline-start" />
+        Attach
+      </Button>
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getPanelClient } from '@/lib/panel-client'
 import { sessionEntriesToConversation } from '@/lib/session-conversion'
+import { ImageGallery } from '@/components/shared/ImageGallery'
 import type { RpcMethods } from '@/lib/protocol'
 import type { ConversationEntry, SessionListEntry } from '@/types'
 
@@ -28,6 +29,7 @@ function EntryView({ entry }: { entry: ConversationEntry }) {
         <div className="mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#1a2a44] border-l-[3px] border-[#4080ff]">
           <div className="text-[#4080ff] font-bold">&gt;&gt;&gt; </div>
           {entry.text}
+          {entry.images && entry.images.length > 0 && <ImageGallery images={entry.images} />}
         </div>
       )
     case 'Thinking':

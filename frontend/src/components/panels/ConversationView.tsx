@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { conversationByAgentAtom } from '@/stores/conversation'
 import { isRunningAtom } from '@/stores/connection'
 import { Markdown } from '@/components/shared/Markdown'
+import { ImageGallery } from '@/components/shared/ImageGallery'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useAutoScroll } from '@/hooks/useAutoScroll'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -110,18 +111,7 @@ function TimelineEntry({
         {entry.type === 'UserInput' && (
           <div>
             <div className="text-foreground whitespace-pre-wrap">{entry.text}</div>
-            {entry.images && entry.images.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {entry.images.map((src, i) => (
-                  <img
-                    key={i}
-                    src={src}
-                    alt={`attachment ${i + 1}`}
-                    className="w-24 h-24 object-cover rounded-md border border-border"
-                  />
-                ))}
-              </div>
-            )}
+            {entry.images && entry.images.length > 0 && <ImageGallery images={entry.images} />}
           </div>
         )}
         {entry.type === 'Thinking' && (

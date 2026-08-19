@@ -1,13 +1,14 @@
 // frontend/src/components/inputs/InputArea.tsx
 // Text input for sending messages to the agent. Sits below the capability bar
 // and above the status bar region of the conversation tab. Port of the Dioxus
-// input_area.rs with the Cancel-button gap fix.
+// input_area.rs with the Cancel-button gap fix. Image attachments live in the
+// shared imageAttachmentsAtom (the Attach trigger is in CapabilityBar).
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAtomValue, useSetAtom, getDefaultStore } from 'jotai'
 import { Button } from '@/components/ui/button'
 import { getPanelClient } from '@/lib/panel-client'
-import { compressImageFile, ImageError, MAX_IMAGES_PER_MESSAGE } from '@/lib/image'
-import { PaperclipIcon, XIcon } from 'lucide-react'
+import { XIcon } from 'lucide-react'
+import { useImageAttachments } from '@/hooks/useImageAttachments'
 import { selectedAgentIdAtom, agentStatusMapAtom } from '@/stores/agents'
 import {
   isRunningAtom,
@@ -40,16 +41,9 @@ export function buildInputParts(
   ]
 }
 
-interface ImageAttachment {
-  id: string
-  dataUrl: string | null // null while compressing
-  error: string | null
-}
-
 export function InputArea() {
   const [text, setText] = useState('')
-  const [images, setImages] = useState<ImageAttachment[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { images, setImages, addFiles, removeImage } = useImageAttachments()
   const isRunning = useAtomValue(isRunningAtom)
   const selectedAgentId = useAtomValue(selectedAgentIdAtom)
   const activeAgentId = useAtomValue(activeAgentIdAtom)
@@ -132,48 +126,13 @@ export function InputArea() {
   }, [
     text,
     images,
+    setImages,
     isRunning,
     selectedAgentId,
     setPendingSubmitAgent,
     conversationMap,
     setConversationMap,
   ])
-
-  const addFiles = useCallback(
-    (files: File[]) => {
-      const imageFiles = files.filter((f) => f.type.startsWith('image/'))
-      if (imageFiles.length === 0) return
-      const room = MAX_IMAGES_PER_MESSAGE - images.length
-      if (room <= 0) return
-      const selected = imageFiles.slice(0, room)
-      const pending: ImageAttachment[] = selected.map((f, i) => ({
-        id: `${Date.now()}-${i}-${f.name}`,
-        dataUrl: null,
-        error: null,
-      }))
-      // State updaters stay pure (no side effects inside setState — React
-      // StrictMode double-invokes updaters); compression runs outside them.
-      setImages((prev) => [...prev, ...pending].slice(0, MAX_IMAGES_PER_MESSAGE))
-      selected.forEach((f, i) => {
-        void compressImageFile(f).then(
-          (dataUrl) => {
-            setImages((cur) => cur.map((a) => (a.id === pending[i].id ? { ...a, dataUrl } : a)))
-          },
-          (err: unknown) => {
-            const message = err instanceof ImageError ? err.message : 'Could not process the image'
-            setImages((cur) =>
-              cur.map((a) => (a.id === pending[i].id ? { ...a, error: message } : a)),
-            )
-          },
-        )
-      })
-    },
-    [images],
-  )
-
-  const removeImage = useCallback((id: string) => {
-    setImages((prev) => prev.filter((a) => a.id !== id))
-  }, [])
 
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -324,28 +283,6 @@ export function InputArea() {
             <span className="text-primary font-bold">Esc×2</span> Clear
           </span>
         )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            addFiles(Array.from(e.target.files ?? []))
-            e.target.value = ''
-          }}
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="cursor-pointer text-muted-foreground/60 hover:text-yellow-400/70 text-[10px] sm:text-[11px]"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isRunning}
-          aria-label="Attach images"
-        >
-          <PaperclipIcon data-icon="inline-start" />
-          Attach
-        </Button>
         <Button
           variant="ghost"
           size="sm"

@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-08-19] ingest | Frontend Image UX Follow-ups: Session View Images, Lightbox, Attach Relocation
+- Created sources: [[frontend-image-session-lightbox]]
+- Updated sources: [[multimodal-image-input]] (Notes: 2026-08-19 follow-up pointer)
+- Updated index: new source entry, multimodal summary row context
+- Cross-references added: 5
+- Changes: Three UI fixes to the multimodal image feature, TDD (RED→GREEN). (1) SessionDetailOverlay `UserInput` now renders `entry.images` via the new shared ImageGallery — root cause was render-only, the conversion layer already extracted image parts. (2) ImageGallery component: clickable thumbnails + lightbox Dialog with wrap-around prev/next; used in ConversationView and SessionDetailOverlay. (3) Attach trigger moved from InputArea's bottom hint row to CapabilityBar next to the ✎ button; attachment state lifted into imageAttachmentsAtom (stores/attachments.ts) with pure queueImageAttachments logic + useImageAttachments hook. New tests: image-gallery (5), session-detail-overlay (3), conversation-view (2), attachments unit (4), capability-bar +4, input-area +1 — 173/173 frontend tests pass; tsc clean, eslint 0 errors, build succeeds; live-stack DOM-geometry verification confirmed Attach placement, attach flow, chip removal, and session overlay rendering.
+
 ## [2026-08-19] ingest | CI Failure Fixes: frontend just-install + StubTool for TDengine tools
 - Updated sources: [[ci-workflow-restructure]] (Notes: first-CI-run bugs and fixes)
 - Changes: First CI run of the restructured workflows failed in all 4 jobs for 2 root causes. (1) Frontend jobs call `just` recipes but never installed just → exit 127; added `Install just` (taiki-e) to quality-frontend / coverage-frontend / e2e-frontend. (2) `test_code_agent_market_data_query` failed in CI only: real TDengine-backed tools + ReAct loop emitting `ToolCallComplete` only on success meant an unreachable-TDengine timeout (120s) produced "Tools called: []". Fixed with local `StubTool` stand-ins in the three agent-run tests (real tools remain in the registration test); suite 135s+ → 0.03s. Also fixed 4 pre-existing clippy lints the rewrite had left in the test target (redundant closures, inline format). Verified: target clippy -D warnings clean, 5/5 in 0.02s, fmt clean, CI-equivalent workspace clippy clean.

@@ -8,6 +8,8 @@ import { createStore, Provider } from 'jotai'
 import { CapabilityBar } from '@/components/inputs/CapabilityBar'
 import { selectedAgentIdAtom } from '@/stores/agents'
 import { drawerOpenAtom } from '@/stores/capability'
+import { approvalPendingAtom } from '@/stores/dialogs'
+import { isRunningAtom } from '@/stores/connection'
 import { getPanelClient } from '@/lib/panel-client'
 
 vi.mock('@/lib/panel-client', () => ({
@@ -71,5 +73,44 @@ describe('CapabilityBar', () => {
     renderCapabilityBar(store)
 
     expect(screen.getByRole('button', { name: 'Edit capabilities' })).toBeDisabled()
+  })
+
+  it('shows an Attach images button next to the edit button', async () => {
+    const store = createStore()
+    store.set(selectedAgentIdAtom, 'agent-1')
+    renderCapabilityBar(store)
+
+    expect(await screen.findByRole('button', { name: 'Attach images' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit capabilities' })).toBeInTheDocument()
+  })
+
+  it('opens the file picker when Attach images is clicked', async () => {
+    const store = createStore()
+    store.set(selectedAgentIdAtom, 'agent-1')
+    const user = userEvent.setup()
+    renderCapabilityBar(store)
+
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    await user.click(await screen.findByRole('button', { name: 'Attach images' }))
+    expect(clickSpy).toHaveBeenCalledTimes(1)
+    clickSpy.mockRestore()
+  })
+
+  it('disables Attach images while a run is active', async () => {
+    const store = createStore()
+    store.set(selectedAgentIdAtom, 'agent-1')
+    store.set(isRunningAtom, true)
+    renderCapabilityBar(store)
+
+    expect(await screen.findByRole('button', { name: 'Attach images' })).toBeDisabled()
+  })
+
+  it('disables Attach images while a tool approval is pending', async () => {
+    const store = createStore()
+    store.set(selectedAgentIdAtom, 'agent-1')
+    store.set(approvalPendingAtom, true)
+    renderCapabilityBar(store)
+
+    expect(await screen.findByRole('button', { name: 'Attach images' })).toBeDisabled()
   })
 })

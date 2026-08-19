@@ -79,3 +79,4 @@ The frontend submits `agent.submit` with a structured input:
 
 - The browser-interaction steps of the plan (paste/attach/drag-drop in a real browser, Context-tab rendering) remain manual verification; the API-level paths they exercise were verified over the live WS stack.
 - `crates/vol-llm-tools-builtin/web-fetch/.vol/` is an untracked local artifact dir, unrelated to this feature.
+- Follow-up (2026-08-19): session detail overlay now renders image parts, thumbnails open a lightbox, and the Attach trigger moved to the CapabilityBar — see [[frontend-image-session-lightbox]].
