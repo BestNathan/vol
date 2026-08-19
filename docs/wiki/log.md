@@ -1,5 +1,9 @@
 # Change Log
 
+## [2026-08-19] ingest | CI Failure Fixes: frontend just-install + StubTool for TDengine tools
+- Updated sources: [[ci-workflow-restructure]] (Notes: first-CI-run bugs and fixes)
+- Changes: First CI run of the restructured workflows failed in all 4 jobs for 2 root causes. (1) Frontend jobs call `just` recipes but never installed just → exit 127; added `Install just` (taiki-e) to quality-frontend / coverage-frontend / e2e-frontend. (2) `test_code_agent_market_data_query` failed in CI only: real TDengine-backed tools + ReAct loop emitting `ToolCallComplete` only on success meant an unreachable-TDengine timeout (120s) produced "Tools called: []". Fixed with local `StubTool` stand-ins in the three agent-run tests (real tools remain in the registration test); suite 135s+ → 0.03s. Also fixed 4 pre-existing clippy lints the rewrite had left in the test target (redundant closures, inline format). Verified: target clippy -D warnings clean, 5/5 in 0.02s, fmt clean, CI-equivalent workspace clippy clean.
+
 ## [2026-08-19] ingest | CI Workflow Restructure: Gates vs Reports, just-Only Calls
 - Created sources: [[ci-workflow-restructure]]
 - Updated concepts: [[test-tiers]] (CI split: e2e consolidated in e2e.yml, coverage report-only, just-only workflow convention; source_count 3->4)

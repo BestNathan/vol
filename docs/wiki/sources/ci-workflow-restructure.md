@@ -56,5 +56,6 @@ Three workflow rules landed: (1) quality.yml never runs e2e — all e2e lives in
 ## Notes
 
 - Supersedes parts of [[test-tiering-e2e-completion]]: the "Playwright in quality.yml PR gate" and the "CI coverage gate (llvm-cov ≥80%)" no longer exist.
+- **First CI run found two bugs, both fixed (2026-08-19):** (1) the frontend jobs call `just` recipes but never installed just → exit 127; `Install just` step added to quality-frontend / coverage-frontend / e2e-frontend. (2) `test_code_agent_market_data_query` failed in CI only ("Tools called: []", 135s): it registered real TDengine-backed tools, and the ReAct loop emits `ToolCallComplete` only on tool success (`agent.rs:793`) — in CI the tool hangs ~120s on the unreachable LAN TDengine and the event never fires. Agent-run tests now use local `StubTool` stand-ins; the suite went 135s+ → 0.03s and is deterministic everywhere. Lesson: mock-driven integration tests must stub ALL external services, not just the LLM.
 - If CI coverage reports are later wanted as PR comments or badges, the artifacts are already being produced — only presentation work remains.
 - Running e2e in CI for real still requires repo secrets (ANTHROPIC_AUTH_TOKEN) and reachable services; unconfigured, the workflow degrades to clean skips by design.
