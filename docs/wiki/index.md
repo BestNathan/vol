@@ -24,7 +24,7 @@ Last updated: 2026-08-19 (CI restructure: e2e consolidated in e2e.yml, coverage 
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 | [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support; `docs-rs-mcp` is GitOps-managed and built by the MCP image workflow | active | 2026-06-16 |
 | [[vol-repository]] | Rust workspace with crates, docs, legacy `k8s/` manifests, and self-contained `deploy/argocd/` GitOps deployment tree | active | 2026-06-16 |
-| [[vol-observability-crate]] | Consolidated observability library (LoggingPlugin, MetricsPlugin, /metrics endpoint, OTel init) | active | 2026-07-24 |
+| [[vol-observability-crate]] | Consolidated observability library (LoggingPlugin, MetricsPlugin, /metrics endpoint, OTel init); agent file logs rotate hourly into `logs/` instead of the process CWD (2026-08-19) | active | 2026-08-19 |
 | [[vol-llm-mcp-crate]] | MCP Client protocol layer for ReAct Agent — config parsing, McpManager lifecycle, tool/resource/prompt discovery | active | 2026-05-13 |
 | [[playwright-mcp-service]] | Standalone in-cluster MCP service exposing Playwright browser automation (24 browser_* tools) on port 8931, referenced via http URL in mcp-config; hardened (ro rootfs, non-root, dropped caps) | active | 2026-08-13 |
 
@@ -112,6 +112,7 @@ Last updated: 2026-08-19 (CI restructure: e2e consolidated in e2e.yml, coverage 
 | [[web-tools-proxy-retry]] | Three-tier proxy configuration (tool param > agent config > env var) and exponential-backoff retry for web_fetch/web_search tools | active | 2026-08-12 |
 | [[playwright-mcp-k8s-deployment]] | Playwright MCP replaced stdio/npx (unrunnable in Rust-only agent-server image) with standalone Deployment + ClusterIP Service + http URL in mcp-config; in-field fixes runAsUser 1000 and --allowed-hosts *; verified in-cluster; egress test pending | active | 2026-08-13 |
 | [[observability-pull-metrics-refactor]] | Consolidated observability crate, Prometheus pull /metrics, LLMCall event emission, run-level metrics, MetricsPlugin concurrency fix | active | 2026-07-24 |
+| [[otel-agent-log-dir-fix]] | Agent log file location fix: rolling appender writes `logs/agent.*.log` instead of the process CWD (was littering the repo root); `build_agent_file_appender()` extracted, behavior test writes a marker and asserts logs/ placement with no CWD leak; 58/58 unit tests, coverage 88.24% | active | 2026-08-19 |
 | [[argocd-gitops-deployment]] | Self-contained ArgoCD GitOps implementation: App-of-Apps split into runtime-config/workloads, shared .agents ConfigMaps mounted at /app/.agents, agent-provider-secrets, vol-agent-system manifests, MCP Dockerfile, and MCP image workflow | active | 2026-06-16 |
 | [[control-plane-behavior-completion-plan]] | Follow-up plan to complete JSON-RPC notifications, endpoint roles, client handlers, control.command, run status, and combined-mode registration | draft | 2026-06-10 |
 | [[agent-server-boundary-mode-verification]] | Task 10 boundary and role-mode verification: cargo-tree dependency guard plus `/ws` ownership and disabled-role config tests | active | 2026-06-10 |
