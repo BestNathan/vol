@@ -85,8 +85,10 @@ async fn test_bash_rm_file_allowed() {
 #[tokio::test]
 async fn test_bash_timeout() {
     let tool = BashTool::new();
+    // Long sleep: guarantees the child is still alive when the 10ms timeout
+    // fires (a short sleep races the 100ms poll loop and can exit naturally).
     let args = json!({
-        "command": "sleep 0.1",
+        "command": "sleep 30",
         "timeout": 10
     });
 
@@ -102,17 +104,19 @@ async fn test_bash_timeout_kills_process() {
     use std::time::Duration;
     use tokio::process::Command;
 
-    // Kill any existing sleep 0.2 from previous test runs
+    // Kill any leftover `sleep 60` from previous test runs.
+    // Anchored pattern: must NOT match the tool's own `bash -c sleep 60`
+    // command line (an unanchored -f pattern would kill the bash wrapper).
     let _ = Command::new("pkill")
         .arg("-f")
-        .arg("sleep 0.2")
+        .arg("^sleep 60$")
         .output()
         .await;
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     let tool = BashTool::new();
     let args = json!({
-        "command": "sleep 0.2",
+        "command": "sleep 60",
         "timeout": 10
     });
 
@@ -126,18 +130,18 @@ async fn test_bash_timeout_kills_process() {
     );
 
     // Give the kill sequence time to complete
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Verify the sleep process was killed (not orphaned)
     let check = Command::new("pgrep")
         .arg("-f")
-        .arg("sleep 0.2")
+        .arg("^sleep 60$")
         .output()
         .await
         .unwrap();
     assert!(
         check.stdout.is_empty(),
-        "sleep 0.2 should have been killed, but pgrep found: {}",
+        "sleep 60 should have been killed, but pgrep found: {}",
         String::from_utf8_lossy(&check.stdout)
     );
 }

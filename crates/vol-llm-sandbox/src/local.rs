@@ -145,17 +145,40 @@ impl Sandbox for LocalSandbox {
                             #[cfg(unix)]
                             {
                                 use std::process::Command as KillCommand;
-                                // Send SIGTERM to the process group (negative pid)
+                                // NOTE: no process-group kills (`kill -TERM -pgid`):
+                                // sandboxes such as the Claude Code bash sandbox kill
+                                // the caller's whole process tree when a group signal
+                                // is actually delivered. Use positive-pid kills only.
+                                // TERM the child's descendants first (pkill -P), then
+                                // the child itself; escalate to KILL after a 2s grace.
+                                let _ = KillCommand::new("pkill")
+                                    .arg("-TERM")
+                                    .arg("-P")
+                                    .arg(pid.to_string())
+                                    .status();
                                 let _ = KillCommand::new("kill")
                                     .arg("-TERM")
-                                    .arg(format!("-{pid}"))
+                                    .arg(pid.to_string())
                                     .status();
-                                std::thread::sleep(Duration::from_secs(5));
-                                // Send SIGKILL if still alive
-                                let _ = KillCommand::new("kill")
-                                    .arg("-KILL")
-                                    .arg(format!("-{pid}"))
-                                    .status();
+                                let grace = std::time::Instant::now();
+                                loop {
+                                    if child.try_wait().map_err(SandboxError::Io)?.is_some() {
+                                        break;
+                                    }
+                                    if grace.elapsed() > Duration::from_secs(2) {
+                                        let _ = KillCommand::new("pkill")
+                                            .arg("-KILL")
+                                            .arg("-P")
+                                            .arg(pid.to_string())
+                                            .status();
+                                        let _ = KillCommand::new("kill")
+                                            .arg("-KILL")
+                                            .arg(pid.to_string())
+                                            .status();
+                                        break;
+                                    }
+                                    std::thread::sleep(Duration::from_millis(50));
+                                }
                             }
                             let _ = child.wait();
                             return Err(SandboxError::Timeout(timeout));
