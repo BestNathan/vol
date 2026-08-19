@@ -34,11 +34,30 @@ fn default_message_template() -> String {
     "🚨 {tenor} {alert_type}: {symbol} | IV={value} | 指数={index_price} | DTE={dte}天 | {option_type} | 价格={mark_price_coin} ({mark_price_usd} USD)".to_string()
 }
 
+/// e2e guard: skip cleanly when TDengine is unreachable at its default address.
+fn tdengine_reachable() -> bool {
+    let cfg = TdengineConfig::default();
+    std::net::TcpStream::connect_timeout(
+        &format!("{}:{}", cfg.host, cfg.port).parse().unwrap(),
+        std::time::Duration::from_secs(3),
+    )
+    .is_ok()
+}
+
 #[tokio::test]
+#[ignore = "e2e: requires ANTHROPIC_AUTH_TOKEN, TDengine, and FEISHU_* credentials"]
 async fn test_advice_agent_end_to_end() {
     // Skip if not configured
-    if std::env::var("ANTHROPIC_AUTH_TOKEN").is_err() {
-        eprintln!("Skipping test: ANTHROPIC_AUTH_TOKEN not set");
+    if std::env::var("ANTHROPIC_AUTH_TOKEN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_none()
+    {
+        eprintln!("SKIP (e2e): ANTHROPIC_AUTH_TOKEN not set — requires real LLM");
+        return;
+    }
+    if !tdengine_reachable() {
+        eprintln!("SKIP (e2e): TDengine unreachable — requires a running TDengine");
         return;
     }
 

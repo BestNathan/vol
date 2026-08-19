@@ -416,15 +416,55 @@ impl LLMClient for AlertScenarioMock {
 
     async fn converse_stream(
         &self,
-        _request: vol_llm_core::ConversationRequest,
+        request: vol_llm_core::ConversationRequest,
     ) -> vol_llm_core::Result<vol_llm_core::stream::StreamReceiver> {
-        unimplemented!()
+        use tokio::sync::mpsc;
+        use vol_llm_core::{StreamEvent, StreamEventData};
+
+        // Delegate to the scripted converse() and replay its response as
+        // stream events — the ReAct loop consumes streams, so this must not
+        // be unimplemented.
+        let response = self.converse(request).await?;
+        let (tx, rx) = mpsc::channel(10);
+
+        tokio::spawn(async move {
+            if let Some(tool_calls) = response.message.tool_calls {
+                for (i, call) in tool_calls.into_iter().enumerate() {
+                    let _ = tx
+                        .send(Ok(StreamEvent {
+                            id: format!("event_tool_{i}"),
+                            data: StreamEventData::ToolCallComplete { tool_call: call },
+                        }))
+                        .await;
+                }
+            }
+            if let Some(content) = response.message.content {
+                let _ = tx
+                    .send(Ok(StreamEvent {
+                        id: "event_content".to_string(),
+                        data: StreamEventData::ContentComplete {
+                            content: content.as_str().to_string(),
+                        },
+                    }))
+                    .await;
+            }
+        });
+
+        Ok(vol_llm_core::StreamReceiver::new(rx))
     }
 }
 
 #[tokio::test]
-#[ignore = "requires ANTHROPIC_AUTH_TOKEN environment variable"]
+#[ignore = "e2e: requires ANTHROPIC_AUTH_TOKEN environment variable"]
 async fn test_agent_alert_scenario() {
+    if std::env::var("ANTHROPIC_AUTH_TOKEN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_none()
+    {
+        eprintln!("SKIP (e2e): ANTHROPIC_AUTH_TOKEN not set — requires real LLM");
+        return;
+    }
     // Initialize tracing
     let agent_log_path = "/tmp/agent_alert_execution.log";
     let scenario_log_path = "/tmp/agent_alert_scenario.log";

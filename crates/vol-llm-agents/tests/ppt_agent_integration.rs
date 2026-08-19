@@ -38,11 +38,15 @@ fn get_template_dir() -> PathBuf {
 }
 
 #[tokio::test]
-#[ignore] // Requires LLM API key (ANTHROPIC_AUTH_TOKEN)
+#[ignore = "e2e: requires ANTHROPIC_AUTH_TOKEN"]
 async fn test_full_ppt_generation() {
     // Skip if API key not set
-    if std::env::var("ANTHROPIC_AUTH_TOKEN").is_err() {
-        eprintln!("Skipping test: ANTHROPIC_AUTH_TOKEN not set");
+    if std::env::var("ANTHROPIC_AUTH_TOKEN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_none()
+    {
+        eprintln!("SKIP (e2e): ANTHROPIC_AUTH_TOKEN not set — requires real LLM");
         return;
     }
 

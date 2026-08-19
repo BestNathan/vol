@@ -25,6 +25,19 @@ fn create_test_llm() -> Arc<dyn LLMClient> {
     registry.get("anthropic-main").unwrap().clone()
 }
 
+/// e2e guard: skip cleanly when the real LLM key is unavailable.
+fn ensure_llm_env() -> bool {
+    if std::env::var("ANTHROPIC_AUTH_TOKEN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_none()
+    {
+        eprintln!("SKIP (e2e): ANTHROPIC_AUTH_TOKEN not set — requires real LLM");
+        return false;
+    }
+    true
+}
+
 #[tokio::test]
 async fn test_observer_plugin_receives_all_events() {
     // Create a mock observer that tracks event types
@@ -99,8 +112,11 @@ async fn test_observer_plugin_receives_all_events() {
 }
 
 #[tokio::test]
-#[ignore] // Requires real LLM API key
+#[ignore = "e2e: requires ANTHROPIC_AUTH_TOKEN"]
 async fn test_coding_agent_generates_complete_html_report() {
+    if !ensure_llm_env() {
+        return;
+    }
     let temp_dir = tempdir().unwrap();
     let report_path = temp_dir.path().join("report.html");
 

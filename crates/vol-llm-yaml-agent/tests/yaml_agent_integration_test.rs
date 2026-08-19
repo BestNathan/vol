@@ -32,10 +32,3 @@ tools: [read]
     };
     assert!(err.to_string().contains("non-existent-provider"));
 }
-
-#[tokio::test]
-#[ignore = "requires ANTHROPIC_AUTH_TOKEN and real LLM"]
-async fn test_full_agent_run() {
-    // In a real test, set up an LLM provider registry with a real provider
-    // and call build() + run(). Left as ignored for manual verification.
-}

@@ -1,5 +1,7 @@
-//! End-to-end test: exercise every operation through core.handle() directly,
-//! verifying full handler registry dispatch for all 22 methods.
+//! Integration (in-process) coverage test: exercise every operation through
+//! core.handle() directly, verifying full handler registry dispatch for all
+//! 22 methods. No network or external services — NOT an e2e test despite
+//! the historical file name.
 
 use vol_agent_server::data_plane::DataPlaneServerCore;
 use vol_llm_agent::AgentInput;
