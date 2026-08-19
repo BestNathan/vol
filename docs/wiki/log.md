@@ -1,5 +1,13 @@
 # Change Log
 
+## [2026-08-19] ingest | CI Workflow Restructure: Gates vs Reports, just-Only Calls
+- Created sources: [[ci-workflow-restructure]]
+- Updated concepts: [[test-tiers]] (CI split: e2e consolidated in e2e.yml, coverage report-only, just-only workflow convention; source_count 3->4)
+- Updated sources: [[test-tiering-e2e-completion]] (superseded note: Playwright PR gate + CI coverage gate removed)
+- Updated index: new source entry, refreshed header date
+- Cross-references added: 4
+- Changes: quality.yml no longer runs e2e (Playwright steps removed; e2e.yml is the only e2e home). Unit + integration are the CI gate on both ends (rust fmt/clippy/unit/integration/boundaries; frontend tsc/vitest unit+integration). Coverage jobs are report-only: rust `just cover-ci` → new `scripts/ci-coverage-report.sh` (llvm-cov summary, COV_PACKAGES/COV_OUTPUT overrides, artifact upload), new `coverage-frontend` job (`just fe-test` + artifact). Workflow steps call just recipes only; new recipes `test-e2e-ci` (crate dispatch, --nocapture), `cover-ci`, `fe-install`, `fe-pw-install`, `boundaries`. The ≥80% coverage gate remains a local-dev convention (`just cover-gate`). Verified: bash -n clean, both workflows YAML-valid, `just --list` shows all new recipes.
+
 ## [2026-08-19] ingest | Frontend Test Tiering: Vitest Projects Split (Unit + Integration)
 - Created sources: [[frontend-test-tiering]]
 - Updated concepts: [[test-tiers]] (frontend vitest tiers: unit/integration projects + component tests; source_count 2->3)

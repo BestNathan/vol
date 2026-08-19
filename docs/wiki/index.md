@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-08-19 (frontend vitest tiers: unit/integration projects + component tests)
+Last updated: 2026-08-19 (CI restructure: e2e consolidated in e2e.yml, coverage report-only, just-only workflow calls)
 
 ## Entities
 
@@ -104,6 +104,7 @@ Last updated: 2026-08-19 (frontend vitest tiers: unit/integration projects + com
 | [[test-tiering-hooks]] | Three-tier test split: pre-commit fmt/lint/type, pre-push changed-crate unit tests only (coverage removed — was the slow part), CI unit+integration+coverage; justfile umbrella recipes deleted, hooks rewritten as thin just-calling shells, `test-integration` fixed to `-E 'kind(test)'` filter, 6 superseded check scripts deleted; e2e dedicated workflow deferred | active | 2026-08-18 |
 | [[test-tiering-e2e-completion]] | E2E tier landed: `e2e:` ignore-marker convention + env guards in all e2e tests, manual e2e.yml + Playwright in PR gate, `test-e2e-crate`/`fe-e2e` recipes; fixed wasmtime memory-export test, brittle mock (MockLlmClient event queue), runtime inline ignore, 2 bash-timeout tests; LocalSandbox kill reworked (positive pids only — group kills kill the caller tree in sandboxes) | active | 2026-08-19 |
 | [[frontend-test-tiering]] | Frontend vitest split into unit (node) + integration (jsdom + testing-library) projects; 4 new component tests (InputArea/TabBar/StatusBar/CapabilityBar) render real components with jotai store + mocked panel client; `fe-test-unit`/`fe-test-integration` recipes, CI runs tiers as separate steps; Playwright e2e unchanged (standalone-package proposal dropped) | active | 2026-08-19 |
+| [[ci-workflow-restructure]] | CI workflows restructured: quality.yml drops all e2e (Playwright → e2e.yml only), unit+integration are the PR gate while coverage jobs are report-only (artifact upload, no threshold), and every workflow step calls a `just` recipe (`test-e2e-ci`, `cover-ci`, `fe-install`, `fe-pw-install`, `boundaries`) with script logic in scripts/ci-coverage-report.sh | active | 2026-08-19 |
 | [[coverage-gate-work]] | Test-only coverage raises to ≥80%: vol-llm-context 88.94% regions / 90.08% lines, vol-llm-core 95.62%, vol-llm-provider 85.79% pre-bugfix; the provider suite surfaced the four production bugs | active | 2026-08-17 |
 | [[fs-cli-tool]] | vol-llm-fs crate implementation: CLI-style `fs` tool (read/write/edit/grep/glob/scheme, `--json` envelope) over the five builtin file-op tools; registered from AgentRuntimeBuilder::build() next to the task tool; 89.81% line coverage | active | 2026-08-16 |
 | [[multimodal-image-input]] | Multimodal image input feature: `[image]` display markers, per-image token budget (1600), images kept through session compression, OpenAI vision conversion, frontend attach/paste/render UI, WS frame-size verification (no explicit limit; defaults 64MiB/16MiB), live-stack e2e verification | active | 2026-08-17 |

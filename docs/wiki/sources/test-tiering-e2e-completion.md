@@ -94,6 +94,7 @@ Completed the three-tier test split established on 2026-08-18. All `#[ignore]`d 
 
 ## Notes
 
+- **Superseded (2026-08-19):** the "Playwright in quality.yml PR gate" and the "CI coverage gate (llvm-cov ≥80%)" parts of this source were removed by [[ci-workflow-restructure]] — e2e now lives only in e2e.yml, and CI coverage is report-only (the ≥80% gate is local-dev only).
 - Process-group kills are a landmine in sandboxed environments: `kill -TERM -<pgid>` that actually delivers a signal kills the caller's whole process tree (reproduced: minimal python `setpgid` + `/usr/bin/kill -TERM -pid` → exit 144, zero output). Any future code touching process signals must use positive pids.
 - The sandbox's `process_group(0)` on the child is retained (harmless, useful for job control outside sandboxes), but the kill path no longer depends on it.
 - E2E tests with a real LLM key still need a network path to the provider; `HTTPS_PROXY` is passed through in e2e.yml.

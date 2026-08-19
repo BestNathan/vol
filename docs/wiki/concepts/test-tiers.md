@@ -4,7 +4,7 @@ category: architecture
 tags: [testing, just, git-hooks, ci, quality-gates]
 created: 2026-08-18
 updated: 2026-08-19
-source_count: 3
+source_count: 4
 ---
 
 # Test Tiers
@@ -19,11 +19,12 @@ The workspace splits tests into three explicit tiers and maps each tier to the s
 |------|------------------|---------|
 | unit | `--lib` (src inline `#[cfg(test)]`) | pre-push (changed crates only), CI |
 | integration | `-E 'kind(test)'` (`tests/` dirs) | CI only |
-| coverage | `cargo llvm-cov` per-crate ≥80% | CI only |
+| coverage | `cargo llvm-cov` summary | CI report-only (no gate); local dev gate: `just cover-gate <crate> 80` |
 | e2e | `--ignored` (external services) | `just test-e2e` / `just test-e2e-crate <crate>`; manual `e2e.yml` workflow |
 
 - **E2E marker convention (2026-08-19):** `#[ignore]` means ONLY "needs external service", with the reason standardized as `#[ignore = "e2e: <requirement>"]`. Every e2e test carries an in-test guard (env var non-empty check or TCP probe) that skips cleanly with a `SKIP (e2e): ...` message — including on CI, where unconfigured secrets arrive as empty strings. Broken/disabled tests must be fixed or deleted, never `#[ignore]`d.
-- **Frontend e2e:** Playwright with a mock backend (self-contained) runs on every frontend PR in quality.yml (`npm run test:e2e`) and via `just fe-e2e`; also available manually in e2e.yml.
+- **Frontend e2e:** Playwright with a mock backend (self-contained) is e2e, so it runs only in e2e.yml (manual `workflow_dispatch`) via `just fe-e2e`. quality.yml never runs e2e tests (2026-08-19).
+- **CI workflow split (2026-08-19):** quality.yml = the gate — rust fmt/clippy/unit/integration/boundaries, frontend tsc/vitest-unit/vitest-integration; plus report-only coverage jobs (rust `just cover-ci` → `scripts/ci-coverage-report.sh`, frontend `just fe-test`) that upload artifacts and never fail on percentage. e2e.yml = all e2e (rust `just test-e2e-ci [crate]`, frontend Playwright). Workflow steps call `just` recipes only — any script logic lives in `scripts/` (env-setup one-liners like `rm -f .cargo/config.toml` excepted).
 - **Frontend vitest tiers (2026-08-19):** vitest runs as two projects — `unit` (node, `tests/unit/`) and `integration` (jsdom + @testing-library/react, `tests/integration/`, jest-dom setup with ResizeObserver/matchMedia stubs). Component integration tests render real components with a real jotai store and a mocked `@/lib/panel-client` (no live WS). Commands: `just fe-test-unit` / `just fe-test-integration`; CI runs the two projects as separate steps.
 
 - **No umbrella recipes.** `quality` / `quality-strict` / `quality-full` / `test-all` were removed; nothing in `justfile` composes others. A scenario is the composition point: `.githooks/pre-push` calls `just no-clippy-allow && just test-unit-crates <crates>`; `quality.yml` has separate `just test-unit` and `just test-integration` steps.
@@ -40,19 +41,20 @@ pre-commit (fast):   just fmt-check | just clippy | just no-clippy-allow
 pre-push (unit):     just no-clippy-allow
                      just test-unit-crates <changed crates>   # fallback: just test-unit
                      just fe-test
-CI (integration):    just test-unit   +   just test-integration
-                     coverage job (llvm-cov ≥80% gate)
-                     quality-frontend: vitest + Playwright e2e (mock backend)
-e2e:                 just test-e2e | just test-e2e-crate <crate>  (manual)
-                     .github/workflows/e2e.yml (workflow_dispatch, secrets-gated,
+CI (quality.yml):    just test-unit   +   just test-integration     (gate)
+                     just cover-ci → scripts/ci-coverage-report.sh  (report only)
+                     quality-frontend: just fe-type + fe-test-unit + fe-test-integration (gate)
+                     coverage-frontend: just fe-test + artifact upload (report only)
+e2e:                 .github/workflows/e2e.yml (workflow_dispatch, secrets-gated,
                      tests degrade to clean skips when prerequisites are absent)
+                     just test-e2e-ci [crate] | just fe-e2e
 ```
 
 Each check is a single recipe (`fmt-check`, `clippy`, `no-clippy-allow`, `fe-fmt-check`, …) so any scenario can pick the subset it needs.
 
 ## Related Concepts
 
-- [[coverage-gate-work]] — the per-crate ≥80% llvm-cov gate that now runs in CI only.
+- [[coverage-gate-work]] — the per-crate ≥80% llvm-cov gate, now a local-dev gate (CI only reports).
 - [[cli-style-tool-pattern]] — same "atomic primitives composed at the call site" philosophy applied to tools.
 
 ## Source
@@ -60,3 +62,4 @@ Each check is a single recipe (`fmt-check`, `clippy`, `no-clippy-allow`, `fe-fmt
 - [[test-tiering-hooks]]
 - [[test-tiering-e2e-completion]]
 - [[frontend-test-tiering]]
+- [[ci-workflow-restructure]]
