@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # Pre-commit quality gate: fast checks only (fmt, lint, typecheck).
-# Slow checks (coverage) run at pre-push.
+# Slow checks (unit tests) run at pre-push.
 #
-# All checks run in series.  First failure stops the chain.
+# All checks run via just recipes.  First failure stops the chain.
 # No bypass: all checks must pass before committing.
 set -euo pipefail
+
+if ! command -v just >/dev/null 2>&1; then
+  echo "pre-commit requires 'just' (https://just.systems) — install it first."
+  exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 
@@ -24,25 +29,25 @@ HAS_ERROR=0
 
 # ── Rust checks ───────────────────────────────────────────────────────
 if [ "$RUST_CHANGED" = "true" ]; then
-  "$SCRIPT_DIR/scripts/check-rust-fmt.sh" || HAS_ERROR=1
+  just fmt-check || HAS_ERROR=1
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 
-  "$SCRIPT_DIR/scripts/check-rust-clippy.sh" || HAS_ERROR=1
+  just clippy || HAS_ERROR=1
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 
-  "$SCRIPT_DIR/scripts/check-no-clippy-allow.sh" || HAS_ERROR=1
+  just no-clippy-allow || HAS_ERROR=1
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 fi
 
 # ── Frontend checks ───────────────────────────────────────────────────
 if [ "$FRONTEND_CHANGED" = "true" ]; then
-  "$SCRIPT_DIR/scripts/check-fe-format.sh" || HAS_ERROR=1
+  just fe-fmt-check || HAS_ERROR=1
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 
-  "$SCRIPT_DIR/scripts/check-fe-lint.sh" || HAS_ERROR=1
+  just fe-lint || HAS_ERROR=1
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 
-  "$SCRIPT_DIR/scripts/check-fe-type.sh" || HAS_ERROR=1
+  just fe-type || HAS_ERROR=1
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 fi
 

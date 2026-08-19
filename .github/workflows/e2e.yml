@@ -1,0 +1,92 @@
+# E2E tests — manual trigger (workflow_dispatch).
+#
+# E2E tests are `#[ignore = "e2e: ..."]` tests requiring external services:
+# real LLM API keys, the internal model service, a Docker SSH test host,
+# TDengine, or a running control-plane server.
+#
+# Every e2e test has an in-test guard that skips cleanly when its
+# prerequisite (env var / reachable service) is missing, so this workflow
+# degrades gracefully: unconfigured secrets simply produce skips, never
+# failures.
+#
+# The frontend Playwright suite is self-contained (mock backend) and also
+# runs on every PR via quality.yml; this job exists as a manual fallback.
+
+name: e2e
+
+on:
+  workflow_dispatch:
+    inputs:
+      crate:
+        description: 'Rust crate to run e2e for (blank = whole workspace)'
+        required: false
+        type: string
+
+concurrency:
+  group: e2e-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  e2e-rust:
+    name: e2e-rust
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (from rust-toolchain.toml)
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-workspaces: "."
+          cache-all-crates: "true"
+
+      - name: Remove rsproxy mirror (CI can't access rsproxy.cn)
+        run: rm -f .cargo/config.toml
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Run e2e tests (missing services → clean skips)
+        env:
+          # Empty when unconfigured; in-test guards treat empty as missing.
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
+          HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
+        run: |
+          if [ -n "${{ github.event.inputs.crate }}" ]; then
+            just test-e2e-crate "${{ github.event.inputs.crate }}"
+          else
+            just test-e2e
+          fi
+
+  e2e-frontend:
+    name: e2e-frontend
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Playwright e2e (self-contained mock backend)
+        run: npm run test:e2e
+        working-directory: frontend

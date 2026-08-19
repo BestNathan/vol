@@ -7,32 +7,8 @@ _default:
 help:
     @just --list
 
-# ── Quality gates (fast checks only) ────────────────────────────────────
-
-# Fast quality gate: fmt + clippy + test compile + no-doc-tests (~5s warm)
-quality:
-    just fmt-check
-    just clippy
-    just test-compile
-    just no-doc-tests
-    @echo "All quality gates passed"
-
-# Strict quality gate: fmt + strict clippy + test compile
-quality-strict:
-    just fmt-check
-    just clippy-strict
-    just test-compile
-    just no-doc-tests
-    @echo "All strict quality gates passed"
-
-# Full CI gate: strict clippy + unit tests + no-doc-tests + boundary check
-quality-full:
-    just fmt-check
-    just clippy-strict
-    just test-unit
-    just no-doc-tests
-    @./scripts/check-agent-boundaries.sh
-    @echo "All full quality gates passed"
+# NOTE: no umbrella "quality-*" recipes — each scenario (pre-commit hook,
+# pre-push hook, CI) composes its own list of atomic recipes below.
 
 # ── Formatting ──────────────────────────────────────────────────────────
 
@@ -62,7 +38,7 @@ check:
 
 # ── Tests (nextest-powered, fallback to cargo test) ────────────────────
 
-# Run all tests (nextest if available, fallback to cargo test)
+# Run all non-e2e tests: unit + integration (nextest, fallback to cargo test)
 test *ARGS:
     cargo nextest run --workspace --no-fail-fast {{ARGS}} 2>/dev/null || cargo test --workspace --no-fail-fast {{ARGS}}
 
@@ -74,20 +50,32 @@ test-compile:
 test-unit *ARGS:
     cargo nextest run --workspace --lib --no-fail-fast {{ARGS}} 2>/dev/null || cargo test --workspace --lib --no-fail-fast {{ARGS}}
 
-# Run all tests including integration (single pass via cargo test)
-test-integration *ARGS:
-    cargo test --workspace --no-fail-fast {{ARGS}}
+# Run unit tests for specific crates (pre-push tier: changed crates only)
+test-unit-crates *CRATES:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    flags=()
+    for c in {{CRATES}}; do flags+=(-p "$c"); done
+    cargo nextest run "${flags[@]}" --lib --no-fail-fast 2>/dev/null || cargo test "${flags[@]}" --lib --no-fail-fast
 
-# Run all tests including e2e
-test-all: test-unit test-e2e
+# Run only integration tests (tests/ dirs, excludes unit)
+# NOTE: nextest `--tests` means ALL targets — use the kind(test) filter instead.
+# cargo test has no kind filter, so the fallback runs the full non-ignored suite.
+test-integration *ARGS:
+    cargo nextest run --workspace -E 'kind(test)' --no-fail-fast {{ARGS}} 2>/dev/null || cargo test --workspace --no-fail-fast {{ARGS}}
 
 # Run tests for specific crate (e.g. `just test-crate vol-llm-tool`)
 test-crate CRATE *ARGS:
     cargo nextest run -p {{CRATE}} --no-fail-fast {{ARGS}} 2>/dev/null || cargo test -p {{CRATE}} --no-fail-fast {{ARGS}}
 
-# Run e2e tests (mostly #[ignore]d, require external services)
-test-e2e:
-    cargo test --workspace --no-fail-fast -- --ignored
+# Run e2e tests (all #[ignore = "e2e: ..."], require external services).
+# Missing env/services degrade to clean skips via in-test guards.
+test-e2e *ARGS:
+    cargo test --workspace --no-fail-fast -- --ignored {{ARGS}}
+
+# Run e2e tests for a single crate (e.g. `just test-e2e-crate vol-llm-sandbox`)
+test-e2e-crate CRATE *ARGS:
+    cargo test -p {{CRATE}} --no-fail-fast -- --ignored {{ARGS}}
 
 # Run tests with slow timeout (for heavy crates like vol-llm-agent)
 test-slow *ARGS:
@@ -233,9 +221,21 @@ fe-lint:
 fe-type:
     npm --prefix frontend run typecheck
 
-# Run frontend tests
+# Run frontend tests (both vitest projects: unit + integration, with coverage)
 fe-test:
     npm --prefix frontend run test:coverage
+
+# Run frontend unit tests (tests/unit/, node environment)
+fe-test-unit:
+    npm --prefix frontend run test:unit
+
+# Run frontend integration tests (tests/integration/, jsdom + testing-library)
+fe-test-integration:
+    npm --prefix frontend run test:integration
+
+# Run frontend Playwright e2e tests (self-contained: mock backend, no external services)
+fe-e2e:
+    npm --prefix frontend run test:e2e
 
 # ── Docker ──────────────────────────────────────────────────────────────
 

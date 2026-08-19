@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
-# Pre-push quality gate: slow checks (coverage, integration tests).
-# Fast checks run at pre-commit, so we assume those already passed.
+# Pre-push quality gate: unit tests for changed crates.
+# Pre-commit already ran fmt/lint/type checks, so we assume those passed.
 #
-# Runs only for changed crates/modules against origin/main.
-# No bypass: all checks must pass before pushing.
+# Test tiers:
+#   unit        → pre-push (this hook, changed crates only)
+#   integration → CI (quality.yml)
+#   coverage    → CI (quality.yml coverage job)
+#   e2e         → manual e2e.yml workflow (workflow_dispatch, secrets-gated)
+#
+# All checks run via just recipes.  No bypass: all checks must pass before pushing.
 set -euo pipefail
+
+if ! command -v just >/dev/null 2>&1; then
+  echo "pre-push requires 'just' (https://just.systems) — install it first."
+  exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 
@@ -44,11 +54,11 @@ HAS_ERROR=0
 
 # ── Rust clippy-allow check (fast, runs first) ─────────────────────────
 if [ "$RUST_CHANGED" = "true" ]; then
-  "$SCRIPT_DIR/scripts/check-no-clippy-allow.sh" || HAS_ERROR=1
+  just no-clippy-allow || HAS_ERROR=1
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 fi
 
-# ── Rust coverage (changed crates only) ────────────────────────────────
+# ── Rust unit tests (changed crates only) ──────────────────────────────
 if [ "$RUST_CHANGED" = "true" ]; then
   # Extract changed crate names
   CHANGED_CRATES=$(echo "$CHANGES" \
@@ -60,17 +70,18 @@ if [ "$RUST_CHANGED" = "true" ]; then
 
   if [ -n "$CHANGED_CRATES" ]; then
     echo "→ Changed crates: $CHANGED_CRATES"
-    "$SCRIPT_DIR/scripts/check-rust-coverage.sh" $CHANGED_CRATES || HAS_ERROR=1
+    just test-unit-crates $CHANGED_CRATES || HAS_ERROR=1
   else
-    echo "→ No crates changed in push range — skipping Rust coverage."
+    echo "→ No crates/ paths changed (workspace-level change) — running full workspace unit tests."
+    just test-unit || HAS_ERROR=1
   fi
 
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 fi
 
-# ── Frontend coverage ──────────────────────────────────────────────────
+# ── Frontend unit tests ────────────────────────────────────────────────
 if [ "$FRONTEND_CHANGED" = "true" ]; then
-  "$SCRIPT_DIR/scripts/check-fe-test.sh" || HAS_ERROR=1
+  just fe-test || HAS_ERROR=1
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 fi
 

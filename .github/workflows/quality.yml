@@ -97,8 +97,11 @@ jobs:
       - name: Check no clippy allow annotations
         run: just no-clippy-allow
 
-      - name: Run all tests
-        run: just test
+      - name: Run unit tests
+        run: just test-unit
+
+      - name: Run integration tests
+        run: just test-integration
 
       - name: Check agent boundaries
         run: ./scripts/check-agent-boundaries.sh
@@ -130,8 +133,20 @@ jobs:
         run: npx tsc -b
         working-directory: frontend
 
-      - name: Vitest
-        run: npx vitest run
+      - name: Vitest unit (tests/unit, node)
+        run: npm run test:unit
+        working-directory: frontend
+
+      - name: Vitest integration (tests/integration, jsdom)
+        run: npm run test:integration
+        working-directory: frontend
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Playwright e2e (self-contained mock backend)
+        run: npm run test:e2e
         working-directory: frontend
 
   # ── Rust coverage gate ──────────────────────────────────────────────────
