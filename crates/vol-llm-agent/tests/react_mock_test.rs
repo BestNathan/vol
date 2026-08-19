@@ -11,6 +11,30 @@ use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision, RunContext};
 use vol_llm_agent::{AgentConfig, AgentStreamEvent, ReActAgent};
 use vol_llm_core::{ConversationRequest, ConversationResponse, LLMClient, LLMProvider};
 use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolResult, ToolResultType};
+
+/// No-op tool named `index_price` — lets loop-mocks trigger tool calls
+/// without touching the real TDengine (see test_agent_max_iterations).
+struct LoopIndexPriceTool;
+
+#[async_trait]
+impl ExecutableTool for LoopIndexPriceTool {
+    fn name(&self) -> &'static str {
+        "index_price"
+    }
+
+    fn description(&self) -> &'static str {
+        "No-op index_price stand-in for loop tests"
+    }
+
+    async fn execute(
+        &self,
+        _args: &serde_json::Value,
+        _context: &ToolContext,
+    ) -> ToolResultType<ToolResult> {
+        Ok(ToolResult::success("ok"))
+    }
+}
 
 /// Simple mock that returns tool call then final answer
 struct SimpleMock {
@@ -163,7 +187,6 @@ async fn test_agent_executes_full_react_cycle() {
 }
 
 #[tokio::test]
-#[ignore = "slow: tool calls trigger real TDengine connection timeouts (~2min each)"]
 async fn test_agent_max_iterations() {
     // Mock that always returns tool calls
     struct LoopMock {
@@ -263,10 +286,7 @@ async fn test_agent_max_iterations() {
     let config = AgentConfig::builder()
         .with_def(def)
         .with_llm(Arc::new(mock_llm))
-        .with_tool(VolatilityIndexTool::new(None))
-        .with_tool(IndexPriceTool::new(None))
-        .with_tool(OptionsTool::new(None))
-        .with_tool(RvTool::new(None))
+        .with_tool(LoopIndexPriceTool)
         .with_plugin(RejectMaxIterationsPlugin)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()

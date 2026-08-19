@@ -240,11 +240,45 @@ impl LLMClient for CodeAgentSimulator {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "brittle mock — needs rewrite with MockLlmClient"]
 async fn test_code_agent_market_data_query() {
     println!("\n=== Test: Market Data Query ===\n");
 
-    let mock_llm = CodeAgentSimulator::new("claude-sonnet-4-6");
+    // Deterministic mock: first LLM call scripts an index_price tool call,
+    // second call returns the final answer. No query-text parsing.
+    use vol_llm_core::test_utils::MockLlmClient;
+    use vol_llm_core::{StreamEvent, StreamEventData, ToolCall};
+
+    let mock_llm = MockLlmClient::new();
+    mock_llm
+        .set_stream_event_queue(vec![
+            vec![
+                StreamEvent {
+                    id: "event_1".to_string(),
+                    data: StreamEventData::ToolCallComplete {
+                        tool_call: ToolCall {
+                            id: "call_market_data".to_string(),
+                            name: "index_price".to_string(),
+                            arguments: r#"{"instrument": "btc_usd", "limit": 1}"#.to_string(),
+                            r#type: "function".to_string(),
+                        },
+                    },
+                },
+                StreamEvent {
+                    id: "event_2".to_string(),
+                    data: StreamEventData::ContentComplete {
+                        content: "Let me check the current market data for you.".to_string(),
+                    },
+                },
+            ],
+            vec![StreamEvent {
+                id: "event_3".to_string(),
+                data: StreamEventData::ContentComplete {
+                    content: "Based on the latest market data, BTC is trading at $69,000."
+                        .to_string(),
+                },
+            }],
+        ])
+        .await;
 
     // Track tool calls via plugin
     use vol_llm_agent::react::plugin::AgentPlugin;
