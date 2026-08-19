@@ -3,6 +3,12 @@
 //! Run with: cargo test --test code_agent_simulation -- --nocapture
 //!
 //! This test simulates a real Code Agent calling the LLM API with proper request/response format.
+//!
+//! Agent-run tests use `StubTool` stand-ins for the TDengine tools: the real
+//! tools hang ~120s per call when TDengine is unreachable (CI), and the
+//! ReAct loop only emits `ToolCallComplete` on tool success — so a timeout
+//! turns "0 tools called" and fails assertions. Tool definitions/registration
+//! are still verified against the real tools (no network on registration).
 
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -15,7 +21,30 @@ use vol_llm_core::{
     MessageRole, StreamEvent, StreamEventData, SupportedParam, TokenUsage,
 };
 use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
-use vol_llm_tool::ToolRegistry;
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolRegistry, ToolResult, ToolResultType};
+
+/// Local stand-in for a TDengine-backed tool: deterministic `execute`,
+/// no external service. Keeps agent-run tests fast and green everywhere.
+struct StubTool(&'static str);
+
+#[async_trait]
+impl ExecutableTool for StubTool {
+    fn name(&self) -> &'static str {
+        self.0
+    }
+
+    fn description(&self) -> &'static str {
+        "Local stub tool (no external service)"
+    }
+
+    async fn execute(
+        &self,
+        _args: &serde_json::Value,
+        _context: &ToolContext,
+    ) -> ToolResultType<ToolResult> {
+        Ok(ToolResult::success("stub result"))
+    }
+}
 
 /// Simulates a real Code Agent LLM client that properly handles tool calls
 struct CodeAgentSimulator {
@@ -43,7 +72,7 @@ impl CodeAgentSimulator {
                 .iter()
                 .find(|m| m.role == MessageRole::User)
                 .and_then(|m| m.content.as_ref())
-                .map(|c| c.as_str())
+                .map(vol_llm_core::MessageContent::as_str)
                 .unwrap_or("");
 
             let query_lower = user_query.to_lowercase();
@@ -120,11 +149,11 @@ impl CodeAgentSimulator {
                 // Analyze tool results and generate natural language response
                 let tool_content: Vec<&str> = tool_results
                     .iter()
-                    .filter_map(|m| m.content.as_ref().map(|c| c.as_str()))
+                    .filter_map(|m| m.content.as_ref().map(vol_llm_core::MessageContent::as_str))
                     .collect();
 
                 // Check which tool was called based on content
-                let first_content = tool_content.first().map(|s| *s).unwrap_or("");
+                let first_content = tool_content.first().copied().unwrap_or("");
 
                 let response_text = if first_content.contains("index_price")
                     || first_content.contains("price")
@@ -317,10 +346,10 @@ async fn test_code_agent_market_data_query() {
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
-        .with_tool(VolatilityIndexTool::new(None))
-        .with_tool(IndexPriceTool::new(None))
-        .with_tool(OptionsTool::new(None))
-        .with_tool(RvTool::new(None))
+        .with_tool(StubTool("volatility_index"))
+        .with_tool(StubTool("index_price"))
+        .with_tool(StubTool("options"))
+        .with_tool(StubTool("rv"))
         .with_system_prompt("You are a code analysis assistant.".to_string())
         .with_plugin(tracker)
         .build()
@@ -351,10 +380,10 @@ async fn test_code_agent_volatility_query() {
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
-        .with_tool(VolatilityIndexTool::new(None))
-        .with_tool(IndexPriceTool::new(None))
-        .with_tool(OptionsTool::new(None))
-        .with_tool(RvTool::new(None))
+        .with_tool(StubTool("volatility_index"))
+        .with_tool(StubTool("index_price"))
+        .with_tool(StubTool("options"))
+        .with_tool(StubTool("rv"))
         .with_system_prompt("You are a volatility analysis assistant.".to_string())
         .build()
         .unwrap();
@@ -377,10 +406,10 @@ async fn test_code_agent_multi_turn_conversation() {
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
-        .with_tool(VolatilityIndexTool::new(None))
-        .with_tool(IndexPriceTool::new(None))
-        .with_tool(OptionsTool::new(None))
-        .with_tool(RvTool::new(None))
+        .with_tool(StubTool("volatility_index"))
+        .with_tool(StubTool("index_price"))
+        .with_tool(StubTool("options"))
+        .with_tool(StubTool("rv"))
         .with_system_prompt("You are a helpful market data assistant.".to_string())
         .build()
         .unwrap();
@@ -445,7 +474,7 @@ async fn test_code_agent_tool_definitions() {
             tool.description.as_deref().unwrap_or("No description")
         );
         if let Some(params) = &tool.parameters {
-            println!("    Parameters: {}", params);
+            println!("    Parameters: {params}");
         }
     }
 
