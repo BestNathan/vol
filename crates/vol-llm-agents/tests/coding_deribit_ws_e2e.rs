@@ -42,8 +42,16 @@ fn configure_web_fetch(tool_config: &mut ToolConfig) {
 /// Test that CodingAgent develops a Deribit WebSocket client from scratch
 /// in an isolated temporary directory.
 #[tokio::test]
-#[ignore] // Requires real LLM API key (ANTHROPIC_AUTH_TOKEN)
+#[ignore = "e2e: requires ANTHROPIC_AUTH_TOKEN"]
 async fn test_coding_agent_develops_deribit_ws_client() {
+    if std::env::var("ANTHROPIC_AUTH_TOKEN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_none()
+    {
+        eprintln!("SKIP (e2e): ANTHROPIC_AUTH_TOKEN not set — requires real LLM");
+        return;
+    }
     let temp_dir = tempdir().unwrap();
     let project_dir = temp_dir.path().to_path_buf(); // Sandbox root — agent creates files here
 
@@ -319,10 +327,22 @@ async fn test_coding_agent_develops_deribit_ws_client() {
 /// Usage: After running the development test, copy the temp dir path
 /// from the test output, then run this test with DERIBIT_WS_CLIENT_DIR env var.
 #[tokio::test]
-#[ignore] // Requires DERIBIT_WS_CLIENT_DIR env var
+#[ignore = "e2e: requires DERIBIT_WS_CLIENT_DIR env var"]
 async fn test_verify_deribit_ws_client_output() {
-    let client_dir = std::env::var("DERIBIT_WS_CLIENT_DIR")
-        .expect("DERIBIT_WS_CLIENT_DIR must be set to the temp dir from development test");
+    let Ok(client_dir) = std::env::var("DERIBIT_WS_CLIENT_DIR") else {
+        eprintln!(
+            "SKIP (e2e): DERIBIT_WS_CLIENT_DIR not set — \
+             copy the temp dir from test_coding_agent_develops_deribit_ws_client first"
+        );
+        return;
+    };
+    if client_dir.trim().is_empty() {
+        eprintln!(
+            "SKIP (e2e): DERIBIT_WS_CLIENT_DIR set but empty — \
+             copy the temp dir from test_coding_agent_develops_deribit_ws_client first"
+        );
+        return;
+    }
 
     let cargo_path = Path::new(&client_dir).join("Cargo.toml");
     assert!(

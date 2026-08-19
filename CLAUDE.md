@@ -79,6 +79,15 @@ just web-backend     # cargo-watch agent server on :3001
 just web-build       # Production React build
 ```
 
+Frontend test tiers (vitest projects + Playwright):
+
+```bash
+just fe-test-unit          # vitest unit project (tests/unit/, node)
+just fe-test-integration   # vitest integration project (tests/integration/, jsdom + testing-library)
+just fe-test               # both projects with coverage
+just fe-e2e                # Playwright e2e (tests/e2e/, self-contained mock backend)
+```
+
 #### Web Frontend shadcn/ui Conventions
 
 The frontend uses **shadcn/ui** (Radix base) with Tailwind CSS v4. All UI primitives live in `frontend/src/components/ui/`. See `frontend/components.json` for config.

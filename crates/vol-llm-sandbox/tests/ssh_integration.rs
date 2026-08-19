@@ -19,9 +19,25 @@ mod ssh_tests {
         }
     }
 
+    /// e2e guard: skip cleanly when the Docker SSH test host is not running.
+    fn ssh_host_reachable() -> bool {
+        std::net::TcpStream::connect_timeout(
+            &"127.0.0.1:2222".parse().unwrap(),
+            Duration::from_secs(3),
+        )
+        .is_ok()
+    }
+
     #[tokio::test]
-    #[ignore = "requires Docker SSH test host running on port 2222"]
+    #[ignore = "e2e: requires Docker SSH test host running on port 2222"]
     async fn test_ssh_execute_echo() {
+        if !ssh_host_reachable() {
+            eprintln!(
+                "SKIP (e2e): SSH test host not running on port 2222 \
+                 (see tests/ssh_test_host/README.md)"
+            );
+            return;
+        }
         let config = test_config();
         let sb = vol_llm_sandbox::ssh::SSHSandbox::new(
             "test".to_string(),
@@ -47,8 +63,15 @@ mod ssh_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires Docker SSH test host running on port 2222"]
+    #[ignore = "e2e: requires Docker SSH test host running on port 2222"]
     async fn test_ssh_file_read_write() {
+        if !ssh_host_reachable() {
+            eprintln!(
+                "SKIP (e2e): SSH test host not running on port 2222 \
+                 (see tests/ssh_test_host/README.md)"
+            );
+            return;
+        }
         let config = test_config();
         let sb = vol_llm_sandbox::ssh::SSHSandbox::new(
             "test".to_string(),
@@ -69,8 +92,15 @@ mod ssh_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires Docker SSH test host running on port 2222"]
+    #[ignore = "e2e: requires Docker SSH test host running on port 2222"]
     async fn test_ssh_missing_host_key_rejected() {
+        if !ssh_host_reachable() {
+            eprintln!(
+                "SKIP (e2e): SSH test host not running on port 2222 \
+                 (see tests/ssh_test_host/README.md)"
+            );
+            return;
+        }
         let mut config = test_config();
         // Set a deliberately wrong host key to verify verification is enforced
         config.host_key = Some("SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string());

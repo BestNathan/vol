@@ -47,11 +47,27 @@ fn create_test_llm() -> Arc<dyn LLMClient> {
     registry.get("anthropic-main").unwrap().clone()
 }
 
+/// e2e guard: skip cleanly when the real LLM key is unavailable.
+fn ensure_llm_env() -> bool {
+    if std::env::var("ANTHROPIC_AUTH_TOKEN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_none()
+    {
+        eprintln!("SKIP (e2e): ANTHROPIC_AUTH_TOKEN not set — requires real LLM");
+        return false;
+    }
+    true
+}
+
 /// Test that CodingAgent registers web_fetch when ToolConfig is provided
 /// and actually calls it during a task requiring URL content.
 #[tokio::test]
-#[ignore] // Requires real LLM API key (ANTHROPIC_AUTH_TOKEN)
+#[ignore = "e2e: requires ANTHROPIC_AUTH_TOKEN"]
 async fn test_coding_agent_uses_web_fetch_for_deribit_docs() {
+    if !ensure_llm_env() {
+        return;
+    }
     let temp_dir = tempdir().unwrap();
 
     // Configure tool_config with web_fetch enabled
@@ -134,8 +150,11 @@ async fn test_coding_agent_uses_web_fetch_for_deribit_docs() {
 
 /// Test that without web_fetch config, the agent only has core tools available.
 #[tokio::test]
-#[ignore] // Requires real LLM API key
+#[ignore = "e2e: requires ANTHROPIC_AUTH_TOKEN"]
 async fn test_coding_agent_without_web_fetch_has_core_tools_only() {
+    if !ensure_llm_env() {
+        return;
+    }
     let temp_dir = tempdir().unwrap();
 
     // No web tool config

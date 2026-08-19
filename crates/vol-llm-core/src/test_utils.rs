@@ -3,6 +3,7 @@
 //! Gated behind `#[cfg(feature = "test-utils")]`.
 
 use async_trait::async_trait;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -14,6 +15,9 @@ use crate::{
 struct MockState {
     converse_response: Option<ConversationResponse>,
     stream_events: Vec<StreamEvent>,
+    /// Per-call stream scripts: each `converse_stream` call pops the next one.
+    /// When non-empty this takes precedence over `stream_events`.
+    stream_event_queue: VecDeque<Vec<StreamEvent>>,
     error_at: Option<usize>,
     call_log: Vec<ConversationRequest>,
 }
@@ -33,6 +37,7 @@ impl MockLlmClient {
             state: Arc::new(Mutex::new(MockState {
                 converse_response: None,
                 stream_events: Vec::new(),
+                stream_event_queue: VecDeque::new(),
                 error_at: None,
                 call_log: Vec::new(),
             })),
@@ -49,6 +54,15 @@ impl MockLlmClient {
     /// Events are returned in order on each call.
     pub async fn set_stream_events(&self, events: Vec<StreamEvent>) {
         self.state.lock().await.stream_events = events;
+    }
+
+    /// Set a queue of per-call stream scripts for converse_stream().
+    ///
+    /// Each call pops the next script (in order). When the queue is
+    /// exhausted, calls fall back to [`Self::set_stream_events`] (or an
+    /// empty stream if that was never set).
+    pub async fn set_stream_event_queue(&self, scripts: Vec<Vec<StreamEvent>>) {
+        self.state.lock().await.stream_event_queue = scripts.into();
     }
 
     /// Configure error at a specific call index (0-based).
@@ -126,7 +140,11 @@ impl LLMClient for MockLlmClient {
             }
         }
 
-        let events = state.stream_events.clone();
+        let events = if let Some(script) = state.stream_event_queue.pop_front() {
+            script
+        } else {
+            state.stream_events.clone()
+        };
         let (tx, rx) = mpsc::channel(100);
 
         tokio::spawn(async move {
@@ -218,6 +236,45 @@ mod tests {
         assert_eq!(received.len(), 2);
         assert_eq!(received[0].id, "e1");
         assert_eq!(received[1].id, "e2");
+    }
+
+    #[tokio::test]
+    async fn test_mock_stream_event_queue() {
+        let mock = MockLlmClient::new();
+        let script_a = vec![StreamEvent {
+            id: "a1".to_string(),
+            data: StreamEventData::ContentDelta {
+                delta: "first".to_string(),
+            },
+        }];
+        let script_b = vec![StreamEvent {
+            id: "b1".to_string(),
+            data: StreamEventData::ContentComplete {
+                content: "second".to_string(),
+            },
+        }];
+        mock.set_stream_event_queue(vec![script_a, script_b]).await;
+
+        let request = ConversationRequest {
+            system: None,
+            messages: vec![],
+            model_config: Default::default(),
+            tools: None,
+            tool_choice: None,
+            stream: false,
+        };
+
+        // First call pops script_a, second pops script_b, third is empty.
+        let mut rx = mock.converse_stream(request.clone()).await.unwrap();
+        assert_eq!(rx.recv().await.unwrap().unwrap().id, "a1");
+        assert!(rx.recv().await.is_none());
+
+        let mut rx = mock.converse_stream(request.clone()).await.unwrap();
+        assert_eq!(rx.recv().await.unwrap().unwrap().id, "b1");
+        assert!(rx.recv().await.is_none());
+
+        let mut rx = mock.converse_stream(request).await.unwrap();
+        assert!(rx.recv().await.is_none(), "exhausted queue should be empty");
     }
 
     #[tokio::test]

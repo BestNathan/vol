@@ -160,7 +160,9 @@ RUN set -eux; \
         sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources; \
     fi; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates; \
+    # procps provides pkill/pgrep — LocalSandbox's timeout kill uses
+    # `pkill -P <pid>` to terminate descendants before the direct child.
+    apt-get install -y --no-install-recommends ca-certificates procps; \
     rm -rf /var/lib/apt/lists/*; \
     addgroup --system --gid 1000 vol-agent; \
     adduser --system --uid 1000 --gid 1000 --no-create-home vol-agent

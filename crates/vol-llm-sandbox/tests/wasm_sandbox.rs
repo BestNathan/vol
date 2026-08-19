@@ -28,9 +28,10 @@ path = "/opt/test.wasm"
     assert_eq!(wasm.max_memory_bytes, 134_217_728); // 128 MB default
     assert_eq!(wasm.max_execution_ms, 30_000); // 30s default
     assert_eq!(wasm.modules.len(), 1);
-    assert_eq!(wasm.modules[0].name, "test");
-    assert_eq!(wasm.modules[0].path, "/opt/test.wasm");
-    assert!(!wasm.modules[0].expose_as_tool); // default false
+    let m0 = wasm.modules.first().expect("one module");
+    assert_eq!(m0.name, "test");
+    assert_eq!(m0.path, "/opt/test.wasm");
+    assert!(!m0.expose_as_tool); // default false
 }
 
 #[test]
@@ -57,8 +58,8 @@ path = "/opt/runner.wasm"
     assert_eq!(wasm.max_memory_bytes, 268_435_456);
     assert_eq!(wasm.max_execution_ms, 60_000);
     assert_eq!(wasm.modules.len(), 2);
-    assert!(wasm.modules[0].expose_as_tool);
-    assert!(!wasm.modules[1].expose_as_tool);
+    assert!(wasm.modules.first().expect("module 0").expose_as_tool);
+    assert!(!wasm.modules.get(1).expect("module 1").expose_as_tool);
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -119,9 +120,12 @@ mod runtime {
 
     /// WASI module that exits with code 42 via proc_exit.
     /// NOTE: exercises the I32Exit downcast path in wasm.rs:269.
+    /// The module must export its memory — the wiggle shim requires a
+    /// "memory" export before it will call any host function.
     const EXIT42_WAT: &str = r#"
         (module
             (import "wasi_snapshot_preview1" "proc_exit" (func $exit (param i32)))
+            (memory (export "memory") 1)
             (func (export "_start")
                 i32.const 42
                 call $exit
@@ -351,22 +355,9 @@ mod runtime {
     }
 
     #[tokio::test]
-    #[ignore = "BUG: wasmtime_wasi::I32Exit no longer at crate root in wasmtime 22 — fix wasm.rs:269"]
     async fn test_execute_nonzero_exit() {
         let work_dir = setup_work_dir("exec_exit42");
-        let wasm_path = write_wat_module(
-            &work_dir,
-            "exit42",
-            r#"
-            (module
-                (import "wasi_snapshot_preview1" "proc_exit" (func $exit (param i32)))
-                (func (export "_start")
-                    i32.const 42
-                    call $exit
-                )
-            )
-        "#,
-        );
+        let wasm_path = write_wat_module(&work_dir, "exit42", EXIT42_WAT);
         let sandbox = build_sandbox("sb", &work_dir, "exit42", &wasm_path);
 
         let req = CommandRequest {

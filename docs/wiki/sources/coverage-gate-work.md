@@ -43,3 +43,4 @@ The coverage work followed the SDD cover workflow with per-crate reports in `/ro
 
 - No production code was changed by the coverage commits themselves.
 - Known follow-up from the provider suite: multi-tool-call streams in `StreamingSession` only complete the last-started call (see [[provider-bugfixes]] Notes).
+- 2026-08-18: the pre-push coverage check was removed — coverage now runs in CI only (see [[test-tiers]], [[test-tiering-hooks]]).

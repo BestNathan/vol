@@ -1,7 +1,6 @@
 // frontend/tests/unit/image.test.ts
 import { describe, it, expect } from 'vitest'
 import {
-  ImageError,
   KEEP_AS_IS_THRESHOLD,
   MAX_LONG_EDGE,
   MAX_ORIGINAL_BYTES,

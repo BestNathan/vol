@@ -16,7 +16,7 @@ if echo "$FILES" | grep -q '\.rs$'; then
   RUST_CHANGED=true
 fi
 
-if echo "$FILES" | grep -q '^frontend/src/'; then
+if echo "$FILES" | grep -q '^frontend/src/\|^frontend/tests/\|^frontend/vite.config'; then
   FRONTEND_CHANGED=true
 fi
 

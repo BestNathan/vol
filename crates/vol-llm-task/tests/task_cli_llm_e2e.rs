@@ -29,9 +29,22 @@ fn create_test_llm() -> Arc<dyn vol_llm_core::LLMClient> {
     registry.get("task-cli-test-llm").unwrap().clone()
 }
 
+/// e2e guard: skip cleanly when the internal model service is unreachable.
+fn model_service_reachable() -> bool {
+    std::net::TcpStream::connect_timeout(
+        &"192.168.2.162:31693".parse().unwrap(),
+        std::time::Duration::from_secs(3),
+    )
+    .is_ok()
+}
+
 #[tokio::test]
-#[ignore] // Requires model service at 192.168.2.162:31693
+#[ignore = "e2e: requires model service at 192.168.2.162:31693"]
 async fn test_task_cli_tool_with_real_llm_create_and_list() {
+    if !model_service_reachable() {
+        eprintln!("SKIP (e2e): model service unreachable at 192.168.2.162:31693");
+        return;
+    }
     let store = Arc::new(InMemoryTaskStore::new());
     let llm = create_test_llm();
 
@@ -96,8 +109,12 @@ async fn test_task_cli_tool_with_real_llm_create_and_list() {
 }
 
 #[tokio::test]
-#[ignore] // Requires model service at 192.168.2.162:31693
+#[ignore = "e2e: requires model service at 192.168.2.162:31693"]
 async fn test_task_cli_tool_json_output_mode() {
+    if !model_service_reachable() {
+        eprintln!("SKIP (e2e): model service unreachable at 192.168.2.162:31693");
+        return;
+    }
     let store = Arc::new(InMemoryTaskStore::new());
     let llm = create_test_llm();
 

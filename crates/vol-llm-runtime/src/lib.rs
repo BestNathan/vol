@@ -1384,8 +1384,20 @@ base_url = "https://api.test.com"
     }
 
     #[tokio::test]
-    #[ignore = "requires isolated MCP configuration (no local MCP servers)"]
     async fn register_agent_with_mcps_resolves_filtered_tools() {
+        // Guard: a user-level ~/.mcp.json adds real MCP servers to every
+        // runtime build, making the environment non-isolated (slow connects,
+        // server process noise). The hermetic assertions below only run in
+        // isolated environments (e.g., CI); skip on developer machines with
+        // a user MCP config.
+        if let Ok(home) = std::env::var("HOME") {
+            if std::path::Path::new(&home).join(".mcp.json").exists() {
+                eprintln!(
+                    "SKIP: user-level ~/.mcp.json present — requires isolated MCP configuration"
+                );
+                return;
+            }
+        }
         let temp = tempfile::tempdir().unwrap();
         let providers_dir = temp.path().join(".agents/providers");
         std::fs::create_dir_all(&providers_dir).unwrap();

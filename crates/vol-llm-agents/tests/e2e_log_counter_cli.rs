@@ -24,9 +24,25 @@ fn create_test_llm() -> Arc<dyn LLMClient> {
     registry.get("anthropic-main").unwrap().clone()
 }
 
+/// e2e guard: skip cleanly when the real LLM key is unavailable.
+fn ensure_llm_env() -> bool {
+    if std::env::var("ANTHROPIC_AUTH_TOKEN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_none()
+    {
+        eprintln!("SKIP (e2e): ANTHROPIC_AUTH_TOKEN not set — requires real LLM");
+        return false;
+    }
+    true
+}
+
 #[tokio::test]
-#[ignore] // Requires real LLM API key (ANTHROPIC_AUTH_TOKEN)
+#[ignore = "e2e: requires ANTHROPIC_AUTH_TOKEN"]
 async fn test_coding_agent_writes_log_counter_cli() {
+    if !ensure_llm_env() {
+        return;
+    }
     let temp_dir = tempdir().unwrap();
     let report_path = temp_dir.path().join("report.html");
     let work_dir = temp_dir.path().join("work");
@@ -130,8 +146,11 @@ Use clap for CLI parsing. Create Cargo.toml and src/main.rs."#;
 }
 
 #[tokio::test]
-#[ignore] // Requires real LLM API key
+#[ignore = "e2e: requires ANTHROPIC_AUTH_TOKEN"]
 async fn test_html_report_shows_ordered_timeline() {
+    if !ensure_llm_env() {
+        return;
+    }
     let temp_dir = tempdir().unwrap();
     let report_path = temp_dir.path().join("report.html");
 

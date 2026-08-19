@@ -25,8 +25,16 @@ async fn load_session_messages(session_path: &std::path::Path) -> Vec<vol_sessio
 }
 
 #[tokio::test]
-#[ignore = "requires ANTHROPIC_AUTH_TOKEN"]
+#[ignore = "e2e: requires ANTHROPIC_AUTH_TOKEN and a real session file"]
 async fn test_compress_real_session() {
+    if std::env::var("ANTHROPIC_AUTH_TOKEN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_none()
+    {
+        eprintln!("SKIP (e2e): ANTHROPIC_AUTH_TOKEN not set — requires real LLM");
+        return;
+    }
     // Find the session file
     let home = std::env::var("HOME").unwrap_or_default();
     let session_path = PathBuf::from(&home)

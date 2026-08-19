@@ -44,10 +44,14 @@ If it is not set, configure it once:
 git config core.hooksPath .githooks
 ```
 
-The pre-commit hook runs on staged Rust files:
-- `cargo fmt --all -- --check`
-- `cargo clippy --workspace`
-- `./scripts/check-coverage.sh` (for changed crates)
+The pre-commit hook runs on staged Rust files (via just recipes):
+- `just fmt-check` — `cargo fmt --all -- --check`
+- `just clippy` — `cargo clippy --workspace`
+- `just no-clippy-allow` — no new `#[allow(clippy::...)]`
+
+The pre-push hook runs unit tests for changed crates (`just test-unit-crates`)
+plus frontend tests (`just fe-test`). Integration tests, coverage, and e2e run
+in CI — not in hooks.
 
 If the hook blocks your commit, read the output. Each check prints what failed
 and how to fix it. Fix the issues, `git add` the fixes, and commit again.
@@ -59,10 +63,31 @@ and how to fix it. Fix the issues, `git add` the fixes, and commit again.
 The quality gate mirrors what CI runs. It is NOT optional. A commit that hasn't passed
 the gate locally will fail in CI.
 
-### Tier 1: Fast gate (run after every significant edit)
+Test tiers and where each runs:
+
+| Tier | Where | Command |
+|------|-------|---------|
+| Unit tests | pre-push hook (changed crates only) | `just test-unit-crates <crate...>` / `just test-unit` |
+| Integration tests | CI (`quality.yml`) | `just test-integration` |
+| Coverage | CI report-only (`quality.yml` coverage jobs, no gate); local gate before claiming done | `just cover-gate <crate> 80` |
+| E2E (external services) | manual `e2e.yml` workflow (secrets-gated) | `just test-e2e` / `just test-e2e-crate <crate>` |
+| Frontend unit | pre-push (`just fe-test`), CI (`quality.yml`) | `just fe-test-unit` (vitest `--project unit`, node) |
+| Frontend integration | CI (`quality.yml`) | `just fe-test-integration` (vitest `--project integration`, jsdom + testing-library) |
+| Frontend e2e | manual `e2e.yml` (never in quality.yml) | `just fe-e2e` (Playwright, mock backend) |
+
+All e2e tests carry `#[ignore = "e2e: ..."]` markers and in-test guards that
+skip cleanly when their prerequisites are missing — safe to run anywhere.
+
+There is no umbrella "quality-all" recipe — each scenario (hook / CI) composes
+atomic `just` recipes itself.
+
+### Fast checks (run after every significant edit)
 
 ```bash
-make quality
+just fmt-check
+just clippy
+just test-compile
+just no-doc-tests
 ```
 
 | Check | Command | Catches |
@@ -72,32 +97,33 @@ make quality
 | Test compile | `cargo test --no-run --workspace` | Code that doesn't compile in test configuration |
 | No doc tests | `./scripts/check-no-doc-tests.sh` | Doc comments with ` ```rust` instead of ` ```text` |
 
-### Tier 2: Full gate (run before pushing / creating PR)
+### Full checks (before pushing / creating PR)
 
 ```bash
-make quality-full
+just test-unit           # unit tests, whole workspace (--lib)
+just test-integration    # tests/ integration tests only (-E 'kind(test)')
+just clippy-strict       # warnings denied
 ```
-
-Includes Tier 1 checks plus:
 
 | Check | Command | Catches |
 |-------|---------|---------|
 | Clippy strict | `cargo clippy --workspace -- -D warnings` | All warnings treated as errors |
-| All tests | `cargo test --workspace --no-fail-fast` | Broken tests in ANY crate, not just the one you changed |
+| Unit tests | `just test-unit` | Broken `#[cfg(test)]` tests in ANY crate |
+| Integration tests | `just test-integration` | Broken `tests/` integration tests |
 | Crate boundaries | `./scripts/check-agent-boundaries.sh` | Forbidden inter-crate dependencies |
 
-### Tier 3: Coverage gate (run before claiming completeness)
+### Coverage gate (run before claiming completeness)
 
 ```bash
-make coverage-threshold PKG=<crate>
+just cover-gate <crate> 80
 ```
 
 Line coverage must be ≥ 80%. Exempt files: `main.rs`, `app.rs`, `health.rs`.
 
 If coverage is below threshold:
-1. `make coverage-html PKG=<crate>` to see uncovered lines
+1. `just cover-html <crate>` to see uncovered lines
 2. Add tests for uncovered paths
-3. Re-run `make coverage-threshold PKG=<crate>`
+3. Re-run `just cover-gate <crate> 80`
 
 ### Gate failure protocol
 
@@ -114,7 +140,7 @@ the PR.
 | `cargo test` | `test ... FAILED` or `error: test failed` | Read the assertion failure; fix the code or update the test |
 | `check-no-doc-tests.sh` | Lists files with doc tests | Convert ` ```rust` to ` ```text` or move code to `#[cfg(test)]` |
 | `check-agent-boundaries.sh` | Lists forbidden dependency paths | Remove the forbidden import; restructure code if needed |
-| `make coverage-threshold` | `FAIL: line coverage X% is below 80%` | Add tests for uncovered functions/paths |
+| `just cover-gate <crate> 80` | `FAIL: line coverage X% is below 80%` | Add tests for uncovered functions/paths |
 
 ### What changed? Searching for downstream impact
 
@@ -125,7 +151,7 @@ signature, grep the workspace for callers and consumers that may need updating:
 grep -rn "<old name / old output / old signature>" crates/ --include="*.rs"
 ```
 
-Run the full test suite (`cargo test --workspace`) after grep-assisted fixes to
+Run the full test suite (`just test`) after grep-assisted fixes to
 catch any callers that grep missed (e.g., dynamic dispatch, trait objects).
 
 ---
@@ -166,7 +192,7 @@ mod tests {
 /// ```
 ```
 
-Verify with: `./scripts/check-no-doc-tests.sh` (also part of `make quality`).
+Verify with: `just no-doc-tests` (also runs in CI `quality.yml`).
 
 **Every new `pub fn` or handler → at least one test.**
 
@@ -204,15 +230,17 @@ If you are adding a new JSON-RPC operation (e.g., `agent.new_operation`), **invo
 | Build check | `cargo check -p <crate>` |
 | Format | `cargo fmt --all` |
 | Lint | `cargo clippy --workspace` |
-| Fast quality gate | `make quality` |
-| Full quality gate | `make quality-full` |
-| All tests | `make test` |
-| Coverage summary | `make coverage PKG=<crate>` |
-| Coverage gate (80%) | `make coverage-threshold PKG=<crate>` |
-| Coverage HTML | `make coverage-html PKG=<crate>` |
-| No doc tests check | `./scripts/check-no-doc-tests.sh` |
+| All non-e2e tests | `just test` |
+| Unit tests | `just test-unit` |
+| Unit tests (specific crates) | `just test-unit-crates <crate...>` |
+| Integration tests | `just test-integration` |
+| E2E tests (external services) | `just test-e2e` |
+| Coverage summary | `just cover <crate>` |
+| Coverage gate (80%) | `just cover-gate <crate> 80` |
+| Coverage HTML | `just cover-html <crate>` |
+| No doc tests check | `just no-doc-tests` |
 | Crate boundary check | `./scripts/check-agent-boundaries.sh` |
-| Vulnerability scan | `make audit` |
+| Vulnerability scan | `just audit` |
 | Rust workspace build | `cargo build -p <crate> --release` |
 
 ## Common Mistakes
@@ -220,9 +248,9 @@ If you are adding a new JSON-RPC operation (e.g., `agent.new_operation`), **invo
 | Mistake | Symptom | Fix |
 |---------|---------|-----|
 | Doc tests in doc comments | `check-no-doc-tests.sh` fails | Convert to `#[cfg(test)]` or use ` ```text` |
-| Committing without running quality gate | CI fails on fmt/clippy/tests | Run `make quality` before every commit |
+| Committing without running quality gate | CI fails on fmt/clippy/tests | Run `just fmt-check && just clippy && just test` before committing |
 | Changing public API without grepping callers | Downstream tests break in other crates | Grep workspace for old name/signature, update all callers |
-| Claiming done without coverage | Coverage below 80% | Run `make coverage-threshold PKG=<crate>` |
+| Claiming done without coverage | Coverage below 80% | Run `just cover-gate <crate> 80` |
 | Registering tools outside `AgentRuntimeBuilder::build()` | Duplicate or missed registrations | Use `AgentRuntimeBuilder::build()` as single source of truth |
 | Wire types in `vol-agent-server` | Boundary check fails | Move to `vol-llm-agent-protocol::agent_server_protocol` |
 | Importing `vol-agent-server` in `vol-llm-runtime` | Boundary check fails | Refactor to avoid dependency |

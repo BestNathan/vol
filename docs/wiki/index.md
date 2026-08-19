@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-08-17 (provider bugfixes, per-crate coverage gate)
+Last updated: 2026-08-19 (CI restructure: e2e consolidated in e2e.yml, coverage report-only, just-only workflow calls)
 
 ## Entities
 
@@ -11,7 +11,7 @@ Last updated: 2026-08-17 (provider bugfixes, per-crate coverage gate)
 | [[vol-llm-task-crate]] | Task models and persistence stores, including SeaORM database store for SQLite and Postgres with compiled migrations | active | 2026-06-09 |
 | [[vol-agent-server-crate]] | Standalone server crate that composes DataPlaneServerCore/ControlPlaneServerCore routes and is deployed by the self-contained ArgoCD GitOps tree as `agent-server`; supports remote control-plane registration with heartbeat/reconnect | active | 2026-06-17 |
 | [[vol-llm-ui-crate]] | Shared UI state model. Web (Dioxus) DEPRECATED 2026-08 — React frontend/ is the active web UI. TUI + state maintained. | deprecated | 2026-08-06 |
-| [[vol-llm-sandbox-crate]] | Sandbox abstraction (Local/Tmp/SSH/Firecracker/Wasm), SandboxRegistry with pure-config loading, TmpSandbox with bind_metadata lifecycle | active | 2026-08-11 |
+| [[vol-llm-sandbox-crate]] | Sandbox abstraction (Local/Tmp/SSH/Firecracker/Wasm), SandboxRegistry with pure-config loading, TmpSandbox with bind_metadata lifecycle; LocalSandbox timeout kill reworked to positive-pid kills (group kills kill the caller tree in sandboxes) | active | 2026-08-19 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API and `[image]` display-text markers | active | 2026-08-17 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions, including provider-neutral multipart message content and `[image]` display markers; coverage gate PASS 95.62% | stable | 2026-08-17 |
@@ -33,6 +33,7 @@ Last updated: 2026-08-17 (provider bugfixes, per-crate coverage gate)
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
 | [[sandbox-lifecycle]] | Sandbox lifecycle: define→construct→register→acquire→bind→start→use→cleanup. Pure registry design with TmpSandbox default, bind_metadata for sub_dir | active | 2026-08-11 |
+| [[test-tiers]] | Three-tier test split (unit `--lib` / integration `-E 'kind(test)'` / e2e `--ignored`) mapped to scenarios: pre-push runs changed-crate unit tests only, CI runs unit+integration+coverage; e2e tier landed — `#[ignore = "e2e: ..."]` marker convention, in-test env guards (clean skips), manual e2e.yml workflow + frontend Playwright in the PR gate; broken/ignored tests fixed, never `#[ignore]`d | active | 2026-08-19 |
 | [[cli-style-tool-pattern]] | Single `ExecutableTool` taking a CLI command string (`tool <subcommand> --flag value`): tokenizer + clap parser → typed command enum → delegation to underlying tools; `task` CLI and `fs` tool are the two implementations | active | 2026-08-16 |
 | [[argocd-app-of-apps-gitops]] | Self-contained ArgoCD App-of-Apps deployment pattern split into `runtime-config` (namespace + shared agents/providers/skills ConfigMaps) and `workloads` (application deployments), with `agent-server` mounting `/app/.agents` and CI-built MCP images updating GitOps manifests | active | 2026-06-16 |
 | [[agent-server-control-data-plane]] | Single server crate with DataPlaneServerCore/ControlPlaneServerCore, channel-owned JSON-RPC protocol, route composition, data-plane snapshot facade, command/run semantics, control-plane router MVP, role-mode verification tests, dependency boundary checks, and remote data-plane registration with heartbeat/reconnect | active | 2026-06-17 |
@@ -100,6 +101,10 @@ Last updated: 2026-08-17 (provider bugfixes, per-crate coverage gate)
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
 | [[provider-bugfixes]] | Four vol-llm-provider production bugfixes (TDD, one commit each): raw string tool-call args, request.system as first system message, symmetric Secret JSON round-trip, streamed ToolCallComplete via ContentBlockStop flush; gate re-verified 95.41%, 120 tests / 0 failed | active | 2026-08-17 |
+| [[test-tiering-hooks]] | Three-tier test split: pre-commit fmt/lint/type, pre-push changed-crate unit tests only (coverage removed — was the slow part), CI unit+integration+coverage; justfile umbrella recipes deleted, hooks rewritten as thin just-calling shells, `test-integration` fixed to `-E 'kind(test)'` filter, 6 superseded check scripts deleted; e2e dedicated workflow deferred | active | 2026-08-18 |
+| [[test-tiering-e2e-completion]] | E2E tier landed: `e2e:` ignore-marker convention + env guards in all e2e tests, manual e2e.yml + Playwright in PR gate, `test-e2e-crate`/`fe-e2e` recipes; fixed wasmtime memory-export test, brittle mock (MockLlmClient event queue), runtime inline ignore, 2 bash-timeout tests; LocalSandbox kill reworked (positive pids only — group kills kill the caller tree in sandboxes) | active | 2026-08-19 |
+| [[frontend-test-tiering]] | Frontend vitest split into unit (node) + integration (jsdom + testing-library) projects; 4 new component tests (InputArea/TabBar/StatusBar/CapabilityBar) render real components with jotai store + mocked panel client; `fe-test-unit`/`fe-test-integration` recipes, CI runs tiers as separate steps; Playwright e2e unchanged (standalone-package proposal dropped) | active | 2026-08-19 |
+| [[ci-workflow-restructure]] | CI workflows restructured: quality.yml drops all e2e (Playwright → e2e.yml only), unit+integration are the PR gate while coverage jobs are report-only (artifact upload, no threshold), and every workflow step calls a `just` recipe (`test-e2e-ci`, `cover-ci`, `fe-install`, `fe-pw-install`, `boundaries`) with script logic in scripts/ci-coverage-report.sh | active | 2026-08-19 |
 | [[coverage-gate-work]] | Test-only coverage raises to ≥80%: vol-llm-context 88.94% regions / 90.08% lines, vol-llm-core 95.62%, vol-llm-provider 85.79% pre-bugfix; the provider suite surfaced the four production bugs | active | 2026-08-17 |
 | [[fs-cli-tool]] | vol-llm-fs crate implementation: CLI-style `fs` tool (read/write/edit/grep/glob/scheme, `--json` envelope) over the five builtin file-op tools; registered from AgentRuntimeBuilder::build() next to the task tool; 89.81% line coverage | active | 2026-08-16 |
 | [[multimodal-image-input]] | Multimodal image input feature: `[image]` display markers, per-image token budget (1600), images kept through session compression, OpenAI vision conversion, frontend attach/paste/render UI, WS frame-size verification (no explicit limit; defaults 64MiB/16MiB), live-stack e2e verification | active | 2026-08-17 |
