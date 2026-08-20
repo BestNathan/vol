@@ -293,7 +293,8 @@ pub enum AgentDefError {
 }
 
 impl AgentDefError {
-    /// Create a TypeNotFound error. Used internally by AgentTool (via ToolError wrapper).
+    /// Create a TypeNotFound error. Legacy helper for type-dispatch error paths —
+    /// AgentTool no longer dispatches by type, so this is only used in tests.
     pub fn type_not_found(r#type: &str) -> Self {
         Self::TypeNotFound(r#type.to_string())
     }
