@@ -6,3 +6,5 @@
 
 pub mod agent_tool;
 pub use agent_tool::AgentTool;
+pub mod injector;
+pub use injector::AgentInjector;
