@@ -62,7 +62,7 @@ test-unit-crates *CRATES:
 # NOTE: nextest `--tests` means ALL targets — use the kind(test) filter instead.
 # cargo test has no kind filter, so the fallback runs the full non-ignored suite.
 test-integration *ARGS:
-    cargo nextest run --workspace -E 'kind(test)' --no-fail-fast {{ARGS}} 2>/dev/null || cargo test --workspace --no-fail-fast {{ARGS}}
+    cargo nextest run --workspace -E 'kind(test)' --no-fail-fast --features vol-agent-server/test-utils {{ARGS}} 2>/dev/null || cargo test --workspace --no-fail-fast --features vol-agent-server/test-utils {{ARGS}}
 
 # Run tests for specific crate (e.g. `just test-crate vol-llm-tool`)
 test-crate CRATE *ARGS:
