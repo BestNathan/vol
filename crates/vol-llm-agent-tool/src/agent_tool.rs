@@ -23,9 +23,10 @@ use vol_llm_tool::{
 };
 use vol_session::{InMemoryEntryStore, Session};
 
-use crate::agent_def::{AgentDef, AgentPath};
-use crate::agent_loader::AgentLoader;
-use crate::react::{AgentConfig, PluginRegistry};
+use vol_llm_agent::agent_loader::AgentLoader;
+use vol_llm_agent::react::{AgentConfig, PluginRegistry};
+use vol_llm_agent::ReActAgent;
+use vol_llm_core::agent_def::{AgentDef, AgentPath};
 
 /// Default system prompt for agents with empty body.
 const DEFAULT_AGENT_PROMPT: &str =
@@ -188,7 +189,7 @@ impl ExecutableTool for AgentTool {
 
         let base_tools = agent_config.tools.clone();
         let skill_loader = agent_config.skill_loader.clone();
-        let sub_agent = crate::react::ReActAgent::new(agent_config, base_tools, skill_loader);
+        let sub_agent = ReActAgent::new(agent_config, base_tools, skill_loader);
 
         let response = sub_agent
             .run(&params.prompt)
@@ -209,7 +210,7 @@ mod tests {
         StreamReceiver, SupportedParam,
     };
 
-    use crate::agent_def::AgentScope;
+    use vol_llm_core::agent_def::AgentScope;
 
     /// Mock LLM for testing AgentTool.
     struct MockLlm {
