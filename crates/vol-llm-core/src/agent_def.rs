@@ -78,6 +78,10 @@ pub struct AgentDef {
     pub mcps: Option<Vec<String>>,
     /// Skill allowlist. None = all skills available.
     pub skills: Option<Vec<String>>,
+    /// 派发方 agent id（根 agent 为 None）
+    pub parent_agent: Option<String>,
+    /// 派发层级：根 = 0，每次派发 +1
+    pub depth: u32,
 }
 
 impl Default for AgentDef {
@@ -100,6 +104,8 @@ impl Default for AgentDef {
             tool_config: None,
             mcps: None,
             skills: None,
+            parent_agent: None,
+            depth: 0,
         }
     }
 }
@@ -126,6 +132,8 @@ impl AgentDef {
             tool_config: None,
             mcps: None,
             skills: None,
+            parent_agent: None,
+            depth: 0,
         }
     }
 
@@ -186,6 +194,18 @@ impl AgentDef {
     /// Set per-tool configurations.
     pub fn with_tool_config(mut self, config: HashMap<String, serde_json::Value>) -> Self {
         self.tool_config = Some(config);
+        self
+    }
+
+    /// Set the dispatching parent agent id.
+    pub fn with_parent_agent(mut self, id: impl Into<String>) -> Self {
+        self.parent_agent = Some(id.into());
+        self
+    }
+
+    /// Set the dispatch depth (root = 0, +1 per dispatch).
+    pub fn with_depth(mut self, depth: u32) -> Self {
+        self.depth = depth;
         self
     }
 
@@ -428,5 +448,25 @@ mod tests {
             AgentDefError::type_not_found("missing").to_string(),
             "Agent type 'missing' not found"
         );
+    }
+
+    #[test]
+    fn test_agent_def_parent_and_depth_defaults() {
+        let def = AgentDef::default();
+        assert_eq!(def.parent_agent, None);
+        assert_eq!(def.depth, 0);
+
+        let def = AgentDef::new("echo", "prompt");
+        assert_eq!(def.parent_agent, None);
+        assert_eq!(def.depth, 0);
+    }
+
+    #[test]
+    fn test_agent_def_parent_and_depth_builders() {
+        let def = AgentDef::new("echo", "prompt")
+            .with_parent_agent("repo:root")
+            .with_depth(2);
+        assert_eq!(def.parent_agent, Some("repo:root".to_string()));
+        assert_eq!(def.depth, 2);
     }
 }

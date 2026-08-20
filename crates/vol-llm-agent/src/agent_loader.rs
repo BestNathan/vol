@@ -108,6 +108,8 @@ impl AgentLoader {
                     tool_config: fm.tool_config.clone(),
                     mcps: fm.mcps.clone(),
                     skills: fm.skills.clone(),
+                    parent_agent: None,
+                    depth: 0,
                 };
 
                 match agents_map.entry(doc.frontmatter.name) {
