@@ -12,6 +12,7 @@ use vol_llm_agent::agent_def::AgentDef;
 use vol_llm_agent::react::AgentConfig;
 use vol_llm_agent::AgentLoader;
 use vol_llm_agent::ReActAgent;
+use vol_llm_agent_tool::{AgentInjector, AgentTool};
 use vol_llm_mcp::{McpConfig, McpManager};
 use vol_llm_provider::{create_provider, ProviderLoader};
 use vol_llm_skill::{SkillLoader, SkillTool};
@@ -22,6 +23,8 @@ use vol_session::{DatabaseSessionManager, FileSessionManager, Session, SessionMa
 
 mod capability_overlay;
 pub use capability_overlay::CapabilityOverlay;
+#[cfg(any(test, feature = "test-utils"))]
+mod test_support;
 
 /// Runtime status of a registered agent.
 #[derive(Debug, Clone, Default)]
@@ -72,6 +75,8 @@ pub struct AgentRuntime {
     pub mcp_manager: Arc<McpManager>,
     pub sandbox_registry: Arc<vol_llm_sandbox::registry::SandboxRegistry>,
     pub skill_loader: Arc<SkillLoader>,
+    /// 共享 AgentLoader：注册定义、AgentTool 派发、AgentInjector 注入同源
+    pub agent_loader: Arc<AgentLoader>,
     pub agent_defs: Arc<std::sync::RwLock<HashMap<String, AgentDef>>>,
     pub agent_status: Arc<std::sync::RwLock<HashMap<String, AgentStatus>>>,
     pub capability_overlays: Arc<tokio::sync::RwLock<HashMap<(String, String), CapabilityOverlay>>>,
@@ -144,6 +149,7 @@ impl AgentRuntime {
             .with_tools(self.tool_registry.clone())
             .with_session(session)
             .with_working_dir(agent_dir)
+            .with_contributor(Box::new(AgentInjector::new(self.agent_loader.clone())))
             .build()
             .expect("AgentConfig build failed — all required fields provided");
 
@@ -193,7 +199,7 @@ impl AgentRuntime {
 
     /// Discover and register all agents from .agents/agents/ directories.
     pub async fn discover_agents(&self) -> Result<Vec<(String, ReActAgent)>, String> {
-        let loader = AgentLoader::new(Some(self.working_dir.clone()));
+        let loader = self.agent_loader.clone();
         loader.discover_all().await.map_err(|e| e.to_string())?;
 
         let mut registered = Vec::new();
@@ -247,58 +253,6 @@ impl AgentRuntime {
         AgentRuntimeHandle {
             shutdown_tx,
             join_handle,
-        }
-    }
-}
-
-impl AgentRuntime {
-    #[doc(hidden)]
-    #[allow(clippy::expect_used)]
-    pub async fn for_test() -> Self {
-        let store_dir = PathBuf::from("/tmp/vol-llm-runtime-test");
-        let working_dir = PathBuf::from(".");
-
-        let llm_registry = ProviderLoader::load(Some(&working_dir));
-        let llm_registry = if llm_registry.is_empty() {
-            ProviderLoader::default()
-        } else {
-            llm_registry
-        };
-        let mut tool_registry = ToolRegistry::new();
-        vol_llm_tools_builtin::register_all(&mut tool_registry);
-        let task_store: Arc<dyn TaskStore> = Arc::new(vol_llm_task::InMemoryTaskStore::new());
-        let session_manager: Arc<dyn SessionManager> =
-            Arc::new(FileSessionManager::new(store_dir.join("agents")));
-        // Register the unified CLI-style `task` tool (agents using `tools: [task]`).
-        vol_llm_task::tools::register_cli(&mut tool_registry, task_store.clone());
-        // Register the unified CLI-style `fs` tool — single entry point for file ops.
-        vol_llm_fs::tools::register_cli(&mut tool_registry);
-        let tool_registry = Arc::new(tool_registry);
-        let mcp_manager = Arc::new(McpManager::new(vec![]));
-        let sandbox_registry = {
-            let tmp = std::env::temp_dir().join("vol-llm-runtime-test-sandboxes");
-            let _ = std::fs::create_dir_all(&tmp);
-            Arc::new(
-                vol_llm_sandbox::registry::SandboxRegistry::load(&tmp)
-                    .await
-                    .expect("SandboxRegistry init in for_test"),
-            )
-        };
-        let skill_loader = Arc::new(SkillLoader::new_empty());
-
-        AgentRuntime {
-            working_dir,
-            store_dir,
-            llm_registry,
-            tool_registry,
-            task_store,
-            session_manager,
-            mcp_manager,
-            sandbox_registry,
-            skill_loader,
-            agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),
-            agent_status: Arc::new(std::sync::RwLock::new(HashMap::new())),
-            capability_overlays: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }
     }
 }
@@ -495,6 +449,9 @@ impl AgentRuntimeBuilder {
             loader
         };
 
+        // 共享 AgentLoader：注册定义、AgentTool 派发、AgentInjector 注入同源
+        let agent_loader = Arc::new(AgentLoader::new(Some(self.working_dir.clone())));
+
         let task_store: Arc<dyn TaskStore> = match self.task_store_config.as_ref() {
             None => build_file_task_store(&store_dir).await?,
             Some(config) if config.store_type == TaskStoreType::File => {
@@ -539,7 +496,30 @@ impl AgentRuntimeBuilder {
         if mcp_count > 0 {
             tracing::info!(mcp_count, "MCP tools registered");
         }
-        let tool_registry = Arc::new(tool_registry);
+        // 内置 agent 工具：Arc::new_cyclic 在分配创建时取得 Weak —— 与运行时最终持有的
+        // Arc 是同一分配，upgrade 恒成功（try_unwrap 会把值搬出原分配、留下死 Weak；
+        // Arc::get_mut 又要求 weak_count == 1，与「先建 Weak 再注册」互斥，均不可用）。
+        let agent_tool_llm: Arc<dyn vol_llm_core::LLMClient> = {
+            let ids = llm_registry.ids();
+            let first_id = ids
+                .first()
+                .ok_or_else(|| "No LLM providers configured".to_string())?;
+            let fc = llm_registry
+                .get(first_id)
+                .ok_or_else(|| "Provider not found".to_string())?;
+            create_provider(&fc.to_llm_config())
+                .map(Arc::from)
+                .map_err(|e| format!("LLM error: {e}"))?
+        };
+        let tool_registry = Arc::new_cyclic(|registry_weak| {
+            tool_registry.register(AgentTool::new(
+                agent_loader.clone(),
+                agent_tool_llm,
+                session_manager.clone(),
+                registry_weak.clone(),
+            ));
+            tool_registry
+        });
 
         let capability_overlays = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
 
@@ -553,6 +533,7 @@ impl AgentRuntimeBuilder {
             mcp_manager,
             sandbox_registry,
             skill_loader,
+            agent_loader,
             agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),
             agent_status: Arc::new(std::sync::RwLock::new(HashMap::new())),
             capability_overlays,
@@ -1147,6 +1128,7 @@ base_url = "https://api.test.com"
             mcp_manager: Arc::new(McpManager::new(vec![])),
             sandbox_registry: Arc::new(registry),
             skill_loader: Arc::new(SkillLoader::new_empty()),
+            agent_loader: Arc::new(AgentLoader::new_empty()),
             agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),
             agent_status: Arc::new(std::sync::RwLock::new(HashMap::new())),
             capability_overlays: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
@@ -1180,6 +1162,7 @@ base_url = "https://api.test.com"
             mcp_manager: Arc::new(McpManager::new(vec![])),
             sandbox_registry: Arc::new(registry),
             skill_loader: Arc::new(SkillLoader::new_empty()),
+            agent_loader: Arc::new(AgentLoader::new_empty()),
             agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),
             agent_status: Arc::new(std::sync::RwLock::new(HashMap::new())),
             capability_overlays: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
@@ -1381,6 +1364,136 @@ base_url = "https://api.test.com"
             names.iter().any(|n| *n == "fs"),
             "fs tool not registered: {names:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn for_test_registers_agent_tool() {
+        let rt = AgentRuntime::for_test().await;
+        let names = rt.tool_registry.tool_names();
+        assert!(
+            names.iter().any(|n| *n == "agent"),
+            "agent tool not registered: {names:?}"
+        );
+
+        // 通过运行时执行 agent 工具：missing id 走 not-found 路径，证明工具可派发、
+        // loader 工作（死 Weak 回归见 agent_tool_dispatch_parent_tools_stay_alive，
+        // 该测试会真实命中 parent_tools.upgrade()）。
+        let call = vol_llm_core::ToolCall {
+            id: "test-call".to_string(),
+            name: "agent".to_string(),
+            arguments: r#"{"id": "repo:missing", "prompt": "x", "description": "y"}"#.to_string(),
+            r#type: "function".to_string(),
+        };
+        let err = rt
+            .tool_registry
+            .execute(&call, &vol_llm_tool::ToolContext::default())
+            .await
+            .expect_err("agent dispatch with missing id must fail");
+        assert!(
+            err.contains("not found"),
+            "expected not-found error, got: {err}"
+        );
+        assert!(
+            !err.contains("tool registry unavailable"),
+            "parent registry Weak is dead: {err}"
+        );
+    }
+
+    /// 本地 mock LLM：返回固定文本，供 agent 工具派发回归测试使用（不发网络请求）。
+    struct MockLlm {
+        response_text: String,
+    }
+
+    impl MockLlm {
+        fn new(response_text: String) -> Self {
+            Self { response_text }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl vol_llm_core::LLMClient for MockLlm {
+        fn provider(&self) -> vol_llm_core::LLMProvider {
+            vol_llm_core::LLMProvider::Anthropic
+        }
+        fn model(&self) -> &str {
+            "mock-model"
+        }
+        fn supported_params(&self) -> &[vol_llm_core::SupportedParam] {
+            &[]
+        }
+        async fn converse(
+            &self,
+            _request: vol_llm_core::ConversationRequest,
+        ) -> vol_llm_core::Result<vol_llm_core::ConversationResponse> {
+            unimplemented!("Use converse_stream")
+        }
+        async fn converse_stream(
+            &self,
+            _request: vol_llm_core::ConversationRequest,
+        ) -> vol_llm_core::Result<vol_llm_core::StreamReceiver> {
+            use tokio::sync::mpsc;
+            let (tx, rx) = mpsc::channel(10);
+            let text = self.response_text.clone();
+            tokio::spawn(async move {
+                let _ = tx
+                    .send(Ok(vol_llm_core::StreamEvent {
+                        id: "event_1".to_string(),
+                        data: vol_llm_core::StreamEventData::ContentComplete { content: text },
+                    }))
+                    .await;
+            });
+            Ok(vol_llm_core::StreamReceiver::new(rx))
+        }
+    }
+
+    /// 死 Weak 回归测试：new_cyclic 接线下 AgentTool 持有的 parent_tools 必须能
+    /// upgrade 到注册它的 registry。若用 try_unwrap 方案（值搬出原分配），这里会
+    /// 在派发到已存在 agent 时命中 upgrade 失败 → "tool registry unavailable"。
+    #[tokio::test]
+    async fn agent_tool_dispatch_parent_tools_stay_alive() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let agents_dir = temp_dir.path().join(".agents").join("agents");
+        std::fs::create_dir_all(&agents_dir).unwrap();
+        std::fs::write(
+            agents_dir.join("echo.md"),
+            "---\nname: echo\ntype: echo\ndescription: Echoes back the prompt\n---\n\
+             Echo the user's prompt exactly.\n",
+        )
+        .unwrap();
+        let loader = Arc::new(AgentLoader::new(Some(temp_dir.path().to_path_buf())));
+        loader.discover_all().await.unwrap();
+
+        let llm: Arc<dyn vol_llm_core::LLMClient> =
+            Arc::new(MockLlm::new("ECHO: alive".to_string()));
+        let session_manager: Arc<dyn SessionManager> =
+            Arc::new(FileSessionManager::new(temp_dir.path().join("sessions")));
+
+        // 与 build()/for_test() 相同的接线：new_cyclic 注册 agent 工具
+        let mut registry = ToolRegistry::new();
+        let registry = Arc::new_cyclic(|registry_weak| {
+            registry.register(AgentTool::new(
+                loader,
+                llm,
+                session_manager,
+                registry_weak.clone(),
+            ));
+            registry
+        });
+
+        let call = vol_llm_core::ToolCall {
+            id: "test-call".to_string(),
+            name: "agent".to_string(),
+            arguments: r#"{"id": "repo:echo", "prompt": "help me", "description": "get help"}"#
+                .to_string(),
+            r#type: "function".to_string(),
+        };
+        let result = registry
+            .execute(&call, &vol_llm_tool::ToolContext::default())
+            .await;
+        let content = result
+            .unwrap_or_else(|e| panic!("agent dispatch failed (dead Weak?): {e}"))
+            .content;
+        assert_eq!(content, "ECHO: alive");
     }
 
     #[tokio::test]

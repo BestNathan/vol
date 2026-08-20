@@ -13,6 +13,7 @@ crates/
 ├── vol-llm-ui/           # DEPRECATED (2026-08): Dioxus WASM web frontend — replaced by React frontend/. TUI + shared state still maintained.
 ├── vol-llm-tui/          # Terminal UI
 ├── vol-llm-agent/        # ReAct agent orchestration
+├── vol-llm-agent-tool/   # AgentTool 派发工具 + AgentInjector（高层组合 crate）
 ├── vol-llm-mcp/          # MCP client
 ├── vol-mcp-servers/      # MCP server implementations
 ├── vol-llm-tool/         # ToolRegistry

@@ -91,6 +91,8 @@ pub fn agent_context(sandbox: SandboxRef, name: &str, working_dir: Option<&str>)
         tool_config: None,
         mcps: None,
         skills: None,
+        parent_agent: None,
+        depth: 0,
     };
     ToolContext::default()
         .with_sandbox(sandbox)

@@ -108,6 +108,8 @@ impl AgentLoader {
                     tool_config: fm.tool_config.clone(),
                     mcps: fm.mcps.clone(),
                     skills: fm.skills.clone(),
+                    parent_agent: None,
+                    depth: 0,
                 };
 
                 match agents_map.entry(doc.frontmatter.name) {
@@ -152,6 +154,17 @@ impl AgentLoader {
     pub async fn get(&self, name: &str) -> Option<Arc<AgentDef>> {
         self.ensure_discovered().await;
         self.agents.read().await.get(name).cloned()
+    }
+
+    /// Get full agent definition by unique id ("{scope}:{name}", e.g. "repo:test-runner").
+    pub async fn get_by_id(&self, id: &str) -> Option<Arc<AgentDef>> {
+        self.ensure_discovered().await;
+        self.agents
+            .read()
+            .await
+            .values()
+            .find(|def| def.id == id)
+            .cloned()
     }
 
     /// Find agents whose type matches the query.
@@ -425,5 +438,27 @@ mod tests {
             def.mcps,
             Some(vec!["docs-rs".to_string(), "weather".to_string()])
         );
+    }
+
+    #[tokio::test]
+    async fn test_get_by_id_hit_and_miss() {
+        let loader = AgentLoader::new_empty();
+
+        let mut a = AgentDef::new("a", "prompt a");
+        a.id = "repo:a".to_string();
+        let mut b = AgentDef::new("b", "prompt b");
+        b.id = "user:b".to_string();
+
+        loader.register(a).await;
+        loader.register(b).await;
+
+        let hit = loader.get_by_id("repo:a").await;
+        assert!(hit.is_some());
+        assert_eq!(hit.unwrap().name, "a");
+
+        assert!(loader.get_by_id("user:b").await.is_some());
+        // scope 前缀不同 → 未命中
+        assert!(loader.get_by_id("repo:b").await.is_none());
+        assert!(loader.get_by_id("missing").await.is_none());
     }
 }

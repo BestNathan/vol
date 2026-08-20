@@ -315,6 +315,8 @@ mod tests {
             tool_config: None,
             mcps: None,
             skills: None,
+            parent_agent: None,
+            depth: 0,
         };
         let ctx = ctx.with_agent_def(def);
         assert!(ctx.agent_def.is_some());

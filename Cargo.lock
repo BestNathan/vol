@@ -8025,6 +8025,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "vol-llm-agent-tool"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "vol-llm-agent",
+ "vol-llm-context",
+ "vol-llm-core",
+ "vol-llm-tool",
+ "vol-session",
+]
+
+[[package]]
 name = "vol-llm-agents"
 version = "0.1.0"
 dependencies = [
@@ -8184,6 +8200,7 @@ dependencies = [
  "tracing",
  "uuid",
  "vol-llm-agent",
+ "vol-llm-agent-tool",
  "vol-llm-core",
  "vol-llm-fs",
  "vol-llm-mcp",

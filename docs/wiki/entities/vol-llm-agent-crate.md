@@ -3,14 +3,14 @@ type: entity
 category: product
 tags: [crate, agent, react, rust]
 created: 2026-05-04
-updated: 2026-08-17
-source_count: 3
+updated: 2026-08-20
+source_count: 4
 ---
 
 # vol-llm-agent Crate
 
 **Category:** Rust crate — ReAct Agent orchestration
-**Related:** [[react-pattern]], [[agent-plugin-system]], [[agent-builder-pattern]], [[run-context]], [[skill-system]], [[session-as-ssot]], [[vol-llm-core-crate]], [[vol-llm-tool-crate]], [[vol-llm-agent-channel-crate]], [[vol-llm-mcp-crate]], [[mcp-client-integration]], [[mcp-manager-lifecycle]], [[agentinput-multimodal-run]]
+**Related:** [[react-pattern]], [[agent-plugin-system]], [[agent-builder-pattern]], [[run-context]], [[skill-system]], [[session-as-ssot]], [[vol-llm-core-crate]], [[vol-llm-tool-crate]], [[vol-llm-agent-channel-crate]], [[vol-llm-mcp-crate]], [[mcp-client-integration]], [[mcp-manager-lifecycle]], [[agentinput-multimodal-run]], [[vol-llm-agent-tool-crate]]
 
 ## Overview
 
@@ -30,3 +30,4 @@ The core crate implementing the ReAct Agent pattern with a plugin system for cro
 - **2026-05-11**: MCP client integration — `AgentConfig` gains `mcp_session` field, `AgentConfigBuilder` gains `with_mcp_from_config()` for auto-discovering MCP tools [[react-agent-mcp-integration]]
 - **2026-05-21**: Multimodal run input — `AgentInput`/`InputPart` added, `run_input(AgentInput)` accepts text plus image URL/data URL parts, `run(&str)` remains a wrapper, and metadata/run_id flow into run context [[agentinput-multimodal-run-implementation]]
 - **2026-08-17**: `AgentInput::display_text()` / `text_content()` render `InputPart::ImageUrl` as `[image]` markers; the `agent_start` stream event input now shows markers instead of raw base64 [[multimodal-image-input]]
+- **2026-08-20**: `agent_tool` module moved out to the new [[vol-llm-agent-tool-crate]] (no re-export); `AgentLoader` gains `get_by_id()` for exact `"{scope}:{name}"` lookup [[agenttool-builtin-impl]]

@@ -16,6 +16,7 @@ members = [
     "crates/vol-llm-provider",
     "crates/vol-llm-tool",
     "crates/vol-llm-agent",
+    "crates/vol-llm-agent-tool",
     "crates/vol-llm-agents",
     "crates/vol-tdengine",
     "crates/vol-llm-tdengine",

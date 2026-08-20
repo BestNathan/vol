@@ -563,6 +563,7 @@ fn derive_llm_client(working_dir: &std::path::Path) -> Result<Arc<dyn LLMClient>
 }
 
 /// Test constructor that provides minimal defaults for all optional fields.
+#[cfg(any(test, feature = "test-utils"))]
 impl DataPlaneServerCore {
     #[doc(hidden)]
     #[allow(clippy::unwrap_used, clippy::expect_used)]
