@@ -100,7 +100,11 @@ jobs:
 
       - name: Test + clippy
         run: |
-          just test-crate ${{ matrix.crate }}
+          if [ "${{ matrix.crate }}" = "vol-agent-server" ]; then
+            just test-crate ${{ matrix.crate }} --features test-utils
+          else
+            just test-crate ${{ matrix.crate }}
+          fi
           cargo clippy -p ${{ matrix.crate }}
 
   # ── Per-arch builds run on native runners ────────────────────────────────
