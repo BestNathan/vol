@@ -8200,6 +8200,7 @@ dependencies = [
  "tracing",
  "uuid",
  "vol-llm-agent",
+ "vol-llm-agent-tool",
  "vol-llm-core",
  "vol-llm-fs",
  "vol-llm-mcp",
