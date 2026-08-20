@@ -11,6 +11,9 @@ path = "src/main.rs"
 [lints]
 workspace = true
 
+[features]
+test-utils = []
+
 [dependencies]
 base64 = "0.22"
 tokio = { workspace = true }
@@ -43,7 +46,34 @@ tower-http = { workspace = true }
 futures = "0.3"
 tempfile = "3"
 tokio-tungstenite = { workspace = true }
-vol-llm-runtime = { path = "../vol-llm-runtime" }
+vol-llm-runtime = { path = "../vol-llm-runtime", features = ["test-utils"] }
 vol-session = { path = "../vol-session" }
 vol-llm-tools-builtin-glob = { path = "../vol-llm-tools-builtin/glob-tool" }
 vol-llm-tools-builtin-read = { path = "../vol-llm-tools-builtin/read-tool" }
+
+# Integration tests that exercise DataPlaneServerCore::for_test() (which is
+# gated behind test-utils) — run with: cargo test -p vol-agent-server --features test-utils
+[[test]]
+name = "agent_server_agent_flow_test"
+path = "tests/agent_server_agent_flow_test.rs"
+required-features = ["test-utils"]
+
+[[test]]
+name = "jsonrpc_operation_coverage_test"
+path = "tests/jsonrpc_operation_coverage_test.rs"
+required-features = ["test-utils"]
+
+[[test]]
+name = "server_core_dispatch_test"
+path = "tests/server_core_dispatch_test.rs"
+required-features = ["test-utils"]
+
+[[test]]
+name = "server_core_non_agent_domains_test"
+path = "tests/server_core_non_agent_domains_test.rs"
+required-features = ["test-utils"]
+
+[[test]]
+name = "ws_transport_core_test"
+path = "tests/ws_transport_core_test.rs"
+required-features = ["test-utils"]
