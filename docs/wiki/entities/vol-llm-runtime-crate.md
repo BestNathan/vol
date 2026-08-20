@@ -3,8 +3,8 @@ type: entity
 category: service
 tags: [runtime, agents, tools, task-store, session-store, data-plane]
 created: 2026-06-09
-updated: 2026-08-16
-source_count: 10
+updated: 2026-08-20
+source_count: 11
 ---
 
 # vol-llm-runtime Crate
@@ -18,6 +18,7 @@ source_count: 10
 - `AgentRuntimeBuilder::build()` registers the CLI-style `fs` tool (`vol_llm_fs::tools::register_cli`) next to the `task` CLI; `for_test()` mirrors it. Source: [[fs-cli-tool]].
 - Runtime task store config primitives are defined here, not in the server crate, so downstream server/channel code can share one config contract.
 - Runtime session store config primitives are also defined here; `AgentRuntimeBuilder::build()` constructs the shared `Arc<dyn SessionManager>` from `[runtime.session_store]` [[session-database-store-implementation]].
+- `build()`/`for_test()` register the builtin `agent` tool (sub-agent dispatch by `AgentDef.id`) and `register_agent` attaches `AgentInjector`; `AgentRuntime` owns a shared `agent_loader: Arc<AgentLoader>` reused by `discover_agents`, AgentTool dispatch, and context injection. Source: [[agenttool-builtin-impl]].
 
 ## Task Store Configuration
 Source: [[task-store-config-parsing]]
@@ -53,6 +54,8 @@ Source: [[agent-server-control-data-plane-architecture]]
 In the proposed control/data-plane architecture, `AgentRuntime` is the authoritative source for data-plane `CapabilitySnapshot` data. `DataPlaneReporter` reads `runtime.tool_registry.definitions()`, `runtime.mcp_manager.server_tools()`, `runtime.skill_loader.list_all()`, and `runtime.agent_defs` to build capability snapshots. This avoids duplicating registry metadata in hand-written config files or control-plane config.
 
 ## Related
+- [[vol-llm-agent-tool-crate]]
+- [[agenttool-subagent-dispatch]]
 - [[agent-server-control-data-plane]]
 - [[vol-agent-server-crate]]
 - [[vol-llm-fs-crate]]

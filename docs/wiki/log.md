@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-08-20] ingest | AgentTool 内置化实现
+- Created sources: [[agenttool-builtin-impl]]
+- Created entities: [[vol-llm-agent-tool-crate]]
+- Updated entities: [[vol-llm-runtime-crate]] (agent 内置工具注册、共享 agent_loader、AgentInjector；source_count 10->11), [[vol-llm-agent-crate]] (agent_tool 迁出、get_by_id；source_count 3->4)
+- Created concepts: [[agenttool-subagent-dispatch]], [[arc-new-cyclic-registration]]
+- Updated index: new entity/source/concept entries, updated summaries
+- Cross-references added: 8
+- Changes: AgentTool 迁入新 crate vol-llm-agent-tool 并注册为运行时内置工具——按 AgentDef.id 派发、深度守卫（tool_config.agent.max_depth 默认 1）、parent/depth 记录在 AgentDef、子 agent 会话按 name 持久化、AgentInjector 上下文贡献。实现中确认 std Arc 语义陷阱：get_mut 要求 weak_count==1、try_unwrap 会使先建 Weak 悬空，正确解法 Arc::new_cyclic（含回归测试）。覆盖 gate：core 92.79 / agent 85.78 / agent-tool 89.32 / runtime 83.19。
+
 ## [2026-08-19] ingest | Agent Log File Location Fix: logs/ Instead of CWD
 - Created sources: [[otel-agent-log-dir-fix]]
 - Updated entities: [[vol-observability-crate]] (otel_init appender dir: logs/ with /tmp fallback; source_count 1->2)
