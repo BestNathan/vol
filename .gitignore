@@ -44,3 +44,8 @@ node_modules/
 .claude/settings.local.json
 
 .playwright-mcp
+# Generated coverage reports
+frontend/coverage/
+
+# Runtime cache dirs
+.vol/
