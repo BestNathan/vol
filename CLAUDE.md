@@ -1,12 +1,11 @@
 # CLAUDE.md
 
-Volatility-monitor + LLM-agent Rust workspace. Deeper context: [[docs/wiki/index]]
+Vol-agent-system Rust workspace. Deeper context: [[docs/wiki/index]]
 
 ## Project Structure
 
 ```
 crates/
-├── vol-monitor/          # Deribit pipeline binary
 ├── vol-agent-server/     # Agent server binary (data-plane + control-plane)
 ├── vol-llm-runtime/      # AgentRuntime — single source of truth for tools/skills/MCP/providers
 ├── vol-llm-agent-protocol/  # JSON-RPC protocol, transport, handler abstractions
@@ -20,11 +19,10 @@ crates/
 ├── vol-llm-skill/        # Skill system
 ├── vol-llm-task/         # Task management
 ├── vol-llm-provider/     # Anthropic / OpenAI providers
-├── vol-session/          # Session persistence
-└── vol-*/                # Volatility pipeline crates
+└── vol-session/          # Session persistence
 configs/                  # Example configs (one per server)
 dockers/                  # Dockerfiles (one per service)
-k8s/                      # Kubernetes manifests (vol-monitor/ agent-server/ mcp/)
+k8s/                      # Kubernetes manifests (agent-server/ mcp/)
 scripts/                  # Build / deploy helpers
 ```
 
@@ -119,7 +117,6 @@ The frontend uses **shadcn/ui** (Radix base) with Tailwind CSS v4. All UI primit
 
 ```bash
 docker build -f dockers/vol-agent-server.Dockerfile -t vol-agent-server .
-docker build -f dockers/vol-monitor.cross.Dockerfile -t vol-monitor .
 ```
 
 ### Lark Docs
@@ -152,8 +149,6 @@ kubectl apply -k deploy/kustomize/overlays/control-plane
 kubectl apply -k deploy/kustomize/overlays/data-plane
 
 # Legacy (deprecated — prefer ArgoCD)
-kubectl apply -f k8s/namespace.yaml
-./k8s/vol-monitor/deploy.sh latest
 kubectl apply -f k8s/agent-server/deployment.yaml
 ```
 
@@ -170,7 +165,6 @@ kubectl apply -f k8s/agent-server/deployment.yaml
 python3 scripts/sync-configmaps.py               # regenerate ConfigMap manifests
 ```
 
-[[docs/deployment/k8s-deployment]] — full deployment guide.
 [[docs/wiki/concepts/argocd-app-of-apps-gitops]] — GitOps architecture.
 
 ## Model Service
