@@ -5,7 +5,7 @@
 
 set -e
 
-IMAGE_NAME="ghcr.io/bestnathan/vol-monitor"
+IMAGE_NAME="ghcr.io/bestnathan/vol-mcp-servers"
 K8S_DIR="$(dirname "$0")"
 BINARY_NAME="${1:?Usage: $0 <binary-name>}"
 VERSION="${2:-latest}"

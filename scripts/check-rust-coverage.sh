@@ -21,20 +21,7 @@ NC='\033[0m'
 # Excluded from coverage: main.rs, app.rs, health.rs (per CLAUDE.md)
 declare -A THRESHOLDS=(
     # Core infrastructure
-    ["vol-core"]=80
-    ["vol-config"]=80
-    ["vol-eventbus"]=80
-    ["vol-tracing"]=80
-    ["vol-observability"]=80
-
-    # Data / protocol
-    ["vol-datasource"]=80
-    ["vol-deribit"]=80
-    ["vol-alert"]=80
-    ["vol-notification"]=80
-    ["vol-rules"]=80
-    ["vol-engine"]=80
-    ["vol-tdengine"]=80
+    ["vol-llm-tracing"]=80
 
     # LLM core
     ["vol-llm-core"]=80
@@ -72,8 +59,6 @@ declare -A THRESHOLDS=(
 
     # Special agents
     ["ppt-agent"]=40
-    ["vol-llm-tdengine"]=40
-    ["vol-monitor"]=40
 )
 
 # Filter to specified crates if arguments provided

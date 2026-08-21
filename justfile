@@ -271,10 +271,6 @@ fe-pw-install:
 docker-agent:
     docker build -f dockers/vol-agent-server.Dockerfile -t vol-agent-server .
 
-# Build vol-monitor Docker image
-docker-monitor:
-    docker build -f dockers/vol-monitor.cross.Dockerfile -t vol-monitor .
-
 # ── Audit ───────────────────────────────────────────────────────────────
 
 # Run cargo-audit vulnerability scan
