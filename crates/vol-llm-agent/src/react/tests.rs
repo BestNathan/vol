@@ -261,7 +261,7 @@ async fn test_run_interceptor_loop_continue_decision() {
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
     plugin_tx
         .send(PluginRequest::Intercept {
-            event: vol_tracing::TracedEvent::without_span(AgentStreamEvent::agent_start(
+            event: vol_llm_tracing::TracedEvent::without_span(AgentStreamEvent::agent_start(
                 "test".to_string(),
             )),
             tx: reply_tx,
@@ -312,7 +312,7 @@ async fn test_run_interceptor_loop_skip_decision() {
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
     plugin_tx
         .send(PluginRequest::Intercept {
-            event: vol_tracing::TracedEvent::without_span(AgentStreamEvent::agent_start(
+            event: vol_llm_tracing::TracedEvent::without_span(AgentStreamEvent::agent_start(
                 "test".to_string(),
             )),
             tx: reply_tx,
@@ -341,7 +341,7 @@ async fn test_run_interceptor_loop_emit_request_preserves_trace_id() {
     let interceptor_ctx = run_ctx.without_plugin_event_tx();
     let interceptor = tokio::spawn(run_interceptor_loop(plugin_rx, plugins, interceptor_ctx));
 
-    let traced_event = vol_tracing::TracedEvent::with_trace_id(
+    let traced_event = vol_llm_tracing::TracedEvent::with_trace_id(
         AgentStreamEvent::agent_start("test".to_string()),
         None,
         "trace-from-plugin-request".to_string(),

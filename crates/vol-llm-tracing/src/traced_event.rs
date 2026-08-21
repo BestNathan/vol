@@ -30,7 +30,7 @@ impl<T> TracedEvent<T> {
     /// # Example
     /// ```text
     /// use tracing::Span;
-    /// use vol_tracing::TracedEvent;
+    /// use vol_llm_tracing::TracedEvent;
     ///
     /// let span = Span::current();
     /// let event = TracedEvent::new(42, span, "trace-123".to_string());
@@ -68,7 +68,7 @@ impl<T> TracedEvent<T> {
     /// # Example
     /// ```text
     /// use tracing::Span;
-    /// use vol_tracing::TracedEvent;
+    /// use vol_llm_tracing::TracedEvent;
     ///
     /// let span = Span::current();
     /// let event = TracedEvent::with_trace_id(42, Some(span), "existing-trace-456".to_string());

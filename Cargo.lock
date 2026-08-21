@@ -7664,8 +7664,8 @@ dependencies = [
  "vol-llm-sandbox",
  "vol-llm-skill",
  "vol-llm-tool",
+ "vol-llm-tracing",
  "vol-session",
- "vol-tracing",
 ]
 
 [[package]]
@@ -8116,6 +8116,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "vol-llm-tracing"
+version = "0.1.0"
+dependencies = [
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "vol-llm-tui"
 version = "0.1.0"
 dependencies = [
@@ -8296,14 +8304,6 @@ dependencies = [
  "uuid",
  "vol-llm-context",
  "vol-llm-core",
-]
-
-[[package]]
-name = "vol-tracing"
-version = "0.1.0"
-dependencies = [
- "tracing",
- "uuid",
 ]
 
 [[package]]

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/vol-tracing",
+    "crates/vol-llm-tracing",
     "crates/vol-llm-core",
     "crates/vol-llm-provider",
     "crates/vol-llm-tool",
@@ -103,7 +103,7 @@ dashmap = "6"
 uuid = { version = "1.6", features = ["v4"] }
 
 # Internal crates
-vol-tracing = { path = "crates/vol-tracing" }
+vol-llm-tracing = { path = "crates/vol-llm-tracing" }
 vol-session = { path = "crates/vol-session" }
 vol-llm-memory = { path = "crates/vol-llm-memory" }
 vol-llm-skill = { path = "crates/vol-llm-skill" }

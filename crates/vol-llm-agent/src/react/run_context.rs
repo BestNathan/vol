@@ -14,8 +14,8 @@ use vol_llm_context::ContextContributor;
 use vol_llm_core::Message;
 use vol_llm_core::ToolCall;
 use vol_llm_tool::ToolRegistry;
+use vol_llm_tracing::TracedEvent;
 use vol_session::{Session, SessionMessage};
-use vol_tracing::TracedEvent;
 
 /// Request type for plugin event bus communication
 pub enum PluginRequest {

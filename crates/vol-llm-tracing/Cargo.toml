@@ -1,5 +1,5 @@
 [package]
-name = "vol-tracing"
+name = "vol-llm-tracing"
 version.workspace = true
 edition.workspace = true
 
