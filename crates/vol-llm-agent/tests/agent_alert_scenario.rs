@@ -16,7 +16,30 @@ use vol_llm_core::{
     ConversationResponse, FinishReason, LLMClient, LLMProvider, Message, TokenUsage, ToolDefinition,
 };
 use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
-use vol_llm_tdengine::{IndexPriceTool, VolatilityIndexTool};
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolResult, ToolResultType};
+
+/// Local stand-in for a deleted TDengine-backed market-data tool:
+/// deterministic `execute`, no external service.
+struct StubTool(&'static str);
+
+#[async_trait]
+impl ExecutableTool for StubTool {
+    fn name(&self) -> &'static str {
+        self.0
+    }
+
+    fn description(&self) -> &'static str {
+        "Local stub tool (no external service)"
+    }
+
+    async fn execute(
+        &self,
+        _args: &serde_json::Value,
+        _context: &ToolContext,
+    ) -> ToolResultType<ToolResult> {
+        Ok(ToolResult::success("stub result"))
+    }
+}
 
 /// Write JSON to file (pretty formatted)
 fn write_json_to_file(path: &str, data: &Value, section: &str) {
@@ -528,8 +551,8 @@ async fn test_agent_alert_scenario() {
     // Create agent with builder
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
-        .with_tool(VolatilityIndexTool::new(None))
-        .with_tool(IndexPriceTool::new(None))
+        .with_tool(StubTool("volatility_index"))
+        .with_tool(StubTool("index_price"))
         .with_system_prompt(format!(
             "You are an AI assistant for the Deribit Volatility Monitor system. \
              You analyze volatility alerts and provide actionable insights to traders. \

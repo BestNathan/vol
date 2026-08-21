@@ -1,16 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/vol-core",
-    "crates/vol-eventbus",
-    "crates/vol-config",
-    "crates/vol-datasource",
-    "crates/vol-deribit",
-    "crates/vol-alert",
-    "crates/vol-notification",
-    "crates/vol-monitor",
-    "crates/vol-engine",
-    "crates/vol-rules",
     "crates/vol-tracing",
     "crates/vol-llm-core",
     "crates/vol-llm-provider",
@@ -18,8 +8,6 @@ members = [
     "crates/vol-llm-agent",
     "crates/vol-llm-agent-tool",
     "crates/vol-llm-agents",
-    "crates/vol-tdengine",
-    "crates/vol-llm-tdengine",
     "crates/ppt-agent",
     "crates/vol-session",
     "crates/vol-llm-tools-builtin",
@@ -80,8 +68,6 @@ vol-llm-provider = { path = "crates/vol-llm-provider" }
 vol-llm-tool = { path = "crates/vol-llm-tool" }
 vol-llm-agent = { path = "crates/vol-llm-agent" }
 vol-llm-agents = { path = "crates/vol-llm-agents" }
-vol-tdengine = { path = "crates/vol-tdengine" }
-vol-llm-tdengine = { path = "crates/vol-llm-tdengine" }
 
 # Time
 chrono = { version = "0.4", features = ["serde"] }
@@ -117,15 +103,6 @@ dashmap = "6"
 uuid = { version = "1.6", features = ["v4"] }
 
 # Internal crates
-vol-core = { path = "crates/vol-core" }
-vol-eventbus = { path = "crates/vol-eventbus" }
-vol-config = { path = "crates/vol-config" }
-vol-datasource = { path = "crates/vol-datasource" }
-vol-deribit = { path = "crates/vol-deribit" }
-vol-alert = { path = "crates/vol-alert" }
-vol-notification = { path = "crates/vol-notification" }
-vol-engine = { path = "crates/vol-engine" }
-vol-rules = { path = "crates/vol-rules" }
 vol-tracing = { path = "crates/vol-tracing" }
 vol-session = { path = "crates/vol-session" }
 vol-llm-memory = { path = "crates/vol-llm-memory" }

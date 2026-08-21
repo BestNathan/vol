@@ -13,6 +13,30 @@ use vol_llm_core::{
     ConversationRequest, ConversationResponse, LLMClient, LLMProvider, MessageRole, StreamEvent,
     StreamEventData, ToolCall,
 };
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolResult, ToolResultType};
+
+/// Local stand-in for the deleted TDengine-backed index_price tool:
+/// deterministic `execute`, no external service.
+struct StubTool;
+
+#[async_trait]
+impl ExecutableTool for StubTool {
+    fn name(&self) -> &'static str {
+        "index_price"
+    }
+
+    fn description(&self) -> &'static str {
+        "Local stub tool (no external service)"
+    }
+
+    async fn execute(
+        &self,
+        _args: &serde_json::Value,
+        _context: &ToolContext,
+    ) -> ToolResultType<ToolResult> {
+        Ok(ToolResult::success("stub result"))
+    }
+}
 
 /// Tracks all messages sent to the LLM across iterations
 #[allow(dead_code)]
@@ -130,7 +154,7 @@ async fn test_tool_results_passed_to_next_iteration() {
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
-        .with_tool(vol_llm_tdengine::IndexPriceTool::new(None))
+        .with_tool(StubTool)
         .with_system_prompt("You are a test assistant. Use tools to get information.".to_string())
         .build()
         .unwrap();
@@ -234,7 +258,7 @@ async fn test_message_history_grows_correctly() {
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
-        .with_tool(vol_llm_tdengine::IndexPriceTool::new(None))
+        .with_tool(StubTool)
         .with_system_prompt("You are a test assistant.".to_string())
         .build()
         .unwrap();

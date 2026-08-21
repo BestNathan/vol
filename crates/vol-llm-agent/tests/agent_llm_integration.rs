@@ -12,7 +12,30 @@ use std::sync::Arc;
 use vol_llm_agent::{AgentConfig, ReActAgent};
 use vol_llm_core::{LLMClient, LLMProvider, StreamEvent, StreamEventData, ToolDefinition};
 use vol_llm_provider::{AnthropicProvider, LLMConfig, Secret};
-use vol_llm_tdengine::IndexPriceTool;
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolResult, ToolResultType};
+
+/// Local stand-in for the deleted TDengine-backed index_price tool:
+/// deterministic `execute`, no external service.
+struct StubTool;
+
+#[async_trait]
+impl ExecutableTool for StubTool {
+    fn name(&self) -> &'static str {
+        "index_price"
+    }
+
+    fn description(&self) -> &'static str {
+        "Local stub tool (no external service)"
+    }
+
+    async fn execute(
+        &self,
+        _args: &serde_json::Value,
+        _context: &ToolContext,
+    ) -> ToolResultType<ToolResult> {
+        Ok(ToolResult::success("stub result"))
+    }
+}
 
 /// 写入日志到文件
 fn log_to_file(path: &str, content: &str) {
@@ -214,7 +237,7 @@ async fn test_agent_with_real_anthropic_api() {
     // Create tool registry
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
-        .with_tool(IndexPriceTool::new(None))
+        .with_tool(StubTool)
         .with_system_prompt(
             "You are a helpful cryptocurrency market assistant. \
             Use the market_data tool to get current prices before answering questions. \

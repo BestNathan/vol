@@ -24,7 +24,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
 dependencies = [
  "cfg-if",
- "getrandom 0.3.4",
  "once_cell",
  "version_check",
  "zerocopy",
@@ -1183,7 +1182,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 dependencies = [
  "powerfmt",
- "serde_core",
 ]
 
 [[package]]
@@ -2736,12 +2734,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "hermit-abi"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c"
-
-[[package]]
 name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2973,7 +2965,6 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.26.4",
  "tower-service",
- "webpki-roots 1.0.6",
 ]
 
 [[package]]
@@ -3206,7 +3197,6 @@ checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
 dependencies = [
  "autocfg",
  "hashbrown 0.12.3",
- "serde",
 ]
 
 [[package]]
@@ -4159,16 +4149,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num_cpus"
-version = "1.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
-dependencies = [
- "hermit-abi",
- "libc",
-]
-
-[[package]]
 name = "num_enum"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4246,106 +4226,6 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
-
-[[package]]
-name = "openlark"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ad168187bbb6fc22aa95df6c684b4d1d3345ca36c16f342270e75dbf869b3d8"
-dependencies = [
- "chrono",
- "openlark-auth",
- "openlark-client",
- "openlark-communication",
- "openlark-core",
- "serde",
- "serde_json",
- "serde_repr",
-]
-
-[[package]]
-name = "openlark-auth"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fee5a868321d6307fbbda4dd3a127a50b2d90375072bdbc5cbd1e633a545db4"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "chrono",
- "hex",
- "openlark-core",
- "rand 0.8.5",
- "regex",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "url",
- "urlencoding",
- "uuid",
-]
-
-[[package]]
-name = "openlark-client"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da8bcf21d0d5e5beef862a29c794679d50d5d376e9f9ea4a851e081356628910"
-dependencies = [
- "chrono",
- "openlark-auth",
- "openlark-communication",
- "openlark-core",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "openlark-communication"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d102d0ad5f63ebbe729e7f513bce18cb0e45bd0da6efb346e8b281ea5b619b1f"
-dependencies = [
- "openlark-core",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "tracing",
-]
-
-[[package]]
-name = "openlark-core"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "336a10748627ee7c57fc2d80d686b210065670bc7c01a17cacd6e85fd7548975"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "futures-util",
- "hmac",
- "http 1.4.0",
- "num_cpus",
- "quick_cache",
- "rand 0.8.5",
- "regex",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "serde_with",
- "sha2",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
- "urlencoding",
- "uuid",
-]
 
 [[package]]
 name = "openssl"
@@ -5025,18 +4905,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "quick_cache"
-version = "0.6.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a70b1b8b47e31d0498ecbc3c5470bb931399a8bfed1fd79d1717a61ce7f96e3"
-dependencies = [
- "ahash",
- "equivalent",
- "hashbrown 0.16.1",
- "parking_lot",
-]
-
-[[package]]
 name = "quinn"
 version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5458,22 +5326,16 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.9.0",
- "hyper-rustls 0.27.8",
  "hyper-util",
  "js-sys",
  "log",
- "mime_guess",
  "percent-encoding",
  "pin-project-lite",
- "quinn",
- "rustls 0.23.37",
- "rustls-pki-types",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "sync_wrapper 1.0.2",
  "tokio",
- "tokio-rustls 0.26.4",
  "tower 0.5.3",
  "tower-http 0.6.8",
  "tower-service",
@@ -5481,7 +5343,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
- "webpki-roots 1.0.6",
 ]
 
 [[package]]
@@ -5564,7 +5425,7 @@ dependencies = [
  "rand 0.10.1",
  "reqwest 0.13.3",
  "rmcp-macros",
- "schemars 1.2.1",
+ "schemars",
  "serde",
  "serde_json",
  "sse-stream",
@@ -5835,18 +5696,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91c1b7e4904c873ef0710c1f407dde2e6287de2bebc1bbbf7d430bb7cbffd939"
 dependencies = [
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "schemars"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cd191f9397d57d581cddd31014772520aa448f65ef991055d7f61582c65165f"
-dependencies = [
- "dyn-clone",
- "ref-cast",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -6210,17 +6059,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_repr"
-version = "0.1.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "175ee3e80ae9982737ca543e96133087cbd9a485eecc3bc4de9c1a37b47ea59c"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "serde_spanned"
 version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6242,37 +6080,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_with"
-version = "3.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd5414fad8e6907dbdd5bc441a50ae8d6e26151a03b1de04d89a5576de61d01f"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "hex",
- "indexmap 1.9.3",
- "indexmap 2.14.0",
- "schemars 0.9.0",
- "schemars 1.2.1",
- "serde_core",
- "serde_json",
- "serde_with_macros",
- "time",
-]
-
-[[package]]
-name = "serde_with_macros"
-version = "3.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3db8978e608f1fe7357e211969fd9abdcae80bac1ba7a3369bb7eb6b404eb65"
-dependencies = [
- "darling 0.23.0",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "serde_yaml"
 version = "0.9.34+deprecated"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6283,31 +6090,6 @@ dependencies = [
  "ryu",
  "serde",
  "unsafe-libyaml",
-]
-
-[[package]]
-name = "serial_test"
-version = "3.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "699f4197115b8a7e7ff19c9a315a4bd6fffec26cc4626ef45ecaea389e081c6d"
-dependencies = [
- "futures-executor",
- "futures-util",
- "log",
- "once_cell",
- "parking_lot",
- "serial_test_derive",
-]
-
-[[package]]
-name = "serial_test_derive"
-version = "3.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94e153fc76e1c6a068703d6d29c508a0b15c061c4b7e43da59cc097bc342673c"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -7767,14 +7549,7 @@ dependencies = [
  "idna",
  "percent-encoding",
  "serde",
- "serde_derive",
 ]
-
-[[package]]
-name = "urlencoding"
-version = "2.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
 
 [[package]]
 name = "utf-8"
@@ -7802,7 +7577,6 @@ checksum = "5ac8b6f42ead25368cf5b098aeb3dc8a1a2c05a3eee8a9a1a68c640edbfc79d9"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",
- "serde_core",
  "wasm-bindgen",
 ]
 
@@ -7858,114 +7632,6 @@ dependencies = [
  "vol-llm-tools-builtin-read",
  "vol-observability",
  "vol-session",
-]
-
-[[package]]
-name = "vol-alert"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "opentelemetry",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-opentelemetry",
- "vol-config",
- "vol-core",
- "vol-tracing",
-]
-
-[[package]]
-name = "vol-config"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serial_test",
- "toml",
- "vol-core",
- "vol-llm-provider",
-]
-
-[[package]]
-name = "vol-core"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "vol-tracing",
-]
-
-[[package]]
-name = "vol-datasource"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "futures-util",
- "opentelemetry",
- "rustls 0.22.4",
- "serde",
- "serde_json",
- "tokio",
- "tokio-rustls 0.25.0",
- "tokio-tungstenite 0.21.0",
- "tracing",
- "tracing-opentelemetry",
- "vol-config",
- "vol-core",
- "vol-deribit",
- "vol-tracing",
- "webpki-roots 0.26.11",
-]
-
-[[package]]
-name = "vol-deribit"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "futures-util",
- "reqwest 0.11.27",
- "rustls 0.22.4",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "tokio-rustls 0.25.0",
- "tokio-tungstenite 0.21.0",
- "tracing",
- "vol-core",
- "webpki-roots 0.26.11",
-]
-
-[[package]]
-name = "vol-engine"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "opentelemetry",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-opentelemetry",
- "vol-alert",
- "vol-config",
- "vol-core",
- "vol-tracing",
-]
-
-[[package]]
-name = "vol-eventbus"
-version = "0.1.0"
-dependencies = [
- "tokio",
- "tracing",
- "vol-core",
 ]
 
 [[package]]
@@ -8266,21 +7932,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vol-llm-tdengine"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "vol-llm-core",
- "vol-llm-tool",
- "vol-tdengine",
-]
-
-[[package]]
 name = "vol-llm-tool"
 version = "0.1.0"
 dependencies = [
@@ -8480,7 +8131,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
- "vol-config",
  "vol-llm-agent",
  "vol-llm-agents",
  "vol-llm-core",
@@ -8547,7 +8197,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "vol-config",
  "vol-llm-agent",
  "vol-llm-context",
  "vol-llm-core",
@@ -8605,60 +8254,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vol-monitor"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "openlark",
- "opentelemetry",
- "opentelemetry-appender-tracing",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "reqwest 0.11.27",
- "serde",
- "serde_json",
- "tokio",
- "toml",
- "tracing",
- "tracing-appender",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "vol-config",
- "vol-core",
- "vol-datasource",
- "vol-deribit",
- "vol-engine",
- "vol-llm-agent",
- "vol-llm-agents",
- "vol-llm-provider",
- "vol-llm-tdengine",
- "vol-llm-tool",
- "vol-notification",
- "vol-rules",
- "vol-tdengine",
-]
-
-[[package]]
-name = "vol-notification"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "openlark",
- "opentelemetry",
- "reqwest 0.11.27",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-opentelemetry",
- "vol-config",
- "vol-core",
- "vol-deribit",
- "vol-tracing",
-]
-
-[[package]]
 name = "vol-observability"
 version = "0.1.0"
 dependencies = [
@@ -8684,20 +8279,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vol-rules"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "vol-config",
- "vol-core",
-]
-
-[[package]]
 name = "vol-session"
 version = "0.1.0"
 dependencies = [
@@ -8715,16 +8296,6 @@ dependencies = [
  "uuid",
  "vol-llm-context",
  "vol-llm-core",
-]
-
-[[package]]
-name = "vol-tdengine"
-version = "0.1.0"
-dependencies = [
- "reqwest 0.11.27",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
 ]
 
 [[package]]

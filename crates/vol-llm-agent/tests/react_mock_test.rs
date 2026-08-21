@@ -10,7 +10,6 @@ use std::sync::Arc;
 use vol_llm_agent::react::plugin::{AgentPlugin, PluginDecision, RunContext};
 use vol_llm_agent::{AgentConfig, AgentStreamEvent, ReActAgent};
 use vol_llm_core::{ConversationRequest, ConversationResponse, LLMClient, LLMProvider};
-use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
 use vol_llm_tool::{ExecutableTool, ToolContext, ToolResult, ToolResultType};
 
 /// No-op tool named `index_price` — lets loop-mocks trigger tool calls
@@ -167,10 +166,7 @@ async fn test_agent_executes_full_react_cycle() {
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
-        .with_tool(IndexPriceTool::new(None))
-        .with_tool(VolatilityIndexTool::new(None))
-        .with_tool(OptionsTool::new(None))
-        .with_tool(RvTool::new(None))
+        .with_tool(LoopIndexPriceTool)
         .with_plugin(tool_counter.clone())
         .with_system_prompt("You are a test assistant.".to_string())
         .build()

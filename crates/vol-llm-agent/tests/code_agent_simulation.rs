@@ -4,11 +4,9 @@
 //!
 //! This test simulates a real Code Agent calling the LLM API with proper request/response format.
 //!
-//! Agent-run tests use `StubTool` stand-ins for the TDengine tools: the real
-//! tools hang ~120s per call when TDengine is unreachable (CI), and the
-//! ReAct loop only emits `ToolCallComplete` on tool success — so a timeout
-//! turns "0 tools called" and fails assertions. Tool definitions/registration
-//! are still verified against the real tools (no network on registration).
+//! Agent-run tests use `StubTool` stand-ins for the deleted TDengine tools
+//! (vol-llm-tdengine removed from the workspace): deterministic `execute`,
+//! no external service. Keeps agent-run tests fast and green everywhere.
 
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -20,7 +18,6 @@ use vol_llm_core::{
     ConversationRequest, ConversationResponse, FinishReason, LLMClient, LLMProvider, Message,
     MessageRole, StreamEvent, StreamEventData, SupportedParam, TokenUsage,
 };
-use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
 use vol_llm_tool::{ExecutableTool, ToolContext, ToolRegistry, ToolResult, ToolResultType};
 
 /// Local stand-in for a TDengine-backed tool: deterministic `execute`,
@@ -435,10 +432,10 @@ async fn test_code_agent_tool_choice_auto() {
 
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
-        .with_tool(VolatilityIndexTool::new(None))
-        .with_tool(IndexPriceTool::new(None))
-        .with_tool(OptionsTool::new(None))
-        .with_tool(RvTool::new(None))
+        .with_tool(StubTool("volatility_index"))
+        .with_tool(StubTool("index_price"))
+        .with_tool(StubTool("options"))
+        .with_tool(StubTool("rv"))
         .with_system_prompt("You are a helpful assistant.".to_string())
         .build()
         .unwrap();
@@ -459,10 +456,10 @@ async fn test_code_agent_tool_definitions() {
 
     // Verify tools are properly registered
     let mut registry = ToolRegistry::new();
-    registry.register(VolatilityIndexTool::new(None));
-    registry.register(IndexPriceTool::new(None));
-    registry.register(OptionsTool::new(None));
-    registry.register(RvTool::new(None));
+    registry.register(StubTool("volatility_index"));
+    registry.register(StubTool("index_price"));
+    registry.register(StubTool("options"));
+    registry.register(StubTool("rv"));
 
     let tools = registry.definitions();
 

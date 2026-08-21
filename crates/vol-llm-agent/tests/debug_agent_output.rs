@@ -8,7 +8,30 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use vol_llm_agent::{AgentConfig, ReActAgent};
 use vol_llm_core::{ConversationRequest, ConversationResponse, LLMClient, LLMProvider, ToolCall};
-use vol_llm_tdengine::IndexPriceTool;
+use vol_llm_tool::{ExecutableTool, ToolContext, ToolResult, ToolResultType};
+
+/// Local stand-in for the deleted TDengine-backed index_price tool:
+/// deterministic `execute`, no external service.
+struct StubTool;
+
+#[async_trait]
+impl ExecutableTool for StubTool {
+    fn name(&self) -> &'static str {
+        "index_price"
+    }
+
+    fn description(&self) -> &'static str {
+        "Local stub tool (no external service)"
+    }
+
+    async fn execute(
+        &self,
+        _args: &serde_json::Value,
+        _context: &ToolContext,
+    ) -> ToolResultType<ToolResult> {
+        Ok(ToolResult::success("stub result"))
+    }
+}
 
 /// Simple mock LLM that returns a tool call then final answer
 struct SimpleMock;
@@ -106,7 +129,7 @@ async fn test_agent_produces_output() {
     // Create agent with builder
     let config = AgentConfig::builder()
         .with_llm(Arc::new(mock_llm))
-        .with_tool(IndexPriceTool::new(None))
+        .with_tool(StubTool)
         .with_system_prompt("You are a test assistant. Use tools to get information.".to_string())
         .build()
         .unwrap();
