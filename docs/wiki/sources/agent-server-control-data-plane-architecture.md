@@ -20,7 +20,7 @@ Designs a control/data-plane architecture without adding a new control-plane cra
 ## Key Takeaways
 
 - No new `vol-agent-control-plane` crate; control-plane implementation lives under [[vol-agent-server-crate]].
-- [[vol-llm-agent-channel-crate]] owns wire protocol: `Operation`, `Payload`, `control.*` methods, JSON-RPC codec, `Connection`, `DomainHandler`, `HandlerRegistry`, and a generic `JsonRpcMessageService` abstraction.
+- [[vol-llm-agent-protocol-crate]] owns wire protocol: `Operation`, `Payload`, `control.*` methods, JSON-RPC codec, `Connection`, `DomainHandler`, `HandlerRegistry`, and a generic `JsonRpcMessageService` abstraction.
 - [[vol-agent-server-crate]] owns concrete cores: `DataPlaneServerCore` and `ControlPlaneServerCore`.
 - Current `AgentServerCore` behavior should move out of channel into `vol-agent-server::data_plane`, because it is concrete data-plane execution implementation rather than protocol.
 - JSON-RPC over WebSocket is the only application protocol; HTTP is reserved for `/health` and `/metrics`.
@@ -38,7 +38,7 @@ The same `vol-agent-server` binary should compose roles from config. In standalo
 ## Entities Mentioned
 
 - [[vol-agent-server-crate]]: concrete server implementation crate for data-plane and control-plane cores plus role composition.
-- [[vol-llm-agent-channel-crate]]: protocol, JSON-RPC transport, connection, handler, registry, and generic service abstractions.
+- [[vol-llm-agent-protocol-crate]]: protocol, JSON-RPC transport, connection, handler, registry, and generic service abstractions.
 - [[vol-llm-runtime-crate]]: authoritative owner of execution resources in every data-plane node.
 
 ## Concepts Covered

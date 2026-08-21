@@ -11,7 +11,7 @@ source_count: 2
 
 **Category:** Pattern — Exposing backend skill discovery via JSON-RPC
 
-**Related:** [[skill-system]], [[jsonrpc-transport]], [[vol-llm-agent-channel-crate]], [[vol-llm-ui-crate]], [[dioxus-web-pattern]], [[mobile-ui-refinements]]
+**Related:** [[skill-system]], [[jsonrpc-transport]], [[vol-llm-agent-protocol-crate]], [[vol-llm-ui-crate]], [[dioxus-web-pattern]], [[mobile-ui-refinements]]
 
 ## Overview
 

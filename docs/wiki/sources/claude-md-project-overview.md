@@ -39,7 +39,7 @@ The LLM side is summarized through provider/core/tool/agent crates (`vol-llm-cor
 - [[vol-llm-ui-crate]]: Dioxus WASM web frontend called out in the overview
 - [[vol-llm-agent-crate]]: ReAct orchestration crate grouped under LLM agent infrastructure
 - [[vol-llm-agents-crate]]: higher-level agent implementations grouped under LLM agent infrastructure
-- [[vol-llm-agent-channel-crate]]: agent communication and JSON-RPC/MCP-related layer
+- [[vol-llm-agent-protocol-crate]]: agent communication and JSON-RPC/MCP-related layer
 - [[vol-llm-mcp-crate]]: MCP client protocol layer
 - [[vol-mcp-servers-crate]]: MCP server collection
 - [[tdengine]]: market-data storage integration

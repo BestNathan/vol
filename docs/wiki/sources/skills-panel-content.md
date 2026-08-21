@@ -55,7 +55,7 @@ Dialog signal managed at `App` level, passed via context to `SkillsPanel`, rende
 
 ## Entities Mentioned
 
-- [[vol-llm-agent-channel-crate]]: Added `skill.list`/`skill.get` RPC methods, `SkillLoader` integration
+- [[vol-llm-agent-protocol-crate]]: Added `skill.list`/`skill.get` RPC methods, `SkillLoader` integration
 - [[vol-llm-ui-crate]]: Added `SkillDialogState`, `SkillDetail` types, `SkillsPanel` rewrite, `SkillDetailDialog` component
 
 ## Concepts Covered

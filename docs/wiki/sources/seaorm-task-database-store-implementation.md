@@ -23,7 +23,7 @@ The task system's database-backed task store was replaced from SQLx raw queries 
 - Cross-process file lock serializes Postgres tests across `cargo test --workspace` and separate test processes.
 - `[[vol-llm-runtime-crate]]` builds either file or database store from `TaskStoreConfig` and exposes one global `runtime.task_store`.
 - `[[vol-agent-server-crate]]` parses, validates, logs, and passes `[runtime.task_store]` through `AgentServerCoreBuilder`.
-- `[[vol-llm-agent-channel-crate]]` transports the config into runtime construction; JSON-RPC `TaskHandler` shares the same `runtime.task_store`.
+- `[[vol-llm-agent-protocol-crate]]` transports the config into runtime construction; JSON-RPC `TaskHandler` shares the same `runtime.task_store`.
 
 ## Detailed Summary
 The implementation keeps the original architectural constraint that `AgentRuntime` is the single source of truth for shared agent resources. `AgentRuntimeBuilder::build()` maps omitted task-store config and `type = "file"` to the existing file-backed store. When config uses `type = "database"`, it calls `DatabaseTaskStore::connect(url)` and registers the same `Arc<dyn TaskStore>` with the CLI-style `task` tool.
@@ -47,7 +47,7 @@ The implementation was verified with focused task-store tests (SQLite and Postgr
 - [[vol-llm-task-crate]]: owns `TaskStore`, `DatabaseTaskStore`, SeaORM entity/migration/mapping, and database tests.
 - [[vol-llm-runtime-crate]]: owns task-store config types and constructs the global store.
 - [[vol-agent-server-crate]]: parses, validates, logs, and passes task-store config.
-- [[vol-llm-agent-channel-crate]]: transports the server builder config into runtime construction; `TaskHandler` uses shared `runtime.task_store`.
+- [[vol-llm-agent-protocol-crate]]: transports the server builder config into runtime construction; `TaskHandler` uses shared `runtime.task_store`.
 
 ## Concepts Covered
 - [[runtime-task-store-configuration]]: shared TOML contract and runtime behavior for file/database task persistence, including SeaORM SQLite URL normalization and Postgres test isolation.

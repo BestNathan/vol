@@ -67,7 +67,7 @@ POST /             → handle_blocking() → dispatcher.submit() → await → J
 - `Message` derive changed from `Debug, Serialize, Deserialize` to `Debug, Clone, Serialize, Deserialize`
 
 ## Entities Mentioned
-- [[vol-llm-agent-channel-crate]]: Crate where this is implemented
+- [[vol-llm-agent-protocol-crate]]: Crate where this is implemented
 - [[vol-llm-agent-crate]]: ReActAgent used by the dispatcher
 
 ## Concepts Covered

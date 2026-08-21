@@ -10,7 +10,7 @@ source_count: 3
 # Agent Dispatcher
 
 **Category:** Request queueing
-**Related:** [[vol-llm-agent-channel-crate]], [[http-transport]], [[react-pattern]], [[agent-router]], [[jsonrpc-server-handler]], [[agentinput-multimodal-run]]
+**Related:** [[vol-llm-agent-protocol-crate]], [[http-transport]], [[react-pattern]], [[agent-router]], [[jsonrpc-server-handler]], [[agentinput-multimodal-run]]
 
 ## Definition
 

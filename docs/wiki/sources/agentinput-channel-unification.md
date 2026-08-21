@@ -55,7 +55,7 @@ Submit match arm destructures only `input` and `target`. Builds `AgentRequest::n
 
 ## Entities Mentioned
 
-- [[vol-llm-agent-channel-crate]]: all changes in this crate
+- [[vol-llm-agent-protocol-crate]]: all changes in this crate
 - [[vol-llm-agent-crate]]: provides `AgentInput`, `InputPart`, `run_input`
 
 ## Concepts Covered

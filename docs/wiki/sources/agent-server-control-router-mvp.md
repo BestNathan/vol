@@ -37,7 +37,7 @@ Verification commands:
 
 ## Entities Mentioned
 - [[vol-agent-server-crate]]: owns the new control-plane router module.
-- [[vol-llm-agent-channel-crate]]: supplies shared `AgentCapability` and `CapabilitySnapshot` protocol models.
+- [[vol-llm-agent-protocol-crate]]: supplies shared `AgentCapability` and `CapabilitySnapshot` protocol models.
 
 ## Concepts Covered
 - [[agent-server-control-data-plane]]: Task 9 implements the MVP distributed agent placement step in the staged control/data-plane plan.

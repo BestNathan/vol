@@ -33,7 +33,7 @@ The plan contains eight tasks. Task 1 adds JSON-RPC notification decode support.
 
 ## Entities Mentioned
 
-- [[vol-llm-agent-channel-crate]]: notification decode and protocol behavior.
+- [[vol-llm-agent-protocol-crate]]: notification decode and protocol behavior.
 - [[vol-agent-server-crate]]: endpoint roles, client/data-plane handlers, capability revision sync, combined mode registration.
 
 ## Concepts Covered

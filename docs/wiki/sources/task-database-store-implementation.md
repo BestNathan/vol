@@ -20,7 +20,7 @@ The task system now supports a single global database-backed task store selected
 - SQLite migrations are embedded with `sqlx::migrate!("./migrations/sqlite")`, so release binaries do not need source-tree migration files at runtime.
 - [[vol-llm-runtime-crate]] owns the shared `TaskStoreConfig`/`TaskStoreType` contract and builds either the existing file store or the new database store.
 - [[vol-agent-server-crate]] parses and validates `[runtime.task_store]` before constructing `AgentServerCore`.
-- [[vol-llm-agent-channel-crate]] passes task-store config through `AgentServerCoreBuilder` into `AgentRuntimeBuilder`; it does not patch or clone the task registry.
+- [[vol-llm-agent-protocol-crate]] passes task-store config through `AgentServerCoreBuilder` into `AgentRuntimeBuilder`; it does not patch or clone the task registry.
 
 ## Detailed Summary
 The implementation keeps the original architectural constraint that `AgentRuntime` is the single source of truth for shared agent resources. `AgentRuntimeBuilder::build()` maps omitted task-store config and `type = "file"` to the existing file-backed store. When config uses `type = "database"`, it calls `DatabaseTaskStore::connect(url)` and registers the same `Arc<dyn TaskStore>` with the CLI-style `task` tool.
@@ -39,7 +39,7 @@ The implementation was verified with focused task-store tests, runtime construct
 - [[vol-llm-task-crate]]: owns `TaskStore`, `DatabaseTaskStore`, SQLite schema, embedded migrations, and task persistence tests.
 - [[vol-llm-runtime-crate]]: owns task-store config types and constructs the global store.
 - [[vol-agent-server-crate]]: parses, validates, logs, and passes task-store config.
-- [[vol-llm-agent-channel-crate]]: transports the server builder config into runtime construction and keeps task handlers on the shared `runtime.task_store`.
+- [[vol-llm-agent-protocol-crate]]: transports the server builder config into runtime construction and keeps task handlers on the shared `runtime.task_store`.
 
 ## Concepts Covered
 - [[runtime-task-store-configuration]]: shared TOML contract and runtime behavior for file/database task persistence.

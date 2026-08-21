@@ -9,7 +9,7 @@ updated: 2026-06-10
 # Agent Channel Examples: Historical WS + HTTP Service
 
 **Source Type:** Implementation
-**Related:** [[vol-llm-agent-channel-crate]], [[agent-server-protocol]], [[http-transport]], [[agent-channel-server-protocol-transport-migration]]
+**Related:** [[vol-llm-agent-protocol-crate]], [[agent-server-protocol]], [[http-transport]], [[agent-channel-server-protocol-transport-migration]]
 
 ## Summary
 

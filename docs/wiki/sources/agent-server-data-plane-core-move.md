@@ -13,7 +13,7 @@ tags: [agent-server, data-plane, json-rpc, channel-boundary, rust]
 **Link:** /Users/admin/Documents/learn/vol-agent/crates/vol-agent-server/src/data_plane
 
 ## TL;DR
-Task 4 moved concrete standalone data-plane execution behavior out of [[vol-llm-agent-channel-crate]] and into [[vol-agent-server-crate]] as `vol_agent_server::data_plane::DataPlaneServerCore`. The channel crate now keeps protocol, connection, handler registry, and generic JSON-RPC transport abstractions, while server owns concrete runtime construction, local handlers, router, dispatcher, and connection holder behavior.
+Task 4 moved concrete standalone data-plane execution behavior out of [[vol-llm-agent-protocol-crate]] and into [[vol-agent-server-crate]] as `vol_agent_server::data_plane::DataPlaneServerCore`. The channel crate now keeps protocol, connection, handler registry, and generic JSON-RPC transport abstractions, while server owns concrete runtime construction, local handlers, router, dispatcher, and connection holder behavior.
 
 ## Key Takeaways
 - Created `crates/vol-agent-server/src/data_plane/` with `builder`, `connection_holder`, `core`, `dispatcher`, `handlers`, and `router` modules; empty `command`/`snapshot` placeholders were removed in cleanup for later Task 8 implementation.
@@ -44,7 +44,7 @@ Verification passed:
 
 ## Entities Mentioned
 - [[vol-agent-server-crate]]: now owns concrete standalone data-plane server execution behavior.
-- [[vol-llm-agent-channel-crate]]: now keeps channel/protocol/transport abstractions and no longer exports concrete data-plane core/router/dispatcher/handlers.
+- [[vol-llm-agent-protocol-crate]]: now keeps channel/protocol/transport abstractions and no longer exports concrete data-plane core/router/dispatcher/handlers.
 - [[vol-llm-runtime-crate]]: remains the runtime resource owner used by `DataPlaneServerCore`.
 
 ## Concepts Covered

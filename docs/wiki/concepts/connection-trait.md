@@ -10,7 +10,7 @@ source_count: 3
 # Connection Trait
 
 **Category:** Transport abstraction
-**Related:** [[vol-llm-agent-channel-crate]], [[http-transport]], [[connection-holder]], [[remote-agent-connection]], [[jsonrpc-transport]], [[jsonrpc-transport-refactoring]], [[agent-server-protocol]], [[agent-channel-server-protocol-transport-migration]], [[tui-frontend-ratatui]]
+**Related:** [[vol-llm-agent-protocol-crate]], [[http-transport]], [[connection-holder]], [[remote-agent-connection]], [[jsonrpc-transport]], [[jsonrpc-transport-refactoring]], [[agent-server-protocol]], [[agent-channel-server-protocol-transport-migration]], [[tui-frontend-ratatui]]
 
 ## Definition
 

@@ -11,7 +11,7 @@ task_number: 6
 
 **Category:** Development task — Task 6
 
-**Related:** [[vol-llm-ui-crate]], [[json-rpc-websocket]], [[remote-agent-connection]], [[vol-llm-agent-channel-crate]]
+**Related:** [[vol-llm-ui-crate]], [[json-rpc-websocket]], [[remote-agent-connection]], [[vol-llm-agent-protocol-crate]]
 
 ## Summary
 

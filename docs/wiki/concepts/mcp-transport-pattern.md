@@ -10,7 +10,7 @@ source_count: 3
 # MCP Transport Pattern
 
 **Category:** Network transport
-**Related:** [[vol-mcp-servers-crate]], [[rmcp-sdk]], [[docs-rs-tools]], [[vol-llm-agent-channel-crate]], [[vol-llm-mcp-crate]], [[playwright-mcp-service]]
+**Related:** [[vol-mcp-servers-crate]], [[rmcp-sdk]], [[docs-rs-tools]], [[vol-llm-agent-protocol-crate]], [[vol-llm-mcp-crate]], [[playwright-mcp-service]]
 
 ## Definition
 

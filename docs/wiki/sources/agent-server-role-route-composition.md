@@ -31,7 +31,7 @@ This task deliberately does not implement Task 8 follow-ups such as `DataPlaneRe
 
 ## Entities Mentioned
 - [[vol-agent-server-crate]]: Owns role-aware startup, route ownership tests, and concrete control/data-plane core composition.
-- [[vol-llm-agent-channel-crate]]: Provides the generic `JsonRpcServer` transport consumed by both server cores.
+- [[vol-llm-agent-protocol-crate]]: Provides the generic `JsonRpcServer` transport consumed by both server cores.
 
 ## Concepts Covered
 - [[agent-server-control-data-plane]]: Task 7 implements the route composition step described by the architecture and plan.

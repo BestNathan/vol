@@ -13,7 +13,7 @@ tags: [agent-server, boundary-tests, role-modes, control-plane, data-plane]
 **Link:** /Users/admin/Documents/learn/vol-agent/crates/vol-agent-server/tests/role_modes.rs; /Users/admin/Documents/learn/vol-agent/scripts/check-agent-boundaries.sh
 
 ## TL;DR
-Task 10 added final boundary and role-mode verification for the agent-server control/data-plane implementation. A shell boundary check fails if either [[vol-llm-agent-channel-crate]] or [[vol-llm-runtime-crate]] depends on [[vol-agent-server-crate]], and an integration test verifies `/ws` ownership plus config rejection when both server roles are disabled.
+Task 10 added final boundary and role-mode verification for the agent-server control/data-plane implementation. A shell boundary check fails if either [[vol-llm-agent-protocol-crate]] or [[vol-llm-runtime-crate]] depends on [[vol-agent-server-crate]], and an integration test verifies `/ws` ownership plus config rejection when both server roles are disabled.
 
 ## Key Takeaways
 - `/Users/admin/Documents/learn/vol-agent/scripts/check-agent-boundaries.sh` runs `cargo tree` checks for `vol-llm-agent-channel` and `vol-llm-runtime` and prints `agent boundary checks passed` on success.
@@ -41,7 +41,7 @@ Verification passed:
 
 ## Entities Mentioned
 - [[vol-agent-server-crate]]: owns the boundary script target tests and role-mode integration tests.
-- [[vol-llm-agent-channel-crate]]: checked to ensure it does not depend on `vol-agent-server`.
+- [[vol-llm-agent-protocol-crate]]: checked to ensure it does not depend on `vol-agent-server`.
 - [[vol-llm-runtime-crate]]: checked to ensure it does not depend on `vol-agent-server`.
 
 ## Concepts Covered

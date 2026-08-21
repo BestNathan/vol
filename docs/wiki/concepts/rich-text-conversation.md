@@ -80,4 +80,4 @@ render(node):
 
 - Design: `docs/superpowers/specs/2026-06-04-rich-text-conversation-design.md`
 - Plan: `docs/superpowers/plans/2026-06-04-rich-text-conversation.md`
-- Scroll mechanism: [[conversation-view]] (`data-auto-scroll`, `data-scroll-programmatic`)
+- Scroll mechanism: conversation-view (`data-auto-scroll`, `data-scroll-programmatic`)

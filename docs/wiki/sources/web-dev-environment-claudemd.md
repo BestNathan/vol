@@ -50,7 +50,7 @@ dx serve --platform web --package vol-llm-ui --bin vol-llm-ui-web \
 ## Entities Mentioned
 
 - [[vol-llm-ui-crate]]: Dioxus WASM frontend requiring the documented web development toolchain.
-- [[vol-llm-agent-channel-crate]]: JSON-RPC backend service started by `make web-backend`.
+- [[vol-llm-agent-protocol-crate]]: JSON-RPC backend service started by `make web-backend`.
 
 ## Concepts Covered
 
