@@ -4,7 +4,7 @@ category: product
 tags: [repository, rust, cargo-workspace, deribit, llm, gitops]
 created: 2026-05-19
 updated: 2026-08-21
-source_count: 4
+source_count: 3
 ---
 
 # vol Repository
@@ -44,11 +44,11 @@ source_count: 4
 | MCP | `vol-llm-mcp`, `vol-mcp-servers` |
 | User interfaces | React `frontend/` (active); `vol-llm-ui` (deprecated), `vol-llm-tui` |
 | Deployment | `deploy/argocd/` ArgoCD GitOps (primary); `deploy/kustomize/`; `k8s/` legacy/manual, deprecated |
-| Documentation and artifacts | `README.md` (agent-focused, six sections), `docs/`, `docs/wiki/`, `docs/superpowers/` |
+| Documentation and artifacts | `README.md` (agent-only, six sections), `docs/`, `docs/wiki/`, `docs/superpowers/` |
 
 ## Timeline
 
-- **2026-08-21**: README restructured to an agent-focused six-section layout (agent system / architecture / project structure / install & deploy / AI workflow / tools & commands); volatility pipeline content moved to `docs/architecture/volatility-pipeline.md` [[readme-restructure]] [[volatility-pipeline-doc]]
+- **2026-08-21**: README restructured to an agent-only six-section layout (agent system / architecture / project structure / install & deploy / AI workflow / tools & commands); volatility pipeline mentions removed entirely [[readme-restructure]]
 - **2026-06-16**: Added self-contained ArgoCD App-of-Apps GitOps deployment tree under `deploy/argocd/` plus MCP image build workflow; later refactored into `runtime-config` (namespace + shared .agents ConfigMaps) and `workloads` child Applications [[argocd-gitops-deployment]]
 - **2026-05-19**: `CLAUDE.md` gained a Project Overview section summarizing the main repository directories and their roles [[claude-md-project-overview]]
 
@@ -56,7 +56,6 @@ source_count: 4
 
 - [[claude-md-project-overview]]
 - [[readme-restructure]]
-- [[volatility-pipeline-doc]]
 - [[vol-llm-ui-crate]]
 - [[vol-llm-agent-crate]]
 - [[vol-llm-agent-protocol-crate]]

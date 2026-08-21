@@ -1,13 +1,39 @@
 # vol
 
-A Rust workspace containing a Deribit volatility monitoring pipeline and a full LLM agent framework —
-ReAct orchestration, MCP integration, built-in tools, skills, TUI and web frontends.
+A Rust workspace containing a full LLM agent system — ReAct orchestration, tools, skills,
+MCP integration, sandboxes, sub-agent dispatch, sessions, TUI and web frontends.
 
 ---
 
-## Architecture
+## 1. The Agent System
 
-### Control Plane / Data Plane
+- **ReAct orchestration** with pluggable providers (Anthropic, OpenAI, DashScope)
+- **Tools** — built-in file/bash/web tools, CLI-style `fs` and `task` tools, skill tools, and MCP tools
+- **Skills** — markdown-frontmatter skills injected into the agent context
+- **MCP** — client for external MCP servers plus bundled servers (`docs-rs-mcp`, `cli-tools-mcp`, `playwright-mcp`)
+- **Sandboxes** — Local / Tmp / SSH / Firecracker / Wasm execution environments
+- **Sub-agent dispatch** — the built-in `agent` tool dispatches work to other agents declared in `.agents/agents/*.toml`
+- **Sessions & tasks** — persisted to SQLite / Postgres
+- **Frontends** — TUI and React web frontend
+- **Server** — JSON-RPC over WebSocket with a control-plane / data-plane split
+
+## 2. Architecture
+
+### 2.1 Core Concepts
+
+- **`AgentRuntime`** ([`vol-llm-runtime`](crates/vol-llm-runtime)) is the single source of
+  truth for agent resources — tools, skills, MCP clients, providers, session/task stores.
+  Tool registration happens in `AgentRuntimeBuilder::build()`. [[vol-llm-runtime-crate]]
+- **`AgentDef`** — agents are declared in `.agents/agents/*.toml` and run a ReAct loop
+  (`vol-llm-agent`): think → tool call → observe, until a final answer.
+- **Context** — `ContextBuilder` composes the prompt from `ContextContributor`s
+  (skills, available-agent list via `AgentInjector`, session history) under a token
+  budget. [[vol-llm-context-crate]]
+- **Protocol** — JSON-RPC 2.0 over WebSocket is the only application protocol; HTTP is
+  reserved for `/health` and `/metrics`. Wire types live in
+  [`vol-llm-agent-protocol`](crates/vol-llm-agent-protocol). [[vol-llm-agent-protocol-crate]]
+
+### 2.2 Control Plane / Data Plane
 
 The agent server (`vol-agent-server`) supports three deployment modes configured via TOML:
 
@@ -40,140 +66,180 @@ The agent server (`vol-agent-server`) supports three deployment modes configured
    (JSON-RPC + transport)   (execution owner)  (ToolRegistry)
 ```
 
-### Crate Boundaries
+- Clients connect at `/ws`; data-plane nodes link to the control plane at `/control/v1/ws`.
+- Both planes live in `vol-agent-server` (no separate control-plane crate).
+- **Dependency direction**: `vol-agent-server` → `vol-llm-agent-protocol` + `vol-llm-runtime`.
+  Protocol and runtime must not depend on server (`./scripts/check-agent-boundaries.sh`).
+
+[[agent-server-control-data-plane]]
+
+### 2.3 Tools & Sandboxes
+
+- **`ToolRegistry`** — every tool implements the `Tool` trait and receives a `ToolContext`;
+  registered once in `AgentRuntimeBuilder::build()`. [[tool-registry]]
+- **Built-in tools** — `read` / `write` / `edit` / `grep` / `bash` / `web-search` /
+  `web-fetch` (`vol-llm-tools-builtin`).
+- **CLI-as-tool** — the `fs` and `task` tools expose CLI-style subcommands
+  (`fs read <path>`, `fs grep <pattern>`, `--json` envelope) over the built-ins,
+  sharing the `vol-llm-cli-tool` abstraction. [[vol-llm-fs-crate]] [[fs-cli-tool]]
+- **Sandboxes** — tools execute inside sandboxes: Local / Tmp / SSH / Firecracker / Wasm.
+  `SandboxRegistry` loads `.agents/sandboxes/*.toml`; each sandbox follows a strict
+  lifecycle: define → construct → register → acquire → bind metadata → initialize →
+  use → cleanup. [[sandbox-lifecycle]] [[vol-llm-sandbox-crate]]
+
+### 2.4 Agent–Sub-agent Collaboration
+
+The built-in `agent` tool lets an agent autonomously dispatch sub-tasks to other agents
+declared in `.agents/agents/`:
+
+- **Dispatch by `AgentDef.id`** — the sub-agent runs its own full ReAct loop and returns
+  its final result synchronously. Dispatch is equivalent to a data-plane task submission;
+  the decision maker switches from human to agent. [[agenttool-subagent-dispatch]]
+- **Depth guard** — the only nesting control: `tool_config.agent.max_depth` (default 1 =
+  root may dispatch one layer; deeper dispatch is rejected).
+- **Sessions persist by name** — sub-agent sessions are keyed by agent name and remain
+  observable by other agents and the UI.
+- **`AgentInjector`** — contributes the list of available agents to the context so the
+  model knows it can dispatch. [[vol-llm-agent-tool-crate]]
+
+### 2.5 Deployment Architecture
+
+- **ArgoCD GitOps (primary)** — `deploy/argocd/root.yaml` (app-of-apps) deploys:
+  control-plane (`agent-server`), data-plane nodes (`agent-server-dp`), specialized
+  agent workers (`agent-server-ansible`, `agent-server-dingtalk`), MCP servers,
+  `nginx-proxy` + React frontend (`vol-llm-ui`). [[argocd-app-of-apps-gitops]]
+- **Runtime config as ConfigMaps** — agents, providers, sandboxes, MCP endpoints and
+  secrets live under `deploy/argocd/manifests/runtime-config/`, regenerated with
+  `python3 scripts/sync-configmaps.py`.
+- **Kustomize alternative** — `deploy/kustomize/overlays/{control-plane,data-plane}`.
+- **Legacy `k8s/` tree is deprecated** — prefer ArgoCD.
+- MCP servers run as standalone Deployments + ClusterIP Services. [[mcp-transport-pattern]]
+
+See [docs/deployment/k8s-deployment.md](docs/deployment/k8s-deployment.md) for the full guide.
+
+## 3. Project Structure
+
+### Agent Crates
 
 | Crate | Responsibility |
 |-------|---------------|
-| `vol-llm-agent-protocol` | JSON-RPC codec, `Operation`/`Payload`, `Connection`, `DomainHandler`, `HandlerRegistry`, `JsonRpcMessageService` |
-| `vol-llm-runtime` | `AgentRuntime` — authoritative owner of tools, skills, MCP, providers, task/session stores |
-| `vol-agent-server` | `DataPlaneServerCore`, `ControlPlaneServerCore`, role composition, config, routes |
-| `vol-llm-agent` | ReAct orchestration, `AgentConfig`, plugin system |
-| `vol-llm-tool` | `ToolRegistry`, `Tool` trait, `ToolContext` |
-| `vol-llm-mcp` | MCP client (`McpManager`), server lifecycle, tool/resource/prompt discovery |
-| `vol-llm-skill` | Skill loader, `SkillTool`, skill injection into agent context |
-| `vol-llm-task` | Task models, file/database task stores |
-| `vol-session` | Session persistence (file + SeaORM SQLite/Postgres) |
+| `vol-llm-core` | LLM abstractions, types, traits |
 | `vol-llm-provider` | Anthropic, OpenAI, DashScope provider implementations |
-| `vol-llm-ui` | Dioxus 0.6 WASM web frontend |
+| `vol-llm-tool` | `ToolRegistry`, `Tool` trait, `ToolContext` |
+| `vol-llm-tools-builtin` | `read`/`write`/`edit`/`grep`/`bash`/`web-search`/`web-fetch` |
+| `vol-llm-cli-tool` | Core abstraction for "CLI-as-Tool" (shared by `fs`/`task`) |
+| `vol-llm-fs` | CLI-style `fs` tool over the file-op built-ins |
+| `vol-llm-task` | Task models and stores (SeaORM SQLite/Postgres) |
+| `vol-llm-sandbox` | Sandbox abstraction (Local/Tmp/SSH/Firecracker/Wasm) + `SandboxRegistry` |
+| `vol-llm-skill` | Skill system (markdown-frontmatter) |
+| `vol-llm-agent` | ReAct orchestration, `AgentConfig`, plugin system |
+| `vol-llm-agents` | High-level agent implementations |
+| `vol-llm-yaml-agent` | Declarative agent definitions via YAML |
+| `vol-llm-agent-tool` | `AgentTool` (sub-agent dispatch) + `AgentInjector` |
+| `vol-llm-context` | `ContextBuilder` / `ContextContributor` prompt construction |
+| `vol-llm-memory` | Layered memory abstractions for cross-session agent memory |
+| `vol-llm-wiki` | Wiki compression and management tool |
+| `vol-llm-mcp` | MCP client, server lifecycle, tool/resource/prompt discovery |
+| `vol-llm-runtime` | `AgentRuntime` — single source of truth for runtime resources |
+| `vol-llm-agent-protocol` | JSON-RPC protocol (`Operation`/`Payload`/`control.*`) + transport |
+| `vol-llm-tdengine` | TDengine tools for LLM agents |
+| `vol-session` | Session persistence (file + SeaORM SQLite/Postgres) |
+| `vol-agent-server` | Agent server binary — `DataPlaneServerCore` + `ControlPlaneServerCore` |
 | `vol-llm-tui` | Terminal UI (ratatui) |
-| `vol-mcp-servers` | MCP server implementations (docs-rs-mcp) |
+| `vol-llm-ui` | **DEPRECATED** — Dioxus WASM web frontend; replaced by React `frontend/` |
+| `vol-mcp-servers` | MCP server implementations (`docs-rs-mcp`, `cli-tools-mcp`, `playwright-mcp`) |
+| `md-frontmatter` | Markdown frontmatter parser |
+| `ppt-agent` | PowerPoint generation agent |
 
-**Dependency direction**: `vol-agent-server` → `vol-llm-agent-protocol` + `vol-llm-runtime`. Protocol must not depend on server. Runtime must not depend on server.
+## 4. Installation & Deployment
 
-### Volatility Monitoring Pipeline
+### Prerequisites
 
-```
-Config ──► DataSource (Deribit) ──► EventBus (broadcast) ──► Alert Rules ──► Notifications (Feishu/Stdout)
-                                       │
-                                  TDengine (time-series storage)
-```
+Rust toolchain (see `rust-toolchain.toml`), [`just`](https://github.com/casey/just) for
+recipes, Node.js for the web frontend.
 
-Event-driven with `TracedEvent<T>` wrappers, plugin traits (`DataSource`, `RuleProcessor`, `NotificationHandler`), and OpenTelemetry/Jaeger tracing.
-
-### Full crate listing
-
-```
-crates/
-├── vol-core/                  Core traits and data models
-├── vol-config/                TOML configuration loading
-├── vol-tracing/               TracedEvent<T> wrappers
-├── vol-eventbus/              Event bus (tokio broadcast)
-├── vol-deribit/               Deribit WebSocket client & types
-├── vol-datasource/            Data source implementations
-├── vol-alert/                 Alert rule implementations
-├── vol-rules/                 Rule processors
-├── vol-notification/          Feishu / Stdout notification handlers
-├── vol-engine/                Monitoring engine orchestration
-├── vol-monitor/               Main binary — vol-monitor
-├── vol-tdengine/              TDengine REST API client
-├── vol-observability/         Prometheus metrics HTTP server
-│
-├── vol-llm-core/              LLM abstractions, types, traits
-├── vol-llm-provider/          Anthropic, OpenAI, DashScope
-├── vol-llm-tool/              ToolRegistry framework
-├── vol-llm-tools-builtin/     read/write/edit/grep/bash/web-search/web-fetch
-├── vol-llm-agent/             ReAct agent orchestration
-├── vol-llm-agents/            High-level agent implementations
-├── vol-llm-context/           Context/memory management
-├── vol-llm-memory/            Conversation persistence
-├── vol-llm-skill/             Skill system (markdown-frontmatter)
-├── vol-llm-task/              Task management
-├── vol-llm-runtime/           AgentRuntime — single source of truth
-├── vol-llm-agent-protocol/    JSON-RPC protocol + transport abstractions
-├── vol-llm-mcp/               MCP client (rmcp)
-├── vol-llm-wiki/              Wiki/knowledge-base tool
-├── vol-llm-observability/     OTel agent logging
-│
-├── vol-agent-server/          Agent server binary (data + control plane)
-├── vol-llm-ui/                Web frontend (Dioxus 0.6 WASM + Tailwind)
-├── vol-llm-tui/               Terminal UI
-├── vol-mcp-servers/           MCP server implementations
-│
-├── md-frontmatter/            Markdown frontmatter parser
-└── ppt-agent/                 PowerPoint generation agent
-```
-
----
-
-## Development Tools
-
-### Quick Start
+### Local
 
 ```bash
-# Prerequisites
-rustup target add wasm32-unknown-unknown
-cargo install dioxus-cli --version 0.6.3 --locked
-cargo install cargo-watch --locked
-npm ci --prefix crates/vol-llm-ui
-
 # Agent server (standalone data-plane)
 cp configs/vol-agent-server.env.example .env
 source .env
 cargo run -p vol-agent-server
+# Per-mode configs: configs/vol-agent-server.{data-plane,control-plane}.toml
 
-# All web services (3 terminals)
-make web-css          # Tailwind watch
-make web-dev          # Dioxus WASM :8080
-make web-backend      # Agent server :3001
-
-# Volatility monitor
-cp configs/vol-monitor.env.example .env
-source .env
-cargo run -p vol-monitor -- --config configs/vol-monitor.example.toml
-```
-
-### Test & Coverage
-
-```bash
-# Run tests
-cargo test -p vol-agent-server -p vol-llm-agent-protocol
-
-# Coverage (≥80% required for agent-server and protocol)
-make coverage PKG=vol-agent-server                        # summary
-make coverage-threshold PKG=vol-agent-server PCT=80      # gate check
-make coverage-html PKG=vol-llm-agent-protocol             # browser report
-
-# Dependency boundary check
-./scripts/check-agent-boundaries.sh
+# Web frontend (React, 2 terminals)
+just web-backend          # agent server on :3001 (cargo-watch)
+just web-dev              # Vite dev server on :5173 (WS proxy to :3001)
 ```
 
 ### Docker
 
 ```bash
+just docker-agent                                   # or:
 docker build -f dockers/vol-agent-server.Dockerfile -t vol-agent-server .
 docker build -f dockers/vol-agent-server.alpine.Dockerfile -t vol-agent-server:alpine .
-docker build -f dockers/vol-monitor.cross.Dockerfile -t vol-monitor .  # amd64 + arm64
 ```
 
-### Config & Env
+### Kubernetes
+
+```bash
+# ArgoCD GitOps (primary)
+kubectl apply -f deploy/argocd/root.yaml
+
+# Kustomize (alternative)
+kubectl apply -k deploy/kustomize/overlays/control-plane
+kubectl apply -k deploy/kustomize/overlays/data-plane
+
+# Post-deploy verification
+./scripts/smoke-test.sh --all
+```
+
+Runtime config changes are synced to ConfigMaps with `python3 scripts/sync-configmaps.py`.
+See [docs/deployment/k8s-deployment.md](docs/deployment/k8s-deployment.md).
+
+## 5. AI-Driven Development Workflow
+
+This project uses Superpowers skills for structured development:
 
 ```
-configs/
-├── vol-monitor.example.toml            # Pipeline config
-├── vol-agent-server.example.toml       # Agent server config (all sections)
-├── vol-monitor.env.example             # Pipeline env
-└── vol-agent-server.env.example        # Agent server env
+clarifying-requirements ──► brainstorming ──► writing-architecture
+      (需求澄清)               (方案脑暴)          (架构设计)
+
+writing-architecture ──► writing-plans ──► subagent-driven-development
+      (架构设计)              (实现计划)           (按 task 派发 subagent)
 ```
+
+| Phase | Output | Location |
+|-------|--------|----------|
+| Requirement | Requirement doc | `docs/superpowers/requirement/` |
+| Architecture | Design doc | `docs/superpowers/architectures/` |
+| Spec | Addendum / detailed spec | `docs/superpowers/specs/` |
+| Plan | Task-level implementation plan | `docs/superpowers/plans/` |
+| Wiki | Compiled knowledge base | `docs/wiki/` |
+
+### Task Completion Checklist
+
+1. `just test-crate <affected-crate>` — all tests pass
+2. `just cover-gate <affected-crate> 80` — coverage gate
+3. `./scripts/check-agent-boundaries.sh` — dependency direction
+4. `just fmt-check && just clippy-strict` — formatting & lint
+5. `wiki-ingest` — ingest changes into `docs/wiki`
+6. Upload changed `docs/superpowers/*` to Lark
+7. (If UI affected) `just fe-test` + `just fe-e2e` — frontend test tiers
+
+## 6. Core Tools & Commands
+
+All recipes run via `just` (`just help` for the full list).
+
+| Area | Commands |
+|------|----------|
+| Build & check | `just check`, `just clippy`, `just clippy-strict`, `just fmt`, `just fmt-check` |
+| Tests | `just test-unit`, `just test-integration`, `just test-crate <crate>`, `just test-e2e`, `just test-tools`, `just test-sandbox` |
+| Coverage | `just cover <crate>`, `just cover-gate <crate> 80`, `just cover-html <crate>`, `just cover-tools` |
+| Guards | `just boundaries`, `just no-doc-tests`, `just no-clippy-allow`, `just audit` |
+| Web | `just web-dev`, `just web-backend`, `just web-build`, `just web-serve` |
+| Frontend tests | `just fe-test` (`fe-test-unit` / `fe-test-integration`), `just fe-e2e`, `just fe-lint`, `just fe-type` |
+| Docker | `just docker-agent` |
 
 ### Model Service
 
@@ -185,41 +251,6 @@ Provider config lives in `.agents/providers/*.toml` and is auto-discovered.
 
 ---
 
-## AI Workflow
-
-This project uses Superpowers skills for structured development. Key workflows:
-
-### Design → Plan → Implement
-
-```
-clarifying-requirements ──► brainstorming ──► writing-architecture
-      (需求澄清)               (方案脑暴)          (架构设计)
-
-writing-architecture ──► writing-plans ──► subagent-driven-development
-      (架构设计)              (实现计划)           (按 task 派发 subagent)
-```
-
-### Artifacts
-
-| Phase | Output | Location |
-|-------|--------|----------|
-| Architecture | Design doc | `docs/superpowers/architectures/` |
-| Spec | Addendum / detailed spec | `docs/superpowers/specs/` |
-| Plan | Task-level implementation plan | `docs/superpowers/plans/` |
-| Wiki | Compiled knowledge base | `docs/wiki/` |
-
-### Task Completion Checklist
-
-1. `cargo test -p <affected-crate>` — all tests pass
-2. `make coverage-threshold PKG=<affected-crate> PCT=80` — coverage gate
-3. `./scripts/check-agent-boundaries.sh` — dependency direction
-4. `cargo fmt --all --check` — formatting
-5. `wiki-ingest` — ingest changes into `docs/wiki`
-6. Upload changed `docs/superpowers/*` to Lark
-7. (If UI affected) Playwright verification — `make web-backend` + `make web-dev`, navigate tabs
-
----
-
 ## Documentation
 
 | Path | Topic |
@@ -227,84 +258,7 @@ writing-architecture ──► writing-plans ──► subagent-driven-developme
 | `CLAUDE.md` | AI agent quick reference (conventions, guardrails, commands) |
 | `docs/CONFIGURATION.md` | Full configuration guide (TOML sections, env vars, K8s) |
 | `docs/architecture/overview.md` | System architecture and data flow |
-| `docs/architecture/crates.md` | Crate organization |
-| `docs/deployment/docker-build.md` | Docker multi-stage builds, ACR push |
+| `docs/deployment/docker-build.md` | Docker multi-stage builds, registry push |
 | `docs/deployment/k8s-deployment.md` | K8s deployment, secrets, troubleshooting |
 | `docs/wiki/index.md` | Wiki index — entities, concepts, sources, full search |
-| `docs/superpowers/architectures/` | Architecture design documents |
-| `docs/superpowers/specs/` | Design specifications |
-| `docs/superpowers/plans/` | Implementation plans |
-
----
-
-## Service Deployment
-
-### Agent Server
-
-```bash
-# Local
-cargo run -p vol-agent-server
-
-# Docker
-docker build -f dockers/vol-agent-server.Dockerfile -t vol-agent-server .
-docker run -d -p 3001:3001 \
-  -v $(pwd)/.agents:/app/.agents:ro \
-  -e ANTHROPIC_AUTH_TOKEN=sk-xxx \
-  vol-agent-server
-
-# K8s
-kubectl apply -f k8s/agent-server/configmap.yaml
-kubectl apply -f k8s/agent-server/secret.yaml
-kubectl apply -f k8s/agent-server/deployment.yaml
-```
-
-### Vol Monitor
-
-```bash
-# Local
-cargo run -p vol-monitor -- --config configs/vol-monitor.example.toml
-
-# Docker
-docker build -f dockers/vol-monitor.Dockerfile -t vol-monitor .
-
-# K8s
-kubectl apply -f k8s/vol-monitor/configmap.yaml
-kubectl create secret generic vol-monitor-secrets \
-  --from-literal=DERIBIT_CLIENT_ID=<id> \
-  --from-literal=DERIBIT_CLIENT_SECRET=<secret> \
-  -n deribit
-kubectl apply -f k8s/vol-monitor/deployment.yaml
-```
-
-### MCP Server
-
-```bash
-cargo run -p vol-mcp-servers --bin docs-rs-mcp
-./k8s/mcp/deploy.sh docs-rs-mcp v0.1.0
-```
-
-### Web Frontend
-
-```bash
-# Dev (3 terminals)
-make web-css && make web-dev && make web-backend
-
-# Release serve
-make web-serve
-```
-
-[[docs/deployment/k8s-deployment]] — full K8s deployment guide with troubleshooting.
-
----
-
-## Key Wiki Links
-
-- [[agent-server-control-data-plane]] — Control/data-plane architecture
-- [[vol-llm-runtime-crate]] — AgentRuntime resource ownership
-- [[vol-agent-server-crate]] — Server implementation
-- [[vol-llm-agent-protocol-crate]] — Protocol layer
-- [[agent-router]] — Local multi-agent routing
-- [[tool-registry]] — Tool registration framework
-- [[mcp-manager-lifecycle]] — MCP lifecycle
-- [[runtime-task-store-configuration]] — Task store config
-- [[runtime-session-store-configuration]] — Session store config
+| `docs/superpowers/` | Requirement / architecture / spec / plan documents |

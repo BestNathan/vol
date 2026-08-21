@@ -1,11 +1,11 @@
 # Change Log
 
-## [2026-08-21] ingest | README 重构（agent 六段式）+ 波动率 pipeline 文档
-- Created sources: [[readme-restructure]], [[volatility-pipeline-doc]]
-- Updated entities: [[vol-repository]] (key facts 修正：make→just、React frontend/ 为活跃 Web UI、ArgoCD 为主部署路径、openspec→superpowers；模块结构表补齐 vol-llm-agent-tool/sandbox/fs/cli-tool 等新 crate；source_count 2->4)
-- Updated index: Last updated + vol-repository summary, 2 new source entries
-- Cross-references added: 6
-- Changes: README 从「pipeline+agent 混合」重构为聚焦 agent 系统的六段式布局（agent 系统 / 架构 / 项目结构 / 安装部署 / AI 开发流程 / 工具命令），采用精简总览+wiki 链接风格；架构章节含核心概念、控制面/数据面、工具与 sandbox、agent-subagent 协作、部署架构五个小节。波动率 pipeline 内容移入新建的 docs/architecture/volatility-pipeline.md（架构图、13 个 pipeline crate、运行与部署）。顺带修复过时内容：make 命令→just（无 Makefile）、vol-llm-ui 标注 deprecated、crate 表补充新增 crate、K8s 标注 ArgoCD 优先。所有 README wikilink 已校验存在。
+## [2026-08-21] ingest | README 重构（纯 agent 六段式布局）
+- Created sources: [[readme-restructure]]
+- Updated entities: [[vol-repository]] (key facts 修正：make→just、React frontend/ 为活跃 Web UI、ArgoCD 为主部署路径、openspec→superpowers；模块结构表补齐 vol-llm-agent-tool/sandbox/fs/cli-tool 等新 crate；source_count 2->3)
+- Updated index: Last updated + vol-repository summary, 1 new source entry
+- Cross-references added: 4
+- Changes: README 从「pipeline+agent 混合」重构为纯 agent 六段式布局（agent 系统 / 架构 / 项目结构 / 安装部署 / AI 开发流程 / 工具命令），采用精简总览+wiki 链接风格；架构章节含核心概念、控制面/数据面、工具与 sandbox、agent-subagent 协作、部署架构五个小节。按用户后续决定，波动率 pipeline 完全不在 README 中介绍（无引言、无 crate 注记、无独立 pipeline 文档）。顺带修复过时内容：make 命令→just（无 Makefile）、vol-llm-ui 标注 deprecated、crate 表补充新增 crate、K8s 标注 ArgoCD 优先。所有 README wikilink 已校验存在。
 
 ## [2026-08-20] ingest | AgentTool 内置化实现
 - Created sources: [[agenttool-builtin-impl]]

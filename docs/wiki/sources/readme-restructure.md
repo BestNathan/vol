@@ -14,9 +14,9 @@ tags: [readme, documentation, restructuring, agent-system]
 
 ## TL;DR
 
-The README was restructured from a mixed pipeline+agent layout into an agent-system-focused,
-six-section entry document. Volatility pipeline content moved out to
-`docs/architecture/volatility-pipeline.md` [[volatility-pipeline-doc]]. Stale content fixed:
+The README was restructured from a mixed pipeline+agent layout into a pure agent-system,
+six-section entry document. Per follow-up decision, the volatility pipeline is not mentioned
+at all — no intro line, no crate note, no pipeline doc. Stale content fixed:
 `make` → `just` recipes (no Makefile exists), `vol-llm-ui` marked deprecated (React
 `frontend/` is the active web UI), crate table updated with new crates
 (`vol-llm-agent-tool`, `vol-llm-fs`, `vol-llm-sandbox`, `vol-llm-cli-tool`), ArgoCD marked
@@ -36,8 +36,9 @@ the primary K8s path (`k8s/` legacy deprecated).
 
 ## Detailed Summary
 
-Decisions confirmed before writing: (1) README is agent-focused — the volatility pipeline
-gets one link-out line; (2) English; (3) lean overview with links into `docs/` and the wiki.
+Decisions confirmed before writing: (1) README is agent-only — the volatility pipeline is
+not mentioned at all (revised from "one link-out line" per follow-up decision); (2) English;
+(3) lean overview with links into `docs/` and the wiki.
 
 Section 2 is the core: 2.1 core concepts (AgentRuntime, AgentDef + ReAct loop,
 ContextBuilder/Contributor, JSON-RPC-over-WebSocket protocol), 2.2 control/data plane (the
@@ -53,7 +54,6 @@ area (build/check, tests, coverage, guards, web, frontend tests, docker).
 ## Entities Mentioned
 
 - [[vol-repository]]: README is its front door; key facts corrected in this ingest
-- `vol-monitor` and the other pipeline crates: now documented in [[volatility-pipeline-doc]]
 
 ## Concepts Covered
 
@@ -65,7 +65,7 @@ area (build/check, tests, coverage, guards, web, frontend tests, docker).
 ## Notes
 
 - `docs/architecture/crates.md` remains stale in its overview ("10 crates", written before
-  `vol-eventbus` / `vol-tdengine` / `vol-observability` existed) — follow-up candidate; the
-  pipeline doc's crate table is authoritative for now
+  `vol-eventbus` / `vol-tdengine` / `vol-observability` existed) — follow-up candidate if
+  pipeline documentation is revisited
 - [[vol-repository]] had stale key facts (Makefile web commands, `vol-agent-manager`,
   OpenSpec) — corrected as part of this ingest
