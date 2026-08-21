@@ -7997,10 +7997,8 @@ dependencies = [
  "vol-llm-provider",
  "vol-llm-sandbox",
  "vol-llm-skill",
- "vol-llm-tdengine",
  "vol-llm-tool",
  "vol-session",
- "vol-tdengine",
  "vol-tracing",
 ]
 
@@ -8056,23 +8054,17 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "vol-config",
- "vol-core",
  "vol-llm-agent",
  "vol-llm-context",
  "vol-llm-core",
  "vol-llm-provider",
  "vol-llm-sandbox",
  "vol-llm-skill",
- "vol-llm-tdengine",
  "vol-llm-tool",
  "vol-llm-tools-builtin",
  "vol-llm-wiki",
- "vol-notification",
  "vol-observability",
  "vol-session",
- "vol-tdengine",
- "vol-tracing",
 ]
 
 [[package]]
@@ -8118,7 +8110,6 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "vol-core",
 ]
 
 [[package]]
@@ -8722,10 +8713,8 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "vol-core",
  "vol-llm-context",
  "vol-llm-core",
- "vol-tracing",
 ]
 
 [[package]]

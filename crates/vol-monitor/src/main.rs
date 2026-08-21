@@ -7,16 +7,11 @@ use anyhow::Result;
 use tracing::{info, warn};
 
 use vol_config::{Config, DataSourceConfig, NotificationConfig, RuleConfig};
-use vol_config::{FeishuConfig, SkewConfig, TermStructureConfig};
+use vol_config::{SkewConfig, TermStructureConfig};
 use vol_datasource::{PortfolioDataSource, VolatilityDataSource};
 use vol_engine::{EngineConfig, MonitoringEngineBuilder};
-use vol_llm_agents::{AdviceAgent, AdviceAgentConfig};
-use vol_llm_provider::{LLMProviderRegistry, ProviderLoader};
-use vol_llm_tdengine::{IndexPriceTool, OptionsTool, RvTool, VolatilityIndexTool};
-use vol_llm_tool::ToolRegistry;
 use vol_notification::{FeishuNotification, StdoutNotification};
 use vol_rules::{AbsoluteIvRule, PortfolioRule, RateChangeRule, SkewRule, TermStructureRule};
-use vol_tdengine::{TdengineClient, TdengineConfig};
 
 /// Parse command line arguments
 #[allow(clippy::indexing_slicing)]
@@ -86,99 +81,6 @@ async fn main() -> Result<()> {
     info!("===========================================");
     info!("  Deribit Volatility Monitor v0.3.0");
     info!("===========================================");
-
-    // Initialize LLM provider registry from .agents/providers/
-    // Pass current working directory so both project-level and user-level providers are loaded
-    let loader = ProviderLoader::load(std::env::current_dir().ok().as_deref());
-    let llm_registry: Option<LLMProviderRegistry> = if !loader.is_empty() {
-        info!(
-            "Initializing LLM providers: {} loaded from .agents/providers/",
-            loader.len()
-        );
-        match LLMProviderRegistry::from_loader(&loader) {
-            Ok(registry) => {
-                info!("Available LLM providers: {:?}", registry.ids());
-
-                // Verify agent_advice provider if configured
-                if config.agent_advice.enabled {
-                    if registry.contains(&config.agent_advice.llm_provider_id) {
-                        info!(
-                            "AgentAdvice will use provider: {}",
-                            config.agent_advice.llm_provider_id
-                        );
-                    } else {
-                        warn!(
-                            "AgentAdvice provider '{}' not found in configured providers",
-                            config.agent_advice.llm_provider_id
-                        );
-                    }
-                }
-
-                Some(registry)
-            }
-            Err(e) => {
-                warn!("Failed to initialize LLM providers: {}", e);
-                None
-            }
-        }
-    } else {
-        info!("No LLM providers configured in .agents/providers/");
-        None
-    };
-
-    // Initialize TDengine client for historical data queries
-    let tdengine_config = TdengineConfig::default();
-    let tdengine_client = TdengineClient::new(tdengine_config.clone());
-    info!("TDengine client initialized");
-
-    // Initialize tool registry with TDengine-based tools
-    let mut tools = ToolRegistry::new();
-    tools.register(VolatilityIndexTool::new(Some(tdengine_config.clone())));
-    tools.register(IndexPriceTool::new(Some(tdengine_config.clone())));
-    tools.register(OptionsTool::new(Some(tdengine_config.clone())));
-    tools.register(RvTool::new(Some(tdengine_config.clone())));
-    info!(
-        "Tool registry initialized with {} tools",
-        tools.tool_names().len()
-    );
-
-    // Initialize Feishu notification for AI advice using environment variables
-    let feishu_config = FeishuConfig {
-        app_id: std::env::var("FEISHU_APP_ID").ok(),
-        app_secret: std::env::var("FEISHU_APP_SECRET").ok(),
-        receive_id: std::env::var("FEISHU_RECEIVE_ID").ok(),
-        message_template: "{tenor} {alert_type} {symbol} | IV={value}".to_string(),
-    };
-    let feishu = FeishuNotification::new(feishu_config).unwrap_or_else(|e| {
-        warn!("Failed to initialize Feishu: {}", e);
-        // Create dummy config for fallback
-        FeishuNotification::new(FeishuConfig {
-            app_id: Some("dummy".to_string()),
-            app_secret: Some("dummy".to_string()),
-            receive_id: Some("oc_dummy".to_string()),
-            message_template: "dummy".to_string(),
-        })
-        .unwrap()
-    });
-    info!("Feishu notification initialized");
-
-    // Create AdviceAgent (only if LLM providers are configured)
-    let agent_service = llm_registry.as_ref().map(|registry| {
-        // Convert vol_config::AgentAdviceConfig to vol_llm_agents::AdviceAgentConfig
-        let agent_config = AdviceAgentConfig {
-            enabled: config.agent_advice.enabled,
-            cooldown_secs: config.agent_advice.cooldown_secs,
-            max_analyses_per_hour: config.agent_advice.max_analyses_per_hour,
-            llm_provider_id: config.agent_advice.llm_provider_id.clone(),
-        };
-        AdviceAgent::new(
-            agent_config,
-            registry.clone(),
-            std::sync::Arc::new(tools),
-            std::sync::Arc::new(tdengine_client),
-            feishu,
-        )
-    });
 
     // Create engine config
     let engine_config = EngineConfig {
@@ -265,14 +167,6 @@ async fn main() -> Result<()> {
                     }
                 }
             }
-        }
-    }
-
-    // Add AdviceAgent as notification handler if enabled
-    if config.agent_advice.enabled {
-        if let Some(service) = agent_service {
-            builder = builder.with_notification(Box::new(service));
-            info!("Added AdviceAgent notification handler");
         }
     }
 
