@@ -13,8 +13,8 @@ use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
 use vol_llm_core::{
     LLMClient, LLMProvider, StreamEvent, StreamEventData, StreamReceiver, SupportedParam,
 };
+use vol_llm_observability::LoggingPlugin;
 use vol_llm_tool::ToolRegistry;
-use vol_observability::LoggingPlugin;
 use vol_session::{InMemoryEntryStore, Session};
 
 /// Mock LLM that immediately returns ContentComplete.

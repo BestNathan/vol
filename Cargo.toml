@@ -27,7 +27,7 @@ members = [
     "crates/vol-mcp-servers",
     "crates/vol-llm-mcp",
     "crates/vol-llm-runtime",
-    "crates/vol-observability",
+    "crates/vol-llm-observability",
     "crates/vol-llm-sandbox",
     "crates/vol-llm-cli-tool",
     "crates/vol-llm-tools-builtin/cli-tool",
@@ -118,7 +118,7 @@ vol-mcp-servers = { path = "crates/vol-mcp-servers" }
 vol-llm-mcp = { path = "crates/vol-llm-mcp" }
 dirs = "5.0"
 fd-lock = "4"
-vol-observability = { path = "crates/vol-observability" }
+vol-llm-observability = { path = "crates/vol-llm-observability" }
 vol-llm-sandbox = { path = "crates/vol-llm-sandbox" }
 vol-llm-cli-tool = { path = "crates/vol-llm-cli-tool" }
 vol-llm-tools-builtin-cli-tool = { path = "crates/vol-llm-tools-builtin/cli-tool" }

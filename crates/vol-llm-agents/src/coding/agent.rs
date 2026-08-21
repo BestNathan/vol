@@ -379,7 +379,7 @@ impl CodingAgentBuilder {
     /// LokiPlugin is stateless — no configuration needed. The OTel
     /// collector endpoint is set via OTEL_EXPORTER_OTLP_ENDPOINT env var.
     pub fn with_loki(mut self) -> Self {
-        let plugin = vol_observability::LoggingPlugin::new();
+        let plugin = vol_llm_observability::LoggingPlugin::new();
         self.config.plugin_registry.register(plugin);
         self
     }

@@ -225,10 +225,10 @@ impl DataPlaneServerCore {
         // Register observability plugins
         config
             .plugin_registry
-            .register(vol_observability::MetricsPlugin::new());
+            .register(vol_llm_observability::MetricsPlugin::new());
         config
             .plugin_registry
-            .register(vol_observability::LoggingPlugin::new());
+            .register(vol_llm_observability::LoggingPlugin::new());
         // Run log plugin — writes agent events to {store_dir}/logs/{run_id}.jsonl.
         // Uses store_dir (writable emptyDir) instead of working_dir (read-only).
         config

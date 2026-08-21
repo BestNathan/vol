@@ -21,9 +21,9 @@ use std::sync::Arc;
 use vol_llm_agent::agent_def::AgentScope;
 use vol_llm_agent::agent_loader::AgentLoader;
 use vol_llm_agent::react::{AgentConfig, PluginRegistry, ReActAgent};
+use vol_llm_observability::{init, LoggingPlugin, OtelConfig};
 use vol_llm_provider::{anthropic::AnthropicProvider, LLMConfig};
 use vol_llm_tools_builtin::register_all;
-use vol_observability::{init, LoggingPlugin, OtelConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

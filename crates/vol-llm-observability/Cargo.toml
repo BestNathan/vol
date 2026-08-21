@@ -1,5 +1,5 @@
 [package]
-name = "vol-observability"
+name = "vol-llm-observability"
 version.workspace = true
 edition.workspace = true
 

@@ -20,11 +20,11 @@ pub fn register_plugin_by_name(
             registry.register(logger);
         }
         "logging" => {
-            let plugin = vol_observability::LoggingPlugin::new();
+            let plugin = vol_llm_observability::LoggingPlugin::new();
             registry.register(plugin);
         }
         "metrics" => {
-            let plugin = vol_observability::MetricsPlugin::new();
+            let plugin = vol_llm_observability::MetricsPlugin::new();
             registry.register(plugin);
         }
         _ => return Err(YamlAgentError::UnknownPlugin(name.to_string())),

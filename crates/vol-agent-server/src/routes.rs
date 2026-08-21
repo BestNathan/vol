@@ -19,7 +19,7 @@ pub fn ws_owner(control_plane: bool, data_plane: bool) -> Result<WsOwner, String
 pub fn base_router() -> Router {
     Router::new()
         .route("/health", get(health::health))
-        .merge(vol_observability::build_metrics_router())
+        .merge(vol_llm_observability::build_metrics_router())
 }
 
 #[cfg(test)]
