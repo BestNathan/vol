@@ -153,7 +153,7 @@ Last updated: 2026-08-21 (volatility pipeline removed from main: tdengine entity
 | [[http-transport-impl]] | HTTP transport implementation with blocking and SSE modes | active | 2026-05-05 |
 | [[clarifying-requirements-subagent-review]] | Subagent review mechanism added to clarifying-requirements skill | active | 2026-05-06 |
 | [[loki-plugin-otel-migration-tasks-3-4]] | LokiPlugin rewritten to use tracing::info! + RunContext model field added | active | 2026-05-06 |
-| [[otel-029-log-init]] | OTel 0.29 API migration and init_otel_logs() implementation in vol-monitor | active | 2026-05-06 |
+| [[otel-029-log-init]] | OTel 0.29 API migration and init_otel_logs() implementation, now in `vol-llm-observability` | active | 2026-05-06 |
 | [[docs-rs-mcp-impl]] | vol-mcp-servers crate with docs-rs-mcp binary, 4 tools, stdio+HTTP/SSE | active | 2026-05-10 |
 | [[vol-mcp-servers-dockerfile]] | Single-stage Ubuntu Docker packaging with ARG-based binary selection | active | 2026-05-10 |
 | [[tui-frontend-ratatui]] | TUI frontend with ratatui rendering, crossterm event loop, 9 render functions migrated | active | 2026-05-08 |
