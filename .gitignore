@@ -49,3 +49,6 @@ frontend/coverage/
 
 # Runtime cache dirs
 .vol/
+
+# MkDocs build output (github pages)
+.github/pages/site/

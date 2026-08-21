@@ -1,0 +1,44 @@
+# Vol Wiki — GitHub Pages site config.
+# Build: mkdocs build --strict (from repo root, config picked up via
+# .github/workflows/deploy-wiki-pages.yml).
+
+site_name: Vol Wiki
+site_url: https://bestnathan.github.io/vol/
+repo_url: https://github.com/BestNathan/vol
+
+# Content lives in docs/wiki; this config dir (.github/pages) is kept out of
+# docs/ so the wiki stays pure content (wiki-ingest / Lark mirror unaffected).
+docs_dir: ../../docs/wiki
+
+# Dead [[wiki-links]] and broken markdown links fail the build.
+strict: true
+
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  # Resolves [[page]] / [[page|alias]] / [[page#heading]] across the whole
+  # wiki tree (cross-directory), the wiki's native link syntax.
+  - roamlinks
+  # Glob-based nav: new pages appear automatically, no nav maintenance.
+  - literate-nav:
+      nav_file: NAV.md
+  - search
+
+markdown_extensions:
+  # Consumes the YAML frontmatter (type/category/tags/...) so it doesn't
+  # render as raw text at the top of every page.
+  - meta
+  - toc:
+      permalink: true
+  - tables
+  - admonition
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
