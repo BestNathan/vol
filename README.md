@@ -142,7 +142,6 @@ See [[docs/wiki/concepts/argocd-app-of-apps-gitops]] for the full guide.
 | `vol-llm-mcp` | MCP client, server lifecycle, tool/resource/prompt discovery |
 | `vol-llm-runtime` | `AgentRuntime` — single source of truth for runtime resources |
 | `vol-llm-agent-protocol` | JSON-RPC protocol (`Operation`/`Payload`/`control.*`) + transport |
-| `vol-llm-tdengine` | TDengine tools for LLM agents |
 | `vol-session` | Session persistence (file + SeaORM SQLite/Postgres) |
 | `vol-agent-server` | Agent server binary — `DataPlaneServerCore` + `ControlPlaneServerCore` |
 | `vol-llm-tui` | Terminal UI (ratatui) |
