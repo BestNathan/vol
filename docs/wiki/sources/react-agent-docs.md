@@ -8,7 +8,7 @@ tags: [react-agent, plugin-system, vol-llm-agent]
 
 # ReAct Agent Plugin System
 
-**Authors/Creators:** vol-monitor team
+**Authors/Creators:** BestNathan
 **Date:** 2026-04-06
 **Link:** `docs/ai-agent/react-plugin-system.md`
 
@@ -35,7 +35,6 @@ The system is async-first, thread-safe (Send + Sync), and composable. It support
 - [[vol-llm-agent-crate]]: Core implementation of ReActAgent and plugin system
 - [[vol-llm-agents-crate]]: High-level agent implementations using the plugin system
 - [[vol-session]]: Session message store, SSOT for conversation messages
-- [[tdengine]]: Time-series database queried by agent tools
 - [[dashscope]]: API endpoint used for LLM access in tests
 - [[vol-llm-agent-protocol-crate]]: Channel layer with dispatcher, router, and transports
 

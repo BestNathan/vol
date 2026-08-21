@@ -8,7 +8,7 @@ tags: [skills, react-agent, vol-llm-skill]
 
 # Skills as Native ReActAgent Capability
 
-**Authors/Creators:** vol-monitor team
+**Authors/Creators:** BestNathan
 **Date:** 2026-04-26
 **Link:** `docs/superpowers/plans/2026-04-26-skills-as-react-agent-native.md`
 

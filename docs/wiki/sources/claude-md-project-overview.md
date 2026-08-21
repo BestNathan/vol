@@ -14,24 +14,22 @@ tags: [claude-md, project-overview, repository-structure]
 
 ## TL;DR
 
-`CLAUDE.md` now includes a Project Overview section that summarizes the repository as a Rust Cargo workspace for Deribit volatility monitoring and LLM agent tooling, with a directory map covering workspace crates, documentation, OpenSpec artifacts, deployment manifests, scripts, and Cargo mirror configuration.
+`CLAUDE.md` includes a Project Overview section that summarizes the repository as a Rust Cargo workspace for the LLM agent system (volatility-monitor pipeline removed 2026-08-21), with a directory map covering workspace crates, documentation, deployment manifests, scripts, and Cargo mirror configuration.
 
 ## Key Takeaways
 
-- The repository combines a Deribit volatility monitoring pipeline with LLM agent infrastructure.
-- The original monitoring pipeline flows from configuration to data sources, event bus, alert handlers, and notification handlers.
-- `crates/` is the main workspace root and contains both `vol-*` monitoring crates and `vol-llm-*` agent/tooling crates.
-- `crates/vol-llm-ui` is the Dioxus WASM web frontend and must use the Makefile web commands.
+- The repository is an LLM agent platform: ReAct agent runtime, tool/skill/MCP infrastructure, agent server (control-plane + data-plane), and web frontend.
+- The former Deribit volatility monitoring pipeline was removed from `main` on 2026-08-21 (see [[pipeline-removal-from-main]]); the 2026-05-19 overview predates that and described the pipeline crates.
+- `crates/` is the main workspace root and contains `vol-llm-*` agent/tooling crates (plus `vol-agent-server`, `vol-session`).
+- `crates/vol-llm-ui` is the Dioxus WASM web frontend (deprecated 2026-08 — React `frontend/` is active) and must use the `just web-*` commands.
 - `docs/wiki` is the persistent project wiki for future agents.
 - `.cargo/` contains the Cargo mirror configuration required by Docker Rust builds.
 
 ## Detailed Summary
 
-The new Project Overview section gives future Claude Code sessions a compact orientation before diving into specific crates. It identifies the repository-level split between the volatility monitor and the LLM agent system, then lists the major directories and selected high-level crate groups.
+The Project Overview section gives future Claude Code sessions a compact orientation before diving into specific crates. It identifies the repository as an agent system, then lists the major directories and selected high-level crate groups.
 
-The monitoring side centers on shared models and traits in `vol-core`, configuration in `vol-config`, market data ingestion/storage via `vol-datasource`, `vol-deribit`, and `vol-tdengine`, and runtime behavior through `vol-eventbus`, `vol-engine`, `vol-alert`, `vol-notification`, and `vol-monitor`.
-
-The LLM side is summarized through provider/core/tool/agent crates (`vol-llm-core`, `vol-llm-provider`, `vol-llm-tool`, `vol-llm-agent`, `vol-llm-agents`), communication and MCP crates (`vol-llm-agent-channel`, `vol-llm-mcp`, `vol-mcp-servers`), UI crates (`vol-llm-ui`, `vol-llm-tui`), and the backend agent service (`vol-agent-manager`).
+The LLM side is summarized through provider/core/tool/agent crates (`vol-llm-core`, `vol-llm-provider`, `vol-llm-tool`, `vol-llm-agent`, `vol-llm-agents`), MCP crates (`vol-llm-mcp`, `vol-mcp-servers`), UI crates (`vol-llm-ui`, `vol-llm-tui`), and the backend agent service (`vol-agent-server`).
 
 ## Entities Mentioned
 
@@ -42,7 +40,6 @@ The LLM side is summarized through provider/core/tool/agent crates (`vol-llm-cor
 - [[vol-llm-agent-protocol-crate]]: agent communication and JSON-RPC/MCP-related layer
 - [[vol-llm-mcp-crate]]: MCP client protocol layer
 - [[vol-mcp-servers-crate]]: MCP server collection
-- [[tdengine]]: market-data storage integration
 
 ## Concepts Covered
 

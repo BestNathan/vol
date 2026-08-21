@@ -1,5 +1,16 @@
 # Change Log
 
+## [2026-08-21] ingest | Volatility pipeline removal from main
+- Created sources: [[pipeline-removal-from-main]]
+- Deleted entities: `tdengine` (pipeline market-data storage, page removed)
+- Renamed entities: vol-observability-crate → [[vol-llm-observability-crate]] (title + in-page refs updated; source_count 2->3)
+- Updated entities: [[vol-repository]] (agent-only main + archive/volatility-pipeline branch, module table without pipeline crates; source_count 3->4), [[vol-llm-agents-crate]] (advice agent removed; source_count 2->3)
+- Updated concepts: [[agent-observability]] (4), [[tool-registry]] (3), [[otel-log-routing]] (3), [[otel-dependency-upgrade]] (2), [[loki-plugin-otel-migration-design]] (2), [[pull-based-metrics]] (2), [[agent-builder-pattern]] (3), [[tool-context]] (2), [[skill-system]] (4) — vol-observability→vol-llm-observability, removed-crate mentions (vol_core/advice/tdengine) cleaned (source_count in parens)
+- Updated sources: [[observability-pull-metrics-refactor]], [[otel-029-log-init]], [[otel-agent-log-dir-fix]], [[claude-md-project-overview]], [[agent-tool-design]], [[test-tiering-e2e-completion]], [[docs-rs-mcp-impl]], [[vol-mcp-servers-dockerfile]], [[readme-restructure]], [[ci-workflow-restructure]], [[react-agent-docs]], [[session-ssot-redesign]], [[http-transport-impl]], [[skills-as-react-native]] — crate renames, removed-crate mentions removed, historical notes annotated
+- Updated index: tdengine row removed, vol-observability-crate row renamed, vol-llm-agents-crate/vol-repository summaries updated, pipeline-removal-from-main source row added, header date
+- Cross-references added: 4
+- Changes: The Deribit volatility pipeline was removed from main (2026-08-21): advice module and 12 pipeline crates deleted (vol-monitor, vol-deribit, vol-datasource, vol-alert, vol-rules, vol-notification, vol-engine, vol-eventbus, vol-core, vol-config, vol-tdengine, vol-llm-tdengine), vol-tracing→vol-llm-tracing and vol-observability→vol-llm-observability renamed, pipeline infra/docs stripped; pipeline preserved on the archive/volatility-pipeline branch. Wiki surgery to match: tdengine entity deleted, vol-observability-crate renamed, all entity/concept/source pages updated (agent-domain pages edited, no page deleted wholesale), dead wikilinks repaired (dead-link sweep clean).
+
 ## [2026-08-21] ingest | README 重构（纯 agent 六段式布局）
 - Created sources: [[readme-restructure]]
 - Updated entities: [[vol-repository]] (key facts 修正：make→just、React frontend/ 为活跃 Web UI、ArgoCD 为主部署路径、openspec→superpowers；模块结构表补齐 vol-llm-agent-tool/sandbox/fs/cli-tool 等新 crate；source_count 2->3)
@@ -18,7 +29,7 @@
 
 ## [2026-08-19] ingest | Agent Log File Location Fix: logs/ Instead of CWD
 - Created sources: [[otel-agent-log-dir-fix]]
-- Updated entities: [[vol-observability-crate]] (otel_init appender dir: logs/ with /tmp fallback; source_count 1->2)
+- Updated entities: [[vol-llm-observability-crate]] (otel_init appender dir: logs/ with /tmp fallback; source_count 1->2; page renamed with the crate on 2026-08-21)
 - Updated index: new source entry, updated entity summary
 - Cross-references added: 2
 - Changes: Root cause of `agent.*.log` files in the repo root was `RollingFileAppender::builder().build(".")` in otel_init.rs (CWD-relative; agent-server config has no log-dir option). Extracted `build_agent_file_appender()` pointing at `logs/` (created on demand, gitignored), /tmp fallback unchanged. TDD: behavior test writes a unique marker through the appender and asserts it lands in logs/agent*.log with no CWD leak. Gates: fmt/clippy/no-doc-tests/boundaries clean, 58/58 unit tests, line coverage 88.24% (>= 80%). Running dev backend (started 2026-08-07, not under cargo watch) keeps writing the old root file until restarted.
@@ -117,7 +128,7 @@
 
 ## [2026-07-24] ingest | Observability Pull-Metrics Refactor
 - Created sources: [[observability-pull-metrics-refactor]]
-- Created entities: [[vol-observability-crate]] (consolidated observability library)
+- Created entities: [[vol-llm-observability-crate]] (consolidated observability library; page renamed with the crate on 2026-08-21)
 - Created concepts: [[pull-based-metrics]] (Prometheus pull via shared registry + /metrics endpoint)
 - Updated concepts: [[agent-observability]] (consolidated crate, Prometheus pull, LLMCall events, run-level metrics), [[built-in-plugins]] (LokiPlugin→LoggingPlugin, LoggerPlugin→RunLogPlugin), [[otel-log-routing]]
 - Updated index: new entity, new concept, new source, updated summaries
@@ -637,5 +648,5 @@
 ## [2026-05-04] ingest | ReAct Agent Documentation
 - Created: [[react-agent-docs]]
 - Created concepts: [[react-pattern]], [[agent-plugin-system]], [[plugin-actions]], [[built-in-plugins]], [[agent-event-stream]], [[agent-builder-pattern]], [[tool-registry]], [[agent-observability]], [[semantic-caching]], [[human-in-the-loop]], [[retry-with-backoff]], [[rate-limiting]]
-- Created entities: [[vol-llm-agent-crate]], [[vol-llm-agents-crate]], [[vol-llm-core-crate]], [[vol-llm-tool-crate]], [[vol-llm-provider-crate]], [[tdengine]], [[dashscope]]
+- Created entities: [[vol-llm-agent-crate]], [[vol-llm-agents-crate]], [[vol-llm-core-crate]], [[vol-llm-tool-crate]], [[vol-llm-provider-crate]], [[dashscope]] (tdengine entity deleted 2026-08-21 with the pipeline removal)
 - Cross-references added: 12

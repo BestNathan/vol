@@ -3,8 +3,8 @@ type: concept
 category: framework
 tags: [tools, registry, execution]
 created: 2026-05-04
-updated: 2026-08-16
-source_count: 2
+updated: 2026-08-21
+source_count: 3
 ---
 
 # Tool Registry
@@ -31,13 +31,10 @@ The `ToolRegistry` is a `HashMap<String, Arc<dyn ExecutableTool>>` that supports
 5. **Clone**: Registry implements `Clone` (cheap Arc reference count bumps)
 6. **CLI-style tools**: `task` ([[vol-llm-task-crate]]) and `fs` ([[vol-llm-fs-crate]]) register via their `register_cli(registry)` helpers from the runtime builder and coexist with the tools they wrap [[cli-style-tool-pattern]]
 
-Tools available in the system:
-| Tool | Purpose | Data Source |
-|------|---------|-------------|
-| `market_data` | Current market prices | [[tdengine]] `deribit_index_price` |
-| `alert_history` | Volatility index history | [[tdengine]] `deribit_volatility_index` |
-| `iv_curve` | Implied volatility curves | [[tdengine]] `deribit_options` |
-| `rule_info` | Realized volatility data | [[tdengine]] `deribit_rv` |
+The original four built-in tools (`market_data`, `alert_history`, `iv_curve`, `rule_info`),
+backed by TDengine market-data tables, were designed in [[agent-tool-design]] but removed
+with the volatility pipeline on 2026-08-21 — the registry is populated dynamically (builtin
+tools, CLI-style `fs`/`task`, MCP tools) instead.
 
 ## Related Concepts
 - [[react-pattern]]: Tools are called during the Act phase

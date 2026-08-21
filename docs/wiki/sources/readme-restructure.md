@@ -64,8 +64,8 @@ area (build/check, tests, coverage, guards, web, frontend tests, docker).
 
 ## Notes
 
-- `docs/architecture/crates.md` remains stale in its overview ("10 crates", written before
-  `vol-eventbus` / `vol-tdengine` / `vol-observability` existed) — follow-up candidate if
-  pipeline documentation is revisited
+- `docs/architecture/crates.md` remains stale in its overview ("10 crates") — follow-up
+  candidate if pipeline documentation is revisited (it was: the volatility pipeline was
+  removed on 2026-08-21, see [[pipeline-removal-from-main]])
 - [[vol-repository]] had stale key facts (Makefile web commands, `vol-agent-manager`,
   OpenSpec) — corrected as part of this ingest

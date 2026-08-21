@@ -3,11 +3,11 @@ type: entity
 category: infrastructure
 tags: [observability, metrics, prometheus, otel, logging, crate]
 created: 2026-07-24
-updated: 2026-08-19
-source_count: 2
+updated: 2026-08-21
+source_count: 3
 ---
 
-# vol-observability (crate)
+# vol-llm-observability (crate)
 
 **Category:** Observability library crate
 **Related:** [[agent-observability]], [[pull-based-metrics]], [[otel-log-routing]], [[built-in-plugins]], [[vol-llm-agent-crate]], [[vol-agent-server-crate]]
@@ -16,7 +16,8 @@ source_count: 2
 
 The single consolidated observability library for the LLM agent stack. Created by the
 [[observability-pull-metrics-refactor]] which merged the former `vol-llm-observability`
-plugin crate and the former `vol-observability` ingest binary into one library crate.
+plugin crate and the former `vol-observability` ingest binary into one library crate;
+renamed to `vol-llm-observability` on 2026-08-21.
 
 ## Key Facts
 - **Library crate** (formerly a binary that ran an ingest HTTP service).
@@ -24,7 +25,7 @@ plugin crate and the former `vol-observability` ingest binary into one library c
   `init` / `OtelConfig` / `OtelGuards`.
 - Depends on `opentelemetry-prometheus = "0.29"` and `prometheus = "0.14"` (pinned directly,
   not the workspace 0.13, to match the exporter's registry type).
-- Removed dependencies: `vol-tdengine`, `reqwest` (the old ingest/TDengine pipeline).
+- Removed dependencies: `reqwest` (the old ingest pipeline; the TDengine ingest path is gone).
 
 ## Module Structure
 - `logging_plugin.rs` — `LoggingPlugin`: structured JSON events → `tracing::info!` → stdout

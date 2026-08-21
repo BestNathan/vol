@@ -1,16 +1,16 @@
 ---
 type: source
 category: development-task
-tags: [otel, tracing, migration, vol-monitor, api-upgrade]
+tags: [otel, tracing, migration, vol-llm-observability, api-upgrade]
 created: 2026-05-06
-updated: 2026-05-06
+updated: 2026-08-21
 ---
 
-# OTel 0.29 Migration and Log Initialization in vol-monitor
+# OTel 0.29 Migration and Log Initialization
 
 ## Summary
 
-Task 8 of the OTel migration pipeline: updated `crates/vol-monitor/src/tracing_setup.rs` from OTel 0.21 to 0.29 APIs and added `init_otel_logs()` function for OTel log export.
+Task 8 of the OTel migration pipeline: updated the OTel init code (then `crates/vol-monitor/src/tracing_setup.rs`, now `crates/vol-llm-observability/src/otel_init.rs`) from OTel 0.21 to 0.29 APIs and added `init_otel_logs()` function for OTel log export.
 
 ## API Changes Applied
 
@@ -54,8 +54,8 @@ The `init()` function now conditionally adds the OTel log layer in both the OTel
 - **OTel disabled:** Log layer is `None` (type alias `OtelLogLayer` used for type inference)
 
 ## Files Changed
-- `crates/vol-monitor/Cargo.toml` — added `opentelemetry-appender-tracing = { workspace = true }`
-- `crates/vol-monitor/src/tracing_setup.rs` — full rewrite of OTel initialization
+- `crates/vol-llm-observability/Cargo.toml` — added `opentelemetry-appender-tracing = { workspace = true }` (path reflects the 2026-08-21 crate rename; originally `crates/vol-monitor/Cargo.toml`)
+- `crates/vol-llm-observability/src/otel_init.rs` — full rewrite of OTel initialization (originally `crates/vol-monitor/src/tracing_setup.rs`)
 
 ## Related
 - [[otel-log-routing]]: Initialization flow now matches the 0.29 API

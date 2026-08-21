@@ -20,7 +20,7 @@ Completed the three-tier test split established on 2026-08-18. All `#[ignore]`d 
 ## Key Takeaways
 
 - **E2E marker convention**: `#[ignore]` now means ONLY "needs external service", reason standardized to `e2e: ` prefix for grep-auditability. Files that are entirely e2e keep `*_e2e.rs` naming; mixed files keep `*_integration.rs` with per-test ignore. 22 e2e tests across 13 files/9 crates.
-- **Env guards in every e2e test**: check env vars (non-empty) or TCP-probe required services (TDengine :6041, model service :31693, SSH host :2222, control-plane) and `return` with a `SKIP (e2e): ...` message. Guards tolerate empty env values — GH Actions sets unconfigured secrets to `""`.
+- **Env guards in every e2e test**: check env vars (non-empty) or TCP-probe required services (model service :31693, SSH host :2222, control-plane) and `return` with a `SKIP (e2e): ...` message. Guards tolerate empty env values — GH Actions sets unconfigured secrets to `""`.
 - **`LocalSandbox` timeout kill rework**: replaced `kill -TERM -pgid` + fixed 5s sleep + `kill -KILL -pgid` with `pkill -TERM -P <pid>` (descendants) + `kill -TERM <pid>` (direct child) + 2s grace poll + KILL escalation. Root cause of the bash-timeout failures: sandboxes kill the caller's tree when a group signal is actually delivered (reproduced with a minimal python script in the Claude Code sandbox — exit 144, whole script killed).
 - **MockLlmClient gained `set_stream_event_queue`**: per-call stream scripts (VecDeque), first call pops first script, exhausted queue → empty stream. Added to `vol-llm-core/src/test_utils.rs` with a unit test.
 - **wasmtime 22 exit-code test**: the bug was NOT the I32Exit import (still at crate root in wasmtime-wasi 22.0.1). The WAT module lacked a `memory` export — the wiggle shim bails with "missing required memory export" before calling any host function. Fixed the WAT (`(memory (export "memory") 1)`) and deduplicated the inline WAT copy in the test (the test used its own inline copy, not the shared `EXIT42_WAT` constant — why the fix initially looked ineffective).
@@ -38,11 +38,9 @@ Completed the three-tier test split established on 2026-08-18. All `#[ignore]`d 
 |---|---|---|---|
 | vol-llm-agents | coding_e2e_test.rs | 3 | ANTHROPIC_AUTH_TOKEN |
 | vol-llm-agents | e2e_log_counter_cli.rs | 2 | ANTHROPIC_AUTH_TOKEN |
-| vol-llm-agents | coding_deribit_ws_e2e.rs | 2 | ANTHROPIC_AUTH_TOKEN / DERIBIT_WS_CLIENT_DIR |
 | vol-llm-agents | coding_web_tools_integration.rs | 2 | ANTHROPIC_AUTH_TOKEN |
 | vol-llm-agents | observer_integration.rs | 1 | ANTHROPIC_AUTH_TOKEN |
 | vol-llm-agents | ppt_agent_integration.rs | 1 | ANTHROPIC_AUTH_TOKEN |
-| vol-llm-agents | advice_agent_integration.rs | 1 | ANTHROPIC_AUTH_TOKEN + TDengine + FEISHU_* |
 | vol-llm-agent | agent_llm_integration.rs | 2 | ANTHROPIC_AUTH_TOKEN |
 | vol-llm-agent | agent_alert_scenario.rs | 1 | ANTHROPIC_AUTH_TOKEN |
 | vol-llm-sandbox | ssh_integration.rs | 3 | Docker SSH host :2222 |

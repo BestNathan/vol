@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, agent, rust, high-level]
 created: 2026-05-04
-updated: 2026-05-11
-source_count: 2
+updated: 2026-08-21
+source_count: 3
 ---
 
 # vol-llm-agents Crate
@@ -14,13 +14,13 @@ source_count: 2
 
 ## Overview
 
-Contains concrete agent implementations built on top of `vol-llm-agent`: advice agent, coding agent, PPT agent, QA agent, and wiki agent.
+Contains concrete agent implementations built on top of `vol-llm-agent`: coding agent, PPT agent, QA agent, and wiki agent. (The advice agent was removed 2026-08-21 with the volatility pipeline.)
 
 ## Key Facts
 - Provides domain-specific agent implementations [[react-agent-docs]]
-- Each agent type lives in its own subdirectory: `advice/`, `coding/`, `ppt/`, `qa/`, `wiki/` [[react-agent-docs]]
+- Each agent type lives in its own subdirectory: `coding/`, `ppt/`, `qa/`, `wiki/` [[react-agent-docs]]
 - Includes integration and E2E tests for each agent type
-- Tests include: coding agent with Deribit WebSocket, agent-Loki integration, PPT agent integration, skill session integration
+- Tests include: agent-Loki integration, PPT agent integration, skill session integration
 - Contains runnable examples in `examples/` directory demonstrating MCP integration [[docs-rs-mcp-example]], [[mcp-example-pattern]]
 
 ## Examples

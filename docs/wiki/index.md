@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-08-21 (README restructure: pure agent six-section layout; pipeline mentions removed)
+Last updated: 2026-08-21 (volatility pipeline removed from main: tdengine entity deleted, vol-observability-crate renamed to vol-llm-observability-crate, crate references fixed, dead links repaired)
 
 ## Entities
 
@@ -14,18 +14,17 @@ Last updated: 2026-08-21 (README restructure: pure agent six-section layout; pip
 | [[vol-llm-ui-crate]] | Shared UI state model. Web (Dioxus) DEPRECATED 2026-08 — React frontend/ is the active web UI. TUI + state maintained. | deprecated | 2026-08-06 |
 | [[vol-llm-sandbox-crate]] | Sandbox abstraction (Local/Tmp/SSH/Firecracker/Wasm), SandboxRegistry with pure-config loading, TmpSandbox with bind_metadata lifecycle; LocalSandbox timeout kill reworked to positive-pid kills (group kills kill the caller tree in sandboxes) | active | 2026-08-19 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API and `[image]` display-text markers; AgentTool moved out to vol-llm-agent-tool, AgentLoader gained `get_by_id` | active | 2026-08-20 |
-| [[vol-llm-agents-crate]] | High-level agent implementations (advice, coding, ppt, qa) with runnable MCP examples | active | 2026-05-11 |
+| [[vol-llm-agents-crate]] | High-level agent implementations (coding, ppt, qa, wiki; advice agent removed 2026-08-21) with runnable MCP examples | active | 2026-08-21 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions, including provider-neutral multipart message content and `[image]` display markers; coverage gate PASS 95.62% | stable | 2026-08-17 |
 | [[vol-llm-tool-crate]] | Tool definition and registry framework with MCP tool proxying through McpManager; web module with ProxyConfig (three-tier resolution) and RetryConfig (exponential backoff) | active | 2026-08-12 |
 | [[vol-llm-provider-crate]] | Anthropic and OpenAI provider implementations; four 2026-08-17 bugfixes (raw tool-call args, request.system forwarding, symmetric Secret JSON, streamed ToolCallComplete); coverage gate PASS 95.41% (120 tests) | stable | 2026-08-17 |
 | [[vol-llm-context-crate]] | Pluggable prompt construction: ContextBuilder, ContextContributor, builtin simple/file/user_input contributors, token-budgeted compression, snapshot APIs; coverage gate PASS 88.94% regions / 90.08% lines | active | 2026-08-17 |
 | [[vol-session]] | Session message store and entry persistence, including file and SeaORM database-backed session managers; images kept through compression | active | 2026-08-17 |
 | [[vol-llm-agent-protocol-crate]] | Protocol, JSON-RPC transport, connection, handler, registry, and generic service abstraction layer | active | 2026-06-10 |
-| [[tdengine]] | Time-series database used for market data storage | active | 2026-05-04 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 | [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support; `docs-rs-mcp` is GitOps-managed and built by the MCP image workflow | active | 2026-06-16 |
-| [[vol-repository]] | Rust workspace: agent-only six-section README, just recipes as command entry point, React `frontend/` (active web UI; vol-llm-ui deprecated), ArgoCD GitOps primary with `k8s/` legacy deprecated | active | 2026-08-21 |
-| [[vol-observability-crate]] | Consolidated observability library (LoggingPlugin, MetricsPlugin, /metrics endpoint, OTel init); agent file logs rotate hourly into `logs/` instead of the process CWD (2026-08-19) | active | 2026-08-19 |
+| [[vol-repository]] | Rust workspace: agent-only (volatility pipeline removed 2026-08-21, archived on `archive/volatility-pipeline`), six-section README, just recipes as command entry point, React `frontend/` (active web UI; vol-llm-ui deprecated), ArgoCD GitOps primary with `k8s/` legacy deprecated | active | 2026-08-21 |
+| [[vol-llm-observability-crate]] | Consolidated observability library (LoggingPlugin, MetricsPlugin, /metrics endpoint, OTel init; renamed from vol-observability 2026-08-21); agent file logs rotate hourly into `logs/` instead of the process CWD (2026-08-19) | active | 2026-08-21 |
 | [[vol-llm-mcp-crate]] | MCP Client protocol layer for ReAct Agent — config parsing, McpManager lifecycle, tool/resource/prompt discovery | active | 2026-05-13 |
 | [[playwright-mcp-service]] | Standalone in-cluster MCP service exposing Playwright browser automation (24 browser_* tools) on port 8931, referenced via http URL in mcp-config; hardened (ro rootfs, non-root, dropped caps) | active | 2026-08-13 |
 
@@ -103,6 +102,7 @@ Last updated: 2026-08-21 (README restructure: pure agent six-section layout; pip
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[pipeline-removal-from-main]] | Volatility pipeline removed from main: advice agent + 12 pipeline crates deleted, vol-tracing/vol-observability renamed to vol-llm-tracing/vol-llm-observability, pipeline infra/docs stripped; pipeline preserved on the archive/volatility-pipeline branch; wiki surgery (tdengine entity deleted, observability entity renamed, dead links repaired) | active | 2026-08-21 |
 | [[readme-restructure]] | README restructured to pure agent six-section layout (agent system / architecture / project structure / install & deploy / AI workflow / tools & commands); volatility pipeline not mentioned per follow-up decision; stale content fixed (make→just, vol-llm-ui deprecated, crate table updated, ArgoCD primary); lean overview style linking to wiki concepts | active | 2026-08-21 |
 | [[provider-bugfixes]] | Four vol-llm-provider production bugfixes (TDD, one commit each): raw string tool-call args, request.system as first system message, symmetric Secret JSON round-trip, streamed ToolCallComplete via ContentBlockStop flush; gate re-verified 95.41%, 120 tests / 0 failed | active | 2026-08-17 |
 | [[agenttool-builtin-impl]] | AgentTool builtin implementation: new vol-llm-agent-tool crate, id-based dispatch with depth guard, name-keyed session persistence, AgentInjector, runtime wiring; subagent-driven execution with Arc::new_cyclic fix round | active | 2026-08-20 |

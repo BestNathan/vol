@@ -3,8 +3,8 @@ type: concept
 category: infrastructure
 tags: [otel, dependency, workspace, upgrade]
 created: 2026-05-14
-updated: 2026-05-14
-source_count: 1
+updated: 2026-08-21
+source_count: 2
 ---
 
 # OTel Dependency Upgrade
@@ -36,6 +36,6 @@ Process for upgrading OpenTelemetry workspace dependencies from version 0.21 to 
 6. Update shutdown to use provider instance method
 
 ## Related Concepts
-- [[otel-029-log-init]]: Implementation of OTel 0.29 migration in vol-monitor
+- [[otel-029-log-init]]: Implementation of OTel 0.29 migration, now in `vol-llm-observability`
 - [[otel-log-routing]]: Architecture using upgraded OTel APIs
 - [[agent-observability]]: Observability system affected by the upgrade

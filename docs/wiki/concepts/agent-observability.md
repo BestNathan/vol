@@ -3,14 +3,14 @@ type: concept
 category: framework
 tags: [observability, logging, jsonl, tracing, otel, prometheus, metrics]
 created: 2026-05-04
-updated: 2026-07-24
-source_count: 3
+updated: 2026-08-21
+source_count: 4
 ---
 
 # Agent Observability
 
 **Category:** Observability framework
-**Related:** [[agent-plugin-system]], [[agent-event-stream]], [[built-in-plugins]], [[otel-log-routing]], [[pull-based-metrics]], [[vol-observability-crate]]
+**Related:** [[agent-plugin-system]], [[agent-event-stream]], [[built-in-plugins]], [[otel-log-routing]], [[pull-based-metrics]], [[vol-llm-observability-crate]]
 
 ## Definition
 
@@ -29,14 +29,14 @@ events through two complementary mechanisms:
    debugging. This is agent business logic, not observability infrastructure.
 
 ## Key Points
-- Single `vol-observability` crate (was two: `vol-llm-observability` + `vol-observability`).
+- Single `vol-llm-observability` crate (merged from the former `vol-llm-observability` plugin crate + `vol-observability` ingest binary; renamed 2026-08-21).
 - Metrics are pull-based (Prometheus scrape), not push-based (OTLP).
 - Traces and logs still push OTLP to the OTel Collector (unchanged).
 - LLMCallStart/Complete/Error events are now emitted in the agent loop, activating
   previously-dormant metrics (TTFT, token usage, LLM errors).
 - JSONL run logging moved to `vol-llm-agent` with `session_id` added to `LogEntry`.
 - IDEMPOTENT: logging failures never crash the agent.
-- Coverage: 87.6% on `vol-observability` (otel_init excluded as init infrastructure).
+- Coverage: 87.6% on `vol-llm-observability` (otel_init excluded as init infrastructure).
 
 ## How It Works
 
@@ -56,7 +56,7 @@ Records OTel Metrics using the `global::meter("vol-llm-agent")`. Instruments:
 
 The exporter is registered against a shared `OnceLock<prometheus::Registry>` so the
 `/metrics` handler reads the same registry. `opentelemetry-prometheus` 0.29 uses
-`prometheus` 0.14; `vol-observability` pins this directly (not the workspace 0.13).
+`prometheus` 0.14; `vol-llm-observability` pins this directly (not the workspace 0.13).
 
 ### RunLogPlugin
 Moved from `vol-llm-observability` to `vol-llm-agent::run_log_plugin` as agent business.
@@ -68,5 +68,5 @@ Writes JSONL files to `{base_dir}/logs/{run_id}.jsonl`. `LogEntry` now includes 
 - [[built-in-plugins]]: Their place in the built-in plugin set
 - [[otel-log-routing]]: OTel Collector integration (traces + logs)
 - [[pull-based-metrics]]: Prometheus pull architecture via shared registry
-- [[vol-observability-crate]]: The consolidated crate
+- [[vol-llm-observability-crate]]: The consolidated crate
 - [[observability-pull-metrics-refactor]]: The source document for this refactor

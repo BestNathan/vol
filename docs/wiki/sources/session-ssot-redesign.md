@@ -8,7 +8,7 @@ tags: [session, ssot, context-management]
 
 # Session as SSOT — ReAct Agent Context Redesign
 
-**Authors/Creators:** vol-monitor team
+**Authors/Creators:** BestNathan
 **Date:** 2026-04-25
 **Link:** `docs/superpowers/plans/2026-04-25-session-ssot-redesign.md`
 
@@ -40,7 +40,7 @@ The resume flow migration eliminates the special `resume()` method. Instead, cal
 
 ## Entities Mentioned
 - [[vol-llm-agent-crate]]: Where RunContext and ReActAgent are modified
-- [[vol-llm-agents-crate]]: CodingAgent/advice agents affected
+- [[vol-llm-agents-crate]]: CodingAgent and the other concrete agents affected
 - [[vol-session]]: Session crate providing message store
 
 ## Concepts Covered

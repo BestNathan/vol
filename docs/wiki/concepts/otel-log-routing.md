@@ -3,8 +3,8 @@ type: concept
 category: framework
 tags: [otel, tracing, structured-logging, agent-observability]
 created: 2026-05-06
-updated: 2026-05-06
-source_count: 2
+updated: 2026-08-21
+source_count: 3
 ---
 
 # OTel Log Routing via Tracing
@@ -49,7 +49,7 @@ tracing::info!(...) ─────┐
 |-------|--------|---------|
 | `namespace` | Fixed | `"agent"` |
 | `session_id` | `RunContext.session_id` | `"sess-abc123"` |
-| `agent_id` | `RunContext.config.def.name` | `"vol_advice"` |
+| `agent_id` | `RunContext.config.def.name` | `"coding-agent"` |
 | `agent_type` | `RunContext.config.def.type` | `"coding"` |
 | `run_id` | `RunContext.run_id` | `"run-xyz789"` |
 | `model` | `RunContext.model` | `"qwen3.5-plus"` |
@@ -57,7 +57,7 @@ tracing::info!(...) ─────┐
 
 ## Initialization Flow
 
-1. `vol-monitor` `tracing_setup.rs` initializes the tracing subscriber stack.
+1. `vol-llm-observability` `otel_init.rs` initializes the tracing subscriber stack (moved from the removed `vol-monitor` binary; renamed crate 2026-08-21).
 2. `init_otel_logs()` creates `LogExporter` via `LogExporter::builder().with_tonic()` (OTel 0.29 API).
 3. `SdkLoggerProvider` is configured with resource attributes and `BatchLogProcessor`.
 4. `OpenTelemetryTracingBridge<SdkLoggerProvider, SdkLogger>` is created and integrated into the `tracing_subscriber` Registry.

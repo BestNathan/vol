@@ -20,8 +20,9 @@ business logic. The dormant `LLMCallStart/Complete/Error` events are now actuall
 activating the previously-empty TTFT/token/error metrics.
 
 ## Key Takeaways
-- `vol-llm-observability` crate deleted; all functionality merged into `vol-observability`,
-  which changed from a binary (ingest service) to a library crate.
+- The `vol-observability` ingest binary and the `vol-llm-observability` plugin crate were
+  merged into a single library crate — today named `vol-llm-observability` (renamed
+  2026-08-21), changed from a binary (ingest service) to a library crate.
 - The bespoke ingest HTTP API + TDengine writer + Loki writer pipeline was removed entirely.
 - `LokiPlugin` + the event-formatting half of `LoggerPlugin` merged into a single
   `LoggingPlugin` (id `"logging"`, priority 20) that emits one structured JSON line per
@@ -44,17 +45,19 @@ activating the previously-empty TTFT/token/error metrics.
 ## Detailed Summary
 
 ### Crate topology change
-`vol-observability` (was: ingest binary depending on `vol-tdengine`, `reqwest`) is now a lib
-crate exporting `LoggingPlugin`, `MetricsPlugin`, `build_metrics_router`, and the OTel
+The consolidated crate — today `vol-llm-observability` (was: ingest binary depending on
+`vol-tdengine`, `reqwest`; renamed 2026-08-21) — is now a lib crate exporting
+`LoggingPlugin`, `MetricsPlugin`, `build_metrics_router`, and the OTel
 `init`/`OtelConfig`/`OtelGuards`. Deleted files: `main.rs`, `ingest.rs`, `tdengine_writer.rs`,
 `loki_writer.rs`, `event.rs`, `config.rs`. Downstream crates (`vol-agent-server`,
 `vol-mcp-servers`, `vol-llm-agents`, `vol-llm-yaml-agent`, `vol-llm-tui`, `vol-llm-ui`) were
-repointed from `vol_llm_observability::*` to `vol_observability::*` / `vol_llm_agent::run_log*`.
+repointed from the old `vol_llm_observability::*` to `vol_observability::*` /
+`vol_llm_agent::run_log*` (module paths since renamed back to `vol_llm_observability::*`).
 
 ### Prometheus registry version pitfall
 `opentelemetry-prometheus` 0.29 depends on `prometheus` 0.14, but the workspace pins
 `prometheus = "0.13"`. The exporter registers on a 0.14 registry, so a handler reading a 0.13
-registry would return empty. Resolved by pinning `vol-observability` directly to
+registry would return empty. Resolved by pinning `vol-llm-observability` directly to
 `prometheus = "0.14"` and sharing one `OnceLock<Registry>` between the exporter (writer) and
 the `/metrics` handler (reader).
 
@@ -68,15 +71,15 @@ as labels (high-cardinality hazard avoided).
 /metrics`, `prometheus.io/port: "3001"` pod annotations and a named `http` containerPort.
 
 ### Coverage
-`vol-observability` reached 87.6% line coverage (logging_plugin ~99%, metrics_plugin ~98%,
+`vol-llm-observability` reached 87.6% line coverage (logging_plugin ~99%, metrics_plugin ~98%,
 metrics_router 100%; `otel_init.rs` left at 0% as global-init infrastructure, analogous to the
 `main.rs`/`app.rs` coverage exception).
 
 ## Entities Mentioned
-- [[vol-observability-crate]]: newly consolidated observability library (this refactor created its wiki page)
+- [[vol-llm-observability-crate]]: newly consolidated observability library (this refactor created its wiki page; renamed 2026-08-21)
 - [[vol-agent-server-crate]]: mounts `/metrics` on its HTTP router
 - [[vol-llm-agent-crate]]: now hosts `RunLogPlugin` + `run_log` module; emits LLMCall events
-- [[vol-repository]]: workspace member list updated (removed `vol-llm-observability`)
+- [[vol-repository]]: workspace member list updated (old `vol-llm-observability` member removed; the consolidated crate took that name back on 2026-08-21)
 
 ## Concepts Covered
 - [[pull-based-metrics]]: new — Prometheus pull via shared registry + `/metrics` endpoint

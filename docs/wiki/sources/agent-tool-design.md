@@ -8,7 +8,7 @@ tags: [agent-tools, tool-design, vol-llm-tool]
 
 # AI Agent Tool Design
 
-**Authors/Creators:** vol-monitor team
+**Authors/Creators:** BestNathan
 **Date:** 2026-04-06
 **Link:** `docs/ai-agent/03-agent-tool-design.md`
 
@@ -30,7 +30,7 @@ Comprehensive design for the ReAct Agent tool layer, defining the `Tool` trait, 
 
 The document provides a complete design for the agent tool system. It defines the package dependency graph where vol-llm-agent depends on vol-llm-tool and vol-llm-core, and vol-llm-tool depends on vol-llm-core. The `Tool` trait requires name, description, JSON schema parameters, and async execute method returning `ToolResult`. `ToolContext` carries the current alert, message history, and metadata map.
 
-The tool registry manages tool lifecycle: registration by unique name, export of all definitions for LLM function calling, and dispatch of tool calls with context. Four built-in tools are specified with their parameter schemas and descriptions, targeting TDengine data sources for market data, volatility indices, options IV curves, and realized volatility.
+The tool registry manages tool lifecycle: registration by unique name, export of all definitions for LLM function calling, and dispatch of tool calls with context. Four built-in tools are specified with their parameter schemas and descriptions, targeting the (then) TDengine market-data sources for market data, volatility indices, options IV curves, and realized volatility — removed with the volatility pipeline on 2026-08-21.
 
 The ReAct Agent layer design includes `AgentState` enum (Init → Reasoning → ExecutingTool → AwaitingObservation → Completed/Error), `ReActOutcome` (ToolCall or FinalResponse), and the full `ReActAgent` loop implementation. The `AgentBuilder` pattern provides fluent construction with validation (LLM is required). System prompts include tool descriptions and custom instructions via `SystemPromptBuilder`.
 
@@ -41,7 +41,6 @@ Error handling follows a hierarchy with `thiserror` derives, and a retry strateg
 - [[vol-llm-tool-crate]]: Tool trait, registry, and built-in tools
 - [[vol-llm-core-crate]]: Core protocols (Message, ToolDefinition, LLMClient)
 - [[vol-llm-provider-crate]]: Anthropic/OpenAI provider implementations
-- [[tdengine]]: Data source for tool queries
 
 ## Concepts Covered
 - [[tool-registry]]: Tool registration and execution framework

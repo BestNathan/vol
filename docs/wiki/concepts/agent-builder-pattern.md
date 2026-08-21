@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [builder, configuration, fluent-api]
 created: 2026-05-04
-updated: 2026-05-11
-source_count: 2
+updated: 2026-08-21
+source_count: 3
 ---
 
 # Agent Builder Pattern
@@ -28,7 +28,7 @@ let agent = ReActAgent::builder()
     .with_llm(llm_client)
     .with_tool(market_data_tool)
     .with_plugin(observability_plugin)
-    .with_agent_id("vol_advice")
+    .with_agent_id("coding-agent")
     .with_max_iterations(5)
     .with_verbose(true)
     .build()?;

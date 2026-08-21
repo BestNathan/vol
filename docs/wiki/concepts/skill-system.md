@@ -3,8 +3,8 @@ type: concept
 category: framework
 tags: [skills, agent, tool-integration]
 created: 2026-05-04
-updated: 2026-05-16
-source_count: 3
+updated: 2026-08-21
+source_count: 4
 ---
 
 # Skill System
@@ -42,7 +42,6 @@ CodingAgent previously managed skills directly with `SkillLoader`, `SkillInjecto
 ## Examples / Applications
 
 - **Coding Agent**: Skills discovered from the project working directory provide coding-specific capabilities (lint, test, refactor skills)
-- **Advice Agent**: Skills provide domain-specific analysis capabilities
 - **Any Agent**: Since skills are native to ReActAgent, any agent type can use them via `AgentConfig::with_skills()`
 - **Web UI Skills Panel**: `SkillLoader` exposed via JSON-RPC (`skill.list`, `skill.get`) for browser-based skill browsing [[skills-panel-json-rpc]]
 

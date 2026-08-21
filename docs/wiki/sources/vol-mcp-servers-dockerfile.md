@@ -52,7 +52,10 @@ CMD ["--http", "0.0.0.0:8080"]
 
 ### Image Registry
 
-Registry: `crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:<binary-name>`
+Images are built and pushed to GHCR by the `build-mcp-images.yml` workflow as
+`ghcr.io/bestnathan/<service>:<git-sha>` (e.g. `ghcr.io/bestnathan/docs-rs-mcp:46eea58`).
+The earlier ACR path `.../n_common/vol-monitor:<binary-name>` is superseded — `vol-monitor`
+was removed with the volatility pipeline on 2026-08-21.
 
 ## Files
 
@@ -64,7 +67,7 @@ Registry: `crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vo
 
 ```bash
 docker build --build-arg BIN_NAME=docs-rs-mcp \
-  -t crpi-ck06yio90i1ttwlz.cn-beijing.personal.cr.aliyuncs.com/n_common/vol-monitor:docs-rs-mcp \
+  -t docs-rs-mcp:docs-rs-mcp \
   -f crates/vol-mcp-servers/Dockerfile .
 ```
 

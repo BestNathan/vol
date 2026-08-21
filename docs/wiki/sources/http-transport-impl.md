@@ -8,7 +8,7 @@ tags: [http, transport, sse, axum, vol-llm-agent-channel]
 
 # HTTP Transport Implementation
 
-**Authors/Creators:** vol-monitor team
+**Authors/Creators:** BestNathan
 **Date:** 2026-05-05
 **Link:** `crates/vol-llm-agent-channel/src/transport/http.rs`
 

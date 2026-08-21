@@ -3,8 +3,8 @@ type: concept
 category: design
 tags: [otel, loki, migration, observability]
 created: 2026-05-14
-updated: 2026-05-14
-source_count: 1
+updated: 2026-08-21
+source_count: 2
 ---
 
 # Loki Plugin OTel Migration Design
@@ -29,7 +29,7 @@ Design specification for migrating `LokiPlugin` from direct HTTP POST to Loki to
 
 1. **Task 1-2**: Delete `LokiEntry`, `LokiWriter`, `LokiConfig`, `LokiLabels`
 2. **Task 3-4**: Rewrite LokiPlugin to stateless, add `model` field to `RunContext`
-3. **Task 8**: Update vol-monitor tracing_setup.rs to OTel 0.29 APIs [[otel-029-log-init]]
+3. **Task 8**: Update the OTel init code (`otel_init.rs`, today in `vol-llm-observability`) to OTel 0.29 APIs [[otel-029-log-init]]
 
 ## Related Concepts
 - [[otel-log-routing]]: Architecture for OTel log routing via tracing

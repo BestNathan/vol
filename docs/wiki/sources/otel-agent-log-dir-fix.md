@@ -10,7 +10,7 @@ tags: [observability, logging, otel, file-appender, backend]
 
 **Authors/Creators:** BestNathan / Claude
 **Date:** 2026-08-19
-**Link:** `crates/vol-observability/src/otel_init.rs`
+**Link:** `crates/vol-llm-observability/src/otel_init.rs`
 
 ## TL;DR
 
@@ -18,7 +18,7 @@ The OTel file appender wrote hourly `agent.YYYY-MM-DD-HH.log` files into the pro
 
 ## Key Takeaways
 
-- Root cause was `RollingFileAppender::builder()...build(".")` in `otel_init.rs` — CWD-relative, not configurable (vol-agent-server config has no log-dir option; vol-monitor has `[tracing.logging] log_dir`, agent-server does not).
+- Root cause was `RollingFileAppender::builder()...build(".")` in `otel_init.rs` — CWD-relative, not configurable (vol-agent-server config has no log-dir option).
 - `build_agent_file_appender()` keeps the same settings: `Rotation::HOURLY`, prefix `agent`, suffix `log`, `max_log_files(168)`; primary dir `logs`, fallback `/tmp`.
 - Behavior test (TDD): writes a unique marker through the appender via `std::io::Write`, asserts it lands in `logs/agent*.log` and does NOT appear in any agent log in the CWD.
 - Gates: fmt / clippy / no-doc-tests / boundaries clean; 58/58 unit tests; line coverage 88.24% (≥ 80%).
@@ -29,7 +29,7 @@ The OTel file appender wrote hourly `agent.YYYY-MM-DD-HH.log` files into the pro
 
 ## Entities Mentioned
 
-- [[vol-observability-crate]]: `otel_init.rs` appender directory fix
+- [[vol-llm-observability-crate]]: `otel_init.rs` appender directory fix
 
 ## Concepts Covered
 
@@ -37,5 +37,5 @@ The OTel file appender wrote hourly `agent.YYYY-MM-DD-HH.log` files into the pro
 
 ## Notes
 
-- The test creates `crates/vol-observability/logs/agent.*.log` during runs — gitignored (`logs/` pattern).
+- The test creates `crates/vol-llm-observability/logs/agent.*.log` during runs — gitignored (`logs/` pattern).
 - `logs/` root directory had been deleted as junk in the same cleanup; the fix recreates it automatically.
